@@ -1,0 +1,115 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to package without leading v
+        required: true
+        type: string
+      publish_test_release:
+        description: Create a temporary javan-test-* release for workflow testing
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    name: package (${{ matrix.package-target }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            package-target: linux-x64
+          - os: macos-15
+            package-target: macos-aarch64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up GraalVM
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '25'
+          distribution: graalvm
+          cache: maven
+          native-image-job-reports: 'true'
+
+      - name: Install Linux native toolchain
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y build-essential
+
+      - name: Resolve version
+        id: version
+        shell: sh
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            printf 'value=%s\n' "${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            printf 'value=%s\n' "${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and verify native package
+        run: JAVAN_VERSION='${{ steps.version.outputs.value }}' JAVAN_PACKAGE_TARGET='${{ matrix.package-target }}' sh scripts/verify-release.sh
+
+      - name: Upload package
+        uses: actions/upload-artifact@v5
+        with:
+          name: javan-${{ matrix.package-target }}
+          retention-days: 1
+          path: |
+            dist/release/javan-*-${{ matrix.package-target }}.tar.gz
+            dist/release/javan-*-${{ matrix.package-target }}.tar.gz.sha256
+          if-no-files-found: error
+
+  publish:
+    name: publish GitHub release
+    needs: build
+    if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) || github.event.inputs.publish_test_release == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v5
+        with:
+          path: dist/release
+          merge-multiple: true
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            tag="$GITHUB_REF_NAME"
+            title="$GITHUB_REF_NAME"
+            notes="Host-native javan binaries for Linux and macOS."
+            gh release create "$tag" dist/release/* \
+              --target "$GITHUB_SHA" \
+              --verify-tag \
+              --title "$title" \
+              --notes "$notes"
+          else
+            tag="javan-test-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            title="Temporary workflow test ${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}"
+            notes="Temporary release created by the workflow-test path. Delete it with scripts/github-cleanup-test-artifacts.sh."
+            gh release create "$tag" dist/release/* \
+              --target "$GITHUB_SHA" \
+              --prerelease \
+              --title "$title" \
+              --notes "$notes"
+          fi

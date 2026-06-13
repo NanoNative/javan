@@ -1,0 +1,12 @@
+/target/
+/dist/
+/release/
+/build/
+/.gradle/
+/.javan/
+**/.javan/
+examples/library-dependency/lib/
+examples/library-dependency/lib-classes/
+*.class
+*.log
+.DS_Store

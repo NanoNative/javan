@@ -1,0 +1,65 @@
+name: Bug report
+description: Report reproducible behavior that looks incorrect.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem in javan. Keep the report focused and reproducible.
+  - type: input
+    id: version
+    attributes:
+      label: javan version or commit
+      description: Include the release version, commit SHA, or branch.
+      placeholder: "0.1.0, main@abcdef0"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Include OS, architecture, Java version, and C compiler if relevant.
+      placeholder: "macOS arm64, Java 25, clang 17"
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command or entrypoint
+      description: Show the exact command, project layout, or public entrypoint that reproduces the issue.
+      render: sh
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include the full error, diagnostic, or unexpected output.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: reproducer
+    attributes:
+      label: Minimal reproducer
+      description: Provide the smallest source files, bytecode, or repository link needed to reproduce.
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I searched existing issues for the same report.
+          required: true
+        - label: I removed secrets, credentials, and private code from this report.
+          required: true

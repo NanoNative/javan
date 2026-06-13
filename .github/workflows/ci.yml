@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - 'workflow/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  verify:
+    name: verify (${{ matrix.package-target }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            package-target: linux-x64
+          - os: macos-15
+            package-target: macos-aarch64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up GraalVM
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '25'
+          distribution: graalvm
+          cache: maven
+          native-image-job-reports: 'true'
+
+      - name: Install Linux native toolchain
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y build-essential
+
+      - name: Verify release candidate
+        run: JAVAN_PACKAGE_TARGET='${{ matrix.package-target }}' sh scripts/verify-release.sh
+
+      - name: Upload local release package
+        uses: actions/upload-artifact@v5
+        with:
+          name: javan-${{ matrix.package-target }}
+          retention-days: 1
+          path: |
+            dist/release/javan-*-${{ matrix.package-target }}.tar.gz
+            dist/release/javan-*-${{ matrix.package-target }}.tar.gz.sha256
+          if-no-files-found: error

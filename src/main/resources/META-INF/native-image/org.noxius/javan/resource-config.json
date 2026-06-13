@@ -1,0 +1,9 @@
+{
+  "resources": {
+    "includes": [
+      {
+        "pattern": "javan-version\\.properties"
+      }
+    ]
+  }
+}

@@ -1,0 +1,24 @@
+# JDK Compatibility
+
+`javan` reads classfile versions directly from `.class` files. Users should not need
+to pass a Java version for supported classfiles; the compiler either understands the
+bytecode pattern or rejects it before native code generation.
+
+| JDK | Class file major | Release-gate status |
+| --- | ---: | --- |
+| 21 | 65 | planned matrix target |
+| 22 | 66 | planned matrix target |
+| 23 | 67 | planned matrix target |
+| 24 | 68 | planned matrix target |
+| 25 | 69 | integrated local gate |
+
+The compatibility flow is:
+
+1. Compile the target project with its normal Java build path.
+2. Scan project and dependency classfiles.
+3. Scan the active JDK runtime image through `jrt:/`.
+4. Record classfile major versions, modules, packages, classes, constructors, fields, methods, descriptors, flags, attributes, constant-pool tags, bootstrap methods, synthetic members, deprecated markers, and preview markers.
+5. Classify every opcode as `NATIVE_SUPPORTED`, `RECOGNIZED_REJECTED`, or `UNKNOWN_FATAL`.
+6. Write deterministic reports under `.javan/reports`, `.javan/jdk-inventory`, `.javan/bytecode-patterns`, and `docs/`.
+
+Unknown bytecode is fatal. Recognized but unsupported bytecode remains rejected until native lowering and tests are added.
