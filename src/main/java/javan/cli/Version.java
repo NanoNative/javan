@@ -4,7 +4,7 @@ package javan.cli;
  * Resolves the packaged javan version.
  */
 public final class Version {
-    private static final String VERSION = "0.1.0";
+    private static final String VERSION = "2026.6.14";
 
     private Version() {
     }
