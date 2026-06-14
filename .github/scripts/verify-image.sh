@@ -8,11 +8,11 @@ if [ -z "$IMAGE" ]; then
 fi
 
 RAW=$(docker buildx imagetools inspect "$IMAGE" --raw)
-if ! printf '%s\n' "$RAW" | grep -F '"architecture":"amd64"' >/dev/null; then
+if ! printf '%s\n' "$RAW" | grep -Eq '"architecture"[[:space:]]*:[[:space:]]*"amd64"'; then
   printf '%s\n' "Image manifest is missing linux/amd64: $IMAGE" >&2
   exit 1
 fi
-if ! printf '%s\n' "$RAW" | grep -F '"architecture":"arm64"' >/dev/null; then
+if ! printf '%s\n' "$RAW" | grep -Eq '"architecture"[[:space:]]*:[[:space:]]*"arm64"'; then
   printf '%s\n' "Image manifest is missing linux/arm64: $IMAGE" >&2
   exit 1
 fi
