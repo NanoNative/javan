@@ -1,32 +1,23 @@
 package javan.build;
 
 import javan.detect.BuildTool;
+import javan.detect.ClassOutputDiscovery;
 import javan.detect.ProjectLayout;
 import javan.util.Files2;
 import javan.util.ProcessRunner;
+import javan.util.Strings2;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 
 /**
  * Resolves application class folders and dependency classpath entries.
  */
 public final class ClasspathResolver {
-    private static final List<String> COMMON_CLASS_FOLDERS = List.of(
-        "target/classes",
-        "build/classes/java/main",
-        "build/classes/kotlin/main",
-        "out/production/classes",
-        "bin",
-        "classes",
-        ".javan/classes"
-    );
-
     private final ProcessRunner processRunner;
 
     /**
@@ -66,7 +57,14 @@ public final class ClasspathResolver {
      * @return joined classpath
      */
     public static String join(final List<Path> entries) {
-        return String.join(File.pathSeparator, entries.stream().map(Path::toString).toList());
+        final StringBuilder result = new StringBuilder();
+        for (int index = 0; index < entries.size(); index++) {
+            if (index > 0) {
+                result.append(File.pathSeparator);
+            }
+            result.append(entries.get(index).toString());
+        }
+        return result.toString();
     }
 
     private void resolveMaven(final ProjectLayout layout, final List<Path> classpath, final List<String> warnings)
@@ -74,8 +72,8 @@ public final class ClasspathResolver {
         final Path outputFile = layout.outputDirectory().resolve("classpath.txt");
         Files.createDirectories(outputFile.getParent());
         final List<String> command = Files.exists(layout.root().resolve("mvnw"))
-            ? List.of("./mvnw", "-q", "-DincludeScope=runtime", "-Dmdep.outputFile=" + outputFile, "dependency:build-classpath")
-            : List.of("mvn", "-q", "-DincludeScope=runtime", "-Dmdep.outputFile=" + outputFile, "dependency:build-classpath");
+            ? List.of("./mvnw", "-q", "-DincludeScope=runtime", "-Dmdep.outputFile=" + outputFile.toString(), "dependency:build-classpath")
+            : List.of("mvn", "-q", "-DincludeScope=runtime", "-Dmdep.outputFile=" + outputFile.toString(), "dependency:build-classpath");
         final ProcessRunner.Result result = processRunner.run(layout.root(), command);
         if (result.exitCode() != 0) {
             warnings.add("Unable to resolve Maven dependency classpath; continuing with project classes only.");
@@ -102,38 +100,45 @@ public final class ClasspathResolver {
             ? List.of("./gradlew", "-q", "-I", initScript.toString(), "javanRuntimeClasspath")
             : List.of("gradle", "-q", "-I", initScript.toString(), "javanRuntimeClasspath");
         final ProcessRunner.Result result = processRunner.run(layout.root(), command);
-        if (result.exitCode() != 0 || result.stdout().isBlank()) {
+        if (result.exitCode() != 0 || Strings2.isBlank(result.stdout())) {
             warnings.add("Unable to resolve Gradle dependency classpath; continuing with project classes only.");
             return;
         }
-        for (final String entry : result.stdout().trim().split(File.pathSeparator)) {
-            if (!entry.isBlank()) {
-                classpath.add(Path.of(entry));
-            }
-        }
+        addClasspathText(result.stdout(), classpath);
     }
 
     private static void addClasspathFile(final Path outputFile, final List<Path> classpath) throws IOException {
-        final String value = Files2.readStringIfExists(outputFile).trim();
-        if (value.isBlank()) {
-            return;
-        }
-        for (final String entry : value.split(File.pathSeparator)) {
-            if (!entry.isBlank()) {
-                classpath.add(Path.of(entry));
+        addClasspathText(Files2.readStringIfExists(outputFile), classpath);
+    }
+
+    private static void addClasspathText(final String value, final List<Path> classpath) {
+        final String trimmed = Strings2.trimAscii(value);
+        int start = 0;
+        for (int index = 0; index <= trimmed.length(); index++) {
+            if (index == trimmed.length() || trimmed.charAt(index) == File.pathSeparatorChar) {
+                final String entry = Strings2.trimAscii(Strings2.slice(trimmed, start, index));
+                if (!Strings2.isBlank(entry)) {
+                    classpath.add(Path.of(entry));
+                }
+                start = index + 1;
             }
         }
     }
 
     private static List<Path> existing(final List<Path> paths) {
-        return paths.stream().filter(Files::exists).toList();
+        final List<Path> result = new ArrayList<>();
+        for (final Path path : paths) {
+            if (Files.exists(path)) {
+                result.add(path);
+            }
+        }
+        return List.copyOf(result);
     }
 
     private static List<Path> rediscoverClassFolders(final ProjectLayout layout) throws IOException {
         final List<Path> result = new ArrayList<>(existing(layout.classFolders()));
-        for (final String folder : COMMON_CLASS_FOLDERS) {
-            final Path candidate = layout.root().resolve(folder).normalize();
-            if (Files.isDirectory(candidate) && Files2.containsClassFile(candidate) && !result.contains(candidate)) {
+        for (final Path candidate : ClassOutputDiscovery.discover(layout.root())) {
+            if (!containsPath(result, candidate)) {
                 result.add(candidate);
             }
         }
@@ -141,12 +146,25 @@ public final class ClasspathResolver {
     }
 
     private static List<Path> distinctExistingOrJar(final List<Path> paths) {
-        final LinkedHashSet<Path> result = new LinkedHashSet<>();
+        final List<Path> result = new ArrayList<>();
         for (final Path path : paths) {
             if (Files.exists(path) || path.getFileName().toString().endsWith(".jar")) {
-                result.add(path.toAbsolutePath().normalize());
+                final Path normalized = path.toAbsolutePath().normalize();
+                if (!containsPath(result, normalized)) {
+                    result.add(normalized);
+                }
             }
         }
         return List.copyOf(result);
+    }
+
+    private static boolean containsPath(final List<Path> paths, final Path target) {
+        final String normalized = target.toAbsolutePath().normalize().toString();
+        for (final Path path : paths) {
+            if (path.toAbsolutePath().normalize().toString().equals(normalized)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

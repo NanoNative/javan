@@ -1,5 +1,7 @@
 package javan.verify;
 
+import javan.util.Strings2;
+
 /**
  * Human-readable diagnostic for static verification and build failures.
  *
@@ -76,21 +78,35 @@ public record Diagnostic(
      * @return formatted diagnostic
      */
     public String format() {
-        final String severity = error ? "error" : "warning";
-        return severity + "[" + code + "]: " + message + System.lineSeparator()
+        final String severity = severity(code());
+        return severity + "[" + code() + "]: " + message() + System.lineSeparator()
             + "Class:" + System.lineSeparator()
-            + "  " + emptyDash(className) + System.lineSeparator()
+            + "  " + emptyDash(className()) + System.lineSeparator()
             + "Method:" + System.lineSeparator()
-            + "  " + emptyDash(methodName) + System.lineSeparator()
+            + "  " + emptyDash(methodName()) + System.lineSeparator()
             + "Subject:" + System.lineSeparator()
-            + "  " + emptyDash(subject) + System.lineSeparator()
+            + "  " + emptyDash(subject()) + System.lineSeparator()
             + "Reason:" + System.lineSeparator()
-            + "  " + emptyDash(reason) + System.lineSeparator()
+            + "  " + emptyDash(reason()) + System.lineSeparator()
             + "Fix:" + System.lineSeparator()
-            + "  " + emptyDash(fix);
+            + "  " + emptyDash(fix());
     }
 
     private static String emptyDash(final String value) {
-        return value == null || value.isBlank() ? "-" : value;
+        return Strings2.isBlank(value) ? "-" : value;
+    }
+
+    private static String severity(final String code) {
+        if (code != null && code.length() > 5 && code.charAt(5) == '0') {
+            return "error";
+        }
+        return errorCodeFallback(code);
+    }
+
+    private static String errorCodeFallback(final String code) {
+        if (code != null && code.length() > 5 && code.charAt(5) == '9') {
+            return "error";
+        }
+        return "warning";
     }
 }

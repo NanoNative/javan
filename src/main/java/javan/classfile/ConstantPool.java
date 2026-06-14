@@ -151,8 +151,16 @@ public final class ConstantPool {
             bootstrap.owner(),
             bootstrap.name(),
             bootstrap.descriptor(),
-            bootstrapMethod.argumentIndexes().stream().map(this::bootstrapArgument).toList()
+            bootstrapArguments(bootstrapMethod.argumentIndexes())
         ));
+    }
+
+    private List<String> bootstrapArguments(final List<Integer> argumentIndexes) {
+        final java.util.ArrayList<String> result = new java.util.ArrayList<>();
+        for (final Integer argumentIndex : argumentIndexes) {
+            result.add(bootstrapArgument(argumentIndex.intValue()));
+        }
+        return List.copyOf(result);
     }
 
     /**
@@ -258,7 +266,23 @@ public final class ConstantPool {
             return utf8(methodType.descriptorIndex());
         }
         if (entry instanceof RawEntry rawEntry) {
-            return String.valueOf(rawEntry.value());
+            return rawValueString(rawEntry.value());
+        }
+        return "";
+    }
+
+    private static String rawValueString(final Object value) {
+        if (value instanceof Integer integer) {
+            return Integer.toString(integer.intValue());
+        }
+        if (value instanceof Long longValue) {
+            return Long.toString(longValue.longValue());
+        }
+        if (value instanceof Float floatValue) {
+            return Float.toString(floatValue.floatValue());
+        }
+        if (value instanceof Double doubleValue) {
+            return Double.toString(doubleValue.doubleValue());
         }
         return "";
     }

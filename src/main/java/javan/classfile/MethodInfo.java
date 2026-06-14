@@ -21,10 +21,19 @@ public record MethodInfo(int accessFlags, String name, String descriptor, Option
      * @return true for the Java main method shape
      */
     public boolean isPublicStaticMain() {
-        return "main".equals(name)
-            && "([Ljava/lang/String;)V".equals(descriptor)
-            && (accessFlags & ACC_PUBLIC) != 0
-            && (accessFlags & ACC_STATIC) != 0;
+        if (!"main".equals(name)) {
+            return false;
+        }
+        if (!"([Ljava/lang/String;)V".equals(descriptor)) {
+            return false;
+        }
+        if ((accessFlags & ACC_PUBLIC) == 0) {
+            return false;
+        }
+        if ((accessFlags & ACC_STATIC) == 0) {
+            return false;
+        }
+        return true;
     }
 
     /**
@@ -33,7 +42,10 @@ public record MethodInfo(int accessFlags, String name, String descriptor, Option
      * @return true when static
      */
     public boolean isStatic() {
-        return (accessFlags & ACC_STATIC) != 0;
+        if ((accessFlags & ACC_STATIC) == 0) {
+            return false;
+        }
+        return true;
     }
 
     /**
@@ -42,6 +54,9 @@ public record MethodInfo(int accessFlags, String name, String descriptor, Option
      * @return true when native
      */
     public boolean isNative() {
-        return (accessFlags & ACC_NATIVE) != 0;
+        if ((accessFlags & ACC_NATIVE) == 0) {
+            return false;
+        }
+        return true;
     }
 }

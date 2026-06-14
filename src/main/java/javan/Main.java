@@ -16,8 +16,8 @@ public final class Main {
      *
      * @param args command line arguments
      */
-    public static void main(final String[] args) {
-        final int exitCode = new Cli().run(Path.of("").toAbsolutePath(), System.out, System.err, args);
+    public static void main(final String[] args) throws Exception {
+        final int exitCode = new Cli().runUnchecked(Path.of(System.getProperty("user.dir")), System.out, System.err, args);
         System.exit(exitCode);
     }
 }

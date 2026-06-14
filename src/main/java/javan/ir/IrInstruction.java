@@ -31,6 +31,16 @@ public record IrInstruction(Op op, Optional<String> value, Optional<IrExpression
     }
 
     /**
+     * Creates a stderr println-int instruction.
+     *
+     * @param expression int expression
+     * @return IR instruction
+     */
+    public static IrInstruction printlnErrorInt(final IrExpression expression) {
+        return new IrInstruction(Op.PRINTLN_ERROR_INT, Optional.empty(), Optional.of(expression));
+    }
+
+    /**
      * Creates a println-long instruction.
      *
      * @param expression long expression
@@ -38,6 +48,16 @@ public record IrInstruction(Op op, Optional<String> value, Optional<IrExpression
      */
     public static IrInstruction printlnLong(final IrExpression expression) {
         return new IrInstruction(Op.PRINTLN_LONG, Optional.empty(), Optional.of(expression));
+    }
+
+    /**
+     * Creates a stderr println-long instruction.
+     *
+     * @param expression long expression
+     * @return IR instruction
+     */
+    public static IrInstruction printlnErrorLong(final IrExpression expression) {
+        return new IrInstruction(Op.PRINTLN_ERROR_LONG, Optional.empty(), Optional.of(expression));
     }
 
     /**
@@ -51,6 +71,16 @@ public record IrInstruction(Op op, Optional<String> value, Optional<IrExpression
     }
 
     /**
+     * Creates a stderr println-float instruction.
+     *
+     * @param expression float expression
+     * @return IR instruction
+     */
+    public static IrInstruction printlnErrorFloat(final IrExpression expression) {
+        return new IrInstruction(Op.PRINTLN_ERROR_FLOAT, Optional.empty(), Optional.of(expression));
+    }
+
+    /**
      * Creates a println-double instruction.
      *
      * @param expression double expression
@@ -58,6 +88,16 @@ public record IrInstruction(Op op, Optional<String> value, Optional<IrExpression
      */
     public static IrInstruction printlnDouble(final IrExpression expression) {
         return new IrInstruction(Op.PRINTLN_DOUBLE, Optional.empty(), Optional.of(expression));
+    }
+
+    /**
+     * Creates a stderr println-double instruction.
+     *
+     * @param expression double expression
+     * @return IR instruction
+     */
+    public static IrInstruction printlnErrorDouble(final IrExpression expression) {
+        return new IrInstruction(Op.PRINTLN_ERROR_DOUBLE, Optional.empty(), Optional.of(expression));
     }
 
     /**
@@ -71,6 +111,16 @@ public record IrInstruction(Op op, Optional<String> value, Optional<IrExpression
     }
 
     /**
+     * Creates a stderr println-boolean instruction.
+     *
+     * @param expression boolean expression represented as an int
+     * @return IR instruction
+     */
+    public static IrInstruction printlnErrorBoolean(final IrExpression expression) {
+        return new IrInstruction(Op.PRINTLN_ERROR_BOOLEAN, Optional.empty(), Optional.of(expression));
+    }
+
+    /**
      * Creates a println-object instruction for string-compatible object values.
      *
      * @param expression object expression
@@ -78,6 +128,36 @@ public record IrInstruction(Op op, Optional<String> value, Optional<IrExpression
      */
     public static IrInstruction printlnObject(final IrExpression expression) {
         return new IrInstruction(Op.PRINTLN_OBJECT, Optional.empty(), Optional.of(expression));
+    }
+
+    /**
+     * Creates a stderr println-object instruction for string-compatible object values.
+     *
+     * @param expression object expression
+     * @return IR instruction
+     */
+    public static IrInstruction printlnErrorObject(final IrExpression expression) {
+        return new IrInstruction(Op.PRINTLN_ERROR_OBJECT, Optional.empty(), Optional.of(expression));
+    }
+
+    /**
+     * Creates a print-object instruction for string-compatible object values.
+     *
+     * @param expression object expression
+     * @return IR instruction
+     */
+    public static IrInstruction printObject(final IrExpression expression) {
+        return new IrInstruction(Op.PRINT_OBJECT, Optional.empty(), Optional.of(expression));
+    }
+
+    /**
+     * Creates a stderr print-object instruction for string-compatible object values.
+     *
+     * @param expression object expression
+     * @return IR instruction
+     */
+    public static IrInstruction printErrorObject(final IrExpression expression) {
+        return new IrInstruction(Op.PRINT_ERROR_OBJECT, Optional.empty(), Optional.of(expression));
     }
 
     /**
@@ -565,11 +645,19 @@ public record IrInstruction(Op op, Optional<String> value, Optional<IrExpression
     public enum Op {
         PRINTLN_LITERAL,
         PRINTLN_INT,
+        PRINTLN_ERROR_INT,
         PRINTLN_LONG,
+        PRINTLN_ERROR_LONG,
         PRINTLN_FLOAT,
+        PRINTLN_ERROR_FLOAT,
         PRINTLN_DOUBLE,
+        PRINTLN_ERROR_DOUBLE,
         PRINTLN_BOOLEAN,
+        PRINTLN_ERROR_BOOLEAN,
         PRINTLN_OBJECT,
+        PRINTLN_ERROR_OBJECT,
+        PRINT_OBJECT,
+        PRINT_ERROR_OBJECT,
         CALL_STATIC_VOID,
         ASSIGN_INT,
         ASSIGN_LONG,

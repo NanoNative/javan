@@ -1,11 +1,13 @@
 package javan.codegen;
 
 import javan.util.ProcessRunner;
+import javan.util.Strings2;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Links generated C into a native executable with an available C compiler.
@@ -41,8 +43,7 @@ public final class NativeLinker {
      * @throws InterruptedException when interrupted while linking
      */
     public Path link(final Path root, final Path mainC, final Path runtimeC, final Path output) throws IOException, InterruptedException {
-        final String compiler = processRunner.firstAvailable(List.of("cc", "clang", "gcc"))
-            .orElseThrow(() -> new IOException("No C compiler found. Install cc, clang, or gcc."));
+        final String compiler = requiredExecutable(List.of("cc", "clang", "gcc"), "No C compiler found. Install cc, clang, or gcc.");
         Files.createDirectories(output.getParent());
         final List<String> command = List.of(compiler, mainC.toString(), runtimeC.toString(), "-o", output.toString());
         final ProcessRunner.Result result = processRunner.run(root, command);
@@ -65,10 +66,9 @@ public final class NativeLinker {
      */
     public Path linkSharedLibrary(final Path root, final Path mainC, final Path runtimeC, final Path output)
         throws IOException, InterruptedException {
-        final String compiler = processRunner.firstAvailable(List.of("cc", "clang", "gcc"))
-            .orElseThrow(() -> new IOException("No C compiler found. Install cc, clang, or gcc."));
+        final String compiler = requiredExecutable(List.of("cc", "clang", "gcc"), "No C compiler found. Install cc, clang, or gcc.");
         Files.createDirectories(output.getParent());
-        final boolean mac = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("mac");
+        final boolean mac = Strings2.toAsciiLowerCase(System.getProperty("os.name", "")).contains("mac");
         final List<String> command = mac
             ? List.of(compiler, "-dynamiclib", "-fPIC", mainC.toString(), runtimeC.toString(), "-o", output.toString())
             : List.of(compiler, "-shared", "-fPIC", mainC.toString(), runtimeC.toString(), "-o", output.toString());
@@ -92,10 +92,8 @@ public final class NativeLinker {
      */
     public Path linkStaticLibrary(final Path root, final Path mainC, final Path runtimeC, final Path output)
         throws IOException, InterruptedException {
-        final String compiler = processRunner.firstAvailable(List.of("cc", "clang", "gcc"))
-            .orElseThrow(() -> new IOException("No C compiler found. Install cc, clang, or gcc."));
-        final String archiver = processRunner.firstAvailable(List.of("ar"))
-            .orElseThrow(() -> new IOException("No archiver found. Install ar."));
+        final String compiler = requiredExecutable(List.of("cc", "clang", "gcc"), "No C compiler found. Install cc, clang, or gcc.");
+        final String archiver = requiredExecutable(List.of("ar"), "No archiver found. Install ar.");
         Files.createDirectories(output.getParent());
         final Path objects = output.getParent().resolve("objects");
         Files.createDirectories(objects);
@@ -129,5 +127,78 @@ public final class NativeLinker {
         if (result.exitCode() != 0) {
             throw new IOException("Native compile failed\n" + result.stderr() + result.stdout());
         }
+    }
+
+    private String requiredExecutable(final List<String> executables, final String message) throws IOException, InterruptedException {
+        final Optional<String> pathExecutable = firstOnPath(executables);
+        if (pathExecutable.isPresent()) {
+            return pathExecutable.orElseThrow();
+        }
+        final Optional<String> executable = processRunner.firstAvailable(executables);
+        if (executable.isEmpty()) {
+            throw new IOException(message);
+        }
+        return executable.orElseThrow();
+    }
+
+    private static Optional<String> firstOnPath(final List<String> executables) {
+        for (final String executable : executables) {
+            final Optional<String> resolved = resolveOnPath(executable);
+            if (resolved.isPresent()) {
+                return resolved;
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<String> resolveOnPath(final String executable) {
+        if (Strings2.isBlank(executable)) {
+            return Optional.empty();
+        }
+        if (containsPathSeparator(executable)) {
+            final Path direct = Path.of(executable);
+            if (Files.isExecutable(direct)) {
+                return Optional.of(direct.toString());
+            }
+            return Optional.empty();
+        }
+        final String path = System.getenv("PATH");
+        if (Strings2.isBlank(path)) {
+            return Optional.empty();
+        }
+        final char separator = pathSeparator();
+        int start = 0;
+        for (int index = 0; index <= path.length(); index++) {
+            if (index == path.length() || path.charAt(index) == separator) {
+                String directory = Strings2.slice(path, start, index);
+                if (Strings2.isBlank(directory)) {
+                    directory = ".";
+                }
+                final Path candidate = Path.of(directory).resolve(executable);
+                if (Files.isExecutable(candidate)) {
+                    return Optional.of(candidate.toString());
+                }
+                start = index + 1;
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static boolean containsPathSeparator(final String executable) {
+        for (int index = 0; index < executable.length(); index++) {
+            final char ch = executable.charAt(index);
+            if (ch == '/' || ch == '\\') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static char pathSeparator() {
+        final String separator = System.getProperty("path.separator", ":");
+        if (separator.isEmpty()) {
+            return ':';
+        }
+        return separator.charAt(0);
     }
 }

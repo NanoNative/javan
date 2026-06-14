@@ -57,12 +57,21 @@ final class ToolchainManagerTest {
     }
 
     @Test
-    void doctorReportsMissingNativeImage() {
+    void doctorDoesNotReportNativeImage() {
         final ToolchainManager manager = new ToolchainManager(tempDir.resolve("home"), missingProbe());
 
         final String report = manager.doctor();
 
-        assertThat(report).contains("native-image:    missing (native-image)");
+        assertThat(report).doesNotContain("native-image");
+    }
+
+    @Test
+    void doctorDoesNotReportGraalVm() {
+        final ToolchainManager manager = new ToolchainManager(tempDir.resolve("home"), missingProbe());
+
+        final String report = manager.doctor();
+
+        assertThat(report).doesNotContain("GraalVM");
     }
 
     @Test
@@ -78,7 +87,7 @@ final class ToolchainManagerTest {
     }
 
     @Test
-    void listReportsNoneWhenToolchainDirectoryIsMissing() {
+    void listReportsNoneWhenToolchainDirectoryIsMissing() throws Exception {
         final ToolchainManager manager = new ToolchainManager(tempDir.resolve("home"), missingProbe());
 
         final String report = manager.listToolchains();

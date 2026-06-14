@@ -1,13 +1,17 @@
 package javan;
 
 import javan.analysis.CallGraph;
+import javan.analysis.EntryPoint;
 import javan.detect.ProjectLayout;
 import javan.profile.Profile;
 import javan.util.Files2;
+import javan.util.Strings2;
 import javan.verify.Diagnostic;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -32,21 +36,22 @@ public final class ProjectReports {
      * @throws IOException when writing fails
      */
     public void writeProject(final ProjectLayout layout, final Profile profile) throws IOException {
-        final String json = "{\n"
-            + "  \"root\": " + json(layout.root().toString()) + ",\n"
-            + "  \"input\": " + json(layout.input().toString()) + ",\n"
-            + "  \"inputKind\": " + json(layout.inputKind().name()) + ",\n"
-            + "  \"buildTool\": " + json(layout.buildTool().name()) + ",\n"
-            + "  \"profile\": " + json(profile.cliName()) + ",\n"
-            + "  \"sourceFolders\": " + jsonList(layout.sourceFolders().stream().map(Object::toString).toList()) + ",\n"
-            + "  \"resourceFolders\": " + jsonList(layout.resourceFolders().stream().map(Object::toString).toList()) + ",\n"
-            + "  \"classFolders\": " + jsonList(layout.classFolders().stream().map(Object::toString).toList()) + ",\n"
-            + "  \"classpathEntries\": " + jsonList(layout.classpathEntries().stream().map(Object::toString).toList()) + ",\n"
-            + "  \"outputDirectory\": " + json(layout.outputDirectory().toString()) + ",\n"
-            + "  \"outputName\": " + json(layout.outputName()) + ",\n"
-            + "  \"warnings\": " + jsonList(layout.warnings()) + "\n"
-            + "}\n";
-        Files2.writeString(layout.outputDirectory().resolve("reports/project.json"), json);
+        final StringBuilder json = new StringBuilder();
+        json.append("{\n");
+        appendJsonField(json, "root", json(layout.root().toString()), true);
+        appendJsonField(json, "input", json(layout.input().toString()), true);
+        appendJsonField(json, "inputKind", json(layout.inputKind().name()), true);
+        appendJsonField(json, "buildTool", json(layout.buildTool().name()), true);
+        appendJsonField(json, "profile", json(profile.cliName()), true);
+        appendJsonField(json, "sourceFolders", pathJsonList(layout.sourceFolders()), true);
+        appendJsonField(json, "resourceFolders", pathJsonList(layout.resourceFolders()), true);
+        appendJsonField(json, "classFolders", pathJsonList(layout.classFolders()), true);
+        appendJsonField(json, "classpathEntries", pathJsonList(layout.classpathEntries()), true);
+        appendJsonField(json, "outputDirectory", json(layout.outputDirectory().toString()), true);
+        appendJsonField(json, "outputName", json(layout.outputName()), true);
+        appendJsonField(json, "warnings", jsonList(layout.warnings()), false);
+        json.append("}\n");
+        Files2.writeString(layout.outputDirectory().resolve("reports/project.json"), json.toString());
     }
 
     /**
@@ -60,10 +65,9 @@ public final class ProjectReports {
         final StringBuilder report = new StringBuilder();
         report.append("entry: ").append(callGraph.entryPoint().display()).append(System.lineSeparator());
         report.append("reachable:").append(System.lineSeparator());
-        callGraph.reachableMethods().stream()
-            .map(Object::toString)
-            .sorted()
-            .forEach(line -> report.append("  ").append(line).append(System.lineSeparator()));
+        for (final String line : sortedEntries(callGraph.reachableMethods())) {
+            report.append("  ").append(line).append(System.lineSeparator());
+        }
         Files2.writeString(layout.outputDirectory().resolve("reports/reachability.txt"), report.toString());
     }
 
@@ -75,16 +79,58 @@ public final class ProjectReports {
      * @throws IOException when writing fails
      */
     public void writeDiagnostics(final ProjectLayout layout, final List<Diagnostic> diagnostics) throws IOException {
-        final String value = diagnostics.isEmpty()
-            ? "No diagnostics." + System.lineSeparator()
-            : String.join(System.lineSeparator() + System.lineSeparator(), diagnostics.stream().map(Diagnostic::format).toList())
-                + System.lineSeparator();
+        final String value = diagnosticsValue(diagnostics);
         Files.createDirectories(layout.outputDirectory().resolve("reports"));
         Files2.writeString(layout.outputDirectory().resolve("reports/diagnostics.txt"), value);
     }
 
     private static String jsonList(final List<String> values) {
-        return "[" + String.join(", ", values.stream().map(ProjectReports::json).toList()) + "]";
+        final StringBuilder result = new StringBuilder("[");
+        for (int index = 0; index < values.size(); index++) {
+            if (index > 0) {
+                result.append(", ");
+            }
+            result.append(json(values.get(index)));
+        }
+        return result.append("]").toString();
+    }
+
+    private static String pathJsonList(final List<Path> values) {
+        final List<String> strings = new ArrayList<>();
+        for (final Path value : values) {
+            strings.add(value.toString());
+        }
+        return jsonList(strings);
+    }
+
+    private static List<String> sortedEntries(final List<EntryPoint> entries) {
+        final List<String> result = new ArrayList<>();
+        for (final EntryPoint entry : entries) {
+            insertSorted(result, entry.toString());
+        }
+        return List.copyOf(result);
+    }
+
+    private static void insertSorted(final List<String> values, final String value) {
+        int index = 0;
+        while (index < values.size() && Strings2.compareAscii(values.get(index), value) <= 0) {
+            index++;
+        }
+        values.add(index, value);
+    }
+
+    private static String diagnosticsValue(final List<Diagnostic> diagnostics) {
+        if (diagnostics.isEmpty()) {
+            return new StringBuilder().append("No diagnostics.").append(System.lineSeparator()).toString();
+        }
+        final StringBuilder result = new StringBuilder();
+        for (int index = 0; index < diagnostics.size(); index++) {
+            if (index > 0) {
+                result.append(System.lineSeparator()).append(System.lineSeparator());
+            }
+            result.append(diagnostics.get(index).format());
+        }
+        return result.append(System.lineSeparator()).toString();
     }
 
     private static String json(final String value) {
@@ -101,5 +147,18 @@ public final class ProjectReports {
             }
         }
         return result.append('"').toString();
+    }
+
+    private static void appendJsonField(
+        final StringBuilder result,
+        final String name,
+        final String value,
+        final boolean comma
+    ) {
+        result.append("  \"").append(name).append("\": ").append(value);
+        if (comma) {
+            result.append(',');
+        }
+        result.append('\n');
     }
 }

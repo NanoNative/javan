@@ -1,26 +1,22 @@
 package javan.util;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.FileVisitResult;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
-import java.util.Set;
-import java.util.function.Predicate;
-import java.util.stream.Stream;
 
 /**
  * File helpers for deterministic project scanning and output generation.
  */
 public final class Files2 {
-    private static final Set<String> IGNORED_DIRECTORIES = Set.of(
+    private static final int MATCH_JAVA = 1;
+    private static final int MATCH_CLASS = 2;
+    private static final int MATCH_RESOURCE = 3;
+    private static final String[] IGNORED_DIRECTORIES = {
         ".git", ".idea", ".gradle", ".mvn", ".javan", "target", "build", "out", "node_modules"
-    );
+    };
 
     private Files2() {
     }
@@ -38,7 +34,7 @@ public final class Files2 {
         if (parent != null) {
             Files.createDirectories(parent);
         }
-        return Files.writeString(path, value, StandardCharsets.UTF_8);
+        return Files.writeString(path, value);
     }
 
     /**
@@ -49,7 +45,7 @@ public final class Files2 {
      * @throws IOException when the file exists but cannot be read
      */
     public static String readStringIfExists(final Path path) throws IOException {
-        return Files.exists(path) ? Files.readString(path, StandardCharsets.UTF_8) : "";
+        return Files.exists(path) ? Files.readString(path) : "";
     }
 
     /**
@@ -63,15 +59,12 @@ public final class Files2 {
         if (!Files.exists(path)) {
             return path;
         }
-        Files.walk(path)
-            .sorted(Comparator.reverseOrder())
-            .forEach(file -> {
-                try {
-                    Files.deleteIfExists(file);
-                } catch (final IOException exception) {
-                    throw new IllegalStateException("Unable to delete " + file, exception);
-                }
-            });
+        final List<Path> files = new ArrayList<>();
+        collectTree(path, files);
+        sortPaths(files);
+        for (int index = files.size() - 1; index >= 0; index--) {
+            Files.deleteIfExists(files.get(index));
+        }
         return path;
     }
 
@@ -79,34 +72,116 @@ public final class Files2 {
      * Finds files below a root while skipping build and VCS directories.
      *
      * @param root scan root
-     * @param matcher file predicate
+     * @param matchKind file match kind
      * @return sorted matching files
      * @throws IOException when scanning fails
      */
-    public static List<Path> findFiles(final Path root, final Predicate<Path> matcher) throws IOException {
+    private static List<Path> findFiles(final Path root, final int matchKind) throws IOException {
         if (!Files.exists(root)) {
-            return List.of();
+            return new ArrayList<>();
         }
         final List<Path> result = new ArrayList<>();
-        Files.walkFileTree(root, new SimpleFileVisitor<>() {
-            @Override
-            public FileVisitResult preVisitDirectory(final Path dir, final BasicFileAttributes attrs) {
-                final Path name = dir.getFileName();
-                if (name != null && IGNORED_DIRECTORIES.contains(name.toString()) && !dir.equals(root)) {
-                    return FileVisitResult.SKIP_SUBTREE;
-                }
-                return FileVisitResult.CONTINUE;
-            }
+        collectMatchingFiles(root, root, matchKind, result);
+        sortPaths(result);
+        return result;
+    }
 
-            @Override
-            public FileVisitResult visitFile(final Path file, final BasicFileAttributes attrs) {
-                if (matcher.test(file)) {
-                    result.add(file);
-                }
-                return FileVisitResult.CONTINUE;
+    private static void collectTree(final Path path, final List<Path> result) throws IOException {
+        result.add(path);
+        if (!Files.isDirectory(path)) {
+            return;
+        }
+        final DirectoryStream<Path> children = Files.newDirectoryStream(path);
+        for (final Path child : children) {
+            collectTree(child, result);
+        }
+        children.close();
+    }
+
+    private static void collectMatchingFiles(
+        final Path root,
+        final Path current,
+        final int matchKind,
+        final List<Path> result
+    ) throws IOException {
+        if (Files.isDirectory(current)) {
+            final Path name = current.getFileName();
+            if (name != null && ignoredDirectory(name.toString()) && topLevelChild(root, current)) {
+                return;
             }
-        });
-        return result.stream().sorted().toList();
+            final DirectoryStream<Path> children = Files.newDirectoryStream(current);
+            for (final Path child : children) {
+                collectMatchingFiles(root, child, matchKind, result);
+            }
+            children.close();
+            return;
+        }
+        if (Files.isRegularFile(current) && matches(current, matchKind)) {
+            result.add(current);
+        }
+    }
+
+    private static boolean matches(final Path file, final int matchKind) {
+        final String name = file.getFileName().toString();
+        if (matchKind == MATCH_JAVA) {
+            if (name.endsWith(".java")) {
+                return true;
+            }
+            return false;
+        }
+        if (matchKind == MATCH_CLASS) {
+            if (name.endsWith(".class")) {
+                return true;
+            }
+            return false;
+        }
+        if (matchKind == MATCH_RESOURCE) {
+            if (name.endsWith(".java")) {
+                return false;
+            }
+            if (name.endsWith(".class")) {
+                return false;
+            }
+            return true;
+        }
+        throw new IllegalArgumentException("Unsupported file match kind");
+    }
+
+    private static boolean ignoredDirectory(final String name) {
+        for (int index = 0; index < IGNORED_DIRECTORIES.length; index++) {
+            if (IGNORED_DIRECTORIES[index].equals(name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean topLevelChild(final Path root, final Path dir) {
+        if (dir.equals(root)) {
+            return false;
+        }
+        final Path absoluteRoot = root.toAbsolutePath().normalize();
+        final Path absoluteDir = dir.toAbsolutePath().normalize();
+        final Path parent = absoluteDir.getParent();
+        if (parent == null) {
+            return false;
+        }
+        if (!parent.equals(absoluteRoot)) {
+            return false;
+        }
+        return true;
+    }
+
+    private static void sortPaths(final List<Path> paths) {
+        for (int index = 1; index < paths.size(); index++) {
+            final Path value = paths.get(index);
+            int position = index - 1;
+            while (position >= 0 && Strings2.compareAscii(paths.get(position).toString(), value.toString()) > 0) {
+                paths.set(position + 1, paths.get(position));
+                position--;
+            }
+            paths.set(position + 1, value);
+        }
     }
 
     /**
@@ -117,7 +192,7 @@ public final class Files2 {
      * @throws IOException when scanning fails
      */
     public static List<Path> findJavaSources(final Path root) throws IOException {
-        return findFiles(root, file -> file.getFileName().toString().endsWith(".java"));
+        return findFiles(root, MATCH_JAVA);
     }
 
     /**
@@ -128,7 +203,18 @@ public final class Files2 {
      * @throws IOException when scanning fails
      */
     public static List<Path> findClassFiles(final Path root) throws IOException {
-        return findFiles(root, file -> file.getFileName().toString().endsWith(".class"));
+        return findFiles(root, MATCH_CLASS);
+    }
+
+    /**
+     * Finds non-source, non-class resource files below a root.
+     *
+     * @param root scan root
+     * @return sorted resource files
+     * @throws IOException when scanning fails
+     */
+    public static List<Path> findResourceFiles(final Path root) throws IOException {
+        return findFiles(root, MATCH_RESOURCE);
     }
 
     /**
@@ -142,7 +228,16 @@ public final class Files2 {
     public static boolean sourcesNewerThanClasses(final List<Path> sourceRoots, final List<Path> classRoots) throws IOException {
         final long newestSource = newestModified(sourceRoots, ".java");
         final long newestClass = newestModified(classRoots, ".class");
-        return newestSource > 0 && (newestClass == 0 || newestSource > newestClass);
+        if (newestSource <= 0) {
+            return false;
+        }
+        if (newestClass == 0) {
+            return true;
+        }
+        if (newestSource > newestClass) {
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -159,23 +254,25 @@ public final class Files2 {
             if (!Files.exists(root)) {
                 continue;
             }
-            try (Stream<Path> stream = Files.walk(root)) {
-                final long rootNewest = stream
-                    .filter(Files::isRegularFile)
-                    .filter(file -> file.getFileName().toString().endsWith(suffix))
-                    .mapToLong(file -> {
-                        try {
-                            return Files.getLastModifiedTime(file).toMillis();
-                        } catch (final IOException exception) {
-                            throw new IllegalStateException("Unable to read timestamp for " + file, exception);
-                        }
-                    })
-                    .max()
-                    .orElse(0);
-                newest = Math.max(newest, rootNewest);
-            }
+            newest = Math.max(newest, newestModified(root, suffix));
         }
         return newest;
+    }
+
+    private static long newestModified(final Path path, final String suffix) throws IOException {
+        if (Files.isDirectory(path)) {
+            long newest = 0;
+            final DirectoryStream<Path> children = Files.newDirectoryStream(path);
+            for (final Path child : children) {
+                newest = Math.max(newest, newestModified(child, suffix));
+            }
+            children.close();
+            return newest;
+        }
+        if (Files.isRegularFile(path) && path.getFileName().toString().endsWith(suffix)) {
+            return Files.getLastModifiedTime(path).toMillis();
+        }
+        return 0;
     }
 
     /**
@@ -186,6 +283,10 @@ public final class Files2 {
      * @throws IOException when scanning fails
      */
     public static boolean containsClassFile(final Path root) throws IOException {
-        return !findClassFiles(root).isEmpty();
+        if (findClassFiles(root).isEmpty()) {
+            return false;
+        }
+        return true;
     }
+
 }

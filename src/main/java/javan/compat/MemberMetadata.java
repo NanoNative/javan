@@ -26,7 +26,13 @@ public record MemberMetadata(
      * @return true for synthetic members
      */
     public boolean synthetic() {
-        return (accessFlags & ACC_SYNTHETIC) != 0 || attributes.contains("Synthetic");
+        if ((accessFlags & ACC_SYNTHETIC) != 0) {
+            return true;
+        }
+        if (attributes.contains("Synthetic")) {
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -35,6 +41,9 @@ public record MemberMetadata(
      * @return true when deprecated
      */
     public boolean deprecated() {
-        return attributes.contains("Deprecated");
+        if (attributes.contains("Deprecated")) {
+            return true;
+        }
+        return false;
     }
 }

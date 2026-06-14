@@ -5,7 +5,7 @@ repositories or folders so other Codex instances can work independently.
 
 ## Goal
 
-Large features such as Java SDK wrapping, Javan Studio, JavanUI, Railix integration,
+Large features such as Javan Studio, JavanUI, Railix integration,
 plugins, installers, and IDE support should not all be implemented directly inside the core
 compiler tree at once.
 
@@ -21,11 +21,12 @@ Recommended shapes:
 <workspace>/javan/                 core compiler and CLI
 <workspace>/javan-ui/              JavanUI runtime and components
 <workspace>/javan-studio/          visual app builder
-<workspace>/javan-java-sdk/        JDK wrapper/layout experiments
+<workspace>/javan-java-sdk/        optional JDK wrapper/layout experiments
 <workspace>/javan-maven-plugin/    Maven plugin
 <workspace>/javan-gradle-plugin/   Gradle plugin
 <workspace>/javan-jetbrains/       optional JetBrains plugin
 <workspace>/javan-homebrew/        formula and release packaging
+<workspace>/javan-crosslang/       Go/Rust translator and binary experiments
 ```
 
 If a separate repository is too early, use ignored local labs:
@@ -37,6 +38,26 @@ If a separate repository is too early, use ignored local labs:
 ```
 
 Labs are temporary. Repositories are for durable standalone products.
+
+Current local workspace root:
+
+```text
+/Users/yuna/projects/javan-project/
+  javan/                 core compiler repo
+  javan-java-sdk/        optional JDK-like wrapper SDK track
+  javan-ui/              UI runtime track
+  javan-studio/          visual app builder track
+  javan-maven-plugin/    Maven integration track
+  javan-gradle-plugin/   Gradle integration track
+  homebrew-javan/        Homebrew packaging track
+  javan-crosslang/       Go/Rust translator lab track
+  javan-virtual-threads-native-spike/
+                         unfinished virtual-thread runtime spike, migration input only
+  labs/                  disposable feature labs
+```
+
+These folders have `AGENTS.md` and `doc/spec/context.md` files so another Codex instance
+can start on one track without pulling unrelated compiler context into its working set.
 
 ## Context Files
 
@@ -72,8 +93,8 @@ Examples:
 
 - JavanUI provides Java APIs, generated code shape, runtime assets, and accessibility reports.
 - Javan Studio consumes and produces `AppModel`, Java source, Railix code, and `javan` reports.
-- Java SDK wrapper provides launcher layout, toolchain metadata, and `javac`/`java`
-  delegation contracts.
+- Optional Java SDK wrapper provides launcher layout, toolchain metadata, and `javac`/`java`
+  delegation contracts only if binary/plugin/IDE report integration is not enough.
 - Maven plugin invokes `javan` CLI and consumes reports.
 - Gradle plugin invokes `javan` CLI and consumes reports.
 - JetBrains plugin reads stable report JSON and never reimplements compiler analysis.
@@ -86,7 +107,7 @@ contract, add that contract deliberately.
 Independent tracks:
 
 - `javan-core`: compiler, CLI, reports, native backend, compatibility gates
-- `javan-java-sdk`: JDK-like wrapper layout, launcher scripts, SDK metadata
+- `javan-java-sdk`: deferred JDK-like wrapper layout, launcher scripts, SDK metadata
 - `javan-ui`: component model, renderer, layout, accessibility, event/state binding
 - `javan-studio`: shell, editors, build center, report visualization, dogfood app
 - `javan-railix`: flow graph model and Java/Railix generation contracts
@@ -94,6 +115,8 @@ Independent tracks:
 - `javan-gradle-plugin`: Gradle task integration
 - `javan-homebrew`: formula, bottles, archive smoke
 - `javan-jetbrains`: optional IDE plugin reading report JSON
+- `javan-crosslang`: Go/Rust source and binary-output experiments around a future backend
+  contract
 
 Agents should receive one track and one slice, not a whole empire.
 
@@ -145,8 +168,8 @@ Keep it as a lab when:
 
 1. `javan-ui`: production UI foundation.
 2. `javan-studio`: shell and `AppModel` once JavanUI can render a real app.
-3. `javan-java-sdk`: wrapper SDK layout and launcher experiments.
-4. `javan-maven-plugin` and `javan-gradle-plugin`: build integrations after CLI reports
+3. `javan-maven-plugin` and `javan-gradle-plugin`: build integrations after CLI reports
    stabilize.
+4. `javan-java-sdk`: wrapper SDK layout and launcher experiments only if still needed.
 
 Core `javan` remains the compiler, CLI, reports, compatibility engine, and native backend.

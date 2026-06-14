@@ -1,15 +1,14 @@
-# javan Examples
+# Examples
 
-The examples are public-entrypoint acceptance projects for the supported native subset.
-`scripts/acceptance.sh` builds supported app examples, runs the generated classes on the
-JVM, runs the native executable, and compares stdout exactly.
+This folder contains user-facing samples only.
 
-Negative examples prove deterministic rejection:
+Current public sample:
 
-- `no-main`
-- `multiple-main`
-- `unsupported-reflection`
+- `native-showcase`: a small native app that demonstrates the supported compiler/runtime
+  path through normal `javan build`.
 
-TypeMap and Nano examples are optional compatibility probes until their external inputs are
-pinned for remote CI. When the local artifacts are unavailable, the acceptance runner skips
-them with an explicit reason.
+Narrow regression projects belong in `src/test/resources/projects`, not here. Optional
+TypeMap and Nano compatibility probes also live under test resources until their external
+inputs are pinned for remote CI.
+
+Generated `.javan`, `.gradle`, `bin`, `target`, and class output must not be committed.

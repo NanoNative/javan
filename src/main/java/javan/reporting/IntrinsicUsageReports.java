@@ -6,55 +6,22 @@ import javan.classfile.ClassFile;
 import javan.classfile.Instruction;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
+import javan.compat.JdkCallSupport;
 import javan.util.Files2;
 import javan.util.Json;
+import javan.util.Strings2;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
-import java.util.TreeMap;
 
 /**
  * Writes deterministic reachable JDK intrinsic usage reports.
  */
 public final class IntrinsicUsageReports {
-    private static final List<IntrinsicMatcher> PLANNED_INTRINSICS = List.of(
-        new IntrinsicMatcher(
-            "Objects.requireNonNull",
-            "java/util/Objects",
-            "requireNonNull",
-            Set.of("(Ljava/lang/Object;)Ljava/lang/Object;")
-        ),
-        new IntrinsicMatcher("Math.abs", "java/lang/Math", "abs", Set.of("(I)I", "(J)J")),
-        new IntrinsicMatcher("Math.min", "java/lang/Math", "min", Set.of("(II)I", "(JJ)J")),
-        new IntrinsicMatcher("Math.max", "java/lang/Math", "max", Set.of("(II)I", "(JJ)J")),
-        new IntrinsicMatcher("System.nanoTime", "java/lang/System", "nanoTime", Set.of("()J")),
-        new IntrinsicMatcher("System.currentTimeMillis", "java/lang/System", "currentTimeMillis", Set.of("()J")),
-        new IntrinsicMatcher("System.arraycopy", "java/lang/System", "arraycopy", Set.of("(Ljava/lang/Object;ILjava/lang/Object;II)V")),
-        new IntrinsicMatcher(
-            "Arrays.copyOf",
-            "java/util/Arrays",
-            "copyOf",
-            Set.of(
-                "([II)[I",
-                "([JI)[J",
-                "([BI)[B",
-                "([SI)[S",
-                "([CI)[C",
-                "([FI)[F",
-                "([DI)[D",
-                "([Ljava/lang/Object;I)[Ljava/lang/Object;"
-            )
-        ),
-        new IntrinsicMatcher("Integer.toString", "java/lang/Integer", "toString", Set.of("(I)Ljava/lang/String;")),
-        new IntrinsicMatcher("Long.toString", "java/lang/Long", "toString", Set.of("(J)Ljava/lang/String;"))
-    );
-
     /**
      * Analyzes reachable bytecode and writes JSON and Markdown reports.
      *
@@ -80,26 +47,30 @@ public final class IntrinsicUsageReports {
      * @param reachable reachable method identities
      * @return intrinsic usage report
      */
-    public IntrinsicUsageReport analyze(final Map<String, ClassFile> classes, final Set<EntryPoint> reachable) {
-        final Map<String, Integer> intrinsicCounts = new LinkedHashMap<>();
-        PLANNED_INTRINSICS.forEach(intrinsic -> intrinsicCounts.put(intrinsic.name(), 0));
-        final Map<String, Integer> unsupportedCounts = new TreeMap<>();
+    public IntrinsicUsageReport analyze(final Map<String, ClassFile> classes, final List<EntryPoint> reachable) {
+        final List<IntrinsicCallCount> intrinsicCounts = zeroIntrinsicCounts();
+        final List<UnsupportedJdkCallCandidate> unsupportedCounts = new ArrayList<>();
 
-        reachable.stream()
-            .map(entry -> method(classes, entry))
-            .flatMap(Optional::stream)
-            .flatMap(method -> method.code().stream())
-            .flatMap(code -> code.instructions().stream())
-            .map(Instruction::methodRef)
-            .flatMap(Optional::stream)
-            .filter(IntrinsicUsageReports::jdkCall)
-            .forEach(methodRef -> countCall(methodRef, intrinsicCounts, unsupportedCounts));
+        for (final EntryPoint entry : reachable) {
+            final Optional<MethodInfo> reachableMethod = method(classes, entry);
+            if (reachableMethod.isEmpty() || reachableMethod.orElseThrow().code().isEmpty()) {
+                continue;
+            }
+            for (final Instruction instruction : reachableMethod.orElseThrow().code().orElseThrow().instructions()) {
+                if (instruction.methodRef().isPresent()) {
+                    final MethodRef methodRef = instruction.methodRef().orElseThrow();
+                    if (JdkCallSupport.isJdkCall(methodRef)) {
+                        countCall(methodRef, intrinsicCounts, unsupportedCounts);
+                    }
+                }
+            }
+        }
 
-        final List<UnsupportedJdkCallCandidate> unsupported = unsupportedCounts.entrySet().stream()
-            .map(entry -> new UnsupportedJdkCallCandidate(entry.getKey(), entry.getValue()))
-            .toList();
-        final int unsupportedCount = unsupported.stream().mapToInt(UnsupportedJdkCallCandidate::count).sum();
-        return new IntrinsicUsageReport(intrinsicCallCounts(intrinsicCounts), unsupported, unsupportedCount);
+        return new IntrinsicUsageReport(
+            List.copyOf(intrinsicCounts),
+            List.copyOf(unsupportedCounts),
+            unsupportedCount(unsupportedCounts)
+        );
     }
 
     private static Optional<MethodInfo> method(final Map<String, ClassFile> classes, final EntryPoint entry) {
@@ -112,30 +83,60 @@ public final class IntrinsicUsageReports {
 
     private static void countCall(
         final MethodRef methodRef,
-        final Map<String, Integer> intrinsicCounts,
-        final Map<String, Integer> unsupportedCounts
+        final List<IntrinsicCallCount> intrinsicCounts,
+        final List<UnsupportedJdkCallCandidate> unsupportedCounts
     ) {
-        final Optional<IntrinsicMatcher> intrinsic = PLANNED_INTRINSICS.stream()
-            .filter(candidate -> candidate.matches(methodRef))
-            .findFirst();
-        if (intrinsic.isPresent()) {
-            final String name = intrinsic.orElseThrow().name();
-            intrinsicCounts.put(name, intrinsicCounts.get(name) + 1);
+        final Optional<JdkCallSupport.SupportedCall> supported = JdkCallSupport.supportedCall(methodRef);
+        if (supported.isPresent() && supported.orElseThrow().kind() == JdkCallSupport.Kind.INTRINSIC) {
+            incrementIntrinsic(intrinsicCounts, supported.orElseThrow().name());
             return;
         }
-        unsupportedCounts.merge(methodRef.display(), 1, Integer::sum);
+        if (supported.isPresent() || JdkCallSupport.isSupported(methodRef)) {
+            return;
+        }
+        incrementUnsupported(unsupportedCounts, methodRef.display());
     }
 
-    private static boolean jdkCall(final MethodRef methodRef) {
-        return methodRef.owner().startsWith("java/")
-            || methodRef.owner().startsWith("jdk/")
-            || methodRef.owner().startsWith("sun/");
-    }
-
-    private static List<IntrinsicCallCount> intrinsicCallCounts(final Map<String, Integer> counts) {
+    private static List<IntrinsicCallCount> zeroIntrinsicCounts() {
         final List<IntrinsicCallCount> result = new ArrayList<>();
-        counts.forEach((name, count) -> result.add(new IntrinsicCallCount(name, count)));
-        return List.copyOf(result);
+        for (final JdkCallSupport.SupportedCall intrinsic : JdkCallSupport.intrinsics()) {
+            result.add(new IntrinsicCallCount(intrinsic.name(), 0));
+        }
+        return result;
+    }
+
+    private static void incrementIntrinsic(final List<IntrinsicCallCount> counts, final String name) {
+        for (int index = 0; index < counts.size(); index++) {
+            final IntrinsicCallCount count = counts.get(index);
+            if (count.name().equals(name)) {
+                counts.set(index, new IntrinsicCallCount(name, count.count() + 1));
+                return;
+            }
+        }
+    }
+
+    private static void incrementUnsupported(final List<UnsupportedJdkCallCandidate> counts, final String target) {
+        for (int index = 0; index < counts.size(); index++) {
+            final UnsupportedJdkCallCandidate candidate = counts.get(index);
+            final int comparison = Strings2.compareAscii(target, candidate.target());
+            if (comparison == 0) {
+                counts.set(index, new UnsupportedJdkCallCandidate(target, candidate.count() + 1));
+                return;
+            }
+            if (comparison < 0) {
+                counts.add(index, new UnsupportedJdkCallCandidate(target, 1));
+                return;
+            }
+        }
+        counts.add(new UnsupportedJdkCallCandidate(target, 1));
+    }
+
+    private static int unsupportedCount(final List<UnsupportedJdkCallCandidate> counts) {
+        int result = 0;
+        for (final UnsupportedJdkCallCandidate count : counts) {
+            result += count.count();
+        }
+        return result;
     }
 
     private static String json(final IntrinsicUsageReport report) {
@@ -151,18 +152,38 @@ public final class IntrinsicUsageReports {
     }
 
     private static String intrinsicJson(final List<IntrinsicCallCount> intrinsics) {
-        return String.join(",\n", intrinsics.stream()
-            .map(intrinsic -> "    {\"name\": " + Json.string(intrinsic.name()) + ", \"count\": " + intrinsic.count() + "}")
-            .toList()) + "\n";
+        final StringBuilder result = new StringBuilder();
+        for (int index = 0; index < intrinsics.size(); index++) {
+            if (index > 0) {
+                result.append(",\n");
+            }
+            final IntrinsicCallCount intrinsic = intrinsics.get(index);
+            result.append("    {\"name\": ")
+                .append(Json.string(intrinsic.name()))
+                .append(", \"count\": ")
+                .append(intrinsic.count())
+                .append("}");
+        }
+        return result.append("\n").toString();
     }
 
     private static String unsupportedJson(final List<UnsupportedJdkCallCandidate> candidates) {
         if (candidates.isEmpty()) {
             return "";
         }
-        return String.join(",\n", candidates.stream()
-            .map(candidate -> "    {\"target\": " + Json.string(candidate.target()) + ", \"count\": " + candidate.count() + "}")
-            .toList()) + "\n";
+        final StringBuilder result = new StringBuilder();
+        for (int index = 0; index < candidates.size(); index++) {
+            if (index > 0) {
+                result.append(",\n");
+            }
+            final UnsupportedJdkCallCandidate candidate = candidates.get(index);
+            result.append("    {\"target\": ")
+                .append(Json.string(candidate.target()))
+                .append(", \"count\": ")
+                .append(candidate.count())
+                .append("}");
+        }
+        return result.append("\n").toString();
     }
 
     private static String markdown(final IntrinsicUsageReport report) {
@@ -179,25 +200,21 @@ public final class IntrinsicUsageReports {
     }
 
     private static String plannedRows(final List<IntrinsicCallCount> intrinsics) {
-        return String.join("", intrinsics.stream()
-            .map(intrinsic -> "| `" + intrinsic.name() + "` | " + intrinsic.count() + " |\n")
-            .toList());
+        final StringBuilder result = new StringBuilder();
+        for (final IntrinsicCallCount intrinsic : intrinsics) {
+            result.append("| `").append(intrinsic.name()).append("` | ").append(intrinsic.count()).append(" |\n");
+        }
+        return result.toString();
     }
 
     private static String unsupportedRows(final List<UnsupportedJdkCallCandidate> candidates) {
         if (candidates.isEmpty()) {
             return "| none | 0 |\n";
         }
-        return String.join("", candidates.stream()
-            .map(candidate -> "| `" + candidate.target() + "` | " + candidate.count() + " |\n")
-            .toList());
-    }
-
-    private record IntrinsicMatcher(String name, String owner, String methodName, Set<String> descriptors) {
-        private boolean matches(final MethodRef methodRef) {
-            return owner.equals(methodRef.owner())
-                && methodName.equals(methodRef.name())
-                && descriptors.contains(methodRef.descriptor());
+        final StringBuilder result = new StringBuilder();
+        for (final UnsupportedJdkCallCandidate candidate : candidates) {
+            result.append("| `").append(candidate.target()).append("` | ").append(candidate.count()).append(" |\n");
         }
+        return result.toString();
     }
 }

@@ -8,30 +8,14 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Detects Java project layout, build tool, source folders, class folders, and defaults.
  */
 public final class ProjectDetector {
-    private static final List<String> COMMON_CLASS_FOLDERS = List.of(
-        "target/classes",
-        "build/classes/java/main",
-        "build/classes/kotlin/main",
-        "out/production/classes",
-        "bin",
-        "classes",
-        ".javan/classes"
-    );
-
     private static final List<String> COMMON_SOURCE_FOLDERS = List.of("src/main/java", "src", ".");
     private static final List<String> COMMON_RESOURCE_FOLDERS = List.of("src/main/resources", "resources");
-    private static final Pattern ARTIFACT_ID = Pattern.compile("<artifactId>\\s*([^<]+)\\s*</artifactId>");
-    private static final Pattern GRADLE_ROOT_NAME = Pattern.compile("rootProject\\.name\\s*=\\s*['\"]([^'\"]+)['\"]");
 
     /**
      * Detects project metadata from CLI options and a working directory.
@@ -49,12 +33,12 @@ public final class ProjectDetector {
         final List<String> warnings = new ArrayList<>();
         final List<Path> sourceFolders = sourceFolders(input, root, inputKind);
         final List<Path> resourceFolders = resourceFolders(input, root, inputKind);
-        final List<Path> classFolders = classFolders(input, root, inputKind, options.classFolders());
+        final List<Path> classFolders = classFolders(cwd, input, root, inputKind, options.classFolders());
         final List<Path> classpathEntries = new ArrayList<>(absoluteAll(cwd, options.classpathEntries()));
         if (inputKind == InputKind.JAR_FILE) {
             classpathEntries.add(input);
         }
-        final String outputName = options.outputName().orElseGet(() -> outputName(input, root, inputKind));
+        final String outputName = selectedOutputName(options, input, root, inputKind);
         return new ProjectLayout(
             root,
             input,
@@ -64,10 +48,29 @@ public final class ProjectDetector {
             List.copyOf(resourceFolders),
             List.copyOf(classFolders),
             List.copyOf(classpathEntries),
-            root.resolve(".javan"),
+            outputDirectory(root, inputKind),
             Strings2.executableName(outputName),
             List.copyOf(warnings)
         );
+    }
+
+    private static String selectedOutputName(
+        final Options options,
+        final Path input,
+        final Path root,
+        final InputKind inputKind
+    ) throws IOException {
+        if (options.outputName().isPresent()) {
+            return options.outputName().orElseThrow();
+        }
+        return outputName(input, root, inputKind);
+    }
+
+    private static Path outputDirectory(final Path root, final InputKind inputKind) {
+        if (inputKind == InputKind.CLASSES_DIRECTORY && root.getParent() != null) {
+            return root.getParent().resolve(".javan");
+        }
+        return root.resolve(".javan");
     }
 
     private static InputKind inputKind(final Path input) throws IOException {
@@ -92,10 +95,16 @@ public final class ProjectDetector {
     }
 
     private static Path root(final Path input, final InputKind inputKind) {
-        return switch (inputKind) {
-            case JAR_FILE, SOURCE_FILE -> input.getParent() == null ? input.toAbsolutePath().getParent() : input.getParent();
-            case CLASSES_DIRECTORY, PROJECT_DIRECTORY -> input;
-        };
+        if (inputKind == InputKind.JAR_FILE || inputKind == InputKind.SOURCE_FILE) {
+            if (input.getParent() == null) {
+                return input.toAbsolutePath().getParent();
+            }
+            return input.getParent();
+        }
+        if (inputKind == InputKind.CLASSES_DIRECTORY || inputKind == InputKind.PROJECT_DIRECTORY) {
+            return input;
+        }
+        throw new IllegalStateException("Unsupported input kind");
     }
 
     private static BuildTool buildTool(final Path root, final InputKind inputKind) {
@@ -127,12 +136,12 @@ public final class ProjectDetector {
         }
         final List<Path> result = new ArrayList<>();
         for (final String folder : COMMON_SOURCE_FOLDERS) {
-            final Path source = root.resolve(folder).normalize();
-            if (Files.isDirectory(source) && !Files2.findJavaSources(source).isEmpty() && !containsParent(result, source)) {
+            final Path source = configuredFolder(root, folder);
+            if (Files.isDirectory(source) && !Files2.findJavaSources(source).isEmpty() && !overlaps(result, source)) {
                 result.add(source);
             }
         }
-        return result.stream().distinct().toList();
+        return List.copyOf(result);
     }
 
     private static List<Path> resourceFolders(final Path input, final Path root, final InputKind inputKind) throws IOException {
@@ -144,95 +153,192 @@ public final class ProjectDetector {
         }
         final List<Path> result = new ArrayList<>();
         for (final String folder : COMMON_RESOURCE_FOLDERS) {
-            final Path resource = root.resolve(folder).normalize();
-            if (Files.isDirectory(resource) && !findResourceFiles(resource).isEmpty() && !containsParent(result, resource)) {
+            final Path resource = configuredFolder(root, folder);
+            if (Files.isDirectory(resource) && !findResourceFiles(resource).isEmpty() && !overlaps(result, resource)) {
                 result.add(resource);
             }
         }
-        return result.stream().distinct().toList();
+        return List.copyOf(result);
     }
 
-    private static boolean containsParent(final List<Path> paths, final Path candidate) {
-        return paths.stream().anyMatch(candidate::startsWith);
+    private static boolean overlaps(final List<Path> paths, final Path candidate) {
+        for (final Path path : paths) {
+            if (candidate.startsWith(path) || path.startsWith(candidate)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static Path configuredFolder(final Path root, final String folder) {
+        if (".".equals(folder)) {
+            return root.normalize();
+        }
+        return root.resolve(folder).normalize();
     }
 
     private static List<Path> findResourceFiles(final Path root) throws IOException {
-        return Files2.findFiles(root, ProjectDetector::resourceFile);
-    }
-
-    private static boolean resourceFile(final Path file) {
-        final String name = file.getFileName().toString();
-        return !name.endsWith(".java") && !name.endsWith(".class");
+        return Files2.findResourceFiles(root);
     }
 
     private static List<Path> classFolders(
+        final Path cwd,
         final Path input,
         final Path root,
         final InputKind inputKind,
         final List<Path> explicitClassFolders
     ) throws IOException {
         if (!explicitClassFolders.isEmpty()) {
-            return explicitClassFolders.stream().map(Path::toAbsolutePath).map(Path::normalize).toList();
+            final List<Path> result = new ArrayList<>();
+            for (final Path folder : explicitClassFolders) {
+                result.add((folder.isAbsolute() ? folder : cwd.resolve(folder)).toAbsolutePath().normalize());
+            }
+            return List.copyOf(result);
         }
         if (inputKind == InputKind.CLASSES_DIRECTORY) {
             return List.of(input);
         }
-        final List<Path> result = new ArrayList<>();
-        for (final String folder : COMMON_CLASS_FOLDERS) {
-            final Path classes = root.resolve(folder).normalize();
-            if (Files.isDirectory(classes) && Files2.containsClassFile(classes)) {
-                result.add(classes);
-            }
-        }
-        result.sort(Comparator.comparingLong(ProjectDetector::newestClass).reversed());
-        return result;
+        return ClassOutputDiscovery.discover(root);
     }
 
     private static List<Path> absoluteAll(final Path cwd, final List<Path> paths) {
-        return paths.stream()
-            .map(path -> path.isAbsolute() ? path : cwd.resolve(path))
-            .map(Path::normalize)
-            .toList();
-    }
-
-    private static long newestClass(final Path folder) {
-        try {
-            return Files2.newestModified(List.of(folder), ".class");
-        } catch (final IOException exception) {
-            return 0;
+        final List<Path> result = new ArrayList<>();
+        for (final Path path : paths) {
+            result.add((path.isAbsolute() ? path : cwd.resolve(path)).normalize());
         }
+        return List.copyOf(result);
     }
 
-    private static String outputName(final Path input, final Path root, final InputKind inputKind) {
+    private static String outputName(final Path input, final Path root, final InputKind inputKind) throws IOException {
         if (Files.exists(root.resolve("pom.xml"))) {
-            final String artifactId = firstMatch(root.resolve("pom.xml"), ARTIFACT_ID);
-            if (!artifactId.isBlank()) {
+            final String artifactId = firstXmlTag(root.resolve("pom.xml"), "artifactId");
+            if (!Strings2.isBlank(artifactId)) {
                 return artifactId;
             }
         }
         for (final String settings : List.of("settings.gradle", "settings.gradle.kts")) {
             final Path file = root.resolve(settings);
             if (Files.exists(file)) {
-                final String name = firstMatch(file, GRADLE_ROOT_NAME);
-                if (!name.isBlank()) {
+                final String name = gradleRootProjectName(file);
+                if (!Strings2.isBlank(name)) {
                     return name;
                 }
             }
         }
         if (inputKind == InputKind.JAR_FILE || inputKind == InputKind.SOURCE_FILE) {
             final String filename = input.getFileName().toString();
-            final int dot = filename.lastIndexOf('.');
-            return dot > 0 ? filename.substring(0, dot) : filename;
+            final int dot = lastIndexOf(filename, '.');
+            return dot > 0 ? Strings2.slice(filename, 0, dot) : filename;
         }
-        return root.getFileName() == null ? "app" : root.getFileName().toString().toLowerCase(Locale.ROOT);
+        return root.getFileName() == null ? "app" : Strings2.toAsciiLowerCase(root.getFileName().toString());
     }
 
-    private static String firstMatch(final Path file, final Pattern pattern) {
-        try {
-            final Matcher matcher = pattern.matcher(Files2.readStringIfExists(file));
-            return matcher.find() ? matcher.group(1).trim() : "";
-        } catch (final IOException exception) {
+    private static String firstXmlTag(final Path file, final String tag) throws IOException {
+        if (!Files.exists(file)) {
             return "";
         }
+        final String content = Files2.readStringIfExists(file);
+        final String open = "<" + tag + ">";
+        final String close = "</" + tag + ">";
+        final int start = indexOf(content, open, 0);
+        if (start < 0) {
+            return "";
+        }
+        final int valueStart = start + open.length();
+        final int end = indexOf(content, close, valueStart);
+        if (end < 0) {
+            return "";
+        }
+        return Strings2.trimAscii(Strings2.slice(content, valueStart, end));
+    }
+
+    private static String gradleRootProjectName(final Path file) throws IOException {
+        if (!Files.exists(file)) {
+            return "";
+        }
+        final String content = Files2.readStringIfExists(file);
+        final String key = "rootProject.name";
+        int index = indexOf(content, key, 0);
+        while (index >= 0) {
+            final int equals = nextNonWhitespace(content, index + key.length());
+            if (equals < content.length() && content.charAt(equals) == '=') {
+                final int quote = nextNonWhitespace(content, equals + 1);
+                if (quote < content.length() && (content.charAt(quote) == '\'' || content.charAt(quote) == '"')) {
+                    final char quoteChar = content.charAt(quote);
+                    final int end = indexOfChar(content, quoteChar, quote + 1);
+                    if (end > quote) {
+                        return Strings2.trimAscii(Strings2.slice(content, quote + 1, end));
+                    }
+                }
+            }
+            index = indexOf(content, key, index + key.length());
+        }
+        return "";
+    }
+
+    private static int lastIndexOf(final String value, final char target) {
+        for (int index = value.length() - 1; index >= 0; index--) {
+            if (value.charAt(index) == target) {
+                return index;
+            }
+        }
+        return -1;
+    }
+
+    private static int indexOfChar(final String value, final char target, final int start) {
+        for (int index = start; index < value.length(); index++) {
+            if (value.charAt(index) == target) {
+                return index;
+            }
+        }
+        return -1;
+    }
+
+    private static int indexOf(final String value, final String target, final int start) {
+        if (target.length() == 0) {
+            return start;
+        }
+        for (int index = start; index <= value.length() - target.length(); index++) {
+            if (matchesAt(value, target, index)) {
+                return index;
+            }
+        }
+        return -1;
+    }
+
+    private static boolean matchesAt(final String value, final String target, final int start) {
+        for (int index = 0; index < target.length(); index++) {
+            if (value.charAt(start + index) != target.charAt(index)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static int nextNonWhitespace(final String value, final int start) {
+        int index = start;
+        while (index < value.length() && isAsciiWhitespace(value.charAt(index))) {
+            index++;
+        }
+        return index;
+    }
+
+    private static boolean isAsciiWhitespace(final char value) {
+        if (value == ' ') {
+            return true;
+        }
+        if (value == '\t') {
+            return true;
+        }
+        if (value == '\n') {
+            return true;
+        }
+        if (value == '\r') {
+            return true;
+        }
+        if (value == '\f') {
+            return true;
+        }
+        return false;
     }
 }

@@ -1,20 +1,66 @@
 package javan.build;
 
 import javan.util.Files2;
+import javan.util.Strings2;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
 
 /**
  * Generates C-first native library bindings.
  */
 public final class BindingGenerator {
+    private static final int ABI_VERSION = 1;
+
     /**
      * Writes requested bindings. C headers are always generated because every other binding depends on them.
+     *
+     * @param outputDirectory javan output directory
+     * @param libraryName logical library name
+     * @param exports resolved exports
+     * @param requested requested binding languages
+     * @param artifacts native library artifacts to copy into language folders
+     * @return generated files
+     * @throws IOException when writing fails
+     */
+    public List<Path> generate(
+        final Path outputDirectory,
+        final String libraryName,
+        final List<ExportedMethod> exports,
+        final List<BindingLanguage> requested,
+        final List<Path> artifacts
+    ) throws IOException {
+        final List<BindingLanguage> languages = new ArrayList<>();
+        languages.add(BindingLanguage.C);
+        for (final BindingLanguage language : requested) {
+            if (!containsLanguage(languages, language)) {
+                languages.add(language);
+            }
+        }
+        final List<Path> files = new ArrayList<>();
+        if (containsLanguage(languages, BindingLanguage.C)) {
+            files.add(Files2.writeString(cHeader(outputDirectory, libraryName), cHeader(libraryName, exports)));
+            files.add(Files2.writeString(cAbiTest(outputDirectory, libraryName), cAbiTest(libraryName)));
+        }
+        if (containsLanguage(languages, BindingLanguage.RUST)) {
+            files.add(Files2.writeString(outputDirectory.resolve("dist/bindings/rust/lib.rs"), rust(libraryName, exports)));
+        }
+        if (containsLanguage(languages, BindingLanguage.GO)) {
+            files.add(Files2.writeString(outputDirectory.resolve("dist/bindings/go/" + safePackage(libraryName) + ".go"), go(libraryName, exports)));
+        }
+        if (containsLanguage(languages, BindingLanguage.PYTHON)) {
+            files.add(Files2.writeString(outputDirectory.resolve("dist/bindings/python/" + safePackage(libraryName) + ".py"), python(libraryName, exports)));
+        }
+        files.addAll(generateLanguagePackages(outputDirectory, libraryName, exports, languages, artifacts));
+        return List.copyOf(files);
+    }
+
+    /**
+     * Writes requested bindings without native artifacts.
      *
      * @param outputDirectory javan output directory
      * @param libraryName logical library name
@@ -29,35 +75,26 @@ public final class BindingGenerator {
         final List<ExportedMethod> exports,
         final List<BindingLanguage> requested
     ) throws IOException {
-        final Set<BindingLanguage> languages = new LinkedHashSet<>();
-        languages.add(BindingLanguage.C);
-        languages.addAll(requested);
-        final List<Path> files = new ArrayList<>();
-        if (languages.contains(BindingLanguage.C)) {
-            files.add(Files2.writeString(cHeader(outputDirectory, libraryName), cHeader(libraryName, exports)));
-        }
-        if (languages.contains(BindingLanguage.RUST)) {
-            files.add(Files2.writeString(outputDirectory.resolve("dist/bindings/rust/lib.rs"), rust(libraryName, exports)));
-        }
-        if (languages.contains(BindingLanguage.GO)) {
-            files.add(Files2.writeString(outputDirectory.resolve("dist/bindings/go/" + safePackage(libraryName) + ".go"), go(libraryName, exports)));
-        }
-        if (languages.contains(BindingLanguage.PYTHON)) {
-            files.add(Files2.writeString(outputDirectory.resolve("dist/bindings/python/" + safePackage(libraryName) + ".py"), python(libraryName, exports)));
-        }
-        return List.copyOf(files);
+        return generate(outputDirectory, libraryName, exports, requested, List.of());
     }
 
     private static Path cHeader(final Path outputDirectory, final String libraryName) {
         return outputDirectory.resolve("dist/bindings/c/" + libraryName + ".h");
     }
 
+    private static Path cAbiTest(final Path outputDirectory, final String libraryName) {
+        return outputDirectory.resolve("dist/bindings/c/" + libraryName + "_abi_test.c");
+    }
+
     private static String cHeader(final String libraryName, final List<ExportedMethod> exports) {
-        final String guard = "JAVAN_BINDINGS_" + safePackage(libraryName).toUpperCase(java.util.Locale.ROOT) + "_H";
+        final String guard = "JAVAN_BINDINGS_" + Strings2.toAsciiUpperCase(safePackage(libraryName)) + "_H";
         final StringBuilder header = new StringBuilder();
         header.append("#ifndef ").append(guard).append(System.lineSeparator());
         header.append("#define ").append(guard).append(System.lineSeparator()).append(System.lineSeparator());
         header.append("#include <stdint.h>").append(System.lineSeparator()).append(System.lineSeparator());
+        header.append("#define JAVAN_ABI_VERSION ").append(ABI_VERSION).append(System.lineSeparator());
+        header.append("#define JAVAN_ABI_STRING_UTF8 1").append(System.lineSeparator());
+        header.append("#define JAVAN_ABI_BYTE_ARRAY_POINTER_LENGTH 1").append(System.lineSeparator()).append(System.lineSeparator());
         header.append("#ifdef __cplusplus").append(System.lineSeparator());
         header.append("extern \"C\" {").append(System.lineSeparator());
         header.append("#endif").append(System.lineSeparator()).append(System.lineSeparator());
@@ -68,7 +105,8 @@ public final class BindingGenerator {
         header.append("/* Frees memory returned by javan-owned String and byte[] exports. */").append(System.lineSeparator());
         header.append("void javan_free(void* value);").append(System.lineSeparator()).append(System.lineSeparator());
         for (final ExportedMethod export : exports) {
-            header.append("/* Exported from ").append(export.display()).append(". Caller owns returned char* and JavanByteArray.data. */")
+            header.append("/* Exported from ").append(export.display())
+                .append(". Returned char* and JavanByteArray.data are javan-owned; release with javan_free. */")
                 .append(System.lineSeparator());
             header.append(signature(export)).append(";").append(System.lineSeparator()).append(System.lineSeparator());
         }
@@ -77,6 +115,24 @@ public final class BindingGenerator {
         header.append("#endif").append(System.lineSeparator()).append(System.lineSeparator());
         header.append("#endif").append(System.lineSeparator());
         return header.toString();
+    }
+
+    private static String cAbiTest(final String libraryName) {
+        final StringBuilder test = new StringBuilder();
+        test.append("#include <stddef.h>").append(System.lineSeparator());
+        test.append("#include \"").append(libraryName).append(".h\"").append(System.lineSeparator()).append(System.lineSeparator());
+        test.append("#if JAVAN_ABI_VERSION != ").append(ABI_VERSION).append(System.lineSeparator());
+        test.append("#error Unsupported Javan ABI version").append(System.lineSeparator());
+        test.append("#endif").append(System.lineSeparator()).append(System.lineSeparator());
+        test.append("_Static_assert(offsetof(JavanByteArray, data) == 0, \"JavanByteArray.data must be first\");").append(System.lineSeparator());
+        test.append("_Static_assert(sizeof(((JavanByteArray*)0)->length) == sizeof(int), \"JavanByteArray.length must be int\");").append(System.lineSeparator());
+        test.append("_Static_assert(JAVAN_ABI_STRING_UTF8 == 1, \"String ABI must be UTF-8 char pointer\");").append(System.lineSeparator());
+        test.append("_Static_assert(JAVAN_ABI_BYTE_ARRAY_POINTER_LENGTH == 1, \"byte[] ABI must be pointer plus length\");").append(System.lineSeparator()).append(System.lineSeparator());
+        test.append("int main(void) {").append(System.lineSeparator());
+        test.append("    void (*free_fn)(void*) = javan_free;").append(System.lineSeparator());
+        test.append("    return free_fn == 0;").append(System.lineSeparator());
+        test.append("}").append(System.lineSeparator());
+        return test.toString();
     }
 
     private static String rust(final String libraryName, final List<ExportedMethod> exports) {
@@ -122,6 +178,23 @@ public final class BindingGenerator {
         return go.toString();
     }
 
+    private static String goPackaged(final String libraryName, final List<ExportedMethod> exports) {
+        final StringBuilder go = new StringBuilder();
+        go.append("package ").append(safePackage(libraryName)).append(System.lineSeparator()).append(System.lineSeparator());
+        go.append("/*").append(System.lineSeparator());
+        go.append("#cgo CFLAGS: -I.").append(System.lineSeparator());
+        go.append("#cgo LDFLAGS: -L. -l").append(libraryName).append(System.lineSeparator());
+        go.append("#include \"").append(libraryName).append(".h\"").append(System.lineSeparator());
+        go.append("*/").append(System.lineSeparator());
+        go.append("import \"C\"").append(System.lineSeparator()).append(System.lineSeparator());
+        go.append("type JavanByteArray = C.JavanByteArray").append(System.lineSeparator()).append(System.lineSeparator());
+        go.append("// Returned C strings and byte buffers are owned by javan. Release them with C.javan_free.").append(System.lineSeparator());
+        for (final ExportedMethod export : exports) {
+            go.append(goWrapper(export)).append(System.lineSeparator());
+        }
+        return go.toString();
+    }
+
     private static String python(final String libraryName, final List<ExportedMethod> exports) {
         final StringBuilder python = new StringBuilder();
         python.append("from __future__ import annotations").append(System.lineSeparator()).append(System.lineSeparator());
@@ -146,16 +219,72 @@ public final class BindingGenerator {
         return python.toString();
     }
 
-    private static String signature(final ExportedMethod export) {
-        return export.returnType().cReturnName() + " " + export.symbol() + "(" + parameters(export, AbiType::cName) + ")";
+    private static List<Path> generateLanguagePackages(
+        final Path outputDirectory,
+        final String libraryName,
+        final List<ExportedMethod> exports,
+        final List<BindingLanguage> languages,
+        final List<Path> artifacts
+    ) throws IOException {
+        final List<Path> files = new ArrayList<>();
+        final Path root = outputDirectory.resolve("dist/lib").resolve(libraryName);
+        if (containsLanguage(languages, BindingLanguage.C)) {
+            final Path c = root.resolve("c");
+            files.add(Files2.writeString(c.resolve(libraryName + ".h"), cHeader(libraryName, exports)));
+            files.add(Files2.writeString(c.resolve(libraryName + "_abi_test.c"), cAbiTest(libraryName)));
+            files.addAll(copyArtifacts(artifacts, c));
+        }
+        if (containsLanguage(languages, BindingLanguage.RUST)) {
+            final Path rust = root.resolve("rust");
+            files.add(Files2.writeString(rust.resolve("lib.rs"), rust(libraryName, exports)));
+            files.addAll(copyArtifacts(artifacts, rust));
+        }
+        if (containsLanguage(languages, BindingLanguage.GO)) {
+            final Path go = root.resolve("go");
+            files.add(Files2.writeString(go.resolve(libraryName + ".h"), cHeader(libraryName, exports)));
+            files.add(Files2.writeString(go.resolve(safePackage(libraryName) + ".go"), goPackaged(libraryName, exports)));
+            files.addAll(copyArtifacts(artifacts, go));
+        }
+        if (containsLanguage(languages, BindingLanguage.PYTHON)) {
+            final Path python = root.resolve("python");
+            files.add(Files2.writeString(python.resolve(safePackage(libraryName) + ".py"), python(libraryName, exports)));
+            files.addAll(copyArtifacts(artifacts, python));
+        }
+        return files;
     }
 
-    private static String parameters(final ExportedMethod export, final java.util.function.Function<AbiType, String> mapper) {
+    private static boolean containsLanguage(final List<BindingLanguage> languages, final BindingLanguage target) {
+        for (final BindingLanguage language : languages) {
+            if (language == target) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static List<Path> copyArtifacts(final List<Path> artifacts, final Path targetDirectory) throws IOException {
+        final List<Path> files = new ArrayList<>();
+        for (final Path artifact : artifacts) {
+            if (Files.exists(artifact)) {
+                final Path target = targetDirectory.resolve(artifact.getFileName().toString());
+                Files.createDirectories(target.getParent());
+                Files.copy(artifact, target, StandardCopyOption.REPLACE_EXISTING);
+                files.add(target);
+            }
+        }
+        return files;
+    }
+
+    private static String signature(final ExportedMethod export) {
+        return cReturnName(export.returnType()) + " " + export.symbol() + "(" + cParameters(export) + ")";
+    }
+
+    private static String cParameters(final ExportedMethod export) {
         final List<String> parameters = new ArrayList<>();
         for (int index = 0; index < export.parameterTypes().size(); index++) {
-            parameters.add(mapper.apply(export.parameterTypes().get(index)) + " arg" + index);
+            parameters.add(cName(export.parameterTypes().get(index)) + " arg" + index);
         }
-        return parameters.isEmpty() ? "void" : String.join(", ", parameters);
+        return parameters.isEmpty() ? "void" : joinComma(parameters);
     }
 
     private static String rustParameters(final ExportedMethod export) {
@@ -163,35 +292,65 @@ public final class BindingGenerator {
         for (int index = 0; index < export.parameterTypes().size(); index++) {
             parameters.add("arg" + index + ": " + rustParameter(export.parameterTypes().get(index)));
         }
-        return String.join(", ", parameters);
+        return joinComma(parameters);
     }
 
     private static String pythonParameters(final ExportedMethod export) {
-        return String.join(", ", export.parameterTypes().stream().map(BindingGenerator::pythonParameter).toList());
+        final List<String> parameters = new ArrayList<>();
+        for (final AbiType type : export.parameterTypes()) {
+            parameters.add(pythonParameter(type));
+        }
+        return joinComma(parameters);
     }
 
     private static String rustParameter(final AbiType type) {
-        return switch (type) {
-            case VOID -> "()";
-            case INT -> "i32";
-            case LONG -> "i64";
-            case FLOAT -> "f32";
-            case DOUBLE -> "f64";
-            case STRING -> "*const c_char";
-            case BYTE_ARRAY -> "JavanByteArray";
-        };
+        if (type == AbiType.VOID) {
+            return "()";
+        }
+        if (type == AbiType.INT) {
+            return "i32";
+        }
+        if (type == AbiType.LONG) {
+            return "i64";
+        }
+        if (type == AbiType.FLOAT) {
+            return "f32";
+        }
+        if (type == AbiType.DOUBLE) {
+            return "f64";
+        }
+        if (type == AbiType.STRING) {
+            return "*const c_char";
+        }
+        if (type == AbiType.BYTE_ARRAY) {
+            return "JavanByteArray";
+        }
+        throw new IllegalStateException("Unsupported ABI type");
     }
 
     private static String rustReturn(final AbiType type) {
-        return switch (type) {
-            case VOID -> "()";
-            case INT -> "i32";
-            case LONG -> "i64";
-            case FLOAT -> "f32";
-            case DOUBLE -> "f64";
-            case STRING -> "*mut c_char";
-            case BYTE_ARRAY -> "JavanByteArray";
-        };
+        if (type == AbiType.VOID) {
+            return "()";
+        }
+        if (type == AbiType.INT) {
+            return "i32";
+        }
+        if (type == AbiType.LONG) {
+            return "i64";
+        }
+        if (type == AbiType.FLOAT) {
+            return "f32";
+        }
+        if (type == AbiType.DOUBLE) {
+            return "f64";
+        }
+        if (type == AbiType.STRING) {
+            return "*mut c_char";
+        }
+        if (type == AbiType.BYTE_ARRAY) {
+            return "JavanByteArray";
+        }
+        throw new IllegalStateException("Unsupported ABI type");
     }
 
     private static String goWrapper(final ExportedMethod export) {
@@ -201,7 +360,7 @@ public final class BindingGenerator {
         for (int index = 0; index < export.parameterTypes().size(); index++) {
             parameters.add("arg" + index + " " + goType(export.parameterTypes().get(index)));
         }
-        go.append(String.join(", ", parameters)).append(") ").append(goType(export.returnType())).append(" {").append(System.lineSeparator());
+        go.append(joinComma(parameters)).append(") ").append(goType(export.returnType())).append(" {").append(System.lineSeparator());
         final String call = "C." + export.symbol() + "(" + goArguments(export) + ")";
         if (export.returnType() == AbiType.VOID) {
             go.append("    ").append(call).append(System.lineSeparator());
@@ -218,43 +377,82 @@ public final class BindingGenerator {
             final AbiType type = export.parameterTypes().get(index);
             arguments.add(goArgument(type, "arg" + index));
         }
-        return String.join(", ", arguments);
+        return joinComma(arguments);
     }
 
     private static String goArgument(final AbiType type, final String name) {
-        return switch (type) {
-            case VOID -> "";
-            case INT -> "C.int(" + name + ")";
-            case LONG -> "C.longlong(" + name + ")";
-            case FLOAT -> "C.float(" + name + ")";
-            case DOUBLE -> "C.double(" + name + ")";
-            case STRING -> name;
-            case BYTE_ARRAY -> "C.JavanByteArray(" + name + ")";
-        };
+        if (type == AbiType.VOID) {
+            return "";
+        }
+        if (type == AbiType.INT) {
+            return "C.int(" + name + ")";
+        }
+        if (type == AbiType.LONG) {
+            return "C.longlong(" + name + ")";
+        }
+        if (type == AbiType.FLOAT) {
+            return "C.float(" + name + ")";
+        }
+        if (type == AbiType.DOUBLE) {
+            return "C.double(" + name + ")";
+        }
+        if (type == AbiType.STRING) {
+            return name;
+        }
+        if (type == AbiType.BYTE_ARRAY) {
+            return "C.JavanByteArray(" + name + ")";
+        }
+        throw new IllegalStateException("Unsupported ABI type");
     }
 
     private static String goReturn(final AbiType type, final String call) {
-        return switch (type) {
-            case VOID -> "";
-            case INT -> "int32(" + call + ")";
-            case LONG -> "int64(" + call + ")";
-            case FLOAT -> "float32(" + call + ")";
-            case DOUBLE -> "float64(" + call + ")";
-            case STRING -> call;
-            case BYTE_ARRAY -> "JavanByteArray(" + call + ")";
-        };
+        if (type == AbiType.VOID) {
+            return "";
+        }
+        if (type == AbiType.INT) {
+            return "int32(" + call + ")";
+        }
+        if (type == AbiType.LONG) {
+            return "int64(" + call + ")";
+        }
+        if (type == AbiType.FLOAT) {
+            return "float32(" + call + ")";
+        }
+        if (type == AbiType.DOUBLE) {
+            return "float64(" + call + ")";
+        }
+        if (type == AbiType.STRING) {
+            return call;
+        }
+        if (type == AbiType.BYTE_ARRAY) {
+            return "JavanByteArray(" + call + ")";
+        }
+        throw new IllegalStateException("Unsupported ABI type");
     }
 
     private static String goType(final AbiType type) {
-        return switch (type) {
-            case VOID -> "";
-            case INT -> "int32";
-            case LONG -> "int64";
-            case FLOAT -> "float32";
-            case DOUBLE -> "float64";
-            case STRING -> "*C.char";
-            case BYTE_ARRAY -> "JavanByteArray";
-        };
+        if (type == AbiType.VOID) {
+            return "";
+        }
+        if (type == AbiType.INT) {
+            return "int32";
+        }
+        if (type == AbiType.LONG) {
+            return "int64";
+        }
+        if (type == AbiType.FLOAT) {
+            return "float32";
+        }
+        if (type == AbiType.DOUBLE) {
+            return "float64";
+        }
+        if (type == AbiType.STRING) {
+            return "*C.char";
+        }
+        if (type == AbiType.BYTE_ARRAY) {
+            return "JavanByteArray";
+        }
+        throw new IllegalStateException("Unsupported ABI type");
     }
 
     private static String goFunction(final String symbol) {
@@ -265,7 +463,7 @@ public final class BindingGenerator {
             if (ch == '_') {
                 upper = true;
             } else if (upper) {
-                result.append(Character.toUpperCase(ch));
+                result.append(asciiUpper(ch));
                 upper = false;
             } else {
                 result.append(ch);
@@ -275,34 +473,103 @@ public final class BindingGenerator {
     }
 
     private static String pythonParameter(final AbiType type) {
-        return switch (type) {
-            case VOID -> "None";
-            case INT -> "ctypes.c_int";
-            case LONG -> "ctypes.c_longlong";
-            case FLOAT -> "ctypes.c_float";
-            case DOUBLE -> "ctypes.c_double";
-            case STRING -> "ctypes.c_char_p";
-            case BYTE_ARRAY -> "JavanByteArray";
-        };
+        if (type == AbiType.VOID) {
+            return "None";
+        }
+        if (type == AbiType.INT) {
+            return "ctypes.c_int";
+        }
+        if (type == AbiType.LONG) {
+            return "ctypes.c_longlong";
+        }
+        if (type == AbiType.FLOAT) {
+            return "ctypes.c_float";
+        }
+        if (type == AbiType.DOUBLE) {
+            return "ctypes.c_double";
+        }
+        if (type == AbiType.STRING) {
+            return "ctypes.c_char_p";
+        }
+        if (type == AbiType.BYTE_ARRAY) {
+            return "JavanByteArray";
+        }
+        throw new IllegalStateException("Unsupported ABI type");
     }
 
     private static String pythonReturn(final AbiType type) {
-        return switch (type) {
-            case VOID -> "None";
-            case INT -> "ctypes.c_int";
-            case LONG -> "ctypes.c_longlong";
-            case FLOAT -> "ctypes.c_float";
-            case DOUBLE -> "ctypes.c_double";
-            case STRING -> "ctypes.c_void_p";
-            case BYTE_ARRAY -> "JavanByteArray";
-        };
+        if (type == AbiType.VOID) {
+            return "None";
+        }
+        if (type == AbiType.INT) {
+            return "ctypes.c_int";
+        }
+        if (type == AbiType.LONG) {
+            return "ctypes.c_longlong";
+        }
+        if (type == AbiType.FLOAT) {
+            return "ctypes.c_float";
+        }
+        if (type == AbiType.DOUBLE) {
+            return "ctypes.c_double";
+        }
+        if (type == AbiType.STRING) {
+            return "ctypes.c_void_p";
+        }
+        if (type == AbiType.BYTE_ARRAY) {
+            return "JavanByteArray";
+        }
+        throw new IllegalStateException("Unsupported ABI type");
     }
 
     private static String safePackage(final String value) {
-        final String safe = value.replaceAll("[^A-Za-z0-9_]", "_");
-        if (safe.isBlank() || Character.isDigit(safe.charAt(0))) {
+        final String safe = safePackageToken(value);
+        if (Strings2.isBlank(safe) || isDigit(safe.charAt(0))) {
             return "javan_" + safe;
         }
         return safe;
+    }
+
+    private static String cName(final AbiType type) {
+        return type.cName();
+    }
+
+    private static String cReturnName(final AbiType type) {
+        return type.cReturnName();
+    }
+
+    private static String joinComma(final List<String> values) {
+        final StringBuilder result = new StringBuilder();
+        for (int index = 0; index < values.size(); index++) {
+            if (index > 0) {
+                result.append(", ");
+            }
+            result.append(values.get(index));
+        }
+        return result.toString();
+    }
+
+    private static String safePackageToken(final String value) {
+        final StringBuilder result = new StringBuilder();
+        for (int index = 0; index < value.length(); index++) {
+            final char ch = value.charAt(index);
+            if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || isDigit(ch) || ch == '_') {
+                result.append(ch);
+            } else {
+                result.append('_');
+            }
+        }
+        return result.toString();
+    }
+
+    private static char asciiUpper(final char value) {
+        if (value >= 'a' && value <= 'z') {
+            return (char) (value - ('a' - 'A'));
+        }
+        return value;
+    }
+
+    private static boolean isDigit(final char value) {
+        return value >= '0' && value <= '9';
     }
 }

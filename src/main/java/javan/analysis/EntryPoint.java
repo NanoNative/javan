@@ -14,6 +14,16 @@ public record EntryPoint(String className, String methodName, String descriptor)
      * @return JVM display name
      */
     public String display() {
-        return className + "." + methodName + descriptor;
+        return new StringBuilder()
+            .append(className)
+            .append('.')
+            .append(methodName)
+            .append(descriptor)
+            .toString();
+    }
+
+    @Override
+    public String toString() {
+        return display();
     }
 }

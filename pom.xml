@@ -132,7 +132,7 @@
                         </goals>
                         <configuration>
                             <excludes>
-                                <!-- Full reports still include these. The hard gate is scoped to deterministic compiler-core behavior. -->
+                                <!-- Temporary coverage-capture gap: these surfaces are exercised mostly through child JVMs/native binaries, which the Maven JaCoCo agent does not count yet. Do not present this ratio as whole-repo coverage. -->
                                 <exclude>javan/Main*</exclude>
                                 <exclude>javan/Javan*</exclude>
                                 <exclude>javan/ProjectReports*</exclude>

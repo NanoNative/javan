@@ -1,12 +1,17 @@
 package javan;
 
+import javan.analysis.CallGraph;
 import javan.analysis.EntryPoint;
+import javan.analysis.ReachabilityAnalyzer;
 import javan.build.BindingLanguage;
 import javan.build.BuildKind;
+import javan.build.LibraryFormat;
 import javan.classfile.ClassFile;
 import javan.classfile.CodeAttribute;
 import javan.classfile.CodeException;
 import javan.classfile.DynamicRef;
+import javan.classfile.FieldInfo;
+import javan.classfile.FieldRef;
 import javan.classfile.Instruction;
 import javan.classfile.MethodInfo;
 import javan.cli.Command;
@@ -16,6 +21,7 @@ import javan.codegen.BytecodeToIR;
 import javan.codegen.MethodDescriptor;
 import javan.codegen.NativeLinker;
 import javan.compat.BytecodeSupport;
+import javan.compat.JdkCallSupport;
 import javan.ir.IrClass;
 import javan.ir.IrDispatch;
 import javan.ir.IrDispatchTarget;
@@ -30,6 +36,7 @@ import javan.ir.IrType;
 import javan.profile.Profile;
 import javan.util.Files2;
 import javan.util.ProcessRunner;
+import javan.util.Strings2;
 import javan.verify.Diagnostic;
 import javan.verify.ForbiddenApiRules;
 import javan.classfile.MethodRef;
@@ -54,7 +61,17 @@ final class CoreBehaviorTest {
     private Path tempDir;
 
     @Test
-    void optionsParseAllEscapeHatches() {
+    void stringsHexLongUsesUnsignedLowercaseText() {
+        assertThat(Strings2.hexLong(-1L)).isEqualTo("ffffffffffffffff");
+    }
+
+    @Test
+    void stringsReplaceCharRewritesOnlyMatchingCharacters() {
+        assertThat(Strings2.replaceChar("a/b/c", '/', '.')).isEqualTo("a.b.c");
+    }
+
+    @Test
+    void optionsParseBuildAndRunArguments() {
         final Options options = Options.parse(new String[]{
             "run",
             "app",
@@ -68,7 +85,6 @@ final class CoreBehaviorTest {
             "--bindings", "c,rust",
             "--release",
             "--target", "linux-aarch64",
-            "--no-build",
             "--",
             "one",
             "two"
@@ -81,12 +97,12 @@ final class CoreBehaviorTest {
         assertThat(options.classpathEntries()).containsExactly(Path.of("a.jar"), Path.of("b.jar"));
         assertThat(options.outputName()).contains("native-app");
         assertThat(options.buildKind()).isEqualTo(BuildKind.SHAREDLIB);
+        assertThat(options.libraryFormats()).containsExactly(LibraryFormat.SHARED);
         assertThat(options.profile()).isEqualTo(Profile.STRICT);
         assertThat(options.exports()).containsExactly("com.acme.Math.add");
         assertThat(options.bindings()).containsExactly(BindingLanguage.C, BindingLanguage.RUST);
         assertThat(options.release()).isTrue();
         assertThat(options.targetTriple()).contains("linux-aarch64");
-        assertThat(options.noBuild()).isTrue();
         assertThat(options.passthroughArgs()).containsExactly("one", "two");
     }
 
@@ -95,6 +111,67 @@ final class CoreBehaviorTest {
         final Options options = Options.parse(new String[]{"build", ".", "--kind", "jar"});
 
         assertThat(options.buildKind()).isEqualTo(BuildKind.JAR);
+    }
+
+    @Test
+    void optionsParseJarAlias() {
+        final Options options = Options.parse(new String[]{"build", ".", "--jar"});
+
+        assertThat(options.buildKind()).isEqualTo(BuildKind.JAR);
+    }
+
+    @Test
+    void optionsParseLibraryAliasWithBothFormats() {
+        final Options options = Options.parse(new String[]{"build", ".", "--library", "--format", "both"});
+
+        assertThat(options.buildKind()).isEqualTo(BuildKind.LIBRARY);
+        assertThat(options.libraryFormats()).containsExactly(LibraryFormat.STATIC, LibraryFormat.SHARED);
+    }
+
+    @Test
+    void optionsParseLibAliasWithStaticFormat() {
+        final Options options = Options.parse(new String[]{"build", ".", "--lib", "--format", "static"});
+
+        assertThat(options.buildKind()).isEqualTo(BuildKind.LIBRARY);
+        assertThat(options.libraryFormats()).containsExactly(LibraryFormat.STATIC);
+    }
+
+    @Test
+    void optionsParseLibraryKindWithSharedFormat() {
+        final Options options = Options.parse(new String[]{"build", ".", "--kind", "library", "--format", "shared"});
+
+        assertThat(options.buildKind()).isEqualTo(BuildKind.LIBRARY);
+        assertThat(options.libraryFormats()).containsExactly(LibraryFormat.SHARED);
+    }
+
+    @Test
+    void optionsRejectFormatForAppBuild() {
+        assertThatThrownBy(() -> Options.parse(new String[]{"build", ".", "--format", "shared"}))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("--format requires --library");
+    }
+
+    @Test
+    void optionsRejectContradictoryStaticLibraryFormat() {
+        assertThatThrownBy(() -> Options.parse(new String[]{"build", ".", "--kind", "staticlib", "--format", "shared"}))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("--kind staticlib only supports --format static");
+    }
+
+    @Test
+    void optionsRejectContradictorySharedLibraryFormat() {
+        assertThatThrownBy(() -> Options.parse(new String[]{"build", ".", "--kind", "sharedlib", "--format", "static"}))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("--kind sharedlib only supports --format shared");
+    }
+
+    @Test
+    void fileScannerIncludesNestedPackageNamedBuild() throws Exception {
+        final Path classFile = tempDir.resolve("classes/javan/build/Foo.class");
+        Files.createDirectories(classFile.getParent());
+        Files.write(classFile, new byte[]{0});
+
+        assertThat(Files2.findClassFiles(tempDir.resolve("classes"))).containsExactly(classFile);
     }
 
     @Test
@@ -112,6 +189,44 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void profileParsesAsciiCaseInsensitiveCliValues() {
+        assertThat(Profile.parse("CORE")).contains(Profile.CORE);
+    }
+
+    @Test
+    void profileReportsStableCliName() {
+        assertThat(Profile.CORE.cliName()).isEqualTo("core");
+        assertThat(Profile.SERVICE.cliName()).isEqualTo("service");
+        assertThat(Profile.LIBRARY.cliName()).isEqualTo("library");
+        assertThat(Profile.STRICT.cliName()).isEqualTo("strict");
+    }
+
+    @Test
+    void stringsDetectNullAsBlank() {
+        assertThat(Strings2.isBlank(null)).isTrue();
+    }
+
+    @Test
+    void stringsDetectAsciiWhitespaceAsBlank() {
+        assertThat(Strings2.isBlank(" \t\n\r\f")).isTrue();
+    }
+
+    @Test
+    void stringsDetectVisibleCharactersAsNotBlank() {
+        assertThat(Strings2.isBlank(" x ")).isFalse();
+    }
+
+    @Test
+    void executableNameNormalizesAsciiNames() {
+        assertThat(Strings2.executableName("com.acme.Hello Tool")).isEqualTo("hello-tool");
+    }
+
+    @Test
+    void executableNameFallsBackForBlankValue() {
+        assertThat(Strings2.executableName(" \t")).isEqualTo("app");
+    }
+
+    @Test
     void nativeLibraryLinkerReportsSharedAndStaticFailures() throws Exception {
         final Path badC = Files.writeString(tempDir.resolve("bad.c"), "int main(void) { return ;\n");
         final Path runtimeC = Files.writeString(tempDir.resolve("runtime.c"), "void runtime(void) {}\n");
@@ -126,6 +241,30 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void nativeLibraryLinkerBuildsSharedLibrary() throws Exception {
+        final Path libraryC = Files.writeString(tempDir.resolve("library.c"), "int javan_add(int a, int b) { return a + b; }\n");
+        final Path runtimeC = Files.writeString(tempDir.resolve("runtime.c"), "void javan_runtime(void) {}\n");
+        final Path output = tempDir.resolve("libok.dylib");
+
+        final Path linked = new NativeLinker().linkSharedLibrary(tempDir, libraryC, runtimeC, output);
+
+        assertThat(linked).isEqualTo(output);
+        assertThat(output).isRegularFile();
+    }
+
+    @Test
+    void nativeLibraryLinkerBuildsStaticLibrary() throws Exception {
+        final Path libraryC = Files.writeString(tempDir.resolve("library.c"), "int javan_add(int a, int b) { return a + b; }\n");
+        final Path runtimeC = Files.writeString(tempDir.resolve("runtime.c"), "void javan_runtime(void) {}\n");
+        final Path output = tempDir.resolve("libok.a");
+
+        final Path linked = new NativeLinker().linkStaticLibrary(tempDir, libraryC, runtimeC, output);
+
+        assertThat(linked).isEqualTo(output);
+        assertThat(output).isRegularFile();
+    }
+
+    @Test
     void bytecodeSupportClassifiesNativeRejectedAndUnknownOpcodes() {
         assertThat(BytecodeSupport.classify(190)).isEqualTo(BytecodeSupport.Status.NATIVE_SUPPORTED);
         assertThat(BytecodeSupport.classify(188)).isEqualTo(BytecodeSupport.Status.NATIVE_SUPPORTED);
@@ -134,7 +273,9 @@ final class CoreBehaviorTest {
         assertThat(BytecodeSupport.mnemonic(190)).isEqualTo("arraylength");
         assertThat(BytecodeSupport.mnemonic(255)).isEqualTo("opcode_255");
         assertThat(BytecodeSupport.knownOpcodes()).contains(0, 201).doesNotContain(255);
-        assertThat(BytecodeSupport.nativeSupportedOpcodes()).contains(47, 48, 49, 80, 81, 82, 186, 188, 190).doesNotContain(197);
+        assertThat(BytecodeSupport.nativeSupportedOpcodes())
+            .contains(47, 48, 49, 80, 81, 82, 126, 146, 165, 166, 170, 171, 186, 188, 190)
+            .doesNotContain(197);
     }
 
     @Test
@@ -158,9 +299,23 @@ final class CoreBehaviorTest {
 
     @Test
     void diagnosticFormatsEmptyFields() {
-        final Diagnostic diagnostic = Diagnostic.warning("JAVAN999", "message", "", "", "", "", "");
+        final Diagnostic diagnostic = Diagnostic.warning("JAVAN199", "message", "", "", "", "", "");
 
-        assertThat(diagnostic.format()).contains("warning[JAVAN999]", "  -");
+        assertThat(diagnostic.format()).contains("warning[JAVAN199]", "  -");
+    }
+
+    @Test
+    void diagnosticFormatsRuntimeFallbackCodeAsError() {
+        final Diagnostic diagnostic = Diagnostic.warning("JAVAN900", "message", "Class", "method", "subject", "reason", "fix");
+
+        assertThat(diagnostic.format()).contains("error[JAVAN900]");
+    }
+
+    @Test
+    void diagnosticFormatsNullCodeAsWarning() {
+        final Diagnostic diagnostic = Diagnostic.error(null, "message", "Class", "method", "subject", "reason", "fix");
+
+        assertThat(diagnostic.format()).contains("warning[null]");
     }
 
     @Test
@@ -202,6 +357,479 @@ final class CoreBehaviorTest {
         assertThat(diagnostics).hasSize(1);
         assertThat(diagnostics.getFirst().error()).isTrue();
         assertThat(diagnostics.getFirst().subject()).isEqualTo("newarray atype--1");
+    }
+
+    @Test
+    void staticVerifierAcceptsSupportedListAddCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 185, "invokeinterface", new MethodRef("java/util/List", "add", "(Ljava/lang/Object;)Z")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierRejectsUnsupportedListStreamCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 185, "invokeinterface", new MethodRef("java/util/List", "stream", "()Ljava/util/stream/Stream;")),
+            true
+        );
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN031");
+        assertThat(diagnostics.getFirst().subject()).isEqualTo("java/util/List.stream()Ljava/util/stream/Stream;");
+    }
+
+    @Test
+    void staticVerifierAcceptsSupportedPathResolveCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 185, "invokeinterface", new MethodRef("java/nio/file/Path", "resolve", "(Ljava/lang/String;)Ljava/nio/file/Path;")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierRejectsUnsupportedPathsGetCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 184, "invokestatic", new MethodRef("java/nio/file/Paths", "get", "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;")),
+            true
+        );
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN031");
+        assertThat(diagnostics.getFirst().subject()).isEqualTo("java/nio/file/Paths.get(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;");
+    }
+
+    @Test
+    void jdkCallSupportAcceptsArrayListIndexedAdd() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/util/ArrayList", "add", "(ILjava/lang/Object;)V"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportRejectsUnknownCollectionCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/util/Collection", "stream", "()Ljava/util/stream/Stream;"))).isFalse();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsCollectionContains() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/util/Collection", "contains", "(Ljava/lang/Object;)Z"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportRejectsUnknownIteratorCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/util/Iterator", "remove", "()V"))).isFalse();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsMapIsEmpty() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/util/Map", "isEmpty", "()Z"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportRejectsUnknownMapCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/util/Map", "entrySet", "()Ljava/util/Set;"))).isFalse();
+    }
+
+    @Test
+    void jdkCallSupportRejectsUnknownHashMapCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/util/HashMap", "clear", "()V"))).isFalse();
+    }
+
+    @Test
+    void jdkCallSupportRejectsUnknownDirectoryStreamCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/nio/file/DirectoryStream", "spliterator", "()Ljava/util/Spliterator;"))).isFalse();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsThrowableStringConstructor() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/IllegalStateException", "<init>", "(Ljava/lang/String;)V"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsEnumSyntheticConstructor() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Enum", "<init>", "(Ljava/lang/String;I)V"))).isTrue();
+    }
+
+    @Test
+    void staticVerifierAcceptsEnumSyntheticConstructorCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 183, "invokespecial", new MethodRef("java/lang/Enum", "<init>", "(Ljava/lang/String;I)V")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierStillWarnsForEnumValueOf() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 184, "invokestatic", new MethodRef("java/lang/Enum", "valueOf", "(Ljava/lang/Class;Ljava/lang/String;)Ljava/lang/Enum;")),
+            false
+        );
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN131");
+    }
+
+    @Test
+    void staticVerifierSkipsUnreachableGeneratedEnumValueOfBody() {
+        final MethodInfo method = generatedEnumValueOfMethod(0x0008, instruction(0, 18, "ldc"));
+        final ClassFile enumClass = classWithMethods("com/acme/Color", "java/lang/Enum", 0x4000, List.of(), method);
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(Map.of(enumClass.name(), enumClass), List.of());
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierSkipsUnreachableGeneratedEnumValueOfBodyWithResolvedClassLiteral() {
+        final MethodInfo method = generatedEnumValueOfMethod(0x0008, classInstruction(0, 18, "ldc", "com/acme/Color"));
+        final ClassFile enumClass = classWithMethods("com/acme/Color", "java/lang/Enum", 0x4000, List.of(), method);
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(Map.of(enumClass.name(), enumClass), List.of());
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierWarnsForReachableGeneratedEnumValueOfBody() {
+        final MethodInfo method = generatedEnumValueOfMethod(0x0008, instruction(0, 18, "ldc"));
+        final ClassFile enumClass = classWithMethods("com/acme/Color", "java/lang/Enum", 0x4000, List.of(), method);
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(enumClass.name(), enumClass),
+            List.of(new EntryPoint("com/acme/Color", "valueOf", "(Ljava/lang/String;)Lcom/acme/Color;"))
+        );
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN031");
+    }
+
+    @Test
+    void staticVerifierWarnsForNonStaticEnumValueOfShape() {
+        final MethodInfo method = generatedEnumValueOfMethod(0, instruction(0, 18, "ldc"));
+        final ClassFile enumClass = classWithMethods("com/acme/Color", "java/lang/Enum", 0x4000, List.of(), method);
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(Map.of(enumClass.name(), enumClass), List.of());
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN131");
+    }
+
+    @Test
+    void reachabilityRejectsDirectEnumValueOfEntry() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Color", classWithMethods(
+                    "com/acme/Color",
+                    "java/lang/Enum",
+                    0x4000,
+                    List.of(),
+                    methodInfo("valueOf", "(Ljava/lang/String;)Lcom/acme/Color;")
+                )
+            ),
+            List.of(new EntryPoint("com/acme/Color", "valueOf", "(Ljava/lang/String;)Lcom/acme/Color;"))
+        );
+
+        assertThat(graph.diagnostics()).hasSize(1);
+        assertThat(graph.diagnostics().getFirst().code()).isEqualTo("JAVAN015");
+    }
+
+    @Test
+    void reachabilityRejectsReachableEnumValueOf() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo("main", "([Ljava/lang/String;)V", instruction(0, 184, "invokestatic", new MethodRef("com/acme/Color", "valueOf", "(Ljava/lang/String;)Lcom/acme/Color;")))
+                ),
+                "com/acme/Color", classWithMethods("com/acme/Color", "java/lang/Enum", 0x4000, List.of())
+            ),
+            List.of(new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"))
+        );
+
+        assertThat(graph.diagnostics()).hasSize(1);
+        assertThat(graph.diagnostics().getFirst().code()).isEqualTo("JAVAN015");
+        assertThat(graph.diagnostics().getFirst().subject()).isEqualTo("com/acme/Color.valueOf(Ljava/lang/String;)Lcom/acme/Color;");
+    }
+
+    @Test
+    void jdkCallSupportRejectsNoopConstructorWithArguments() {
+        assertThat(JdkCallSupport.isNoopPlatformConstructor(new MethodRef("java/lang/Object", "<init>", "(Ljava/lang/String;)V"))).isFalse();
+    }
+
+    @Test
+    void staticVerifierAcceptsAssignableSuperclassInstanceofTarget() {
+        final List<Diagnostic> diagnostics = verifyInstanceOf(
+            Map.of("com/acme/Child", typeClass("com/acme/Child", "com/acme/MissingBase", 0, List.of())),
+            "com/acme/MissingBase",
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsDirectInterfaceInstanceofTarget() {
+        final List<Diagnostic> diagnostics = verifyInstanceOf(
+            Map.of("com/acme/Child", typeClass("com/acme/Child", "java/lang/Object", 0, List.of("com/acme/MissingInterface"))),
+            "com/acme/MissingInterface",
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsInheritedInterfaceInstanceofTarget() {
+        final List<Diagnostic> diagnostics = verifyInstanceOf(
+            Map.of(
+                "com/acme/Child", typeClass("com/acme/Child", "java/lang/Object", 0, List.of("com/acme/KnownInterface")),
+                "com/acme/KnownInterface", typeClass("com/acme/KnownInterface", "java/lang/Object", 0x0200, List.of("com/acme/MissingInterface"))
+            ),
+            "com/acme/MissingInterface",
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsObjectInstanceofTarget() {
+        final List<Diagnostic> diagnostics = verifyInstanceOf(Map.of(), "java/lang/Object", true);
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierRejectsInstanceofTargetWhenSuperclassChainEnds() {
+        final List<Diagnostic> diagnostics = verifyInstanceOf(
+            Map.of("com/acme/Child", typeClass("com/acme/Child", "", 0, List.of())),
+            "com/acme/MissingBase",
+            true
+        );
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN045");
+    }
+
+    @Test
+    void staticVerifierRejectsInstanceofTargetWhenSuperclassCycleCannotProveAssignable() {
+        final List<Diagnostic> diagnostics = verifyInstanceOf(
+            Map.of(
+                "com/acme/A", typeClass("com/acme/A", "com/acme/B", 0, List.of()),
+                "com/acme/B", typeClass("com/acme/B", "com/acme/A", 0, List.of())
+            ),
+            "com/acme/MissingBase",
+            true
+        );
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN045");
+    }
+
+    @Test
+    void staticVerifierRejectsInstanceofTargetWhenInterfaceMetadataIsMissing() {
+        final List<Diagnostic> diagnostics = verifyInstanceOf(
+            Map.of("com/acme/Child", typeClass("com/acme/Child", "java/lang/Object", 0, List.of("com/acme/KnownInterface"))),
+            "com/acme/MissingInterface",
+            true
+        );
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN045");
+    }
+
+    @Test
+    void staticVerifierRejectsInstanceofTargetWhenInterfaceWasAlreadyVisited() {
+        final List<Diagnostic> diagnostics = verifyInstanceOf(
+            Map.of(
+                "com/acme/Child", typeClass("com/acme/Child", "java/lang/Object", 0, List.of("com/acme/A", "com/acme/B")),
+                "com/acme/A", typeClass("com/acme/A", "java/lang/Object", 0x0200, List.of("com/acme/B")),
+                "com/acme/B", typeClass("com/acme/B", "java/lang/Object", 0x0200, List.of())
+            ),
+            "com/acme/MissingInterface",
+            true
+        );
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN045");
+    }
+
+    @Test
+    void staticVerifierRejectsUnsupportedReachableInstanceofTarget() {
+        final List<Diagnostic> diagnostics = verifyInstanceOf(Map.of(), "java/util/List", true);
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN045");
+    }
+
+    @Test
+    void staticVerifierWarnsForUnsupportedUnreachableInstanceofTarget() {
+        final List<Diagnostic> diagnostics = verifyInstanceOf(Map.of(), "java/util/List", false);
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN145");
+    }
+
+    @Test
+    void staticVerifierIgnoresInstanceofWithoutClassMetadata() {
+        final List<Diagnostic> diagnostics = verifyInstruction(instruction(0, 193, "instanceof"), true);
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void reachabilityRejectsEmptyEntryPoints() {
+        assertThatThrownBy(() -> new ReachabilityAnalyzer().analyze(Map.of(), List.of()))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Reachability requires at least one entry point");
+    }
+
+    @Test
+    void reachabilityReportsMissingEntryMethod() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of("com/acme/Main", classWithMethods("com/acme/Main", "java/lang/Object", 0, List.of())),
+            List.of(new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"))
+        );
+
+        assertThat(graph.diagnostics()).hasSize(1);
+        assertThat(graph.diagnostics().getFirst().code()).isEqualTo("JAVAN011");
+    }
+
+    @Test
+    void reachabilityReportsMissingApplicationCallTarget() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of("com/acme/Main", classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                methodInfo("main", "([Ljava/lang/String;)V", instruction(0, 184, "invokestatic", new MethodRef("com/acme/Missing", "call", "()V")))
+            )),
+            List.of(new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"))
+        );
+
+        assertThat(graph.diagnostics()).hasSize(1);
+        assertThat(graph.diagnostics().getFirst().subject()).isEqualTo("com/acme/Missing.call()V");
+    }
+
+    @Test
+    void reachabilityReportsInterfaceCallWithoutImplementation() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of("com/acme/Main", classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                methodInfo("main", "([Ljava/lang/String;)V", instruction(0, 185, "invokeinterface", new MethodRef("com/acme/Handler", "handle", "()V")))
+            )),
+            List.of(new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"))
+        );
+
+        assertThat(graph.diagnostics()).hasSize(1);
+        assertThat(graph.diagnostics().getFirst().code()).isEqualTo("JAVAN012");
+    }
+
+    @Test
+    void reachabilityResolvesSpecialNonConstructorCall() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo("main", "([Ljava/lang/String;)V", instruction(0, 183, "invokespecial", new MethodRef("com/acme/Base", "helper", "()V")))
+                ),
+                "com/acme/Base", classWithMethods("com/acme/Base", "java/lang/Object", 0, List.of(), methodInfo("helper", "()V"))
+            ),
+            List.of(new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+        assertThat(graph.reachableMethods()).contains(new EntryPoint("com/acme/Base", "helper", "()V"));
+    }
+
+    @Test
+    void reachabilityResolvesInheritedVirtualTarget() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo("main", "([Ljava/lang/String;)V", instruction(0, 182, "invokevirtual", new MethodRef("com/acme/Base", "value", "()I")))
+                ),
+                "com/acme/Base", classWithMethods("com/acme/Base", "java/lang/Object", 0, List.of(), methodInfo("value", "()I")),
+                "com/acme/Child", classWithMethods("com/acme/Child", "com/acme/Base", 0, List.of())
+            ),
+            List.of(new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+        assertThat(graph.reachableMethods()).contains(new EntryPoint("com/acme/Base", "value", "()I"));
+    }
+
+    @Test
+    void reachabilityReportsUnresolvedVirtualTarget() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo("main", "([Ljava/lang/String;)V", instruction(0, 182, "invokevirtual", new MethodRef("com/acme/Base", "missing", "()V")))
+                ),
+                "com/acme/Base", classWithMethods("com/acme/Base", "java/lang/Object", 0, List.of()),
+                "com/acme/Child", classWithMethods("com/acme/Child", "com/acme/Base", 0, List.of())
+            ),
+            List.of(new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"))
+        );
+
+        assertThat(graph.diagnostics()).hasSize(1);
+        assertThat(graph.diagnostics().getFirst().code()).isEqualTo("JAVAN012");
+    }
+
+    @Test
+    void reachabilityAcceptsSupportedPrimitiveArrayClone() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of("com/acme/Main", classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                methodInfo("main", "([Ljava/lang/String;)V", instruction(0, 182, "invokevirtual", new MethodRef("[I", "clone", "()Ljava/lang/Object;")))
+            )),
+            List.of(new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+    }
+
+    @Test
+    void reachabilityReportsUnsupportedBooleanArrayClone() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of("com/acme/Main", classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                methodInfo("main", "([Ljava/lang/String;)V", instruction(0, 182, "invokevirtual", new MethodRef("[Z", "clone", "()Ljava/lang/Object;")))
+            )),
+            List.of(new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"))
+        );
+
+        assertThat(graph.diagnostics()).hasSize(1);
+        assertThat(graph.diagnostics().getFirst().code()).isEqualTo("JAVAN011");
     }
 
     @Test
@@ -285,6 +913,393 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void staticVerifierAcceptsExplicitThrowRangeWithInstructionBeforeProtectedRange() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            instruction(0, 0, "nop"),
+            classInstruction(1, 187, "new", "java/lang/IllegalStateException"),
+            instruction(2, 183, "invokespecial", new MethodRef("java/lang/IllegalStateException", "<init>", "()V")),
+            instruction(3, 191, "athrow")
+        ), new CodeException(1, 4, 4, Optional.of("java/lang/IllegalStateException")));
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsExplicitThrowRangeWithNop() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(explicitThrowInstructions(instruction(1, 0, "nop")));
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsExplicitThrowRangeWithLdcW() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(explicitThrowInstructions(instruction(1, 19, "ldc_w")));
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsExplicitThrowRangeWithLdc2W() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(explicitThrowInstructions(instruction(1, 20, "ldc2_w")));
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsExplicitThrowRangeWithPop() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(explicitThrowInstructions(instruction(1, 87, "pop")));
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierRejectsExplicitThrowConstructorWithoutMethodRef() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            classInstruction(0, 187, "new", "java/lang/IllegalStateException"),
+            instruction(1, 183, "invokespecial"),
+            instruction(2, 191, "athrow")
+        ), new CodeException(0, 3, 3, Optional.of("java/lang/IllegalStateException")));
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierRejectsThrowableConstructorWithCause() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            classInstruction(0, 187, "new", "java/lang/IllegalStateException"),
+            instruction(1, 89, "dup"),
+            instruction(2, 18, "ldc"),
+            classInstruction(3, 187, "new", "java/lang/RuntimeException"),
+            instruction(4, 89, "dup"),
+            instruction(5, 18, "ldc"),
+            instruction(6, 183, "invokespecial", new MethodRef("java/lang/RuntimeException", "<init>", "(Ljava/lang/String;)V")),
+            instruction(7, 183, "invokespecial", new MethodRef("java/lang/IllegalStateException", "<init>", "(Ljava/lang/String;Ljava/lang/Throwable;)V")),
+            instruction(8, 191, "athrow")
+        ), new CodeException(0, 9, 9, Optional.of("java/lang/IllegalStateException")));
+
+        assertThat(diagnostics).extracting(Diagnostic::code).contains("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierAcceptsEnumSwitchMapNoSuchFieldHandler() {
+        assertThat(verifyEnumSwitchMapExceptionTable(enumSwitchMapInstructions(5))).isEmpty();
+    }
+
+    @Test
+    void staticVerifierRejectsEnumSwitchMapHandlerWithoutHandlerInstruction() {
+        final List<Diagnostic> diagnostics = verifyEnumSwitchMapExceptionTable(
+            enumSwitchMapInstructions(5),
+            new CodeException(0, 5, 99, Optional.of("java/lang/NoSuchFieldError"))
+        );
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierRejectsEnumSwitchMapHandlerThatDoesNotStoreException() {
+        final List<Diagnostic> diagnostics = verifyEnumSwitchMapExceptionTable(List.of(
+            enumSwitchMapInstructions(5).get(0),
+            enumSwitchMapInstructions(5).get(1),
+            enumSwitchMapInstructions(5).get(2),
+            enumSwitchMapInstructions(5).get(3),
+            enumSwitchMapInstructions(5).get(4),
+            instruction(5, 177, "return")
+        ));
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierAcceptsEnumSwitchMapPopHandler() {
+        final List<Diagnostic> diagnostics = verifyEnumSwitchMapExceptionTable(List.of(
+            enumSwitchMapInstructions(5).get(0),
+            enumSwitchMapInstructions(5).get(1),
+            enumSwitchMapInstructions(5).get(2),
+            enumSwitchMapInstructions(5).get(3),
+            enumSwitchMapInstructions(5).get(4),
+            instruction(5, 87, "pop")
+        ));
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierRejectsEnumSwitchMapHandlerWithUnsupportedLowStoreOpcode() {
+        final List<Diagnostic> diagnostics = verifyEnumSwitchMapExceptionTable(List.of(
+            enumSwitchMapInstructions(5).get(0),
+            enumSwitchMapInstructions(5).get(1),
+            enumSwitchMapInstructions(5).get(2),
+            enumSwitchMapInstructions(5).get(3),
+            enumSwitchMapInstructions(5).get(4),
+            instruction(5, 74, "lstore_3")
+        ));
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierRejectsEnumSwitchMapHandlerWithoutArrayStore() {
+        final List<Diagnostic> diagnostics = verifyEnumSwitchMapExceptionTable(List.of(
+            instruction(0, 178, "getstatic", new FieldRef("com/acme/Main$1", "$SwitchMap$com$acme$Color", "[I")),
+            instruction(1, 75, "astore_0")
+        ), new CodeException(0, 1, 1, Optional.of("java/lang/NoSuchFieldError")));
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierRejectsEnumSwitchMapHandlerWithEmptyProtectedRange() {
+        final List<Diagnostic> diagnostics = verifyEnumSwitchMapExceptionTable(List.of(
+            instruction(1, 75, "astore_0")
+        ), new CodeException(0, 0, 1, Optional.of("java/lang/NoSuchFieldError")));
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierAcceptsEnumSwitchMapHandlerWithBipushIndex() {
+        final List<Diagnostic> diagnostics = verifyEnumSwitchMapExceptionTable(List.of(
+            instruction(0, 16, "bipush"),
+            instruction(1, 79, "iastore"),
+            instruction(2, 75, "astore_0")
+        ), new CodeException(0, 2, 2, Optional.of("java/lang/NoSuchFieldError")));
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsEnumSwitchMapHandlerWithSipushIndex() {
+        final List<Diagnostic> diagnostics = verifyEnumSwitchMapExceptionTable(List.of(
+            instruction(0, 17, "sipush"),
+            instruction(1, 79, "iastore"),
+            instruction(2, 75, "astore_0")
+        ), new CodeException(0, 2, 2, Optional.of("java/lang/NoSuchFieldError")));
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsEnumSwitchMapHandlerWithWideAloadAndAstore() {
+        final List<Diagnostic> diagnostics = verifyEnumSwitchMapExceptionTable(List.of(
+            instruction(0, 25, "aload"),
+            instruction(1, 79, "iastore"),
+            instruction(2, 58, "astore")
+        ), new CodeException(0, 2, 2, Optional.of("java/lang/NoSuchFieldError")));
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierRejectsEnumSwitchMapHandlerWithUnsupportedProtectedInstruction() {
+        final List<Diagnostic> diagnostics = verifyEnumSwitchMapExceptionTable(List.of(
+            instruction(0, 178, "getstatic", new FieldRef("com/acme/Main$1", "$SwitchMap$com$acme$Color", "[I")),
+            instruction(1, 0, "nop"),
+            instruction(2, 79, "iastore"),
+            instruction(3, 75, "astore_0")
+        ), new CodeException(0, 3, 3, Optional.of("java/lang/NoSuchFieldError")));
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierRejectsEnumSwitchMapHandlerWithGetstaticMissingFieldRef() {
+        final List<Diagnostic> diagnostics = verifyEnumSwitchMapExceptionTable(List.of(
+            instruction(0, 178, "getstatic"),
+            instruction(1, 79, "iastore"),
+            instruction(2, 75, "astore_0")
+        ), new CodeException(0, 2, 2, Optional.of("java/lang/NoSuchFieldError")));
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierRejectsEnumSwitchMapHandlerWithInvokevirtualMissingMethodRef() {
+        final List<Diagnostic> diagnostics = verifyEnumSwitchMapExceptionTable(List.of(
+            instruction(0, 182, "invokevirtual"),
+            instruction(1, 79, "iastore"),
+            instruction(2, 75, "astore_0")
+        ), new CodeException(0, 2, 2, Optional.of("java/lang/NoSuchFieldError")));
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierRejectsEnumSwitchMapHandlerWithInvokevirtualMissingOwner() {
+        final List<Diagnostic> diagnostics = verifyEnumSwitchMapExceptionTable(List.of(
+            instruction(0, 182, "invokevirtual", new MethodRef("com/acme/MissingColor", "ordinal", "()I")),
+            instruction(1, 79, "iastore"),
+            instruction(2, 75, "astore_0")
+        ), new CodeException(0, 2, 2, Optional.of("java/lang/NoSuchFieldError")));
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierRejectsEnumSwitchMapHandlerWithUnsupportedWideLoadOpcode() {
+        final List<Diagnostic> diagnostics = verifyEnumSwitchMapExceptionTable(List.of(
+            instruction(0, 46, "iaload"),
+            instruction(1, 79, "iastore"),
+            instruction(2, 75, "astore_0")
+        ), new CodeException(0, 2, 2, Optional.of("java/lang/NoSuchFieldError")));
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierRejectsEnumSwitchMapHandlerWithNonEnumField() {
+        final List<Diagnostic> diagnostics = verifyEnumSwitchMapExceptionTable(List.of(
+            instruction(0, 178, "getstatic", new FieldRef("com/acme/Other", "RED", "Lcom/acme/Other;")),
+            instruction(1, 79, "iastore"),
+            instruction(2, 75, "astore_0")
+        ), new CodeException(0, 2, 2, Optional.of("java/lang/NoSuchFieldError")));
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierRejectsEnumSwitchMapHandlerWithNonEnumOrdinalOwner() {
+        final List<Diagnostic> diagnostics = verifyEnumSwitchMapExceptionTable(
+            Map.of("com/acme/Other", typeClass("com/acme/Other", "java/lang/Object", 0, List.of())),
+            List.of(
+                instruction(0, 182, "invokevirtual", new MethodRef("com/acme/Other", "ordinal", "()I")),
+                instruction(1, 79, "iastore"),
+                instruction(2, 75, "astore_0")
+            ),
+            new CodeException(0, 2, 2, Optional.of("java/lang/NoSuchFieldError"))
+        );
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierRejectsEnumSwitchMapHandlerWithNonOrdinalMethod() {
+        final List<Diagnostic> diagnostics = verifyEnumSwitchMapExceptionTable(List.of(
+            instruction(0, 182, "invokevirtual", new MethodRef("com/acme/Color", "name", "()Ljava/lang/String;")),
+            instruction(1, 79, "iastore"),
+            instruction(2, 75, "astore_0")
+        ), new CodeException(0, 2, 2, Optional.of("java/lang/NoSuchFieldError")));
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierAcceptsSyntheticSwitchMapClassShape() {
+        final List<Diagnostic> diagnostics = verifySyntheticSwitchMapClass(
+            0x1000,
+            "<clinit>",
+            List.of(new FieldInfo(0x1008, "$SwitchMap$com$acme$Color", "[I")),
+            new CodeException(0, 0, 0, Optional.of("java/lang/NoSuchFieldError"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierRejectsSwitchMapClassWhenNotSynthetic() {
+        final List<Diagnostic> diagnostics = verifySyntheticSwitchMapClass(
+            0,
+            "<clinit>",
+            List.of(new FieldInfo(0x1008, "$SwitchMap$com$acme$Color", "[I")),
+            new CodeException(0, 0, 0, Optional.of("java/lang/NoSuchFieldError"))
+        );
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierRejectsSyntheticSwitchMapClassWhenInitializerNameDiffers() {
+        final List<Diagnostic> diagnostics = verifySyntheticSwitchMapClass(
+            0x1000,
+            "main",
+            List.of(new FieldInfo(0x1008, "$SwitchMap$com$acme$Color", "[I")),
+            new CodeException(0, 0, 0, Optional.of("java/lang/NoSuchFieldError"))
+        );
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierRejectsSyntheticSwitchMapClassWithoutSwitchMapFields() {
+        final List<Diagnostic> diagnostics = verifySyntheticSwitchMapClass(
+            0x1000,
+            "<clinit>",
+            List.of(),
+            new CodeException(0, 0, 0, Optional.of("java/lang/NoSuchFieldError"))
+        );
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierRejectsSyntheticSwitchMapClassWithWrongFieldName() {
+        final List<Diagnostic> diagnostics = verifySyntheticSwitchMapClass(
+            0x1000,
+            "<clinit>",
+            List.of(new FieldInfo(0x1008, "values", "[I")),
+            new CodeException(0, 0, 0, Optional.of("java/lang/NoSuchFieldError"))
+        );
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierRejectsSyntheticSwitchMapClassWithWrongFieldDescriptor() {
+        final List<Diagnostic> diagnostics = verifySyntheticSwitchMapClass(
+            0x1000,
+            "<clinit>",
+            List.of(new FieldInfo(0x1008, "$SwitchMap$com$acme$Color", "[Ljava/lang/String;")),
+            new CodeException(0, 0, 0, Optional.of("java/lang/NoSuchFieldError"))
+        );
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierRejectsSyntheticSwitchMapClassWithoutCatchType() {
+        final List<Diagnostic> diagnostics = verifySyntheticSwitchMapClass(
+            0x1000,
+            "<clinit>",
+            List.of(new FieldInfo(0x1008, "$SwitchMap$com$acme$Color", "[I")),
+            new CodeException(0, 0, 0, Optional.empty())
+        );
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN014");
+    }
+
+    @Test
+    void staticVerifierRejectsSyntheticSwitchMapClassWithWrongCatchType() {
+        final List<Diagnostic> diagnostics = verifySyntheticSwitchMapClass(
+            0x1000,
+            "<clinit>",
+            List.of(new FieldInfo(0x1008, "$SwitchMap$com$acme$Color", "[I")),
+            new CodeException(0, 0, 0, Optional.of("java/lang/String"))
+        );
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN014");
+    }
+
+    @Test
     void filesHelpersHandleMissingAndIgnoredPaths() throws Exception {
         final Path ignored = tempDir.resolve("target/generated.java");
         Files.createDirectories(ignored.getParent());
@@ -334,6 +1349,113 @@ final class CoreBehaviorTest {
     }
 
     private static List<Diagnostic> verifyExceptionTable(final List<Instruction> instructions, final CodeException exception) {
+        return verifyExceptionTable(Map.of(), instructions, exception);
+    }
+
+    private static List<Diagnostic> verifyExceptionTable(final List<Instruction> instructions) {
+        return verifyExceptionTable(instructions, new CodeException(0, instructions.size(), instructions.size(), Optional.of("java/lang/IllegalStateException")));
+    }
+
+    private static List<Instruction> explicitThrowInstructions(final Instruction protectedInstruction) {
+        return List.of(
+            classInstruction(0, 187, "new", "java/lang/IllegalStateException"),
+            protectedInstruction,
+            instruction(2, 87, "pop"),
+            instruction(3, 183, "invokespecial", new MethodRef("java/lang/IllegalStateException", "<init>", "()V")),
+            instruction(4, 191, "athrow")
+        );
+    }
+
+    private static List<Diagnostic> verifyEnumSwitchMapExceptionTable(final List<Instruction> instructions) {
+        return verifyEnumSwitchMapExceptionTable(
+            instructions,
+            new CodeException(0, 5, 5, Optional.of("java/lang/NoSuchFieldError"))
+        );
+    }
+
+    private static List<Diagnostic> verifyEnumSwitchMapExceptionTable(final List<Instruction> instructions, final CodeException exception) {
+        return verifyEnumSwitchMapExceptionTable(Map.of(), instructions, exception);
+    }
+
+    private static List<Diagnostic> verifyEnumSwitchMapExceptionTable(
+        final Map<String, ClassFile> extraClasses,
+        final List<Instruction> instructions,
+        final CodeException exception
+    ) {
+        final ClassFile enumClass = new ClassFile(
+            69,
+            "com/acme/Color",
+            "java/lang/Enum",
+            0x4000,
+            List.of(),
+            List.of(new FieldInfo(0x4008, "RED", "Lcom/acme/Color;")),
+            List.of(),
+            Path.of("Color.class"),
+            true
+        );
+        final ClassFile switchMap = exceptionClassFile("com/acme/Main$1", instructions, exception);
+        final Map<String, ClassFile> classes = new java.util.LinkedHashMap<>();
+        classes.put(switchMap.name(), switchMap);
+        classes.put(enumClass.name(), enumClass);
+        classes.putAll(extraClasses);
+        return new StaticVerifier().verify(
+            classes,
+            List.of(new EntryPoint(switchMap.name(), "main", "([Ljava/lang/String;)V"))
+        );
+    }
+
+    private static List<Diagnostic> verifySyntheticSwitchMapClass(
+        final int accessFlags,
+        final String methodName,
+        final List<FieldInfo> fields,
+        final CodeException exception
+    ) {
+        final MethodInfo method = new MethodInfo(
+            0,
+            methodName,
+            "()V",
+            Optional.of(new CodeAttribute(
+                1,
+                1,
+                new byte[]{(byte) 177},
+                1,
+                List.of(exception),
+                List.of(instruction(0, 177, "return"))
+            ))
+        );
+        final ClassFile switchMap = new ClassFile(
+            69,
+            "com/acme/Main$1",
+            "java/lang/Object",
+            accessFlags,
+            List.of(),
+            fields,
+            List.of(method),
+            Path.of("Main$1.class"),
+            true
+        );
+        return new StaticVerifier().verify(
+            Map.of(switchMap.name(), switchMap),
+            List.of(new EntryPoint(switchMap.name(), methodName, "()V"))
+        );
+    }
+
+    private static List<Diagnostic> verifyExceptionTable(
+        final Map<String, ClassFile> extraClasses,
+        final List<Instruction> instructions,
+        final CodeException exception
+    ) {
+        final ClassFile classFile = exceptionClassFile("com/acme/Main", instructions, exception);
+        final Map<String, ClassFile> classes = new java.util.LinkedHashMap<>();
+        classes.put(classFile.name(), classFile);
+        classes.putAll(extraClasses);
+        return new StaticVerifier().verify(
+            classes,
+            List.of(new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"))
+        );
+    }
+
+    private static ClassFile exceptionClassFile(final String className, final List<Instruction> instructions, final CodeException exception) {
         final MethodInfo method = new MethodInfo(
             0,
             "main",
@@ -347,9 +1469,9 @@ final class CoreBehaviorTest {
                 instructions
             ))
         );
-        final ClassFile classFile = new ClassFile(
+        return new ClassFile(
             69,
-            "com/acme/Main",
+            className,
             "java/lang/Object",
             0,
             List.of(),
@@ -358,13 +1480,92 @@ final class CoreBehaviorTest {
             Path.of("Main.class"),
             true
         );
-        return new StaticVerifier().verify(
-            Map.of(classFile.name(), classFile),
-            Set.of(new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"))
+    }
+
+    private static List<Instruction> enumSwitchMapInstructions(final int handlerOffset) {
+        return List.of(
+            instruction(0, 178, "getstatic", new FieldRef("com/acme/Main$1", "$SwitchMap$com$acme$Color", "[I")),
+            instruction(1, 178, "getstatic", new FieldRef("com/acme/Color", "RED", "Lcom/acme/Color;")),
+            instruction(2, 182, "invokevirtual", new MethodRef("com/acme/Color", "ordinal", "()I")),
+            instruction(3, 4, "iconst_1"),
+            instruction(4, 79, "iastore"),
+            instruction(handlerOffset, 75, "astore_0")
+        );
+    }
+
+    private static Instruction instruction(final int offset, final int opcode, final String mnemonic) {
+        return new Instruction(
+            offset,
+            opcode,
+            mnemonic,
+            new byte[0],
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty()
+        );
+    }
+
+    private static Instruction instruction(final int offset, final int opcode, final String mnemonic, final FieldRef fieldRef) {
+        return new Instruction(
+            offset,
+            opcode,
+            mnemonic,
+            new byte[0],
+            Optional.empty(),
+            Optional.of(fieldRef),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty()
+        );
+    }
+
+    private static Instruction instruction(final int offset, final int opcode, final String mnemonic, final MethodRef methodRef) {
+        return new Instruction(
+            offset,
+            opcode,
+            mnemonic,
+            new byte[0],
+            Optional.of(methodRef),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty()
+        );
+    }
+
+    private static Instruction classInstruction(final int offset, final int opcode, final String mnemonic, final String className) {
+        return new Instruction(
+            offset,
+            opcode,
+            mnemonic,
+            new byte[0],
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(className),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty()
         );
     }
 
     private static List<Diagnostic> verifyInstruction(final Instruction instruction, final boolean reachable) {
+        return verifyInstruction(Map.of(), instruction, reachable);
+    }
+
+    private static List<Diagnostic> verifyInstruction(
+        final Map<String, ClassFile> extraClasses,
+        final Instruction instruction,
+        final boolean reachable
+    ) {
         final MethodInfo method = new MethodInfo(
             0,
             "main",
@@ -388,10 +1589,91 @@ final class CoreBehaviorTest {
             Path.of("Main.class"),
             true
         );
-        final Set<EntryPoint> reachableMethods = reachable
-            ? Set.of(new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"))
-            : Set.of();
-        return new StaticVerifier().verify(Map.of(classFile.name(), classFile), reachableMethods);
+        final List<EntryPoint> reachableMethods = reachable
+            ? List.of(new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"))
+            : List.of();
+        final Map<String, ClassFile> classes = new java.util.LinkedHashMap<>();
+        classes.put(classFile.name(), classFile);
+        classes.putAll(extraClasses);
+        return new StaticVerifier().verify(classes, reachableMethods);
+    }
+
+    private static List<Diagnostic> verifyInstanceOf(
+        final Map<String, ClassFile> extraClasses,
+        final String className,
+        final boolean reachable
+    ) {
+        return verifyInstruction(extraClasses, classInstruction(0, 193, "instanceof", className), reachable);
+    }
+
+    private static ClassFile typeClass(
+        final String name,
+        final String superName,
+        final int accessFlags,
+        final List<String> interfaces
+    ) {
+        return new ClassFile(
+            69,
+            name,
+            superName,
+            accessFlags,
+            List.copyOf(interfaces),
+            List.of(),
+            List.of(),
+            Path.of(name + ".class"),
+            true
+        );
+    }
+
+    private static ClassFile classWithMethods(
+        final String name,
+        final String superName,
+        final int accessFlags,
+        final List<String> interfaces,
+        final MethodInfo... methods
+    ) {
+        return new ClassFile(
+            69,
+            name,
+            superName,
+            accessFlags,
+            List.copyOf(interfaces),
+            List.of(),
+            List.of(methods),
+            Path.of(name + ".class"),
+            true
+        );
+    }
+
+    private static MethodInfo methodInfo(final String name, final String descriptor, final Instruction... instructions) {
+        return new MethodInfo(
+            0,
+            name,
+            descriptor,
+            Optional.of(new CodeAttribute(2, 1, new byte[0], 0, List.of(instructions)))
+        );
+    }
+
+    private static MethodInfo generatedEnumValueOfMethod(final int accessFlags, final Instruction firstInstruction) {
+        final MethodRef enumValueOf = new MethodRef("java/lang/Enum", "valueOf", "(Ljava/lang/Class;Ljava/lang/String;)Ljava/lang/Enum;");
+        return new MethodInfo(
+            accessFlags,
+            "valueOf",
+            "(Ljava/lang/String;)Lcom/acme/Color;",
+            Optional.of(new CodeAttribute(
+                2,
+                1,
+                new byte[0],
+                0,
+                List.of(
+                    firstInstruction,
+                    instruction(1, 42, "aload_0"),
+                    instruction(2, 184, "invokestatic", enumValueOf),
+                    classInstruction(3, 192, "checkcast", "com/acme/Color"),
+                    instruction(4, 176, "areturn")
+                )
+            ))
+        );
     }
 
     @Test
@@ -410,6 +1692,17 @@ final class CoreBehaviorTest {
         assertThat(result.exitCode()).isEqualTo(7);
         assertThat(result.stdout()).isEqualTo("out\n");
         assertThat(result.stderr()).isEqualTo("err\n");
+    }
+
+    @Test
+    void processRunnerCapturesLargeStderrWithoutDeadlock() throws Exception {
+        final ProcessRunner.Result result = new ProcessRunner(Duration.ofSeconds(5)).run(
+            tempDir,
+            List.of("sh", "-c", "i=0; while [ $i -lt 5000 ]; do echo compiler-warning-$i >&2; i=$((i + 1)); done")
+        );
+
+        assertThat(result.exitCode()).isZero();
+        assertThat(result.stderr()).contains("compiler-warning-0", "compiler-warning-4999");
     }
 
     @Test
@@ -432,10 +1725,52 @@ final class CoreBehaviorTest {
         final Path generated = new CCodegen().generate(program, tempDir);
 
         assertThat(Files.readString(generated)).contains(
+            "int main(int argc, char** argv) {",
             "static void helper_symbol(void);",
             "helper_symbol();",
             "line\\nquote\\\"slash\\\\tab\\tcarriage\\rcontrol\\001"
         );
+    }
+
+    @Test
+    void cCodegenEmitsCMainOnlyForProgramEntry() throws Exception {
+        final IrProgram program = new IrProgram(
+            List.of(
+                new IrFunction("com/acme/Main", "main", "([Ljava/lang/String;)V", "main_symbol", IrType.VOID, List.of(), List.of(), List.of(
+                    IrInstruction.returnVoid()
+                )),
+                new IrFunction("com/acme/Helper", "help", "()V", "helper_symbol", IrType.VOID, List.of(), List.of(), List.of(
+                    IrInstruction.returnVoid()
+                ))
+            ),
+            "main_symbol"
+        );
+
+        final String generated = Files.readString(new CCodegen().generate(program, tempDir));
+
+        assertThat(generated).contains("int main(int argc, char** argv) {");
+        assertThat(generated).doesNotContain("static void main_symbol(void)");
+        assertThat(generated).contains("static void helper_symbol(void);", "static void helper_symbol(void) {");
+    }
+
+    @Test
+    void cCodegenChunksLongStringLiterals() throws Exception {
+        final String longText = "x".repeat(400);
+        final IrProgram program = new IrProgram(
+            List.of(),
+            List.of(new IrFunction("com/acme/Main", "main", "([Ljava/lang/String;)V", "main_symbol", IrType.VOID, List.of(), List.of(), List.of(
+                IrInstruction.printlnObject(IrExpression.stringLiteral(longText)),
+                IrInstruction.returnVoid()
+            ))),
+            "main_symbol"
+        );
+
+        final String generated = Files.readString(new CCodegen().generate(program, tempDir));
+
+        assertThat(generated).contains("\"" + "x".repeat(120) + "\"");
+        for (final String line : generated.split("\\R")) {
+            assertThat(line.length()).isLessThan(220);
+        }
     }
 
     @Test
@@ -481,9 +1816,256 @@ final class CoreBehaviorTest {
             "javan_dispatch_com_acme_Api_answer__Lcom_acme_Api__I(void* self) {",
             "void javan_export_com_acme_Api_touch_void(void) {",
             "javan_library_init();",
+            "javan_register_generated_type_descriptors();",
+            "javan_register_generated_roots();",
+            "javan_gc_safe_point();",
             "javan_com_acme_Api__clinit___V();",
             "javan_com_acme_Api_touch___V();"
         );
+    }
+
+    @Test
+    void cCodegenEmitsStaticRootInventoryForObjectStaticFieldsOnly() throws Exception {
+        final IrProgram program = new IrProgram(
+            List.of(new IrClass(
+                "com/acme/State",
+                "javan_class_com_acme_State",
+                List.of(),
+                List.of(
+                    new IrField(IrType.INT, "count", "field_count"),
+                    new IrField(IrType.OBJECT, "root", "field_root"),
+                    new IrField(IrType.OBJECT, "items", "field_items")
+                )
+            )),
+            List.of(new IrFunction(
+                "com/acme/Main",
+                "main",
+                "([Ljava/lang/String;)V",
+                "main_symbol",
+                IrType.VOID,
+                List.of(),
+                List.of(),
+                List.of(IrInstruction.returnVoid())
+            )),
+            "main_symbol"
+        );
+
+        final String generated = Files.readString(new CCodegen().generate(program, tempDir));
+
+        assertThat(generated).contains(
+            "static int javan_static_com_acme_State_field_count = 0;",
+            "static void* javan_static_com_acme_State_field_root = 0;",
+            "static void* javan_static_com_acme_State_field_items = 0;",
+            "static void** javan_static_roots[] = {",
+            "(void**) &javan_static_com_acme_State_field_root,",
+            "(void**) &javan_static_com_acme_State_field_items",
+            "javan_register_static_roots(javan_static_roots, 2);",
+            "javan_register_generated_roots();",
+            "javan_gc_safe_point();"
+        );
+        assertThat(generated).doesNotContain("&javan_static_com_acme_State_field_count");
+        assertThat(generated.indexOf("javan_register_generated_roots();")).isLessThan(generated.indexOf("return 0;"));
+    }
+
+    @Test
+    void cCodegenEmitsTypeDescriptorsForObjectInstanceFieldsOnly() throws Exception {
+        final IrProgram program = new IrProgram(
+            List.of(new IrClass(
+                "com/acme/Node",
+                "javan_class_com_acme_Node",
+                List.of(
+                    new IrField(IrType.INT, "count", "field_count"),
+                    new IrField(IrType.OBJECT, "child", "field_child"),
+                    new IrField(IrType.DOUBLE, "weight", "field_weight"),
+                    new IrField(IrType.OBJECT, "items", "field_items")
+                )
+            )),
+            List.of(new IrFunction(
+                "com/acme/Main",
+                "main",
+                "([Ljava/lang/String;)V",
+                "main_symbol",
+                IrType.VOID,
+                List.of(),
+                List.of(),
+                List.of(IrInstruction.returnVoid())
+            )),
+            "main_symbol"
+        );
+
+        final String generated = Files.readString(new CCodegen().generate(program, tempDir));
+
+        assertThat(generated).contains(
+            "#include <stddef.h>",
+            "static unsigned long javan_type_fields_com_acme_Node[] = {",
+            "(unsigned long) offsetof(struct javan_class_com_acme_Node, field_child),",
+            "(unsigned long) offsetof(struct javan_class_com_acme_Node, field_items)",
+            "static JavanTypeDescriptor javan_type_descriptors[] = {",
+            "{1, \"com/acme/Node\", 2, javan_type_fields_com_acme_Node}",
+            "javan_register_type_descriptors(javan_type_descriptors, 1);",
+            "javan_register_generated_type_descriptors();",
+            "javan_gc_safe_point();"
+        );
+        assertThat(generated).doesNotContain(
+            "offsetof(struct javan_class_com_acme_Node, field_count)",
+            "offsetof(struct javan_class_com_acme_Node, field_weight)"
+        );
+    }
+
+    @Test
+    void cCodegenEmitsRootFramesForObjectParametersAndLocalsOnly() throws Exception {
+        final IrProgram program = new IrProgram(
+            List.of(new IrClass("com/acme/Node", "javan_class_com_acme_Node", List.of())),
+            List.of(new IrFunction(
+                "com/acme/Node",
+                "pick",
+                "(Lcom/acme/Node;I)Lcom/acme/Node;",
+                "pick_symbol",
+                IrType.OBJECT,
+                List.of(new IrParameter(IrType.OBJECT, "self"), new IrParameter(IrType.INT, "count")),
+                List.of(new IrLocal(IrType.OBJECT, "tmp"), new IrLocal(IrType.INT, "index")),
+                List.of(
+                    IrInstruction.assignObject("tmp", IrExpression.objectLocal("self")),
+                    IrInstruction.returnObject(IrExpression.objectLocal("tmp"))
+                )
+            )),
+            "pick_symbol"
+        );
+
+        final String generated = Files.readString(new CCodegen().generate(program, tempDir));
+
+        assertThat(generated).contains(
+            "void** javan_roots_pick_symbol[] = {",
+            "(void**) &self,",
+            "(void**) &tmp",
+            "javan_root_frame_push(javan_roots_pick_symbol, 2);",
+            "javan_gc_safe_point();",
+            "void* javan_return_value = tmp;",
+            "javan_generated_return_root = javan_return_value;",
+            "javan_gc_safe_point();",
+            "javan_root_frame_pop(javan_roots_pick_symbol);",
+            "javan_generated_return_root = 0;",
+            "return javan_return_value;"
+        );
+        assertThat(generated).doesNotContain("(void**) &count", "(void**) &index");
+        assertThat(generated.indexOf("javan_root_frame_push(javan_roots_pick_symbol, 2);"))
+            .isLessThan(generated.indexOf("javan_gc_safe_point();"));
+        assertThat(generated.indexOf("javan_gc_safe_point();"))
+            .isLessThan(generated.indexOf("void* javan_return_value = tmp;"));
+        assertThat(generated.indexOf("void* javan_return_value = tmp;"))
+            .isLessThan(generated.indexOf("javan_generated_return_root = javan_return_value;"));
+        assertThat(generated.indexOf("javan_generated_return_root = javan_return_value;"))
+            .isLessThan(generated.indexOf("javan_root_frame_pop(javan_roots_pick_symbol);"));
+        assertThat(generated.indexOf("javan_root_frame_pop(javan_roots_pick_symbol);"))
+            .isLessThan(generated.lastIndexOf("javan_generated_return_root = 0;"));
+    }
+
+    @Test
+    void cCodegenFreesByteArrayExportInputsAfterAbiResultIsCreated() throws Exception {
+        final EntryPoint exportEntry = new EntryPoint("com/acme/Bytes", "echo", "([B)[B");
+        final IrProgram program = new IrProgram(
+            List.of(new IrClass("com/acme/Bytes", "javan_class_com_acme_Bytes", List.of())),
+            List.of(new IrFunction(
+                exportEntry.className(),
+                exportEntry.methodName(),
+                exportEntry.descriptor(),
+                BytecodeToIR.symbol(exportEntry),
+                IrType.OBJECT,
+                List.of(new IrParameter(IrType.OBJECT, "data")),
+                List.of(),
+                List.of(IrInstruction.returnObject(IrExpression.objectLocal("data")))
+            )),
+            BytecodeToIR.symbol(exportEntry)
+        );
+
+        final String generated = Files.readString(new CCodegen().generateLibrary(
+            program,
+            tempDir,
+            List.of(new javan.build.ExportedMethod(
+                exportEntry,
+                "javan_export_com_acme_Bytes_echo_bytes",
+                List.of(javan.build.AbiType.BYTE_ARRAY),
+                javan.build.AbiType.BYTE_ARRAY
+            ))
+        ));
+
+        assertThat(generated).contains(
+            "void* arg0_array = 0;",
+            "void** javan_export_roots[] = {",
+            "(void**) &arg0_array",
+            "javan_root_frame_push(javan_export_roots, 1);",
+            "arg0_array = javan_byte_array_from(arg0.data, arg0.length);",
+            "void* javan_export_object_result = javan_com_acme_Bytes_echo___B__B(arg0_array);",
+            "void** javan_export_result_roots[] = {",
+            "(void**) &javan_export_object_result",
+            "javan_root_frame_push(javan_export_result_roots, 1);",
+            "JavanByteArray javan_export_result = javan_byte_array_export(javan_export_object_result);",
+            "javan_root_frame_pop(javan_export_result_roots);",
+            "javan_root_frame_pop(javan_export_roots);",
+            "javan_free(arg0_array);",
+            "return javan_export_result;"
+        );
+        assertThat(generated.indexOf("javan_root_frame_push(javan_export_roots, 1);"))
+            .isLessThan(generated.indexOf("arg0_array = javan_byte_array_from(arg0.data, arg0.length);"));
+        assertThat(generated.indexOf("void* javan_export_object_result = javan_com_acme_Bytes_echo___B__B(arg0_array);"))
+            .isLessThan(generated.indexOf("javan_root_frame_push(javan_export_result_roots, 1);"));
+        assertThat(generated.indexOf("javan_root_frame_push(javan_export_result_roots, 1);"))
+            .isLessThan(generated.indexOf("javan_byte_array_export"));
+        assertThat(generated.indexOf("javan_byte_array_export"))
+            .isLessThan(generated.indexOf("javan_root_frame_pop(javan_export_result_roots);"));
+        assertThat(generated.indexOf("javan_root_frame_pop(javan_export_result_roots);"))
+            .isLessThan(generated.indexOf("javan_root_frame_pop(javan_export_roots);"));
+        assertThat(generated.indexOf("javan_root_frame_pop(javan_export_roots);"))
+            .isLessThan(generated.indexOf("javan_free(arg0_array);"));
+    }
+
+    @Test
+    void cCodegenRootsStringExportResultUntilAbiCopyCompletes() throws Exception {
+        final EntryPoint exportEntry = new EntryPoint("com/acme/Text", "greet", "(Ljava/lang/String;)Ljava/lang/String;");
+        final IrProgram program = new IrProgram(
+            List.of(new IrClass("com/acme/Text", "javan_class_com_acme_Text", List.of())),
+            List.of(new IrFunction(
+                exportEntry.className(),
+                exportEntry.methodName(),
+                exportEntry.descriptor(),
+                BytecodeToIR.symbol(exportEntry),
+                IrType.OBJECT,
+                List.of(new IrParameter(IrType.OBJECT, "name")),
+                List.of(),
+                List.of(IrInstruction.returnObject(IrExpression.stringConcat(
+                    "\u0001!",
+                    List.of(IrExpression.objectLocal("name"))
+                )))
+            )),
+            BytecodeToIR.symbol(exportEntry)
+        );
+
+        final String generated = Files.readString(new CCodegen().generateLibrary(
+            program,
+            tempDir,
+            List.of(new javan.build.ExportedMethod(
+                exportEntry,
+                "javan_export_com_acme_Text_greet_string",
+                List.of(javan.build.AbiType.STRING),
+                javan.build.AbiType.STRING
+            ))
+        ));
+
+        assertThat(generated).contains(
+            "void* javan_export_object_result = javan_com_acme_Text_greet__Ljava_lang_String__Ljava_lang_String_((void*) arg0);",
+            "void** javan_export_result_roots[] = {",
+            "(void**) &javan_export_object_result",
+            "javan_root_frame_push(javan_export_result_roots, 1);",
+            "char* javan_export_result = javan_string_export((const char*) javan_export_object_result);",
+            "javan_root_frame_pop(javan_export_result_roots);",
+            "return javan_export_result;"
+        );
+        assertThat(generated.indexOf("void* javan_export_object_result = javan_com_acme_Text_greet__Ljava_lang_String__Ljava_lang_String_((void*) arg0);"))
+            .isLessThan(generated.indexOf("javan_root_frame_push(javan_export_result_roots, 1);"));
+        assertThat(generated.indexOf("javan_root_frame_push(javan_export_result_roots, 1);"))
+            .isLessThan(generated.indexOf("javan_string_export"));
+        assertThat(generated.indexOf("javan_string_export"))
+            .isLessThan(generated.indexOf("javan_root_frame_pop(javan_export_result_roots);"));
     }
 
     @Test
@@ -607,10 +2189,14 @@ final class CoreBehaviorTest {
             "int _javan_type_id;",
             "char _javan_empty;",
             "void* message_text(void)",
-            "message = javan_new_com_acme_Message();",
+            "javan_expr_tmp_0 = javan_new_com_acme_Message();",
+            "message = javan_expr_tmp_0;",
             "((struct javan_class_com_acme_Message*) message)->field_text = (void*) \"hello\";",
-            "javan_println((const char*) ((struct javan_class_com_acme_Message*) message)->field_text);",
-            "return (void*) \"returned\";"
+            "javan_expr_tmp_0 = ((struct javan_class_com_acme_Message*) message)->field_text;",
+            "javan_println((const char*) javan_expr_tmp_0);",
+            "void* javan_return_value = (void*) \"returned\";",
+            "javan_generated_return_root = javan_return_value;",
+            "return javan_return_value;"
         );
     }
 
@@ -801,16 +2387,22 @@ final class CoreBehaviorTest {
         final String generated = Files.readString(new CCodegen().generate(program, tempDir));
 
         assertThat(generated).contains(
-            "bytes = javan_byte_array_new(2);",
-            "shorts = javan_short_array_new(2);",
-            "chars = javan_char_array_new(2);",
-            "longs = javan_long_array_new(2);",
-            "floats = javan_float_array_new(2);",
-            "doubles = javan_double_array_new(2);",
+            "javan_expr_tmp_0 = javan_byte_array_new(2);",
+            "bytes = javan_expr_tmp_0;",
+            "javan_expr_tmp_0 = javan_short_array_new(2);",
+            "shorts = javan_expr_tmp_0;",
+            "javan_expr_tmp_0 = javan_char_array_new(2);",
+            "chars = javan_expr_tmp_0;",
+            "javan_expr_tmp_0 = javan_long_array_new(2);",
+            "longs = javan_expr_tmp_0;",
+            "javan_expr_tmp_0 = javan_float_array_new(2);",
+            "floats = javan_expr_tmp_0;",
+            "javan_expr_tmp_0 = javan_double_array_new(2);",
+            "doubles = javan_expr_tmp_0;",
             "javan_byte_array_set(bytes, 0, -2);",
             "javan_short_array_set(shorts, 0, 300);",
             "javan_char_array_set(chars, 0, 65);",
-            "javan_long_array_set(longs, 0, 7);",
+            "javan_long_array_set(longs, 0, 7LL);",
             "javan_float_array_set(floats, 0, 1.25);",
             "javan_double_array_set(doubles, 0, 2.5);",
             "javan_println_int(javan_byte_array_get(bytes, 0));",

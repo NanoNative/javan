@@ -1,12 +1,13 @@
 package javan.toolchain;
 
 import javan.util.ProcessRunner;
+import javan.util.Strings2;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -24,7 +25,7 @@ public final class ToolchainManager {
      * Creates a toolchain manager.
      */
     public ToolchainManager() {
-        this(defaultJavanHome(), new PathCommandProbe(System.getenv()));
+        this(defaultJavanHome(), new PathCommandProbe(System.getenv("PATH")));
     }
 
     /**
@@ -33,7 +34,7 @@ public final class ToolchainManager {
      * @param processRunner process runner
      */
     public ToolchainManager(final ProcessRunner processRunner) {
-        this(defaultJavanHome(), new ProcessRunnerCommandProbe(processRunner));
+        this(defaultJavanHome(), pathCommandProbe(processRunner));
     }
 
     /**
@@ -58,8 +59,7 @@ public final class ToolchainManager {
     public String doctor() {
         final Path settings = settingsPath();
         final ToolStatus javac = commandProbe.find("javac");
-        final ToolStatus nativeImage = commandProbe.find("native-image");
-        final ToolStatus cCompiler = commandProbe.firstAvailable(List.of("cc", "clang", "gcc"));
+        final ToolStatus cCompiler = firstAvailable(commandProbe, List.of("cc", "clang", "gcc"));
         final StringBuilder report = new StringBuilder();
         report.append("Toolchain").append(System.lineSeparator());
         report.append("  javan home:      ").append(javanHome).append(System.lineSeparator());
@@ -67,7 +67,6 @@ public final class ToolchainManager {
         report.append("  java.version:    ").append(systemProperty("java.version")).append(System.lineSeparator());
         report.append("  javac:           ").append(formatStatus(javac)).append(System.lineSeparator());
         report.append("  c compiler:      ").append(formatStatus(cCompiler)).append(System.lineSeparator());
-        report.append("  native-image:    ").append(formatStatus(nativeImage)).append(System.lineSeparator());
         report.append("  global settings: ").append(settings).append(" (").append(fileStatus(settings)).append(")");
         return report.toString();
     }
@@ -77,23 +76,18 @@ public final class ToolchainManager {
      *
      * @return deterministic human-readable toolchain list
      */
-    public String listToolchains() {
+    public String listToolchains() throws IOException {
         final StringBuilder report = new StringBuilder();
         report.append("Toolchains").append(System.lineSeparator());
         report.append("  home:      ").append(javanHome).append(System.lineSeparator());
-        try {
-            final List<ToolchainMetadata> entries = installedToolchains();
-            if (entries.isEmpty()) {
-                report.append("  installed: none");
-            } else {
-                report.append("  installed:").append(System.lineSeparator())
-                    .append(indentInstalledReport(listRenderer.render(entries)));
-            }
-            return report.toString();
-        } catch (final IOException | RuntimeException exception) {
-            report.append("  installed: unreadable (").append(exception.getMessage()).append(")");
-            return report.toString();
+        final List<ToolchainMetadata> entries = installedToolchains();
+        if (entries.isEmpty()) {
+            report.append("  installed: none");
+        } else {
+            report.append("  installed:").append(System.lineSeparator())
+                .append(indentInstalledReport(listRenderer.render(entries)));
         }
+        return report.toString();
     }
 
     /**
@@ -155,7 +149,11 @@ public final class ToolchainManager {
 
     private static String formatStatus(final ToolStatus status) {
         if (status.available()) {
-            return "available " + status.path().map(path -> "(" + path + ")").orElse("(" + status.name() + ")");
+            final Optional<Path> path = status.path();
+            if (path.isPresent()) {
+                return "available (" + path.orElseThrow().toString() + ")";
+            }
+            return "available (" + status.name() + ")";
         }
         return "missing (" + status.name() + ")";
     }
@@ -172,21 +170,52 @@ public final class ToolchainManager {
 
     private static String systemProperty(final String name) {
         final String value = System.getProperty(name);
-        if (value == null || value.isBlank()) {
+        if (Strings2.isBlank(value)) {
             return "missing";
         }
         return value;
     }
 
-    private static String indentInstalledReport(final String report) {
-        final String[] lines = report.split("\\R");
-        final StringBuilder result = new StringBuilder();
-        for (int index = 1; index < lines.length; index++) {
-            if (!lines[index].isBlank()) {
-                result.append("    ").append(lines[index]).append(System.lineSeparator());
+    private static ToolStatus firstAvailable(final CommandProbe probe, final List<String> executables) {
+        for (final String executable : executables) {
+            final ToolStatus status = probe.find(executable);
+            if (status.available()) {
+                return status;
             }
         }
-        if (!result.isEmpty()) {
+        return new ToolStatus(joinExecutableNames(executables), Optional.empty());
+    }
+
+    private static String joinExecutableNames(final List<String> executables) {
+        final StringBuilder result = new StringBuilder();
+        for (int index = 0; index < executables.size(); index++) {
+            if (index > 0) {
+                result.append('|');
+            }
+            result.append(executables.get(index));
+        }
+        return result.toString();
+    }
+
+    private static String indentInstalledReport(final String report) {
+        final StringBuilder result = new StringBuilder();
+        int line = 0;
+        int start = 0;
+        for (int index = 0; index <= report.length(); index++) {
+            if (index == report.length() || report.charAt(index) == '\n') {
+                int end = index;
+                if (end > start && report.charAt(end - 1) == '\r') {
+                    end--;
+                }
+                final String text = Strings2.slice(report, start, end);
+                if (line > 0 && !Strings2.isBlank(text)) {
+                    result.append("    ").append(text).append(System.lineSeparator());
+                }
+                line++;
+                start = index + 1;
+            }
+        }
+        if (result.length() > 0) {
             result.setLength(result.length() - System.lineSeparator().length());
         }
         return result.toString();
@@ -194,6 +223,11 @@ public final class ToolchainManager {
 
     private static Path defaultJavanHome() {
         return JavanHome.resolve();
+    }
+
+    private static CommandProbe pathCommandProbe(final ProcessRunner processRunner) {
+        Objects.requireNonNull(processRunner, "processRunner");
+        return new PathCommandProbe(System.getenv("PATH"));
     }
 
     /**
@@ -208,20 +242,6 @@ public final class ToolchainManager {
          * @return command status
          */
         ToolStatus find(String executable);
-
-        /**
-         * Finds the first available command.
-         *
-         * @param executables executable names
-         * @return command status
-         */
-        default ToolStatus firstAvailable(final List<String> executables) {
-            return executables.stream()
-                .map(this::find)
-                .filter(ToolStatus::available)
-                .findFirst()
-                .orElseGet(() -> new ToolStatus(String.join("|", executables), Optional.empty()));
-        }
     }
 
     /**
@@ -259,47 +279,53 @@ public final class ToolchainManager {
     }
 
     private static final class PathCommandProbe implements CommandProbe {
-        private final Map<String, String> environment;
+        private final String path;
 
-        private PathCommandProbe(final Map<String, String> environment) {
-            this.environment = Map.copyOf(environment);
+        private PathCommandProbe(final String path) {
+            if (path == null) {
+                this.path = "";
+                return;
+            }
+            this.path = path;
         }
 
         @Override
         public ToolStatus find(final String executable) {
-            return pathEntries().stream()
-                .map(directory -> directory.resolve(executable))
-                .filter(Files::isExecutable)
-                .findFirst()
-                .map(path -> new ToolStatus(executable, Optional.of(path)))
-                .orElseGet(() -> new ToolStatus(executable));
+            for (final Path directory : pathEntries()) {
+                final Path candidate = directory.resolve(executable);
+                if (Files.isExecutable(candidate)) {
+                    return new ToolStatus(executable, Optional.of(candidate));
+                }
+            }
+            return new ToolStatus(executable);
         }
 
         private List<Path> pathEntries() {
-            final String path = environment.getOrDefault("PATH", "");
-            if (path.isBlank()) {
+            if (Strings2.isBlank(path)) {
                 return List.of();
             }
-            return List.of(path.split(java.io.File.pathSeparator)).stream()
-                .filter(entry -> !entry.isBlank())
-                .map(Path::of)
-                .toList();
-        }
-    }
-
-    private static final class ProcessRunnerCommandProbe implements CommandProbe {
-        private final ProcessRunner processRunner;
-
-        private ProcessRunnerCommandProbe(final ProcessRunner processRunner) {
-            this.processRunner = processRunner;
-        }
-
-        @Override
-        public ToolStatus find(final String executable) {
-            if (processRunner.commandExists(executable)) {
-                return new ToolStatus(executable, Optional.of(Path.of(executable)));
+            final List<Path> result = new ArrayList<>();
+            int start = 0;
+            for (int index = 0; index <= path.length(); index++) {
+                if (index == path.length() || path.charAt(index) == java.io.File.pathSeparatorChar) {
+                    addPathEntry(result, path, start, index);
+                    start = index + 1;
+                }
             }
-            return new ToolStatus(executable);
+            return List.copyOf(result);
+        }
+
+        private static void addPathEntry(final List<Path> result, final String path, final int start, final int end) {
+            if (start >= end) {
+                return;
+            }
+            final StringBuilder entry = new StringBuilder();
+            for (int index = start; index < end; index++) {
+                entry.append(path.charAt(index));
+            }
+            if (!entry.isEmpty()) {
+                result.add(Path.of(entry.toString()));
+            }
         }
     }
 }

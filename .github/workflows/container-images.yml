@@ -1,0 +1,163 @@
+name: Container Images
+
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to publish images from, for example v2026.6.14.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: container-images-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: publish container images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Plan image release
+        id: plan
+        shell: sh
+        env:
+          EVENT_TAG: ${{ github.event.release.tag_name || '' }}
+          INPUT_TAG: ${{ inputs.tag || '' }}
+        run: |
+          tag="$EVENT_TAG"
+          if [ -z "$tag" ]; then
+            tag="$INPUT_TAG"
+          fi
+
+          if ! printf '%s\n' "$tag" | grep -Eq '^v[0-9]{4}[.][1-9][0-9]?[.][1-9][0-9]?$'; then
+            printf '%s\n' "Tag must look like v2026.6.14: $tag" >&2
+            exit 1
+          fi
+
+          version=${tag#v}
+          repository="ghcr.io/$(printf '%s' "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')"
+          {
+            printf 'tag=%s\n' "$tag"
+            printf 'version=%s\n' "$version"
+            printf 'repository=%s\n' "$repository"
+            printf 'wolfi_tags<<EOF\n'
+            printf '%s:%s\n' "$repository" "$version"
+            printf '%s:%s-wolfi\n' "$repository" "$version"
+            printf '%s:latest\n' "$repository"
+            printf '%s:wolfi\n' "$repository"
+            printf 'EOF\n'
+            printf 'distroless_tags<<EOF\n'
+            printf '%s:%s-distroless\n' "$repository" "$version"
+            printf '%s:distroless\n' "$repository"
+            printf 'EOF\n'
+            printf 'scratch_tags<<EOF\n'
+            printf '%s:%s-scratch\n' "$repository" "$version"
+            printf '%s:scratch\n' "$repository"
+            printf 'EOF\n'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Checkout release source
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ steps.plan.outputs.tag }}
+
+      - name: Download released Linux packages
+        shell: sh
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.plan.outputs.tag }}
+          RELEASE_VERSION: ${{ steps.plan.outputs.version }}
+        run: |
+          mkdir -p dist/release
+          gh release download "$RELEASE_TAG" --dir dist/release --pattern "javan-${RELEASE_VERSION}-linux-x64.tar.gz"
+          gh release download "$RELEASE_TAG" --dir dist/release --pattern "javan-${RELEASE_VERSION}-linux-x64.tar.gz.sha256"
+          gh release download "$RELEASE_TAG" --dir dist/release --pattern "javan-${RELEASE_VERSION}-linux-aarch64.tar.gz"
+          gh release download "$RELEASE_TAG" --dir dist/release --pattern "javan-${RELEASE_VERSION}-linux-aarch64.tar.gz.sha256"
+          cd dist/release
+          sha256sum -c "javan-${RELEASE_VERSION}-linux-x64.tar.gz.sha256"
+          sha256sum -c "javan-${RELEASE_VERSION}-linux-aarch64.tar.gz.sha256"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.RELEASE_TOKEN || github.token }}
+
+      - name: Build Wolfi image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packaging/containers/javan-wolfi.Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            JAVAN_VERSION=${{ steps.plan.outputs.version }}
+          labels: |
+            org.opencontainers.image.title=javan
+            org.opencontainers.image.description=Javan native-first Java toolchain
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.plan.outputs.version }}
+          tags: ${{ steps.plan.outputs.wolfi_tags }}
+
+      - name: Build distroless image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packaging/containers/javan-distroless.Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            JAVAN_VERSION=${{ steps.plan.outputs.version }}
+          labels: |
+            org.opencontainers.image.title=javan
+            org.opencontainers.image.description=Javan native-first Java toolchain
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.plan.outputs.version }}
+          tags: ${{ steps.plan.outputs.distroless_tags }}
+
+      - name: Build scratch image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packaging/containers/javan-scratch.Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            JAVAN_VERSION=${{ steps.plan.outputs.version }}
+          labels: |
+            org.opencontainers.image.title=javan
+            org.opencontainers.image.description=Javan native-first Java toolchain
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.plan.outputs.version }}
+          tags: ${{ steps.plan.outputs.scratch_tags }}
+
+      - name: Verify pushed image manifests
+        shell: sh
+        env:
+          IMAGE_REPOSITORY: ${{ steps.plan.outputs.repository }}
+          RELEASE_VERSION: ${{ steps.plan.outputs.version }}
+        run: |
+          .github/scripts/verify-image.sh "$IMAGE_REPOSITORY:$RELEASE_VERSION"
+          .github/scripts/verify-image.sh "$IMAGE_REPOSITORY:$RELEASE_VERSION-wolfi"
+          .github/scripts/verify-image.sh "$IMAGE_REPOSITORY:$RELEASE_VERSION-distroless"
+          .github/scripts/verify-image.sh "$IMAGE_REPOSITORY:$RELEASE_VERSION-scratch"
+          .github/scripts/verify-image.sh "$IMAGE_REPOSITORY:latest"
+          .github/scripts/verify-image.sh "$IMAGE_REPOSITORY:wolfi"
+          .github/scripts/verify-image.sh "$IMAGE_REPOSITORY:distroless"
+          .github/scripts/verify-image.sh "$IMAGE_REPOSITORY:scratch"

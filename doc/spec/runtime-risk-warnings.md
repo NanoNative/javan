@@ -70,15 +70,17 @@ Severity is deterministic:
 The analyzer should avoid warning spam by reporting the nearest source location and grouping
 duplicate findings by diagnostic id, source location, risk kind, and reachable path.
 
-## Planned CLI
+## CLI And Report Policy
 
 Planned command behavior:
 
 - `javan check` reports errors and warnings for reachable code
-- `javan check --strict` also reports uncertain info findings
-- `javan check --warnings-as-errors` exits non-zero when warnings are present
-- `javan explain <diagnostic-id>` prints the rule, examples, and suggested fixes
 - `javan build` runs the same analysis before native generation
+- `javan report` reads and summarizes the generated report model
+- strictness, warnings-as-errors, and feature toggles should be available from project or
+  global settings before adding more public flags
+- `javan explain <diagnostic-id>` may print the rule, examples, and suggested fixes once
+  the diagnostic catalog is stable
 
 ## Planned Reports
 
@@ -86,6 +88,8 @@ Generated report paths:
 
 - `.javan/reports/safety-warnings.json`
 - `.javan/reports/safety-warnings.md`
+- `.javan/reports/report.json`
+- `.javan/reports/report.md`
 
 The JSON report should preserve stable diagnostic ids, severity, class, method, descriptor,
 source file, line, reachable path, facts used, invalidation points, reason, and fix. The

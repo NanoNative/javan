@@ -1,7 +1,7 @@
 package javan.build;
 
-import java.util.Arrays;
-import java.util.Locale;
+import javan.util.Strings2;
+
 import java.util.Optional;
 
 /**
@@ -20,8 +20,12 @@ public enum BindingLanguage {
      * @return parsed language when known
      */
     public static Optional<BindingLanguage> parse(final String value) {
-        return Arrays.stream(values())
-            .filter(language -> language.name().equals(value.toUpperCase(Locale.ROOT).replace('-', '_')))
-            .findFirst();
+        final String normalized = Strings2.replaceChar(Strings2.toAsciiUpperCase(value), '-', '_');
+        for (final BindingLanguage language : values()) {
+            if (language.name().equals(normalized)) {
+                return Optional.of(language);
+            }
+        }
+        return Optional.empty();
     }
 }

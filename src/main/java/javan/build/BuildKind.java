@@ -1,8 +1,8 @@
 package javan.build;
 
+import javan.util.Strings2;
+
 import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.Locale;
 import java.util.Optional;
 
 /**
@@ -11,6 +11,7 @@ import java.util.Optional;
 public enum BuildKind {
     APP,
     JAR,
+    LIBRARY,
     STATICLIB,
     SHAREDLIB;
 
@@ -21,9 +22,16 @@ public enum BuildKind {
      * @return parsed kind when known
      */
     public static Optional<BuildKind> parse(final String value) {
-        return Arrays.stream(values())
-            .filter(kind -> kind.name().equals(value.toUpperCase(Locale.ROOT).replace('-', '_')))
-            .findFirst();
+        final String normalized = Strings2.replaceChar(Strings2.toAsciiUpperCase(value), '-', '_');
+        if ("LIB".equals(normalized)) {
+            return Optional.of(LIBRARY);
+        }
+        for (final BuildKind kind : values()) {
+            if (kind.name().equals(normalized)) {
+                return Optional.of(kind);
+            }
+        }
+        return Optional.empty();
     }
 
     /**
@@ -32,7 +40,16 @@ public enum BuildKind {
      * @return true for static and shared libraries
      */
     public boolean library() {
-        return this == STATICLIB || this == SHAREDLIB;
+        if (this == LIBRARY) {
+            return true;
+        }
+        if (this == STATICLIB) {
+            return true;
+        }
+        if (this == SHAREDLIB) {
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -43,16 +60,26 @@ public enum BuildKind {
      * @return artifact path
      */
     public Path artifactPath(final Path outputDirectory, final String outputName) {
-        return switch (this) {
-            case APP -> outputDirectory.resolve("bin").resolve(outputName);
-            case JAR -> outputDirectory.resolve("dist").resolve(outputName + ".jar");
-            case STATICLIB -> outputDirectory.resolve("dist").resolve("lib" + outputName + ".a");
-            case SHAREDLIB -> outputDirectory.resolve("dist").resolve(sharedLibraryName(outputName));
-        };
+        if (this == APP) {
+            return outputDirectory.resolve("bin").resolve(outputName);
+        }
+        if (this == JAR) {
+            return outputDirectory.resolve("dist").resolve(outputName + ".jar");
+        }
+        if (this == LIBRARY) {
+            return outputDirectory.resolve("dist").resolve("lib").resolve(outputName);
+        }
+        if (this == STATICLIB) {
+            return outputDirectory.resolve("dist").resolve("lib" + outputName + ".a");
+        }
+        if (this == SHAREDLIB) {
+            return outputDirectory.resolve("dist").resolve(sharedLibraryName(outputName));
+        }
+        throw new IllegalStateException("Unsupported build kind");
     }
 
     private static String sharedLibraryName(final String outputName) {
-        final String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        final String os = Strings2.toAsciiLowerCase(System.getProperty("os.name", ""));
         if (os.contains("win")) {
             return outputName + ".dll";
         }

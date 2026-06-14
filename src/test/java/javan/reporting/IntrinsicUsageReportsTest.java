@@ -45,7 +45,7 @@ final class IntrinsicUsageReportsTest {
                 instruction("java/lang/String", "valueOf", "(I)Ljava/lang/String;")
             ))
         );
-        final CallGraph callGraph = new CallGraph(entry, Set.of(entry), List.of());
+        final CallGraph callGraph = new CallGraph(entry, List.of(entry), List.of());
 
         final List<Path> written = reports.write(tempDir, classes, callGraph);
         final IntrinsicUsageReport report = reports.analyze(classes, callGraph.reachableMethods());
@@ -59,16 +59,25 @@ final class IntrinsicUsageReportsTest {
             new IntrinsicCallCount("Math.abs", 1),
             new IntrinsicCallCount("Math.min", 0),
             new IntrinsicCallCount("Math.max", 1),
+            new IntrinsicCallCount("Math.toIntExact", 0),
             new IntrinsicCallCount("System.nanoTime", 2),
             new IntrinsicCallCount("System.currentTimeMillis", 0),
+            new IntrinsicCallCount("System.lineSeparator", 0),
+            new IntrinsicCallCount("System.getenv", 0),
+            new IntrinsicCallCount("System.getProperty", 0),
             new IntrinsicCallCount("System.arraycopy", 1),
+            new IntrinsicCallCount("System.exit", 0),
             new IntrinsicCallCount("Arrays.copyOf", 1),
+            new IntrinsicCallCount("Arrays.copyOfRange", 0),
             new IntrinsicCallCount("Integer.toString", 1),
-            new IntrinsicCallCount("Long.toString", 1)
+            new IntrinsicCallCount("Long.toString", 1),
+            new IntrinsicCallCount("Float.toString", 0),
+            new IntrinsicCallCount("Float.intBitsToFloat", 0),
+            new IntrinsicCallCount("Double.toString", 0),
+            new IntrinsicCallCount("Double.longBitsToDouble", 0)
         );
-        assertThat(report.unsupportedJdkCallCandidateCount()).isEqualTo(2);
+        assertThat(report.unsupportedJdkCallCandidateCount()).isEqualTo(1);
         assertThat(report.unsupportedJdkCallCandidates()).containsExactly(
-            new UnsupportedJdkCallCandidate("java/io/PrintStream.println(I)V", 1),
             new UnsupportedJdkCallCandidate("java/lang/String.valueOf(I)Ljava/lang/String;", 1)
         );
         assertThat(Files.readString(tempDir.resolve("reports/intrinsics.json")))
@@ -77,14 +86,14 @@ final class IntrinsicUsageReportsTest {
                 "{\"name\": \"Math.abs\", \"count\": 1}",
                 "{\"name\": \"Arrays.copyOf\", \"count\": 1}",
                 "{\"name\": \"Integer.toString\", \"count\": 1}",
-                "\"unsupportedJdkCallCandidateCount\": 2",
-                "{\"target\": \"java/io/PrintStream.println(I)V\", \"count\": 1}"
+                "\"unsupportedJdkCallCandidateCount\": 1",
+                "{\"target\": \"java/lang/String.valueOf(I)Ljava/lang/String;\", \"count\": 1}"
             );
         assertThat(Files.readString(tempDir.resolve("reports/intrinsics.md")))
             .contains(
                 "| `System.nanoTime` | 2 |",
                 "| `System.arraycopy` | 1 |",
-                "Total reachable call sites: `2`",
+                "Total reachable call sites: `1`",
                 "| `java/lang/String.valueOf(I)Ljava/lang/String;` | 1 |"
             );
     }
@@ -98,7 +107,7 @@ final class IntrinsicUsageReportsTest {
             classFile("com/acme/Main", method("main", "([Ljava/lang/String;)V"))
         );
 
-        reports.write(tempDir, classes, new CallGraph(entry, Set.of(entry), List.of()));
+        reports.write(tempDir, classes, new CallGraph(entry, List.of(entry), List.of()));
 
         assertThat(Files.readString(tempDir.resolve("reports/intrinsics.json")))
             .contains(
@@ -119,12 +128,12 @@ final class IntrinsicUsageReportsTest {
                 "main",
                 "([Ljava/lang/String;)V",
                 instruction("java/lang/Math", "abs", "(F)F"),
-                instruction("java/util/Objects", "requireNonNull", "(Ljava/lang/Object;Ljava/lang/String;)Ljava/lang/Object;"),
+                instruction("java/util/Objects", "requireNonNullElse", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
                 instruction("java/util/Arrays", "copyOf", "([ZI)[Z")
             ))
         );
 
-        final IntrinsicUsageReport report = reports.analyze(classes, Set.of(entry));
+        final IntrinsicUsageReport report = reports.analyze(classes, List.of(entry));
 
         assertThat(report.intrinsics()).contains(
             new IntrinsicCallCount("Math.abs", 0),
@@ -135,7 +144,7 @@ final class IntrinsicUsageReportsTest {
         assertThat(report.unsupportedJdkCallCandidates()).containsExactly(
             new UnsupportedJdkCallCandidate("java/lang/Math.abs(F)F", 1),
             new UnsupportedJdkCallCandidate("java/util/Arrays.copyOf([ZI)[Z", 1),
-            new UnsupportedJdkCallCandidate("java/util/Objects.requireNonNull(Ljava/lang/Object;Ljava/lang/String;)Ljava/lang/Object;", 1)
+            new UnsupportedJdkCallCandidate("java/util/Objects.requireNonNullElse(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;", 1)
         );
     }
 

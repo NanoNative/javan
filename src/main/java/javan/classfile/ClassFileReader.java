@@ -2,7 +2,6 @@ package javan.classfile;
 
 import javan.compat.BytecodeSupport;
 
-import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
@@ -25,16 +24,28 @@ public final class ClassFileReader {
      * @throws IOException when parsing fails
      */
     public ClassFile read(final InputStream input, final Path source) throws IOException {
-        final DataInputStream in = new DataInputStream(input);
-        if (in.readInt() != MAGIC) {
-            throw new IOException("Not a Java class file: " + source);
+        return read(input.readAllBytes(), source);
+    }
+
+    /**
+     * Reads a class file.
+     *
+     * @param bytes class file bytes
+     * @param source source path used for diagnostics
+     * @return parsed class file
+     * @throws IOException when parsing fails
+     */
+    public ClassFile read(final byte[] bytes, final Path source) throws IOException {
+        final ClassByteCursor in = new ClassByteCursor(bytes);
+        if (in.i4() != MAGIC) {
+            throw new IOException("Not a Java class file: " + source.toString());
         }
-        in.readUnsignedShort();
-        final int major = in.readUnsignedShort();
+        in.u2();
+        final int major = in.u2();
         final ConstantPool constantPool = readConstantPool(in);
-        final int accessFlags = in.readUnsignedShort();
-        final String thisClass = constantPool.className(in.readUnsignedShort());
-        final int superIndex = in.readUnsignedShort();
+        final int accessFlags = in.u2();
+        final String thisClass = constantPool.className(in.u2());
+        final int superIndex = in.u2();
         final String superClass = superIndex == 0 ? "" : constantPool.className(superIndex);
         final List<String> interfaces = readInterfaces(in, constantPool);
         final List<FieldInfo> fields = readFields(in, constantPool);
@@ -53,75 +64,75 @@ public final class ClassFileReader {
         );
     }
 
-    private static ConstantPool readConstantPool(final DataInputStream in) throws IOException {
-        final int count = in.readUnsignedShort();
+    private static ConstantPool readConstantPool(final ClassByteCursor in) throws IOException {
+        final int count = in.u2();
         final Object[] entries = new Object[count];
         for (int index = 1; index < count; index++) {
-            final int tag = in.readUnsignedByte();
+            final int tag = in.u1();
             switch (tag) {
-                case 1 -> entries[index] = new ConstantPool.Utf8Entry(in.readUTF());
-                case 3 -> entries[index] = new ConstantPool.RawEntry(tag, in.readInt());
-                case 4 -> entries[index] = new ConstantPool.RawEntry(tag, in.readFloat());
+                case 1 -> entries[index] = new ConstantPool.Utf8Entry(in.modifiedUtf8());
+                case 3 -> entries[index] = new ConstantPool.RawEntry(tag, in.i4());
+                case 4 -> entries[index] = new ConstantPool.RawEntry(tag, in.f4());
                 case 5 -> {
-                    entries[index] = new ConstantPool.RawEntry(tag, in.readLong());
+                    entries[index] = new ConstantPool.RawEntry(tag, in.i8());
                     index++;
                 }
                 case 6 -> {
-                    entries[index] = new ConstantPool.RawEntry(tag, in.readDouble());
+                    entries[index] = new ConstantPool.RawEntry(tag, in.f8());
                     index++;
                 }
-                case 7 -> entries[index] = new ConstantPool.ClassEntry(in.readUnsignedShort());
-                case 8 -> entries[index] = new ConstantPool.StringEntry(in.readUnsignedShort());
-                case 9, 10, 11 -> entries[index] = new ConstantPool.RefEntry(tag, in.readUnsignedShort(), in.readUnsignedShort());
-                case 12 -> entries[index] = new ConstantPool.NameAndTypeEntry(in.readUnsignedShort(), in.readUnsignedShort());
-                case 15 -> entries[index] = new ConstantPool.MethodHandleEntry(in.readUnsignedByte(), in.readUnsignedShort());
-                case 16 -> entries[index] = new ConstantPool.MethodTypeEntry(in.readUnsignedShort());
-                case 17, 18 -> entries[index] = new ConstantPool.DynamicEntry(tag, in.readUnsignedShort(), in.readUnsignedShort());
-                case 19, 20 -> entries[index] = new ConstantPool.RawEntry(tag, in.readUnsignedShort());
+                case 7 -> entries[index] = new ConstantPool.ClassEntry(in.u2());
+                case 8 -> entries[index] = new ConstantPool.StringEntry(in.u2());
+                case 9, 10, 11 -> entries[index] = new ConstantPool.RefEntry(tag, in.u2(), in.u2());
+                case 12 -> entries[index] = new ConstantPool.NameAndTypeEntry(in.u2(), in.u2());
+                case 15 -> entries[index] = new ConstantPool.MethodHandleEntry(in.u1(), in.u2());
+                case 16 -> entries[index] = new ConstantPool.MethodTypeEntry(in.u2());
+                case 17, 18 -> entries[index] = new ConstantPool.DynamicEntry(tag, in.u2(), in.u2());
+                case 19, 20 -> entries[index] = new ConstantPool.RawEntry(tag, in.u2());
                 default -> throw new IOException("Unsupported constant pool tag " + tag);
             }
         }
         return new ConstantPool(entries);
     }
 
-    private static List<String> readInterfaces(final DataInputStream in, final ConstantPool constantPool) throws IOException {
-        final int count = in.readUnsignedShort();
+    private static List<String> readInterfaces(final ClassByteCursor in, final ConstantPool constantPool) throws IOException {
+        final int count = in.u2();
         final List<String> result = new ArrayList<>();
         for (int index = 0; index < count; index++) {
-            result.add(constantPool.className(in.readUnsignedShort()));
+            result.add(constantPool.className(in.u2()));
         }
         return List.copyOf(result);
     }
 
-    private static List<FieldInfo> readFields(final DataInputStream in, final ConstantPool constantPool) throws IOException {
-        final int count = in.readUnsignedShort();
+    private static List<FieldInfo> readFields(final ClassByteCursor in, final ConstantPool constantPool) throws IOException {
+        final int count = in.u2();
         final List<FieldInfo> result = new ArrayList<>();
         for (int index = 0; index < count; index++) {
-            final int accessFlags = in.readUnsignedShort();
-            final String name = constantPool.utf8(in.readUnsignedShort());
-            final String descriptor = constantPool.utf8(in.readUnsignedShort());
+            final int accessFlags = in.u2();
+            final String name = constantPool.utf8(in.u2());
+            final String descriptor = constantPool.utf8(in.u2());
             skipAttributes(in);
             result.add(new FieldInfo(accessFlags, name, descriptor));
         }
         return result;
     }
 
-    private static List<MethodInfo> readMethods(final DataInputStream in, final ConstantPool constantPool) throws IOException {
-        final int count = in.readUnsignedShort();
+    private static List<MethodInfo> readMethods(final ClassByteCursor in, final ConstantPool constantPool) throws IOException {
+        final int count = in.u2();
         final List<MethodInfo> result = new ArrayList<>();
         for (int index = 0; index < count; index++) {
-            final int accessFlags = in.readUnsignedShort();
-            final String name = constantPool.utf8(in.readUnsignedShort());
-            final String descriptor = constantPool.utf8(in.readUnsignedShort());
+            final int accessFlags = in.u2();
+            final String name = constantPool.utf8(in.u2());
+            final String descriptor = constantPool.utf8(in.u2());
             Optional<CodeAttribute> code = Optional.empty();
-            final int attributes = in.readUnsignedShort();
+            final int attributes = in.u2();
             for (int attribute = 0; attribute < attributes; attribute++) {
-                final String attributeName = constantPool.utf8(in.readUnsignedShort());
-                final int length = in.readInt();
+                final String attributeName = constantPool.utf8(in.u2());
+                final long length = in.u4();
                 if ("Code".equals(attributeName)) {
                     code = Optional.of(readCode(in, constantPool));
                 } else {
-                    in.skipNBytes(length);
+                    in.skip(length);
                 }
             }
             result.add(new MethodInfo(accessFlags, name, descriptor, code));
@@ -129,62 +140,66 @@ public final class ClassFileReader {
         return result;
     }
 
-    private static CodeAttribute readCode(final DataInputStream in, final ConstantPool constantPool) throws IOException {
-        final int maxStack = in.readUnsignedShort();
-        final int maxLocals = in.readUnsignedShort();
-        final int codeLength = in.readInt();
-        final byte[] bytecode = in.readNBytes(codeLength);
-        final int exceptionTableLength = in.readUnsignedShort();
+    private static CodeAttribute readCode(final ClassByteCursor in, final ConstantPool constantPool) throws IOException {
+        final int maxStack = in.u2();
+        final int maxLocals = in.u2();
+        final long codeLength = in.u4();
+        final byte[] bytecode = in.bytes(codeLength);
+        final int exceptionTableLength = in.u2();
         final List<CodeException> exceptionTable = readExceptionTable(in, constantPool, exceptionTableLength);
         skipAttributes(in);
         return new CodeAttribute(maxStack, maxLocals, bytecode, exceptionTableLength, exceptionTable, List.of());
     }
 
     private static List<CodeException> readExceptionTable(
-        final DataInputStream in,
+        final ClassByteCursor in,
         final ConstantPool constantPool,
         final int exceptionTableLength
     ) throws IOException {
         final List<CodeException> result = new ArrayList<>();
         for (int index = 0; index < exceptionTableLength; index++) {
-            final int startPc = in.readUnsignedShort();
-            final int endPc = in.readUnsignedShort();
-            final int handlerPc = in.readUnsignedShort();
-            final int catchType = in.readUnsignedShort();
+            final int startPc = in.u2();
+            final int endPc = in.u2();
+            final int handlerPc = in.u2();
+            final int catchType = in.u2();
+            Optional<String> catchClass = Optional.empty();
+            if (catchType != 0) {
+                catchClass = Optional.of(constantPool.className(catchType));
+            }
             result.add(new CodeException(
                 startPc,
                 endPc,
                 handlerPc,
-                catchType == 0 ? Optional.empty() : Optional.of(constantPool.className(catchType))
+                catchClass
             ));
         }
         return List.copyOf(result);
     }
 
-    private static List<BootstrapMethod> readClassAttributes(final DataInputStream in, final ConstantPool constantPool) throws IOException {
-        final int count = in.readUnsignedShort();
+    private static List<BootstrapMethod> readClassAttributes(final ClassByteCursor in, final ConstantPool constantPool) throws IOException {
+        final int count = in.u2();
         final List<BootstrapMethod> bootstrapMethods = new ArrayList<>();
         for (int index = 0; index < count; index++) {
-            final String attributeName = constantPool.utf8(in.readUnsignedShort());
-            final int length = in.readInt();
+            final String attributeName = constantPool.utf8(in.u2());
+            final long length = in.u4();
             if ("BootstrapMethods".equals(attributeName)) {
                 bootstrapMethods.addAll(readBootstrapMethods(in));
             } else {
-                in.skipNBytes(length);
+                in.skip(length);
             }
         }
         return List.copyOf(bootstrapMethods);
     }
 
-    private static List<BootstrapMethod> readBootstrapMethods(final DataInputStream in) throws IOException {
-        final int count = in.readUnsignedShort();
+    private static List<BootstrapMethod> readBootstrapMethods(final ClassByteCursor in) throws IOException {
+        final int count = in.u2();
         final List<BootstrapMethod> result = new ArrayList<>();
         for (int index = 0; index < count; index++) {
-            final int methodHandleIndex = in.readUnsignedShort();
-            final int argumentCount = in.readUnsignedShort();
+            final int methodHandleIndex = in.u2();
+            final int argumentCount = in.u2();
             final List<Integer> arguments = new ArrayList<>();
             for (int argument = 0; argument < argumentCount; argument++) {
-                arguments.add(in.readUnsignedShort());
+                arguments.add(in.u2());
             }
             result.add(new BootstrapMethod(methodHandleIndex, List.copyOf(arguments)));
         }
@@ -215,11 +230,11 @@ public final class ClassFileReader {
         return List.copyOf(result);
     }
 
-    private static void skipAttributes(final DataInputStream in) throws IOException {
-        final int count = in.readUnsignedShort();
+    private static void skipAttributes(final ClassByteCursor in) throws IOException {
+        final int count = in.u2();
         for (int index = 0; index < count; index++) {
-            in.readUnsignedShort();
-            in.skipNBytes(in.readInt());
+            in.u2();
+            in.skip(in.u4());
         }
     }
 
@@ -282,7 +297,7 @@ public final class ClassFileReader {
     }
 
     private static Optional<String> className(final int opcode, final byte[] operands, final ConstantPool constantPool) {
-        if (opcode == 187 || opcode == 189) {
+        if (opcode == 187 || opcode == 189 || opcode == 192 || opcode == 193) {
             return Optional.of(constantPool.className(index16(operands, 0)));
         }
         return Optional.empty();
@@ -334,17 +349,90 @@ public final class ClassFileReader {
 
     private static int instructionLength(final byte[] bytecode, final int offset) throws IOException {
         final int opcode = unsigned(bytecode[offset]);
-        return switch (opcode) {
-            case 16, 18, 21, 22, 23, 24, 25, 54, 55, 56, 57, 58, 169, 188 -> 2;
-            case 17, 19, 20, 132, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 178,
-                 179, 180, 181, 182, 183, 184, 187, 189, 192, 193, 198, 199 -> 3;
-            case 185, 186, 200, 201 -> 5;
-            case 196 -> wideLength(bytecode, offset);
-            case 197 -> 4;
-            case 170 -> tableSwitchLength(bytecode, offset);
-            case 171 -> lookupSwitchLength(bytecode, offset);
-            default -> 1;
-        };
+        if (hasOneOperandByte(opcode)) {
+            return 2;
+        }
+        if (hasTwoOperandBytes(opcode)) {
+            return 3;
+        }
+        if (opcode == 185 || opcode == 186 || opcode == 200 || opcode == 201) {
+            return 5;
+        }
+        if (opcode == 196) {
+            return wideLength(bytecode, offset);
+        }
+        if (opcode == 197) {
+            return 4;
+        }
+        if (opcode == 170) {
+            return tableSwitchLength(bytecode, offset);
+        }
+        if (opcode == 171) {
+            return lookupSwitchLength(bytecode, offset);
+        }
+        return 1;
+    }
+
+    private static boolean hasOneOperandByte(final int opcode) {
+        if (opcode == 16) {
+            return true;
+        }
+        if (opcode == 18) {
+            return true;
+        }
+        if (opcode >= 21 && opcode <= 25) {
+            return true;
+        }
+        if (opcode >= 54 && opcode <= 58) {
+            return true;
+        }
+        if (opcode == 169) {
+            return true;
+        }
+        if (opcode == 188) {
+            return true;
+        }
+        return false;
+    }
+
+    private static boolean hasTwoOperandBytes(final int opcode) {
+        if (opcode == 17) {
+            return true;
+        }
+        if (opcode == 19) {
+            return true;
+        }
+        if (opcode == 20) {
+            return true;
+        }
+        if (opcode == 132) {
+            return true;
+        }
+        if (opcode >= 153 && opcode <= 168) {
+            return true;
+        }
+        if (opcode >= 178 && opcode <= 184) {
+            return true;
+        }
+        if (opcode == 187) {
+            return true;
+        }
+        if (opcode == 189) {
+            return true;
+        }
+        if (opcode == 192) {
+            return true;
+        }
+        if (opcode == 193) {
+            return true;
+        }
+        if (opcode == 198) {
+            return true;
+        }
+        if (opcode == 199) {
+            return true;
+        }
+        return false;
     }
 
     private static int wideLength(final byte[] bytecode, final int offset) throws IOException {

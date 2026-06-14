@@ -1,7 +1,7 @@
 package javan.cli;
 
-import java.util.Arrays;
-import java.util.Locale;
+import javan.util.Strings2;
+
 import java.util.Optional;
 
 /**
@@ -17,6 +17,7 @@ public enum Command {
     RUN,
     JAVAC,
     COMPAT,
+    REPORT,
     CLEAN,
     DOCTOR,
     TOOLCHAIN;
@@ -28,8 +29,12 @@ public enum Command {
      * @return parsed command when supported
      */
     public static Optional<Command> parse(final String value) {
-        return Arrays.stream(values())
-            .filter(command -> command.name().equals(value.toUpperCase(Locale.ROOT).replace('-', '_')))
-            .findFirst();
+        final String normalized = Strings2.replaceChar(Strings2.toAsciiUpperCase(value), '-', '_');
+        for (final Command command : values()) {
+            if (command.name().equals(normalized)) {
+                return Optional.of(command);
+            }
+        }
+        return Optional.empty();
     }
 }
