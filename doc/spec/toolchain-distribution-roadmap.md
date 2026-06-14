@@ -1,25 +1,29 @@
 # Toolchain Distribution Roadmap
 
-Status: roadmap only. This file describes planned distribution and ecosystem behavior.
-It does not claim that the current CLI already implements these features.
+Status: roadmap only. The first release direction is now binary-first; see
+[binary-first-distribution.md](binary-first-distribution.md). This file keeps longer-term
+toolchain ideas that may be useful after the standalone executable, Maven/Gradle
+plugins, Homebrew packaging, and IDE report consumption are stable.
 
 ## Goal
 
-Make `javan` feel JDK-like without pretending to be a replacement JDK.
+Make `javan` integrate cleanly with existing JDKs without pretending to be a replacement
+JDK.
 
-The production distribution should wrap an original JDK and `javac`, add native-build
-awareness around it, and remain friendly to IDEs and existing Java build tools. Users
-should be able to install `javan`, point a project or IDE at the toolchain, and get:
+The production distribution should install a standalone `javan` binary, add native-build
+awareness around normal Java outputs, and remain friendly to IDEs and existing Java build
+tools. Users should be able to install `javan`, point it at a project or wire it through a
+build plugin, and get:
 
 - normal Java compilation through a real `javac`
 - deterministic native-build checks and reports
-- automatic toolchain discovery and installation when explicitly requested
+- automatic toolchain discovery and installation only when needed and explicitly allowed
 - Maven and Gradle integration
 - stable distribution metadata with versions, checksums, and source provenance
 
 ## Principles
 
-- Wrap real JDKs. Do not rebuild Java or ship fake platform classes.
+- Use real JDKs. Do not rebuild Java or ship fake platform classes.
 - Keep Java source and `.class` output ordinary enough for existing tools.
 - Prefer explicit installation over silent global mutation.
 - Make every resolved toolchain deterministic: version, vendor, OS, architecture,
@@ -40,7 +44,8 @@ Initial deliverables:
 
 Optional later deliverables:
 
-- `javan-jdk` wrapper layout that an IDE can select as an SDK
+- `javan-jdk` wrapper layout that an IDE can select as an SDK, only if binary reports and
+  plugins are not enough
 - bundled original JDK distribution where licensing permits
 - Homebrew formula and bottles
 - Maven plugin
@@ -284,15 +289,54 @@ Non-responsibilities:
 
 Reports intended for IDEs must be stable and machine-readable:
 
+- `.javan/reports/report.json`
+- `.javan/reports/report.md`
 - `.javan/reports/project.json`
 - `.javan/reports/safety-warnings.json`
 - `.javan/reports/exceptions.json`
 - `.javan/reports/debug-map.json`
 - `.javan/reports/intrinsics.json`
 - `.javan/reports/compatibility-summary.json`
+- `.javan/reports/threads.json`
 
 The IDE layer should render reports; it should not infer unsupported native behavior on
 its own. One source of truth keeps the knives facing away from the user.
+
+The unified report should also carry Sonar-like findings for reachable code where Javan
+can prove or conservatively suspect a problem:
+
+- correctness bugs
+- possible runtime failures
+- security and unsafe API usage
+- performance traps
+- concurrency misuse
+- maintainability smells when they affect native readiness
+- dead or unreachable dependency usage
+- license and dependency policy findings
+
+Every finding uses the same diagnostic id, severity, source location, reachable path, why,
+and fix model as compiler/native-profile diagnostics. IDE integrations and build plugins
+must not run a second analyzer with different semantics.
+
+The javac wrapper may also emit javan diagnostics in source-focused compiler format so
+IDEs that already parse `javac` output can display warnings without a custom plugin:
+
+```text
+src/main/java/com/acme/Main.java:42: warning: [JAVAN-RISK-NULL] possible null dereference
+```
+
+Those diagnostics must still come from the same report model. The wrapper delegates to
+the original `javac` first and must preserve normal Java compiler diagnostics and exit
+codes.
+
+Compatibility summaries for IDEs must distinguish:
+
+- JDK inventory counts
+- supported reachable variants
+- deliberately rejected reachable variants
+- unknown leftovers
+
+IDE integrations must never infer native support from inventory counts alone.
 
 ## Feature Incubator Workflow
 
@@ -318,7 +362,7 @@ the gate is many narrow tests with clear assumptions.
 Distribution and toolchain tests should remain public-entrypoint oriented:
 
 - CLI tests for install, use, doctor, resolution, and missing-tool failures
-- fixture projects for plain Java, Maven, Gradle, wrapper Maven, and wrapper Gradle
+- test projects for plain Java, Maven, Gradle, wrapper Maven, and wrapper Gradle
 - checksum rejection tests
 - corrupt download and partial extraction tests
 - global settings precedence tests
@@ -363,7 +407,7 @@ build system has enough jobs; no need to make one test carry furniture.
 
 - release Maven plugin with `check` and `build`
 - release Gradle plugin with `javanCheck` and `javanBuild`
-- add fixture projects for both plugins
+- add test projects for both plugins
 - document CI usage
 
 ### Phase 5: Package Managers

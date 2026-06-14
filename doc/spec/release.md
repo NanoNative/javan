@@ -1,58 +1,84 @@
 # Release
 
-`javan` releases are host-native. GraalVM Native Image builds binaries for the
-operating system and CPU architecture that run the build, so release automation
-must build on each target runner instead of pretending cross-compilation is free.
+Javan releases are host-native binary releases. Each package is built on the operating
+system and CPU architecture it claims to support.
 
 ## Local Gate
 
-Run the same gate used by CI:
+Run the same gate used by the release matrix:
 
 ```sh
-scripts/verify-release.sh
+.github/scripts/verify-release.sh
 ```
 
 The gate runs:
 
 - `mvn verify`
-- `scripts/build-javan-native.sh`
+- `scripts/build.sh`
 - `dist/javan doctor`
 - `dist/javan --help`
 - `dist/javan --version`
-- `scripts/acceptance.sh`
-- `scripts/package-release.sh`
-- `scripts/verify-package.sh`
+- `.github/scripts/acceptance.sh`
+- `JAVAN_SANITIZER_REQUIRED=true sh .github/scripts/sanitizer-suite.sh`
+- `.github/scripts/package-release.sh`
+- `.github/scripts/verify-package.sh`
 
-## Acceptance Projects
+## Release Versioning
 
-`scripts/acceptance.sh` treats the checked-in `examples/` projects as acceptance
-projects. For supported app projects it builds with `javan`, runs the same
-classes on the JVM, runs the native executable, and compares output exactly.
+The workflow owns versioning. No manual `pom.xml` version bump is required.
 
-It also checks:
+| Trigger | Behavior |
+| --- | --- |
+| push to `main` | computes today's `vYYYY.M.D`, updates `pom.xml` and `CHANGELOG.md`, tags, and publishes |
+| manual dispatch | uses the provided `tag`, or today's `vYYYY.M.D` when empty |
+| manual dispatch with `dry_run=true` | builds and verifies packages without committing, tagging, or publishing |
 
-- static library C ABI smoke test
-- missing `Main.main` rejection
-- multiple-main rejection
-- reachable reflection rejection
-- optional TypeMap and Nano probes when their local artifacts are available
+Release tags must match `vYYYY.M.D`, for example `v2026.6.14`.
 
-## GitHub Actions
+Non-dry-run publishing requires the repository `BOT_TOKEN` secret. The release workflow
+must create the GitHub release with that bot token so GitHub emits the follow-up
+`release.published` event used by image publication.
 
-`.github/workflows/ci.yml` runs the local release gate on Linux x64 and macOS aarch64 for
-pushes, pull requests, and manual dispatches.
+Container images are published by the separate `Container Images` workflow after a
+GitHub release exists. That workflow downloads the released Linux archives and can be
+replayed manually with the release tag.
 
-`.github/workflows/release.yml` builds release packages on Linux x64 and macOS aarch64. A
-tag matching `v*.*.*` publishes a GitHub Release. Manual dispatch packages a specific
-version without publishing unless it is run from a tag.
+## CI Matrix
 
-## Platform Plan
+Required release package targets:
 
-Current guaranteed release targets:
+| Target | Runner |
+| --- | --- |
+| `linux-x64` | `ubuntu-24.04` |
+| `linux-aarch64` | `ubuntu-24.04-arm` |
+| `macos-aarch64` | `macos-15` |
+| `macos-x64` | `macos-15-intel` |
 
-- Linux x64 or aarch64 when a matching GitHub runner is configured
-- macOS x64 or aarch64 when a matching GitHub runner is configured
+Windows is tracked but not in the first release gate. It still needs a native linker path,
+`.exe` package verification, and CI coverage before it is claimed.
 
-Windows is intentionally not in the first release gate. The compiler runtime and
-script surface still need a Windows-native linker path, `.exe` packaging, and
-PowerShell-free verification before it belongs in the required matrix.
+## Acceptance Coverage
+
+`.github/scripts/acceptance.sh` runs public-entrypoint checks over:
+
+- native app parity against JVM output
+- resource distribution
+- jar output
+- native-library C ABI smoke
+- negative rejection projects
+- native-profile runtime/codegen probes
+- optional TypeMap and Nano probes when local artifacts exist
+
+Test-only projects live under `src/test/resources/projects`, not `examples`.
+
+## Package Rules
+
+Release archives contain only:
+
+- `bin/javan`
+- `README.md`
+- `VERSION`
+- `LICENSE` when present
+
+Each archive has a SHA-256 file and is verified before upload. Package scripts reject
+target mismatches and non-triplet versions.

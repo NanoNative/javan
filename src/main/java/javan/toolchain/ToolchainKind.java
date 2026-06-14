@@ -1,6 +1,7 @@
 package javan.toolchain;
 
-import java.util.Locale;
+import javan.util.Strings2;
+
 import java.util.Optional;
 
 /**
@@ -16,14 +17,16 @@ public enum ToolchainKind {
      * @return parsed kind when recognized
      */
     public static Optional<ToolchainKind> parse(final String value) {
-        if (value == null || value.isBlank()) {
+        if (Strings2.isBlank(value)) {
             return Optional.empty();
         }
-        try {
-            return Optional.of(ToolchainKind.valueOf(value.trim().toUpperCase(Locale.ROOT)));
-        } catch (final IllegalArgumentException exception) {
-            return Optional.empty();
+        final String normalized = Strings2.toAsciiUpperCase(Strings2.trimAscii(value));
+        for (final ToolchainKind kind : values()) {
+            if (kind.name().equals(normalized)) {
+                return Optional.of(kind);
+            }
         }
+        return Optional.empty();
     }
 
     /**
@@ -32,6 +35,6 @@ public enum ToolchainKind {
      * @return stable value
      */
     public String value() {
-        return name().toLowerCase(Locale.ROOT);
+        return Strings2.toAsciiLowerCase(name());
     }
 }

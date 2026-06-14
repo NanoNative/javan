@@ -1,12 +1,14 @@
 package javan.toolchain;
 
+import javan.util.Strings2;
+
 import java.io.IOException;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Comparator;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.stream.Stream;
 
 /**
  * Reads installed toolchains from a javan home directory.
@@ -46,27 +48,65 @@ public final class ToolchainRegistry {
         if (!Files.isDirectory(toolchains)) {
             return List.of();
         }
-        try (Stream<Path> children = Files.list(toolchains)) {
-            return children
-                .filter(Files::isDirectory)
-                .sorted(Comparator.comparing(path -> path.getFileName().toString()))
-                .map(path -> path.resolve("toolchain.toml"))
-                .map(this::readMetadata)
-                .flatMap(List::stream)
-                .sorted(Comparator
-                    .comparing(ToolchainMetadata::id)
-                    .thenComparing(metadata -> metadata.kind().value())
-                    .thenComparing(ToolchainMetadata::version)
-                    .thenComparing(metadata -> metadata.home().toString()))
-                .toList();
+        final List<Path> installs = new ArrayList<>();
+        final DirectoryStream<Path> children = Files.newDirectoryStream(toolchains);
+        for (final Path child : children) {
+            if (Files.isDirectory(child)) {
+                insertPath(installs, child);
+            }
         }
+        children.close();
+        final List<ToolchainMetadata> installed = new ArrayList<>();
+        for (final Path install : installs) {
+            final List<ToolchainMetadata> metadata = readMetadata(install.resolve("toolchain.toml"));
+            for (final ToolchainMetadata item : metadata) {
+                insertMetadata(installed, item);
+            }
+        }
+        return List.copyOf(installed);
     }
 
-    private List<ToolchainMetadata> readMetadata(final Path metadataFile) {
-        try {
-            return reader.read(metadataFile).stream().toList();
-        } catch (final IOException exception) {
-            throw new ToolchainMetadataException("Unable to read toolchain metadata: " + metadataFile, exception);
+    private List<ToolchainMetadata> readMetadata(final Path metadataFile) throws IOException {
+        final java.util.Optional<ToolchainMetadata> metadata = reader.read(metadataFile);
+        if (metadata.isEmpty()) {
+            return List.of();
         }
+        return List.of(metadata.orElseThrow());
+    }
+
+    private static void insertPath(final List<Path> paths, final Path path) {
+        int index = 0;
+        while (index < paths.size() && comparePath(paths.get(index), path) <= 0) {
+            index++;
+        }
+        paths.add(index, path);
+    }
+
+    private static int comparePath(final Path left, final Path right) {
+        return Strings2.compareAscii(left.getFileName().toString(), right.getFileName().toString());
+    }
+
+    private static void insertMetadata(final List<ToolchainMetadata> values, final ToolchainMetadata metadata) {
+        int index = 0;
+        while (index < values.size() && compareMetadata(values.get(index), metadata) <= 0) {
+            index++;
+        }
+        values.add(index, metadata);
+    }
+
+    private static int compareMetadata(final ToolchainMetadata left, final ToolchainMetadata right) {
+        int result = Strings2.compareAscii(left.id(), right.id());
+        if (result != 0) {
+            return result;
+        }
+        result = Strings2.compareAscii(left.kind().value(), right.kind().value());
+        if (result != 0) {
+            return result;
+        }
+        result = Strings2.compareAscii(left.version(), right.version());
+        if (result != 0) {
+            return result;
+        }
+        return Strings2.compareAscii(left.home().toString(), right.home().toString());
     }
 }

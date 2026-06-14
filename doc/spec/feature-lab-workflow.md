@@ -64,7 +64,7 @@ Required coverage shape:
 
 - success path tests
 - negative tests for unsupported input
-- deterministic fixture tests
+- deterministic test-project tests
 - public-entrypoint tests for CLI/build/runtime behavior
 - regression tests for every bug fix
 - report-content tests when reports are part of the feature
@@ -93,7 +93,7 @@ without making the test obscure or fragile.
 
 ## Determinism
 
-Feature labs must make fixture behavior repeatable:
+Feature labs must make test-project behavior repeatable:
 
 - fixed source files
 - fixed classpath order
@@ -131,7 +131,7 @@ Before moving a lab feature into `javan`:
 
 - reduce the implementation to the smallest production slice
 - remove lab-only scaffolding
-- keep deterministic fixtures that prove the slice
+- keep deterministic test projects that prove the slice
 - add negative tests before claiming unsupported behavior is safe
 - update reports/docs only for behavior that exists
 - keep unsupported paths explicit and readable

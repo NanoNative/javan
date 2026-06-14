@@ -1,26 +1,24 @@
 package javan.compat;
 
-import java.util.Map;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.TreeSet;
 
 /**
  * Explicit JVM bytecode support table for the current native profile.
  */
 public final class BytecodeSupport {
-    private static final Set<Integer> NATIVE_SUPPORTED = Set.of(
+    private static final int[] NATIVE_SUPPORTED = {
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
         24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45,
         46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67,
         68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 89, 96,
         97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 118,
-        119, 132, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164,
-        167, 172, 173, 174, 175, 176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188,
-        189, 190, 191, 192, 198, 199
-    );
+        119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164,
+        165, 166, 167, 170, 171, 172, 173, 174, 175, 176, 177, 178, 179, 180, 181, 182, 183, 184,
+        185, 186, 187, 188, 189, 190, 191, 192, 193, 198, 199
+    };
 
-    private static final Set<Integer> KNOWN_JVM = Set.of(
+    private static final int[] KNOWN_JVM = {
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
         20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36,
         37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53,
@@ -34,9 +32,9 @@ public final class BytecodeSupport {
         160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173,
         174, 175, 176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187,
         188, 189, 190, 191, 192, 193, 194, 195, 196, 197, 198, 199, 200, 201
-    );
+    };
 
-    private static final Map<Integer, String> MNEMONICS = mnemonics();
+    private static final String[] MNEMONICS = mnemonics();
 
     private BytecodeSupport() {
     }
@@ -48,10 +46,10 @@ public final class BytecodeSupport {
      * @return support status
      */
     public static Status classify(final int opcode) {
-        if (NATIVE_SUPPORTED.contains(opcode)) {
+        if (contains(NATIVE_SUPPORTED, opcode)) {
             return Status.NATIVE_SUPPORTED;
         }
-        if (KNOWN_JVM.contains(opcode)) {
+        if (contains(KNOWN_JVM, opcode)) {
             return Status.RECOGNIZED_REJECTED;
         }
         return Status.UNKNOWN_FATAL;
@@ -64,7 +62,10 @@ public final class BytecodeSupport {
      * @return mnemonic
      */
     public static String mnemonic(final int opcode) {
-        return MNEMONICS.getOrDefault(opcode, "opcode_" + opcode);
+        if (opcode >= 0 && opcode < MNEMONICS.length) {
+            return MNEMONICS[opcode];
+        }
+        return "opcode_" + opcode;
     }
 
     /**
@@ -73,7 +74,7 @@ public final class BytecodeSupport {
      * @return known opcodes
      */
     public static Set<Integer> knownOpcodes() {
-        return new TreeSet<>(KNOWN_JVM);
+        return setOf(KNOWN_JVM);
     }
 
     /**
@@ -82,12 +83,28 @@ public final class BytecodeSupport {
      * @return supported opcodes
      */
     public static Set<Integer> nativeSupportedOpcodes() {
-        return new TreeSet<>(NATIVE_SUPPORTED);
+        return setOf(NATIVE_SUPPORTED);
     }
 
-    private static Map<Integer, String> mnemonics() {
-        final Map<Integer, String> values = new TreeMap<>();
-        final String[] names = {
+    private static boolean contains(final int[] values, final int target) {
+        for (final int value : values) {
+            if (value == target) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static Set<Integer> setOf(final int[] values) {
+        final Set<Integer> result = new TreeSet<>();
+        for (final int value : values) {
+            result.add(value);
+        }
+        return result;
+    }
+
+    private static String[] mnemonics() {
+        return new String[]{
             "nop", "aconst_null", "iconst_m1", "iconst_0", "iconst_1", "iconst_2", "iconst_3", "iconst_4",
             "iconst_5", "lconst_0", "lconst_1", "fconst_0", "fconst_1", "fconst_2", "dconst_0", "dconst_1",
             "bipush", "sipush", "ldc", "ldc_w", "ldc2_w", "iload", "lload", "fload", "dload", "aload",
@@ -112,10 +129,6 @@ public final class BytecodeSupport {
             "checkcast", "instanceof", "monitorenter", "monitorexit", "wide", "multianewarray", "ifnull",
             "ifnonnull", "goto_w", "jsr_w"
         };
-        for (int opcode = 0; opcode < names.length; opcode++) {
-            values.put(opcode, names[opcode]);
-        }
-        return Map.copyOf(values);
     }
 
     /**

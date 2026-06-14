@@ -13,8 +13,8 @@ javan is a minimal native-first Java toolchain. Contributions should keep Java s
 
 - Use Java 25 or newer.
 - Use Maven for local verification.
-- Install a native C toolchain when testing generated binaries.
-- Install GraalVM `native-image` when running the full release gate.
+- Install a native C toolchain when testing generated binaries or the full release gate.
+- The release gate builds Javan through Javan's own native backend.
 
 ```sh
 mvn verify
@@ -23,7 +23,7 @@ mvn verify
 Full local release gate:
 
 ```sh
-sh scripts/verify-release.sh
+sh .github/scripts/verify-release.sh
 ```
 
 ## Code Standards

@@ -4,26 +4,20 @@ import javan.analysis.EntryPoint;
 import javan.classfile.ClassFile;
 import javan.classfile.MethodInfo;
 import javan.util.Files2;
+import javan.util.Strings2;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Resolves library exports from CLI and {@code javan.toml}.
  */
 public final class ExportResolver {
-    private static final Pattern CONFIG_METHODS = Pattern.compile("methods\\s*=\\s*\\[(?<values>[^]]*)]", Pattern.DOTALL);
-    private static final Pattern QUOTED = Pattern.compile("\"([^\"]+)\"");
-
     /**
      * Resolves export declarations.
      *
@@ -45,14 +39,26 @@ public final class ExportResolver {
             throw new IllegalArgumentException("Library builds require at least one --export or [exports].methods entry in javan.toml");
         }
         final List<ExportedMethod> result = new ArrayList<>();
-        final Set<EntryPoint> seen = new LinkedHashSet<>();
+        final List<EntryPoint> seen = new ArrayList<>();
         for (final String declaration : declarations) {
-            final ExportedMethod method = resolveOne(classes, declaration.trim());
-            if (seen.add(method.entryPoint())) {
+            final ExportedMethod method = resolveOne(classes, Strings2.trimAscii(declaration));
+            if (!containsEntry(seen, method.entryPoint())) {
+                seen.add(method.entryPoint());
                 result.add(method);
             }
         }
         return List.copyOf(result);
+    }
+
+    private static boolean containsEntry(final List<EntryPoint> entries, final EntryPoint target) {
+        for (final EntryPoint entry : entries) {
+            if (entry.className().equals(target.className())
+                && entry.methodName().equals(target.methodName())
+                && entry.descriptor().equals(target.descriptor())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static List<String> configExports(final Path root) throws IOException {
@@ -61,40 +67,98 @@ public final class ExportResolver {
             return List.of();
         }
         final String text = Files2.readStringIfExists(config);
-        final Matcher methods = CONFIG_METHODS.matcher(text);
-        if (!methods.find()) {
+        final int start = methodsArrayStart(text);
+        if (start < 0) {
             return List.of();
         }
+        final int end = methodsArrayEnd(text, start);
         final List<String> result = new ArrayList<>();
-        final Matcher quoted = QUOTED.matcher(methods.group("values"));
-        while (quoted.find()) {
-            result.add(quoted.group(1));
-        }
+        collectQuoted(text, start + 1, end, result);
         return List.copyOf(result);
     }
 
+    private static int methodsArrayStart(final String text) {
+        int index = 0;
+        while (index >= 0 && index < text.length()) {
+            index = text.indexOf("methods", index);
+            if (index < 0) {
+                return -1;
+            }
+            final int afterName = index + "methods".length();
+            int cursor = skipWhitespace(text, afterName);
+            if (cursor < text.length() && text.charAt(cursor) == '=') {
+                cursor = skipWhitespace(text, cursor + 1);
+                if (cursor < text.length() && text.charAt(cursor) == '[') {
+                    return cursor;
+                }
+            }
+            index = afterName;
+        }
+        return -1;
+    }
+
+    private static int methodsArrayEnd(final String text, final int start) {
+        final int end = text.indexOf(']', start + 1);
+        if (end < 0) {
+            throw new IllegalArgumentException("Invalid [exports].methods in javan.toml");
+        }
+        return end;
+    }
+
+    private static int skipWhitespace(final String text, final int start) {
+        int cursor = start;
+        while (cursor < text.length()) {
+            final char value = text.charAt(cursor);
+            if (value != ' ' && value != '\t' && value != '\n' && value != '\r') {
+                return cursor;
+            }
+            cursor++;
+        }
+        return cursor;
+    }
+
+    private static void collectQuoted(final String text, final int start, final int end, final List<String> result) {
+        int cursor = start;
+        while (cursor < end) {
+            if (text.charAt(cursor) != '"') {
+                cursor++;
+                continue;
+            }
+            final int close = text.indexOf('"', cursor + 1);
+            if (close < 0 || close > end) {
+                throw new IllegalArgumentException("Invalid quoted export in javan.toml");
+            }
+            result.add(text.substring(cursor + 1, close));
+            cursor = close + 1;
+        }
+    }
+
     private static ExportedMethod resolveOne(final Map<String, ClassFile> classes, final String declaration) {
-        if (declaration.isBlank()) {
+        if (Strings2.isBlank(declaration)) {
             throw new IllegalArgumentException("Blank export declaration");
         }
         if (declaration.contains("(")) {
             final ParsedDeclaration parsed = ParsedDeclaration.parse(declaration);
             final ClassFile classFile = classFile(classes, parsed.owner());
-            final MethodInfo method = classFile.method(parsed.methodName(), parsed.descriptor())
-                .orElseThrow(() -> new IllegalArgumentException("Export method not found: " + declaration));
+            final MethodInfo method = classFile.method(parsed.methodName(), parsed.descriptor()).orElse(null);
+            if (method == null) {
+                throw new IllegalArgumentException("Export method not found: " + declaration);
+            }
             return validate(classFile, method, parsed.parameterTypes(), parsed.returnType());
         }
         final int dot = declaration.lastIndexOf('.');
         if (dot < 1 || dot == declaration.length() - 1) {
             throw new IllegalArgumentException("Export must look like com.acme.Type.method or com.acme.Type.method(int):int");
         }
-        final String owner = declaration.substring(0, dot).replace('.', '/');
+        final String owner = Strings2.replaceChar(declaration.substring(0, dot), '.', '/');
         final String methodName = declaration.substring(dot + 1);
         final ClassFile classFile = classFile(classes, owner);
-        final List<MethodInfo> matches = classFile.methods().stream()
-            .filter(method -> method.name().equals(methodName))
-            .filter(method -> !method.name().startsWith("<"))
-            .toList();
+        final List<MethodInfo> matches = new ArrayList<>();
+        for (final MethodInfo method : classFile.methods()) {
+            if (method.name().equals(methodName) && !method.name().startsWith("<")) {
+                matches.add(method);
+            }
+        }
         if (matches.isEmpty()) {
             throw new IllegalArgumentException("Export method not found: " + declaration);
         }
@@ -109,7 +173,7 @@ public final class ExportResolver {
     private static ClassFile classFile(final Map<String, ClassFile> classes, final String owner) {
         final ClassFile classFile = classes.get(owner);
         if (classFile == null) {
-            throw new IllegalArgumentException("Export class not found: " + owner.replace('/', '.'));
+            throw new IllegalArgumentException("Export class not found: " + Strings2.replaceChar(owner, '/', '.'));
         }
         return classFile;
     }
@@ -121,11 +185,11 @@ public final class ExportResolver {
         final AbiType returnType
     ) {
         if (!method.isStatic()) {
-            throw new IllegalArgumentException("Unsupported export " + classFile.name().replace('/', '.') + "." + method.name()
+            throw new IllegalArgumentException("Unsupported export " + Strings2.replaceChar(classFile.name(), '/', '.') + "." + method.name()
                 + method.descriptor() + ": exported methods must be static");
         }
         if (method.isNative() || method.code().isEmpty()) {
-            throw new IllegalArgumentException("Unsupported export " + classFile.name().replace('/', '.') + "." + method.name()
+            throw new IllegalArgumentException("Unsupported export " + Strings2.replaceChar(classFile.name(), '/', '.') + "." + method.name()
                 + method.descriptor() + ": method must have Java bytecode");
         }
         final EntryPoint entryPoint = new EntryPoint(classFile.name(), method.name(), method.descriptor());
@@ -133,18 +197,35 @@ public final class ExportResolver {
     }
 
     private static String symbol(final String owner, final String methodName, final List<AbiType> parameters) {
-        final String suffix = parameters.isEmpty()
-            ? "void"
-            : String.join("_", parameters.stream().map(AbiType::suffix).toList());
+        final String suffix = suffix(parameters);
         return "javan_export_" + sanitize(owner) + "_" + sanitize(methodName) + "_" + suffix;
     }
 
+    private static String suffix(final List<AbiType> parameters) {
+        if (parameters.isEmpty()) {
+            return "void";
+        }
+        final StringBuilder result = new StringBuilder();
+        for (int index = 0; index < parameters.size(); index++) {
+            if (index > 0) {
+                result.append('_');
+            }
+            result.append(parameters.get(index).suffix());
+        }
+        return result.toString();
+    }
+
     private static String sanitize(final String value) {
-        return value
-            .replace('/', '_')
-            .replace('.', '_')
-            .replace('$', '_')
-            .replace('-', '_');
+        return Strings2.replaceChar(
+            Strings2.replaceChar(
+                Strings2.replaceChar(
+                    Strings2.replaceChar(value, '/', '_'),
+                    '.', '_'
+                ),
+                '$', '_'
+            ),
+            '-', '_'
+        );
     }
 
     private record ParsedDeclaration(String owner, String methodName, String descriptor, List<AbiType> parameterTypes, AbiType returnType) {
@@ -159,10 +240,10 @@ public final class ExportResolver {
             if (dot < 1) {
                 throw new IllegalArgumentException("Invalid export declaration: " + declaration);
             }
-            final String owner = declaration.substring(0, dot).replace('.', '/');
+            final String owner = Strings2.replaceChar(declaration.substring(0, dot), '.', '/');
             final String methodName = declaration.substring(dot + 1, open);
             final List<AbiType> parameters = parseTypes(declaration.substring(open + 1, close));
-            final AbiType returnType = parseType(declaration.substring(colon + 1).trim(), true);
+            final AbiType returnType = parseType(Strings2.trimAscii(declaration.substring(colon + 1)), true);
             return new ParsedDeclaration(owner, methodName, ExportResolver.descriptor(parameters, returnType), parameters, returnType);
         }
     }
@@ -186,16 +267,28 @@ public final class ExportResolver {
 
     private static TypeRead readDescriptorType(final String descriptor, final int index) {
         final char type = descriptor.charAt(index);
-        return switch (type) {
-            case 'V' -> new TypeRead(AbiType.VOID, index + 1);
-            case 'B', 'C', 'I', 'S', 'Z' -> new TypeRead(AbiType.INT, index + 1);
-            case 'J' -> new TypeRead(AbiType.LONG, index + 1);
-            case 'F' -> new TypeRead(AbiType.FLOAT, index + 1);
-            case 'D' -> new TypeRead(AbiType.DOUBLE, index + 1);
-            case 'L' -> readObjectDescriptor(descriptor, index);
-            case '[' -> readArrayDescriptor(descriptor, index);
-            default -> throw new IllegalArgumentException("Unsupported export descriptor: " + descriptor);
-        };
+        if (type == 'V') {
+            return new TypeRead(AbiType.VOID, index + 1);
+        }
+        if (type == 'B' || type == 'C' || type == 'I' || type == 'S' || type == 'Z') {
+            return new TypeRead(AbiType.INT, index + 1);
+        }
+        if (type == 'J') {
+            return new TypeRead(AbiType.LONG, index + 1);
+        }
+        if (type == 'F') {
+            return new TypeRead(AbiType.FLOAT, index + 1);
+        }
+        if (type == 'D') {
+            return new TypeRead(AbiType.DOUBLE, index + 1);
+        }
+        if (type == 'L') {
+            return readObjectDescriptor(descriptor, index);
+        }
+        if (type == '[') {
+            return readArrayDescriptor(descriptor, index);
+        }
+        throw new IllegalArgumentException("Unsupported export descriptor: " + descriptor);
     }
 
     private static TypeRead readObjectDescriptor(final String descriptor, final int index) {
@@ -207,7 +300,7 @@ public final class ExportResolver {
         if ("java/lang/String".equals(type)) {
             return new TypeRead(AbiType.STRING, end + 1);
         }
-        throw new IllegalArgumentException("Unsupported export object type: " + type.replace('/', '.'));
+        throw new IllegalArgumentException("Unsupported export object type: " + Strings2.replaceChar(type, '/', '.'));
     }
 
     private static TypeRead readArrayDescriptor(final String descriptor, final int index) {
@@ -218,27 +311,44 @@ public final class ExportResolver {
     }
 
     private static List<AbiType> parseTypes(final String value) {
-        if (value.isBlank()) {
+        if (Strings2.isBlank(value)) {
             return List.of();
         }
         final List<AbiType> result = new ArrayList<>();
-        for (final String part : value.split(",")) {
-            result.add(parseType(part.trim(), false));
+        int start = 0;
+        for (int index = 0; index <= value.length(); index++) {
+            if (index == value.length() || value.charAt(index) == ',') {
+                result.add(parseType(Strings2.trimAscii(value.substring(start, index)), false));
+                start = index + 1;
+            }
         }
         return List.copyOf(result);
     }
 
     private static AbiType parseType(final String value, final boolean returnPosition) {
-        return switch (value) {
-            case "void" -> returnPosition ? AbiType.VOID : unsupported(value);
-            case "byte", "char", "short", "int", "boolean" -> AbiType.INT;
-            case "long" -> AbiType.LONG;
-            case "float" -> AbiType.FLOAT;
-            case "double" -> AbiType.DOUBLE;
-            case "String", "java.lang.String" -> AbiType.STRING;
-            case "byte[]" -> AbiType.BYTE_ARRAY;
-            default -> throw new IllegalArgumentException("Unsupported export type: " + value);
-        };
+        if ("void".equals(value)) {
+            return returnPosition ? AbiType.VOID : unsupported(value);
+        }
+        if ("byte".equals(value) || "char".equals(value) || "short".equals(value) || "int".equals(value)
+            || "boolean".equals(value)) {
+            return AbiType.INT;
+        }
+        if ("long".equals(value)) {
+            return AbiType.LONG;
+        }
+        if ("float".equals(value)) {
+            return AbiType.FLOAT;
+        }
+        if ("double".equals(value)) {
+            return AbiType.DOUBLE;
+        }
+        if ("String".equals(value) || "java.lang.String".equals(value)) {
+            return AbiType.STRING;
+        }
+        if ("byte[]".equals(value)) {
+            return AbiType.BYTE_ARRAY;
+        }
+        throw new IllegalArgumentException("Unsupported export type: " + value);
     }
 
     private static AbiType unsupported(final String value) {
@@ -246,18 +356,38 @@ public final class ExportResolver {
     }
 
     private static String descriptor(final List<AbiType> parameters, final AbiType returnType) {
-        return "(" + String.join("", parameters.stream().map(ExportResolver::descriptor).toList()) + ")" + descriptor(returnType);
+        final StringBuilder result = new StringBuilder();
+        result.append('(');
+        for (final AbiType parameter : parameters) {
+            result.append(descriptor(parameter));
+        }
+        result.append(')');
+        result.append(descriptor(returnType));
+        return result.toString();
     }
 
     private static String descriptor(final AbiType type) {
-        return switch (type) {
-            case VOID -> "V";
-            case INT -> "I";
-            case LONG -> "J";
-            case FLOAT -> "F";
-            case DOUBLE -> "D";
-            case STRING -> "Ljava/lang/String;";
-            case BYTE_ARRAY -> "[B";
-        };
+        if (type == AbiType.VOID) {
+            return "V";
+        }
+        if (type == AbiType.INT) {
+            return "I";
+        }
+        if (type == AbiType.LONG) {
+            return "J";
+        }
+        if (type == AbiType.FLOAT) {
+            return "F";
+        }
+        if (type == AbiType.DOUBLE) {
+            return "D";
+        }
+        if (type == AbiType.STRING) {
+            return "Ljava/lang/String;";
+        }
+        if (type == AbiType.BYTE_ARRAY) {
+            return "[B";
+        }
+        throw new IllegalArgumentException("Unsupported ABI type: " + type.name());
     }
 }

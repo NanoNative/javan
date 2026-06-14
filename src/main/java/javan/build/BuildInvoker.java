@@ -6,14 +6,13 @@ import javan.detect.InputKind;
 import javan.detect.ProjectLayout;
 import javan.util.Files2;
 import javan.util.ProcessRunner;
+import javan.util.Strings2;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Ensures Java classes exist by invoking the detected build tool or plain javac.
@@ -51,15 +50,22 @@ public final class BuildInvoker {
      */
     public ProjectLayout ensureClasses(final ProjectLayout layout, final Options options) throws IOException, InterruptedException {
         Files.createDirectories(layout.outputDirectory());
-        if (options.noBuild() || layout.inputKind() == InputKind.JAR_FILE || layout.buildTool() == BuildTool.CLASSES) {
+        if (layout.inputKind() == InputKind.JAR_FILE || layout.buildTool() == BuildTool.CLASSES) {
             return classpathResolver.resolve(layout);
         }
-        return switch (layout.buildTool()) {
-            case MAVEN -> buildMaven(layout);
-            case GRADLE -> buildGradle(layout);
-            case JAVAC, NONE -> buildPlainJavac(layout);
-            case JAR, CLASSES -> classpathResolver.resolve(layout);
-        };
+        if (layout.buildTool() == BuildTool.MAVEN) {
+            return buildMaven(layout);
+        }
+        if (layout.buildTool() == BuildTool.GRADLE) {
+            return buildGradle(layout);
+        }
+        if (layout.buildTool() == BuildTool.JAVAC || layout.buildTool() == BuildTool.NONE) {
+            return buildPlainJavac(layout);
+        }
+        if (layout.buildTool() == BuildTool.JAR || layout.buildTool() == BuildTool.CLASSES) {
+            return classpathResolver.resolve(layout);
+        }
+        throw new IllegalStateException("Unsupported build tool");
     }
 
     private ProjectLayout buildMaven(final ProjectLayout layout) throws IOException, InterruptedException {
@@ -101,20 +107,6 @@ public final class BuildInvoker {
             : layout.classFolders();
         final List<Path> sources = sources(layout);
         final boolean hasResources = hasPlainResources(layout);
-        if (!Files2.sourcesNewerThanClasses(layout.sourceFolders(), classFolders)) {
-            final Path classes = layout.outputDirectory().resolve("classes");
-            deleteGeneratedResources(classes);
-            if (!hasResources) {
-                return classpathResolver.resolve(layout.withClasspath(classFolders, layout.classpathEntries(), List.of()));
-            }
-            Files.createDirectories(classes);
-            copyPlainResources(layout, classes);
-            final List<Path> updatedClassFolders = new ArrayList<>(classFolders);
-            if (!updatedClassFolders.contains(classes)) {
-                updatedClassFolders.addFirst(classes);
-            }
-            return classpathResolver.resolve(layout.withClasspath(updatedClassFolders, layout.classpathEntries(), List.of()));
-        }
         if (sources.isEmpty() && !hasResources) {
             return classpathResolver.resolve(layout);
         }
@@ -129,7 +121,9 @@ public final class BuildInvoker {
                 command.add("-classpath");
                 command.add(ClasspathResolver.join(layout.classpathEntries()));
             }
-            sources.stream().map(Path::toString).forEach(command::add);
+            for (final Path source : sources) {
+                command.add(source.toString());
+            }
             final ProcessRunner.Result result = processRunner.run(layout.root(), command);
             if (result.exitCode() != 0) {
                 throw new IOException("javac failed\n" + result.stderr() + result.stdout());
@@ -137,7 +131,7 @@ public final class BuildInvoker {
         }
         copyPlainResources(layout, classes);
         final List<Path> updatedClassFolders = new ArrayList<>(classFolders);
-        if (!updatedClassFolders.contains(classes)) {
+        if (!containsPath(updatedClassFolders, classes)) {
             updatedClassFolders.addFirst(classes);
         }
         return classpathResolver.resolve(layout.withClasspath(updatedClassFolders, layout.classpathEntries(), List.of()));
@@ -149,9 +143,11 @@ public final class BuildInvoker {
         }
         final List<Path> result = new ArrayList<>();
         for (final Path sourceFolder : layout.sourceFolders()) {
-            result.addAll(Files2.findJavaSources(sourceFolder));
+            for (final Path source : Files2.findJavaSources(sourceFolder)) {
+                addPath(result, source);
+            }
         }
-        return result.stream().distinct().toList();
+        return List.copyOf(result);
     }
 
     private static boolean hasPlainResources(final ProjectLayout layout) throws IOException {
@@ -160,13 +156,13 @@ public final class BuildInvoker {
 
     private static void copyPlainResources(final ProjectLayout layout, final Path classes) throws IOException {
         deleteGeneratedResources(classes);
-        for (final Map.Entry<String, Path> resource : plainResources(layout).entrySet()) {
-            final Path target = classes.resolve(resource.getKey()).normalize();
+        for (final ResourceCopy resource : plainResources(layout)) {
+            final Path target = classes.resolve(resource.relativePath()).normalize();
             if (!target.startsWith(classes)) {
-                throw new IOException("Resource path escapes class output: " + resource.getKey());
+                throw new IOException("Resource path escapes class output: " + resource.relativePath());
             }
             Files.createDirectories(target.getParent());
-            Files.copy(resource.getValue(), target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            Files.copy(resource.source(), target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
         }
     }
 
@@ -174,40 +170,72 @@ public final class BuildInvoker {
         if (!Files.isDirectory(classes)) {
             return;
         }
-        for (final Path file : Files2.findFiles(classes, BuildInvoker::resourceFile)) {
+        for (final Path file : Files2.findResourceFiles(classes)) {
             Files.deleteIfExists(file);
         }
     }
 
-    private static Map<String, Path> plainResources(final ProjectLayout layout) throws IOException {
-        final LinkedHashMap<String, Path> result = new LinkedHashMap<>();
+    private static List<ResourceCopy> plainResources(final ProjectLayout layout) throws IOException {
+        final List<ResourceCopy> result = new ArrayList<>();
         for (final Path resourceFolder : layout.resourceFolders()) {
             addResources(result, resourceFolder, resourceFolder, List.of());
         }
         for (final Path sourceFolder : layout.sourceFolders()) {
             addResources(result, sourceFolder, sourceFolder, layout.resourceFolders());
         }
-        return java.util.Collections.unmodifiableMap(result);
+        return List.copyOf(result);
     }
 
     private static void addResources(
-        final Map<String, Path> result,
+        final List<ResourceCopy> result,
         final Path root,
         final Path relativeRoot,
         final List<Path> excludedRoots
     ) throws IOException {
-        for (final Path file : Files2.findFiles(root, BuildInvoker::resourceFile)) {
+        for (final Path file : Files2.findResourceFiles(root)) {
             final Path normalized = file.toAbsolutePath().normalize();
-            if (excludedRoots.stream().map(Path::toAbsolutePath).map(Path::normalize).anyMatch(normalized::startsWith)) {
+            if (startsWithAny(normalized, excludedRoots)) {
                 continue;
             }
-            final String relative = relativeRoot.relativize(file).toString().replace(java.io.File.separatorChar, '/');
-            result.putIfAbsent(relative, file);
+            final String relative = Strings2.replaceChar(relativeRoot.relativize(file).toString(), java.io.File.separatorChar, '/');
+            addResource(result, relative, file);
         }
     }
 
-    private static boolean resourceFile(final Path file) {
-        final String name = file.getFileName().toString();
-        return !name.endsWith(".java") && !name.endsWith(".class");
+    private static void addResource(final List<ResourceCopy> result, final String relativePath, final Path source) {
+        for (final ResourceCopy resource : result) {
+            if (resource.relativePath().equals(relativePath)) {
+                return;
+            }
+        }
+        result.add(new ResourceCopy(relativePath, source));
+    }
+
+    private static void addPath(final List<Path> values, final Path path) {
+        if (!containsPath(values, path)) {
+            values.add(path);
+        }
+    }
+
+    private static boolean containsPath(final List<Path> values, final Path target) {
+        final String normalized = target.toAbsolutePath().normalize().toString();
+        for (final Path value : values) {
+            if (value.toAbsolutePath().normalize().toString().equals(normalized)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean startsWithAny(final Path normalized, final List<Path> roots) {
+        for (final Path root : roots) {
+            if (normalized.startsWith(root.toAbsolutePath().normalize())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private record ResourceCopy(String relativePath, Path source) {
     }
 }

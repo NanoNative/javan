@@ -1,5 +1,7 @@
 package javan.toolchain;
 
+import javan.util.Strings2;
+
 import java.nio.file.Path;
 import java.util.Objects;
 import java.util.Optional;
@@ -41,9 +43,9 @@ public record ToolchainMetadata(
     }
 
     private static String requireText(final String value, final String field) {
-        if (value == null || value.isBlank()) {
+        if (Strings2.isBlank(value)) {
             throw new IllegalArgumentException("Missing toolchain metadata field: " + field);
         }
-        return value.trim();
+        return Strings2.trimAscii(value);
     }
 }

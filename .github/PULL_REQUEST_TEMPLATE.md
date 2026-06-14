@@ -5,7 +5,7 @@
 # Verification
 
 - [ ] `mvn verify`
-- [ ] `sh scripts/verify-release.sh` when native packaging, release artifacts, or supported code generation changed
+- [ ] `sh .github/scripts/verify-release.sh` when native packaging, release artifacts, or supported code generation changed
 - [ ] Not run; reason:
 
 # Checklist

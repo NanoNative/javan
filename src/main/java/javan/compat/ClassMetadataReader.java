@@ -1,13 +1,14 @@
 package javan.compat;
 
-import java.io.DataInputStream;
+import javan.classfile.ClassByteCursor;
+import javan.util.Strings2;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.TreeSet;
 
 /**
  * Reads classfiles for compatibility inventory without assuming native support.
@@ -24,31 +25,43 @@ public final class ClassMetadataReader {
      * @throws IOException when parsing fails
      */
     public ClassMetadata read(final InputStream input, final Path source) throws IOException {
-        final DataInputStream in = new DataInputStream(input);
-        if (in.readInt() != MAGIC) {
-            throw new IOException("Not a Java class file: " + source);
+        return read(input.readAllBytes(), source);
+    }
+
+    /**
+     * Reads class metadata.
+     *
+     * @param bytes classfile bytes
+     * @param source source path
+     * @return metadata
+     * @throws IOException when parsing fails
+     */
+    public ClassMetadata read(final byte[] bytes, final Path source) throws IOException {
+        final ClassByteCursor in = new ClassByteCursor(bytes);
+        if (in.i4() != MAGIC) {
+            throw new IOException("Not a Java class file: " + source.toString());
         }
-        final int minor = in.readUnsignedShort();
-        final int major = in.readUnsignedShort();
+        final int minor = in.u2();
+        final int major = in.u2();
         final Pool pool = readConstantPool(in);
-        final int accessFlags = in.readUnsignedShort();
-        final String thisClass = pool.className(in.readUnsignedShort());
-        final int superIndex = in.readUnsignedShort();
+        final int accessFlags = in.u2();
+        final String thisClass = pool.className(in.u2());
+        final int superIndex = in.u2();
         final String superClass = superIndex == 0 ? "" : pool.className(superIndex);
         final List<String> interfaces = readInterfaces(in, pool);
         final List<MemberMetadata> fields = readMembers(in, pool, false);
         final List<MemberMetadata> rawMethods = readMembers(in, pool, true);
         final List<String> classAttributes = new ArrayList<>();
         final List<String> bootstrapMethods = new ArrayList<>();
-        final int attributes = in.readUnsignedShort();
+        final int attributes = in.u2();
         for (int index = 0; index < attributes; index++) {
-            final String name = pool.utf8(in.readUnsignedShort());
+            final String name = pool.utf8(in.u2());
             classAttributes.add(name);
-            final int length = in.readInt();
+            final long length = in.u4();
             if ("BootstrapMethods".equals(name)) {
                 bootstrapMethods.addAll(readBootstrapMethods(in, pool));
             } else {
-                in.skipNBytes(length);
+                in.skip(length);
             }
         }
         return new ClassMetadata(
@@ -61,79 +74,81 @@ public final class ClassMetadataReader {
             thisClass,
             superClass,
             List.copyOf(interfaces),
-            List.copyOf(new TreeSet<>(pool.tags())),
+            sortedInts(pool.tags()),
             sorted(classAttributes),
             sorted(bootstrapMethods),
             List.copyOf(fields),
-            rawMethods.stream().filter(member -> "<init>".equals(member.name())).toList(),
-            rawMethods.stream().filter(member -> !"<init>".equals(member.name())).toList()
+            constructors(rawMethods),
+            methods(rawMethods)
         );
     }
 
-    private static Pool readConstantPool(final DataInputStream in) throws IOException {
-        final int count = in.readUnsignedShort();
+    private static Pool readConstantPool(final ClassByteCursor in) throws IOException {
+        final int count = in.u2();
         final Object[] entries = new Object[count];
+        final int[] entryTags = new int[count];
         final List<Integer> tags = new ArrayList<>();
         for (int index = 1; index < count; index++) {
-            final int tag = in.readUnsignedByte();
+            final int tag = in.u1();
+            entryTags[index] = tag;
             tags.add(tag);
             switch (tag) {
-                case 1 -> entries[index] = new Utf8Entry(in.readUTF());
-                case 3 -> entries[index] = new RawEntry(tag, in.readInt());
-                case 4 -> entries[index] = new RawEntry(tag, in.readFloat());
+                case 1 -> entries[index] = new Utf8Entry(in.modifiedUtf8());
+                case 3 -> entries[index] = new RawEntry(tag, in.i4());
+                case 4 -> entries[index] = new RawEntry(tag, in.f4());
                 case 5 -> {
-                    entries[index] = new RawEntry(tag, in.readLong());
+                    entries[index] = new RawEntry(tag, in.i8());
                     index++;
                 }
                 case 6 -> {
-                    entries[index] = new RawEntry(tag, in.readDouble());
+                    entries[index] = new RawEntry(tag, in.f8());
                     index++;
                 }
-                case 7 -> entries[index] = new ClassEntry(in.readUnsignedShort());
-                case 8 -> entries[index] = new StringEntry(in.readUnsignedShort());
-                case 9, 10, 11 -> entries[index] = new RefEntry(tag, in.readUnsignedShort(), in.readUnsignedShort());
-                case 12 -> entries[index] = new NameAndTypeEntry(in.readUnsignedShort(), in.readUnsignedShort());
-                case 15 -> entries[index] = new MethodHandleEntry(in.readUnsignedByte(), in.readUnsignedShort());
-                case 16 -> entries[index] = new MethodTypeEntry(in.readUnsignedShort());
-                case 17, 18 -> entries[index] = new DynamicEntry(tag, in.readUnsignedShort(), in.readUnsignedShort());
-                case 19, 20 -> entries[index] = new RawEntry(tag, in.readUnsignedShort());
+                case 7 -> entries[index] = new ClassEntry(in.u2());
+                case 8 -> entries[index] = new StringEntry(in.u2());
+                case 9, 10, 11 -> entries[index] = new RefEntry(tag, in.u2(), in.u2());
+                case 12 -> entries[index] = new NameAndTypeEntry(in.u2(), in.u2());
+                case 15 -> entries[index] = new MethodHandleEntry(in.u1(), in.u2());
+                case 16 -> entries[index] = new MethodTypeEntry(in.u2());
+                case 17, 18 -> entries[index] = new DynamicEntry(tag, in.u2(), in.u2());
+                case 19, 20 -> entries[index] = new RawEntry(tag, in.u2());
                 default -> throw new IOException("Unsupported constant pool tag " + tag);
             }
         }
-        return new Pool(entries, List.copyOf(tags));
+        return new Pool(entries, entryTags, List.copyOf(tags));
     }
 
-    private static List<String> readInterfaces(final DataInputStream in, final Pool pool) throws IOException {
-        final int count = in.readUnsignedShort();
+    private static List<String> readInterfaces(final ClassByteCursor in, final Pool pool) throws IOException {
+        final int count = in.u2();
         final List<String> result = new ArrayList<>();
         for (int index = 0; index < count; index++) {
-            result.add(pool.className(in.readUnsignedShort()));
+            result.add(pool.className(in.u2()));
         }
         return result;
     }
 
     private static List<MemberMetadata> readMembers(
-        final DataInputStream in,
+        final ClassByteCursor in,
         final Pool pool,
         final boolean methods
     ) throws IOException {
-        final int count = in.readUnsignedShort();
+        final int count = in.u2();
         final List<MemberMetadata> result = new ArrayList<>();
         for (int index = 0; index < count; index++) {
-            final int flags = in.readUnsignedShort();
-            final String name = pool.utf8(in.readUnsignedShort());
-            final String descriptor = pool.utf8(in.readUnsignedShort());
+            final int flags = in.u2();
+            final String name = pool.utf8(in.u2());
+            final String descriptor = pool.utf8(in.u2());
             final List<String> attributes = new ArrayList<>();
             final List<InstructionMetadata> instructions = new ArrayList<>();
-            final int attributeCount = in.readUnsignedShort();
+            final int attributeCount = in.u2();
             for (int attribute = 0; attribute < attributeCount; attribute++) {
-                final String attributeName = pool.utf8(in.readUnsignedShort());
+                final String attributeName = pool.utf8(in.u2());
                 attributes.add(attributeName);
-                final int length = in.readInt();
+                final long length = in.u4();
                 if (methods && "Code".equals(attributeName)) {
                     instructions.addAll(readCode(in, pool));
                 } else {
-                    in.skipNBytes(length);
+                    in.skip(length);
                 }
             }
             result.add(new MemberMetadata(flags, name, descriptor, sorted(attributes), List.copyOf(instructions)));
@@ -141,38 +156,51 @@ public final class ClassMetadataReader {
         return result;
     }
 
-    private static List<InstructionMetadata> readCode(final DataInputStream in, final Pool pool) throws IOException {
-        in.readUnsignedShort();
-        in.readUnsignedShort();
-        final int codeLength = in.readInt();
-        final byte[] bytecode = in.readNBytes(codeLength);
-        final int exceptionTableLength = in.readUnsignedShort();
-        in.skipNBytes(exceptionTableLength * 8L);
+    private static List<InstructionMetadata> readCode(final ClassByteCursor in, final Pool pool) throws IOException {
+        in.u2();
+        in.u2();
+        final long codeLength = in.u4();
+        final byte[] bytecode = in.bytes(codeLength);
+        final int exceptionTableLength = in.u2();
+        in.skip(exceptionTableLength * 8L);
         skipNestedAttributes(in, pool);
         return decode(bytecode);
     }
 
-    private static void skipNestedAttributes(final DataInputStream in, final Pool pool) throws IOException {
-        final int count = in.readUnsignedShort();
+    private static void skipNestedAttributes(final ClassByteCursor in, final Pool pool) throws IOException {
+        final int count = in.u2();
         for (int index = 0; index < count; index++) {
-            pool.utf8(in.readUnsignedShort());
-            in.skipNBytes(in.readInt());
+            pool.utf8(in.u2());
+            in.skip(in.u4());
         }
     }
 
-    private static List<String> readBootstrapMethods(final DataInputStream in, final Pool pool) throws IOException {
-        final int count = in.readUnsignedShort();
+    private static List<String> readBootstrapMethods(final ClassByteCursor in, final Pool pool) throws IOException {
+        final int count = in.u2();
         final List<String> result = new ArrayList<>();
         for (int index = 0; index < count; index++) {
-            final String method = pool.methodHandle(in.readUnsignedShort()).orElse("methodHandle#unknown");
-            final int argumentCount = in.readUnsignedShort();
+            final String method = pool.methodHandle(in.u2()).orElse("methodHandle#unknown");
+            final int argumentCount = in.u2();
             final List<String> arguments = new ArrayList<>();
             for (int argument = 0; argument < argumentCount; argument++) {
-                arguments.add(pool.describe(in.readUnsignedShort()));
+                arguments.add(pool.describe(in.u2()));
             }
-            result.add(method + " args=" + arguments);
+            result.add(method + " args=" + describeList(arguments));
         }
         return result;
+    }
+
+    private static String describeList(final List<String> values) {
+        final StringBuilder result = new StringBuilder();
+        result.append('[');
+        for (int index = 0; index < values.size(); index++) {
+            if (index > 0) {
+                result.append(", ");
+            }
+            result.append(values.get(index));
+        }
+        result.append(']');
+        return result.toString();
     }
 
     private static List<InstructionMetadata> decode(final byte[] bytecode) throws IOException {
@@ -255,10 +283,72 @@ public final class ClassMetadataReader {
     }
 
     private static List<String> sorted(final List<String> values) {
-        return List.copyOf(new TreeSet<>(values));
+        final List<String> result = new ArrayList<>();
+        for (final String value : values) {
+            insertString(result, value);
+        }
+        return List.copyOf(result);
     }
 
-    private record Pool(Object[] entries, List<Integer> tags) {
+    private static List<Integer> sortedInts(final List<Integer> values) {
+        final List<Integer> result = new ArrayList<>();
+        for (final Integer value : values) {
+            insertInt(result, value.intValue());
+        }
+        return List.copyOf(result);
+    }
+
+    private static List<MemberMetadata> constructors(final List<MemberMetadata> rawMethods) {
+        final List<MemberMetadata> result = new ArrayList<>();
+        for (final MemberMetadata member : rawMethods) {
+            if ("<init>".equals(member.name())) {
+                result.add(member);
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    private static List<MemberMetadata> methods(final List<MemberMetadata> rawMethods) {
+        final List<MemberMetadata> result = new ArrayList<>();
+        for (final MemberMetadata member : rawMethods) {
+            if (!"<init>".equals(member.name())) {
+                result.add(member);
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    private static void insertString(final List<String> values, final String value) {
+        int index = 0;
+        while (index < values.size()) {
+            final int comparison = Strings2.compareAscii(values.get(index), value);
+            if (comparison == 0) {
+                return;
+            }
+            if (comparison > 0) {
+                break;
+            }
+            index++;
+        }
+        values.add(index, value);
+    }
+
+    private static void insertInt(final List<Integer> values, final int value) {
+        int index = 0;
+        while (index < values.size()) {
+            final int current = values.get(index).intValue();
+            if (current == value) {
+                return;
+            }
+            if (current > value) {
+                break;
+            }
+            index++;
+        }
+        values.add(index, Integer.valueOf(value));
+    }
+
+    private record Pool(Object[] entries, int[] entryTags, List<Integer> tags) {
         String utf8(final int index) {
             return ((Utf8Entry) entries[index]).value();
         }
@@ -268,38 +358,22 @@ public final class ClassMetadataReader {
         }
 
         String describe(final int index) {
-            final Object entry = entries[index];
-            if (entry instanceof Utf8Entry utf8) {
-                return "Utf8:" + utf8.value();
-            }
-            if (entry instanceof ClassEntry classEntry) {
-                return "Class:" + utf8(classEntry.nameIndex());
-            }
-            if (entry instanceof StringEntry stringEntry) {
-                return "String:" + utf8(stringEntry.stringIndex());
-            }
-            if (entry instanceof RefEntry ref) {
-                return refName(ref);
-            }
-            if (entry instanceof MethodHandleEntry handle) {
-                return methodHandleDescription(handle);
-            }
-            if (entry instanceof MethodTypeEntry methodType) {
-                return "MethodType:" + utf8(methodType.descriptorIndex());
-            }
-            if (entry instanceof DynamicEntry dynamic) {
-                return "Dynamic:bootstrap=" + dynamic.bootstrapMethodAttributeIndex();
-            }
-            if (entry instanceof RawEntry raw) {
-                return "tag" + raw.tag();
-            }
-            return "unknown";
+            return switch (entryTags[index]) {
+                case 1 -> "Utf8:" + ((Utf8Entry) entries[index]).value();
+                case 7 -> "Class:" + utf8(((ClassEntry) entries[index]).nameIndex());
+                case 8 -> "String:" + utf8(((StringEntry) entries[index]).stringIndex());
+                case 9, 10, 11 -> refName((RefEntry) entries[index]);
+                case 15 -> methodHandleDescription((MethodHandleEntry) entries[index]);
+                case 16 -> "MethodType:" + utf8(((MethodTypeEntry) entries[index]).descriptorIndex());
+                case 17, 18 -> "Dynamic:bootstrap=" + ((DynamicEntry) entries[index]).bootstrapMethodAttributeIndex();
+                case 3, 4, 5, 6, 19, 20 -> "tag" + ((RawEntry) entries[index]).tag();
+                default -> "unknown";
+            };
         }
 
         Optional<String> methodHandle(final int index) {
-            final Object entry = entries[index];
-            if (entry instanceof MethodHandleEntry handle) {
-                return Optional.of(methodHandleDescription(handle));
+            if (entryTags[index] == 15) {
+                return Optional.of(methodHandleDescription((MethodHandleEntry) entries[index]));
             }
             return Optional.empty();
         }

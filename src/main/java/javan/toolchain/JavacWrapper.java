@@ -1,17 +1,35 @@
 package javan.toolchain;
 
+import javan.util.ProcessRunner;
+
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.PrintStream;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Delegates {@code javan javac} to the real {@code javac} available on the host toolchain.
  */
 public final class JavacWrapper {
+    private final ProcessRunner processRunner;
+
+    /**
+     * Creates a javac wrapper with the default process timeout.
+     */
+    public JavacWrapper() {
+        this(new ProcessRunner());
+    }
+
+    /**
+     * Creates a javac wrapper.
+     *
+     * @param processRunner process runner used to invoke javac
+     */
+    public JavacWrapper(final ProcessRunner processRunner) {
+        this.processRunner = processRunner;
+    }
+
     /**
      * Runs javac in the requested working directory.
      *
@@ -29,43 +47,9 @@ public final class JavacWrapper {
         command.add("javac");
         command.addAll(args);
 
-        final Process process = new ProcessBuilder(command).directory(cwd.toFile()).start();
-        final AtomicReference<IOException> stdoutFailure = new AtomicReference<>();
-        final AtomicReference<IOException> stderrFailure = new AtomicReference<>();
-        final Thread stdout = copyAsync("javan-javac-stdout", process.getInputStream(), out, stdoutFailure);
-        final Thread stderr = copyAsync("javan-javac-stderr", process.getErrorStream(), err, stderrFailure);
-        final int exitCode = process.waitFor();
-        stdout.join();
-        stderr.join();
-        if (stdoutFailure.get() != null) {
-            throw stdoutFailure.get();
-        }
-        if (stderrFailure.get() != null) {
-            throw stderrFailure.get();
-        }
-        return exitCode;
-    }
-
-    private static Thread copyAsync(
-        final String name,
-        final InputStream input,
-        final PrintStream output,
-        final AtomicReference<IOException> failure
-    ) {
-        final Thread thread = new Thread(() -> {
-            final byte[] buffer = new byte[8192];
-            try {
-                int read = input.read(buffer);
-                while (read >= 0) {
-                    output.write(buffer, 0, read);
-                    read = input.read(buffer);
-                }
-                output.flush();
-            } catch (final IOException exception) {
-                failure.set(exception);
-            }
-        }, name);
-        thread.start();
-        return thread;
+        final ProcessRunner.Result result = processRunner.run(cwd, command);
+        out.print(result.stdout());
+        err.print(result.stderr());
+        return result.exitCode();
     }
 }

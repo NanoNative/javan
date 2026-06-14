@@ -8,6 +8,7 @@ import javan.util.Json;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -15,6 +16,8 @@ import java.util.Map;
  * Writes deterministic native library build reports.
  */
 public final class LibraryBuildReports {
+    private static final int ABI_VERSION = 1;
+
     /**
      * Writes library build metrics.
      *
@@ -22,7 +25,7 @@ public final class LibraryBuildReports {
      * @param classes parsed classes
      * @param callGraph call graph
      * @param exports exports
-     * @param artifact native artifact
+     * @param artifacts native artifacts
      * @param bindings binding files
      * @return report files
      * @throws IOException when writing fails
@@ -32,36 +35,56 @@ public final class LibraryBuildReports {
         final Map<String, ClassFile> classes,
         final CallGraph callGraph,
         final List<ExportedMethod> exports,
-        final Path artifact,
+        final List<Path> artifacts,
         final List<Path> bindings
     ) throws IOException {
         final Path reports = outputDirectory.resolve("reports");
-        final long inputMethods = classes.values().stream().mapToLong(classFile -> classFile.methods().size()).sum();
+        long inputMethods = 0;
+        for (final ClassFile classFile : classes.values()) {
+            inputMethods += classFile.methods().size();
+        }
         final long inputClasses = classes.size();
         final long reachableMethods = callGraph.reachableMethods().size();
-        final long reachableClasses = callGraph.reachableMethods().stream().map(entry -> entry.className()).distinct().count();
-        final long artifactSize = Files.exists(artifact) ? Files.size(artifact) : 0;
+        final long reachableClasses = reachableClassCount(callGraph);
+        long artifactSize = 0;
+        for (final Path artifact : artifacts) {
+            artifactSize += Files.exists(artifact) ? Files.size(artifact) : 0;
+        }
         final List<String> runtimeModules = runtimeModules(callGraph);
         final String json = "{\n"
+            + "  \"abiVersion\": " + ABI_VERSION + ",\n"
+            + "  \"stringOwnership\": \"input-borrowed-utf8-output-javan-owned-free-with-javan_free\",\n"
+            + "  \"byteArrayOwnership\": \"input-copied-output-javan-owned-data-free-with-javan_free\",\n"
+            + "  \"errorResultAbi\": \"not-yet-stable-panics-abort-current-call\",\n"
+            + "  \"exceptionMapping\": \"uncaught-native-panic-limited-same-method-catch\",\n"
+            + "  \"threadRuntimeRules\": \"single-threaded-native-profile-no-thread-api-yet\",\n"
+            + "  \"generatedAbiTests\": \"c-header-compile-test\",\n"
             + "  \"inputClasses\": " + inputClasses + ",\n"
             + "  \"inputMethods\": " + inputMethods + ",\n"
             + "  \"reachableClassesFromExports\": " + reachableClasses + ",\n"
             + "  \"reachableMethodsFromExports\": " + reachableMethods + ",\n"
             + "  \"exportedMethods\": " + exports.size() + ",\n"
-            + "  \"artifact\": " + Json.string(artifact.toString()) + ",\n"
+            + "  \"artifacts\": " + Json.stringList(pathStrings(artifacts)) + ",\n"
             + "  \"artifactBytes\": " + artifactSize + ",\n"
             + "  \"runtimeModulesLinked\": " + Json.stringList(runtimeModules) + ",\n"
             + "  \"dependencyReductionMethods\": " + Math.max(0, inputMethods - reachableMethods) + ",\n"
-            + "  \"bindings\": " + Json.stringList(bindings.stream().map(Path::toString).toList()) + "\n"
+            + "  \"bindings\": " + Json.stringList(pathStrings(bindings)) + "\n"
             + "}\n";
         final String markdown = "# Library Build Metrics\n\n"
+            + "- ABI version: `" + ABI_VERSION + "`\n"
+            + "- string ownership: `input-borrowed-utf8-output-javan-owned-free-with-javan_free`\n"
+            + "- byte[] ownership: `input-copied-output-javan-owned-data-free-with-javan_free`\n"
+            + "- error/result ABI: `not-yet-stable-panics-abort-current-call`\n"
+            + "- exception mapping: `uncaught-native-panic-limited-same-method-catch`\n"
+            + "- thread/runtime rules: `single-threaded-native-profile-no-thread-api-yet`\n"
+            + "- generated ABI tests: `c-header-compile-test`\n"
             + "- input classes: `" + inputClasses + "`\n"
             + "- input methods: `" + inputMethods + "`\n"
             + "- reachable classes from exports: `" + reachableClasses + "`\n"
             + "- reachable methods from exports: `" + reachableMethods + "`\n"
             + "- exported methods: `" + exports.size() + "`\n"
             + "- artifact bytes: `" + artifactSize + "`\n"
-            + "- runtime modules linked: `" + String.join(", ", runtimeModules) + "`\n"
+            + "- runtime modules linked: `" + join(", ", runtimeModules) + "`\n"
             + "- dependency reduction methods: `" + Math.max(0, inputMethods - reachableMethods) + "`\n";
         return List.of(
             Files2.writeString(reports.resolve("library-build.json"), json),
@@ -70,8 +93,17 @@ public final class LibraryBuildReports {
     }
 
     private static List<String> runtimeModules(final CallGraph callGraph) {
-        final boolean arrays = callGraph.reachableMethods().stream().anyMatch(entry -> entry.descriptor().contains("["));
-        final boolean strings = callGraph.reachableMethods().stream().anyMatch(entry -> entry.descriptor().contains("Ljava/lang/String;"));
+        boolean arrays = false;
+        boolean strings = false;
+        for (final javan.analysis.EntryPoint entry : callGraph.reachableMethods()) {
+            final String descriptor = entry.descriptor();
+            if (descriptor.contains("[")) {
+                arrays = true;
+            }
+            if (descriptor.contains("Ljava/lang/String;")) {
+                strings = true;
+            }
+        }
         final java.util.ArrayList<String> modules = new java.util.ArrayList<>();
         modules.add("core");
         if (strings) {
@@ -81,5 +113,43 @@ public final class LibraryBuildReports {
             modules.add("arrays");
         }
         return List.copyOf(modules);
+    }
+
+    private static long reachableClassCount(final CallGraph callGraph) {
+        final List<String> classNames = new ArrayList<>();
+        for (final javan.analysis.EntryPoint entry : callGraph.reachableMethods()) {
+            if (!contains(classNames, entry.className())) {
+                classNames.add(entry.className());
+            }
+        }
+        return classNames.size();
+    }
+
+    private static List<String> pathStrings(final List<Path> paths) {
+        final List<String> result = new ArrayList<>();
+        for (final Path path : paths) {
+            result.add(path.toString());
+        }
+        return List.copyOf(result);
+    }
+
+    private static boolean contains(final List<String> values, final String target) {
+        for (final String value : values) {
+            if (value.equals(target)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String join(final String delimiter, final List<String> values) {
+        final StringBuilder result = new StringBuilder();
+        for (int index = 0; index < values.size(); index++) {
+            if (index > 0) {
+                result.append(delimiter);
+            }
+            result.append(values.get(index));
+        }
+        return result.toString();
     }
 }

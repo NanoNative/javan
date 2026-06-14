@@ -30,6 +30,7 @@ public record ClassFile(
 ) {
     private static final int ACC_FINAL = 0x0010;
     private static final int ACC_INTERFACE = 0x0200;
+    private static final int ACC_SYNTHETIC = 0x1000;
     private static final int ACC_ENUM = 0x4000;
 
     /**
@@ -40,9 +41,12 @@ public record ClassFile(
      * @return matching method
      */
     public Optional<MethodInfo> method(final String methodName, final String descriptor) {
-        return methods.stream()
-            .filter(method -> method.name().equals(methodName) && method.descriptor().equals(descriptor))
-            .findFirst();
+        for (final MethodInfo method : methods) {
+            if (method.name().equals(methodName) && method.descriptor().equals(descriptor)) {
+                return Optional.of(method);
+            }
+        }
+        return Optional.empty();
     }
 
     /**
@@ -51,7 +55,10 @@ public record ClassFile(
      * @return true when final
      */
     public boolean isFinal() {
-        return (accessFlags & ACC_FINAL) != 0;
+        if ((accessFlags & ACC_FINAL) == 0) {
+            return false;
+        }
+        return true;
     }
 
     /**
@@ -60,7 +67,22 @@ public record ClassFile(
      * @return true when interface
      */
     public boolean isInterface() {
-        return (accessFlags & ACC_INTERFACE) != 0;
+        if ((accessFlags & ACC_INTERFACE) == 0) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Returns true when this class file is compiler-generated synthetic code.
+     *
+     * @return true when synthetic
+     */
+    public boolean isSynthetic() {
+        if ((accessFlags & ACC_SYNTHETIC) == 0) {
+            return false;
+        }
+        return true;
     }
 
     /**
@@ -69,7 +91,10 @@ public record ClassFile(
      * @return true when enum
      */
     public boolean isEnum() {
-        return (accessFlags & ACC_ENUM) != 0;
+        if ((accessFlags & ACC_ENUM) == 0) {
+            return false;
+        }
+        return true;
     }
 
     /**

@@ -4,18 +4,12 @@ package javan.ir;
  * Types supported by the current javan IR.
  */
 public enum IrType {
-    VOID("void"),
-    INT("int"),
-    LONG("long long"),
-    FLOAT("float"),
-    DOUBLE("double"),
-    OBJECT("void*");
-
-    private final String cName;
-
-    IrType(final String cName) {
-        this.cName = cName;
-    }
+    VOID,
+    INT,
+    LONG,
+    FLOAT,
+    DOUBLE,
+    OBJECT;
 
     /**
      * Returns the matching C type name.
@@ -23,7 +17,22 @@ public enum IrType {
      * @return C type name
      */
     public String cName() {
-        return cName;
+        if (this == VOID) {
+            return "void";
+        }
+        if (this == INT) {
+            return "int";
+        }
+        if (this == LONG) {
+            return "long long";
+        }
+        if (this == FLOAT) {
+            return "float";
+        }
+        if (this == DOUBLE) {
+            return "double";
+        }
+        return "void*";
     }
 
     /**
@@ -32,6 +41,12 @@ public enum IrType {
      * @return slot width
      */
     public int slotWidth() {
-        return this == LONG || this == DOUBLE ? 2 : 1;
+        if (this == LONG) {
+            return 2;
+        }
+        if (this == DOUBLE) {
+            return 2;
+        }
+        return 1;
     }
 }

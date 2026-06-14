@@ -1,36 +1,61 @@
 package javan.toolchain;
 
+import javan.util.Strings2;
+
 import java.util.Map;
 import java.util.TreeMap;
 
-final class SimpleToml {
+/**
+ * Small deterministic TOML reader for the limited javan configuration shape.
+ */
+public final class SimpleToml {
     private SimpleToml() {
     }
 
-    static Map<String, String> parse(final String content) {
+    /**
+     * Parses scalar TOML values into section-qualified keys.
+     *
+     * @param content TOML content
+     * @return parsed key/value map
+     */
+    public static Map<String, String> parse(final String content) {
         final Map<String, String> values = new TreeMap<>();
         String section = "";
-        final String[] lines = content.split("\\R", -1);
-        for (int index = 0; index < lines.length; index++) {
-            final String line = stripComment(lines[index]).trim();
+        int lineNumber = 1;
+        int start = 0;
+        for (int index = 0; index <= content.length(); index++) {
+            if (index < content.length() && content.charAt(index) != '\n') {
+                continue;
+            }
+            int end = index;
+            if (end > start && content.charAt(end - 1) == '\r') {
+                end--;
+            }
+            final String line = Strings2.trimAscii(stripComment(Strings2.slice(content, start, end)));
             if (line.isEmpty()) {
+                lineNumber++;
+                start = index + 1;
                 continue;
             }
             if (line.startsWith("[") && line.endsWith("]")) {
-                section = line.substring(1, line.length() - 1).trim();
+                section = Strings2.trimAscii(line.substring(1, line.length() - 1));
                 if (section.isEmpty()) {
-                    throw new IllegalArgumentException("Empty TOML section at line " + (index + 1));
+                    throw new IllegalArgumentException("Empty TOML section at line " + lineNumber);
                 }
+                lineNumber++;
+                start = index + 1;
                 continue;
             }
             final int equals = line.indexOf('=');
             if (equals < 1) {
-                throw new IllegalArgumentException("Expected key = value at line " + (index + 1));
+                throw new IllegalArgumentException("Expected key = value at line " + lineNumber);
             }
-            final String key = line.substring(0, equals).trim();
-            final String value = parseValue(line.substring(equals + 1).trim(), index + 1);
+            final String key = Strings2.trimAscii(line.substring(0, equals));
+            final String value = parseValue(Strings2.trimAscii(line.substring(equals + 1)), lineNumber);
             final String fullKey = section.isEmpty() ? key : section + "." + key;
             values.put(fullKey, value);
+            lineNumber++;
+            start = index + 1;
         }
         return Map.copyOf(values);
     }
@@ -56,7 +81,7 @@ final class SimpleToml {
         if ("true".equals(raw) || "false".equals(raw)) {
             return raw;
         }
-        if (!raw.isBlank()) {
+        if (!Strings2.isBlank(raw)) {
             return raw;
         }
         throw new IllegalArgumentException("Missing TOML value at line " + line);

@@ -2,310 +2,329 @@
 
 Minimal native-first Java toolchain.
 
-`javan` keeps Java source normal, consumes existing `.class` files when possible,
-checks a closed native profile, lowers reachable bytecode to a compact IR, emits C,
-and links native artifacts. It also keeps a normal JVM jar path available, because
-shipping Java should not become harder just because native output exists.
+`javan` is a standalone executable that sits next to `javac`, Maven, and Gradle. It
+keeps Java source normal, consumes compiled `.class` files, checks the reachable code,
+lowers supported bytecode to javan IR, emits C, and links host-native artifacts.
+
+The first product goal is simple: build Java into a native executable or native library
+without making users think about compiler internals.
 
 ## Fast Start
 
-From this source checkout:
+From this checkout:
 
 ```sh
-mvn -q -DskipTests package
-java -jar target/javan-0.1.0.jar --version
-java -jar target/javan-0.1.0.jar build examples/hello
-examples/hello/.javan/bin/hello
+mvn -q package
+java -jar target/javan-*.jar --version
+java -jar target/javan-*.jar build examples/native-showcase
+examples/native-showcase/.javan/bin/native-showcase
 ```
 
-With an installed `javan` executable:
+With an installed `javan` binary:
 
 ```sh
+javan check .
 javan build .
 javan run . -- one two
-javan build . --kind jar
-javan build . --kind staticlib --export com.acme.Math.add --bindings c,rust,go,python
+javan build . --jar
+javan build . --library --export com.acme.Math.add --bindings c,rust,go,python
 ```
 
-The default native app output is `.javan/bin/<project-name>`. The name is inferred
-from Maven `artifactId`, Gradle `rootProject.name`, the input file/jar name, or the
-directory name. Override it with `--output <name>`.
+Application arguments are passed after `--`; no Maven `-D...` tunnel is needed:
 
-## Build Pipelines
+```sh
+javan run . -- Alice 42
+```
 
-| Build kind | Pipeline | Output |
-| --- | --- | --- |
-| `app` | Java `.class` -> javan IR -> C -> native linker | `.javan/bin/<name>` |
-| `jar` | Java source/classes/resources -> JVM jar | `.javan/dist/<name>.jar` |
-| `staticlib` | Java `.class` exports -> javan IR -> C -> native linker -> C ABI | `.javan/dist/lib<name>.a` |
-| `sharedlib` | Java `.class` exports -> javan IR -> C -> native linker -> C ABI | `.javan/dist/lib<name>.so`, `.dylib`, or `.dll` |
+## Container Images
+
+After a GitHub release is published, the container image workflow publishes Linux OCI
+images to GHCR from the released Linux archives. They run on Linux directly and on
+macOS/Windows through Docker Desktop or another Linux-container runtime.
+
+```sh
+docker run --rm ghcr.io/nanonative/javan:<version> --version
+docker run --rm -v "$PWD:/workspace" -w /workspace ghcr.io/nanonative/javan:<version> build target/classes
+```
+
+| Image tag | Base | Platforms | Use |
+| --- | --- | --- | --- |
+| `ghcr.io/nanonative/javan:<version>` | Chainguard gcc-glibc | `linux/amd64`, `linux/arm64` | default image with C linker; expects compiled class output |
+| `ghcr.io/nanonative/javan:<version>-wolfi` | Chainguard gcc-glibc | `linux/amd64`, `linux/arm64` | explicit default variant |
+| `ghcr.io/nanonative/javan:<version>-distroless` | distroless C runtime | `linux/amd64`, `linux/arm64` | smaller runtime image, no shell |
+| `ghcr.io/nanonative/javan:<version>-scratch` | scratch with copied dynamic runtime libs | `linux/amd64`, `linux/arm64` | smallest Linux runtime image |
+
+Docker selects the host architecture from the multi-platform manifest. To force x64 on
+Apple Silicon or Windows arm64:
+
+```sh
+docker run --rm --platform linux/amd64 ghcr.io/nanonative/javan:<version> --version
+```
 
 ## Commands
 
-| Command | What it does | Main outputs |
+| Command | Description | Main output |
 | --- | --- | --- |
 | `javan --version` | Prints the CLI version. | stdout |
-| `javan inspect [path]` | Detects project layout, build tool, classes, sources, resources, and output names. | `.javan/reports/project.json` |
-| `javan check [path]` | Builds classes if needed, scans reachable code, rejects unsupported native bytecode, and writes reports. | reachability, diagnostics, intrinsics, deduplication, optimizer scaffold |
-| `javan test [path]` | Runs the detected project test task after ensuring classes exist. | test process exit code |
-| `javan build [path]` | Produces the selected build kind. Default is a native app. | `.javan/bin` or `.javan/dist` |
-| `javan run [path] -- args...` | Builds a native app, then executes it with passthrough args. | app stdout/stderr |
-| `javan javac [args...]` | JDK-friendly wrapper around `javac`; intended for IDE/build-tool integration. | normal `javac` outputs |
-| `javan compat [path]` | Builds/scans classes, inventories the active JDK, classifies bytecode support, and writes deterministic reports. | `.javan/reports`, `.javan/jdk-inventory`, `.javan/bytecode-patterns`, `docs/` |
-| `javan clean [path]` | Removes the project `.javan` folder. | deleted `.javan` |
-| `javan doctor` | Checks visible local Java/native toolchain commands. | stdout |
-| `javan toolchain list` | Lists globally known toolchains from the user `.javan` home. | stdout |
-| `javan toolchain doctor` | Checks global javan settings/toolchain health. | stdout |
+| `javan inspect [path]` | Detects Java source/classes, Maven, Gradle, jars, resources, and output names. | `.javan/reports/project.json` |
+| `javan check [path]` | Builds classes if needed, analyzes reachable code, rejects unsupported native shapes, and writes reports. | `.javan/reports/*` |
+| `javan test [path]` | Runs the detected project test task after class output exists. | test exit code |
+| `javan build [path]` | Builds the default native app when a `main` exists. | `.javan/bin/<name>` |
+| `javan build [path] --jar` | Builds a normal JVM jar. | `.javan/dist/<name>.jar` |
+| `javan build [path] --library` | Builds a native library package from explicit exports. | `.javan/dist/lib/<name>/...` |
+| `javan run [path] -- args...` | Builds and runs the native app. | app stdout/stderr |
+| `javan javac [args...]` | Runs the JDK-friendly `javac` wrapper for build tools and IDEs. | normal `javac` output |
+| `javan compat [path]` | Generates deterministic JDK/classfile inventory and bytecode support reports. | `.javan/reports`, `.javan/jdk-inventory`, `doc/*` |
+| `javan report [path]` | Reads existing report files and writes one Markdown/JSON summary. | `.javan/reports/report.*` |
+| `javan clean [path]` | Removes generated `.javan` output. | deleted output |
+| `javan doctor` | Checks visible Java and native toolchain commands. | stdout |
+| `javan toolchain list` | Lists configured global toolchains. | stdout |
+| `javan toolchain doctor` | Checks global javan toolchain settings. | stdout |
 
-## Options
+## Build Kinds
 
-| Option | Used by | Meaning |
-| --- | --- | --- |
-| `--main com.acme.Main` | `check`, `build`, `run`, `compat` | Sets the app entry class when auto-detection is ambiguous. For `--kind jar`, it writes `Main-Class` into the manifest. |
-| `--classes <dir>` | `check`, `build`, `run`, `compat` | Adds an explicit classes directory to scan instead of relying only on detection. |
-| `--classpath <paths>` / `-cp <paths>` | `check`, `build`, `run`, `compat` | Adds dependency jars/classes. Uses the platform path separator. |
-| `--output <name>` / `-o <name>` | `build`, `run`, `inspect` | Overrides the inferred binary/library/jar base name. |
-| `--kind app` | `build`, `run` | Builds a native executable and requires a supported `main`. |
-| `--kind jar` | `build` | Builds a JVM jar. No native profile check and no `main` required unless you want a runnable jar manifest. |
-| `--kind staticlib` | `build` | Builds a native static library. No `Main.main`; reachability starts at exported methods. |
-| `--kind sharedlib` | `build` | Builds a native shared library. No `Main.main`; reachability starts at exported methods. |
-| `--export com.acme.Math.add` | library builds | Exposes a static Java method through the C ABI and starts reachability there. |
-| `--export com.acme.Math.add(int,int):int` | library builds | Same export, but with an explicit Java-like signature when overloads exist. |
-| `--bindings c,rust,go,python` | library builds | Generates FFI binding files. C headers are the base; Rust/Go/Python wrap that ABI. |
-| `--profile core|service|library|strict` | `check`, `build`, `run` | Records intended profile in reports. Lowering is not profile-specialized yet. |
-| `--release` | `build`, `run` | Accepted release-mode flag. Optimization behavior is still conservative. |
-| `--target <triple>` | `build` | Accepted target-triple flag. Cross-linking is not release-gated yet. |
-| `--no-build` | `check`, `build`, `run`, `compat` | Reuses existing class files and skips Maven/Gradle/javac invocation. |
+| User command | Kind | Requires `main` | Output |
+| --- | --- | --- | --- |
+| `javan build` | native app | yes | `.javan/bin/<name>` |
+| `javan build --jar` | JVM jar | no, unless a runnable manifest is wanted | `.javan/dist/<name>.jar` |
+| `javan build --library` | native library package | no | `.javan/dist/lib/<name>/...` |
 
-## Native Library Exports
+Compatibility aliases still work for automation: `--kind app`, `--kind jar`,
+`--kind library`, `--kind staticlib`, and `--kind sharedlib`.
 
-Library mode is for calling Java code from C, Rust, Go, or Python without requiring
-`public static void main(String[] args)`.
+## Common Options
+
+| Option | Meaning |
+| --- | --- |
+| `--main com.acme.Main` | Selects the app entry class when detection is ambiguous. |
+| `--classes <dir>` | Adds an explicit class output directory. |
+| `--classpath <paths>` / `-cp <paths>` | Adds dependency jars/classes. |
+| `--output <name>` / `-o <name>` | Overrides the inferred artifact base name. |
+| `--jar` | Builds JVM jar output. |
+| `--library` / `--lib` | Builds a native library package from exported methods. |
+| `--format static\|shared\|both` | Selects native library formats. |
+| `--export com.acme.Math.add` | Exposes a static Java method as a C ABI root. |
+| `--export com.acme.Math.add(int,int):int` | Export form for overloads. |
+| `--bindings c,rust,go,python` | Generates language binding folders for the library ABI. |
+| `--profile core\|service\|library\|strict` | Records intended runtime profile in reports. |
+| `--release` | Enables release build mode. Optimizations are still conservative. |
+| `--target <os-arch>` | Asserts the host target; cross-linking is not claimed yet. |
+
+## Project Detection
+
+`javan` accepts a project directory, classes directory, jar, or single Java source file.
+For Maven and Gradle it uses normal build output folders, including multi-module
+`target/classes` and `build/classes/java/main` directories.
+
+Output names are inferred from Maven `artifactId`, Gradle `rootProject.name`, jar/file
+name, or directory name. Override with `--output`.
+
+## Native Libraries
+
+Library mode starts reachability at explicit exports instead of `Main.main`.
 
 ```sh
-javan build . --kind staticlib --export com.acme.Math.add --bindings c,rust,go,python
-javan build . --kind sharedlib --export 'com.acme.Text.greet(String):String'
+javan build . --library --export com.acme.Math.add --bindings c,rust,go,python
+javan build . --library --format shared --export 'com.acme.Text.greet(String):String'
 ```
 
-`--export com.acme.Math.add` means: find the static method `com.acme.Math.add`,
-make it a C ABI entry point, and treat it as a reachability root. If a method is
-overloaded, use the signature form:
+Supported ABI surface today:
 
-```text
-com.acme.Math.add(int,int):int
-```
+| Java type | C ABI shape |
+| --- | --- |
+| primitives | stable C integer/float types |
+| `String` input | UTF-8 `char*` |
+| `String` return | javan-owned UTF-8 `char*`; release with `javan_free` |
+| `byte[]` input | pointer + length |
+| `byte[]` return | javan-owned pointer + length; release with `javan_free` |
 
-The C ABI supports primitives, UTF-8 `char*` strings, and `byte[]` as pointer plus
-length. Returned strings and byte buffers are owned by javan and must be released
-with `javan_free`.
-
-Generated library outputs:
+Generated folders:
 
 | Output | Path |
 | --- | --- |
-| Static library | `.javan/dist/lib<name>.a` |
-| Shared library | `.javan/dist/lib<name>.so`, `.dylib`, or `.dll` |
+| static/shared artifacts | `.javan/dist/lib/<name>/c` |
 | C header | `.javan/dist/bindings/c/<name>.h` |
-| Rust wrapper | `.javan/dist/bindings/rust/lib.rs` |
-| Go cgo wrapper | `.javan/dist/bindings/go/<name>.go` |
-| Python ctypes wrapper | `.javan/dist/bindings/python/<name>.py` |
-| Metrics report | `.javan/reports/library-build.md` and `.json` |
+| Rust wrapper | `.javan/dist/bindings/rust/` |
+| Go cgo wrapper | `.javan/dist/bindings/go/` |
+| Python ctypes wrapper | `.javan/dist/bindings/python/` |
+| ABI/report files | `.javan/reports/library-build.*` |
+
+Full ABI contract: [doc/spec/native-abi.md](doc/spec/native-abi.md).
 
 ## Resources
 
-Resource files are supported as artifacts. `javan` detects `src/main/resources` and
-`resources`, copies non-Java/non-class files into class output for plain `javac`
-projects, includes them in `--kind jar`, and preserves them for native builds.
+Resource files are preserved as artifacts.
 
-| Resource behavior | Integrated | Output |
-| --- | --- | --- |
-| Include resources in `--kind jar` | [x] | entries inside `.javan/dist/<name>.jar` |
-| Copy resources for native app/library builds | [x] | `.javan/resources` and `.javan/dist/resources` |
-| Remove stale generated resource files | [x] | deleted source resources do not remain in rebuilt jars |
-| Report copied resources | [x] | `.javan/reports/resources.md` and `.json` |
-| Native `ClassLoader.getResource*` / `getResourceAsStream` runtime API | [ ] | planned |
-| Embed resource bytes into generated C runtime tables | [ ] | planned |
+| Resource behavior | Status |
+| --- | --- |
+| Copy `src/main/resources` and `resources` into class output for plain Java projects | `[x]` |
+| Include resources in `--jar` output | `[x]` |
+| Copy resources beside native app/library artifacts | `[x]` |
+| Report copied resources | `[x]` |
+| Native `ClassLoader.getResource*` runtime API | `[ ]` |
+| Embed resource bytes into generated C runtime tables | `[ ]` |
 
-Static web assets, pictures, language `.properties`, templates, and similar files
-are therefore preserved beside native artifacts today. Reading them through Java
-resource APIs in the generated native binary is the next slice, not claimed here.
+Static web assets, images, `.properties`, templates, and similar files are therefore
+kept with the build output today. Reading those resources through Java APIs in the native
+binary is not claimed yet.
 
 ## Supported JDKs
 
-`javan` reads the class file major version from each `.class` file automatically.
-Users should not need to pass a JDK version for supported class files. Unknown future
-bytecode patterns are rejected before native code generation.
+`javan` reads each class file version automatically. Users should not pass the Java
+version manually for supported class files.
 
-| JDK | Class file major | Release-gate status | Notes |
-| --- | ---: | --- | --- |
-| 21 | 65 | planned matrix target | Inventory/diff flow is designed for it, but this checkout is not CI-gated on JDK 21 yet. |
-| 22 | 66 | planned matrix target | Same deterministic scan path; not release-gated yet. |
-| 23 | 67 | planned matrix target | Same deterministic scan path; not release-gated yet. |
-| 24 | 68 | planned matrix target | Same deterministic scan path; not release-gated yet. |
-| 25 | 69 | integrated local gate | Current development and verification JDK. |
+| JDK | Class file major | Status |
+| --- | ---: | --- |
+| 21 | 65 | planned release-gate |
+| 22 | 66 | planned release-gate |
+| 23 | 67 | planned release-gate |
+| 24 | 68 | planned release-gate |
+| 25 | 69 | current development/release gate |
 
-Compatibility output is written to:
-
-- `.javan/reports/compatibility-summary.md`
-- `.javan/reports/compatibility-summary.json`
-- `.javan/reports/jdk-<version>-inventory.json`
-- `.javan/reports/bytecode-patterns-jdk-<version>.json`
-- `.javan/jdk-inventory/jdk-<version>.json`
-- `.javan/bytecode-patterns/jdk-<version>.json`
-- `docs/support-matrix.md`
-- `docs/support-matrix.json`
-- `docs/jdk-compatibility.md`
+Inventory is not native support. Inventory answers what exists in a JDK. Native support
+means every reachable class/member/bytecode shape is either implemented or rejected
+clearly before code generation.
 
 ## Feature Status
 
-| Feature | Integrated | Status |
-| --- | --- | --- |
-| Plain Java, Maven, Gradle, classes directory, jar input detection | [x] | Implemented. |
-| Automatic `Main.main` detection | [x] | Implemented for app builds. |
-| JVM jar output | [x] | `javan build --kind jar`; no native subset restriction. |
-| Native executable output | [x] | Host-native app builds through generated C and system linker. |
-| Static/shared native library output | [x] | `staticlib` and `sharedlib` with explicit exports. |
-| C, Rust, Go, Python binding generation | [x] | Generated wrappers for supported C ABI signatures. |
-| Resource file preservation | [x] | Included in jars and copied beside native artifacts. |
-| Native Java resource API support | [ ] | Planned. |
-| Reachability analysis | [x] | Starts from `main` or exported methods. |
-| Unsupported reachable bytecode rejection | [x] | Fails before native codegen. |
-| Unsupported unreachable application bytecode warning | [x] | Reported as warning. |
-| Unsupported unreachable dependency bytecode | [x] | Skipped unless reachable. |
-| JDK inventory and bytecode pattern reports | [x] | Active JDK scan is deterministic. |
-| `int`, `long`, `float`, `double`, `boolean` lowering | [x] | Supported in explicit tested shapes. |
-| Primitive array variants | [x] | `boolean`, `byte`, `short`, `char`, `int`, `long`, `float`, `double`. |
-| Object arrays and `String[] args` | [x] | Supported in tested shapes. |
-| Constructors, fields, simple objects, records | [x] | Closed-world, supported bytecode only. |
-| Enums | [x] | Basic constants, `name()`, and `toString()`. |
-| Interface and virtual dispatch | [x] | Closed-world dispatch tables and monomorphic direct cases. |
-| String concat lowering | [x] | Supported `StringConcatFactory` shapes. |
-| String intrinsics | [x] | `length`, `isEmpty`, `charAt`, `equals` for native string values. |
-| Platform exception panic and simple same-method catch | [x] | Narrow exception support. |
-| Human-readable exception cleanup | [ ] | Roadmap. |
-| Runtime-risk warnings (`javan check --strict`) | [ ] | Roadmap. |
-| Deduplication detection/planning | [x] | Reports infrastructure/string/helper candidates. |
-| Actual emitted-helper deduplication | [ ] | Roadmap. |
-| Redundant-check elimination | [ ] | Roadmap. |
-| Escape analysis and stack allocation | [ ] | Roadmap. |
-| Method specialization and inlining | [ ] | Roadmap. |
-| Generic specialization and boxing elimination | [ ] | Roadmap. |
-| Global JDK/toolchain install/download | [ ] | Roadmap. Current `toolchain` commands inspect configured state. |
-| Maven/Gradle plugins | [ ] | Roadmap. |
-| Homebrew formula | [ ] | Roadmap. |
-| JetBrains plugin | [ ] | Roadmap. |
+| Tool feature | Status |
+| --- | --- |
+| Plain Java, Maven, Gradle, classes directory, jar input detection | `[x]` |
+| Automatic main-class detection | `[x]` |
+| Native executable output | `[x]` |
+| JVM jar output | `[x]` |
+| Native library output | `[x]` |
+| C/Rust/Go/Python binding generation | `[x]` |
+| Resource artifact preservation | `[x]` |
+| Reachability analysis | `[x]` |
+| Unsupported reachable-code rejection | `[x]` |
+| Unified report command | `[x]` |
+| Runtime/binary contract reports | `[x]` |
+| JDK inventory and bytecode-pattern reports | `[x]` |
+| Managed heap and single-thread safe-point GC subset | `[-]` |
+| Runtime feature selection enforcement | `[-]` |
+| IDE diagnostics through `javan javac` | `[ ]` |
+| Maven plugin | `[ ]` |
+| Gradle plugin | `[ ]` |
+| Homebrew formula | `[ ]` |
+| GHCR container images | `[-]` |
+| Windows release artifact | `[ ]` |
+
+| Java/native feature | Status |
+| --- | --- |
+| primitive arithmetic and primitive arrays | `[x]` |
+| object arrays and `String[] args` | `[x]` |
+| simple objects, constructors, fields, records | `[-]` |
+| enums | `[-]` |
+| interface and virtual dispatch | `[-]` |
+| string concat and selected string intrinsics | `[-]` |
+| simple exception panic/catch support | `[-]` |
+| full exceptions | `[ ]` |
+| threads, monitors, virtual threads | `[ ]` |
+| arbitrary reflection/runtime scanning | `[!]` |
+| dynamic class loading | `[!]` |
+| JNI/native method loading | `[!]` |
+
+Legend: `[x]` implemented for stated scope, `[-]` scoped subset with clear rejection for
+unsupported shapes, `[ ]` planned, `[!]` rejected for native output.
 
 ## Intrinsics And Substitutions
 
-Intrinsics are the intended path, not a shameful workaround. Native Java compilers
-need explicit substitutions for platform/JDK hotspots where normal bytecode either
-depends on VM internals or would pull too much runtime. Every intrinsic must be
-visible in reports and tested against JVM behavior.
+Intrinsics are the intended native compiler path for JDK/runtime hotspots. They avoid
+pulling VM internals into small native artifacts and must be visible in reports.
 
-| API or pattern | Integrated | Native behavior / limit |
-| --- | --- | --- |
-| `Objects.requireNonNull(Object)` | [x] | Native null guard; message overloads are not supported yet. |
-| `Math.abs(int/long)` | [x] | JVM-compatible integer/long behavior, including min values. |
-| `Math.min/max(int,int)` and `(long,long)` | [x] | Direct native comparisons. |
-| `System.nanoTime()` | [x] | Runtime time module. |
-| `System.currentTimeMillis()` | [x] | Runtime time module. |
-| `System.arraycopy(Object,int,Object,int,int)` | [x] | Native array helper with type and bounds checks. |
-| `Arrays.copyOf` for `int`, `long`, `byte`, `short`, `char`, `float`, `double`, `Object` | [x] | Native array copy helpers; `boolean[]` overload is still unsupported. |
-| `Integer.toString(int)` | [x] | Native number-to-string helper. |
-| `Long.toString(long)` | [x] | Native number-to-string helper. |
-| `String.length/isEmpty/charAt/equals` | [x] | Native string helpers for supported string values. |
-| javac `StringConcatFactory` concat | [x] | Supported concat shapes; unsupported invokedynamic forms are rejected. |
-| `SecureRandom.nextBytes` | [ ] | Planned OS entropy substitution. |
-| `UUID.randomUUID` | [ ] | Planned runtime substitution. |
-| `Path.of`, `Files.readString`, `Files.writeString` | [ ] | Planned IO substitutions. |
-| `System.getenv` / `System.getProperty` subset | [ ] | Planned controlled runtime substitutions. |
-| Base64 encoder/decoder | [ ] | Planned. |
+| API/pattern | Status |
+| --- | --- |
+| `Objects.requireNonNull(Object)` | `[x]` |
+| `Math.abs/min/max` selected int/long forms | `[x]` |
+| `System.nanoTime()` / `currentTimeMillis()` | `[x]` |
+| `System.arraycopy` | `[x]` |
+| `Arrays.copyOf` selected primitive/object forms | `[-]` |
+| array `clone()` selected forms | `[-]` |
+| `Integer.toString` / `Long.toString` | `[x]` |
+| `String.length/isEmpty/charAt/equals` | `[-]` |
+| javac `StringConcatFactory` concat shapes | `[-]` |
+| `SecureRandom.nextBytes` | `[ ]` |
+| `UUID.randomUUID` | `[ ]` |
+| `Path.of` / `Files.*` selected helpers | `[ ]` |
+| `System.getenv` / `System.getProperty` subset | `[ ]` |
 
-## Unsupported Native Features
+## Showcase
 
-| Feature | Native behavior today | Workaround |
-| --- | --- | --- |
-| Reflection and runtime scanning | Rejected when reachable. | Use explicit code, exports, and closed-world wiring. |
-| Dynamic class loading and arbitrary `ClassLoader` APIs | Rejected when reachable. | Put dependencies on the classpath at build time. |
-| JNI/native methods and `System.load*` | Rejected when reachable. | Use `--kind staticlib/sharedlib` C ABI exports instead. |
-| General lambdas and arbitrary `invokedynamic` | Rejected unless it is a supported string concat shape. | Use explicit classes/static methods for now. |
-| General try/catch/finally and complex exception tables | Rejected outside supported same-method platform catch shape. | Keep native-profile code simple until exception lowering grows. |
-| Threads, monitors, `synchronized`, volatile coordination | Rejected when reachable. | Keep native-profile code single-threaded for now. |
-| Serialization | Rejected/unsupported. | Use explicit DTO parsing/formatting. |
-| Full JDK collections/streams/Optional runtime | Not generally supported. | Use arrays/simple objects or wait for targeted substitutions. |
-| Native UI frameworks | Unsupported. | JavanUI/Studio are separate roadmap tracks. |
-| Cross-target releases | Not release-gated. | Build on the target host today. |
-| Windows release artifact | Shared library naming exists; Windows CI/release is not first-gate. | Build locally when the toolchain path is ready. |
+The only public example is [examples/native-showcase](examples/native-showcase). It shows
+the currently supported path without pretending to be a full application framework.
+
+```sh
+mvn -q package
+java -cp target/classes javan.Main build examples/native-showcase --output native-showcase
+examples/native-showcase/.javan/bin/native-showcase
+```
+
+Expected output:
+
+```text
+javan native showcase
+metric requests -> 9
+first request
+samples 3
+copy 8
+name-length 8
+char e
+same true
+safe deterministic native build
+```
+
+Regression projects live under `src/test/resources/projects`:
+
+| Folder | Purpose |
+| --- | --- |
+| `acceptance` | end-to-end release acceptance projects |
+| `native-profile` | one-assumption native runtime/codegen scenarios |
+| `negative` | deterministic rejection scenarios |
+| `real-probes` | TypeMap/Nano probes when local artifacts exist |
 
 ## Build And Release
 
-```sh
-mvn verify
-scripts/verify-release.sh
-```
-
-Build the `javan` CLI itself as a native executable with GraalVM `native-image`:
+Local build:
 
 ```sh
-scripts/build-javan-native.sh
-dist/javan --help
-dist/javan --version
+mvn -q verify
+scripts/build.sh
 ```
 
-Package the host-native executable:
+Local release gate:
 
 ```sh
-scripts/package-release.sh
-scripts/verify-package.sh build/release/javan-0.1.0-<target>.tar.gz
+.github/scripts/verify-release.sh
 ```
 
-Release packaging rejects snapshot versions and target mismatches.
+The release workflow owns versioning. On `main` or manual dispatch it computes
+`vYYYY.M.D`, updates `pom.xml` and `CHANGELOG.md`, builds Linux/macOS x64/aarch64
+packages, pushes the release commit/tag, and creates the GitHub release. Manual
+`dry_run` builds packages without committing, tagging, publishing, or building images.
+After a successful GitHub release, the container image workflow can be replayed by tag
+without rebuilding the release archives.
 
-## Examples
+## Repository Layout
 
-```sh
-dist/javan build examples/hello
-dist/javan build examples/object-fields
-dist/javan build examples/int-array
-dist/javan build examples/long-array
-dist/javan build examples/float-double
-dist/javan build examples/boolean-basic
-dist/javan build examples/long-basic
-dist/javan build examples/exception-panic
-dist/javan build examples/try-catch
-dist/javan build examples/enum-basic
-dist/javan build examples/static-fields
-dist/javan build examples/interface-dispatch
-dist/javan build examples/polymorphic-virtual
-dist/javan build examples/interface-polymorphic
-dist/javan build examples/string-intrinsics
-dist/javan build examples/string-concat
-dist/javan build examples/primitive-arrays
-dist/javan build examples/native-library --kind staticlib --export com.acme.Math.add --bindings c,rust,go,python
-examples/typemap-pair/build-example.sh
-examples/nano-metric/build-example.sh
-```
-
-The acceptance runner builds supported examples, compares app output against the
-JVM where applicable, validates native-library C ABI output, and checks negative
-examples:
-
-```sh
-scripts/acceptance.sh
-```
+| Path | Purpose |
+| --- | --- |
+| `src/main/java` | javan CLI, classfile reader, analyzer, IR, codegen, linker, reports |
+| `src/main/resources` | packaged CLI metadata |
+| `src/test/java` | public-entrypoint regression tests |
+| `src/test/resources/projects` | test projects and native probes |
+| `examples/native-showcase` | one public showcase |
+| `doc` | specs, roadmap, compatibility, and generated support docs |
+| `scripts/build.sh` | local self-hosting build script |
+| `.github/scripts` | CI/release validation helpers |
 
 ## Further Docs
 
 - [Roadmap](doc/spec/roadmap.md)
-- [Library output](doc/spec/library-output.md)
+- [Roadmap progress](doc/roadmap-progress.md)
+- [Support matrix](doc/support-matrix.md)
+- [JDK compatibility](doc/jdk-compatibility.md)
+- [Native ABI contract](doc/spec/native-abi.md)
+- [Memory/runtime correctness](doc/spec/memory-runtime-correctness.md)
 - [Release gates](doc/spec/release.md)
-- [GitHub workflow testing](doc/spec/github-workflow-testing.md)
-- [OSS readiness](doc/spec/oss-readiness.md)
-- [Optimizer roadmap](doc/spec/optimizer-roadmap.md)
-- [Human-readable exceptions roadmap](doc/spec/human-readable-exceptions.md)
-- [Runtime-risk warnings roadmap](doc/spec/runtime-risk-warnings.md)
-- [Real project readiness](doc/spec/real-project-readiness.md)
-- [Feature lab workflow](doc/spec/feature-lab-workflow.md)
-- [Cross-platform verification](doc/spec/cross-platform-verification.md)
-- [Support matrix](docs/support-matrix.md)
-- [Testing](doc/spec/testing.md)
+- [Examples and test projects](doc/spec/examples-and-test-projects.md)

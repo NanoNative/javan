@@ -2,29 +2,88 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v*.*.*'
+    branches:
+      - main
   workflow_dispatch:
     inputs:
-      version:
-        description: Version to package without leading v
-        required: true
+      tag:
+        description: Release tag. Empty means today's vYYYY.M.D.
+        required: false
         type: string
-      publish_test_release:
-        description: Create a temporary javan-test-* release for workflow testing
+      dry_run:
+        description: Build release packages without committing, tagging, or publishing.
         required: false
         default: false
         type: boolean
 
 permissions:
-  contents: read
+  contents: write
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+concurrency:
+  group: release-${{ github.ref || github.run_id }}
+  cancel-in-progress: false
 
 jobs:
-  build:
+  plan:
+    name: plan release
+    runs-on: ubuntu-24.04
+    outputs:
+      release: ${{ steps.plan.outputs.release }}
+      dry_run: ${{ steps.plan.outputs.dry_run }}
+      tag: ${{ steps.plan.outputs.tag }}
+      version: ${{ steps.plan.outputs.version }}
+    steps:
+      - name: Plan release
+        id: plan
+        shell: sh
+        env:
+          HEAD_MESSAGE: ${{ github.event.head_commit.message || '' }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run || 'false' }}
+          INPUT_TAG: ${{ inputs.tag || '' }}
+        run: |
+          release=false
+          dry_run=false
+
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            release=true
+            dry_run="$INPUT_DRY_RUN"
+          elif [ "$GITHUB_EVENT_NAME" = "push" ] \
+            && [ "$GITHUB_REF" = "refs/heads/main" ] \
+            && ! printf '%s\n' "$HEAD_MESSAGE" | grep -Eq '^chore: release '; then
+            release=true
+          fi
+
+          tag=""
+          version=""
+          if [ "$release" = "true" ]; then
+            if [ -n "$INPUT_TAG" ]; then
+              tag="$INPUT_TAG"
+            else
+              year=$(date -u +%Y)
+              month=$(date -u +%m | sed 's/^0//')
+              day=$(date -u +%d | sed 's/^0//')
+              tag="v$year.$month.$day"
+            fi
+
+            if ! printf '%s\n' "$tag" | grep -Eq '^v[0-9]{4}[.][1-9][0-9]?[.][1-9][0-9]?$'; then
+              printf '%s\n' "Tag must look like v2026.6.14: $tag" >&2
+              exit 1
+            fi
+            version=${tag#v}
+          fi
+
+          {
+            printf 'release=%s\n' "$release"
+            printf 'dry_run=%s\n' "$dry_run"
+            printf 'tag=%s\n' "$tag"
+            printf 'version=%s\n' "$version"
+          } >> "$GITHUB_OUTPUT"
+          printf 'release=%s dry_run=%s tag=%s version=%s\n' "$release" "$dry_run" "$tag" "$version"
+
+  build-linux:
     name: package (${{ matrix.package-target }})
+    needs: plan
+    if: needs.plan.outputs.release == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
@@ -33,37 +92,108 @@ jobs:
         include:
           - os: ubuntu-24.04
             package-target: linux-x64
-          - os: macos-15
-            package-target: macos-aarch64
+          - os: ubuntu-24.04-arm
+            package-target: linux-aarch64
 
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Set up GraalVM
-        uses: graalvm/setup-graalvm@v1
+      - name: Set up JDK
+        uses: actions/setup-java@v5
         with:
           java-version: '25'
-          distribution: graalvm
+          distribution: temurin
           cache: maven
-          native-image-job-reports: 'true'
 
       - name: Install Linux native toolchain
-        if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y build-essential
 
-      - name: Resolve version
-        id: version
+      - name: Set release version
         shell: sh
+        env:
+          RELEASE_VERSION: ${{ needs.plan.outputs.version }}
         run: |
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            printf 'value=%s\n' "${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
-          else
-            printf 'value=%s\n' "${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-          fi
+          awk -v version="$RELEASE_VERSION" '
+            !done && /<version>[^<]+<\/version>/ {
+              sub(/<version>[^<]+<\/version>/, "<version>" version "</version>")
+              done = 1
+            }
+            { print }
+          ' pom.xml > pom.xml.tmp
+          mv pom.xml.tmp pom.xml
+          awk -v version="$RELEASE_VERSION" '
+            /private static final String VERSION = "/ {
+              print "    private static final String VERSION = \"" version "\";"
+              next
+            }
+            { print }
+          ' src/main/java/javan/cli/Version.java > Version.java.tmp
+          mv Version.java.tmp src/main/java/javan/cli/Version.java
 
       - name: Build and verify native package
-        run: JAVAN_VERSION='${{ steps.version.outputs.value }}' JAVAN_PACKAGE_TARGET='${{ matrix.package-target }}' sh scripts/verify-release.sh
+        run: JAVAN_VERSION='${{ needs.plan.outputs.version }}' JAVAN_PACKAGE_TARGET='${{ matrix.package-target }}' sh .github/scripts/verify-release.sh
+
+      - name: Upload package
+        uses: actions/upload-artifact@v5
+        with:
+          name: javan-${{ matrix.package-target }}
+          retention-days: 1
+          path: |
+            dist/release/javan-*-${{ matrix.package-target }}.tar.gz
+            dist/release/javan-*-${{ matrix.package-target }}.tar.gz.sha256
+          if-no-files-found: error
+
+  build-macos:
+    name: package (${{ matrix.package-target }})
+    needs: plan
+    if: needs.plan.outputs.release == 'true'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            package-target: macos-aarch64
+          - os: macos-15-intel
+            package-target: macos-x64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: temurin
+          cache: maven
+
+      - name: Set release version
+        shell: sh
+        env:
+          RELEASE_VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          awk -v version="$RELEASE_VERSION" '
+            !done && /<version>[^<]+<\/version>/ {
+              sub(/<version>[^<]+<\/version>/, "<version>" version "</version>")
+              done = 1
+            }
+            { print }
+          ' pom.xml > pom.xml.tmp
+          mv pom.xml.tmp pom.xml
+          awk -v version="$RELEASE_VERSION" '
+            /private static final String VERSION = "/ {
+              print "    private static final String VERSION = \"" version "\";"
+              next
+            }
+            { print }
+          ' src/main/java/javan/cli/Version.java > Version.java.tmp
+          mv Version.java.tmp src/main/java/javan/cli/Version.java
+
+      - name: Build and verify native package
+        run: JAVAN_VERSION='${{ needs.plan.outputs.version }}' JAVAN_PACKAGE_TARGET='${{ matrix.package-target }}' sh .github/scripts/verify-release.sh
 
       - name: Upload package
         uses: actions/upload-artifact@v5
@@ -77,39 +207,127 @@ jobs:
 
   publish:
     name: publish GitHub release
-    needs: build
-    if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) || github.event.inputs.publish_test_release == 'true'
+    needs:
+      - plan
+      - build-linux
+      - build-macos
+    if: needs.plan.outputs.release == 'true' && needs.plan.outputs.dry_run != 'true'
     runs-on: ubuntu-24.04
-    permissions:
-      contents: write
     steps:
+      - name: Require bot token
+        shell: sh
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+        run: |
+          if [ -z "$BOT_TOKEN" ]; then
+            printf '%s\n' "Missing required BOT_TOKEN secret. Releases need BOT_TOKEN so post-release workflows are triggered." >&2
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.BOT_TOKEN }}
+
       - name: Download packages
         uses: actions/download-artifact@v5
         with:
           path: dist/release
           merge-multiple: true
 
-      - name: Publish release
+      - name: Prepare release metadata
+        shell: sh
         env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.plan.outputs.tag }}
+          RELEASE_VERSION: ${{ needs.plan.outputs.version }}
         run: |
-          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
-            tag="$GITHUB_REF_NAME"
-            title="$GITHUB_REF_NAME"
-            notes="Host-native javan binaries for Linux and macOS."
-            gh release create "$tag" dist/release/* \
-              --target "$GITHUB_SHA" \
-              --verify-tag \
-              --title "$title" \
-              --notes "$notes"
-          else
-            tag="javan-test-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-            title="Temporary workflow test ${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}"
-            notes="Temporary release created by the workflow-test path. Delete it with scripts/github-cleanup-test-artifacts.sh."
-            gh release create "$tag" dist/release/* \
-              --target "$GITHUB_SHA" \
-              --prerelease \
-              --title "$title" \
-              --notes "$notes"
+          git fetch --tags --force
+          if git rev-parse -q --verify "refs/tags/$RELEASE_TAG" >/dev/null; then
+            printf '%s\n' "Tag already exists: $RELEASE_TAG" >&2
+            exit 1
           fi
+
+          awk -v version="$RELEASE_VERSION" '
+            !done && /<version>[^<]+<\/version>/ {
+              sub(/<version>[^<]+<\/version>/, "<version>" version "</version>")
+              done = 1
+            }
+            { print }
+          ' pom.xml > pom.xml.tmp
+          mv pom.xml.tmp pom.xml
+          awk -v version="$RELEASE_VERSION" '
+            /private static final String VERSION = "/ {
+              print "    private static final String VERSION = \"" version "\";"
+              next
+            }
+            { print }
+          ' src/main/java/javan/cli/Version.java > Version.java.tmp
+          mv Version.java.tmp src/main/java/javan/cli/Version.java
+
+          if [ ! -f CHANGELOG.md ]; then
+            {
+              printf '%s\n\n' '# Changelog'
+              printf '%s\n\n' '## [Unreleased]'
+            } > CHANGELOG.md
+          fi
+
+          release_date=$(date -u +%Y-%m-%d)
+          if ! grep -Eq "^## \\[$RELEASE_VERSION\\]" CHANGELOG.md; then
+            awk -v version="$RELEASE_VERSION" -v release_date="$release_date" '
+              /^## \[Unreleased\]/ && !done {
+                print
+                print ""
+                print "## [" version "] - " release_date
+                print ""
+                print "- Release Linux/macOS Javan binary archives."
+                print "- Enable replayable container image publication from release assets."
+                done = 1
+                next
+              }
+              { print }
+            ' CHANGELOG.md > CHANGELOG.md.tmp
+            mv CHANGELOG.md.tmp CHANGELOG.md
+          fi
+
+          awk -v version="$RELEASE_VERSION" '
+            $0 ~ "^## \\[" version "\\]" { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            printf 'Javan %s\n' "$RELEASE_TAG" > release-notes.md
+          fi
+
+      - name: Commit release metadata and tag
+        shell: sh
+        env:
+          RELEASE_TAG: ${{ needs.plan.outputs.tag }}
+          RELEASE_VERSION: ${{ needs.plan.outputs.version }}
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+        run: |
+          git config user.name "Kira"
+          git config user.email "kira@yuna.berlin"
+          git remote set-url origin "https://x-access-token:${BOT_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          if ! git diff --quiet -- pom.xml src/main/java/javan/cli/Version.java CHANGELOG.md; then
+            git add pom.xml src/main/java/javan/cli/Version.java CHANGELOG.md
+            git commit -m "chore: release $RELEASE_VERSION [skip ci]"
+          fi
+
+          target_branch=${GITHUB_REF_NAME:-main}
+          git push origin "HEAD:$target_branch"
+          git tag -a "$RELEASE_TAG" -m "$RELEASE_TAG [skip ci]"
+          git push origin "refs/tags/$RELEASE_TAG"
+
+      - name: Publish release
+        shell: sh
+        env:
+          GH_TOKEN: ${{ secrets.BOT_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.plan.outputs.tag }}
+        run: |
+          gh release create "$RELEASE_TAG" dist/release/* \
+            --verify-tag \
+            --title "$RELEASE_TAG" \
+            --notes-file release-notes.md

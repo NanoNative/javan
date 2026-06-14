@@ -1,7 +1,9 @@
 package javan.test;
 
+import javan.detect.BuildTool;
 import javan.detect.ProjectLayout;
 import javan.util.ProcessRunner;
+import javan.util.Strings2;
 
 import java.io.IOException;
 import java.io.PrintStream;
@@ -43,29 +45,48 @@ public final class ProjectTestRunner {
     public int run(final ProjectLayout layout, final PrintStream out) throws IOException, InterruptedException {
         final List<String> command = command(layout);
         out.println("Running tests:");
-        out.println("  " + String.join(" ", command));
+        out.println("  " + joinCommand(command));
         final ProcessRunner.Result result = processRunner.run(layout.root(), command);
         out.print(result.stdout());
-        if (!result.stderr().isBlank()) {
+        if (!Strings2.isBlank(result.stderr())) {
             out.print(result.stderr());
         }
         return result.exitCode();
     }
 
     private static List<String> command(final ProjectLayout layout) {
-        return switch (layout.buildTool()) {
-            case MAVEN -> mavenCommand(layout.root());
-            case GRADLE -> gradleCommand(layout.root());
-            case JAVAC, NONE, JAR, CLASSES -> throw new IllegalArgumentException(
-                "No configured test runner for " + layout.buildTool() + " projects. Add Maven or Gradle build files, or run tests directly."
+        if (layout.buildTool() == BuildTool.MAVEN) {
+            return mavenCommand(layout.root());
+        }
+        if (layout.buildTool() == BuildTool.GRADLE) {
+            return gradleCommand(layout.root());
+        }
+        if (layout.buildTool() == BuildTool.JAVAC
+            || layout.buildTool() == BuildTool.NONE
+            || layout.buildTool() == BuildTool.JAR
+            || layout.buildTool() == BuildTool.CLASSES) {
+            throw new IllegalArgumentException(
+                "No configured test runner for " + layout.buildTool().name() + " projects. Add Maven or Gradle build files, or run tests directly."
             );
-        };
+        }
+        throw new IllegalStateException("Unsupported build tool");
     }
 
     private static List<String> mavenCommand(final Path root) {
         return Files.exists(root.resolve("mvnw"))
             ? List.of("./mvnw", "test")
             : List.of("mvn", "test");
+    }
+
+    private static String joinCommand(final List<String> command) {
+        final StringBuilder result = new StringBuilder();
+        for (int index = 0; index < command.size(); index++) {
+            if (index > 0) {
+                result.append(' ');
+            }
+            result.append(command.get(index));
+        }
+        return result.toString();
     }
 
     private static List<String> gradleCommand(final Path root) {

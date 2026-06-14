@@ -1,6 +1,7 @@
 package javan.profile;
 
-import java.util.Locale;
+import javan.util.Strings2;
+
 import java.util.Optional;
 
 /**
@@ -19,13 +20,13 @@ public enum Profile {
      * @return parsed profile, or empty when unsupported
      */
     public static Optional<Profile> parse(final String value) {
-        return switch (value.toLowerCase(Locale.ROOT)) {
-            case "core" -> Optional.of(CORE);
-            case "service" -> Optional.of(SERVICE);
-            case "library" -> Optional.of(LIBRARY);
-            case "strict" -> Optional.of(STRICT);
-            default -> Optional.empty();
-        };
+        final String normalized = Strings2.toAsciiUpperCase(Strings2.trimAscii(value));
+        for (final Profile profile : values()) {
+            if (profile.name().equals(normalized)) {
+                return Optional.of(profile);
+            }
+        }
+        return Optional.empty();
     }
 
     /**
@@ -34,6 +35,6 @@ public enum Profile {
      * @return lowercase profile name
      */
     public String cliName() {
-        return name().toLowerCase(Locale.ROOT);
+        return Strings2.toAsciiLowerCase(name());
     }
 }

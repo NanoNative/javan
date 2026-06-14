@@ -1,20 +1,17 @@
 package javan.analysis;
 
 import javan.classfile.ClassFile;
+import javan.classfile.CodeAttribute;
 import javan.classfile.FieldRef;
 import javan.classfile.Instruction;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
 import javan.verify.Diagnostic;
 
-import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Queue;
-import java.util.Set;
 
 /**
  * Builds a small closed-world call graph for reachable application methods.
@@ -43,16 +40,18 @@ public final class ReachabilityAnalyzer {
         if (entries.isEmpty()) {
             throw new IllegalArgumentException("Reachability requires at least one entry point");
         }
-        final Set<EntryPoint> reachable = new LinkedHashSet<>();
+        final List<EntryPoint> reachable = new ArrayList<>();
         final List<Diagnostic> diagnostics = new ArrayList<>();
-        final Queue<EntryPoint> work = new ArrayDeque<>();
-        work.addAll(entries);
+        final List<EntryPoint> work = new ArrayList<>(entries);
+        int workIndex = 0;
 
-        while (!work.isEmpty()) {
-            final EntryPoint current = work.remove();
-            if (!reachable.add(current)) {
+        while (workIndex < work.size()) {
+            final EntryPoint current = work.get(workIndex);
+            workIndex++;
+            if (containsEntry(reachable, current)) {
                 continue;
             }
+            reachable.add(current);
             final Optional<MethodInfo> method = method(classes, current);
             if (method.isEmpty()) {
                 diagnostics.add(Diagnostic.error(
@@ -66,12 +65,41 @@ public final class ReachabilityAnalyzer {
                 ));
                 continue;
             }
-            method.orElseThrow().code().ifPresent(code -> code.instructions().forEach(instruction -> {
-                enqueueClassInitializer(classes, instruction, work);
-                enqueueApplicationCall(classes, instruction, work, diagnostics, current);
-            }));
+            if (isUnsupportedEnumSyntheticEntry(classes, current)) {
+                diagnostics.add(unsupportedEnumValueOfDiagnostic(current, current.display()));
+                continue;
+            }
+            final Optional<CodeAttribute> code = method.orElseThrow().code();
+            if (code.isPresent()) {
+                for (final Instruction instruction : code.orElseThrow().instructions()) {
+                    enqueueClassInitializer(classes, instruction, work);
+                    enqueueApplicationCall(classes, instruction, work, diagnostics, current);
+                }
+            }
         }
-        return new CallGraph(entries.getFirst(), Set.copyOf(reachable), List.copyOf(diagnostics));
+        return new CallGraph(entries.getFirst(), List.copyOf(reachable), List.copyOf(diagnostics));
+    }
+
+    private static boolean containsEntry(final List<EntryPoint> entries, final EntryPoint target) {
+        for (final EntryPoint entry : entries) {
+            if (sameEntry(entry, target)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean sameEntry(final EntryPoint left, final EntryPoint right) {
+        if (!left.className().equals(right.className())) {
+            return false;
+        }
+        if (!left.methodName().equals(right.methodName())) {
+            return false;
+        }
+        if (!left.descriptor().equals(right.descriptor())) {
+            return false;
+        }
+        return true;
     }
 
     private static Optional<MethodInfo> method(final Map<String, ClassFile> classes, final EntryPoint entryPoint) {
@@ -85,7 +113,7 @@ public final class ReachabilityAnalyzer {
     private static void enqueueApplicationCall(
         final Map<String, ClassFile> classes,
         final Instruction instruction,
-        final Queue<EntryPoint> work,
+        final List<EntryPoint> work,
         final List<Diagnostic> diagnostics,
         final EntryPoint current
     ) {
@@ -94,7 +122,17 @@ public final class ReachabilityAnalyzer {
             return;
         }
         final MethodRef target = methodRef.orElseThrow();
-        if (isEnumIntrinsic(classes, target)) {
+        if (isEnumIntrinsic(classes, target) || isSupportedEnumSynthetic(classes, target) || isSupportedArrayClone(target)) {
+            return;
+        }
+        if (isUnsupportedEnumSynthetic(classes, target)) {
+            diagnostics.add(unsupportedEnumValueOfDiagnostic(current, target.display()));
+            return;
+        }
+        if (isJdkCall(target)) {
+            return;
+        }
+        if (isJavanSubstitutedCall(target)) {
             return;
         }
         if (instruction.opcode() == 185) {
@@ -165,36 +203,44 @@ public final class ReachabilityAnalyzer {
     private static void enqueueClassInitializer(
         final Map<String, ClassFile> classes,
         final Instruction instruction,
-        final Queue<EntryPoint> work
+        final List<EntryPoint> work
     ) {
         if (instruction.opcode() == 178 || instruction.opcode() == 179) {
-            instruction.fieldRef()
-                .map(FieldRef::owner)
-                .ifPresent(owner -> enqueueClassInitializer(classes, owner, work));
+            final Optional<FieldRef> fieldRef = instruction.fieldRef();
+            if (fieldRef.isPresent()) {
+                enqueueClassInitializer(classes, fieldRef.orElseThrow().owner(), work);
+            }
             return;
         }
         if (instruction.opcode() == 184) {
-            instruction.methodRef()
-                .map(MethodRef::owner)
-                .ifPresent(owner -> enqueueClassInitializer(classes, owner, work));
+            final Optional<MethodRef> methodRef = instruction.methodRef();
+            if (methodRef.isPresent()) {
+                enqueueClassInitializer(classes, methodRef.orElseThrow().owner(), work);
+            }
             return;
         }
         if (instruction.opcode() == 187) {
-            instruction.className().ifPresent(owner -> enqueueClassInitializer(classes, owner, work));
+            final Optional<String> className = instruction.className();
+            if (className.isPresent()) {
+                enqueueClassInitializer(classes, className.orElseThrow(), work);
+            }
         }
     }
 
     private static void enqueueClassInitializer(
         final Map<String, ClassFile> classes,
         final String owner,
-        final Queue<EntryPoint> work
+        final List<EntryPoint> work
     ) {
         final ClassFile classFile = classes.get(owner);
         if (classFile == null || classFile.isEnum()) {
             return;
         }
-        classFile.method("<clinit>", "()V")
-            .ifPresent(method -> work.add(new EntryPoint(owner, method.name(), method.descriptor())));
+        final Optional<MethodInfo> method = classFile.method("<clinit>", "()V");
+        if (method.isPresent()) {
+            final MethodInfo classInitializer = method.orElseThrow();
+            work.add(new EntryPoint(owner, classInitializer.name(), classInitializer.descriptor()));
+        }
     }
 
     private static boolean isConcreteExactCallTarget(final Map<String, ClassFile> classes, final String owner) {
@@ -202,34 +248,145 @@ public final class ReachabilityAnalyzer {
         if (target == null || target.isInterface()) {
             return false;
         }
-        return target.isFinal() || classes.values().stream().noneMatch(candidate -> owner.equals(candidate.superName()));
+        if (target.isFinal()) {
+            return true;
+        }
+        for (final ClassFile candidate : classes.values()) {
+            if (owner.equals(candidate.superName())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static boolean isEnumIntrinsic(final Map<String, ClassFile> classes, final MethodRef target) {
         final ClassFile owner = classes.get(target.owner());
-        return owner != null
-            && owner.isEnum()
-            && ("name".equals(target.name()) || "toString".equals(target.name()))
-            && "()Ljava/lang/String;".equals(target.descriptor());
+        if (owner == null || !owner.isEnum()) {
+            return false;
+        }
+        if (!"()Ljava/lang/String;".equals(target.descriptor())) {
+            return false;
+        }
+        if ("name".equals(target.name())) {
+            return true;
+        }
+        return "toString".equals(target.name());
+    }
+
+    private static boolean isUnsupportedEnumSynthetic(final Map<String, ClassFile> classes, final MethodRef target) {
+        final ClassFile owner = classes.get(target.owner());
+        if (owner == null || !owner.isEnum()) {
+            return false;
+        }
+        if (!"valueOf".equals(target.name())) {
+            return false;
+        }
+        return ("(Ljava/lang/String;)L" + target.owner() + ";").equals(target.descriptor());
+    }
+
+    private static boolean isUnsupportedEnumSyntheticEntry(final Map<String, ClassFile> classes, final EntryPoint entry) {
+        final ClassFile owner = classes.get(entry.className());
+        if (owner == null || !owner.isEnum()) {
+            return false;
+        }
+        if (!"valueOf".equals(entry.methodName())) {
+            return false;
+        }
+        return ("(Ljava/lang/String;)L" + entry.className() + ";").equals(entry.descriptor());
+    }
+
+    private static Diagnostic unsupportedEnumValueOfDiagnostic(final EntryPoint current, final String subject) {
+        return Diagnostic.error(
+            "JAVAN015",
+            "unsupported reachable enum synthetic method",
+            current.className(),
+            current.methodName() + current.descriptor(),
+            subject,
+            "Enum.valueOf(String) requires deterministic enum lookup lowering, which is not implemented yet.",
+            "Use direct enum constants, values(), ordinal(), name(), toString(), or enum switch until valueOf lowering is implemented."
+        );
+    }
+
+    private static boolean isSupportedEnumSynthetic(final Map<String, ClassFile> classes, final MethodRef target) {
+        final ClassFile owner = classes.get(target.owner());
+        if (owner == null || !owner.isEnum()) {
+            return false;
+        }
+        if ("ordinal".equals(target.name()) && "()I".equals(target.descriptor())) {
+            return true;
+        }
+        if (!"values".equals(target.name())) {
+            return false;
+        }
+        if (!target.descriptor().equals("()[L" + target.owner() + ";")) {
+            return false;
+        }
+        return true;
+    }
+
+    private static boolean isJdkCall(final MethodRef target) {
+        if (target.owner().startsWith("java/")) {
+            return true;
+        }
+        if (target.owner().startsWith("jdk/")) {
+            return true;
+        }
+        if (target.owner().startsWith("sun/")) {
+            return true;
+        }
+        return false;
+    }
+
+    private static boolean isSupportedArrayClone(final MethodRef target) {
+        if (!target.owner().startsWith("[")) {
+            return false;
+        }
+        if (!"clone".equals(target.name())) {
+            return false;
+        }
+        if (!"()Ljava/lang/Object;".equals(target.descriptor())) {
+            return false;
+        }
+        if ("[Z".equals(target.owner())) {
+            return false;
+        }
+        return true;
     }
 
     private static List<EntryPoint> interfaceTargets(final Map<String, ClassFile> classes, final MethodRef target) {
-        return classes.values().stream()
-            .filter(candidate -> !candidate.isInterface())
-            .filter(candidate -> candidate.interfaces().contains(target.owner()))
-            .filter(candidate -> candidate.method(target.name(), target.descriptor()).isPresent())
-            .map(candidate -> new EntryPoint(candidate.name(), target.name(), target.descriptor()))
-            .toList();
+        final List<EntryPoint> targets = new ArrayList<>();
+        for (final ClassFile candidate : classes.values()) {
+            if (candidate.isInterface()) {
+                continue;
+            }
+            if (!candidate.interfaces().contains(target.owner())) {
+                continue;
+            }
+            if (candidate.method(target.name(), target.descriptor()).isPresent()) {
+                targets.add(new EntryPoint(candidate.name(), target.name(), target.descriptor()));
+            }
+        }
+        return List.copyOf(targets);
     }
 
     private static List<EntryPoint> virtualTargets(final Map<String, ClassFile> classes, final MethodRef target) {
-        return classes.values().stream()
-            .filter(candidate -> !candidate.isInterface())
-            .filter(candidate -> isSubtypeOf(classes, candidate.name(), target.owner()))
-            .map(candidate -> resolvedVirtualTarget(classes, candidate.name(), target))
-            .flatMap(Optional::stream)
-            .distinct()
-            .toList();
+        final List<EntryPoint> targets = new ArrayList<>();
+        for (final ClassFile candidate : classes.values()) {
+            if (candidate.isInterface()) {
+                continue;
+            }
+            if (!isSubtypeOf(classes, candidate.name(), target.owner())) {
+                continue;
+            }
+            final Optional<EntryPoint> resolved = resolvedVirtualTarget(classes, candidate.name(), target);
+            if (resolved.isPresent()) {
+                final EntryPoint entryPoint = resolved.orElseThrow();
+                if (!containsEntry(targets, entryPoint)) {
+                    targets.add(entryPoint);
+                }
+            }
+        }
+        return List.copyOf(targets);
     }
 
     private static Optional<EntryPoint> resolvedVirtualTarget(final Map<String, ClassFile> classes, final String receiver, final MethodRef target) {
@@ -252,6 +409,22 @@ public final class ReachabilityAnalyzer {
             }
             current = classes.get(current).superName();
         }
-        return current.equals(expectedSuper);
+        if (current.equals(expectedSuper)) {
+            return true;
+        }
+        return false;
+    }
+
+    private static boolean isJavanSubstitutedCall(final MethodRef methodRef) {
+        if (!"javan/util/ProcessRunner".equals(methodRef.owner())) {
+            return false;
+        }
+        if (!"run".equals(methodRef.name())) {
+            return false;
+        }
+        if (!"(Ljava/nio/file/Path;Ljava/util/List;)Ljavan/util/ProcessRunner$Result;".equals(methodRef.descriptor())) {
+            return false;
+        }
+        return true;
     }
 }

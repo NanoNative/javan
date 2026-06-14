@@ -6,53 +6,56 @@ on:
     branches:
       - main
       - 'workflow/**'
+      - 'release/**'
   workflow_dispatch:
 
 permissions:
   contents: read
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   verify:
-    name: verify (${{ matrix.package-target }})
+    name: verify (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-24.04
-            package-target: linux-x64
-          - os: macos-15
-            package-target: macos-aarch64
+          - target: linux-x64
+            os: ubuntu-24.04
+          - target: linux-aarch64
+            os: ubuntu-24.04-arm
+          - target: macos-aarch64
+            os: macos-15
+          - target: macos-x64
+            os: macos-15-intel
 
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Set up GraalVM
-        uses: graalvm/setup-graalvm@v1
+      - name: Set up JDK
+        uses: actions/setup-java@v5
         with:
           java-version: '25'
-          distribution: graalvm
+          distribution: temurin
           cache: maven
-          native-image-job-reports: 'true'
 
       - name: Install Linux native toolchain
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y build-essential
 
-      - name: Verify release candidate
-        run: JAVAN_PACKAGE_TARGET='${{ matrix.package-target }}' sh scripts/verify-release.sh
+      - name: Verify Maven suite
+        run: mvn -q verify
 
-      - name: Upload local release package
-        uses: actions/upload-artifact@v5
-        with:
-          name: javan-${{ matrix.package-target }}
-          retention-days: 1
-          path: |
-            dist/release/javan-*-${{ matrix.package-target }}.tar.gz
-            dist/release/javan-*-${{ matrix.package-target }}.tar.gz.sha256
-          if-no-files-found: error
+      - name: Verify acceptance suite
+        run: sh .github/scripts/acceptance.sh
+
+      - name: Verify host target build
+        run: java -cp target/classes javan.Main build src/test/resources/projects/acceptance/hello --target ${{ matrix.target }} --output hello-${{ matrix.target }}
+
+      - name: Verify sanitizer smoke
+        run: JAVAN_SANITIZER_REQUIRED=true sh .github/scripts/sanitizer-suite.sh
+
+      - name: Verify self-host jar path
+        run: java -cp target/classes javan.Main build target/classes --main javan.Main --jar --output javan

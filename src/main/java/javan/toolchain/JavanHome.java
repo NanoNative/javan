@@ -1,9 +1,10 @@
 package javan.toolchain;
 
+import javan.util.Strings2;
+
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Properties;
 
 /**
@@ -22,7 +23,15 @@ public final class JavanHome {
      * @return resolved absolute home path
      */
     public static Path resolve() {
-        return resolve(System.getenv(), System.getProperties(), Path.of(System.getProperty("user.home", ".")));
+        final String property = clean(System.getProperty(PROPERTY));
+        if (property != null) {
+            return normalize(Path.of(property));
+        }
+        final String environment = clean(System.getenv(ENVIRONMENT));
+        if (environment != null) {
+            return normalize(Path.of(environment));
+        }
+        return normalize(Path.of(System.getProperty("user.home", ".")).resolve(".javan"));
     }
 
     /**
@@ -42,26 +51,30 @@ public final class JavanHome {
         Objects.requireNonNull(properties, "properties");
         Objects.requireNonNull(userHome, "userHome");
 
-        return property(properties)
-            .or(() -> environment(environment))
-            .map(Path::of)
-            .map(JavanHome::normalize)
-            .orElseGet(() -> normalize(userHome.resolve(".javan")));
+        final String property = property(properties);
+        if (property != null) {
+            return normalize(Path.of(property));
+        }
+        final String environmentValue = environment(environment);
+        if (environmentValue != null) {
+            return normalize(Path.of(environmentValue));
+        }
+        return normalize(userHome.resolve(".javan"));
     }
 
-    private static Optional<String> property(final Properties properties) {
+    private static String property(final Properties properties) {
         return clean(properties.getProperty(PROPERTY));
     }
 
-    private static Optional<String> environment(final Map<String, String> environment) {
+    private static String environment(final Map<String, String> environment) {
         return clean(environment.get(ENVIRONMENT));
     }
 
-    private static Optional<String> clean(final String value) {
-        if (value == null || value.isBlank()) {
-            return Optional.empty();
+    private static String clean(final String value) {
+        if (Strings2.isBlank(value)) {
+            return null;
         }
-        return Optional.of(value.trim());
+        return Strings2.trimAscii(value);
     }
 
     private static Path normalize(final Path path) {

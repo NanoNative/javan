@@ -5,7 +5,8 @@
 - line coverage >= 95%
 - branch coverage >= 90%
 
-The enforced JaCoCo gate is scoped to deterministic compiler-core behavior:
+The enforced JaCoCo gate is not a whole-repository quality number yet. It is scoped to
+deterministic compiler-core behavior that runs inside the Maven test JVM:
 
 - reachability
 - static verification
@@ -14,9 +15,10 @@ The enforced JaCoCo gate is scoped to deterministic compiler-core behavior:
 - diagnostics
 - compatibility bytecode support classification
 
-The full JaCoCo report still includes every class. The following areas are covered by
-public-entrypoint integration tests but excluded from the hard ratio gate until they can be
-made deterministic across machines:
+The following areas are covered mainly by public-entrypoint integration tests that spawn
+child JVMs or native binaries. The Maven JaCoCo agent does not count those child-process
+paths yet, so they are excluded from the numeric gate until child JVM/native coverage is
+captured honestly:
 
 - build-tool invocation adapters
 - host filesystem and process adapters
@@ -26,14 +28,14 @@ made deterministic across machines:
 - CLI text routing
 - pure data records
 
-When one of those areas becomes stable enough to test exhaustively, remove the exclusion
-instead of lowering the gate. The gate is a blade, not wall art.
+Next gate: run child JVMs with JaCoCo agent output merged into the main report, then remove
+each exclusion instead of lowering the threshold.
 
 ## Test Shape
 
 Every test checks exactly one assumption, scenario, or case.
 
-Use shared setup when it keeps fixtures readable, but split unrelated expectations into
+Use shared setup when it keeps test projects readable, but split unrelated expectations into
 separate tests. A failing test name should identify the broken promise without reading a
 large assertion bundle.
 

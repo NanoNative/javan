@@ -1,5 +1,7 @@
 package javan.toolchain;
 
+import javan.util.Strings2;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -37,15 +39,39 @@ public final class SettingsTomlReader {
         Objects.requireNonNull(content, "content");
         final Map<String, String> values = SimpleToml.parse(content);
         return new JavanSettings(
-            text(values, "default_toolchain").or(() -> text(values, "defaults.toolchain")),
-            text(values, "default_jdk").or(() -> text(values, "defaults.jdk")),
-            bool(values, "auto_install").or(() -> bool(values, "defaults.auto_install")).orElse(false)
+            firstText(values, "default_toolchain", "defaults.toolchain"),
+            firstText(values, "default_jdk", "defaults.jdk"),
+            firstBool(values, "auto_install", "defaults.auto_install")
         );
+    }
+
+    private static Optional<String> firstText(
+        final Map<String, String> values,
+        final String primary,
+        final String fallback
+    ) {
+        final Optional<String> value = text(values, primary);
+        if (value.isPresent()) {
+            return value;
+        }
+        return text(values, fallback);
+    }
+
+    private static boolean firstBool(final Map<String, String> values, final String primary, final String fallback) {
+        Optional<Boolean> value = bool(values, primary);
+        if (value.isPresent()) {
+            return value.get();
+        }
+        value = bool(values, fallback);
+        if (value.isPresent()) {
+            return value.get();
+        }
+        return false;
     }
 
     private static Optional<String> text(final Map<String, String> values, final String key) {
         final String value = values.get(key);
-        if (value == null || value.isBlank()) {
+        if (Strings2.isBlank(value)) {
             return Optional.empty();
         }
         return Optional.of(value);
@@ -53,7 +79,7 @@ public final class SettingsTomlReader {
 
     private static Optional<Boolean> bool(final Map<String, String> values, final String key) {
         final String value = values.get(key);
-        if (value == null || value.isBlank()) {
+        if (Strings2.isBlank(value)) {
             return Optional.empty();
         }
         if ("true".equals(value)) {

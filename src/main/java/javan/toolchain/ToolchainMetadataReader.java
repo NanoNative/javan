@@ -1,5 +1,7 @@
 package javan.toolchain;
 
+import javan.util.Strings2;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -42,10 +44,14 @@ public final class ToolchainMetadataReader {
             "metadataFile parent"
         );
         final Path home = resolve(installRoot, values.getOrDefault("home", "."));
+        final String kindValue = required(values, "kind");
+        final Optional<ToolchainKind> kind = ToolchainKind.parse(kindValue);
+        if (kind.isEmpty()) {
+            throw new IllegalArgumentException("Unknown toolchain kind: " + kindValue);
+        }
         return new ToolchainMetadata(
             required(values, "id"),
-            ToolchainKind.parse(required(values, "kind"))
-                .orElseThrow(() -> new IllegalArgumentException("Unknown toolchain kind: " + required(values, "kind"))),
+            kind.get(),
             required(values, "version"),
             home,
             resolve(home, values.getOrDefault("java", "bin/java")),
@@ -57,7 +63,7 @@ public final class ToolchainMetadataReader {
 
     private static String required(final Map<String, String> values, final String key) {
         final String value = values.get(key);
-        if (value == null || value.isBlank()) {
+        if (Strings2.isBlank(value)) {
             throw new IllegalArgumentException("Missing toolchain metadata field: " + key);
         }
         return value;
@@ -65,7 +71,7 @@ public final class ToolchainMetadataReader {
 
     private static Optional<String> optional(final Map<String, String> values, final String key) {
         final String value = values.get(key);
-        if (value == null || value.isBlank()) {
+        if (Strings2.isBlank(value)) {
             return Optional.empty();
         }
         return Optional.of(value);

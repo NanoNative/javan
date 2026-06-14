@@ -3,6 +3,7 @@ package javan.build;
 import javan.detect.ProjectLayout;
 import javan.util.Files2;
 import javan.util.Json;
+import javan.util.Strings2;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -45,12 +46,12 @@ public final class ResourceBundler {
             if (!Files.isDirectory(classFolder)) {
                 continue;
             }
-            for (final Path file : Files2.findFiles(classFolder, ResourceBundler::resourceFile)) {
+            for (final Path file : Files2.findResourceFiles(classFolder)) {
                 final String path = classFolder.relativize(file).toString().replace(java.io.File.separatorChar, '/');
                 result.putIfAbsent(path, new ResourceFile(path, file, Files.size(file)));
             }
         }
-        return result.values().stream().sorted(java.util.Comparator.comparing(ResourceFile::path)).toList();
+        return sorted(result);
     }
 
     private static void copy(final List<ResourceFile> resources, final Path targetRoot) throws IOException {
@@ -69,10 +70,7 @@ public final class ResourceBundler {
         final String json = "{\n"
             + "  \"resourceCount\": " + resources.size() + ",\n"
             + "  \"resources\": [\n"
-            + String.join(",\n", resources.stream()
-                .map(resource -> "    {\"path\": " + Json.string(resource.path())
-                    + ", \"size\": " + resource.size() + "}")
-                .toList())
+            + resourceJson(resources)
             + "\n  ]\n"
             + "}\n";
         Files2.writeString(layout.outputDirectory().resolve("reports/resources.json"), json);
@@ -88,9 +86,36 @@ public final class ResourceBundler {
         Files2.writeString(layout.outputDirectory().resolve("reports/resources.md"), markdown.toString());
     }
 
-    private static boolean resourceFile(final Path file) {
-        final String name = file.getFileName().toString();
-        return !name.endsWith(".class") && !name.equals("module-info.class");
+    private static List<ResourceFile> sorted(final Map<String, ResourceFile> resources) {
+        final List<ResourceFile> result = new ArrayList<>();
+        for (final ResourceFile resource : resources.values()) {
+            insertSorted(result, resource);
+        }
+        return List.copyOf(result);
+    }
+
+    private static void insertSorted(final List<ResourceFile> resources, final ResourceFile resource) {
+        int index = 0;
+        while (index < resources.size() && Strings2.compareAscii(resources.get(index).path(), resource.path()) <= 0) {
+            index++;
+        }
+        resources.add(index, resource);
+    }
+
+    private static String resourceJson(final List<ResourceFile> resources) {
+        final StringBuilder result = new StringBuilder();
+        for (int index = 0; index < resources.size(); index++) {
+            if (index > 0) {
+                result.append(",\n");
+            }
+            final ResourceFile resource = resources.get(index);
+            result.append("    {\"path\": ")
+                .append(Json.string(resource.path()))
+                .append(", \"size\": ")
+                .append(resource.size())
+                .append("}");
+        }
+        return result.toString();
     }
 
     /**

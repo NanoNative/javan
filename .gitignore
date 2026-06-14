@@ -3,10 +3,11 @@
 /release/
 /build/
 /.gradle/
+**/.gradle/
 /.javan/
 **/.javan/
-examples/library-dependency/lib/
-examples/library-dependency/lib-classes/
+src/test/resources/projects/acceptance/library-dependency/lib/
+src/test/resources/projects/acceptance/library-dependency/lib-classes/
 *.class
 *.log
 .DS_Store

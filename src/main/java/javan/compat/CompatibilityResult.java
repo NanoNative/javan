@@ -31,15 +31,27 @@ public record CompatibilityResult(
      * @return true when compatible
      */
     public boolean pass() {
-        return diagnostics.stream().noneMatch(Diagnostic::error)
-            && projectClasses.stream().flatMap(CompatibilityResult::instructions)
-                .noneMatch(instruction -> instruction.support() == BytecodeSupport.Status.UNKNOWN_FATAL);
+        for (final Diagnostic diagnostic : diagnostics) {
+            if (diagnostic.error()) {
+                return false;
+            }
+        }
+        for (final ClassMetadata metadata : projectClasses) {
+            if (hasUnknownFatal(metadata.constructors()) || hasUnknownFatal(metadata.methods())) {
+                return false;
+            }
+        }
+        return true;
     }
 
-    private static java.util.stream.Stream<InstructionMetadata> instructions(final ClassMetadata metadata) {
-        return java.util.stream.Stream.concat(
-            metadata.constructors().stream(),
-            metadata.methods().stream()
-        ).flatMap(member -> member.instructions().stream());
+    private static boolean hasUnknownFatal(final List<MemberMetadata> members) {
+        for (final MemberMetadata member : members) {
+            for (final InstructionMetadata instruction : member.instructions()) {
+                if (instruction.support() == BytecodeSupport.Status.UNKNOWN_FATAL) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 }

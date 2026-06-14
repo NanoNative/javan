@@ -17,7 +17,10 @@ public record FieldInfo(int accessFlags, String name, String descriptor) {
      * @return true when the field has ACC_STATIC
      */
     public boolean isStatic() {
-        return (accessFlags & ACC_STATIC) != 0;
+        if ((accessFlags & ACC_STATIC) == 0) {
+            return false;
+        }
+        return true;
     }
 
     /**
@@ -26,6 +29,9 @@ public record FieldInfo(int accessFlags, String name, String descriptor) {
      * @return true when the field has ACC_ENUM
      */
     public boolean isEnumConstant() {
-        return (accessFlags & ACC_ENUM) != 0;
+        if ((accessFlags & ACC_ENUM) == 0) {
+            return false;
+        }
+        return true;
     }
 }
