@@ -1,7 +1,6 @@
 package javan.util;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -65,14 +64,14 @@ public final class ProcessRunner {
                 process.waitFor();
                 return new Result(
                     124,
-                    Files.readString(stdoutFile, StandardCharsets.UTF_8),
+                    Files.readString(stdoutFile),
                     timeoutMessage(command, stderrFile)
                 );
             }
             return new Result(
                 process.exitValue(),
-                Files.readString(stdoutFile, StandardCharsets.UTF_8),
-                Files.readString(stderrFile, StandardCharsets.UTF_8)
+                Files.readString(stdoutFile),
+                Files.readString(stderrFile)
             );
         } finally {
             Files.deleteIfExists(stdoutFile);
@@ -128,7 +127,7 @@ public final class ProcessRunner {
     }
 
     private String timeoutMessage(final List<String> command, final Path stderrFile) throws IOException {
-        final String stderr = Files.readString(stderrFile, StandardCharsets.UTF_8);
+        final String stderr = Files.readString(stderrFile);
         if (Strings2.isBlank(stderr)) {
             return "Timed out after " + (timeoutMillis / 1000L) + "s: " + commandLine(command);
         }

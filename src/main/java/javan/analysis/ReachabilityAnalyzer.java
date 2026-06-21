@@ -6,6 +6,8 @@ import javan.classfile.FieldRef;
 import javan.classfile.Instruction;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
+import javan.compat.NetworkApiSupport;
+import javan.compat.JavanNativeSubstitutions;
 import javan.verify.Diagnostic;
 
 import java.util.ArrayList;
@@ -129,10 +131,10 @@ public final class ReachabilityAnalyzer {
             diagnostics.add(unsupportedEnumValueOfDiagnostic(current, target.display()));
             return;
         }
-        if (isJdkCall(target)) {
+        if (isJdkCall(target) || NetworkApiSupport.isNetworkCall(target)) {
             return;
         }
-        if (isJavanSubstitutedCall(target)) {
+        if (JavanNativeSubstitutions.isSubstitutedCall(target)) {
             return;
         }
         if (instruction.opcode() == 185) {
@@ -153,7 +155,10 @@ public final class ReachabilityAnalyzer {
             return;
         }
         if (!classes.containsKey(target.owner())) {
-            if (!target.owner().startsWith("java/") && !target.owner().startsWith("jdk/") && !target.owner().startsWith("sun/")) {
+            if (!target.owner().startsWith("java/")
+                && !target.owner().startsWith("jdk/")
+                && !target.owner().startsWith("sun/")
+                && !NetworkApiSupport.isNetworkCall(target)) {
                 diagnostics.add(Diagnostic.error(
                     "JAVAN011",
                     "reachable call target cannot be resolved",
@@ -415,16 +420,4 @@ public final class ReachabilityAnalyzer {
         return false;
     }
 
-    private static boolean isJavanSubstitutedCall(final MethodRef methodRef) {
-        if (!"javan/util/ProcessRunner".equals(methodRef.owner())) {
-            return false;
-        }
-        if (!"run".equals(methodRef.name())) {
-            return false;
-        }
-        if (!"(Ljava/nio/file/Path;Ljava/util/List;)Ljavan/util/ProcessRunner$Result;".equals(methodRef.descriptor())) {
-            return false;
-        }
-        return true;
-    }
 }

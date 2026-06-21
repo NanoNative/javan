@@ -8,8 +8,38 @@ import java.util.Optional;
  * @param op operation kind
  * @param value literal value or symbol
  * @param expression optional expression
+ * @param sourceLocation optional source-facing location
  */
-public record IrInstruction(Op op, Optional<String> value, Optional<IrExpression> expression) {
+public record IrInstruction(
+    Op op,
+    Optional<String> value,
+    Optional<IrExpression> expression,
+    Optional<IrSourceLocation> sourceLocation
+) {
+    /**
+     * Creates an instruction without source metadata.
+     *
+     * @param op operation kind
+     * @param value literal value or symbol
+     * @param expression optional expression
+     */
+    public IrInstruction(final Op op, final Optional<String> value, final Optional<IrExpression> expression) {
+        this(op, value, expression, Optional.empty());
+    }
+
+    /**
+     * Returns a copy with source metadata when the instruction has no stronger source already.
+     *
+     * @param location source-facing location
+     * @return instruction copy
+     */
+    public IrInstruction withSourceLocation(final IrSourceLocation location) {
+        if (sourceLocation.isPresent()) {
+            return this;
+        }
+        return new IrInstruction(op, value, expression, Optional.of(location));
+    }
+
     /**
      * Creates a println-literal instruction.
      *
@@ -578,6 +608,17 @@ public record IrInstruction(Op op, Optional<String> value, Optional<IrExpression
      */
     public static IrInstruction panic(final IrExpression expression) {
         return new IrInstruction(Op.PANIC, Optional.empty(), Optional.of(expression));
+    }
+
+    /**
+     * Creates a native panic instruction with source metadata.
+     *
+     * @param expression message expression
+     * @param sourceLocation source-facing location
+     * @return IR instruction
+     */
+    public static IrInstruction panic(final IrExpression expression, final IrSourceLocation sourceLocation) {
+        return new IrInstruction(Op.PANIC, Optional.empty(), Optional.of(expression), Optional.of(sourceLocation));
     }
 
     /**

@@ -1,7 +1,60 @@
 # Dependency And License Reports
 
-Status: roadmap only. This file describes required behavior and does not claim current
-implementation.
+Status: implemented slice plus roadmap. Javan now writes classpath dependency and
+license reports from resolved `--classpath`, Maven, and Gradle runtime classpaths during
+reachability-backed `check`, `build`, and `compat` flows. Javan also reads local
+`javan.mod` path dependencies, resolves direct coordinates from a configured local Maven
+repository or `~/.m2/repository`, and writes deterministic `javan.lock`. Network
+resolution, authenticated mirrors, direct/transitive truth, full test reachability, and
+license policy blocking remain roadmap work.
+
+## Current Implementation
+
+Generated today:
+
+- `.javan/reports/dependencies.json`
+- `.javan/reports/dependencies.md`
+- `.javan/reports/licenses.json`
+- `.javan/reports/licenses.md`
+
+Current dependency rows are based on the resolved classpath Javan actually scans. Each
+row includes path, classpath index, kind, `main` scope, present/missing status, class
+count, reachable dependency class count, reachable classes, Maven coordinate when packed
+in `META-INF/maven/**/pom.properties`, source (`classpath` or `javan.mod`), and
+used/unused classification.
+
+Current `javan.mod` syntax:
+
+```text
+module com.acme.app
+java 25
+
+require main libs/runtime.jar
+require main com.acme:math:1.2.3
+require test libs/test-support.jar
+require tool tools/codegen.jar
+```
+
+Rules today:
+
+- `main` local jar/classes dependencies are added before plain `javac` compilation.
+- direct `group:artifact:version` and `group:artifact version` coordinates are resolved
+  from `-Djavan.maven.localRepository`, `-Dmaven.repo.local`, then `~/.m2/repository`.
+- `test` and `tool` local dependencies are recorded in `javan.lock` but not added to
+  native app classpath.
+- missing local declarations fail clearly.
+- missing local Maven-cache coordinates fail clearly after writing lock metadata.
+- `javan.lock` records scope, notation, status, artifact kind, path, relative path, size,
+  and `fnv64` content checksum metadata.
+
+Current license rows inspect jar metadata first:
+
+- `META-INF/maven/**/pom.xml` license name and URL
+- `META-INF/LICENSE*`, `META-INF/NOTICE*`, `LICENSE*`, `NOTICE*`, `COPYING`
+- directory-level `LICENSE`, `LICENSE.txt`, `LICENSE.md`, `NOTICE`, `COPYING`
+
+Unknown licenses are reported as `unknown` and marked warning. Javan does not guess SPDX
+ids and does not block builds on license policy yet.
 
 ## Goal
 
@@ -32,7 +85,8 @@ should be more explicit because Java projects already separate main and test sou
 Resolver order should be deterministic and configurable:
 
 1. local project paths
-2. local Maven cache (`~/.m2/repository`)
+2. configured local Maven cache (`-Djavan.maven.localRepository`, `-Dmaven.repo.local`,
+   then `~/.m2/repository`)
 3. configured Maven/Ivy repositories
 4. Maven Central when enabled
 5. GitHub Packages when configured

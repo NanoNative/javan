@@ -50,7 +50,7 @@ public final class ClassFileReader {
         final List<String> interfaces = readInterfaces(in, constantPool);
         final List<FieldInfo> fields = readFields(in, constantPool);
         final List<MethodInfo> methods = readMethods(in, constantPool);
-        final List<BootstrapMethod> bootstrapMethods = readClassAttributes(in, constantPool);
+        final ClassAttributes classAttributes = readClassAttributes(in, constantPool);
         return new ClassFile(
             major,
             thisClass,
@@ -58,7 +58,8 @@ public final class ClassFileReader {
             accessFlags,
             interfaces,
             List.copyOf(fields),
-            resolveInstructions(methods, constantPool, bootstrapMethods),
+            resolveInstructions(methods, constantPool, classAttributes.bootstrapMethods()),
+            classAttributes.sourceFile(),
             source,
             true
         );
@@ -147,8 +148,32 @@ public final class ClassFileReader {
         final byte[] bytecode = in.bytes(codeLength);
         final int exceptionTableLength = in.u2();
         final List<CodeException> exceptionTable = readExceptionTable(in, constantPool, exceptionTableLength);
-        skipAttributes(in);
-        return new CodeAttribute(maxStack, maxLocals, bytecode, exceptionTableLength, exceptionTable, List.of());
+        final List<LineNumberEntry> lineNumbers = readCodeAttributes(in, constantPool);
+        return new CodeAttribute(maxStack, maxLocals, bytecode, exceptionTableLength, exceptionTable, lineNumbers, List.of());
+    }
+
+    private static List<LineNumberEntry> readCodeAttributes(final ClassByteCursor in, final ConstantPool constantPool) throws IOException {
+        final int count = in.u2();
+        final List<LineNumberEntry> lineNumbers = new ArrayList<>();
+        for (int index = 0; index < count; index++) {
+            final String attributeName = constantPool.utf8(in.u2());
+            final long length = in.u4();
+            if ("LineNumberTable".equals(attributeName)) {
+                lineNumbers.addAll(readLineNumberTable(in));
+            } else {
+                in.skip(length);
+            }
+        }
+        return List.copyOf(lineNumbers);
+    }
+
+    private static List<LineNumberEntry> readLineNumberTable(final ClassByteCursor in) throws IOException {
+        final int count = in.u2();
+        final List<LineNumberEntry> result = new ArrayList<>();
+        for (int index = 0; index < count; index++) {
+            result.add(new LineNumberEntry(in.u2(), in.u2()));
+        }
+        return List.copyOf(result);
     }
 
     private static List<CodeException> readExceptionTable(
@@ -176,19 +201,22 @@ public final class ClassFileReader {
         return List.copyOf(result);
     }
 
-    private static List<BootstrapMethod> readClassAttributes(final ClassByteCursor in, final ConstantPool constantPool) throws IOException {
+    private static ClassAttributes readClassAttributes(final ClassByteCursor in, final ConstantPool constantPool) throws IOException {
         final int count = in.u2();
         final List<BootstrapMethod> bootstrapMethods = new ArrayList<>();
+        Optional<String> sourceFile = Optional.empty();
         for (int index = 0; index < count; index++) {
             final String attributeName = constantPool.utf8(in.u2());
             final long length = in.u4();
             if ("BootstrapMethods".equals(attributeName)) {
                 bootstrapMethods.addAll(readBootstrapMethods(in));
+            } else if ("SourceFile".equals(attributeName)) {
+                sourceFile = Optional.of(constantPool.utf8(in.u2()));
             } else {
                 in.skip(length);
             }
         }
-        return List.copyOf(bootstrapMethods);
+        return new ClassAttributes(List.copyOf(bootstrapMethods), sourceFile);
     }
 
     private static List<BootstrapMethod> readBootstrapMethods(final ClassByteCursor in) throws IOException {
@@ -224,10 +252,14 @@ public final class ClassFileReader {
                 code.bytecode(),
                 code.exceptionTableLength(),
                 code.exceptionTable(),
+                code.lineNumbers(),
                 decode(code.bytecode(), constantPool, bootstrapMethods)
             ))));
         }
         return List.copyOf(result);
+    }
+
+    private record ClassAttributes(List<BootstrapMethod> bootstrapMethods, Optional<String> sourceFile) {
     }
 
     private static void skipAttributes(final ClassByteCursor in) throws IOException {

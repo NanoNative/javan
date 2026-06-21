@@ -16,7 +16,9 @@ import java.util.Map;
  * Writes deterministic native library build reports.
  */
 public final class LibraryBuildReports {
-    private static final int ABI_VERSION = 1;
+    private static final int ABI_VERSION = 2;
+    private static final String ERROR_RESULT_ABI =
+        "abi-v2-c-owned-javanresult-try-wrappers-v1-direct-exports-compatible";
 
     /**
      * Writes library build metrics.
@@ -53,10 +55,10 @@ public final class LibraryBuildReports {
         final List<String> runtimeModules = runtimeModules(callGraph);
         final String json = "{\n"
             + "  \"abiVersion\": " + ABI_VERSION + ",\n"
-            + "  \"stringOwnership\": \"input-borrowed-utf8-output-javan-owned-free-with-javan_free\",\n"
-            + "  \"byteArrayOwnership\": \"input-copied-output-javan-owned-data-free-with-javan_free\",\n"
-            + "  \"errorResultAbi\": \"not-yet-stable-panics-abort-current-call\",\n"
-            + "  \"exceptionMapping\": \"uncaught-native-panic-limited-same-method-catch\",\n"
+            + "  \"stringOwnership\": \"input-copied-gc-managed-utf8-output-javan-owned-free-with-javan_free\",\n"
+            + "  \"byteArrayOwnership\": \"input-copied-gc-managed-output-javan-owned-data-free-with-javan_free\",\n"
+            + "  \"errorResultAbi\": \"" + ERROR_RESULT_ABI + "\",\n"
+            + "  \"exceptionMapping\": \"caught-runtime-panic-to-last-error-limited-same-method-catch\",\n"
             + "  \"threadRuntimeRules\": \"single-threaded-native-profile-no-thread-api-yet\",\n"
             + "  \"generatedAbiTests\": \"c-header-compile-test\",\n"
             + "  \"inputClasses\": " + inputClasses + ",\n"
@@ -72,10 +74,10 @@ public final class LibraryBuildReports {
             + "}\n";
         final String markdown = "# Library Build Metrics\n\n"
             + "- ABI version: `" + ABI_VERSION + "`\n"
-            + "- string ownership: `input-borrowed-utf8-output-javan-owned-free-with-javan_free`\n"
-            + "- byte[] ownership: `input-copied-output-javan-owned-data-free-with-javan_free`\n"
-            + "- error/result ABI: `not-yet-stable-panics-abort-current-call`\n"
-            + "- exception mapping: `uncaught-native-panic-limited-same-method-catch`\n"
+            + "- string ownership: `input-copied-gc-managed-utf8-output-javan-owned-free-with-javan_free`\n"
+            + "- byte[] ownership: `input-copied-gc-managed-output-javan-owned-data-free-with-javan_free`\n"
+            + "- error/result ABI: `" + ERROR_RESULT_ABI + "`\n"
+            + "- exception mapping: `caught-runtime-panic-to-last-error-limited-same-method-catch`\n"
             + "- thread/runtime rules: `single-threaded-native-profile-no-thread-api-yet`\n"
             + "- generated ABI tests: `c-header-compile-test`\n"
             + "- input classes: `" + inputClasses + "`\n"

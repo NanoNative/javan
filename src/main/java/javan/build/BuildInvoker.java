@@ -49,21 +49,22 @@ public final class BuildInvoker {
      * @throws InterruptedException when interrupted while waiting for a build tool
      */
     public ProjectLayout ensureClasses(final ProjectLayout layout, final Options options) throws IOException, InterruptedException {
-        Files.createDirectories(layout.outputDirectory());
-        if (layout.inputKind() == InputKind.JAR_FILE || layout.buildTool() == BuildTool.CLASSES) {
-            return classpathResolver.resolve(layout);
+        final ProjectLayout declared = classpathResolver.resolveDeclaredDependencies(layout);
+        Files.createDirectories(declared.outputDirectory());
+        if (declared.inputKind() == InputKind.JAR_FILE || declared.buildTool() == BuildTool.CLASSES) {
+            return classpathResolver.resolve(declared);
         }
-        if (layout.buildTool() == BuildTool.MAVEN) {
-            return buildMaven(layout);
+        if (declared.buildTool() == BuildTool.MAVEN) {
+            return buildMaven(declared);
         }
-        if (layout.buildTool() == BuildTool.GRADLE) {
-            return buildGradle(layout);
+        if (declared.buildTool() == BuildTool.GRADLE) {
+            return buildGradle(declared);
         }
-        if (layout.buildTool() == BuildTool.JAVAC || layout.buildTool() == BuildTool.NONE) {
-            return buildPlainJavac(layout);
+        if (declared.buildTool() == BuildTool.JAVAC || declared.buildTool() == BuildTool.NONE) {
+            return buildPlainJavac(declared);
         }
-        if (layout.buildTool() == BuildTool.JAR || layout.buildTool() == BuildTool.CLASSES) {
-            return classpathResolver.resolve(layout);
+        if (declared.buildTool() == BuildTool.JAR || declared.buildTool() == BuildTool.CLASSES) {
+            return classpathResolver.resolve(declared);
         }
         throw new IllegalStateException("Unsupported build tool");
     }

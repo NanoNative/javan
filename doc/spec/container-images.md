@@ -1,7 +1,7 @@
 # Container Images
 
-Status: post-release image pipeline implemented; remote GHCR publish still needs one
-successful release-triggered run.
+Status: post-release image pipeline implemented locally; remote GHCR publish is
+unverified until one successful release-triggered run publishes the images.
 
 ## Goal
 
@@ -57,6 +57,13 @@ be manually replayed with an existing release tag.
 5. Runs `javan --version` during each image build.
 6. Pushes multi-platform manifests to GHCR.
 7. Verifies every pushed tag contains `linux/amd64` and `linux/arm64`.
+8. Reuses `.github/scripts/verify-showcase.sh` with `JAVAN_IMAGE` set to the default
+   Wolfi image, builds `example` from compiled classes, and runs the
+   produced native binary inside the image.
+
+Distroless and scratch images remain version-smoke images until they include or can
+locate a native linker. The showcase build is deliberately tied to the default image
+because that is the image that contains the C toolchain today.
 
 ## Scratch Honesty
 

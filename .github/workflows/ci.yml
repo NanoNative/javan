@@ -5,18 +5,20 @@ on:
   push:
     branches:
       - main
-      - 'workflow/**'
-      - 'release/**'
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     name: verify (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -41,6 +43,20 @@ jobs:
           distribution: temurin
           cache: maven
 
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.4'
+          cache: false
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@1.96.0
+
+      - name: Verify binding toolchains
+        run: |
+          go version
+          rustc --version
+
       - name: Install Linux native toolchain
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y build-essential
@@ -57,5 +73,5 @@ jobs:
       - name: Verify sanitizer smoke
         run: JAVAN_SANITIZER_REQUIRED=true sh .github/scripts/sanitizer-suite.sh
 
-      - name: Verify self-host jar path
-        run: java -cp target/classes javan.Main build target/classes --main javan.Main --jar --output javan
+      - name: Verify self-host package smoke
+        run: JAVAN_PACKAGE_TARGET='${{ matrix.target }}' sh .github/scripts/verify-ci-package-smoke.sh

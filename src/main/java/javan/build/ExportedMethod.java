@@ -29,6 +29,19 @@ public record ExportedMethod(
     }
 
     /**
+     * Returns the ABI v2 result-wrapper symbol.
+     *
+     * @return try wrapper symbol
+     */
+    public String trySymbol() {
+        final String prefix = "javan_export_";
+        if (symbol.startsWith(prefix)) {
+            return "javan_try_" + symbol.substring(prefix.length());
+        }
+        return "javan_try_" + symbol;
+    }
+
+    /**
      * Returns the display name used in diagnostics.
      *
      * @return display name

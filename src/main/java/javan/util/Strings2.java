@@ -205,6 +205,23 @@ public final class Strings2 {
         return left.length() - right.length();
     }
 
+    /**
+     * Returns true when the value can be represented by the current native string subset.
+     *
+     * @param value input value
+     * @return true when every character is non-NUL ASCII
+     */
+    public static boolean isRuntimeAsciiStringConstant(final String value) {
+        Objects.requireNonNull(value, "value");
+        for (int index = 0; index < value.length(); index++) {
+            final char current = value.charAt(index);
+            if (current == '\0' || current > 0x7F) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private static char asciiLower(final char value) {
         if (value >= 'A' && value <= 'Z') {
             return (char) (value + ('a' - 'A'));

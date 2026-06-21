@@ -85,7 +85,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.release == 'true'
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -105,6 +105,20 @@ jobs:
           java-version: '25'
           distribution: temurin
           cache: maven
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.4'
+          cache: false
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@1.96.0
+
+      - name: Verify binding toolchains
+        run: |
+          go version
+          rustc --version
 
       - name: Install Linux native toolchain
         run: sudo apt-get update && sudo apt-get install -y build-essential
@@ -149,7 +163,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.release == 'true'
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -169,6 +183,20 @@ jobs:
           java-version: '25'
           distribution: temurin
           cache: maven
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.4'
+          cache: false
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@1.96.0
+
+      - name: Verify binding toolchains
+        run: |
+          go version
+          rustc --version
 
       - name: Set release version
         shell: sh

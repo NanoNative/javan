@@ -2,6 +2,7 @@
 set -eu
 
 ARCHIVE=${1:-}
+REPO_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 if [ -z "$ARCHIVE" ] || [ ! -f "$ARCHIVE" ]; then
   printf '%s\n' "Usage: .github/scripts/verify-package.sh dist/release/javan-<version>-<os>-<arch>.tar.gz" >&2
   exit 2
@@ -66,5 +67,6 @@ fi
 "$ROOT/bin/javan" --version | grep -F "javan $VERSION" >/dev/null
 "$ROOT/bin/javan" --help | grep -F "javan $VERSION" >/dev/null
 "$ROOT/bin/javan" --help >/dev/null
+JAVAN_BIN=$ROOT/bin/javan sh "$REPO_ROOT/.github/scripts/verify-showcase.sh" >/dev/null
 
 printf '%s\n' "Verified package $ARCHIVE"

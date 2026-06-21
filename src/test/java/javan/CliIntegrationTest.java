@@ -4,8 +4,10 @@ import javan.cli.Cli;
 import javan.cli.Version;
 import javan.reporting.RuntimeFootprintReports;
 import javan.util.Files2;
+import javan.util.Json;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.Execution;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -23,38 +25,26 @@ import java.util.jar.JarFile;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
+import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 
+@Execution(CONCURRENT)
 final class CliIntegrationTest {
     @TempDir
     private Path tempDir;
 
     @Test
-    void helpPrintsUsage() {
-        final CliRun run = run(tempDir, "--help");
+    void mainPrintsVersionFromChildJvm() throws Exception {
+        final Path root = Path.of("").toAbsolutePath();
+        final Path classes = root.resolve("target/classes");
+        assertThat(classes.resolve("javan/Main.class")).exists();
 
-        assertThat(run.exitCode()).isZero();
-        assertThat(run.stdout()).contains("javan " + Version.number());
-        assertThat(run.stdout()).contains(
-            "javan --version",
-            "javan inspect",
-            "javan check",
-            "javan test",
-            "javan build",
-            "javan report",
-            "--jar",
-            "--library",
-            "--format <formats>",
-            "--kind <kind>",
-            "--profile <profile>",
-            "core, service, library, or strict"
-        );
-        assertThat(run.stdout()).doesNotContain("--no-build");
-        assertThat(run.stderr()).isEmpty();
-    }
-
-    @Test
-    void versionPrintsProjectVersion() {
-        final CliRun run = run(tempDir, "--version");
+        final ProcessResult run = process(root, List.of(
+            "java",
+            "-cp",
+            classes.toString(),
+            "javan.Main",
+            "--version"
+        ));
 
         assertThat(run.exitCode()).isZero();
         assertThat(run.stdout()).isEqualTo("javan " + Version.number() + "\n");
@@ -62,71 +52,57 @@ final class CliIntegrationTest {
     }
 
     @Test
-    void helpListsToolchainListCommand() {
-        final CliRun run = run(tempDir, "--help");
+    void mainUnknownOptionFailsAtProcessBoundary() throws Exception {
+        final Path root = Path.of("").toAbsolutePath();
+        final Path classes = root.resolve("target/classes");
+        assertThat(classes.resolve("javan/Main.class")).exists();
 
-        assertThat(run.stdout()).contains("javan toolchain list");
+        final ProcessResult run = process(root, List.of(
+            "java",
+            "-cp",
+            classes.toString(),
+            "javan.Main",
+            "check",
+            "--wat"
+        ));
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stdout()).isEmpty();
+        assertThat(run.stderr()).contains("error[JAVAN900]: Unknown option: --wat");
+        assertThat(run.stderr()).doesNotContain("Exception", "at javan.");
     }
 
     @Test
-    void helpMentionsJavacWrapper() {
-        final CliRun run = run(tempDir, "--help");
+    void mainUsesProcessWorkingDirectoryForRelativeTarget() throws Exception {
+        final Path root = Path.of("").toAbsolutePath();
+        final Path classes = root.resolve("target/classes");
+        final Path project = project("main-child-cwd");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
 
-        assertThat(run.stdout()).contains("javan javac [javac args...]");
-    }
+            public final class Main {
+                private Main() {
+                }
 
-    @Test
-    void javacVersionDelegatesToJavac() {
-        final ProcessResult javac = process(tempDir, List.of("javac", "-version"));
-
-        final CliRun run = run(tempDir, "javac", "-version");
-
-        assertThat(run.exitCode()).isEqualTo(javac.exitCode());
-        assertThat(run.stdout()).isEqualTo(javac.stdout());
-        assertThat(run.stderr()).isEqualTo(javac.stderr());
-    }
-
-    @Test
-    void javacReleaseCompilesSourceIntoCurrentDirectory() throws Exception {
-        final Path source = tempDir.resolve("JavacWrapperSmoke.java");
-        Files.writeString(source, """
-            public final class JavacWrapperSmoke {
-                private JavacWrapperSmoke() {
+                public static void main(final String[] args) {
+                    System.out.println("cwd");
                 }
             }
             """);
-
-        final CliRun run = run(tempDir, "javac", "--release", "25", source.getFileName().toString());
-
-        assertThat(run.exitCode()).isZero();
-        assertThat(tempDir.resolve("JavacWrapperSmoke.class")).exists();
-    }
-
-    @Test
-    void selfHostNativeCheckPassesCurrentClasses() throws Exception {
-        final Path classes = Path.of("").toAbsolutePath().resolve("target/classes");
         assertThat(classes.resolve("javan/Main.class")).exists();
-        Files2.deleteRecursive(classes.resolve(".javan"));
 
-        final CliRun run = run(classes, "check", classes.toString(), "--main", "javan.Main");
+        final ProcessResult run = process(project, List.of(
+            "java",
+            "-cp",
+            classes.toString(),
+            "javan.Main",
+            "inspect",
+            "."
+        ));
 
         assertThat(run.exitCode()).isZero();
         assertThat(run.stderr()).isEmpty();
-        assertThat(classes.resolve(".javan")).doesNotExist();
-        assertThat(run.stdout()).contains("Checking static Java profile", "reachable classes:", "diagnostics:");
-        assertThat(run.stdout()).contains("Warnings:", "warning[JAVAN130] unsupported bytecode in unreachable code:");
-        assertThat(Files.readString(classes.getParent().resolve(".javan/reports/diagnostics.txt")))
-            .doesNotContain(
-                "java/util/List.stream()Ljava/util/stream/Stream;",
-                "java/util/regex/Pattern.compile(Ljava/lang/String;)Ljava/util/regex/Pattern;",
-                "error[JAVAN",
-                "java/util/List.add(Ljava/lang/Object;)Z",
-                "java/util/List.of()Ljava/util/List;"
-            )
-            .doesNotContain("JAVAN015")
-            .doesNotContain("JAVAN011")
-            .doesNotContain("JAVAN012")
-            .doesNotContain("javan/build/BuildInvoker.<init>()V");
+        assertThat(project.resolve(".javan/reports/project.json")).exists();
     }
 
     @Test
@@ -153,81 +129,27 @@ final class CliIntegrationTest {
     }
 
     @Test
-    void reportWritesAndPrintsUnifiedSummary() throws Exception {
-        final Path project = project("report-writes");
-        final Path reports = project.resolve(".javan/reports");
-        Files.createDirectories(reports);
-        Files.writeString(reports.resolve("project.json"), """
-            {
-              "buildTool": "JAVAC",
-              "profile": "service",
-              "sourceFolders": ["src/main/java"],
-              "resourceFolders": [],
-              "classFolders": [".javan/classes"],
-              "classpathEntries": [],
-              "warnings": []
-            }
-            """, StandardCharsets.UTF_8);
+    void inspectPrintsMultipleExplicitClassFoldersInOrder() throws Exception {
+        final Path project = project("inspect-class-folders");
+        final Path firstClasses = project.resolve("first-classes");
+        final Path secondClasses = project.resolve("second-classes");
+        Files.createDirectories(firstClasses);
+        Files.createDirectories(secondClasses);
 
-        final CliRun run = run(tempDir, "report", project.toString());
+        final CliRun run = run(
+            tempDir,
+            "inspect",
+            project.toString(),
+            "--classes",
+            firstClasses.toString(),
+            "--classes",
+            secondClasses.toString()
+        );
 
         assertThat(run.exitCode()).isZero();
         assertThat(run.stderr()).isEmpty();
-        assertThat(run.stdout()).isEqualTo(Files.readString(reports.resolve("report.md")));
-        assertThat(reports.resolve("report.json")).exists();
-    }
-
-    @Test
-    void reportCountsExistingDiagnosticsFile() throws Exception {
-        final Path project = project("report-diagnostics");
-        final Path reports = project.resolve(".javan/reports");
-        Files.createDirectories(reports);
-        Files.writeString(reports.resolve("diagnostics.txt"), """
-            error[JAVAN031]: unsupported API
-
-            warning[JAVAN145]: unreachable bytecode
-            """, StandardCharsets.UTF_8);
-
-        final CliRun run = run(tempDir, "report", project.toString());
-
-        assertThat(run.exitCode()).isZero();
-        assertThat(Files.readString(reports.resolve("report.json")))
-            .contains("\"diagnostics\": 2", "\"errors\": 1", "\"warnings\": 1");
-    }
-
-    @Test
-    void reportMarksMissingFamiliesAbsent() throws Exception {
-        final Path project = project("report-missing");
-        final Path reports = project.resolve(".javan/reports");
-        Files.createDirectories(reports);
-        Files.writeString(reports.resolve("project.json"), """
-            {
-              "buildTool": "JAVAC",
-              "profile": "core",
-              "sourceFolders": [],
-              "resourceFolders": [],
-              "classFolders": [],
-              "classpathEntries": [],
-              "warnings": []
-            }
-            """, StandardCharsets.UTF_8);
-
-        final CliRun run = run(tempDir, "report", project.toString());
-
-        assertThat(run.exitCode()).isZero();
-        assertThat(Files.readString(reports.resolve("report.json")))
-            .contains("{\"name\": \"diagnostics\", \"status\": \"absent\"");
-    }
-
-    @Test
-    void reportFailsWhenReportsDirectoryIsMissing() throws Exception {
-        final Path project = project("report-empty");
-
-        final CliRun run = run(tempDir, "report", project.toString());
-
-        assertThat(run.exitCode()).isEqualTo(2);
-        assertThat(run.stdout()).isEmpty();
-        assertThat(run.stderr()).contains("No .javan/reports directory");
+        assertThat(run.stdout()).contains("Classes: [" + firstClasses.toAbsolutePath().normalize() + ", "
+            + secondClasses.toAbsolutePath().normalize() + "]");
     }
 
     @Test
@@ -265,6 +187,12 @@ final class CliIntegrationTest {
         assertThat(project.resolve(".javan/reports/optimizations.md")).exists();
         assertThat(project.resolve(".javan/reports/intrinsics.json")).exists();
         assertThat(project.resolve(".javan/reports/intrinsics.md")).exists();
+        assertThat(Files.readString(project.resolve(".javan/reports/report.json"))).contains(
+            "{\"name\": \"project\", \"status\": \"present\"",
+            "{\"name\": \"runtime-features\", \"status\": \"present\"",
+            "{\"name\": \"intrinsics\", \"status\": \"present\"",
+            "{\"name\": \"optimizations\", \"status\": \"present\""
+        );
         assertThat(Files.readString(project.resolve(".javan/reports/intrinsics.json")))
             .contains(
                 "{\"name\": \"Objects.requireNonNull\", \"count\": 1}",
@@ -320,6 +248,1153 @@ final class CliIntegrationTest {
         assertThat(Files.readString(project.resolve(".javan/reports/runtime-features.json"))).contains(
             "\"disabledReachableRuntimeModules\": [\"time\"]",
             "\"status\": \"fail\""
+        );
+    }
+
+    @Test
+    void buildRejectsReachableDisabledFilesystemRuntimeModule() throws Exception {
+        assertBuildRejectsDisabledRuntimeModule("disabled-filesystem-build", "filesystem", """
+            package com.acme;
+
+            import java.nio.file.Files;
+            import java.nio.file.Path;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    System.out.println(Files.readString(Path.of("message.txt")));
+                }
+            }
+            """);
+    }
+
+    @Test
+    void buildRejectsReachableDisabledCollectionsRuntimeModule() throws Exception {
+        assertBuildRejectsDisabledRuntimeModule("disabled-collections-build", "collections", """
+            package com.acme;
+
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<String> values = List.of("a", "b");
+                    System.out.println(values.size());
+                }
+            }
+            """);
+    }
+
+    @Test
+    void buildRejectsReachableDisabledMapsRuntimeModule() throws Exception {
+        assertBuildRejectsDisabledRuntimeModule("disabled-maps-build", "maps", """
+            package com.acme;
+
+            import java.util.HashMap;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final HashMap<String, String> values = new HashMap<>();
+                    values.put("key", "value");
+                }
+            }
+            """);
+    }
+
+    @Test
+    void buildRejectsReachableDisabledOptionalRuntimeModule() throws Exception {
+        assertBuildRejectsDisabledRuntimeModule("disabled-optional-build", "optional", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    Optional.of("value").isPresent();
+                }
+            }
+            """);
+    }
+
+    @Test
+    void buildRejectsReachableDisabledEnvironmentRuntimeModule() throws Exception {
+        assertBuildRejectsDisabledRuntimeModule("disabled-environment-build", "environment", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.getProperty("java.version");
+                }
+            }
+            """);
+    }
+
+    @Test
+    void buildRejectsReachableDisabledArraysRuntimeModule() throws Exception {
+        assertBuildRejectsDisabledRuntimeModule("disabled-arrays-build", "arrays", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final int[] source = new int[] {1};
+                    final int[] target = new int[1];
+                    System.arraycopy(source, 0, target, 0, 1);
+                }
+            }
+            """);
+    }
+
+    @Test
+    void buildRejectsReachableDisabledStringsRuntimeModule() throws Exception {
+        assertBuildRejectsDisabledRuntimeModule("disabled-strings-build", "strings", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    "value".length();
+                }
+            }
+            """);
+    }
+
+    @Test
+    void buildRejectsReachableDisabledMathRuntimeModule() throws Exception {
+        assertBuildRejectsDisabledRuntimeModule("disabled-math-build", "math", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    Math.abs(args.length - 1);
+                }
+            }
+            """);
+    }
+
+    @Test
+    void buildRejectsReachableDisabledIoRuntimeModule() throws Exception {
+        assertBuildRejectsDisabledRuntimeModule("disabled-io-build", "io", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("value");
+                }
+            }
+            """);
+    }
+
+    @Test
+    void buildRejectsReachableDisabledExceptionsRuntimeModule() throws Exception {
+        assertBuildRejectsDisabledRuntimeModule("disabled-exceptions-build", "exceptions", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    new IllegalStateException("value").getMessage();
+                }
+            }
+            """);
+    }
+
+    @Test
+    void buildRejectsReachableDisabledManagedHeapRuntimeModule() throws Exception {
+        assertBuildRejectsDisabledRuntimeModule("disabled-managed-heap-build", "managed-heap", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    Integer.valueOf(args.length).intValue();
+                }
+            }
+            """);
+    }
+
+    @Test
+    void buildRejectsReachableDisabledProcessRuntimeModule() throws Exception {
+        assertBuildRejectsDisabledRuntimeModule("disabled-process-build", "process", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.exit(0);
+                }
+            }
+            """);
+    }
+
+    @Test
+    void buildRejectsReachableDisabledDurationTimeRuntimeModule() throws Exception {
+        assertBuildRejectsDisabledRuntimeModule("disabled-duration-time-build", "time", """
+            package com.acme;
+
+            import java.time.Duration;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Duration.ofMillis(args.length).toMillis());
+                }
+            }
+            """);
+    }
+
+    @Test
+    void buildRejectsReachableDisabledFileTimeTimeRuntimeModule() throws Exception {
+        assertBuildRejectsDisabledRuntimeModule("disabled-file-time-build", "time", """
+            package com.acme;
+
+            import java.nio.file.Files;
+            import java.nio.file.Path;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    System.out.println(Files.getLastModifiedTime(Path.of("message.txt")).toMillis());
+                }
+            }
+            """);
+    }
+
+    @Test
+    void buildRejectsReachableDisabledThreadsRuntimeModule() throws Exception {
+        assertBuildRejectsDisabledRuntimeModule("disabled-threads-build", "threads", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+            """);
+    }
+
+    @Test
+    void socketConnectStateBuildsAndTalksToLoopbackServer() throws Exception {
+        final int port = freeTcpPort();
+        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
+                try (java.net.Socket socket = server.accept()) {
+                    socket.getOutputStream().flush();
+                } catch (final Exception exception) {
+                    throw new IllegalStateException(exception);
+                }
+            });
+            final Path project = project("socket-connect-state");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.net.Socket;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final Socket socket = new Socket("127.0.0.1", %d);
+                        System.out.println(socket.isConnected());
+                        System.out.println(socket.getPort());
+                        System.out.println(socket.getInetAddress().getHostAddress());
+                        System.out.println(socket.isClosed());
+                        socket.close();
+                        System.out.println(socket.isClosed());
+                    }
+                }
+                """.formatted(port));
+
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            assertThat(process(project, List.of(project.resolve(".javan/bin/socket-connect-state").toString())).stdout())
+                .isEqualTo("true\n" + port + "\n127.0.0.1\nfalse\ntrue\n");
+            accepted.get(5, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
+    void serverSocketAcceptBuildsAndAcceptsLoopbackClient() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("server-socket-accept");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.ServerSocket;
+            import java.net.Socket;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ServerSocket server = new ServerSocket(%d);
+                    System.out.println(server.getLocalPort());
+                    final Socket accepted = server.accept();
+                    System.out.println(accepted.isConnected());
+                    System.out.println(accepted.getInetAddress().getHostAddress());
+                    accepted.close();
+                    System.out.println(accepted.isClosed());
+                    server.close();
+                }
+            }
+            """.formatted(port));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Process process = new ProcessBuilder(project.resolve(".javan/bin/server-socket-accept").toString())
+            .directory(project.toFile())
+            .start();
+        final CompletableFuture<String> stdout = CompletableFuture.supplyAsync(() -> readStream(process.getInputStream()));
+        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
+        connectLoopback(port);
+        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
+        assertThat(process.exitValue()).isZero();
+        assertThat(stdout.join()).isEqualTo(port + "\ntrue\n127.0.0.1\ntrue\n");
+        assertThat(stderr.join()).isEmpty();
+    }
+
+    @Test
+    void socketInputStreamReadByteBuildsAndReadsFromLoopbackServer() throws Exception {
+        final int port = freeTcpPort();
+        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final CompletableFuture<Void> served = CompletableFuture.runAsync(() -> {
+                try (java.net.Socket socket = server.accept()) {
+                    socket.getOutputStream().write(65);
+                    socket.getOutputStream().flush();
+                } catch (final Exception exception) {
+                    throw new IllegalStateException(exception);
+                }
+            });
+            final Path project = project("socket-input-stream-read-byte");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.io.InputStream;
+                import java.net.Socket;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final Socket socket = new Socket("127.0.0.1", %d);
+                        final InputStream in = socket.getInputStream();
+                        System.out.println(in.read());
+                        socket.close();
+                    }
+                }
+                """.formatted(port));
+
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            assertThat(process(project, List.of(project.resolve(".javan/bin/socket-input-stream-read-byte").toString())).stdout())
+                .isEqualTo("65\n");
+            served.get(5, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
+    void socketOutputStreamWriteBytesBuildsAndWritesToLoopbackServer() throws Exception {
+        final int port = freeTcpPort();
+        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final CompletableFuture<String> served = CompletableFuture.supplyAsync(() -> {
+                try (java.net.Socket socket = server.accept()) {
+                    return new String(socket.getInputStream().readNBytes(3), StandardCharsets.UTF_8);
+                } catch (final Exception exception) {
+                    throw new IllegalStateException(exception);
+                }
+            });
+            final Path project = project("socket-output-stream-write-bytes");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.io.OutputStream;
+                import java.net.Socket;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final Socket socket = new Socket("127.0.0.1", %d);
+                        final OutputStream out = socket.getOutputStream();
+                        out.write(new byte[] {97, 98, 99});
+                        out.flush();
+                        socket.close();
+                    }
+                }
+                """.formatted(port));
+
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/socket-output-stream-write-bytes").toString()));
+            assertThat(nativeRun.exitCode()).isZero();
+            assertThat(nativeRun.stdout()).isEmpty();
+            assertThat(served.get(5, TimeUnit.SECONDS)).isEqualTo("abc");
+        }
+    }
+
+    @Test
+    void acceptedSocketInputStreamReadByteBuildsAndReadsFromLoopbackClient() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("accepted-socket-input-stream-read-byte");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.io.InputStream;
+            import java.net.ServerSocket;
+            import java.net.Socket;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ServerSocket server = new ServerSocket(%d);
+                    final Socket accepted = server.accept();
+                    final InputStream in = accepted.getInputStream();
+                    System.out.println(in.read());
+                    accepted.close();
+                    server.close();
+                }
+            }
+            """.formatted(port));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Process process = new ProcessBuilder(project.resolve(".javan/bin/accepted-socket-input-stream-read-byte").toString())
+            .directory(project.toFile())
+            .start();
+        final CompletableFuture<String> stdout = CompletableFuture.supplyAsync(() -> readStream(process.getInputStream()));
+        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
+        writeLoopbackBytes(port, new byte[] {90});
+        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
+        assertThat(process.exitValue()).isZero();
+        assertThat(stdout.join()).isEqualTo("90\n");
+        assertThat(stderr.join()).isEmpty();
+    }
+
+    @Test
+    void buildRejectsNonSocketInputStreamRead() throws Exception {
+        final Path project = project("non-socket-input-stream-read");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.io.InputStream;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final InputStream in = null;
+                    System.out.println(in.read());
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isNotZero();
+        assertThat(run.stderr()).contains("error[JAVAN062]", "supported stream call requires a socket-derived stream");
+    }
+
+    @Test
+    void httpClientGetStringBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
+            new java.net.InetSocketAddress("127.0.0.1", port),
+            0
+        );
+        server.createContext("/hello", exchange -> {
+            final byte[] body = "pong".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, body.length);
+            try (java.io.OutputStream out = exchange.getResponseBody()) {
+                out.write(body);
+            } finally {
+                exchange.close();
+            }
+        });
+        server.start();
+        try {
+            final Path project = project("http-client-get-string");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.net.URI;
+                import java.net.http.HttpClient;
+                import java.net.http.HttpRequest;
+                import java.net.http.HttpResponse;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final HttpClient client = HttpClient.newHttpClient();
+                        final HttpRequest request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:%d/hello")).GET().build();
+                        final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+                        System.out.println(response.statusCode());
+                        System.out.println(response.body());
+                    }
+                }
+                """.formatted(port));
+
+            final String jvmOutput = runJvm(project, "com.acme.Main");
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            assertThat(process(project, List.of(project.resolve(".javan/bin/http-client-get-string").toString())).stdout()).isEqualTo(jvmOutput);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void httpClientPostStringAndReadByteArrayBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
+            new java.net.InetSocketAddress("127.0.0.1", port),
+            0
+        );
+        server.createContext("/upload", exchange -> {
+            try {
+                final byte[] requestBody = exchange.getRequestBody().readAllBytes();
+                final String contentType = exchange.getRequestHeaders().getFirst("Content-Type");
+                final String requestText = new String(requestBody, StandardCharsets.UTF_8);
+                final byte[] body;
+                final int status;
+                if ("text/plain".equals(contentType) && "hello".equals(requestText)) {
+                    body = new byte[] {1, 0, 2, 3};
+                    status = 201;
+                } else {
+                    body = new byte[] {9};
+                    status = 400;
+                }
+                exchange.sendResponseHeaders(status, body.length);
+                try (java.io.OutputStream out = exchange.getResponseBody()) {
+                    out.write(body);
+                }
+            } finally {
+                exchange.close();
+            }
+        });
+        server.start();
+        try {
+            final Path project = project("http-client-post-string-byte-array");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.net.URI;
+                import java.net.http.HttpClient;
+                import java.net.http.HttpRequest;
+                import java.net.http.HttpResponse;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final HttpClient client = HttpClient.newHttpClient();
+                        final HttpRequest request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:%d/upload"))
+                            .header("Content-Type", "text/plain")
+                            .POST(HttpRequest.BodyPublishers.ofString("hello"))
+                            .build();
+                        final HttpResponse<byte[]> response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
+                        System.out.println(response.statusCode());
+                        System.out.println(response.body().length);
+                        System.out.println(response.body()[0]);
+                        System.out.println(response.body()[1]);
+                        System.out.println(response.body()[2]);
+                        System.out.println(response.body()[3]);
+                    }
+                }
+                """.formatted(port));
+
+            final String jvmOutput = runJvm(project, "com.acme.Main");
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            assertThat(process(project, List.of(project.resolve(".javan/bin/http-client-post-string-byte-array").toString())).stdout()).isEqualTo(jvmOutput);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void httpClientPutByteArrayAndReadByteArrayBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
+            new java.net.InetSocketAddress("127.0.0.1", port),
+            0
+        );
+        server.createContext("/blob", exchange -> {
+            try {
+                final byte[] requestBody = exchange.getRequestBody().readAllBytes();
+                final String contentType = exchange.getRequestHeaders().getFirst("Content-Type");
+                final byte[] body;
+                final int status;
+                if ("PUT".equals(exchange.getRequestMethod())
+                    && "application/octet-stream".equals(contentType)
+                    && java.util.Arrays.equals(requestBody, new byte[] {4, 5, 6})) {
+                    body = new byte[] {6, 5, 4};
+                    status = 202;
+                } else {
+                    body = new byte[] {0};
+                    status = 400;
+                }
+                exchange.sendResponseHeaders(status, body.length);
+                try (java.io.OutputStream out = exchange.getResponseBody()) {
+                    out.write(body);
+                }
+            } finally {
+                exchange.close();
+            }
+        });
+        server.start();
+        try {
+            final Path project = project("http-client-put-byte-array");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.net.URI;
+                import java.net.http.HttpClient;
+                import java.net.http.HttpRequest;
+                import java.net.http.HttpResponse;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final HttpClient client = HttpClient.newHttpClient();
+                        final HttpRequest request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:%d/blob"))
+                            .header("Content-Type", "application/octet-stream")
+                            .PUT(HttpRequest.BodyPublishers.ofByteArray(new byte[] {4, 5, 6}))
+                            .build();
+                        final HttpResponse<byte[]> response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
+                        System.out.println(response.statusCode());
+                        System.out.println(response.body().length);
+                        System.out.println(response.body()[0]);
+                        System.out.println(response.body()[1]);
+                        System.out.println(response.body()[2]);
+                    }
+                }
+                """.formatted(port));
+
+            final String jvmOutput = runJvm(project, "com.acme.Main");
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            assertThat(process(project, List.of(project.resolve(".javan/bin/http-client-put-byte-array").toString())).stdout()).isEqualTo(jvmOutput);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void inetAddressLoopbackHostAddressBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("inet-address-loopback-host-address");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.InetAddress;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(InetAddress.getLoopbackAddress().getHostAddress());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/inet-address-loopback-host-address").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void inetSocketAddressGetPortBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("inet-socket-address-get-port");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.InetSocketAddress;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new InetSocketAddress("127.0.0.1", 8080).getPort());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/inet-socket-address-get-port").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void inetSocketAddressGetHostStringBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("inet-socket-address-get-host-string");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.InetSocketAddress;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new InetSocketAddress("127.0.0.1", 8080).getHostString());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/inet-socket-address-get-host-string").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void inetSocketAddressGetAddressHostAddressBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("inet-socket-address-get-address-host-address");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.InetSocketAddress;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new InetSocketAddress("127.0.0.1", 8080).getAddress().getHostAddress());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/inet-socket-address-get-address-host-address").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void inetSocketAddressToStringFromHostBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("inet-socket-address-to-string-from-host");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.InetSocketAddress;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new InetSocketAddress("127.0.0.1", 8080).toString());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/inet-socket-address-to-string-from-host").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void inetSocketAddressToStringFromAddressBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("inet-socket-address-to-string-from-address");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.InetAddress;
+            import java.net.InetSocketAddress;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new InetSocketAddress(InetAddress.getLoopbackAddress(), 8080).toString());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/inet-socket-address-to-string-from-address").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void buildRejectsReachableDisabledSocketRuntimeModuleForInetAddressLoopback() throws Exception {
+        assertBuildRejectsDisabledRuntimeModule("disabled-socket-build", "socket", """
+            package com.acme;
+
+            import java.net.InetAddress;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(InetAddress.getLoopbackAddress().getHostAddress());
+                }
+            }
+            """);
+    }
+
+    @Test
+    void checkRejectsReachableSocketAndReportsNetworkRuntimeModules() throws Exception {
+        final Path project = project("unsupported-socket");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    new java.net.Socket();
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains("error[JAVAN061]", "java/net/Socket.<init>()V", "network/socket");
+        assertThat(Files.readString(project.resolve(".javan/reports/runtime-features.json"))).contains(
+            "\"reachableRuntimeModules\": [\"core\", \"network\", \"socket\"]",
+            "\"status\": \"pass\""
+        );
+    }
+
+    @Test
+    void checkRejectsReachableServerSocketAndReportsNetworkRuntimeModules() throws Exception {
+        final Path project = project("unsupported-server-socket");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    new java.net.ServerSocket();
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains("error[JAVAN061]", "java/net/ServerSocket.<init>()V", "network/socket");
+        assertThat(Files.readString(project.resolve(".javan/reports/runtime-features.json"))).contains(
+            "\"reachableRuntimeModules\": [\"core\", \"network\", \"socket\"]",
+            "\"status\": \"pass\""
+        );
+    }
+
+    @Test
+    void checkAcceptsReachableHttpClientAndReportsHttpRuntimeModules() throws Exception {
+        final Path project = project("http-client-runtime-modules");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.http.HttpClient;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    HttpClient.newHttpClient();
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stderr()).isEmpty();
+        assertThat(Files.readString(project.resolve(".javan/reports/runtime-features.json"))).contains(
+            "\"reachableRuntimeModules\": [\"core\", \"http\", \"network\"]",
+            "\"status\": \"pass\""
+        );
+    }
+
+    @Test
+    void checkAcceptsReachableThreadCallsAndReportsThreadRuntimeModules() throws Exception {
+        final Path project = project("thread-runtime-modules");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Thread current = Thread.currentThread();
+                    current.interrupt();
+                    System.out.println(current.isInterrupted());
+                    System.out.println(Thread.interrupted());
+                    System.out.println(current.isInterrupted());
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stderr()).isEmpty();
+        assertThat(Files.readString(project.resolve(".javan/reports/runtime-features.json"))).contains(
+            "\"reachableRuntimeModules\": [\"core\", \"io\", \"strings\", \"threads\"]",
+            "\"status\": \"pass\""
+        );
+    }
+
+    @Test
+    void checkAcceptsReachableThreadConstructionAndReportsThreadRuntimeModules() throws Exception {
+        final Path project = project("thread-construction-runtime-modules");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Thread plain = new Thread();
+                    final Thread withTarget = new Thread(new Task());
+                    System.out.println(plain != null);
+                    System.out.println(withTarget != null);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println("unused");
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stderr()).isEmpty();
+        assertThat(Files.readString(project.resolve(".javan/reports/runtime-features.json"))).contains(
+            "\"reachableRuntimeModules\": [\"core\", \"io\", \"strings\", \"threads\"]",
+            "\"status\": \"pass\""
+        );
+    }
+
+    @Test
+    void checkAcceptsReachableThreadSleepAndReportsThreadRuntimeModules() throws Exception {
+        final Path project = project("thread-sleep-runtime-modules");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    Thread.sleep(1L);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stderr()).isEmpty();
+        assertThat(Files.readString(project.resolve(".javan/reports/runtime-features.json"))).contains(
+            "\"reachableRuntimeModules\": [\"core\", \"threads\"]",
+            "\"status\": \"pass\""
+        );
+    }
+
+    @Test
+    void checkRejectsReachableThreadStartAfterConstructionSlice() throws Exception {
+        final Path project = project("thread-start-unsupported");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    new Thread().start();
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains("error[JAVAN031]", "java/lang/Thread.start()V");
+    }
+
+    @Test
+    void checkRejectsReachableThreadJoinAfterConstructionSlice() throws Exception {
+        final Path project = project("thread-join-unsupported");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    new Thread().join();
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains("error[JAVAN031]", "java/lang/Thread.join()V");
+    }
+
+    @Test
+    void checkRejectsReachableNanoStyleHttpServerDependencyAndReportsHttpRuntimeModules() throws Exception {
+        final Path project = project("unsupported-nano-http-server-dependency");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    org.nanonative.nano.services.http.HttpServer.create();
+                }
+            }
+            """);
+        writeJava(project, "org.nanonative.nano.services.http.HttpServer", """
+            package org.nanonative.nano.services.http;
+
+            public final class HttpServer {
+                private HttpServer() {
+                }
+
+                public static com.sun.net.httpserver.HttpServer create() throws java.io.IOException {
+                    return com.sun.net.httpserver.HttpServer.create(null, 0);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains(
+            "error[JAVAN061]",
+            "org/nanonative/nano/services/http/HttpServer",
+            "create()Lcom/sun/net/httpserver/HttpServer;",
+            "com/sun/net/httpserver/HttpServer.create",
+            "network/http"
+        );
+        assertThat(Files.readString(project.resolve(".javan/reports/runtime-features.json"))).contains(
+            "\"reachableRuntimeModules\": [\"core\", \"http\", \"network\"]",
+            "\"status\": \"pass\""
+        );
+    }
+
+    @Test
+    void reportShowsReachableNetworkRuntimeModuleNamesAfterUnsupportedCheck() throws Exception {
+        final Path project = project("unsupported-network-report");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    new java.net.Socket();
+                }
+            }
+            """);
+
+        final CliRun check = run(tempDir, "check", project.toString());
+        final CliRun report = run(tempDir, "report", project.toString());
+
+        assertThat(check.exitCode()).isEqualTo(2);
+        assertThat(report.exitCode()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/reports/report.md"))).contains(
+            "reachableRuntimeModuleNames: `core, network, socket`",
+            "reachableRuntimeModules: `3`"
+        );
+        assertThat(Files.readString(project.resolve(".javan/reports/report.json"))).contains(
+            "\"reachableRuntimeModuleNames\": \"core, network, socket\"",
+            "\"reachableRuntimeModules\": 3"
         );
     }
 
@@ -473,6 +1548,49 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void runStopsWhenStaticCheckFails() throws Exception {
+        final Path project = project("run-no-main");
+        writeJava(project, "com.acme.Library", """
+            package com.acme;
+
+            public final class Library {
+                private Library() {
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "run", project.toString());
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stdout()).isEmpty();
+        assertThat(run.stderr()).contains("error[JAVAN020]");
+        assertThat(project.resolve(".javan/generated")).doesNotExist();
+    }
+
+    @Test
+    void runForwardsNativeStderr() throws Exception {
+        final Path project = project("run-stderr");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.err.println("native-err");
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "run", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stdout()).contains("native-err");
+        assertThat(run.stderr()).isEmpty();
+    }
+
+    @Test
     void buildCreatesNativeExecutable() throws Exception {
         final Path project = project("hello");
         writeJava(project, "com.acme.Main", """
@@ -503,25 +1621,29 @@ final class CliIntegrationTest {
             "\"heapMetadata\": true",
             "\"heapAccounting\": true",
             "\"heapReclamation\": true",
-            "\"heapReclamationScope\": \"generated-objects-object-arrays-primitive-arrays-runtime-strings-runtime-containers-and-owned-container-storage\"",
+            "\"heapReclamationScope\": \"generated-objects-object-arrays-primitive-arrays-boxed-primitive-wrappers-runtime-strings-runtime-containers-and-owned-container-storage\"",
             "\"typeDescriptors\": true",
             "\"objectFieldDescriptors\": true",
             "\"frameRootInventory\": true",
             "\"managedHeap\": false",
             "\"gc\": \"partial-mark-sweep\"",
             "\"runtimeContainerTraversal\": \"precise-rooted-runtime-container-mark-sweep\"",
+            "\"ownedBufferReferenceValidation\": true",
+            "\"ownedBufferReferenceValidationScope\": \"list-map-stringbuilder-owned-backing-storage\"",
             "\"operandCallTemporaryRoots\": true",
             "\"allocationPathCollection\": true",
             "\"allocationPathCollectionModel\": \"allocator-gc-retry-before-out-of-memory\"",
-            "\"allocationPathCollectionScope\": \"generated-objects-object-arrays-primitive-arrays-runtime-strings-runtime-containers-and-owned-container-storage\"",
+            "\"allocationPathCollectionScope\": \"generated-objects-object-arrays-primitive-arrays-boxed-primitive-wrappers-runtime-strings-runtime-containers-and-owned-container-storage\"",
             "\"allocationFailureMode\": \"deterministic-native-panic\"",
             "\"statementSafePoints\": true",
             "\"returnValueRoots\": true",
             "\"protectedObjectReturns\": true",
             "\"staticRootInventory\": true",
             "\"localRootInventory\": true",
+            "\"localRootLiveness\": true",
+            "\"localRootLivenessModel\": \"cfg-safe-point-dead-root-clearing\"",
             "\"rootModel\": \"generated-static-frame-return-and-expression-root-inventory-no-heap-scan\"",
-            "\"threads\": \"none\"",
+            "\"threads\": \"current-thread-interrupt-state-uninterrupted-sleep-and-thread-construction-only\"",
             "\"sanitizers\": \"not-enabled\""
         );
         final String footprint = Files.readString(project.resolve(".javan/reports/runtime-footprint.json"));
@@ -535,6 +1657,12 @@ final class CliIntegrationTest {
             "\"status\": \"not-implemented\"",
             "\"target\": \"linux-aarch64\"",
             "\"target\": \"macos-aarch64\""
+        );
+        assertThat(Files.readString(project.resolve(".javan/reports/report.json"))).contains(
+            "{\"name\": \"runtime\", \"status\": \"present\"",
+            "{\"name\": \"runtime-footprint\", \"status\": \"present\"",
+            "\"artifactKind\": \"app\"",
+            "\"actualTarget\": \"" + RuntimeFootprintReports.hostTarget() + "\""
         );
     }
 
@@ -642,16 +1770,31 @@ final class CliIntegrationTest {
         assertThat(project.resolve(".javan/dist/bindings/python/library_add.py")).exists();
         assertThat(project.resolve(".javan/reports/library-build.json")).exists();
         assertThat(Files.readString(header)).contains(
-            "#define JAVAN_ABI_VERSION 1",
+            "#define JAVAN_ABI_VERSION 2",
+            "#define JAVAN_ABI_V1_DIRECT_EXPORTS 1",
             "#define JAVAN_ABI_STRING_UTF8 1",
-            "#define JAVAN_ABI_BYTE_ARRAY_POINTER_LENGTH 1"
+            "#define JAVAN_ABI_BYTE_ARRAY_POINTER_LENGTH 1",
+            "#define JAVAN_ABI_RUNTIME_DIAGNOSTICS 1",
+            "#define JAVAN_ABI_STRUCTURED_ERROR 1",
+            "#define JAVAN_ABI_RESULT_WRAPPERS 1",
+            "typedef struct {",
+            "int ok;",
+            "char* message;",
+            "} JavanResult;",
+            "void javan_result_free(JavanResult* result);",
+            "const char* javan_last_error(void);",
+            "const char* javan_last_error_code(void);",
+            "int javan_last_error_line(void);",
+            "const char* javan_last_error_detail(void);",
+            "JavanResult javan_try_com_acme_Math_add_int_int(int arg0, int arg1, int* out);",
+            "void javan_clear_error(void);"
         );
         assertThat(Files.readString(project.resolve(".javan/reports/library-build.json"))).contains(
-            "\"abiVersion\": 1",
-            "\"stringOwnership\": \"input-borrowed-utf8-output-javan-owned-free-with-javan_free\"",
-            "\"byteArrayOwnership\": \"input-copied-output-javan-owned-data-free-with-javan_free\"",
-            "\"errorResultAbi\": \"not-yet-stable-panics-abort-current-call\"",
-            "\"exceptionMapping\": \"uncaught-native-panic-limited-same-method-catch\"",
+            "\"abiVersion\": 2",
+            "\"stringOwnership\": \"input-copied-gc-managed-utf8-output-javan-owned-free-with-javan_free\"",
+            "\"byteArrayOwnership\": \"input-copied-gc-managed-output-javan-owned-data-free-with-javan_free\"",
+            "\"errorResultAbi\": \"abi-v2-c-owned-javanresult-try-wrappers-v1-direct-exports-compatible\"",
+            "\"exceptionMapping\": \"caught-runtime-panic-to-last-error-limited-same-method-catch\"",
             "\"threadRuntimeRules\": \"single-threaded-native-profile-no-thread-api-yet\"",
             "\"generatedAbiTests\": \"c-header-compile-test\""
         );
@@ -670,12 +1813,23 @@ final class CliIntegrationTest {
 
             int main(void) {
                 printf("%d\\n", javan_export_com_acme_Math_add_int_int(2, 5));
+                int result_value = 0;
+                JavanResult result = javan_try_com_acme_Math_add_int_int(2, 5, &result_value);
+                printf("try:%d:%d\\n", result.ok, result_value);
+                javan_result_free(&result);
+                JavanResult null_out = javan_try_com_acme_Math_add_int_int(2, 5, 0);
+                printf("try-null:%d:%s\\n", null_out.ok, null_out.code);
+                javan_result_free(&null_out);
                 return 0;
             }
             """);
         final Path binary = project.resolve("call-add");
         assertThat(process(project, List.of("cc", caller.toString(), library.toString(), "-o", binary.toString())).exitCode()).isZero();
-        assertThat(process(project, List.of(binary.toString())).stdout()).isEqualTo("7\n");
+        assertThat(process(project, List.of(binary.toString())).stdout()).isEqualTo("""
+            7
+            try:1:7
+            try-null:0:JAVAN-ABI-NULL-OUT
+            """);
         final Path abiTestObject = project.resolve("library-add-abi-test.o");
         assertThat(process(project, List.of("cc", "-c", cAbiTest.toString(), "-o", abiTestObject.toString())).exitCode()).isZero();
         if (commandAvailable("rustc")) {
@@ -2414,7 +3568,54 @@ final class CliIntegrationTest {
         final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/exception-panic").toString()));
         assertThat(nativeRun.exitCode()).isEqualTo(1);
         assertThat(nativeRun.stdout()).isEmpty();
-        assertThat(nativeRun.stderr()).isEqualTo("boom\n");
+        assertThat(nativeRun.stderr()).contains(
+            "[JAVAN-RUNTIME-PANIC] uncaught Java exception",
+            "Where:",
+            "com.acme.Main.main([Ljava/lang/String;)V(Main.java:",
+            "Code:",
+            "throw new IllegalStateException(\"boom\");",
+            "^ here",
+            "Why:",
+            "detail: boom",
+            "Fix:"
+        );
+        assertThat(project.resolve(".javan/reports/exceptions.json")).exists();
+        assertThat(project.resolve(".javan/reports/debug-map.json")).exists();
+    }
+
+    @Test
+    void generatedRuntimeHelperFailureBuildsAsReadableNativePanic() throws Exception {
+        final Path project = project("helper-panic");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new int[-1].length);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/helper-panic").toString()));
+        assertThat(nativeRun.exitCode()).isEqualTo(1);
+        assertThat(nativeRun.stdout()).isEmpty();
+        assertThat(nativeRun.stderr()).contains(
+            "[JAVAN-RUNTIME-PANIC] runtime helper failure",
+            "Where:",
+            "com.acme.Main.main([Ljava/lang/String;)V(Main.java:",
+            "Code:",
+            "System.out.println(new int[-1].length);",
+            "^ here",
+            "Why:",
+            "detail: negative array length",
+            "Fix:"
+        );
     }
 
     @Test
@@ -2650,7 +3851,13 @@ final class CliIntegrationTest {
         final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/exception-default-panic").toString()));
         assertThat(nativeRun.exitCode()).isEqualTo(1);
         assertThat(nativeRun.stdout()).isEmpty();
-        assertThat(nativeRun.stderr()).isEqualTo("javan panic\n");
+        assertThat(nativeRun.stderr()).contains(
+            "[JAVAN-RUNTIME-PANIC] uncaught Java exception",
+            "Where:",
+            "com.acme.Main.main([Ljava/lang/String;)V(Main.java:",
+            "detail: javan panic",
+            "Fix:"
+        );
     }
 
     @Test
@@ -3309,6 +4516,56 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void durationOfMillisToMillisBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("duration-of-millis");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.time.Duration;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Duration.ofMillis(1234L).toMillis());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/duration-of-millis").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void durationOfSecondsToMillisBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("duration-of-seconds");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.time.Duration;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Duration.ofSeconds(65L).toMillis());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/duration-of-seconds").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void fileSeparatorCharBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("file-separator-char");
         writeJava(project, "com.acme.Main", """
@@ -3481,6 +4738,58 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void stringBuilderAppendObjectBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-append-object");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder();
+                    final Object value = "object";
+                    builder.append(value);
+                    System.out.println(builder.toString());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-append-object").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("object\n");
+    }
+
+    @Test
+    void stringBuilderIsEmptyBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-is-empty");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder();
+                    System.out.println(builder.isEmpty());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-is-empty").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n");
+    }
+
+    @Test
     void stringBuilderSetLengthBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("stringbuilder-set-length");
         writeJava(project, "com.acme.Main", """
@@ -3558,6 +4867,58 @@ final class CliIntegrationTest {
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/optional-get").toString())).stdout()).isEqualTo(jvmOutput);
         assertThat(jvmOutput).isEqualTo("value\n");
+    }
+
+    @Test
+    void optionalIsPresentBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-is-present");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Optional.of("value").isPresent());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-is-present").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n");
+    }
+
+    @Test
+    void optionalIsEmptyBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-is-empty");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Optional.empty().isEmpty());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-is-empty").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n");
     }
 
     @Test
@@ -4169,6 +5530,181 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void listAddAllBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("list-add-all");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<String> values = new ArrayList<>();
+                    System.out.println(values.addAll(List.of("left", "right")));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/list-add-all").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n");
+    }
+
+    @Test
+    void listAddFirstBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("list-add-first");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<String> values = new ArrayList<>();
+                    values.add("right");
+                    values.addFirst("left");
+                    System.out.println(values.getFirst());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/list-add-first").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("left\n");
+    }
+
+    @Test
+    void listSetBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("list-set");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<String> values = new ArrayList<>();
+                    values.add("old");
+                    System.out.println(values.set(0, "new"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/list-set").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("old\n");
+    }
+
+    @Test
+    void listRemoveLastBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("list-remove-last");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<String> values = new ArrayList<>();
+                    values.add("left");
+                    values.add("right");
+                    System.out.println(values.removeLast());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/list-remove-last").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("right\n");
+    }
+
+    @Test
+    void listGetLastBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("list-get-last");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<String> values = new ArrayList<>();
+                    values.add("left");
+                    values.add("right");
+                    System.out.println(values.getLast());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/list-get-last").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("right\n");
+    }
+
+    @Test
+    void listIsEmptyBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("list-is-empty");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<String> values = new ArrayList<>();
+                    System.out.println(values.isEmpty());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/list-is-empty").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n");
+    }
+
+    @Test
     void hashMapStringGetBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("hashmap-string-get");
         writeJava(project, "com.acme.Main", """
@@ -4250,6 +5786,63 @@ final class CliIntegrationTest {
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/hashmap-get-or-default").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void hashMapSizeBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("hashmap-size");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, String> values = new HashMap<>();
+                    values.put("left", "right");
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/hashmap-size").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("1\n");
+    }
+
+    @Test
+    void hashMapIsEmptyBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("hashmap-is-empty");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, String> values = new HashMap<>();
+                    System.out.println(values.isEmpty());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/hashmap-is-empty").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n");
     }
 
     @Test
@@ -4604,6 +6197,84 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void pathNormalizeBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("path-normalize");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.nio.file.Path;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Path.of("data", "..", "message.txt").normalize().toString());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/path-normalize").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("message.txt\n");
+    }
+
+    @Test
+    void pathToAbsolutePathBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("path-to-absolute");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.nio.file.Path;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Path.of("data").toAbsolutePath().toString());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/path-to-absolute").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(Path.of(jvmOutput.strip())).isAbsolute();
+    }
+
+    @Test
+    void pathEqualsBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("path-equals");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.nio.file.Path;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Path.of("data").equals(Path.of("data")));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/path-equals").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n");
+    }
+
+    @Test
     void filesReadStringBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("files-read-string");
         Files.createDirectories(project.resolve("data"));
@@ -4800,6 +6471,91 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void filesExistsBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("files-exists");
+        Files.writeString(project.resolve("message.txt"), "exists", StandardCharsets.UTF_8);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.nio.file.Files;
+            import java.nio.file.Path;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Files.exists(Path.of("message.txt")));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/files-exists").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n");
+    }
+
+    @Test
+    void filesIsRegularFileBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("files-is-regular-file");
+        Files.writeString(project.resolve("message.txt"), "regular", StandardCharsets.UTF_8);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.nio.file.Files;
+            import java.nio.file.Path;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Files.isRegularFile(Path.of("message.txt")));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/files-is-regular-file").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n");
+    }
+
+    @Test
+    void filesDeleteIfExistsBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("files-delete-if-exists");
+        Files.writeString(project.resolve("message.txt"), "delete", StandardCharsets.UTF_8);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.nio.file.Files;
+            import java.nio.file.Path;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    System.out.println(Files.deleteIfExists(Path.of("message.txt")));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        Files.writeString(project.resolve("message.txt"), "delete", StandardCharsets.UTF_8);
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/files-delete-if-exists").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n");
+    }
+
+    @Test
     void filesIsDirectoryNoFollowLinksBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("files-is-directory-no-follow");
         Files.createDirectories(project.resolve("target-dir"));
@@ -4879,6 +6635,33 @@ final class CliIntegrationTest {
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/files-size").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void filesLastModifiedTimeToMillisBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("files-last-modified-time");
+        Files.writeString(project.resolve("message.txt"), "javan-mtime", StandardCharsets.UTF_8);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.nio.file.Files;
+            import java.nio.file.Path;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    System.out.println(Files.getLastModifiedTime(Path.of("message.txt")).toMillis() >= 0);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/files-last-modified-time").toString())).stdout()).isEqualTo(jvmOutput);
     }
 
     @Test
@@ -5243,6 +7026,122 @@ final class CliIntegrationTest {
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/boxed-integer-unbox").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void boxedBooleanUnboxBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("boxed-boolean-unbox");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Boolean value = Boolean.valueOf(true);
+                    System.out.println(value.booleanValue());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/boxed-boolean-unbox").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void currentThreadInterruptStateBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("current-thread-interrupt-state");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Thread current = Thread.currentThread();
+                    System.out.println(current.isInterrupted());
+                    current.interrupt();
+                    System.out.println(current.isInterrupted());
+                    System.out.println(Thread.interrupted());
+                    System.out.println(current.isInterrupted());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/current-thread-interrupt-state").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadSleepUninterruptedBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-sleep-uninterrupted");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final long start = System.nanoTime();
+                    Thread.sleep(25L);
+                    final long elapsedMillis = (System.nanoTime() - start) / 1_000_000L;
+                    System.out.println(elapsedMillis >= 20L);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-sleep-uninterrupted").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadConstructionBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-construction");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Thread plain = new Thread();
+                    final Thread withTarget = new Thread(new Task());
+                    System.out.println(plain != null);
+                    System.out.println(withTarget != null);
+                    System.out.println(plain.isInterrupted());
+                    System.out.println(withTarget.isInterrupted());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println("unused");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-construction").toString())).stdout()).isEqualTo(jvmOutput);
     }
 
     @Test
@@ -5682,6 +7581,172 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void checkWritesDependencyAndLicenseReportsForResolvedClasspath() throws Exception {
+        final Path used = dependencyJarWithMavenLicense("usedlib", "dep.Used", """
+            package dep;
+
+            public final class Used {
+                private Used() {
+                }
+
+                public static int value() {
+                    return 7;
+                }
+            }
+            """, "com.acme", "usedlib", "1.2.3", "Apache License, Version 2.0");
+        final Path unused = dependencyJar("unusedlib", "unused.Unused", """
+            package unused;
+
+            public final class Unused {
+                private Unused() {
+                }
+
+                public static int value() {
+                    return 99;
+                }
+            }
+            """);
+        final Path project = project("dependency-reports");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import dep.Used;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Used.value());
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString(), "--classpath", used.toString(), "--classpath", unused.toString());
+
+        assertThat(run.exitCode()).isZero();
+        final String dependencies = Files.readString(project.resolve(".javan/reports/dependencies.json"));
+        final String licenses = Files.readString(project.resolve(".javan/reports/licenses.json"));
+        assertThat(dependencies).contains(
+            "\"dependencyCount\": 2",
+            "\"usedDependencies\": 1",
+            "\"unusedDependencies\": 1",
+            "\"reachableDependencyClasses\": 1",
+            Json.string(used.toAbsolutePath().normalize().toString()),
+            "\"coordinate\": \"com.acme:usedlib:1.2.3\"",
+            "\"used\": true",
+            "\"reachableClasses\": [\"dep/Used\"]",
+            Json.string(unused.toAbsolutePath().normalize().toString()),
+            "\"used\": false",
+            "\"classes\": [\"unused/Unused\"]"
+        );
+        assertThat(licenses).contains(
+            "\"licenseCount\": 2",
+            "\"knownLicenses\": 1",
+            "\"unknownLicenses\": 1",
+            "\"id\": \"Apache License, Version 2.0\"",
+            "\"policy\": \"warning\""
+        );
+    }
+
+    @Test
+    void javanModMainDependencyCompilesWithoutClasspathOption() throws Exception {
+        final Path dependency = dependencyJar("mod-mathlib", "dep.ModMath", """
+            package dep;
+
+            public final class ModMath {
+                private ModMath() {
+                }
+
+                public static int value() {
+                    return 11;
+                }
+            }
+            """);
+        final Path project = project("javan-mod-main-dependency");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import dep.ModMath;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(ModMath.value());
+                }
+            }
+            """);
+        Files.writeString(project.resolve("javan.mod"), """
+            module com.acme.app
+            java 25
+            require main %s
+            """.formatted(pathForMod(project, dependency)), StandardCharsets.UTF_8);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(Files.readString(project.resolve("javan.lock"))).contains(
+            "\"scope\": \"main\"",
+            "\"notation\": " + Json.string(pathForMod(project, dependency)),
+            "\"status\": \"present\"",
+            "\"checksumAlgorithm\": \"fnv64\""
+        );
+        assertThat(Files.readString(project.resolve(".javan/reports/dependencies.json"))).contains(
+            Json.string(dependency.toAbsolutePath().normalize().toString()),
+            "\"source\": \"javan.mod\"",
+            "\"used\": true",
+            "\"reachableClasses\": [\"dep/ModMath\"]"
+        );
+    }
+
+    @Test
+    void javanModTestDependencyDoesNotSatisfyMainCompilation() throws Exception {
+        final Path dependency = dependencyJar("mod-testlib", "dep.TestOnly", """
+            package dep;
+
+            public final class TestOnly {
+                private TestOnly() {
+                }
+
+                public static int value() {
+                    return 17;
+                }
+            }
+            """);
+        final Path project = project("javan-mod-test-dependency");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import dep.TestOnly;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(TestOnly.value());
+                }
+            }
+            """);
+        Files.writeString(project.resolve("javan.mod"), """
+            module com.acme.app
+            java 25
+            require test %s
+            """.formatted(pathForMod(project, dependency)), StandardCharsets.UTF_8);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isEqualTo(1);
+        assertThat(run.stderr()).contains("error[JAVAN901]: javac failed", "package dep does not exist");
+        assertThat(Files.readString(project.resolve("javan.lock"))).contains(
+            "\"scope\": \"test\"",
+            "\"status\": \"present\""
+        );
+    }
+
+    @Test
     void dependencyJarObjectConstructorAndInstanceMethodBuilds() throws Exception {
         final Path dependency = dependencyJar("scalelib", "dep.Scale", """
             package dep;
@@ -5973,6 +8038,77 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void manyUnreachableWarningsPrintCompactSummary() throws Exception {
+        final Path project = project("many-unreachable-warnings");
+        writeJava(project, "com.acme.Main", repeatedReflectionSource(13));
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stdout()).contains(
+            "Warnings: 26",
+            "full details: .javan/reports/diagnostics.txt",
+            "warning[JAVAN101] unsupported API in unreachable code: 13",
+            "warning[JAVAN131] unsupported JDK call in unreachable code: 13"
+        );
+        assertThat(run.stdout()).doesNotContain("Subject:");
+    }
+
+    @Test
+    void reachableNonAsciiStringConstantFailsUntilUtf16StringModelExists() throws Exception {
+        final Path project = project("non-ascii-string");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("caf\\u00e9".length());
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains(
+            "error[JAVAN046]",
+            "non-ASCII string constants require the UTF-16 string model"
+        );
+    }
+
+    @Test
+    void unreachableNonAsciiStringConstantWarnsOnly() throws Exception {
+        final Path project = project("unreachable-non-ascii-string");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("ok");
+                }
+
+                public static int unused() {
+                    return "caf\\u00e9".length();
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stdout()).contains(
+            "warning[JAVAN146]",
+            "non-ASCII string constant in unreachable code"
+        );
+    }
+
+    @Test
     void noMainFails() throws Exception {
         final Path project = project("no-main");
         writeJava(project, "com.acme.Library", """
@@ -6024,108 +8160,6 @@ final class CliIntegrationTest {
 
         assertThat(run.exitCode()).isZero();
         assertThat(project.resolve(".javan")).doesNotExist();
-    }
-
-    @Test
-    void doctorReportsToolchain() {
-        final CliRun run = run(tempDir, "doctor");
-
-        assertThat(run.exitCode()).isZero();
-        assertThat(run.stdout()).contains("javan home:", "java.home:", "java.version:", "javac:", "c compiler:", "global settings:");
-    }
-
-    @Test
-    void toolchainListPrintsToolchainHeader() {
-        final CliRun run = run(tempDir, "toolchain", "list");
-
-        assertThat(run.exitCode()).isZero();
-        assertThat(run.stdout()).contains("Toolchains");
-    }
-
-    @Test
-    void toolchainDoctorPrintsDoctorReport() {
-        final CliRun run = run(tempDir, "toolchain", "doctor");
-
-        assertThat(run.exitCode()).isZero();
-        assertThat(run.stdout()).contains("Toolchain");
-    }
-
-    @Test
-    void compatWritesDeterministicReports() throws Exception {
-        final Path project = project("compat-pass");
-        writeJava(project, "com.acme.Main", """
-            package com.acme;
-
-            public final class Main {
-                private Main() {
-                }
-
-                public static void main(final String[] args) {
-                    final String[] values = new String[] {"zero", "one"};
-                    System.out.println(values.length);
-                    System.out.println(values[1]);
-                }
-            }
-            """);
-
-        final CliRun run = runSlow(tempDir, "compat", project.toString());
-
-        final int jdk = Runtime.version().feature();
-        assertThat(run.exitCode()).isZero();
-        assertThat(run.stdout()).contains("Compatibility:", "status:          pass", "jdk classes:");
-        assertThat(project.resolve(".javan/reports/compatibility-summary.md")).exists();
-        assertThat(project.resolve(".javan/reports/compatibility-summary.json")).exists();
-        assertThat(project.resolve(".javan/reports/jdk-" + jdk + "-inventory.json")).exists();
-        assertThat(project.resolve(".javan/reports/bytecode-patterns-jdk-" + jdk + ".json")).exists();
-        assertThat(project.resolve(".javan/jdk-inventory/jdk-" + jdk + ".json")).exists();
-        assertThat(project.resolve(".javan/bytecode-patterns/jdk-" + jdk + ".json")).exists();
-        assertThat(project.resolve("doc/support-matrix.md")).exists();
-        assertThat(project.resolve("doc/support-matrix.json")).exists();
-        assertThat(project.resolve("doc/jdk-compatibility.md")).exists();
-        assertThat(Files.readString(project.resolve(".javan/reports/compatibility-summary.json")))
-            .contains("\"status\": \"pass\"", "\"unknownFatalOpcodeUses\": 0");
-        assertThat(Files.readString(project.resolve(".javan/reports/bytecode-patterns-jdk-" + jdk + ".json")))
-            .contains("\"mnemonic\": \"anewarray\"", "\"mnemonic\": \"arraylength\"", "\"support\": \"NATIVE_SUPPORTED\"");
-        assertThat(Files.readString(project.resolve("doc/support-matrix.md")))
-            .contains(
-                "object-array",
-                "long-array",
-                "float-double",
-                "static-fields",
-                "string-concat",
-                "try-catch",
-                "polymorphic-virtual",
-                "interface-polymorphic",
-                "JDK" + jdk
-            );
-    }
-
-    @Test
-    void compatReportsSupportedInvokedynamicStringConcat() throws Exception {
-        final Path project = project("compat-string-concat");
-        writeJava(project, "com.acme.Main", """
-            package com.acme;
-
-            public final class Main {
-                private Main() {
-                }
-
-                public static void main(final String[] args) {
-                    System.out.println("value " + args.length);
-                }
-            }
-            """);
-
-        final CliRun run = runSlow(tempDir, "compat", project.toString());
-
-        final int jdk = Runtime.version().feature();
-        assertThat(run.exitCode()).isZero();
-        assertThat(run.stdout()).contains("status:          pass");
-        assertThat(run.stderr()).isEmpty();
-        assertThat(Files.readString(project.resolve(".javan/reports/compatibility-summary.json")))
-            .contains("\"status\": \"pass\"");
-        assertThat(Files.readString(project.resolve(".javan/reports/bytecode-patterns-jdk-" + jdk + ".json")))
-            .contains("\"mnemonic\": \"invokedynamic\"", "\"support\": \"NATIVE_SUPPORTED\"");
     }
 
     @Test
@@ -6201,6 +8235,10 @@ final class CliIntegrationTest {
 
         assertThat(run.exitCode()).isZero();
         assertThat(project.resolve(".javan/dist/jar-no-main.jar")).exists();
+        assertThat(Files.readString(project.resolve(".javan/reports/report.json"))).contains(
+            "{\"name\": \"project\", \"status\": \"present\"",
+            "{\"name\": \"resources\", \"status\": \"present\""
+        );
     }
 
     @Test
@@ -6603,6 +8641,32 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void dynamicByteShortStringConcatBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-concat-byte-short");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final byte left = (byte) args.length;
+                    final short right = (short) (left + 2);
+                    System.out.println("values " + left + ":" + right);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-concat-byte-short").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("values 0:2\n");
+    }
+
+    @Test
     void reachableSystemLoadFails() throws Exception {
         final Path project = project("system-load");
         writeJava(project, "com.acme.Main", """
@@ -6887,6 +8951,35 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void denseIntSwitchDefaultBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("dense-int-switch-default");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    switch (args.length) {
+                        case 1 -> System.out.println("one");
+                        case 2 -> System.out.println("two");
+                        case 3 -> System.out.println("three");
+                        default -> System.out.println("other");
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/dense-int-switch-default").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("other\n");
+    }
+
+    @Test
     void sparseIntSwitchBuildsAndRuns() throws Exception {
         final Path project = project("sparse-int-switch");
         writeJava(project, "com.acme.Main", """
@@ -6910,6 +9003,34 @@ final class CliIntegrationTest {
 
         assertThat(run.exitCode()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/sparse-int-switch").toString(), "a")).stdout()).isEqualTo("one\n");
+    }
+
+    @Test
+    void sparseIntSwitchDefaultBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("sparse-int-switch-default");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    switch (args.length) {
+                        case 1 -> System.out.println("one");
+                        case 1000 -> System.out.println("many");
+                        default -> System.out.println("other");
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/sparse-int-switch-default").toString(), "a", "b")).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("other\n");
     }
 
     @Test
@@ -7029,6 +9150,29 @@ final class CliIntegrationTest {
         return project;
     }
 
+    private void assertBuildRejectsDisabledRuntimeModule(
+        final String projectName,
+        final String module,
+        final String source
+    ) throws Exception {
+        final Path project = project(projectName);
+        Files.writeString(project.resolve("javan.toml"), """
+            [runtime]
+            disabled = ["%s"]
+            """.formatted(module));
+        writeJava(project, "com.acme.Main", source);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains("error[JAVAN060]", module);
+        assertThat(project.resolve(".javan/generated")).doesNotExist();
+        assertThat(Files.readString(project.resolve(".javan/reports/runtime-features.json"))).contains(
+            "\"disabledReachableRuntimeModules\": [\"" + module + "\"]",
+            "\"status\": \"fail\""
+        );
+    }
+
     private static void writeJava(final Path project, final String className, final String source) throws Exception {
         final Path file = project.resolve("src/main/java").resolve(className.replace('.', '/') + ".java");
         Files.createDirectories(file.getParent());
@@ -7045,6 +9189,26 @@ final class CliIntegrationTest {
         final Path file = project.resolve(filename);
         Files.writeString(file, source, StandardCharsets.UTF_8);
         return file;
+    }
+
+    private static String pathForMod(final Path project, final Path dependency) {
+        return project.toAbsolutePath().normalize().relativize(dependency.toAbsolutePath().normalize()).toString();
+    }
+
+    private static void installMavenCoordinate(
+        final Path repository,
+        final String groupId,
+        final String artifactId,
+        final String version,
+        final Path jar
+    ) throws Exception {
+        final Path target = repository
+            .resolve(groupId.replace('.', '/'))
+            .resolve(artifactId)
+            .resolve(version)
+            .resolve(artifactId + "-" + version + ".jar");
+        Files.createDirectories(target.getParent());
+        Files.copy(jar, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
     }
 
     private static void writeExecutableScript(final Path script, final String source) throws Exception {
@@ -7117,7 +9281,8 @@ final class CliIntegrationTest {
 
     private static ProcessResult process(final Path cwd, final List<String> command, final Duration timeout) {
         try {
-            final Process process = new ProcessBuilder(command).directory(cwd.toFile()).start();
+            final List<String> actualCommand = childCoverageCommand(command);
+            final Process process = new ProcessBuilder(actualCommand).directory(cwd.toFile()).start();
             final CompletableFuture<String> stdout = CompletableFuture.supplyAsync(() -> readStream(process.getInputStream()));
             final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
             if (!process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
@@ -7129,7 +9294,7 @@ final class CliIntegrationTest {
                 return new ProcessResult(
                     124,
                     stdout.join(),
-                    stderr.join() + "Timed out after " + timeout.toSeconds() + " seconds: " + String.join(" ", command) + "\n"
+                    stderr.join() + "Timed out after " + timeout.toSeconds() + " seconds: " + String.join(" ", actualCommand) + "\n"
                 );
             }
             return new ProcessResult(
@@ -7143,6 +9308,121 @@ final class CliIntegrationTest {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Interrupted while running process: " + String.join(" ", command), exception);
         }
+    }
+
+    private static List<String> childCoverageCommand(final List<String> command) {
+        final String agent = childCoverageAgentTemplate();
+        final String directory = System.getProperty("javan.childJacocoDir", "");
+        if (agent.isBlank() || directory.isBlank() || !isJavanMainJavaCommand(command)) {
+            return command;
+        }
+        try {
+            final Path coverageDirectory = Path.of(directory);
+            Files.createDirectories(coverageDirectory);
+            final Path exec = coverageDirectory.resolve("child-" + java.util.UUID.randomUUID() + ".exec");
+            final List<String> result = new java.util.ArrayList<>();
+            result.add(command.getFirst());
+            result.add(childCoverageAgent(agent, exec));
+            result.addAll(command.subList(1, command.size()));
+            return List.copyOf(result);
+        } catch (final IOException exception) {
+            throw new UncheckedIOException(exception);
+        }
+    }
+
+    private static String childCoverageAgentTemplate() {
+        final String configured = System.getProperty("javan.childJacocoArgLine", "");
+        if (!configured.isBlank()) {
+            return configured;
+        }
+        for (final String argument : java.lang.management.ManagementFactory.getRuntimeMXBean().getInputArguments()) {
+            if (argument.startsWith("-javaagent:") && argument.contains("org.jacoco.agent")) {
+                return argument;
+            }
+        }
+        return "";
+    }
+
+    private static boolean isJavanMainJavaCommand(final List<String> command) {
+        if (command.isEmpty()) {
+            return false;
+        }
+        final Path executable = Path.of(command.getFirst()).getFileName();
+        if (executable == null) {
+            return false;
+        }
+        final String name = executable.toString();
+        if (!"java".equals(name) && !"java.exe".equals(name)) {
+            return false;
+        }
+        for (int index = 1; index < command.size(); index++) {
+            final String argument = command.get(index);
+            if ("-cp".equals(argument) || "-classpath".equals(argument) || "--class-path".equals(argument)) {
+                index++;
+            } else if (!argument.startsWith("-")) {
+                return "javan.Main".equals(argument);
+            }
+        }
+        return false;
+    }
+
+    private static String childCoverageAgent(final String agent, final Path exec) {
+        final String key = "destfile=";
+        final int start = agent.indexOf(key);
+        if (start < 0) {
+            return agent;
+        }
+        final int valueStart = start + key.length();
+        final int valueEnd = agent.indexOf(',', valueStart);
+        if (valueEnd < 0) {
+            return agent.substring(0, valueStart) + exec;
+        }
+        return agent.substring(0, valueStart) + exec + agent.substring(valueEnd);
+    }
+
+    private static int freeTcpPort() {
+        try (java.net.ServerSocket socket = new java.net.ServerSocket(0)) {
+            return socket.getLocalPort();
+        } catch (final IOException exception) {
+            throw new UncheckedIOException(exception);
+        }
+    }
+
+    private static void connectLoopback(final int port) {
+        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (System.nanoTime() < deadline) {
+            try (java.net.Socket socket = new java.net.Socket("127.0.0.1", port)) {
+                socket.getOutputStream().flush();
+                return;
+            } catch (final IOException exception) {
+                try {
+                    Thread.sleep(25);
+                } catch (final InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("Interrupted while waiting for loopback socket on port " + port, interrupted);
+                }
+            }
+        }
+        throw new IllegalStateException("Timed out waiting for loopback socket on port " + port);
+    }
+
+    private static void writeLoopbackBytes(final int port, final byte[] bytes) {
+        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (System.nanoTime() < deadline) {
+            try (java.net.Socket socket = new java.net.Socket("127.0.0.1", port)) {
+                socket.getOutputStream().write(bytes);
+                socket.getOutputStream().flush();
+                return;
+            } catch (final IOException exception) {
+                try {
+                    Thread.sleep(25);
+                } catch (final InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("Interrupted while writing to loopback socket on port " + port, interrupted);
+                }
+            }
+        }
+        throw new IllegalStateException("Timed out writing to loopback socket on port " + port);
     }
 
     private static String readStream(final InputStream stream) {
@@ -7206,6 +9486,58 @@ final class CliIntegrationTest {
         return jar;
     }
 
+    private Path dependencyJarWithMavenLicense(
+        final String name,
+        final String className,
+        final String source,
+        final String groupId,
+        final String artifactId,
+        final String version,
+        final String license
+    ) throws Exception {
+        final Path root = tempDir.resolve(name + "-dependency");
+        final Path sourceRoot = root.resolve("src");
+        final Path classes = root.resolve("classes");
+        final Path metadata = root.resolve("metadata/META-INF/maven")
+            .resolve(groupId.replace('.', '/'))
+            .resolve(artifactId);
+        final Path jar = root.resolve(name + ".jar");
+        final Path sourceFile = sourceRoot.resolve(className.replace('.', '/') + ".java");
+        Files.createDirectories(sourceFile.getParent());
+        Files.createDirectories(classes);
+        Files.createDirectories(metadata);
+        Files.writeString(sourceFile, source, StandardCharsets.UTF_8);
+        Files.writeString(metadata.resolve("pom.properties"), """
+            groupId=%s
+            artifactId=%s
+            version=%s
+            """.formatted(groupId, artifactId, version), StandardCharsets.UTF_8);
+        Files.writeString(metadata.resolve("pom.xml"), """
+            <project>
+              <licenses>
+                <license>
+                  <name>%s</name>
+                  <url>https://example.invalid/license</url>
+                </license>
+              </licenses>
+            </project>
+            """.formatted(license), StandardCharsets.UTF_8);
+        assertThat(process(root, List.of("javac", "-d", classes.toString(), sourceFile.toString())).exitCode()).isZero();
+        assertThat(process(root, List.of(
+            "jar",
+            "--create",
+            "--file",
+            jar.toString(),
+            "-C",
+            classes.toString(),
+            ".",
+            "-C",
+            root.resolve("metadata").toString(),
+            "."
+        )).exitCode()).isZero();
+        return jar;
+    }
+
     private Path dependencyClasses(final String name, final String className, final String source) throws Exception {
         final Path root = tempDir.resolve(name + "-dependency");
         final Path sourceRoot = root.resolve("src");
@@ -7216,6 +9548,30 @@ final class CliIntegrationTest {
         Files.writeString(sourceFile, source, StandardCharsets.UTF_8);
         assertThat(process(root, List.of("javac", "-d", classes.toString(), sourceFile.toString())).exitCode()).isZero();
         return classes;
+    }
+
+    private static String repeatedReflectionSource(final int count) {
+        final StringBuilder calls = new StringBuilder();
+        for (int index = 0; index < count; index++) {
+            calls.append("        Class.forName(\"com.acme.Plugin")
+                .append(index)
+                .append("\");\n");
+        }
+        return """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("ok");
+                }
+
+                public static void load() throws ClassNotFoundException {
+            %s    }
+            }
+            """.formatted(calls);
     }
 
     private record CliRun(int exitCode, String stdout, String stderr) {

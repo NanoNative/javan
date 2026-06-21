@@ -4,13 +4,14 @@ Javan keeps public examples separate from test projects.
 
 ## Public Examples
 
-`examples/` contains runnable Java projects that users can inspect and build. They may
-also serve as release acceptance targets, but they are not fake implementations and not
-private test projects.
+`example/` contains the runnable public showcase that users can inspect and build. Public
+examples may also serve as release acceptance targets, but they are not fake
+implementations and not private test projects.
 
-Future additions to `examples/` must be complete user-facing samples, not renamed test
-test projects. A top-level example should document a real use case, run through the public
-CLI, and make its expected behavior obvious without relying on local tribal knowledge.
+Future additions to `example/` or a future `examples/` directory must be complete
+user-facing samples, not renamed test projects. A top-level example should document a
+real use case, run through the public CLI, and make its expected behavior obvious without
+relying on local tribal knowledge.
 
 Requirements:
 
@@ -21,12 +22,19 @@ Requirements:
 - Build and run instructions are complete enough for a new user.
 - Complexity grows over time: simple feature examples stay, but real application-shaped
   examples are required before release claims.
+- Each user-visible compiler/runtime enrichment should add one small showcase capability
+  or a new complete public example in the same slice.
+- Release image verification must keep proving that the default container image can build
+  and run the current showcase.
 
 Current public showcase:
 
-- `examples/native-showcase`: verified native app showing object allocation, final fields,
-  interface dispatch, `ArrayList`, primitive arrays, string operations, string
-  concatenation, and selected JDK intrinsics.
+- `example`: verified native app showing object allocation, final fields,
+  interface dispatch, `ArrayList`, `HashMap`, `Map.copyOf`, `Optional`, explicit
+  iterators, enums, static initialization, scoped try/catch, primitive arrays, string
+  operations, string concatenation, and selected JDK intrinsics. This is the rolling
+  public proof target: when Javan gains a visible feature, grow this showcase unless a
+  separate complete example is more honest.
 
 Optional real-project probes:
 

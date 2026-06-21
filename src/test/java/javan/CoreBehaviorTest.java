@@ -22,6 +22,7 @@ import javan.codegen.MethodDescriptor;
 import javan.codegen.NativeLinker;
 import javan.compat.BytecodeSupport;
 import javan.compat.JdkCallSupport;
+import javan.compat.NetworkApiSupport;
 import javan.ir.IrClass;
 import javan.ir.IrDispatch;
 import javan.ir.IrDispatchTarget;
@@ -51,7 +52,6 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -166,6 +166,49 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void buildResultWithoutArtifactDoesNotPass() {
+        final Javan.BuildResult result = new Javan.BuildResult(Optional.empty(), List.of());
+
+        assertThat(result.pass()).isFalse();
+    }
+
+    @Test
+    void buildResultWithFatalDiagnosticDoesNotPass() {
+        final Javan.BuildResult result = new Javan.BuildResult(
+            Optional.of(tempDir.resolve("app")),
+            List.of(Diagnostic.error(
+                "JAVAN031",
+                "unsupported reachable JDK call",
+                "com/acme/Main",
+                "main()V",
+                "java/lang/System.exit(I)V",
+                "unsupported",
+                "remove the call"
+            ))
+        );
+
+        assertThat(result.pass()).isFalse();
+    }
+
+    @Test
+    void buildResultWithArtifactAndWarningsPasses() {
+        final Javan.BuildResult result = new Javan.BuildResult(
+            Optional.of(tempDir.resolve("app")),
+            List.of(Diagnostic.warning(
+                "JAVAN130",
+                "unsupported bytecode in unreachable code",
+                "com/acme/Main",
+                "dead()V",
+                "invokedynamic",
+                "unreachable",
+                "remove dead code"
+            ))
+        );
+
+        assertThat(result.pass()).isTrue();
+    }
+
+    @Test
     void fileScannerIncludesNestedPackageNamedBuild() throws Exception {
         final Path classFile = tempDir.resolve("classes/javan/build/Foo.class");
         Files.createDirectories(classFile.getParent());
@@ -272,10 +315,34 @@ final class CoreBehaviorTest {
         assertThat(BytecodeSupport.classify(255)).isEqualTo(BytecodeSupport.Status.UNKNOWN_FATAL);
         assertThat(BytecodeSupport.mnemonic(190)).isEqualTo("arraylength");
         assertThat(BytecodeSupport.mnemonic(255)).isEqualTo("opcode_255");
+        assertThat(BytecodeSupport.mnemonic(-1)).isEqualTo("opcode_-1");
         assertThat(BytecodeSupport.knownOpcodes()).contains(0, 201).doesNotContain(255);
         assertThat(BytecodeSupport.nativeSupportedOpcodes())
             .contains(47, 48, 49, 80, 81, 82, 126, 146, 165, 166, 170, 171, 186, 188, 190)
             .doesNotContain(197);
+        assertThat(BytecodeSupport.knownOpcodes()).containsExactlyElementsOf(BytecodeSupport.knownOpcodes());
+    }
+
+    @Test
+    void bytecodeSupportOpcodeListsAreSortedAndReadOnly() {
+        final List<Integer> opcodes = BytecodeSupport.knownOpcodes();
+
+        assertThat(opcodes).hasSize(202);
+        assertThat(opcodes.isEmpty()).isFalse();
+        assertThat(opcodes.contains(Integer.valueOf(0))).isTrue();
+        assertThat(opcodes.contains(Integer.valueOf(255))).isFalse();
+        assertThat(opcodes.contains("0")).isFalse();
+        assertThat(opcodes.containsAll(List.of(0, 201))).isTrue();
+        assertThat(opcodes.containsAll(List.of(0, 255))).isFalse();
+        assertThat(opcodes.toArray()).hasSize(202);
+        assertThat(opcodes.toArray(new Object[0])).hasSize(202);
+        final Integer[] padded = opcodes.toArray(new Integer[203]);
+        assertThat(padded[0]).isEqualTo(0);
+        assertThat(padded[201]).isEqualTo(201);
+        assertThat(padded[202]).isNull();
+        assertThat(opcodes).containsExactlyElementsOf(BytecodeSupport.knownOpcodes());
+        assertThatThrownBy(() -> opcodes.add(255)).isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> opcodes.remove(Integer.valueOf(0))).isInstanceOf(UnsupportedOperationException.class);
     }
 
     @Test
@@ -382,6 +449,220 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void staticVerifierRejectsReachableSocketCallWithNetworkDiagnostic() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 183, "invokespecial", new MethodRef("java/net/Socket", "<init>", "()V")),
+            true
+        );
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN061");
+        assertThat(diagnostics.getFirst().message()).isEqualTo("unsupported reachable network API");
+        assertThat(diagnostics.getFirst().subject()).isEqualTo("java/net/Socket.<init>()V");
+        assertThat(diagnostics.getFirst().reason()).contains("network/socket");
+    }
+
+    @Test
+    void staticVerifierAcceptsSupportedHttpCallEvenWhenUnreachable() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 184, "invokestatic", new MethodRef("java/net/http/HttpClient", "newHttpClient", "()Ljava/net/http/HttpClient;")),
+            false
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void networkApiSupportClassifiesSocketHttpAndJdkHttpServerOwners() {
+        assertThat(NetworkApiSupport.runtimeModules(new MethodRef("java/net/ServerSocket", "<init>", "()V")))
+            .containsExactly("network", "socket");
+        assertThat(NetworkApiSupport.runtimeModules(new MethodRef("java/net/http/HttpClient", "newHttpClient", "()Ljava/net/http/HttpClient;")))
+            .containsExactly("network", "http");
+        assertThat(NetworkApiSupport.runtimeModules(new MethodRef("com/sun/net/httpserver/HttpServer", "create", "()Lcom/sun/net/httpserver/HttpServer;")))
+            .containsExactly("network", "http");
+    }
+
+    @Test
+    void networkApiSupportClassifiesSocketAddressOwner() {
+        assertThat(NetworkApiSupport.runtimeModules(new MethodRef("java/net/SocketAddress", "toString", "()Ljava/lang/String;")))
+            .containsExactly("network", "socket");
+    }
+
+    @Test
+    void networkApiSupportClassifiesInetSocketAddressOwner() {
+        assertThat(NetworkApiSupport.runtimeModules(new MethodRef("java/net/InetSocketAddress", "<init>", "(Ljava/lang/String;I)V")))
+            .containsExactly("network", "socket");
+    }
+
+    @Test
+    void networkApiSupportClassifiesInetAddressOwner() {
+        assertThat(NetworkApiSupport.runtimeModules(new MethodRef("java/net/InetAddress", "getByName", "(Ljava/lang/String;)Ljava/net/InetAddress;")))
+            .containsExactly("network", "socket");
+    }
+
+    @Test
+    void jdkCallSupportAcceptsInetAddressLoopbackCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/InetAddress", "getLoopbackAddress", "()Ljava/net/InetAddress;"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportClassifiesInetSocketAddressRuntimeModules() {
+        assertThat(JdkCallSupport.runtimeModules(new MethodRef("java/net/InetSocketAddress", "getPort", "()I")))
+            .containsExactly("network", "socket");
+    }
+
+    @Test
+    void jdkCallSupportAcceptsSocketStringPortConstructor() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/Socket", "<init>", "(Ljava/lang/String;I)V"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsServerSocketPortConstructor() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/ServerSocket", "<init>", "(I)V"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsSocketInputStreamReadCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/io/InputStream", "read", "()I"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsSocketOutputStreamWriteByteArrayCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/io/OutputStream", "write", "([B)V"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsHttpClientSendCalls() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/URI", "create", "(Ljava/lang/String;)Ljava/net/URI;"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/http/HttpClient", "newHttpClient", "()Ljava/net/http/HttpClient;"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/http/HttpRequest", "newBuilder", "(Ljava/net/URI;)Ljava/net/http/HttpRequest$Builder;"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/http/HttpRequest$Builder", "GET", "()Ljava/net/http/HttpRequest$Builder;"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/http/HttpRequest$Builder", "header", "(Ljava/lang/String;Ljava/lang/String;)Ljava/net/http/HttpRequest$Builder;"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/http/HttpRequest$BodyPublishers", "ofString", "(Ljava/lang/String;)Ljava/net/http/HttpRequest$BodyPublisher;"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/http/HttpRequest$Builder", "POST", "(Ljava/net/http/HttpRequest$BodyPublisher;)Ljava/net/http/HttpRequest$Builder;"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/http/HttpRequest$BodyPublishers", "ofByteArray", "([B)Ljava/net/http/HttpRequest$BodyPublisher;"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/http/HttpRequest$Builder", "PUT", "(Ljava/net/http/HttpRequest$BodyPublisher;)Ljava/net/http/HttpRequest$Builder;"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/http/HttpRequest$Builder", "build", "()Ljava/net/http/HttpRequest;"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/http/HttpResponse$BodyHandlers", "ofString", "()Ljava/net/http/HttpResponse$BodyHandler;"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/http/HttpResponse$BodyHandlers", "ofByteArray", "()Ljava/net/http/HttpResponse$BodyHandler;"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/http/HttpClient", "send", "(Ljava/net/http/HttpRequest;Ljava/net/http/HttpResponse$BodyHandler;)Ljava/net/http/HttpResponse;"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/http/HttpResponse", "statusCode", "()I"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/http/HttpResponse", "body", "()Ljava/lang/Object;"))).isTrue();
+    }
+
+    @Test
+    void staticVerifierAcceptsSupportedSocketConstructorCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 183, "invokespecial", new MethodRef("java/net/Socket", "<init>", "(Ljava/lang/String;I)V")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsSupportedServerSocketConstructorCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 183, "invokespecial", new MethodRef("java/net/ServerSocket", "<init>", "(I)V")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsSupportedSocketInputStreamReadCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 182, "invokevirtual", new MethodRef("java/io/InputStream", "read", "()I")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsSupportedSocketOutputStreamWriteCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 182, "invokevirtual", new MethodRef("java/io/OutputStream", "write", "([B)V")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsSupportedInetAddressLoopbackCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 184, "invokestatic", new MethodRef("java/net/InetAddress", "getLoopbackAddress", "()Ljava/net/InetAddress;")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsSupportedHttpClientSendCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 182, "invokevirtual", new MethodRef("java/net/http/HttpClient", "send", "(Ljava/net/http/HttpRequest;Ljava/net/http/HttpResponse$BodyHandler;)Ljava/net/http/HttpResponse;")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsSupportedHttpRequestPostCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 185, "invokeinterface", new MethodRef("java/net/http/HttpRequest$Builder", "POST", "(Ljava/net/http/HttpRequest$BodyPublisher;)Ljava/net/http/HttpRequest$Builder;")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsSupportedHttpRequestPutCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 185, "invokeinterface", new MethodRef("java/net/http/HttpRequest$Builder", "PUT", "(Ljava/net/http/HttpRequest$BodyPublisher;)Ljava/net/http/HttpRequest$Builder;")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void networkApiSupportClassifiesDatagramSocketOwner() {
+        assertThat(NetworkApiSupport.runtimeModules(new MethodRef("java/net/DatagramSocket", "<init>", "()V")))
+            .containsExactly("network", "socket");
+    }
+
+    @Test
+    void networkApiSupportClassifiesDatagramPacketOwner() {
+        assertThat(NetworkApiSupport.runtimeModules(new MethodRef("java/net/DatagramPacket", "<init>", "([BI)V")))
+            .containsExactly("network", "socket");
+    }
+
+    @Test
+    void networkApiSupportClassifiesTlsOwner() {
+        assertThat(NetworkApiSupport.runtimeModules(new MethodRef("javax/net/ssl/SSLSocketFactory", "getDefault", "()Ljavax/net/SocketFactory;")))
+            .containsExactly("network", "tls");
+    }
+
+    @Test
+    void networkApiSupportClassifiesCertificateOwner() {
+        assertThat(NetworkApiSupport.runtimeModules(new MethodRef("java/security/cert/CertificateFactory", "getInstance", "(Ljava/lang/String;)Ljava/security/cert/CertificateFactory;")))
+            .containsExactly("network", "certificates");
+    }
+
+    @Test
+    void networkApiSupportIgnoresNonNetworkOwner() {
+        final MethodRef methodRef = new MethodRef("java/lang/String", "length", "()I");
+
+        assertThat(NetworkApiSupport.runtimeModules(methodRef)).isEmpty();
+        assertThat(NetworkApiSupport.isNetworkCall(methodRef)).isFalse();
+    }
+
+    @Test
     void staticVerifierAcceptsSupportedPathResolveCall() {
         final List<Diagnostic> diagnostics = verifyInstruction(
             instruction(0, 185, "invokeinterface", new MethodRef("java/nio/file/Path", "resolve", "(Ljava/lang/String;)Ljava/nio/file/Path;")),
@@ -406,6 +687,118 @@ final class CoreBehaviorTest {
     @Test
     void jdkCallSupportAcceptsArrayListIndexedAdd() {
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/util/ArrayList", "add", "(ILjava/lang/Object;)V"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportClassifiesListRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new MethodRef("java/util/List", "of", "()Ljava/util/List;")))
+            .containsExactly("collections");
+    }
+
+    @Test
+    void jdkCallSupportClassifiesMapRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new MethodRef("java/util/HashMap", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")))
+            .containsExactly("maps");
+    }
+
+    @Test
+    void jdkCallSupportClassifiesOptionalRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new MethodRef("java/util/Optional", "of", "(Ljava/lang/Object;)Ljava/util/Optional;")))
+            .containsExactly("optional");
+    }
+
+    @Test
+    void jdkCallSupportClassifiesFilesystemRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new MethodRef("java/nio/file/Files", "readString", "(Ljava/nio/file/Path;)Ljava/lang/String;")))
+            .containsExactly("filesystem");
+    }
+
+    @Test
+    void jdkCallSupportClassifiesFileTimeRuntimeModules() {
+        assertThat(JdkCallSupport.runtimeModules(new MethodRef("java/nio/file/attribute/FileTime", "toMillis", "()J")))
+            .containsExactly("filesystem", "time");
+    }
+
+    @Test
+    void jdkCallSupportClassifiesDurationRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new MethodRef("java/time/Duration", "ofMillis", "(J)Ljava/time/Duration;")))
+            .containsExactly("time");
+    }
+
+    @Test
+    void jdkCallSupportClassifiesThreadRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new MethodRef("java/lang/Thread", "currentThread", "()Ljava/lang/Thread;")))
+            .containsExactly("threads");
+    }
+
+    @Test
+    void jdkCallSupportClassifiesThreadConstructorRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new MethodRef("java/lang/Thread", "<init>", "(Ljava/lang/Runnable;)V")))
+            .containsExactly("threads");
+    }
+
+    @Test
+    void jdkCallSupportClassifiesThreadSleepRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new MethodRef("java/lang/Thread", "sleep", "(J)V")))
+            .containsExactly("threads");
+    }
+
+    @Test
+    void jdkCallSupportClassifiesEnvironmentRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new MethodRef("java/lang/System", "getProperty", "(Ljava/lang/String;)Ljava/lang/String;")))
+            .containsExactly("environment");
+    }
+
+    @Test
+    void jdkCallSupportClassifiesArraycopyRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new MethodRef("java/lang/System", "arraycopy", "(Ljava/lang/Object;ILjava/lang/Object;II)V")))
+            .containsExactly("arrays");
+    }
+
+    @Test
+    void jdkCallSupportClassifiesMathRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new MethodRef("java/lang/Math", "abs", "(I)I")))
+            .containsExactly("math");
+    }
+
+    @Test
+    void jdkCallSupportClassifiesIoRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new MethodRef("java/io/PrintStream", "println", "(Ljava/lang/String;)V")))
+            .containsExactly("io");
+    }
+
+    @Test
+    void jdkCallSupportClassifiesExceptionRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new MethodRef("java/lang/IllegalStateException", "<init>", "(Ljava/lang/String;)V")))
+            .containsExactly("exceptions");
+    }
+
+    @Test
+    void jdkCallSupportClassifiesManagedHeapRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new MethodRef("java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;")))
+            .containsExactly("managed-heap");
+    }
+
+    @Test
+    void jdkCallSupportClassifiesProcessRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new MethodRef("java/lang/System", "exit", "(I)V")))
+            .containsExactly("process");
+    }
+
+    @Test
+    void jdkCallSupportIgnoresUnsupportedRuntimeModuleCandidate() {
+        assertThat(JdkCallSupport.runtimeModules(new MethodRef("java/util/Collection", "stream", "()Ljava/util/stream/Stream;")))
+            .isEmpty();
+    }
+
+    @Test
+    void nativeSubstitutionsClassifyProcessRuntimeModule() {
+        assertThat(javan.compat.JavanNativeSubstitutions.runtimeModules(new MethodRef(
+            "javan/util/ProcessRunner",
+            "run",
+            "(Ljava/nio/file/Path;Ljava/util/List;)Ljavan/util/ProcessRunner$Result;"
+        )))
+            .containsExactly("process");
     }
 
     @Test
@@ -441,6 +834,47 @@ final class CoreBehaviorTest {
     @Test
     void jdkCallSupportRejectsUnknownDirectoryStreamCall() {
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/nio/file/DirectoryStream", "spliterator", "()Ljava/util/Spliterator;"))).isFalse();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsFileTimeToMillis() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/nio/file/attribute/FileTime", "toMillis", "()J"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportRejectsUnknownFileTimeCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/nio/file/attribute/FileTime", "toInstant", "()Ljava/time/Instant;"))).isFalse();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsDurationOfMillis() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/time/Duration", "ofMillis", "(J)Ljava/time/Duration;"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsDurationOfSeconds() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/time/Duration", "ofSeconds", "(J)Ljava/time/Duration;"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsDurationToMillis() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/time/Duration", "toMillis", "()J"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsCurrentThreadInterruptStateCalls() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "<init>", "()V"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "<init>", "(Ljava/lang/Runnable;)V"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "currentThread", "()Ljava/lang/Thread;"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "sleep", "(J)V"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "interrupted", "()Z"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "interrupt", "()V"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "isInterrupted", "()Z"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportRejectsUnknownDurationCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/time/Duration", "ofNanos", "(J)Ljava/time/Duration;"))).isFalse();
     }
 
     @Test
@@ -603,6 +1037,13 @@ final class CoreBehaviorTest {
     @Test
     void staticVerifierAcceptsObjectInstanceofTarget() {
         final List<Diagnostic> diagnostics = verifyInstanceOf(Map.of(), "java/lang/Object", true);
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsBooleanWrapperInstanceofTarget() {
+        final List<Diagnostic> diagnostics = verifyInstanceOf(Map.of(), "java/lang/Boolean", true);
 
         assertThat(diagnostics).isEmpty();
     }
@@ -833,6 +1274,251 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void staticVerifierIgnoresUnreachableSubstitutedProcessRunnerRunBody() {
+        final ClassFile processRunner = classWithMethods(
+            "javan/util/ProcessRunner",
+            "java/lang/Object",
+            0,
+            List.of(),
+            processRunnerRunFallbackMethod()
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(Map.of(processRunner.name(), processRunner), List.of());
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierStillRejectsReachableSubstitutedProcessRunnerRunBody() {
+        final ClassFile processRunner = classWithMethods(
+            "javan/util/ProcessRunner",
+            "java/lang/Object",
+            0,
+            List.of(),
+            processRunnerRunFallbackMethod()
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(processRunner.name(), processRunner),
+            List.of(new EntryPoint(
+                "javan/util/ProcessRunner",
+                "run",
+                "(Ljava/nio/file/Path;Ljava/util/List;)Ljavan/util/ProcessRunner$Result;"
+            ))
+        );
+
+        assertThat(diagnostics).extracting(Diagnostic::code).contains("JAVAN014", "JAVAN031", "JAVAN031", "JAVAN031");
+    }
+
+    @Test
+    void staticVerifierIgnoresUnreachableHostOnlyClassFileReaderInputStreamOverload() {
+        final ClassFile reader = classWithMethods(
+            "javan/classfile/ClassFileReader",
+            "java/lang/Object",
+            0,
+            List.of(),
+            hostOnlyInputStreamReadMethod("(Ljava/io/InputStream;Ljava/nio/file/Path;)Ljavan/classfile/ClassFile;")
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(Map.of(reader.name(), reader), List.of());
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierIgnoresUnreachableHostOnlyClassMetadataReaderInputStreamOverload() {
+        final ClassFile reader = classWithMethods(
+            "javan/compat/ClassMetadataReader",
+            "java/lang/Object",
+            0,
+            List.of(),
+            hostOnlyInputStreamReadMethod("(Ljava/io/InputStream;Ljava/nio/file/Path;)Ljavan/compat/ClassMetadata;")
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(Map.of(reader.name(), reader), List.of());
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierRejectsReachableHostOnlyInputStreamOverload() {
+        final String descriptor = "(Ljava/io/InputStream;Ljava/nio/file/Path;)Ljavan/classfile/ClassFile;";
+        final ClassFile reader = classWithMethods(
+            "javan/classfile/ClassFileReader",
+            "java/lang/Object",
+            0,
+            List.of(),
+            hostOnlyInputStreamReadMethod(descriptor)
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(reader.name(), reader),
+            List.of(new EntryPoint(reader.name(), "read", descriptor))
+        );
+
+        assertThat(diagnostics).extracting(Diagnostic::code).contains("JAVAN031");
+    }
+
+    @Test
+    void staticVerifierIgnoresUnreachableHostOnlyJavanHomePropertiesHelper() {
+        final ClassFile javanHome = classWithMethods(
+            "javan/toolchain/JavanHome",
+            "java/lang/Object",
+            0,
+            List.of(),
+            methodInfo("property", "(Ljava/util/Properties;)Ljava/lang/String;", instruction(
+                0,
+                182,
+                "invokevirtual",
+                new MethodRef("java/util/Properties", "getProperty", "(Ljava/lang/String;)Ljava/lang/String;")
+            ))
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(Map.of(javanHome.name(), javanHome), List.of());
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierRejectsReachableHostOnlyJavanHomePropertiesHelper() {
+        final String descriptor = "(Ljava/util/Properties;)Ljava/lang/String;";
+        final ClassFile javanHome = classWithMethods(
+            "javan/toolchain/JavanHome",
+            "java/lang/Object",
+            0,
+            List.of(),
+            methodInfo("property", descriptor, instruction(
+                0,
+                182,
+                "invokevirtual",
+                new MethodRef("java/util/Properties", "getProperty", "(Ljava/lang/String;)Ljava/lang/String;")
+            ))
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(javanHome.name(), javanHome),
+            List.of(new EntryPoint(javanHome.name(), "property", descriptor))
+        );
+
+        assertThat(diagnostics).extracting(Diagnostic::code).contains("JAVAN031");
+    }
+
+    @Test
+    void staticVerifierIgnoresUnreachableHostOnlyToolchainMetadataCauseConstructor() {
+        final ClassFile exception = classWithMethods(
+            "javan/toolchain/ToolchainMetadataException",
+            "java/lang/RuntimeException",
+            0,
+            List.of(),
+            methodInfo("<init>", "(Ljava/lang/String;Ljava/lang/Throwable;)V", instruction(
+                0,
+                183,
+                "invokespecial",
+                new MethodRef("java/lang/RuntimeException", "<init>", "(Ljava/lang/String;Ljava/lang/Throwable;)V")
+            ))
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(Map.of(exception.name(), exception), List.of());
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierRejectsReachableHostOnlyToolchainMetadataCauseConstructor() {
+        final String descriptor = "(Ljava/lang/String;Ljava/lang/Throwable;)V";
+        final ClassFile exception = classWithMethods(
+            "javan/toolchain/ToolchainMetadataException",
+            "java/lang/RuntimeException",
+            0,
+            List.of(),
+            methodInfo("<init>", descriptor, instruction(
+                0,
+                183,
+                "invokespecial",
+                new MethodRef("java/lang/RuntimeException", "<init>", "(Ljava/lang/String;Ljava/lang/Throwable;)V")
+            ))
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(exception.name(), exception),
+            List.of(new EntryPoint(exception.name(), "<init>", descriptor))
+        );
+
+        assertThat(diagnostics).extracting(Diagnostic::code).contains("JAVAN031");
+    }
+
+    @Test
+    void staticVerifierIgnoresUnreachableHostOnlyCliRunFacade() {
+        final String descriptor = "(Ljava/nio/file/Path;Ljava/io/PrintStream;Ljava/io/PrintStream;[Ljava/lang/String;)I";
+        final ClassFile cli = classWithMethods(
+            "javan/cli/Cli",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0,
+                "run",
+                descriptor,
+                Optional.of(new CodeAttribute(
+                    1,
+                    5,
+                    new byte[0],
+                    1,
+                    List.of(new CodeException(0, 4, 4, Optional.of("java/lang/InterruptedException"))),
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "currentThread", "()Ljava/lang/Thread;")),
+                        instruction(1, 182, "invokevirtual", new MethodRef("java/lang/Thread", "interrupt", "()V")),
+                        instruction(2, 5, "iconst_2"),
+                        instruction(3, 172, "ireturn"),
+                        instruction(4, 6, "iconst_3")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(Map.of(cli.name(), cli), List.of());
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierRejectsReachableHostOnlyCliRunFacade() {
+        final String descriptor = "(Ljava/nio/file/Path;Ljava/io/PrintStream;Ljava/io/PrintStream;[Ljava/lang/String;)I";
+        final ClassFile cli = classWithMethods(
+            "javan/cli/Cli",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0,
+                "run",
+                descriptor,
+                Optional.of(new CodeAttribute(
+                    1,
+                    5,
+                    new byte[0],
+                    1,
+                    List.of(new CodeException(0, 4, 4, Optional.of("java/lang/InterruptedException"))),
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "currentThread", "()Ljava/lang/Thread;")),
+                        instruction(1, 182, "invokevirtual", new MethodRef("java/lang/Thread", "interrupt", "()V")),
+                        instruction(2, 5, "iconst_2"),
+                        instruction(3, 172, "ireturn"),
+                        instruction(4, 6, "iconst_3")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(cli.name(), cli),
+            List.of(new EntryPoint(cli.name(), "run", descriptor))
+        );
+
+        assertThat(diagnostics).extracting(Diagnostic::code).containsExactly("JAVAN014");
+    }
+
+    @Test
     void staticVerifierAcceptsOnlyDeterministicStringConcatInvokedynamic() {
         assertThat(verifyInvokedynamic(new DynamicRef(
             "makeConcatWithConstants",
@@ -873,6 +1559,93 @@ final class CoreBehaviorTest {
         final List<Diagnostic> warnings = verifyInvokedynamic(rejected.getFirst(), false);
         assertThat(warnings).hasSize(1);
         assertThat(warnings.getFirst().code()).isEqualTo("JAVAN130");
+    }
+
+    @Test
+    void staticVerifierIgnoresUnreachableJavacRecordObjectMethods() {
+        final List<Diagnostic> diagnostics = verifyRecordObjectMethod("java/lang/Record", "toString", "()Ljava/lang/String;", false);
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierIgnoresUnreachableJavacRecordHashCodeMethod() {
+        final List<Diagnostic> diagnostics = verifyRecordObjectMethod("java/lang/Record", "hashCode", "()I", false);
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierIgnoresUnreachableJavacRecordEqualsMethod() {
+        final List<Diagnostic> diagnostics = verifyRecordObjectMethod("java/lang/Record", "equals", "(Ljava/lang/Object;)Z", false);
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierRejectsReachableJavacRecordObjectMethods() {
+        final List<Diagnostic> diagnostics = verifyRecordObjectMethod("java/lang/Record", "toString", "()Ljava/lang/String;", true);
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN030");
+    }
+
+    @Test
+    void staticVerifierWarnsForUnreachableObjectMethodsBootstrapOutsideRecords() {
+        final List<Diagnostic> diagnostics = verifyRecordObjectMethod("java/lang/Object", "toString", "()Ljava/lang/String;", false);
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN130");
+    }
+
+    @Test
+    void staticVerifierWarnsForUnreachableObjectMethodsBootstrapOnNonObjectRecordMethod() {
+        final List<Diagnostic> diagnostics = verifyRecordObjectMethod("java/lang/Record", "describe", "()Ljava/lang/String;", false);
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN130");
+    }
+
+    @Test
+    void staticVerifierWarnsForUnreachableRecordObjectMethodWithoutDynamicMetadata() {
+        final List<Diagnostic> diagnostics = verifyRecordObjectMethod(
+            "java/lang/Record",
+            "toString",
+            "()Ljava/lang/String;",
+            Optional.empty(),
+            false
+        );
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN130");
+    }
+
+    @Test
+    void staticVerifierWarnsForUnreachableRecordObjectMethodWithDifferentBootstrapOwner() {
+        final List<Diagnostic> diagnostics = verifyRecordObjectMethod(
+            "java/lang/Record",
+            "toString",
+            "()Ljava/lang/String;",
+            Optional.of(new DynamicRef("toString", "()Ljava/lang/String;", "other/Factory", "bootstrap", "()V", List.of())),
+            false
+        );
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN130");
+    }
+
+    @Test
+    void staticVerifierWarnsForUnreachableRecordObjectMethodWithDifferentBootstrapName() {
+        final List<Diagnostic> diagnostics = verifyRecordObjectMethod(
+            "java/lang/Record",
+            "toString",
+            "()Ljava/lang/String;",
+            Optional.of(new DynamicRef("toString", "()Ljava/lang/String;", "java/lang/runtime/ObjectMethods", "other", "()V", List.of())),
+            false
+        );
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN130");
     }
 
     @Test
@@ -1348,6 +2121,52 @@ final class CoreBehaviorTest {
         ), reachable);
     }
 
+    private static List<Diagnostic> verifyRecordObjectMethod(
+        final String superName,
+        final String methodName,
+        final String descriptor,
+        final boolean reachable
+    ) {
+        return verifyRecordObjectMethod(superName, methodName, descriptor, Optional.of(new DynamicRef(
+            methodName,
+            descriptor,
+            "java/lang/runtime/ObjectMethods",
+            "bootstrap",
+            "()V",
+            List.of("field")
+        )), reachable);
+    }
+
+    private static List<Diagnostic> verifyRecordObjectMethod(
+        final String superName,
+        final String methodName,
+        final String descriptor,
+        final Optional<DynamicRef> dynamicRef,
+        final boolean reachable
+    ) {
+        final MethodInfo method = methodInfo(methodName, descriptor, new Instruction(
+            0,
+            186,
+            "invokedynamic",
+            new byte[]{0, 1, 0, 0},
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            dynamicRef
+        ));
+        final ClassFile classFile = classWithMethods("com/acme/Message", superName, 0, List.of(), method);
+        final List<EntryPoint> reachableMethods;
+        if (reachable) {
+            reachableMethods = List.of(new EntryPoint(classFile.name(), methodName, descriptor));
+        } else {
+            reachableMethods = List.of();
+        }
+        return new StaticVerifier().verify(Map.of(classFile.name(), classFile), reachableMethods);
+    }
+
     private static List<Diagnostic> verifyExceptionTable(final List<Instruction> instructions, final CodeException exception) {
         return verifyExceptionTable(Map.of(), instructions, exception);
     }
@@ -1671,6 +2490,51 @@ final class CoreBehaviorTest {
                     instruction(2, 184, "invokestatic", enumValueOf),
                     classInstruction(3, 192, "checkcast", "com/acme/Color"),
                     instruction(4, 176, "areturn")
+                )
+            ))
+        );
+    }
+
+    private static MethodInfo processRunnerRunFallbackMethod() {
+        return new MethodInfo(
+            0,
+            "run",
+            "(Ljava/nio/file/Path;Ljava/util/List;)Ljavan/util/ProcessRunner$Result;",
+            Optional.of(new CodeAttribute(
+                4,
+                5,
+                new byte[0],
+                1,
+                List.of(new CodeException(0, 4, 4, Optional.of("java/io/IOException"))),
+                List.of(
+                    instruction(0, 184, "invokestatic", new MethodRef(
+                        "java/nio/file/Files",
+                        "createTempFile",
+                        "(Ljava/lang/String;Ljava/lang/String;[Ljava/nio/file/attribute/FileAttribute;)Ljava/nio/file/Path;"
+                    )),
+                    instruction(1, 183, "invokespecial", new MethodRef("java/lang/ProcessBuilder", "<init>", "(Ljava/util/List;)V")),
+                    instruction(2, 182, "invokevirtual", new MethodRef("java/lang/ProcessBuilder", "start", "()Ljava/lang/Process;")),
+                    instruction(3, 176, "areturn"),
+                    instruction(4, 176, "areturn")
+                )
+            ))
+        );
+    }
+
+    private static MethodInfo hostOnlyInputStreamReadMethod(final String descriptor) {
+        return new MethodInfo(
+            0,
+            "read",
+            descriptor,
+            Optional.of(new CodeAttribute(
+                2,
+                3,
+                new byte[0],
+                0,
+                List.of(
+                    instruction(0, 42, "aload_0"),
+                    instruction(1, 182, "invokevirtual", new MethodRef("java/io/InputStream", "readAllBytes", "()[B")),
+                    instruction(2, 176, "areturn")
                 )
             ))
         );
@@ -2002,7 +2866,6 @@ final class CoreBehaviorTest {
             "JavanByteArray javan_export_result = javan_byte_array_export(javan_export_object_result);",
             "javan_root_frame_pop(javan_export_result_roots);",
             "javan_root_frame_pop(javan_export_roots);",
-            "javan_free(arg0_array);",
             "return javan_export_result;"
         );
         assertThat(generated.indexOf("javan_root_frame_push(javan_export_roots, 1);"))
@@ -2015,8 +2878,7 @@ final class CoreBehaviorTest {
             .isLessThan(generated.indexOf("javan_root_frame_pop(javan_export_result_roots);"));
         assertThat(generated.indexOf("javan_root_frame_pop(javan_export_result_roots);"))
             .isLessThan(generated.indexOf("javan_root_frame_pop(javan_export_roots);"));
-        assertThat(generated.indexOf("javan_root_frame_pop(javan_export_roots);"))
-            .isLessThan(generated.indexOf("javan_free(arg0_array);"));
+        assertThat(generated).doesNotContain("javan_free(arg0_array);");
     }
 
     @Test
@@ -2052,20 +2914,32 @@ final class CoreBehaviorTest {
         ));
 
         assertThat(generated).contains(
-            "void* javan_export_object_result = javan_com_acme_Text_greet__Ljava_lang_String__Ljava_lang_String_((void*) arg0);",
+            "void* arg0_string = 0;",
+            "void** javan_export_roots[] = {",
+            "(void**) &arg0_string",
+            "javan_root_frame_push(javan_export_roots, 1);",
+            "arg0_string = javan_string_from(arg0);",
+            "void* javan_export_object_result = javan_com_acme_Text_greet__Ljava_lang_String__Ljava_lang_String_(arg0_string);",
             "void** javan_export_result_roots[] = {",
             "(void**) &javan_export_object_result",
             "javan_root_frame_push(javan_export_result_roots, 1);",
             "char* javan_export_result = javan_string_export((const char*) javan_export_object_result);",
             "javan_root_frame_pop(javan_export_result_roots);",
+            "javan_root_frame_pop(javan_export_roots);",
             "return javan_export_result;"
         );
-        assertThat(generated.indexOf("void* javan_export_object_result = javan_com_acme_Text_greet__Ljava_lang_String__Ljava_lang_String_((void*) arg0);"))
+        assertThat(generated.indexOf("javan_root_frame_push(javan_export_roots, 1);"))
+            .isLessThan(generated.indexOf("arg0_string = javan_string_from(arg0);"));
+        assertThat(generated.indexOf("arg0_string = javan_string_from(arg0);"))
+            .isLessThan(generated.indexOf("void* javan_export_object_result = javan_com_acme_Text_greet__Ljava_lang_String__Ljava_lang_String_(arg0_string);"));
+        assertThat(generated.indexOf("void* javan_export_object_result = javan_com_acme_Text_greet__Ljava_lang_String__Ljava_lang_String_(arg0_string);"))
             .isLessThan(generated.indexOf("javan_root_frame_push(javan_export_result_roots, 1);"));
         assertThat(generated.indexOf("javan_root_frame_push(javan_export_result_roots, 1);"))
             .isLessThan(generated.indexOf("javan_string_export"));
         assertThat(generated.indexOf("javan_string_export"))
             .isLessThan(generated.indexOf("javan_root_frame_pop(javan_export_result_roots);"));
+        assertThat(generated.indexOf("javan_root_frame_pop(javan_export_result_roots);"))
+            .isLessThan(generated.indexOf("javan_root_frame_pop(javan_export_roots);"));
     }
 
     @Test

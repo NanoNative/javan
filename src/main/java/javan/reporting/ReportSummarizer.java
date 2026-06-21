@@ -18,16 +18,20 @@ public final class ReportSummarizer {
     private static final long NO_NUMBER = Long.MIN_VALUE;
     private static final List<ReportSpec> REPORTS = List.of(
         new ReportSpec("project", List.of("project.json")),
-        new ReportSpec("diagnostics", List.of("diagnostics.txt")),
+        new ReportSpec("diagnostics", List.of("diagnostics.txt", "diagnostics.json", "diagnostics.md")),
         new ReportSpec("reachability", List.of("reachability.txt")),
+        new ReportSpec("exceptions", List.of("exceptions.json", "exceptions.md", "debug-map.json")),
         new ReportSpec("intrinsics", List.of("intrinsics.json", "intrinsics.md")),
         new ReportSpec("optimizations", List.of("optimizations.json", "optimizations.md")),
+        new ReportSpec("dependencies", List.of("dependencies.json", "dependencies.md")),
+        new ReportSpec("licenses", List.of("licenses.json", "licenses.md")),
         new ReportSpec("resources", List.of("resources.json", "resources.md")),
         new ReportSpec("library-build", List.of("library-build.json", "library-build.md")),
         new ReportSpec("deduplication", List.of("deduplication-plan.json", "deduplication-plan.md")),
         new ReportSpec("runtime-features", List.of("runtime-features.json", "runtime-features.md")),
         new ReportSpec("runtime", List.of("runtime.json", "runtime.md")),
         new ReportSpec("runtime-footprint", List.of("runtime-footprint.json", "runtime-footprint.md")),
+        new ReportSpec("sanitizer-proof", List.of("sanitizer-proof.json", "sanitizer-proof.md")),
         new ReportSpec("compatibility", List.of("compatibility-summary.json", "compatibility-summary.md"))
     );
 
@@ -99,11 +103,20 @@ public final class ReportSummarizer {
         if ("reachability".equals(name)) {
             return reachabilityMetrics(read(reportsDirectory.resolve("reachability.txt")));
         }
+        if ("exceptions".equals(name)) {
+            return exceptionMetrics(read(reportsDirectory.resolve("exceptions.json")), read(reportsDirectory.resolve("debug-map.json")));
+        }
         if ("intrinsics".equals(name)) {
             return intrinsicsMetrics(read(reportsDirectory.resolve("intrinsics.json")));
         }
         if ("optimizations".equals(name)) {
             return optimizationMetrics(read(reportsDirectory.resolve("optimizations.json")));
+        }
+        if ("dependencies".equals(name)) {
+            return dependencyMetrics(read(reportsDirectory.resolve("dependencies.json")));
+        }
+        if ("licenses".equals(name)) {
+            return licenseMetrics(read(reportsDirectory.resolve("licenses.json")));
         }
         if ("resources".equals(name)) {
             return resourceMetrics(read(reportsDirectory.resolve("resources.json")));
@@ -122,6 +135,9 @@ public final class ReportSummarizer {
         }
         if ("runtime-footprint".equals(name)) {
             return runtimeFootprintMetrics(read(reportsDirectory.resolve("runtime-footprint.json")));
+        }
+        if ("sanitizer-proof".equals(name)) {
+            return sanitizerProofMetrics(read(reportsDirectory.resolve("sanitizer-proof.json")));
         }
         if ("compatibility".equals(name)) {
             return compatibilityMetrics(read(reportsDirectory.resolve("compatibility-summary.json")));
@@ -221,6 +237,49 @@ public final class ReportSummarizer {
         return List.copyOf(result);
     }
 
+    private static List<Metric> dependencyMetrics(final Optional<String> report) {
+        if (report.isEmpty()) {
+            return List.of();
+        }
+        final String value = report.orElseThrow();
+        final List<Metric> result = new ArrayList<>();
+        addNumber(result, value, "dependencyCount");
+        addNumber(result, value, "presentDependencies");
+        addNumber(result, value, "missingDependencies");
+        addNumber(result, value, "usedDependencies");
+        addNumber(result, value, "unusedDependencies");
+        addNumber(result, value, "reachableDependencyClasses");
+        addArrayCount(result, value, "dependencies");
+        return List.copyOf(result);
+    }
+
+    private static List<Metric> licenseMetrics(final Optional<String> report) {
+        if (report.isEmpty()) {
+            return List.of();
+        }
+        final String value = report.orElseThrow();
+        final List<Metric> result = new ArrayList<>();
+        addNumber(result, value, "licenseCount");
+        addNumber(result, value, "knownLicenses");
+        addNumber(result, value, "unknownLicenses");
+        addNumber(result, value, "warningLicenses");
+        addNumber(result, value, "blockedLicenses");
+        addArrayCount(result, value, "licenses");
+        return List.copyOf(result);
+    }
+
+    private static List<Metric> exceptionMetrics(final Optional<String> exceptions, final Optional<String> debugMap) {
+        final List<Metric> result = new ArrayList<>();
+        if (exceptions.isPresent()) {
+            addNumber(result, exceptions.orElseThrow(), "panicSites");
+            addArrayCount(result, exceptions.orElseThrow(), "sites");
+        }
+        if (debugMap.isPresent()) {
+            addNumber(result, debugMap.orElseThrow(), "debugEntries");
+        }
+        return List.copyOf(result);
+    }
+
     private static List<Metric> libraryBuildMetrics(final Optional<String> report) {
         if (report.isEmpty()) {
             return List.of();
@@ -269,6 +328,8 @@ public final class ReportSummarizer {
         addText(result, value, "status");
         addText(result, value, "containment");
         addText(result, value, "optimize");
+        addArrayText(result, value, "reachableRuntimeModules", "reachableRuntimeModuleNames");
+        addArrayText(result, value, "disabledRuntimeModules", "disabledRuntimeModuleNames");
         addArrayCount(result, value, "reachableRuntimeModules");
         addArrayCount(result, value, "disabledRuntimeModules");
         addArrayCount(result, value, "disabledReachableRuntimeModules");
@@ -287,6 +348,10 @@ public final class ReportSummarizer {
         addNumber(result, value, "javaFeatureVersion");
         addNumber(result, value, "projectClasses");
         addNumber(result, value, "jdkClasses");
+        addNumber(result, value, "supportRows");
+        addNumber(result, value, "passRows");
+        addNumber(result, value, "scopedRows");
+        addNumber(result, value, "targetRows");
         addNumber(result, value, "diagnosticErrors");
         addNumber(result, value, "recognizedRejectedOpcodeUses");
         addNumber(result, value, "unknownFatalOpcodeUses");
@@ -324,6 +389,8 @@ public final class ReportSummarizer {
         addText(result, value, "gcStress");
         addArrayCount(result, value, "gcExcludedAllocationKinds");
         addText(result, value, "runtimeContainerTraversal");
+        addBoolean(result, value, "ownedBufferReferenceValidation");
+        addText(result, value, "ownedBufferReferenceValidationScope");
         addBoolean(result, value, "operandCallTemporaryRoots");
         addText(result, value, "operandCallTemporaryRootModel");
         addArrayCount(result, value, "operandCallTemporaryRootScope");
@@ -339,6 +406,8 @@ public final class ReportSummarizer {
         addText(result, value, "protectedObjectReturnScope");
         addBoolean(result, value, "staticRootInventory");
         addBoolean(result, value, "localRootInventory");
+        addBoolean(result, value, "localRootLiveness");
+        addText(result, value, "localRootLivenessModel");
         addBoolean(result, value, "rootScanning");
         addText(result, value, "rootModel");
         addBoolean(result, value, "threadRoots");
@@ -363,6 +432,42 @@ public final class ReportSummarizer {
         addArrayNumberSum(result, value, "artifacts", "bytes", "artifactBytes");
         addArrayCount(result, value, "footprints");
         addArrayCount(result, value, "osArchCoverage");
+        return List.copyOf(result);
+    }
+
+    private static List<Metric> sanitizerProofMetrics(final Optional<String> report) {
+        if (report.isEmpty()) {
+            return List.of();
+        }
+        final String value = report.orElseThrow();
+        final List<Metric> result = new ArrayList<>();
+        addText(result, value, "status");
+        addText(result, value, "kind");
+        addText(result, value, "leakDetection");
+        addBoolean(result, value, "sanitizerRequired");
+        addBoolean(result, value, "counterCheck");
+        addBoolean(result, value, "failureSignatures");
+        addNumber(result, value, "expectedExit");
+        addNumber(result, value, "actualExit");
+        addNumber(result, value, "actualLiveAllocations");
+        addNumber(result, value, "actualLiveBytes");
+        addNumber(result, value, "actualPeakLiveBytes");
+        addNumber(result, value, "actualTotalAllocations");
+        addNumber(result, value, "actualGcCollections");
+        addNumber(result, value, "actualGcCollectedAllocations");
+        addNumber(result, value, "actualGcCollectedBytes");
+        addNumber(result, value, "actualRootFrameDepth");
+        addNumber(result, value, "actualFrameRootCount");
+        addNumber(result, value, "maxLiveAllocations");
+        addNumber(result, value, "maxLiveBytes");
+        addNumber(result, value, "maxPeakLiveBytes");
+        addNumber(result, value, "minTotalAllocations");
+        addNumber(result, value, "minGcCollections");
+        addNumber(result, value, "minGcCollectedAllocations");
+        addNumber(result, value, "minGcCollectedBytes");
+        addNumber(result, value, "maxRootFrameDepth");
+        addNumber(result, value, "maxFrameRootCount");
+        addArrayCount(result, value, "probes");
         return List.copyOf(result);
     }
 
@@ -391,6 +496,13 @@ public final class ReportSummarizer {
         final long value = arrayCount(report, name);
         if (value != NO_NUMBER) {
             result.add(Metric.number(name, value));
+        }
+    }
+
+    private static void addArrayText(final List<Metric> result, final String report, final String name, final String metricName) {
+        final Optional<String> value = stringArrayText(report, name);
+        if (value.isPresent()) {
+            result.add(Metric.text(metricName, value.orElseThrow()));
         }
     }
 
@@ -529,6 +641,42 @@ public final class ReportSummarizer {
         return Optional.of(Strings2.slice(report, valueStart + 1, valueEnd));
     }
 
+    private static Optional<String> stringArrayText(final String report, final String name) {
+        final Optional<String> body = arrayBody(report, name);
+        if (body.isEmpty()) {
+            return Optional.empty();
+        }
+        final List<String> values = new ArrayList<>();
+        final String value = body.orElseThrow();
+        for (int index = 0; index < value.length(); index++) {
+            if (value.charAt(index) != '"') {
+                continue;
+            }
+            final StringBuilder item = new StringBuilder();
+            boolean escaped = false;
+            index++;
+            while (index < value.length()) {
+                final char ch = value.charAt(index);
+                if (escaped) {
+                    item.append(ch);
+                    escaped = false;
+                } else if (ch == '\\') {
+                    escaped = true;
+                } else if (ch == '"') {
+                    break;
+                } else {
+                    item.append(ch);
+                }
+                index++;
+            }
+            values.add(item.toString());
+        }
+        if (values.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(join(", ", values));
+    }
+
     private static int arrayEnd(final String value, final int start) {
         int depth = 0;
         boolean quoted = false;
@@ -660,6 +808,17 @@ public final class ReportSummarizer {
             return end - 1;
         }
         return end;
+    }
+
+    private static String join(final String delimiter, final List<String> values) {
+        final StringBuilder result = new StringBuilder();
+        for (int index = 0; index < values.size(); index++) {
+            if (index > 0) {
+                result.append(delimiter);
+            }
+            result.append(values.get(index));
+        }
+        return result.toString();
     }
 
     private static int skipWhitespace(final String value, final int start) {

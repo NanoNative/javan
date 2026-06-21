@@ -23,7 +23,7 @@ jobs:
   publish:
     name: publish container images
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - name: Plan image release
         id: plan
@@ -175,3 +175,12 @@ jobs:
           verify_image "$IMAGE_REPOSITORY:wolfi"
           verify_image "$IMAGE_REPOSITORY:distroless"
           verify_image "$IMAGE_REPOSITORY:scratch"
+
+      - name: Verify default image builds showcase
+        shell: sh
+        env:
+          IMAGE_REPOSITORY: ${{ steps.plan.outputs.repository }}
+          RELEASE_VERSION: ${{ steps.plan.outputs.version }}
+        run: |
+          image="$IMAGE_REPOSITORY:$RELEASE_VERSION"
+          JAVAN_IMAGE="$image" sh .github/scripts/verify-showcase.sh

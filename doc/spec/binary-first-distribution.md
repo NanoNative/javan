@@ -32,6 +32,29 @@ Non-goal for the first release:
 - fake platform classes
 - replacing `javac`
 
+## Linux libc-free Runtime Footprint
+
+Status: planned.
+
+Javan should eventually offer a Linux-only footprint that avoids libc for constrained
+native programs and calls kernel syscalls directly. This is a size/deployment option,
+not the default runtime.
+
+Scope:
+
+- Linux only; macOS and Windows keep their platform APIs.
+- Start with tiny app/runtime modules where direct syscalls are stable and testable.
+- Keep DNS, certificates, HTTPS, locale/timezone, and full thread runtime outside the
+  first syscall slice unless they are explicitly implemented and stress-tested.
+- Report the active syscall/libc posture in runtime reports and container image reports.
+
+Acceptance:
+
+- generated syscall binaries list no libc dependency in the runtime report
+- unsupported runtime modules fail before native codegen when syscall mode is selected
+- sanitizer/leak and native showcase smoke pass for syscall-supported modules
+- normal system-linked builds remain the default
+
 ## Detection Rules
 
 The binary should use existing output first:
@@ -101,9 +124,15 @@ Before a first public binary release:
 - Linux `amd64`/`arm64` Wolfi, distroless, and scratch images build remotely from
   published release assets.
 - archives contain only final numeric versions.
-- `javan --version`, `javan doctor`, `javan build examples/native-showcase`, package
-  verification, acceptance, and sanitizer/leak gates pass.
+- archive verification extracts the package and proves packaged `bin/javan`.
+- packaged `bin/javan --version`, `javan doctor`, `javan build example`,
+  showcase report generation, stale-report-resistant self-check/report, package-built
+  native Javan smoke, acceptance, and sanitizer/leak gates pass.
 - unfinished Java support is visible in README, support matrix, and reports.
+
+Pull-request CI runs a lighter extracted-package smoke on every Linux/macOS release row.
+The full extracted-package acceptance and sanitizer/leak gate stays in the release
+workflow, where longer runtime is acceptable and easier to replay.
 
 Windows, Maven plugin, Gradle plugin, Homebrew tap, and IDE plugin may start from the
 release-test branch, but they are not blockers for the first Linux/macOS binary archive.

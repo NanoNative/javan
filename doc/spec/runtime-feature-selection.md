@@ -12,8 +12,11 @@ Current implemented slice:
 - disabled unused runtime modules are reported as unused/omitted
 - native checks write `.javan/reports/runtime-features.json`
 - native checks write `.javan/reports/runtime-features.md`
-- unified `javan report` summarizes the runtime-footprint family
-- unified `javan report` summarizes the runtime-features family
+- normal `check`, `build`, and `compat` commands refresh `.javan/reports/report.md`
+  and `.javan/reports/report.json`
+- unified reports summarize the runtime-footprint family
+- unified reports summarize the runtime-features family
+- `javan report` remains the explicit report reader/refresh command
 - `--target` is a host-target assertion and fails before native codegen on mismatch
 - host-native CI is required for Linux/macOS x64/aarch64
 

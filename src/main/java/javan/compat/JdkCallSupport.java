@@ -68,6 +68,12 @@ public final class JdkCallSupport {
         intrinsic("System.getProperty", "java/lang/System", "getProperty", "(Ljava/lang/String;)Ljava/lang/String;", "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;"),
         intrinsic("System.arraycopy", "java/lang/System", "arraycopy", "(Ljava/lang/Object;ILjava/lang/Object;II)V"),
         intrinsic("System.exit", "java/lang/System", "exit", "(I)V"),
+        runtime("Thread.<init>", "java/lang/Thread", "<init>", "()V", "(Ljava/lang/Runnable;)V"),
+        runtime("Thread.currentThread", "java/lang/Thread", "currentThread", "()Ljava/lang/Thread;"),
+        runtime("Thread.sleep", "java/lang/Thread", "sleep", "(J)V"),
+        runtime("Thread.interrupted", "java/lang/Thread", "interrupted", "()Z"),
+        runtime("Thread.interrupt", "java/lang/Thread", "interrupt", "()V"),
+        runtime("Thread.isInterrupted", "java/lang/Thread", "isInterrupted", "()Z"),
         intrinsic(
             "Arrays.copyOf",
             "java/util/Arrays",
@@ -102,6 +108,11 @@ public final class JdkCallSupport {
         runtime("Double.valueOf", "java/lang/Double", "valueOf", "(D)Ljava/lang/Double;"),
         runtime("Double.doubleValue", "java/lang/Double", "doubleValue", "()D"),
         intrinsic("Double.longBitsToDouble", "java/lang/Double", "longBitsToDouble", "(J)D"),
+        runtime("Boolean.valueOf", "java/lang/Boolean", "valueOf", "(Z)Ljava/lang/Boolean;"),
+        runtime("Boolean.booleanValue", "java/lang/Boolean", "booleanValue", "()Z"),
+        runtime("Duration.ofMillis", "java/time/Duration", "ofMillis", "(J)Ljava/time/Duration;"),
+        runtime("Duration.ofSeconds", "java/time/Duration", "ofSeconds", "(J)Ljava/time/Duration;"),
+        runtime("Duration.toMillis", "java/time/Duration", "toMillis", "()J"),
         runtime("PrintStream.print", "java/io/PrintStream", "print", "(Ljava/lang/String;)V"),
         runtime("PrintStream.println", "java/io/PrintStream", "println", "(Ljava/lang/String;)V", "(Ljava/lang/Object;)V", "(I)V", "(J)V", "(F)V", "(D)V", "(Z)V"),
         runtime("String.<init>", "java/lang/String", "<init>", "([CII)V"),
@@ -186,9 +197,24 @@ public final class JdkCallSupport {
         runtime("LinkedHashMap.putIfAbsent", "java/util/LinkedHashMap", "putIfAbsent", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("TreeMap.putIfAbsent", "java/util/TreeMap", "putIfAbsent", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Map.containsKey", "java/util/Map", "containsKey", "(Ljava/lang/Object;)Z"),
+        runtime("HashMap.containsKey", "java/util/HashMap", "containsKey", "(Ljava/lang/Object;)Z"),
+        runtime("LinkedHashMap.containsKey", "java/util/LinkedHashMap", "containsKey", "(Ljava/lang/Object;)Z"),
+        runtime("TreeMap.containsKey", "java/util/TreeMap", "containsKey", "(Ljava/lang/Object;)Z"),
         runtime("Map.size", "java/util/Map", "size", "()I"),
+        runtime("HashMap.size", "java/util/HashMap", "size", "()I"),
+        runtime("LinkedHashMap.size", "java/util/LinkedHashMap", "size", "()I"),
+        runtime("TreeMap.size", "java/util/TreeMap", "size", "()I"),
         runtime("Map.isEmpty", "java/util/Map", "isEmpty", "()Z"),
+        runtime("HashMap.isEmpty", "java/util/HashMap", "isEmpty", "()Z"),
+        runtime("LinkedHashMap.isEmpty", "java/util/LinkedHashMap", "isEmpty", "()Z"),
+        runtime("TreeMap.isEmpty", "java/util/TreeMap", "isEmpty", "()Z"),
         runtime("Map.values", "java/util/Map", "values", "()Ljava/util/Collection;"),
+        runtime("HashMap.values", "java/util/HashMap", "values", "()Ljava/util/Collection;"),
+        runtime("LinkedHashMap.values", "java/util/LinkedHashMap", "values", "()Ljava/util/Collection;"),
+        runtime("TreeMap.values", "java/util/TreeMap", "values", "()Ljava/util/Collection;"),
+        runtime("HashMap.getOrDefault", "java/util/HashMap", "getOrDefault", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("LinkedHashMap.getOrDefault", "java/util/LinkedHashMap", "getOrDefault", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("TreeMap.getOrDefault", "java/util/TreeMap", "getOrDefault", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Path.of", "java/nio/file/Path", "of", "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;"),
         runtime("Path.resolve", "java/nio/file/Path", "resolve", "(Ljava/lang/String;)Ljava/nio/file/Path;"),
         runtime("Path.resolve", "java/nio/file/Path", "resolve", "(Ljava/nio/file/Path;)Ljava/nio/file/Path;"),
@@ -215,7 +241,51 @@ public final class JdkCallSupport {
         runtime("Files.readAllBytes", "java/nio/file/Files", "readAllBytes", "(Ljava/nio/file/Path;)[B"),
         runtime("Files.deleteIfExists", "java/nio/file/Files", "deleteIfExists", "(Ljava/nio/file/Path;)Z"),
         runtime("Files.size", "java/nio/file/Files", "size", "(Ljava/nio/file/Path;)J"),
+        runtime("Files.getLastModifiedTime", "java/nio/file/Files", "getLastModifiedTime", "(Ljava/nio/file/Path;[Ljava/nio/file/LinkOption;)Ljava/nio/file/attribute/FileTime;"),
+        runtime("FileTime.toMillis", "java/nio/file/attribute/FileTime", "toMillis", "()J"),
         runtime("Files.newDirectoryStream", "java/nio/file/Files", "newDirectoryStream", "(Ljava/nio/file/Path;)Ljava/nio/file/DirectoryStream;"),
+        runtime("InetAddress.getLoopbackAddress", "java/net/InetAddress", "getLoopbackAddress", "()Ljava/net/InetAddress;"),
+        runtime("InetAddress.getHostAddress", "java/net/InetAddress", "getHostAddress", "()Ljava/lang/String;"),
+        runtime("InetAddress.getHostName", "java/net/InetAddress", "getHostName", "()Ljava/lang/String;"),
+        runtime("InetAddress.getCanonicalHostName", "java/net/InetAddress", "getCanonicalHostName", "()Ljava/lang/String;"),
+        runtime("InetSocketAddress.<init>", "java/net/InetSocketAddress", "<init>", "(Ljava/lang/String;I)V", "(Ljava/net/InetAddress;I)V"),
+        runtime("InetSocketAddress.getPort", "java/net/InetSocketAddress", "getPort", "()I"),
+        runtime("InetSocketAddress.getHostString", "java/net/InetSocketAddress", "getHostString", "()Ljava/lang/String;"),
+        runtime("InetSocketAddress.getAddress", "java/net/InetSocketAddress", "getAddress", "()Ljava/net/InetAddress;"),
+        runtime("InetSocketAddress.toString", "java/net/InetSocketAddress", "toString", "()Ljava/lang/String;"),
+        runtime("Socket.<init>", "java/net/Socket", "<init>", "(Ljava/lang/String;I)V"),
+        runtime("Socket.isConnected", "java/net/Socket", "isConnected", "()Z"),
+        runtime("Socket.isClosed", "java/net/Socket", "isClosed", "()Z"),
+        runtime("Socket.getPort", "java/net/Socket", "getPort", "()I"),
+        runtime("Socket.getLocalPort", "java/net/Socket", "getLocalPort", "()I"),
+        runtime("Socket.getInetAddress", "java/net/Socket", "getInetAddress", "()Ljava/net/InetAddress;"),
+        runtime("Socket.getInputStream", "java/net/Socket", "getInputStream", "()Ljava/io/InputStream;"),
+        runtime("Socket.getOutputStream", "java/net/Socket", "getOutputStream", "()Ljava/io/OutputStream;"),
+        runtime("Socket.close", "java/net/Socket", "close", "()V"),
+        runtime("ServerSocket.<init>", "java/net/ServerSocket", "<init>", "(I)V"),
+        runtime("ServerSocket.getLocalPort", "java/net/ServerSocket", "getLocalPort", "()I"),
+        runtime("ServerSocket.accept", "java/net/ServerSocket", "accept", "()Ljava/net/Socket;"),
+        runtime("ServerSocket.close", "java/net/ServerSocket", "close", "()V"),
+        runtime("URI.create", "java/net/URI", "create", "(Ljava/lang/String;)Ljava/net/URI;"),
+        runtime("HttpClient.newHttpClient", "java/net/http/HttpClient", "newHttpClient", "()Ljava/net/http/HttpClient;"),
+        runtime("HttpRequest.newBuilder", "java/net/http/HttpRequest", "newBuilder", "(Ljava/net/URI;)Ljava/net/http/HttpRequest$Builder;"),
+        runtime("HttpRequest.Builder.GET", "java/net/http/HttpRequest$Builder", "GET", "()Ljava/net/http/HttpRequest$Builder;"),
+        runtime("HttpRequest.Builder.header", "java/net/http/HttpRequest$Builder", "header", "(Ljava/lang/String;Ljava/lang/String;)Ljava/net/http/HttpRequest$Builder;"),
+        runtime("HttpRequest.Builder.POST", "java/net/http/HttpRequest$Builder", "POST", "(Ljava/net/http/HttpRequest$BodyPublisher;)Ljava/net/http/HttpRequest$Builder;"),
+        runtime("HttpRequest.Builder.PUT", "java/net/http/HttpRequest$Builder", "PUT", "(Ljava/net/http/HttpRequest$BodyPublisher;)Ljava/net/http/HttpRequest$Builder;"),
+        runtime("HttpRequest.Builder.build", "java/net/http/HttpRequest$Builder", "build", "()Ljava/net/http/HttpRequest;"),
+        runtime("HttpRequest.BodyPublishers.ofString", "java/net/http/HttpRequest$BodyPublishers", "ofString", "(Ljava/lang/String;)Ljava/net/http/HttpRequest$BodyPublisher;"),
+        runtime("HttpRequest.BodyPublishers.ofByteArray", "java/net/http/HttpRequest$BodyPublishers", "ofByteArray", "([B)Ljava/net/http/HttpRequest$BodyPublisher;"),
+        runtime("HttpResponse.BodyHandlers.ofString", "java/net/http/HttpResponse$BodyHandlers", "ofString", "()Ljava/net/http/HttpResponse$BodyHandler;"),
+        runtime("HttpResponse.BodyHandlers.ofByteArray", "java/net/http/HttpResponse$BodyHandlers", "ofByteArray", "()Ljava/net/http/HttpResponse$BodyHandler;"),
+        runtime("HttpClient.send", "java/net/http/HttpClient", "send", "(Ljava/net/http/HttpRequest;Ljava/net/http/HttpResponse$BodyHandler;)Ljava/net/http/HttpResponse;"),
+        runtime("HttpResponse.statusCode", "java/net/http/HttpResponse", "statusCode", "()I"),
+        runtime("HttpResponse.body", "java/net/http/HttpResponse", "body", "()Ljava/lang/Object;"),
+        runtime("InputStream.read", "java/io/InputStream", "read", "()I", "([B)I", "([BII)I"),
+        runtime("InputStream.close", "java/io/InputStream", "close", "()V"),
+        runtime("OutputStream.write", "java/io/OutputStream", "write", "(I)V", "([B)V", "([BII)V"),
+        runtime("OutputStream.flush", "java/io/OutputStream", "flush", "()V"),
+        runtime("OutputStream.close", "java/io/OutputStream", "close", "()V"),
         runtime("Iterable.iterator", "java/lang/Iterable", "iterator", "()Ljava/util/Iterator;"),
         runtime("DirectoryStream.iterator", "java/nio/file/DirectoryStream", "iterator", "()Ljava/util/Iterator;"),
         runtime("DirectoryStream.close", "java/nio/file/DirectoryStream", "close", "()V"),
@@ -526,6 +596,67 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Returns runtime modules required by a reachable JDK call.
+     *
+     * @param methodRef method reference
+     * @return ordered runtime modules
+     */
+    public static List<String> runtimeModules(final MethodRef methodRef) {
+        final List<String> network = NetworkApiSupport.runtimeModules(methodRef);
+        if (!network.isEmpty()) {
+            return network;
+        }
+        if (!isSupported(methodRef)) {
+            return List.of();
+        }
+        final String owner = methodRef.owner();
+        final String name = methodRef.name();
+        if ("java/lang/System".equals(owner)) {
+            return systemRuntimeModules(name);
+        }
+        if ("java/lang/Math".equals(owner)) {
+            return List.of("math");
+        }
+        if ("java/lang/Thread".equals(owner)) {
+            return List.of("threads");
+        }
+        if ("java/util/Arrays".equals(owner)) {
+            return List.of("arrays");
+        }
+        if (isStringRuntimeOwner(owner) || isNumberToStringCall(owner, name)) {
+            return List.of("strings");
+        }
+        if (isBoxedPrimitiveOwner(owner)) {
+            return List.of("managed-heap");
+        }
+        if ("java/time/Duration".equals(owner)) {
+            return List.of("time");
+        }
+        if ("java/nio/file/attribute/FileTime".equals(owner)) {
+            return List.of("filesystem", "time");
+        }
+        if (isFileRuntimeOwner(owner)) {
+            return List.of("filesystem");
+        }
+        if (isCollectionRuntimeOwner(owner)) {
+            return List.of("collections");
+        }
+        if (isMapRuntimeOwner(owner)) {
+            return List.of("maps");
+        }
+        if ("java/util/Optional".equals(owner)) {
+            return List.of("optional");
+        }
+        if ("java/io/PrintStream".equals(owner)) {
+            return List.of("io");
+        }
+        if (isPlatformThrowable(owner)) {
+            return List.of("exceptions");
+        }
+        return List.of();
+    }
+
+    /**
      * Checks whether an owner is one of the throwable classes handled by the panic runtime.
      *
      * @param owner JVM internal owner
@@ -598,6 +729,103 @@ public final class JdkCallSupport {
             }
         }
         return true;
+    }
+
+    private static List<String> systemRuntimeModules(final String name) {
+        if ("nanoTime".equals(name) || "currentTimeMillis".equals(name)) {
+            return List.of("time");
+        }
+        if ("lineSeparator".equals(name)) {
+            return List.of("strings", "environment");
+        }
+        if ("getenv".equals(name) || "getProperty".equals(name)) {
+            return List.of("environment");
+        }
+        if ("arraycopy".equals(name)) {
+            return List.of("arrays");
+        }
+        if ("exit".equals(name)) {
+            return List.of("process");
+        }
+        return List.of();
+    }
+
+    private static boolean isStringRuntimeOwner(final String owner) {
+        if ("java/lang/String".equals(owner)) {
+            return true;
+        }
+        return "java/lang/StringBuilder".equals(owner);
+    }
+
+    private static boolean isNumberToStringCall(final String owner, final String name) {
+        if (!"toString".equals(name)) {
+            return false;
+        }
+        if ("java/lang/Integer".equals(owner)) {
+            return true;
+        }
+        if ("java/lang/Long".equals(owner)) {
+            return true;
+        }
+        if ("java/lang/Float".equals(owner)) {
+            return true;
+        }
+        return "java/lang/Double".equals(owner);
+    }
+
+    private static boolean isBoxedPrimitiveOwner(final String owner) {
+        if ("java/lang/Integer".equals(owner)) {
+            return true;
+        }
+        if ("java/lang/Long".equals(owner)) {
+            return true;
+        }
+        if ("java/lang/Float".equals(owner)) {
+            return true;
+        }
+        if ("java/lang/Double".equals(owner)) {
+            return true;
+        }
+        return "java/lang/Boolean".equals(owner);
+    }
+
+    private static boolean isFileRuntimeOwner(final String owner) {
+        if ("java/nio/file/Path".equals(owner)) {
+            return true;
+        }
+        if ("java/nio/file/Files".equals(owner)) {
+            return true;
+        }
+        return "java/nio/file/DirectoryStream".equals(owner);
+    }
+
+    private static boolean isCollectionRuntimeOwner(final String owner) {
+        if ("java/util/List".equals(owner)) {
+            return true;
+        }
+        if ("java/util/ArrayList".equals(owner)) {
+            return true;
+        }
+        if ("java/util/Collection".equals(owner)) {
+            return true;
+        }
+        if ("java/lang/Iterable".equals(owner)) {
+            return true;
+        }
+        return "java/util/Iterator".equals(owner);
+    }
+
+    private static boolean isMapRuntimeOwner(final String owner) {
+        if ("java/util/Map".equals(owner)) {
+            return true;
+        }
+        if ("java/util/HashMap".equals(owner)) {
+            return true;
+        }
+        if ("java/util/LinkedHashMap".equals(owner)) {
+            return true;
+        }
+        return "java/util/TreeMap".equals(owner);
     }
 
     private static boolean endsWithAscii(final String value, final String suffix) {

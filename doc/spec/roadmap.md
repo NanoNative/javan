@@ -4,7 +4,7 @@
 
 Large features should be built as small isolated slices in temporary labs, agent work
 areas, or spike branches, then reviewed and migrated into `javan`. See
-[feature-lab-workflow.md](feature-lab-workflow.md).
+[../process/feature-lab-workflow.md](../process/feature-lab-workflow.md).
 
 ## Cross-Platform Verification
 
@@ -15,24 +15,35 @@ Docker, JDK matrix, cache, negative-test, and release-gate policy lives in
 
 Large standalone tracks such as JavanUI, Javan Studio, Java SDK wrapping, build plugins,
 Homebrew packaging, and IDE integration may live in separate repositories or ignored labs
-with their own context files. See [independent-workspaces.md](independent-workspaces.md).
+with their own context files. See [../process/independent-workspaces.md](../process/independent-workspaces.md).
 
 ## Examples And Test Projects
 
-Public examples, acceptance projects, and test-only test projects are intentionally separate.
+Public examples, acceptance projects, and test-only projects are intentionally separate.
 See [examples-and-test-projects.md](examples-and-test-projects.md).
 
 ## Status Language
 
-Roadmap sections use production-slice language:
+Roadmap summary tables use this vocabulary:
 
-- `Implemented slice`: behavior available and verified for the stated scope.
+| Status | Meaning |
+| --- | --- |
+| Done | Implemented, tested, and release-gated for the stated scope. |
+| Partial | Useful subset exists; unsupported reachable shapes fail clearly. |
+| In progress | Production work is underway, but the release gate is not complete. |
+| Planned | Wanted, specified, and not claimed as supported yet. |
+| Blocked | Waiting on remote platform/tool validation or an external prerequisite. |
+| Dismissed | Deliberately outside the native-support goal, except for narrower future variants. |
+
+Detailed roadmap sections keep implementation-detail language:
+
+- `Implemented details`: behavior available and verified for the stated scope.
 - `Current gates`: checks that keep the slice honest.
 - `Open acceptance criteria`: work still required before the umbrella feature is complete.
 
 Broad Java features are not complete until their open acceptance criteria are empty and
-the support matrix has no unknown leftovers. An implemented slice must not imply full
-Java compatibility for the whole umbrella feature.
+the support matrix has no unknown leftovers. Partial support must not imply full Java
+compatibility for the whole umbrella feature.
 
 ## 0.1 Native Hello
 
@@ -41,7 +52,7 @@ verification, C generation, native link, and integration tests.
 
 ## 0.2 Static Primitives
 
-Implemented slice:
+Implemented details:
 
 - int locals
 - int arithmetic
@@ -72,7 +83,7 @@ Open acceptance criteria:
 
 ## 0.25 Simple Objects
 
-Implemented slice:
+Implemented details:
 
 - object allocation for known application classes
 - constructor calls
@@ -104,6 +115,9 @@ Implemented slice:
 - closed-world polymorphic interface dispatch tables
 - `String.length`, `String.isEmpty`, `String.charAt`, and `String.equals` intrinsics
 - javac `StringConcatFactory` string concatenation
+- non-ASCII string constants are rejected by `javan check` and native lowering when
+  used with UTF-16-sensitive operations such as `length`, `charAt`, `substring`,
+  `indexOf`, and `lastIndexOf`
 - static fields and reachable class initializers for supported bytecode
 - long, float, and double primitive arrays
 - object-array and int-array `clone()` lowering
@@ -120,14 +134,15 @@ Current gates:
 
 Open acceptance criteria:
 
-- non-ASCII/full UTF-16 string runtime semantics
+- non-ASCII/full UTF-16 string runtime semantics beyond the current clear rejection
+  for UTF-16-sensitive operations
 - general try/catch/finally exception-handler lowering
 - richer class initialization ordering across complex dependency graphs
 - full `java.lang.Enum` object identity and initialization semantics beyond the current constant-as-string model
 
 ## 0.27 Deterministic Compatibility
 
-Implemented slice:
+Implemented details:
 
 - `javan compat`
 - active JDK inventory through the `jrt:/` image
@@ -154,7 +169,7 @@ Open acceptance criteria:
 
 ## 0.28 Native Library Output
 
-Implemented slice:
+Implemented details:
 
 - build kinds: `app`, `jar`, `library`, `staticlib`, and `sharedlib`
 - library mode without requiring `Main.main`
@@ -169,7 +184,12 @@ Implemented slice:
 - `javan_free` ownership hook for javan-owned exported memory
 - `String` export as UTF-8 `char*`
 - `byte[]` export as pointer+length
-- versioned C ABI header macros (`JAVAN_ABI_VERSION = 1`)
+- versioned C ABI header macros (`JAVAN_ABI_VERSION = 2`)
+- ABI v1-compatible direct export symbols
+- ABI v2 C `javan_try_*` result wrappers with owned `JavanResult` diagnostics
+- Rust `try_javan_export_*` wrappers returning `Result<T, JavanError>`
+- Go `TryJavanExport*` wrappers returning `(T, error)`
+- Python `try_javan_export_*` wrappers returning Python-owned values or raising `JavanError`
 - generated C ABI compile tests
 - reported string ownership, byte-array ownership, error/result ABI, exception mapping,
   and thread/runtime rules
@@ -186,12 +206,25 @@ Current gates:
   no-main library builds, and C/Rust/Go/Python binding smoke checks
 - library metrics and deduplication reports are generated from the same reachability
   model as app builds
+- native-library sanitizer smoke counter-checks repeated C ABI `String` and `byte[]`
+  export/free paths with final GC, heap metadata validation, zero live heap, zero open
+  root frames, peak-live-byte ceiling, and minimum total/GC/collected counters
+- ABI v1 headers and bindings expose borrowed structured `javan_last_error_*` fields
+  beside the compatibility `javan_last_error()` message
+- ABI v2 C result wrappers expose owned diagnostics through `JavanResult`, survive
+  `javan_clear_error()`, and free through `javan_result_free`
+- generated Rust, Go, and Python result wrappers copy diagnostics before freeing
+  `JavanResult` and copy successful `String`/`byte[]` values before freeing
+  Javan-owned native memory
+- native-library probes cover null `String` input, empty `byte[]` input, negative
+  `byte[]` length rejection, structured last-error fields, last-error clear semantics,
+  try-wrapper success, try-wrapper error results, and result free semantics
 
 Open acceptance criteria:
 
 - annotation-driven exports
-- stable `JavanResult` error/result ABI
-- exception-to-result mapping for library mode
+- full Java exception-to-result mapping beyond the current caught Javan runtime
+  panic to borrowed last-error and C `JavanResult` ABI surfaces
 - per-export thread/reentrancy reports
 - richer object/record ABI models
 - cross-target library linking
@@ -201,7 +234,7 @@ Open acceptance criteria:
 
 ## 0.285 JVM Jar And Resources
 
-Implemented slice:
+Implemented details:
 
 - `javan build --kind jar`
 - jar builds without requiring `Main.main`
@@ -231,10 +264,10 @@ Open acceptance criteria:
 
 Status: implemented process-lifetime cleanup, allocation metadata/accounting, generated
 type descriptors, generated static-root inventory, generated local/parameter root frames,
-statement/label safe points, protected direct object returns, safe-point mark/sweep for
-generated objects, object arrays, primitive arrays, and runtime-owned strings, generated
-expression temporary root frames, conservative runtime-container pinning, reporting,
-soak, and sanitizer-stress slice. Full managed heap
+CFG-aware local root liveness, statement/label safe points, protected direct object
+returns, safe-point mark/sweep for generated objects, object arrays, primitive arrays,
+boxed primitive wrappers, and runtime-owned strings, generated expression temporary root frames, conservative
+runtime-container pinning, reporting, soak, and sanitizer-stress slice. Full managed heap
 coverage is still planned. See
 [memory-runtime-correctness.md](memory-runtime-correctness.md).
 
@@ -250,19 +283,25 @@ Current slice:
 - generated app/library code registers class type descriptors and object-field offsets
 - generated functions push object parameter/local root frames and pop them before
   generated returns
+- generated functions clear dead object local/parameter root slots at CFG-proven
+  safe-point boundaries across straight-line code, labels, branches, and loops
 - generated object-returning functions publish direct return values through a
   single-threaded static return root until callee safe points and frame pop complete
 - generated object-producing expression temporaries are rooted through statement/return
   expression root frames for nested object call arguments, store operands, print operands,
   array operands, and return operands
 - generated safe points can mark static roots, frame roots, generated object fields,
-  object-array elements, primitive-array leaf allocations, runtime-owned strings,
+  object-array elements, primitive-array leaf allocations, boxed primitive wrapper leaf
+  allocations, runtime-owned strings,
   runtime containers, and owned container storage
+- runtime `HashMap` backing-array growth publishes each moved keys/values buffer before
+  any later allocation can collect and traverse the rooted map
 - generated safe points are emitted at entry/init, labels, non-terminal statement
   boundaries, protected object returns, and expression-rooted statement/return operands;
   allocator paths now retry GC under heap pressure before deterministic out-of-memory
   failure for generated object/array/string allocation
-- generated objects, object arrays, primitive arrays, runtime-owned strings,
+- generated objects, object arrays, primitive arrays, boxed primitive wrappers,
+  runtime-owned strings,
   runtime containers, and owned container storage unreachable at safe points are swept;
   explicit runtime temporaries and FFI exports are excluded from GC
 - native library byte-array ABI inputs are rooted while wrapper-created Java byte arrays
@@ -272,14 +311,21 @@ Current slice:
 - explicit `javan_free` of process results releases owned stdout/stderr runtime strings
 - native acceptance runs `memory-soak`, a repeated allocation JVM-vs-native equivalence
   project, `static-root-inventory`, `root-frame-stack`, `gc-generated-object-graph`, plus
-  `object-registry-gc`, `protected-object-return`, `operand-call-temporary-roots`,
-  `large-arrays`, `primitive-array-gc`, `string-static-root`, `string-growth-limit`,
+  `local-root-liveness-gc`, `cfg-local-root-liveness-gc`, `object-registry-gc`,
+  `protected-object-return`, `operand-call-temporary-roots`,
+  `large-arrays`, `primitive-array-gc`, `boxed-boolean-gc`, `runtime-filetime-gc`,
+  `runtime-duration-millis-gc`, `runtime-duration-seconds-gc`, `boxed-integer-gc`,
+  `boxed-long-gc`, `boxed-float-gc`, `boxed-double-gc`,
+  `string-static-root`, `string-growth-limit`,
   `runtime-container-live-roots`, `runtime-list-reclaim`, `runtime-map-reclaim`,
+  `runtime-map-realloc-gc`,
   `runtime-optional-reclaim`, `runtime-iterator-reclaim`,
   `runtime-stringbuilder-reclaim`, `runtime-list-of-array-gc`,
   `runtime-list-copy-gc`, `runtime-map-copy-gc`, `runtime-map-values-gc`,
   `runtime-realloc-growth-fit`, `operand-call-receiver-temporary-root`,
-  `operand-array-load-temporary-root`, `runtime-string-temporary-root`,
+  `operand-array-load-temporary-root`, `operand-object-compare-temporary-root`,
+  `operand-field-load-temporary-root`, `operand-chained-field-load-temporary-root`,
+  `operand-chained-call-receiver-temporary-root`, `runtime-string-temporary-root`,
   `runtime-string-substring-source-root`, `runtime-string-replace-source-root`,
   `runtime-string-from-chars-source-root`, `runtime-string-char-array-copy-gc`,
   `runtime-stringbuilder-append-source-root`, `runtime-nested-container-reclaim`,
@@ -304,8 +350,11 @@ Current slice:
   `JAVAN_GC_STRESS` metadata validation plus `JAVAN_GC_SAFEPOINT_INTERVAL` collection
   stress and covers normal completion, static roots, root frames, generated object graph
   collection, object-registry GC, protected object returns, operand/call expression
-  temporary roots, large arrays, primitive-array GC, native-library byte-array FFI
+  temporary roots, large arrays, primitive-array GC, boxed primitive wrapper GC,
+  straight-line and CFG local root liveness,
+  native-library byte-array FFI
   ownership, runtime list/map copy and view helper rooting under heap pressure,
+  map backing-array realloc publish-before-GC safety,
   runtime UTF-8 string helper source rooting for substring, replace, char-array
   construction, copy, concat, StringBuilder append, path helper, and export-copy
   allocation paths, `FILE*`/`DIR*` panic-time cleanup, directory-stream source path
@@ -317,6 +366,29 @@ Current slice:
   `realloc` heap-limit growth accounting, hostile receiver/array-load/runtime-string/
   nested-container/catch/live-root panic allocation stress, allocator-path GC retry,
   deterministic panic cleanup, and `system-exit` cleanup
+- the generated-app sanitizer smoke has an opt-in counter wrapper, and the suite runs
+  `memory-soak` with final `javan_gc_collect()`, heap metadata validation, zero final
+  live allocations/bytes, a peak-live-byte ceiling, and minimum total/GC/collected
+  counters. It also writes and suite-asserts `.javan/reports/sanitizer-proof.*`
+  with actual live allocation, live byte, peak byte, total allocation, GC collection,
+  and collected allocation counters, then runs `javan report` and asserts the unified
+  report exposes the sanitizer-proof family and zero-live-heap counters.
+- the native-library sanitizer smoke runs a C ABI counter probe over repeated `String`
+  and `byte[]` export/free paths with final GC, heap metadata validation, zero final
+  live allocations/bytes, zero open root frames, a peak-live-byte ceiling, and minimum
+  total/GC/collected counters. It writes and suite-asserts the same sanitizer proof
+  report with actual live allocation, live byte, root-frame, frame-root, and GC counters,
+  then runs `javan report` and asserts the unified report exposes zero-live-heap and
+  zero-open-root counters.
+- the native-library sanitizer smoke also covers null `String` input, empty `byte[]`
+  input, negative `byte[]` input rejection, structured borrowed last-error fields, and
+  last-error clear semantics
+- generated Rust, Go, and Python bindings expose explicit free helpers for direct
+  javan-owned string and byte-array results, plus result wrappers that copy outputs into
+  language-owned values; the native-library smoke runs Python package result-wrapper
+  ownership when `python3` is available and Rust/Go package result-wrapper ownership
+  when `rustc` or `go` are available. CI and release install Go `1.26.4` and Rust
+  `1.96.0`, and `JAVAN_SANITIZER_REQUIRED=true` makes missing binding proof fail.
 - CI and release verification run sanitizer checks in required mode
 
 Open gates:
@@ -324,12 +396,12 @@ Open gates:
 - remaining operand/eval-order validation across supported IR shapes beyond the current
   hostile receiver, array-load, runtime-string, nested-container, caught-exception, and
   live-root panic probes
-- full Java heap mark/sweep beyond generated objects/arrays
+- full Java heap mark/sweep beyond generated objects/arrays, primitive arrays, boxed
+  primitive wrappers, current runtime strings, and current runtime containers
 - hostile-point GC collection stress across every supported allocation shape
-- string allocation ownership and collection
+- full Java `String` object and UTF-16 ownership beyond current UTF-8 runtime strings
 - exception semantics beyond direct same-method platform catch routing
 - sanitizer/leak CI on Windows and release footprint jobs
-- FFI ownership/free-path sanitizer tests for strings
 - thread roots once threads exist
 
 ## 0.29 Optimizer Foundation
@@ -369,15 +441,15 @@ Reports:
 
 ## 0.295 CLI UX Consolidation
 
-Status: implemented CLI/reporting slice with open build-plugin and artifact-layout
-acceptance criteria.
+Status: Partial. The CLI/reporting slice is implemented; build-plugin and
+artifact-layout acceptance criteria remain open.
 
 Goal:
 
 - keep the CLI easy enough that users do not need to understand internal artifact kinds,
   Maven properties, or report file locations before building something useful
 
-Implemented slice:
+Implemented details:
 
 - keep `javan build` as the default native app path
 - add `javan build --jar` as the friendly JVM jar path
@@ -391,6 +463,8 @@ Implemented slice:
 - detect class directories and jars as already-built inputs without a special reuse flag
 - add one bounded `javan report` reader over existing `.javan/reports` files; feature
   tracks add diagnostics and sections to that model, not new public report/check commands
+- refresh unified `.javan/reports/report.md` and `.javan/reports/report.json`
+  automatically from `check`, `build`, and `compat`
 
 Current gates:
 
@@ -500,6 +574,46 @@ Open technical risks:
 - shared library generation currently assumes POSIX/macOS flags
 - full self-contained Windows packaging needs explicit CRT policy
 
+## 0.298 Linux Libc-Free Syscall Runtime
+
+Status: planned external integration track.
+
+Goal:
+
+- provide an optional Linux runtime footprint that uses direct kernel syscalls instead
+  of libc for small static/native programs
+
+Rules:
+
+- not the default runtime
+- Linux only; macOS and Windows use platform APIs
+- no silent fallback to libc when syscall mode is requested
+- unsupported modules fail before code generation
+- runtime reports state `syscall` versus `libc` posture
+
+Initial scope:
+
+- process exit
+- stdout/stderr writes
+- monotonic/realtime clock
+- cwd and simple file reads/writes
+- simple memory mapping only if the allocator needs it
+
+Deferred:
+
+- DNS
+- certificates/TLS/HTTPS
+- locale/timezone
+- full virtual-thread scheduler and blocking I/O integration
+- complex process spawning
+
+Acceptance criteria:
+
+- Linux syscall artifacts report no libc dependency
+- syscall mode runs native showcase features that only use supported modules
+- unsupported module selection fails with a source-focused diagnostic
+- sanitizer/leak gates pass for all syscall-supported allocation paths
+
 ## 0.3 Go-Style Dependencies
 
 Add `javan.mod` and `javan.lock`.
@@ -510,14 +624,22 @@ Initial shape:
 module com.acme.app
 java 25
 
-require org.nanonative:nano 2025.11.3131219
-require berlin.yuna:type-map 2026.05.1481042
+require main libs/runtime.jar
+require main com.acme:math:1.2.3
+require test libs/test-support.jar
+require tool tools/codegen.jar
 ```
 
 Behavior:
 
-- resolve Maven coordinates without requiring Maven or Gradle
-- respect the local Maven cache (`~/.m2/repository`) before network fetches
+- current implementation resolves local jar/classes paths and direct coordinates from local
+  Maven repositories
+- local `main` dependencies enter plain `javac` and native app reachability
+- local `test` and `tool` dependencies are locked but do not enter native app reachability
+- missing local dependencies fail clearly
+- resolve direct Maven coordinates without requiring Maven or Gradle
+- respect configured local Maven repositories (`-Djavan.maven.localRepository`,
+  `-Dmaven.repo.local`, then `~/.m2/repository`) before network fetches
 - resolve from Maven Central only when enabled by policy
 - resolve from configured Maven/Ivy repositories and authenticated mirrors
 - resolve from GitHub Packages, GitHub releases, or Git source dependencies when declared
@@ -561,7 +683,7 @@ Open acceptance criteria:
 
 ## 0.32 Human-Readable Exceptions
 
-Status: planned. See [human-readable-exceptions.md](human-readable-exceptions.md).
+Status: Partial. See [human-readable-exceptions.md](human-readable-exceptions.md).
 
 Goal:
 
@@ -581,11 +703,19 @@ Planned diagnostics:
 - generated/native frames shown only with `--debug-native`
 - optimized and specialized method names mapped back to the original Java source through a debug map
 
-Planned reports:
+Implemented reports:
 
 - `.javan/reports/exceptions.json`
 - `.javan/reports/exceptions.md`
 - `.javan/reports/debug-map.json`
+
+Open acceptance criteria:
+
+- reachable call path rendering
+- exact expression/range highlighting beyond whole-line source snippets
+- expression-level runtime helper source mapping for null, bounds, string, cast, and arithmetic failures
+- `--debug-native` native/generated frame expansion
+- optimized/specialized method mapping after those optimizations are enabled
 
 ## 0.33 Compile-Time Runtime-Risk Warnings
 
@@ -609,7 +739,12 @@ Initial planned checks:
 - uncaught panic-style exception paths
 - redundant checks that can later feed release optimization
 
-Planned reports:
+Current shared diagnostic reports:
+
+- `.javan/reports/diagnostics.json` for the shared build/check diagnostic model
+- `.javan/reports/diagnostics.md` for readable diagnostic details
+
+Planned safety reports:
 
 - `.javan/reports/safety-warnings.json`
 - `.javan/reports/safety-warnings.md`
@@ -830,6 +965,10 @@ Rules:
 - generated/internal names must be hidden by default
 - source mapping must use the same diagnostic model as human-readable exceptions
 
+Core `javan` owns the `javac` wrapper contract and stable report/diagnostic formats. IDE
+plugins and build-tool integrations should live in sibling workspaces, not inside the core
+compiler dependency graph.
+
 ## 0.37 Go And Rust Translator / Binary Experiments
 
 Status: standalone lab track.
@@ -873,7 +1012,10 @@ Current state:
 - `javan build target/classes --main javan.Main` now builds a self-hosted native Javan
   bootstrap binary on the current host
 - the production self-host gate covers jar/report acceptance under the rebuilt binary
-  locally and still needs broader cross-OS/architecture verification
+  locally; CI package smoke also extracts the archive, clears stale reports, runs packaged
+  `check`/`report` on Javan's own classes, and uses packaged `bin/javan` to build a
+  native Javan smoke binary that must start
+- broader cross-OS/architecture verification still remains open until remote rows pass
 
 Target flow:
 
@@ -901,7 +1043,6 @@ Bootstrap stages:
 Production acceptance:
 
 - normal documented build commands produce a working Javan executable
-  native-image
 - the Javan-built executable can rebuild Javan from Javan class files
 - `dist/javan --version`, `doctor`, `check`, `build`, `run`, `compat`, `report`, and
   `toolchain` smoke tests pass
@@ -960,44 +1101,17 @@ that cannot enter the static native subset.
 
 ## Flagship: Javan Studio With JavanUI
 
-Status: planned flagship track. See [javan-studio-roadmap.md](javan-studio-roadmap.md).
+Status: external flagship track.
 
-Javan Studio is a professional visual app builder built with JavanUI itself. It creates
-Java-native apps, Railix flows, web frontend/backend projects, desktop apps, and native
-libraries from a versioned `AppModel`.
+Javan Studio and JavanUI are deliberate sibling-product tracks. The core repo only owns
+the integration contract:
 
-Core requirements:
+- Studio consumes stable `javan` report formats
+- generated output must remain normal Java and explicit project files
+- no Studio/UI implementation may add hidden runtime coupling to the core compiler
 
-- Javan Studio is built with JavanUI.
-- JavanUI must be production-grade enough to host Studio.
-- A versioned `AppModel` is the structural source of truth.
-- Generated output is normal Java, Railix code, DTO/schema code, and target-specific
-  project files.
-- Business logic remains editable Java.
-- No reflection, runtime scanning, or hidden editor-only logic.
-- Studio visualizes javan reports: reachability, build metrics, safety warnings, readable
-  exceptions, dependency usage, optimizations, native readiness, and accessibility.
-- Studio includes workspace shell, project tree, command palette, diagnostics panel, report
-  viewer, flow editor, UI editor, inspector, preview surface, and build center.
-- Flow editor supports `actor -> validate -> map -> branch -> side effect -> terminal result`.
-- UI editor supports responsive layouts, accessibility checks, state binding, action
-  binding, and resource management.
-- Export targets include native desktop app, web frontend/backend separation, backend
-  service, and native shared/static library with bindings later.
-- Studio must be buildable by `javan` and display its own `javan` reports.
-
-Execution order:
-
-1. JavanUI production foundation.
-2. Studio shell.
-3. Versioned `AppModel`.
-4. Railix flow editor.
-5. UI editor.
-6. UI-to-flow binding.
-7. Multi-target export.
-8. Full report/build center.
-9. Self-build and dogfooding.
-10. Professional editor features.
+Detailed product planning belongs in the sibling `javan-studio` and `javan-ui`
+workspaces under `/Users/yuna/projects/javan-project/`.
 
 ## UI Separation Rule
 

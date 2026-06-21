@@ -14,6 +14,7 @@ import java.util.Optional;
  * @param interfaces JVM internal interface names implemented by this class
  * @param fields fields declared by the class
  * @param methods methods declared by the class
+ * @param sourceFile SourceFile attribute value when present
  * @param source source class file path
  * @param application whether the class belongs to the application input rather than a dependency
  */
@@ -25,6 +26,7 @@ public record ClassFile(
     List<String> interfaces,
     List<FieldInfo> fields,
     List<MethodInfo> methods,
+    Optional<String> sourceFile,
     Path source,
     boolean application
 ) {
@@ -32,6 +34,33 @@ public record ClassFile(
     private static final int ACC_INTERFACE = 0x0200;
     private static final int ACC_SYNTHETIC = 0x1000;
     private static final int ACC_ENUM = 0x4000;
+
+    /**
+     * Creates a class file without parsed source-file metadata.
+     *
+     * @param majorVersion class file major version
+     * @param name JVM internal class name
+     * @param superName JVM internal superclass name
+     * @param accessFlags class access flags
+     * @param interfaces JVM internal interface names implemented by this class
+     * @param fields fields declared by the class
+     * @param methods methods declared by the class
+     * @param source source class file path
+     * @param application whether the class belongs to the application input
+     */
+    public ClassFile(
+        final int majorVersion,
+        final String name,
+        final String superName,
+        final int accessFlags,
+        final List<String> interfaces,
+        final List<FieldInfo> fields,
+        final List<MethodInfo> methods,
+        final Path source,
+        final boolean application
+    ) {
+        this(majorVersion, name, superName, accessFlags, interfaces, fields, methods, Optional.empty(), source, application);
+    }
 
     /**
      * Finds a method by name and descriptor.
@@ -104,6 +133,6 @@ public record ClassFile(
      * @return updated class file
      */
     public ClassFile withApplication(final boolean value) {
-        return new ClassFile(majorVersion, name, superName, accessFlags, interfaces, fields, methods, source, value);
+        return new ClassFile(majorVersion, name, superName, accessFlags, interfaces, fields, methods, sourceFile, source, value);
     }
 }

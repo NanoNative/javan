@@ -68,8 +68,8 @@ final class ReportSummarizerTest {
 
         final ReportSummarizer.Summary summary = new ReportSummarizer().write(tempDir);
 
-        assertThat(summary.markdown()).contains("Known report families: `0` present, `0` partial, `12` absent.");
-        assertThat(summary.json()).contains("\"presentFamilyCount\": 0", "\"partialFamilyCount\": 0", "\"absentFamilyCount\": 12");
+        assertThat(summary.markdown()).contains("Known report families: `0` present, `0` partial, `16` absent.");
+        assertThat(summary.json()).contains("\"presentFamilyCount\": 0", "\"partialFamilyCount\": 0", "\"absentFamilyCount\": 16");
     }
 
     @Test
@@ -186,10 +186,20 @@ final class ReportSummarizerTest {
     void writeSummarizesDiagnosticMetrics() throws Exception {
         final Path reports = reportsDirectory();
         Files.writeString(reports.resolve("diagnostics.txt"), "error[JAVAN001]: bad\r\nwarning[JAVAN101]: maybe\n");
+        Files.writeString(reports.resolve("diagnostics.json"), "{\"diagnostics\": 2}\n");
+        Files.writeString(reports.resolve("diagnostics.md"), "# Diagnostics\n");
 
         final ReportSummarizer.Summary summary = new ReportSummarizer().write(tempDir);
 
-        assertThat(summary.markdown()).contains("diagnostics: `2`", "errors: `1`", "warnings: `1`");
+        assertThat(summary.markdown()).contains(
+            "| `diagnostics` | present |",
+            "`diagnostics.txt`",
+            "`diagnostics.json`",
+            "`diagnostics.md`",
+            "diagnostics: `2`",
+            "errors: `1`",
+            "warnings: `1`"
+        );
     }
 
     @Test
@@ -232,6 +242,32 @@ final class ReportSummarizerTest {
             "intrinsicCallSites: `5`",
             "unsupportedJdkCallCandidateCount: `1`",
             "unsupportedJdkCallCandidates: `1`"
+        );
+    }
+
+    @Test
+    void writeSummarizesExceptionMetrics() throws Exception {
+        final Path reports = reportsDirectory();
+        Files.writeString(reports.resolve("exceptions.json"), """
+            {
+              "panicSites": 2,
+              "sites": [{"id": "panic-1"}, {"id": "panic-2"}]
+            }
+            """);
+        Files.writeString(reports.resolve("exceptions.md"), "# Runtime Exceptions\n");
+        Files.writeString(reports.resolve("debug-map.json"), """
+            {
+              "debugEntries": 2,
+              "entries": [{"id": "panic-1"}, {"id": "panic-2"}]
+            }
+            """);
+
+        final ReportSummarizer.Summary summary = new ReportSummarizer().write(tempDir);
+
+        assertThat(summary.markdown()).contains(
+            "panicSites: `2`",
+            "sites: `2`",
+            "debugEntries: `2`"
         );
     }
 
@@ -323,11 +359,11 @@ final class ReportSummarizerTest {
         final Path reports = reportsDirectory();
         Files.writeString(reports.resolve("library-build.json"), """
             {
-              "abiVersion": 1,
-              "stringOwnership": "input-borrowed-utf8-output-javan-owned-free-with-javan_free",
-              "byteArrayOwnership": "input-copied-output-javan-owned-data-free-with-javan_free",
-              "errorResultAbi": "not-yet-stable-panics-abort-current-call",
-              "exceptionMapping": "uncaught-native-panic-limited-same-method-catch",
+              "abiVersion": 2,
+              "stringOwnership": "input-copied-gc-managed-utf8-output-javan-owned-free-with-javan_free",
+              "byteArrayOwnership": "input-copied-gc-managed-output-javan-owned-data-free-with-javan_free",
+              "errorResultAbi": "abi-v2-c-owned-javanresult-try-wrappers-v1-direct-exports-compatible",
+              "exceptionMapping": "caught-runtime-panic-to-last-error-limited-same-method-catch",
               "threadRuntimeRules": "single-threaded-native-profile-no-thread-api-yet",
               "generatedAbiTests": "c-header-compile-test",
               "inputClasses": 3,
@@ -347,11 +383,11 @@ final class ReportSummarizerTest {
         final ReportSummarizer.Summary summary = new ReportSummarizer().write(tempDir);
 
         assertThat(summary.markdown()).contains(
-            "abiVersion: `1`",
-            "stringOwnership: `input-borrowed-utf8-output-javan-owned-free-with-javan_free`",
-            "byteArrayOwnership: `input-copied-output-javan-owned-data-free-with-javan_free`",
-            "errorResultAbi: `not-yet-stable-panics-abort-current-call`",
-            "exceptionMapping: `uncaught-native-panic-limited-same-method-catch`",
+            "abiVersion: `2`",
+            "stringOwnership: `input-copied-gc-managed-utf8-output-javan-owned-free-with-javan_free`",
+            "byteArrayOwnership: `input-copied-gc-managed-output-javan-owned-data-free-with-javan_free`",
+            "errorResultAbi: `abi-v2-c-owned-javanresult-try-wrappers-v1-direct-exports-compatible`",
+            "exceptionMapping: `caught-runtime-panic-to-last-error-limited-same-method-catch`",
             "threadRuntimeRules: `single-threaded-native-profile-no-thread-api-yet`",
             "generatedAbiTests: `c-header-compile-test`",
             "inputClasses: `3`",
@@ -385,6 +421,47 @@ final class ReportSummarizerTest {
     }
 
     @Test
+    void writeSummarizesDependencyAndLicenseMetrics() throws Exception {
+        final Path reports = reportsDirectory();
+        Files.writeString(reports.resolve("dependencies.json"), """
+            {
+              "dependencyCount": 2,
+              "presentDependencies": 2,
+              "missingDependencies": 0,
+              "usedDependencies": 1,
+              "unusedDependencies": 1,
+              "reachableDependencyClasses": 3,
+              "dependencies": [{"path": "used.jar"}, {"path": "unused.jar"}]
+            }
+            """);
+        Files.writeString(reports.resolve("dependencies.md"), "# Dependencies\n");
+        Files.writeString(reports.resolve("licenses.json"), """
+            {
+              "licenseCount": 2,
+              "knownLicenses": 1,
+              "unknownLicenses": 1,
+              "warningLicenses": 1,
+              "blockedLicenses": 0,
+              "licenses": [{"dependency": "used.jar"}, {"dependency": "unused.jar"}]
+            }
+            """);
+        Files.writeString(reports.resolve("licenses.md"), "# Licenses\n");
+
+        final ReportSummarizer.Summary summary = new ReportSummarizer().write(tempDir);
+
+        assertThat(summary.markdown()).contains(
+            "dependencyCount: `2`",
+            "usedDependencies: `1`",
+            "unusedDependencies: `1`",
+            "reachableDependencyClasses: `3`",
+            "licenseCount: `2`",
+            "knownLicenses: `1`",
+            "unknownLicenses: `1`",
+            "blockedLicenses: `0`"
+        );
+    }
+
+    @Test
     void writeSummarizesRuntimeFeatureMetrics() throws Exception {
         final Path reports = reportsDirectory();
         Files.writeString(reports.resolve("runtime-features.json"), """
@@ -392,7 +469,7 @@ final class ReportSummarizerTest {
               "status": "pass",
               "containment": "system-linked",
               "optimize": "size",
-              "reachableRuntimeModules": ["core", "strings"],
+              "reachableRuntimeModules": ["core", "network", "socket"],
               "disabledRuntimeModules": ["thread-profiling"],
               "disabledReachableRuntimeModules": [],
               "disabledUnusedRuntimeModules": ["thread-profiling"],
@@ -407,12 +484,32 @@ final class ReportSummarizerTest {
             "status: `pass`",
             "containment: `system-linked`",
             "optimize: `size`",
-            "reachableRuntimeModules: `2`",
+            "reachableRuntimeModuleNames: `core, network, socket`",
+            "reachableRuntimeModules: `3`",
+            "disabledRuntimeModuleNames: `thread-profiling`",
             "disabledRuntimeModules: `1`",
             "disabledReachableRuntimeModules: `0`",
             "disabledUnusedRuntimeModules: `1`",
             "unknownDisabledRuntimeModules: `0`"
         );
+    }
+
+    @Test
+    void writeOmitsEmptyRuntimeFeatureNameMetrics() throws Exception {
+        final Path reports = reportsDirectory();
+        Files.writeString(reports.resolve("runtime-features.json"), """
+            {
+              "reachableRuntimeModules": [],
+              "disabledRuntimeModules": []
+            }
+            """);
+        Files.writeString(reports.resolve("runtime-features.md"), "# Runtime Features\n");
+
+        final ReportSummarizer.Summary summary = new ReportSummarizer().write(tempDir);
+
+        assertThat(summary.markdown())
+            .contains("reachableRuntimeModules: `0`", "disabledRuntimeModules: `0`")
+            .doesNotContain("reachableRuntimeModuleNames:", "disabledRuntimeModuleNames:");
     }
 
     @Test
@@ -427,30 +524,32 @@ final class ReportSummarizerTest {
               "runtimeModulesIncluded": ["core", "arrays", "strings"],
               "memoryModel": "tracked-c-heap-safe-point-partial-gc",
               "allocator": "tracked-calloc-free-at-shutdown",
-              "javaAllocationOwnership": "javan-owned-generated-objects-object-arrays-primitive-arrays-runtime-strings-runtime-containers-and-owned-container-storage-gc-eligible",
-              "ffiAllocationOwnership": "caller-frees-javan-owned-results-with-javan_free",
+              "javaAllocationOwnership": "javan-owned-generated-objects-object-arrays-primitive-arrays-boxed-primitive-wrappers-runtime-strings-runtime-containers-and-owned-container-storage-gc-eligible",
+              "ffiAllocationOwnership": "caller-frees-javan-owned-strings-and-byte-arrays-with-javan_free-result-diagnostics-with-javan_result_free",
               "temporaryAllocationOwnership": "javan-owned-explicit-free",
               "heapMetadata": true,
               "heapMetadataStrategy": "allocation-ledger-kind-typeid-runtimekind-mark-collectible",
               "heapAccounting": true,
               "heapReclamation": true,
-              "heapReclamationScope": "generated-objects-object-arrays-primitive-arrays-runtime-strings-runtime-containers-and-owned-container-storage",
+              "heapReclamationScope": "generated-objects-object-arrays-primitive-arrays-boxed-primitive-wrappers-runtime-strings-runtime-containers-and-owned-container-storage",
               "typeDescriptors": true,
               "objectFieldDescriptors": true,
               "frameRootInventory": true,
               "managedHeap": false,
               "gc": "partial-mark-sweep",
-              "gcStrategy": "single-threaded-entry-statement-and-return-safe-point-generated-object-object-array-primitive-array-runtime-string-runtime-container-and-owned-container-storage-mark-sweep",
+              "gcStrategy": "single-threaded-entry-statement-and-return-safe-point-generated-object-object-array-primitive-array-boxed-primitive-wrapper-runtime-string-runtime-container-and-owned-container-storage-mark-sweep",
               "gcStress": "metadata-verify-and-safe-point-collection",
               "gcExcludedAllocationKinds": ["explicit-runtime-temporaries", "ffi-exports"],
               "runtimeContainerTraversal": "precise-rooted-runtime-container-mark-sweep",
+              "ownedBufferReferenceValidation": true,
+              "ownedBufferReferenceValidationScope": "list-map-stringbuilder-owned-backing-storage",
               "operandCallTemporaryRoots": true,
               "operandCallTemporaryRootModel": "generated-expression-root-frame",
               "operandCallTemporaryRootScope": ["object-call-arguments", "nested-object-call-results"],
               "operandCallTemporaryRootLifetime": "until-enclosing-generated-statement-or-return-completes",
               "allocationPathCollection": true,
               "allocationPathCollectionModel": "allocator-gc-retry-before-out-of-memory",
-              "allocationPathCollectionScope": "generated-objects-object-arrays-primitive-arrays-runtime-strings-runtime-containers-and-owned-container-storage",
+              "allocationPathCollectionScope": "generated-objects-object-arrays-primitive-arrays-boxed-primitive-wrappers-runtime-strings-runtime-containers-and-owned-container-storage",
               "allocationFailureMode": "deterministic-native-panic",
               "statementSafePoints": true,
               "statementSafePointScope": "generated-label-and-non-terminal-statement-boundaries",
@@ -459,12 +558,14 @@ final class ReportSummarizerTest {
               "protectedObjectReturnScope": "single-threaded-static-return-root-through-callee-safe-point-and-frame-pop",
               "staticRootInventory": true,
               "localRootInventory": true,
+              "localRootLiveness": true,
+              "localRootLivenessModel": "cfg-safe-point-dead-root-clearing",
               "rootScanning": false,
               "rootModel": "generated-static-frame-return-and-expression-root-inventory-no-heap-scan",
               "threadRoots": false,
               "javaHeapAllocationsManaged": false,
               "exceptions": "panic-and-limited-same-method-catch",
-              "threads": "none",
+              "threads": "current-thread-interrupt-state-uninterrupted-sleep-and-thread-construction-only",
               "sanitizerInstrumentation": "not-built",
               "sanitizers": "not-enabled"
             }
@@ -481,30 +582,32 @@ final class ReportSummarizerTest {
             "runtimeModulesIncluded: `3`",
             "memoryModel: `tracked-c-heap-safe-point-partial-gc`",
             "allocator: `tracked-calloc-free-at-shutdown`",
-            "javaAllocationOwnership: `javan-owned-generated-objects-object-arrays-primitive-arrays-runtime-strings-runtime-containers-and-owned-container-storage-gc-eligible`",
-            "ffiAllocationOwnership: `caller-frees-javan-owned-results-with-javan_free`",
+            "javaAllocationOwnership: `javan-owned-generated-objects-object-arrays-primitive-arrays-boxed-primitive-wrappers-runtime-strings-runtime-containers-and-owned-container-storage-gc-eligible`",
+            "ffiAllocationOwnership: `caller-frees-javan-owned-strings-and-byte-arrays-with-javan_free-result-diagnostics-with-javan_result_free`",
             "temporaryAllocationOwnership: `javan-owned-explicit-free`",
             "heapMetadata: `true`",
             "heapMetadataStrategy: `allocation-ledger-kind-typeid-runtimekind-mark-collectible`",
             "heapAccounting: `true`",
             "heapReclamation: `true`",
-            "heapReclamationScope: `generated-objects-object-arrays-primitive-arrays-runtime-strings-runtime-containers-and-owned-container-storage`",
+            "heapReclamationScope: `generated-objects-object-arrays-primitive-arrays-boxed-primitive-wrappers-runtime-strings-runtime-containers-and-owned-container-storage`",
             "typeDescriptors: `true`",
             "objectFieldDescriptors: `true`",
             "frameRootInventory: `true`",
             "managedHeap: `false`",
             "gc: `partial-mark-sweep`",
-            "gcStrategy: `single-threaded-entry-statement-and-return-safe-point-generated-object-object-array-primitive-array-runtime-string-runtime-container-and-owned-container-storage-mark-sweep`",
+            "gcStrategy: `single-threaded-entry-statement-and-return-safe-point-generated-object-object-array-primitive-array-boxed-primitive-wrapper-runtime-string-runtime-container-and-owned-container-storage-mark-sweep`",
             "gcStress: `metadata-verify-and-safe-point-collection`",
             "gcExcludedAllocationKinds: `2`",
             "runtimeContainerTraversal: `precise-rooted-runtime-container-mark-sweep`",
+            "ownedBufferReferenceValidation: `true`",
+            "ownedBufferReferenceValidationScope: `list-map-stringbuilder-owned-backing-storage`",
             "operandCallTemporaryRoots: `true`",
             "operandCallTemporaryRootModel: `generated-expression-root-frame`",
             "operandCallTemporaryRootScope: `2`",
             "operandCallTemporaryRootLifetime: `until-enclosing-generated-statement-or-return-completes`",
             "allocationPathCollection: `true`",
             "allocationPathCollectionModel: `allocator-gc-retry-before-out-of-memory`",
-            "allocationPathCollectionScope: `generated-objects-object-arrays-primitive-arrays-runtime-strings-runtime-containers-and-owned-container-storage`",
+            "allocationPathCollectionScope: `generated-objects-object-arrays-primitive-arrays-boxed-primitive-wrappers-runtime-strings-runtime-containers-and-owned-container-storage`",
             "allocationFailureMode: `deterministic-native-panic`",
             "statementSafePoints: `true`",
             "statementSafePointScope: `generated-label-and-non-terminal-statement-boundaries`",
@@ -513,12 +616,14 @@ final class ReportSummarizerTest {
             "protectedObjectReturnScope: `single-threaded-static-return-root-through-callee-safe-point-and-frame-pop`",
             "staticRootInventory: `true`",
             "localRootInventory: `true`",
+            "localRootLiveness: `true`",
+            "localRootLivenessModel: `cfg-safe-point-dead-root-clearing`",
             "rootScanning: `false`",
             "rootModel: `generated-static-frame-return-and-expression-root-inventory-no-heap-scan`",
             "threadRoots: `false`",
             "javaHeapAllocationsManaged: `false`",
             "sanitizerInstrumentation: `not-built`",
-            "threads: `none`"
+            "threads: `current-thread-interrupt-state-uninterrupted-sleep-and-thread-construction-only`"
         );
     }
 
@@ -558,6 +663,10 @@ final class ReportSummarizerTest {
               "javaFeatureVersion": 25,
               "projectClasses": 8,
               "jdkClasses": 32482,
+              "supportRows": 83,
+              "passRows": 67,
+              "scopedRows": 14,
+              "targetRows": 2,
               "diagnosticErrors": 0,
               "recognizedRejectedOpcodeUses": 2,
               "unknownFatalOpcodeUses": 0
@@ -571,7 +680,76 @@ final class ReportSummarizerTest {
             "status: `pass`",
             "javaFeatureVersion: `25`",
             "jdkClasses: `32482`",
+            "supportRows: `83`",
+            "passRows: `67`",
+            "scopedRows: `14`",
+            "targetRows: `2`",
             "unknownFatalOpcodeUses: `0`"
+        );
+    }
+
+    @Test
+    void writeSummarizesSanitizerProofMetrics() throws Exception {
+        final Path reports = reportsDirectory();
+        Files.writeString(reports.resolve("sanitizer-proof.json"), """
+            {
+              "schemaVersion": 1,
+              "status": "pass",
+              "kind": "app",
+              "project": "src/test/resources/projects/native-profile/memory-soak",
+              "sanitizerRequired": true,
+              "counterCheck": true,
+              "leakDetection": "AddressSanitizer leak detection enabled",
+              "expectedExit": 0,
+              "actualExit": 0,
+              "actualLiveAllocations": 0,
+              "actualLiveBytes": 0,
+              "actualPeakLiveBytes": 24192,
+              "actualTotalAllocations": 5500,
+              "actualGcCollections": 8,
+              "actualGcCollectedAllocations": 5500,
+              "actualGcCollectedBytes": 24192,
+              "actualRootFrameDepth": 0,
+              "actualFrameRootCount": 0,
+              "maxLiveAllocations": 0,
+              "maxLiveBytes": 0,
+              "maxPeakLiveBytes": 32768,
+              "minTotalAllocations": 5000,
+              "minGcCollections": 1,
+              "minGcCollectedAllocations": 5000,
+              "failureSignatures": false,
+              "probes": [{"name": "generated-app"}, {"name": "heap-counters"}]
+            }
+            """);
+        Files.writeString(reports.resolve("sanitizer-proof.md"), "# Sanitizer Proof\n");
+
+        final ReportSummarizer.Summary summary = new ReportSummarizer().write(tempDir);
+
+        assertThat(summary.markdown()).contains(
+            "status: `pass`",
+            "kind: `app`",
+            "sanitizerRequired: `true`",
+            "counterCheck: `true`",
+            "leakDetection: `AddressSanitizer leak detection enabled`",
+            "expectedExit: `0`",
+            "actualExit: `0`",
+            "actualLiveAllocations: `0`",
+            "actualLiveBytes: `0`",
+            "actualPeakLiveBytes: `24192`",
+            "actualTotalAllocations: `5500`",
+            "actualGcCollections: `8`",
+            "actualGcCollectedAllocations: `5500`",
+            "actualGcCollectedBytes: `24192`",
+            "actualRootFrameDepth: `0`",
+            "actualFrameRootCount: `0`",
+            "maxLiveAllocations: `0`",
+            "maxLiveBytes: `0`",
+            "maxPeakLiveBytes: `32768`",
+            "minTotalAllocations: `5000`",
+            "minGcCollections: `1`",
+            "minGcCollectedAllocations: `5000`",
+            "failureSignatures: `false`",
+            "probes: `2`"
         );
     }
 

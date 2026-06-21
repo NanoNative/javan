@@ -8,6 +8,7 @@ import javan.ir.IrDispatch;
 import javan.ir.IrDispatchTarget;
 import javan.ir.IrInstruction;
 import javan.ir.IrProgram;
+import javan.ir.IrSourceLocation;
 import javan.util.Files2;
 import javan.util.Strings2;
 
@@ -140,6 +141,7 @@ public final class CCodegen {
         emitLibraryInitializer(program, c);
         for (final ExportedMethod export : exports) {
             emitExportWrapper(export, c);
+            emitResultWrapper(export, c);
         }
         return Files2.writeString(generatedDirectory.resolve("library.c"), c.toString());
     }
@@ -414,6 +416,7 @@ public final class CCodegen {
         }
         final List<String> rootNames = objectRootNames(function);
         final String rootFrameSymbol = rootFrameSymbol(function);
+        final RootLivenessPlan rootLiveness = RootLivenessPlan.forFunction(function);
         emitRootFramePush(rootFrameSymbol, rootNames, c);
         if (entry) {
             c.append("    javan_register_generated_type_descriptors();").append(System.lineSeparator());
@@ -423,8 +426,12 @@ public final class CCodegen {
         } else {
             c.append("    javan_gc_safe_point();").append(System.lineSeparator());
         }
-        for (final IrInstruction instruction : function.instructions()) {
-            emitInstruction(instruction, entry, rootFrameSymbol, !rootNames.isEmpty(), c);
+        for (int index = 0; index < function.instructions().size(); index++) {
+            final IrInstruction instruction = function.instructions().get(index);
+            emitInstruction(index, instruction, entry, rootFrameSymbol, !rootNames.isEmpty(), c);
+            if (hasStatementSafePoint(instruction)) {
+                rootLiveness.emitClearsAfter(index, c);
+            }
             emitStatementSafePoint(instruction, c);
         }
         if (entry) {
@@ -450,66 +457,199 @@ public final class CCodegen {
         c.append("    if (javan_library_initialized != 0) {").append(System.lineSeparator());
         c.append("        return;").append(System.lineSeparator());
         c.append("    }").append(System.lineSeparator());
-        c.append("    javan_library_initialized = 1;").append(System.lineSeparator());
         c.append("    javan_register_generated_type_descriptors();").append(System.lineSeparator());
         c.append("    javan_register_generated_roots();").append(System.lineSeparator());
         emitClassInitializers(program, c);
         c.append("    javan_gc_safe_point();").append(System.lineSeparator());
+        c.append("    javan_library_initialized = 1;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
     }
 
     private static void emitExportWrapper(final ExportedMethod export, final StringBuilder c) {
         emitExportSignature(export, c);
         c.append(" {").append(System.lineSeparator());
+        c.append("    jmp_buf javan_export_panic_target;").append(System.lineSeparator());
+        c.append("    javan_panic_set_target(&javan_export_panic_target);").append(System.lineSeparator());
+        c.append("    if (setjmp(javan_export_panic_target) != 0) {").append(System.lineSeparator());
+        c.append("        javan_panic_clear_target(&javan_export_panic_target);").append(System.lineSeparator());
+        emitExportWrapperDefaultReturn(export.returnType(), c);
+        c.append("    }").append(System.lineSeparator());
         c.append("    javan_library_init();").append(System.lineSeparator());
-        final List<Integer> byteArrayArguments = byteArrayExportArgumentIndexes(export);
-        for (final int index : byteArrayArguments) {
-            c.append("    void* arg").append(index).append("_array = 0;").append(System.lineSeparator());
-        }
-        emitExportWrapperRootFramePush(byteArrayArguments, c);
-        for (final int index : byteArrayArguments) {
-            c.append("    arg").append(index).append("_array = javan_byte_array_from(arg")
-                .append(index)
-                .append(".data, arg")
-                .append(index)
-                .append(".length);")
+        final List<Integer> objectArguments = objectExportArgumentIndexes(export);
+        for (final int index : objectArguments) {
+            c.append("    void* ")
+                .append(convertedExportArgumentName(export.parameterTypes().get(index), index))
+                .append(" = 0;")
                 .append(System.lineSeparator());
+        }
+        emitExportWrapperRootFramePush(export, objectArguments, c);
+        for (final int index : objectArguments) {
+            final AbiType type = export.parameterTypes().get(index);
+            if (type == AbiType.STRING) {
+                c.append("    arg").append(index).append("_string = javan_string_from(arg")
+                    .append(index)
+                    .append(");")
+                    .append(System.lineSeparator());
+            } else if (type == AbiType.BYTE_ARRAY) {
+                c.append("    arg").append(index).append("_array = javan_byte_array_from(arg")
+                    .append(index)
+                    .append(".data, arg")
+                    .append(index)
+                    .append(".length);")
+                    .append(System.lineSeparator());
+            }
         }
         final String call = export.internalSymbol() + "(" + exportArguments(export) + ")";
         final AbiType returnType = export.returnType();
         if (returnType == AbiType.VOID) {
             c.append("    ").append(call).append(";").append(System.lineSeparator());
-            emitExportWrapperCleanup(byteArrayArguments, c);
+            emitExportWrapperCleanup(objectArguments, c);
+            c.append("    javan_panic_clear_target(&javan_export_panic_target);").append(System.lineSeparator());
         } else if (returnType == AbiType.STRING) {
             c.append("    void* javan_export_object_result = ").append(call).append(";").append(System.lineSeparator());
             emitExportWrapperReturnRootFramePush(c);
             c.append("    char* javan_export_result = javan_string_export((const char*) javan_export_object_result);").append(System.lineSeparator());
             emitExportWrapperReturnRootFramePop(c);
-            emitExportWrapperCleanup(byteArrayArguments, c);
+            emitExportWrapperCleanup(objectArguments, c);
+            c.append("    javan_panic_clear_target(&javan_export_panic_target);").append(System.lineSeparator());
             c.append("    return javan_export_result;").append(System.lineSeparator());
         } else if (returnType == AbiType.BYTE_ARRAY) {
             c.append("    void* javan_export_object_result = ").append(call).append(";").append(System.lineSeparator());
             emitExportWrapperReturnRootFramePush(c);
             c.append("    JavanByteArray javan_export_result = javan_byte_array_export(javan_export_object_result);").append(System.lineSeparator());
             emitExportWrapperReturnRootFramePop(c);
-            emitExportWrapperCleanup(byteArrayArguments, c);
+            emitExportWrapperCleanup(objectArguments, c);
+            c.append("    javan_panic_clear_target(&javan_export_panic_target);").append(System.lineSeparator());
             c.append("    return javan_export_result;").append(System.lineSeparator());
         } else {
             c.append("    ").append(returnType.cReturnName()).append(" javan_export_result = ").append(call).append(";").append(System.lineSeparator());
-            emitExportWrapperCleanup(byteArrayArguments, c);
+            emitExportWrapperCleanup(objectArguments, c);
+            c.append("    javan_panic_clear_target(&javan_export_panic_target);").append(System.lineSeparator());
             c.append("    return javan_export_result;").append(System.lineSeparator());
         }
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
     }
 
-    private static List<Integer> byteArrayExportArgumentIndexes(final ExportedMethod export) {
+    private static void emitExportWrapperDefaultReturn(final AbiType type, final StringBuilder c) {
+        if (type == AbiType.VOID) {
+            c.append("        return;").append(System.lineSeparator());
+        } else if (type == AbiType.STRING) {
+            c.append("        return NULL;").append(System.lineSeparator());
+        } else if (type == AbiType.BYTE_ARRAY) {
+            c.append("        JavanByteArray javan_export_error_result;").append(System.lineSeparator());
+            c.append("        javan_export_error_result.data = NULL;").append(System.lineSeparator());
+            c.append("        javan_export_error_result.length = 0;").append(System.lineSeparator());
+            c.append("        return javan_export_error_result;").append(System.lineSeparator());
+        } else if (type == AbiType.LONG) {
+            c.append("        return 0LL;").append(System.lineSeparator());
+        } else if (type == AbiType.FLOAT) {
+            c.append("        return 0.0f;").append(System.lineSeparator());
+        } else if (type == AbiType.DOUBLE) {
+            c.append("        return 0.0;").append(System.lineSeparator());
+        } else {
+            c.append("        return 0;").append(System.lineSeparator());
+        }
+    }
+
+    private static void emitResultWrapper(final ExportedMethod export, final StringBuilder c) {
+        emitResultWrapperSignature(export, c);
+        c.append(" {").append(System.lineSeparator());
+        if (export.returnType() != AbiType.VOID) {
+            c.append("    if (out == NULL) {").append(System.lineSeparator());
+            c.append("        return javan_result_error_message(\"JAVAN-ABI-NULL-OUT\", \"invalid native ABI call\", \"result output pointer is null\");").append(System.lineSeparator());
+            c.append("    }").append(System.lineSeparator());
+            emitResultWrapperDefaultOut(export.returnType(), c);
+        }
+        final String call = export.symbol() + "(" + rawExportArguments(export) + ")";
+        if (export.returnType() == AbiType.VOID) {
+            c.append("    ").append(call).append(";").append(System.lineSeparator());
+        } else {
+            c.append("    ").append(export.returnType().cReturnName()).append(" javan_try_value = ").append(call).append(";").append(System.lineSeparator());
+        }
+        c.append("    if (javan_last_error() != NULL) {").append(System.lineSeparator());
+        c.append("        return javan_result_error_from_last_error();").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        if (export.returnType() != AbiType.VOID) {
+            c.append("    *out = javan_try_value;").append(System.lineSeparator());
+        }
+        c.append("    return javan_result_ok();").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+    }
+
+    private static void emitResultWrapperSignature(final ExportedMethod export, final StringBuilder c) {
+        c.append("JavanResult ").append(export.trySymbol()).append('(');
+        boolean emitted = false;
+        for (int index = 0; index < export.parameterTypes().size(); index++) {
+            if (emitted) {
+                c.append(", ");
+            }
+            final AbiType type = export.parameterTypes().get(index);
+            c.append(type.cName()).append(" arg").append(index);
+            emitted = true;
+        }
+        if (export.returnType() != AbiType.VOID) {
+            if (emitted) {
+                c.append(", ");
+            }
+            c.append(export.returnType().cReturnName()).append("* out");
+            emitted = true;
+        }
+        if (!emitted) {
+            c.append("void");
+        }
+        c.append(')');
+    }
+
+    private static void emitResultWrapperDefaultOut(final AbiType type, final StringBuilder c) {
+        if (type == AbiType.STRING) {
+            c.append("    *out = NULL;").append(System.lineSeparator());
+        } else if (type == AbiType.BYTE_ARRAY) {
+            c.append("    out->data = NULL;").append(System.lineSeparator());
+            c.append("    out->length = 0;").append(System.lineSeparator());
+        } else if (type == AbiType.LONG) {
+            c.append("    *out = 0LL;").append(System.lineSeparator());
+        } else if (type == AbiType.FLOAT) {
+            c.append("    *out = 0.0f;").append(System.lineSeparator());
+        } else if (type == AbiType.DOUBLE) {
+            c.append("    *out = 0.0;").append(System.lineSeparator());
+        } else {
+            c.append("    *out = 0;").append(System.lineSeparator());
+        }
+    }
+
+    private static List<Integer> objectExportArgumentIndexes(final ExportedMethod export) {
         final List<Integer> result = new java.util.ArrayList<>();
         for (int index = 0; index < export.parameterTypes().size(); index++) {
-            if (export.parameterTypes().get(index) == AbiType.BYTE_ARRAY) {
+            final AbiType type = export.parameterTypes().get(index);
+            if (type == AbiType.STRING || type == AbiType.BYTE_ARRAY) {
                 result.add(index);
             }
         }
         return List.copyOf(result);
+    }
+
+    private static String rawExportArguments(final ExportedMethod export) {
+        if (export.parameterTypes().isEmpty()) {
+            return "";
+        }
+        final StringBuilder arguments = new StringBuilder();
+        for (int index = 0; index < export.parameterTypes().size(); index++) {
+            if (index > 0) {
+                arguments.append(", ");
+            }
+            arguments.append("arg").append(index);
+        }
+        return arguments.toString();
+    }
+
+    private static String convertedExportArgumentName(final AbiType type, final int index) {
+        if (type == AbiType.STRING) {
+            return "arg" + index + "_string";
+        }
+        if (type == AbiType.BYTE_ARRAY) {
+            return "arg" + index + "_array";
+        }
+        throw new IllegalArgumentException("ABI type is not converted through a Java object slot: " + type.name());
     }
 
     private static void emitExportWrapperReturnRootFramePush(final StringBuilder c) {
@@ -523,34 +663,36 @@ public final class CCodegen {
         c.append("    javan_root_frame_pop(javan_export_result_roots);").append(System.lineSeparator());
     }
 
-    private static void emitExportWrapperRootFramePush(final List<Integer> byteArrayArguments, final StringBuilder c) {
-        if (byteArrayArguments.isEmpty()) {
+    private static void emitExportWrapperRootFramePush(
+        final ExportedMethod export,
+        final List<Integer> objectArguments,
+        final StringBuilder c
+    ) {
+        if (objectArguments.isEmpty()) {
             return;
         }
         c.append("    void** javan_export_roots[] = {").append(System.lineSeparator());
-        for (int position = 0; position < byteArrayArguments.size(); position++) {
-            final int argumentIndex = byteArrayArguments.get(position);
-            c.append("        (void**) &arg").append(argumentIndex).append("_array");
-            if (position < byteArrayArguments.size() - 1) {
+        for (int position = 0; position < objectArguments.size(); position++) {
+            final int argumentIndex = objectArguments.get(position);
+            c.append("        (void**) &")
+                .append(convertedExportArgumentName(export.parameterTypes().get(argumentIndex), argumentIndex));
+            if (position < objectArguments.size() - 1) {
                 c.append(',');
             }
             c.append(System.lineSeparator());
         }
         c.append("    };").append(System.lineSeparator());
         c.append("    javan_root_frame_push(javan_export_roots, ")
-            .append(byteArrayArguments.size())
+            .append(objectArguments.size())
             .append(");")
             .append(System.lineSeparator());
     }
 
-    private static void emitExportWrapperCleanup(final List<Integer> byteArrayArguments, final StringBuilder c) {
-        if (byteArrayArguments.isEmpty()) {
+    private static void emitExportWrapperCleanup(final List<Integer> objectArguments, final StringBuilder c) {
+        if (objectArguments.isEmpty()) {
             return;
         }
         c.append("    javan_root_frame_pop(javan_export_roots);").append(System.lineSeparator());
-        for (final int index : byteArrayArguments) {
-            c.append("    javan_free(arg").append(index).append("_array);").append(System.lineSeparator());
-        }
     }
 
     private static void emitExportSignature(final ExportedMethod export, final StringBuilder c) {
@@ -577,7 +719,7 @@ public final class CCodegen {
             }
             final AbiType type = export.parameterTypes().get(index);
             if (type == AbiType.STRING) {
-                arguments.append("(void*) arg").append(index);
+                arguments.append("arg").append(index).append("_string");
             } else if (type == AbiType.BYTE_ARRAY) {
                 arguments.append("arg").append(index).append("_array");
             } else {
@@ -612,6 +754,438 @@ public final class CCodegen {
             }
         }
         return List.copyOf(result);
+    }
+
+    private static final class RootLivenessPlan {
+        private final java.util.Map<Integer, List<String>> clearsAfter;
+
+        private RootLivenessPlan(final java.util.Map<Integer, List<String>> clearsAfter) {
+            this.clearsAfter = clearsAfter;
+        }
+
+        static RootLivenessPlan forFunction(final IrFunction function) {
+            final java.util.Map<Integer, List<String>> clears = new java.util.LinkedHashMap<>();
+            final List<IrInstruction> instructions = function.instructions();
+            final List<String> roots = objectRootNames(function);
+            if (roots.isEmpty()) {
+                return new RootLivenessPlan(clears);
+            }
+            if (!hasValidControlFlow(instructions)) {
+                return new RootLivenessPlan(clears);
+            }
+
+            final List<List<String>> uses = emptyStringSets(instructions.size());
+            final List<List<String>> defs = emptyStringSets(instructions.size());
+            for (int index = 0; index < instructions.size(); index++) {
+                final IrInstruction instruction = instructions.get(index);
+                final java.util.Optional<javan.ir.IrExpression> expression = instruction.expression();
+                if (expression.isPresent()) {
+                    collectRootUses(expression.get(), roots, uses.get(index));
+                }
+                final java.util.Optional<String> assignedRoot = assignedObjectRoot(instruction, roots);
+                if (assignedRoot.isPresent()) {
+                    defs.get(index).add(assignedRoot.get());
+                }
+            }
+
+            final List<List<Integer>> successors = successors(instructions);
+            final Liveness liveness = liveness(instructions, uses, defs, successors);
+            final List<List<String>> clearSets = clearSets(function, instructions, roots, defs, successors, liveness);
+            for (int index = 0; index < clearSets.size(); index++) {
+                if (!clearSets.get(index).isEmpty()) {
+                    clears.put(Integer.valueOf(index), clearSets.get(index));
+                }
+            }
+            return new RootLivenessPlan(clears);
+        }
+
+        void emitClearsAfter(final int instructionIndex, final StringBuilder c) {
+            final List<String> roots = clearsAfter.get(instructionIndex);
+            if (roots == null) {
+                return;
+            }
+            for (final String root : roots) {
+                c.append("    ").append(root).append(" = 0;").append(System.lineSeparator());
+            }
+        }
+
+        private static void collectRootUses(
+            final javan.ir.IrExpression expression,
+            final List<String> roots,
+            final List<String> result
+        ) {
+            if (expression.kind() == javan.ir.IrExpression.Kind.LOCAL
+                && expression.type() == javan.ir.IrType.OBJECT
+                && contains(roots, expression.value())) {
+                addUnique(result, expression.value());
+            }
+            for (final javan.ir.IrExpression argument : expression.arguments()) {
+                collectRootUses(argument, roots, result);
+            }
+        }
+
+        private static java.util.Optional<String> assignedObjectRoot(
+            final IrInstruction instruction,
+            final List<String> roots
+        ) {
+            if (instruction.op() == IrInstruction.Op.ASSIGN_OBJECT) {
+                final String target = instruction.value().orElseThrow();
+                if (contains(roots, target)) {
+                    return java.util.Optional.of(target);
+                }
+            }
+            return java.util.Optional.empty();
+        }
+
+        private static Liveness liveness(
+            final List<IrInstruction> instructions,
+            final List<List<String>> uses,
+            final List<List<String>> defs,
+            final List<List<Integer>> successors
+        ) {
+            final List<List<String>> liveIn = emptyStringSets(instructions.size());
+            final List<List<String>> liveOut = emptyStringSets(instructions.size());
+            boolean changed = true;
+            while (changed) {
+                changed = false;
+                for (int index = instructions.size() - 1; index >= 0; index--) {
+                    final List<String> nextOut = new java.util.ArrayList<>();
+                    for (final Integer successor : successors.get(index)) {
+                        addAllUnique(nextOut, liveIn.get(successor.intValue()));
+                    }
+                    final List<String> nextIn = copyOf(uses.get(index));
+                    for (final String root : nextOut) {
+                        if (!contains(defs.get(index), root)) {
+                            addUnique(nextIn, root);
+                        }
+                    }
+                    if (!sameValues(liveOut.get(index), nextOut)) {
+                        liveOut.set(index, nextOut);
+                        changed = true;
+                    }
+                    if (!sameValues(liveIn.get(index), nextIn)) {
+                        liveIn.set(index, nextIn);
+                        changed = true;
+                    }
+                }
+            }
+            return new Liveness(liveIn, liveOut);
+        }
+
+        private static List<List<String>> clearSets(
+            final IrFunction function,
+            final List<IrInstruction> instructions,
+            final List<String> roots,
+            final List<List<String>> defs,
+            final List<List<Integer>> successors,
+            final Liveness liveness
+        ) {
+            final List<List<Integer>> predecessors = predecessors(instructions.size(), successors);
+            final List<List<String>> mayIn = emptyStringSets(instructions.size());
+            final List<List<String>> mayOut = emptyStringSets(instructions.size());
+            final List<List<String>> clears = emptyStringSets(instructions.size());
+            final List<String> parameterRoots = objectParameterRoots(function);
+            boolean changed = true;
+            while (changed) {
+                changed = false;
+                for (int index = 0; index < instructions.size(); index++) {
+                    final List<String> nextIn = new java.util.ArrayList<>();
+                    if (index == 0) {
+                        addAllUnique(nextIn, parameterRoots);
+                    }
+                    for (final Integer predecessor : predecessors.get(index)) {
+                        addAllUnique(nextIn, mayOut.get(predecessor.intValue()));
+                    }
+                    List<String> nextOut = copyOf(nextIn);
+                    nextOut = applyAssignmentMayState(instructions.get(index), defs.get(index), nextOut);
+                    final List<String> nextClears = rootsToClearAfter(
+                        instructions.get(index),
+                        index,
+                        roots,
+                        nextOut,
+                        liveness,
+                        successors
+                    );
+                    for (final String root : nextClears) {
+                        if (instructions.get(index).op() != IrInstruction.Op.BRANCH_IF) {
+                            nextOut = withoutValue(nextOut, root);
+                        }
+                    }
+                    if (!sameValues(mayIn.get(index), nextIn)) {
+                        mayIn.set(index, nextIn);
+                        changed = true;
+                    }
+                    if (!sameValues(mayOut.get(index), nextOut)) {
+                        mayOut.set(index, nextOut);
+                        changed = true;
+                    }
+                    if (!sameValues(clears.get(index), nextClears)) {
+                        clears.set(index, nextClears);
+                        changed = true;
+                    }
+                }
+            }
+            return clears;
+        }
+
+        private static List<String> applyAssignmentMayState(
+            final IrInstruction instruction,
+            final List<String> defs,
+            final List<String> state
+        ) {
+            List<String> result = state;
+            for (final String root : defs) {
+                result = withoutValue(result, root);
+                if (!assignsObjectNull(instruction)) {
+                    addUnique(result, root);
+                }
+            }
+            return result;
+        }
+
+        private static List<String> rootsToClearAfter(
+            final IrInstruction instruction,
+            final int instructionIndex,
+            final List<String> roots,
+            final List<String> mayOut,
+            final Liveness liveness,
+            final List<List<Integer>> successors
+        ) {
+            final List<String> result = new java.util.ArrayList<>();
+            if (!hasStatementSafePoint(instruction)) {
+                return result;
+            }
+            final List<String> requiredAfterClear = requiredAfterFallthroughClear(
+                instruction,
+                instructionIndex,
+                liveness,
+                successors
+            );
+            for (final String root : roots) {
+                if (contains(mayOut, root) && !contains(requiredAfterClear, root)) {
+                    result.add(root);
+                }
+            }
+            return result;
+        }
+
+        private static List<String> requiredAfterFallthroughClear(
+            final IrInstruction instruction,
+            final int instructionIndex,
+            final Liveness liveness,
+            final List<List<Integer>> successors
+        ) {
+            if (instruction.op() != IrInstruction.Op.BRANCH_IF) {
+                return liveness.liveOut().get(instructionIndex);
+            }
+            final Integer fallthrough = fallthroughSuccessor(instructionIndex, successors);
+            if (fallthrough == null) {
+                return List.of();
+            }
+            return liveness.liveIn().get(fallthrough.intValue());
+        }
+
+        private static Integer fallthroughSuccessor(final int instructionIndex, final List<List<Integer>> successors) {
+            final int fallthroughIndex = instructionIndex + 1;
+            for (final Integer successor : successors.get(instructionIndex)) {
+                if (successor.intValue() == fallthroughIndex) {
+                    return successor;
+                }
+            }
+            return null;
+        }
+
+        private static List<List<Integer>> successors(final List<IrInstruction> instructions) {
+            final java.util.Map<String, Integer> labelTargets = labelTargets(instructions);
+            final List<List<Integer>> result = emptyIntegerSets(instructions.size());
+            for (int index = 0; index < instructions.size(); index++) {
+                final IrInstruction instruction = instructions.get(index);
+                switch (instruction.op()) {
+                    case JUMP:
+                        addLabelSuccessor(result.get(index), labelTargets, instruction.value().orElseThrow());
+                        break;
+                    case BRANCH_IF:
+                        addLabelSuccessor(result.get(index), labelTargets, instruction.value().orElseThrow());
+                        addNextSuccessor(result.get(index), index, instructions.size());
+                        break;
+                    case PANIC:
+                    case RETURN_VOID:
+                    case RETURN_INT:
+                    case RETURN_LONG:
+                    case RETURN_FLOAT:
+                    case RETURN_DOUBLE:
+                    case RETURN_OBJECT:
+                        break;
+                    default:
+                        addNextSuccessor(result.get(index), index, instructions.size());
+                        break;
+                }
+            }
+            return result;
+        }
+
+        private static boolean hasValidControlFlow(final List<IrInstruction> instructions) {
+            final java.util.Map<String, Integer> labelTargets = new java.util.LinkedHashMap<>();
+            for (int index = 0; index < instructions.size(); index++) {
+                final IrInstruction instruction = instructions.get(index);
+                if (instruction.op() == IrInstruction.Op.LABEL) {
+                    final String label = instruction.value().orElseThrow();
+                    if (labelTargets.get(label) != null) {
+                        return false;
+                    }
+                    labelTargets.put(label, Integer.valueOf(index));
+                }
+            }
+            for (final IrInstruction instruction : instructions) {
+                switch (instruction.op()) {
+                    case JUMP:
+                    case BRANCH_IF:
+                        if (labelTargets.get(instruction.value().orElseThrow()) == null) {
+                            return false;
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            }
+            return true;
+        }
+
+        private static List<List<Integer>> predecessors(final int size, final List<List<Integer>> successors) {
+            final List<List<Integer>> result = emptyIntegerSets(size);
+            for (int index = 0; index < successors.size(); index++) {
+                for (final Integer successor : successors.get(index)) {
+                    addUniqueInteger(result.get(successor.intValue()), Integer.valueOf(index));
+                }
+            }
+            return result;
+        }
+
+        private static java.util.Map<String, Integer> labelTargets(final List<IrInstruction> instructions) {
+            final java.util.Map<String, Integer> result = new java.util.LinkedHashMap<>();
+            for (int index = 0; index < instructions.size(); index++) {
+                final IrInstruction instruction = instructions.get(index);
+                if (instruction.op() == IrInstruction.Op.LABEL) {
+                    result.put(instruction.value().orElseThrow(), Integer.valueOf(index));
+                }
+            }
+            return result;
+        }
+
+        private static void addLabelSuccessor(
+            final List<Integer> result,
+            final java.util.Map<String, Integer> labelTargets,
+            final String label
+        ) {
+            final Integer target = labelTargets.get(label);
+            if (target != null) {
+                addUniqueInteger(result, target);
+            }
+        }
+
+        private static void addNextSuccessor(final List<Integer> result, final int index, final int size) {
+            if (index + 1 < size) {
+                addUniqueInteger(result, Integer.valueOf(index + 1));
+            }
+        }
+
+        private static List<String> objectParameterRoots(final IrFunction function) {
+            final List<String> result = new java.util.ArrayList<>();
+            for (final javan.ir.IrParameter parameter : function.parameters()) {
+                if (parameter.type() == javan.ir.IrType.OBJECT) {
+                    result.add(parameter.name());
+                }
+            }
+            return result;
+        }
+
+        private static List<List<String>> emptyStringSets(final int size) {
+            final List<List<String>> result = new java.util.ArrayList<>();
+            for (int index = 0; index < size; index++) {
+                result.add(new java.util.ArrayList<>());
+            }
+            return result;
+        }
+
+        private static List<List<Integer>> emptyIntegerSets(final int size) {
+            final List<List<Integer>> result = new java.util.ArrayList<>();
+            for (int index = 0; index < size; index++) {
+                result.add(new java.util.ArrayList<>());
+            }
+            return result;
+        }
+
+        private static List<String> copyOf(final List<String> values) {
+            final List<String> result = new java.util.ArrayList<>();
+            addAllUnique(result, values);
+            return result;
+        }
+
+        private static void addAllUnique(final List<String> values, final List<String> additions) {
+            for (final String addition : additions) {
+                addUnique(values, addition);
+            }
+        }
+
+        private static void addUnique(final List<String> values, final String value) {
+            if (!contains(values, value)) {
+                values.add(value);
+            }
+        }
+
+        private static void addUniqueInteger(final List<Integer> values, final Integer value) {
+            if (!containsInteger(values, value)) {
+                values.add(value);
+            }
+        }
+
+        private static List<String> withoutValue(final List<String> values, final String value) {
+            final List<String> result = new java.util.ArrayList<>();
+            for (final String current : values) {
+                if (!current.equals(value)) {
+                    result.add(current);
+                }
+            }
+            return result;
+        }
+
+        private static boolean contains(final List<String> values, final String value) {
+            for (final String current : values) {
+                if (current.equals(value)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static boolean containsInteger(final List<Integer> values, final Integer value) {
+            for (final Integer current : values) {
+                if (current.intValue() == value.intValue()) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static boolean sameValues(final List<String> left, final List<String> right) {
+            if (left.size() != right.size()) {
+                return false;
+            }
+            for (final String value : left) {
+                if (!contains(right, value)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        private static boolean assignsObjectNull(final IrInstruction instruction) {
+            final java.util.Optional<javan.ir.IrExpression> expression = instruction.expression();
+            return expression.isPresent() && expression.get().kind() == javan.ir.IrExpression.Kind.OBJECT_NULL;
+        }
+
+        private record Liveness(List<List<String>> liveIn, List<List<String>> liveOut) {
+        }
     }
 
     private static void emitRootFramePush(final String rootFrameSymbol, final List<String> rootNames, final StringBuilder c) {
@@ -779,17 +1353,32 @@ public final class CCodegen {
     private static void emitBranchIf(
         final StringBuilder c,
         final String label,
-        final javan.ir.IrExpression condition
+        final javan.ir.IrExpression condition,
+        final String sourceContextSymbol
     ) {
         final ExpressionPlan plan = new ExpressionPlan();
         final String value = plan.expression(condition);
         if (plan.isEmpty()) {
+            if (sourceContextSymbol.length() == 0) {
+                c.append("    if (")
+                    .append(value)
+                    .append(") goto ")
+                    .append(label)
+                    .append(";")
+                    .append(System.lineSeparator());
+                return;
+            }
             c.append("    if (")
                 .append(value)
-                .append(") goto ")
+                .append(") {")
+                .append(System.lineSeparator());
+            emitSourceContextClear(c, "        ", sourceContextSymbol);
+            c.append("        goto ")
                 .append(label)
                 .append(";")
                 .append(System.lineSeparator());
+            c.append("    }").append(System.lineSeparator());
+            emitSourceContextClear(c, "    ", sourceContextSymbol);
             return;
         }
         final String indent = emitExpressionScopeStart(plan, c);
@@ -798,11 +1387,17 @@ public final class CCodegen {
             .append(value)
             .append(") {")
             .append(System.lineSeparator());
+        if (sourceContextSymbol.length() > 0) {
+            emitSourceContextClear(c, indent + "    ", sourceContextSymbol);
+        }
         if (plan.hasRootFrame()) {
             c.append(indent).append("    javan_root_frame_pop(javan_expr_roots);").append(System.lineSeparator());
         }
         c.append(indent).append("    goto ").append(label).append(";").append(System.lineSeparator());
         c.append(indent).append("}").append(System.lineSeparator());
+        if (sourceContextSymbol.length() > 0) {
+            emitSourceContextClear(c, indent, sourceContextSymbol);
+        }
         emitExpressionScopeEnd(plan, c);
     }
 
@@ -1067,12 +1662,18 @@ public final class CCodegen {
     }
 
     private static void emitInstruction(
+        final int index,
         final IrInstruction instruction,
         final boolean entry,
         final String rootFrameSymbol,
         final boolean hasRootFrame,
         final StringBuilder c
     ) {
+        final boolean sourceContext = shouldEmitSourceContext(instruction);
+        final String sourceContextSymbol = sourceContext ? sourceContextSymbol(index) : "";
+        if (sourceContext) {
+            emitSourceContextEnter(c, "    ", sourceContextSymbol, instruction.sourceLocation().orElseThrow());
+        }
         switch (instruction.op()) {
             case PRINTLN_LITERAL:
                 c.append("    javan_println(\"")
@@ -1217,21 +1818,28 @@ public final class CCodegen {
                     .append(System.lineSeparator());
                 break;
             case BRANCH_IF:
-                emitBranchIf(c, instruction.value().orElseThrow(), instruction.expression().orElseThrow());
+                emitBranchIf(c, instruction.value().orElseThrow(), instruction.expression().orElseThrow(), sourceContextSymbol);
                 break;
             case PANIC: {
                 final ExpressionPlan plan = new ExpressionPlan();
                 final String value = plan.expression(instruction.expression().orElseThrow());
                 final String indent = emitExpressionScopeStart(plan, c);
-                c.append(indent)
-                    .append("javan_panic((const char*) ")
-                    .append(value)
-                    .append(");")
-                    .append(System.lineSeparator());
+                if (instruction.sourceLocation().isPresent()) {
+                    emitPanicAt(c, indent, value, instruction.sourceLocation().orElseThrow());
+                } else {
+                    c.append(indent)
+                        .append("javan_panic((const char*) ")
+                        .append(value)
+                        .append(");")
+                        .append(System.lineSeparator());
+                }
                 emitExpressionScopeEnd(plan, c);
                 break;
             }
             case RETURN_VOID:
+                if (sourceContext) {
+                    emitSourceContextClear(c, "    ", sourceContextSymbol);
+                }
                 if (!entry) {
                     emitRootFramePop(rootFrameSymbol, hasRootFrame, c);
                     c.append("    return;").append(System.lineSeparator());
@@ -1242,12 +1850,22 @@ public final class CCodegen {
             case RETURN_FLOAT:
             case RETURN_DOUBLE:
             case RETURN_OBJECT:
-                emitReturnValue(instruction.expression().orElseThrow(), rootFrameSymbol, hasRootFrame, c);
+                emitReturnValue(instruction.expression().orElseThrow(), rootFrameSymbol, hasRootFrame, sourceContextSymbol, c);
                 break;
+        }
+        if (sourceContext && shouldClearSourceContextAfterInstruction(instruction)) {
+            emitSourceContextClear(c, "    ", sourceContextSymbol);
         }
     }
 
     private static void emitStatementSafePoint(final IrInstruction instruction, final StringBuilder c) {
+        if (!hasStatementSafePoint(instruction)) {
+            return;
+        }
+        c.append("    javan_gc_safe_point();").append(System.lineSeparator());
+    }
+
+    private static boolean hasStatementSafePoint(final IrInstruction instruction) {
         switch (instruction.op()) {
             case JUMP:
             case PANIC:
@@ -1257,25 +1875,101 @@ public final class CCodegen {
             case RETURN_FLOAT:
             case RETURN_DOUBLE:
             case RETURN_OBJECT:
-                return;
+                return false;
             default:
-                c.append("    javan_gc_safe_point();").append(System.lineSeparator());
+                return true;
         }
+    }
+
+    private static boolean shouldEmitSourceContext(final IrInstruction instruction) {
+        if (instruction.sourceLocation().isEmpty()) {
+            return false;
+        }
+        switch (instruction.op()) {
+            case LABEL:
+            case JUMP:
+            case PANIC:
+                return false;
+            default:
+                return true;
+        }
+    }
+
+    private static boolean shouldClearSourceContextAfterInstruction(final IrInstruction instruction) {
+        switch (instruction.op()) {
+            case BRANCH_IF:
+            case RETURN_VOID:
+            case RETURN_INT:
+            case RETURN_LONG:
+            case RETURN_FLOAT:
+            case RETURN_DOUBLE:
+            case RETURN_OBJECT:
+                return false;
+            default:
+                return true;
+        }
+    }
+
+    private static void emitSourceContextEnter(
+        final StringBuilder c,
+        final String indent,
+        final String symbol,
+        final IrSourceLocation location
+    ) {
+        c.append(indent)
+            .append("JavanSourceContext ")
+            .append(symbol)
+            .append(";")
+            .append(System.lineSeparator());
+        c.append(indent)
+            .append("javan_source_enter(&")
+            .append(symbol)
+            .append(", ")
+            .append(emitCStringLiteral("JAVAN-RUNTIME-PANIC"))
+            .append(", ")
+            .append(emitCStringLiteral("runtime helper failure"))
+            .append(", ")
+            .append(emitCStringLiteral(displayClassName(location.className())))
+            .append(", ")
+            .append(emitCStringLiteral(location.methodName() + location.descriptor()))
+            .append(", ")
+            .append(emitCStringLiteral(location.sourceFile().orElse("")))
+            .append(", ")
+            .append(sourceLineNumber(location))
+            .append(", ")
+            .append(location.bytecodeOffset())
+            .append(", ")
+            .append(emitCStringLiteral(location.sourceLine().orElse("")))
+            .append(", ")
+            .append(emitCStringLiteral("Generated native code called a runtime helper that rejected the current value."))
+            .append(", ")
+            .append(emitCStringLiteral("Check the source expression and guard values before this operation."))
+            .append(");")
+            .append(System.lineSeparator());
+    }
+
+    private static void emitSourceContextClear(final StringBuilder c, final String indent, final String symbol) {
+        c.append(indent).append("javan_source_clear(&").append(symbol).append(");").append(System.lineSeparator());
+    }
+
+    private static String sourceContextSymbol(final int index) {
+        return "javan_source_context_" + index;
     }
 
     private static void emitReturnValue(
         final javan.ir.IrExpression expression,
         final String rootFrameSymbol,
         final boolean hasRootFrame,
+        final String sourceContextSymbol,
         final StringBuilder c
     ) {
         if (expression.type() == javan.ir.IrType.OBJECT) {
-            emitObjectReturnValue(expression, rootFrameSymbol, hasRootFrame, c);
+            emitObjectReturnValue(expression, rootFrameSymbol, hasRootFrame, sourceContextSymbol, c);
             return;
         }
         final ExpressionPlan plan = new ExpressionPlan();
         final String value = plan.expression(expression);
-        if (!hasRootFrame && plan.isEmpty()) {
+        if (!hasRootFrame && plan.isEmpty() && sourceContextSymbol.length() == 0) {
             c.append("    return ")
                 .append(value)
                 .append(";")
@@ -1295,6 +1989,9 @@ public final class CCodegen {
             .append(value)
             .append(";")
             .append(System.lineSeparator());
+        if (sourceContextSymbol.length() > 0) {
+            emitSourceContextClear(c, indent, sourceContextSymbol);
+        }
         c.append(indent).append("javan_gc_safe_point();").append(System.lineSeparator());
         if (plan.hasRootFrame()) {
             c.append(indent).append("javan_root_frame_pop(javan_expr_roots);").append(System.lineSeparator());
@@ -1308,6 +2005,7 @@ public final class CCodegen {
         final javan.ir.IrExpression expression,
         final String rootFrameSymbol,
         final boolean hasRootFrame,
+        final String sourceContextSymbol,
         final StringBuilder c
     ) {
         final ExpressionPlan plan = new ExpressionPlan();
@@ -1325,6 +2023,9 @@ public final class CCodegen {
             .append(";")
             .append(System.lineSeparator());
         c.append(indent).append(returnRootSymbol()).append(" = javan_return_value;").append(System.lineSeparator());
+        if (sourceContextSymbol.length() > 0) {
+            emitSourceContextClear(c, indent, sourceContextSymbol);
+        }
         c.append(indent).append("javan_gc_safe_point();").append(System.lineSeparator());
         if (plan.hasRootFrame()) {
             c.append(indent).append("javan_root_frame_pop(javan_expr_roots);").append(System.lineSeparator());
@@ -1461,6 +2162,50 @@ public final class CCodegen {
 
     private static String enumOrdinalSymbol(final String className) {
         return "javan_enum_ordinal_" + sanitize(className);
+    }
+
+    private static void emitPanicAt(
+        final StringBuilder c,
+        final String indent,
+        final String value,
+        final IrSourceLocation location
+    ) {
+        c.append(indent)
+            .append("javan_panic_at(")
+            .append(emitCStringLiteral("JAVAN-RUNTIME-PANIC"))
+            .append(", ")
+            .append(emitCStringLiteral("uncaught Java exception"))
+            .append(", ")
+            .append(emitCStringLiteral(displayClassName(location.className())))
+            .append(", ")
+            .append(emitCStringLiteral(location.methodName() + location.descriptor()))
+            .append(", ")
+            .append(emitCStringLiteral(location.sourceFile().orElse("")))
+            .append(", ")
+            .append(sourceLineNumber(location))
+            .append(", ")
+            .append(location.bytecodeOffset())
+            .append(", ")
+            .append(emitCStringLiteral(location.sourceLine().orElse("")))
+            .append(", ")
+            .append(emitCStringLiteral("An exception reached the native boundary without a supported catch block."))
+            .append(", ")
+            .append(emitCStringLiteral("Catch it in Java or let the application terminate intentionally."))
+            .append(", (const char*) ")
+            .append(value)
+            .append(");")
+            .append(System.lineSeparator());
+    }
+
+    private static String displayClassName(final String className) {
+        return Strings2.replaceChar(className, '/', '.');
+    }
+
+    private static int sourceLineNumber(final IrSourceLocation location) {
+        if (location.lineNumber().isEmpty()) {
+            return -1;
+        }
+        return location.lineNumber().orElseThrow().intValue();
     }
 
     private static java.util.Map<String, Integer> typeIds(final IrProgram program) {

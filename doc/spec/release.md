@@ -13,15 +13,17 @@ Run the same gate used by the release matrix:
 
 The gate runs:
 
-- `mvn verify`
+- `mvn clean verify`
 - `scripts/build.sh`
-- `dist/javan doctor`
-- `dist/javan --help`
-- `dist/javan --version`
-- `.github/scripts/acceptance.sh`
-- `JAVAN_SANITIZER_REQUIRED=true sh .github/scripts/sanitizer-suite.sh`
 - `.github/scripts/package-release.sh`
-- `.github/scripts/verify-package.sh`
+- `.github/scripts/verify-package.sh`, which extracts the archive and builds/runs
+  `example` with packaged `bin/javan`
+- packaged `bin/javan doctor`
+- packaged `bin/javan --help`
+- packaged `bin/javan --version`
+- `.github/scripts/acceptance.sh` with `JAVAN_BIN` set to packaged `bin/javan`
+- `JAVAN_SANITIZER_REQUIRED=true sh .github/scripts/sanitizer-suite.sh` with
+  `JAVAN_BIN` set to packaged `bin/javan`
 
 ## Release Versioning
 
@@ -57,6 +59,16 @@ Required release package targets:
 Windows is tracked but not in the first release gate. It still needs a native linker path,
 `.exe` package verification, and CI coverage before it is claimed.
 
+The release matrix is configured so every CI row runs the Maven suite, public acceptance
+suite, sanitizer suite, host-target native build check, and self-host package smoke. The
+package smoke builds the native `javan` binary, packages it, extracts the archive,
+verifies package metadata, clears stale `target/.javan` state, runs packaged `bin/javan`
+against the showcase, runs packaged `bin/javan check` and `javan report` on Javan's own
+class files, uses the packaged binary to build a second native Javan smoke binary that
+must start with the same version, and runs package-backed self-host sanitizer proof. For
+M13R, remote validation remains 0/4 completed until those rows pass with package-backed
+sanitizer proof.
+
 ## Acceptance Coverage
 
 `.github/scripts/acceptance.sh` runs public-entrypoint checks over:
@@ -81,4 +93,5 @@ Release archives contain only:
 - `LICENSE` when present
 
 Each archive has a SHA-256 file and is verified before upload. Package scripts reject
-target mismatches and non-triplet versions.
+target mismatches and non-triplet versions. Verification must exercise the extracted
+binary, not only the pre-package `dist/javan`.

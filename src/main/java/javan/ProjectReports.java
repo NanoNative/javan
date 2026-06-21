@@ -81,7 +81,10 @@ public final class ProjectReports {
     public void writeDiagnostics(final ProjectLayout layout, final List<Diagnostic> diagnostics) throws IOException {
         final String value = diagnosticsValue(diagnostics);
         Files.createDirectories(layout.outputDirectory().resolve("reports"));
-        Files2.writeString(layout.outputDirectory().resolve("reports/diagnostics.txt"), value);
+        final Path reports = layout.outputDirectory().resolve("reports");
+        Files2.writeString(reports.resolve("diagnostics.txt"), value);
+        Files2.writeString(reports.resolve("diagnostics.json"), diagnosticsJson(diagnostics));
+        Files2.writeString(reports.resolve("diagnostics.md"), diagnosticsMarkdown(diagnostics));
     }
 
     private static String jsonList(final List<String> values) {
@@ -133,6 +136,77 @@ public final class ProjectReports {
         return result.append(System.lineSeparator()).toString();
     }
 
+    private static String diagnosticsJson(final List<Diagnostic> diagnostics) {
+        final long errors = errorCount(diagnostics);
+        final StringBuilder result = new StringBuilder();
+        result.append("{\n");
+        result.append("  \"schemaVersion\": 1,\n");
+        result.append("  \"diagnostics\": ").append(diagnostics.size()).append(",\n");
+        result.append("  \"errors\": ").append(errors).append(",\n");
+        result.append("  \"warnings\": ").append(diagnostics.size() - errors).append(",\n");
+        result.append("  \"items\": [\n");
+        for (int index = 0; index < diagnostics.size(); index++) {
+            final Diagnostic diagnostic = diagnostics.get(index);
+            result.append("    {\n");
+            appendJsonField(result, "severity", json(diagnostic.error() ? "error" : "warning"), true, 6);
+            appendJsonField(result, "code", json(diagnostic.code()), true, 6);
+            appendJsonField(result, "message", json(diagnostic.message()), true, 6);
+            appendJsonField(result, "class", json(diagnostic.className()), true, 6);
+            appendJsonField(result, "method", json(diagnostic.methodName()), true, 6);
+            appendJsonField(result, "subject", json(diagnostic.subject()), true, 6);
+            appendJsonField(result, "reason", json(diagnostic.reason()), true, 6);
+            appendJsonField(result, "fix", json(diagnostic.fix()), false, 6);
+            result.append("    }");
+            if (index + 1 < diagnostics.size()) {
+                result.append(',');
+            }
+            result.append('\n');
+        }
+        result.append("  ]\n");
+        return result.append("}\n").toString();
+    }
+
+    private static String diagnosticsMarkdown(final List<Diagnostic> diagnostics) {
+        final long errors = errorCount(diagnostics);
+        final StringBuilder result = new StringBuilder();
+        result.append("# Diagnostics\n\n");
+        result.append("- diagnostics: `").append(diagnostics.size()).append("`\n");
+        result.append("- errors: `").append(errors).append("`\n");
+        result.append("- warnings: `").append(diagnostics.size() - errors).append("`\n\n");
+        if (diagnostics.isEmpty()) {
+            return result.append("No diagnostics.\n").toString();
+        }
+        for (final Diagnostic diagnostic : diagnostics) {
+            result.append("## ")
+                .append(diagnostic.error() ? "error" : "warning")
+                .append("[")
+                .append(diagnostic.code())
+                .append("] ")
+                .append(diagnostic.message())
+                .append("\n\n");
+            result.append("- class: `").append(emptyDash(diagnostic.className())).append("`\n");
+            result.append("- method: `").append(emptyDash(diagnostic.methodName())).append("`\n");
+            result.append("- subject: `").append(emptyDash(diagnostic.subject())).append("`\n");
+            result.append("- reason: ").append(emptyDash(diagnostic.reason())).append('\n');
+            result.append("- fix: ").append(emptyDash(diagnostic.fix())).append("\n\n");
+        }
+        return result.toString();
+    }
+
+    private static String emptyDash(final String value) {
+        return Strings2.isBlank(value) ? "-" : value;
+    }
+
+    private static long errorCount(final List<Diagnostic> diagnostics) {
+        long result = 0L;
+        for (final Diagnostic diagnostic : diagnostics) {
+            if (diagnostic.error()) {
+                result++;
+            }
+        }
+        return result;
+    }
+
     private static String json(final String value) {
         final StringBuilder result = new StringBuilder("\"");
         for (int index = 0; index < value.length(); index++) {
@@ -160,5 +234,26 @@ public final class ProjectReports {
             result.append(',');
         }
         result.append('\n');
+    }
+
+    private static void appendJsonField(
+        final StringBuilder result,
+        final String name,
+        final String value,
+        final boolean comma,
+        final int spaces
+    ) {
+        appendSpaces(result, spaces);
+        result.append("\"").append(name).append("\": ").append(value);
+        if (comma) {
+            result.append(',');
+        }
+        result.append('\n');
+    }
+
+    private static void appendSpaces(final StringBuilder result, final int spaces) {
+        for (int index = 0; index < spaces; index++) {
+            result.append(' ');
+        }
     }
 }

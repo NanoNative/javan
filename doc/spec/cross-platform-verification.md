@@ -21,7 +21,7 @@ This policy covers:
 - CI stages and release acceptance gates
 
 Feature incubation and agent handoff rules live in
-[feature-lab-workflow.md](feature-lab-workflow.md). This file defines how those slices are
+[../process/feature-lab-workflow.md](../process/feature-lab-workflow.md). This file defines how those slices are
 verified once they touch cross-platform behavior.
 
 ## Local Host Gate
@@ -38,13 +38,23 @@ Required local commands:
 For focused local debugging, the release gate expands to:
 
 ```sh
-mvn verify
+mvn -q clean verify
 scripts/build.sh
-dist/javan doctor
-dist/javan --help
-.github/scripts/acceptance.sh
-.github/scripts/package-release.sh
+ARCHIVE=$(.github/scripts/package-release.sh "${JAVAN_VERSION:-}")
+.github/scripts/verify-package.sh "$ARCHIVE"
+# after extracting the archive:
+bin/javan doctor
+bin/javan --help
+bin/javan --version
+JAVAN_BIN=bin/javan .github/scripts/acceptance.sh
+JAVAN_BIN=bin/javan JAVAN_SANITIZER_REQUIRED=true sh .github/scripts/sanitizer-suite.sh
 ```
+
+The sanitizer suite includes generated-app counter proof, package-backed generated
+self-host allocation/GC/no-residue proof, and native-library/binding ownership proof.
+Local macOS aarch64 proof exists; remote release-matrix validation remains 0/4
+completed. The self-host proof requires nonzero allocation and GC counters plus zero
+final tracked heap/root residue.
 
 Library-output changes are covered by `.github/scripts/acceptance.sh`, including:
 
@@ -62,10 +72,10 @@ entrypoints on each required target.
 
 | Target | Runner | Required checks |
 | --- | --- | --- |
-| linux-x64 | `ubuntu-24.04` | `mvn verify`, acceptance, host `--target`, sanitizer smoke |
-| linux-aarch64 | `ubuntu-24.04-arm` | `mvn verify`, acceptance, host `--target`, sanitizer smoke |
-| macos-aarch64 | `macos-15` | `mvn verify`, acceptance, host `--target`, sanitizer smoke |
-| macos-x64 | `macos-15-intel` | `mvn verify`, acceptance, host `--target`, sanitizer smoke |
+| linux-x64 | `ubuntu-24.04` | `mvn verify`, acceptance, host `--target`, sanitizer suite with self-host proof |
+| linux-aarch64 | `ubuntu-24.04-arm` | `mvn verify`, acceptance, host `--target`, sanitizer suite with self-host proof |
+| macos-aarch64 | `macos-15` | `mvn verify`, acceptance, host `--target`, sanitizer suite with self-host proof |
+| macos-x64 | `macos-15-intel` | `mvn verify`, acceptance, host `--target`, sanitizer suite with self-host proof |
 
 Windows targets remain tracked rows until the runtime and linker path are ported.
 
@@ -94,7 +104,10 @@ packaging/containers/javan-scratch.Dockerfile
 ```
 
 Each image build runs `javan --version`. The post-release image workflow verifies that
-each pushed manifest contains `linux/amd64` and `linux/arm64`.
+each pushed manifest contains `linux/amd64` and `linux/arm64`. The default Wolfi image
+reuses `.github/scripts/verify-showcase.sh` to build `example` from
+compiled classes and run the generated native binary inside the image. Distroless and
+scratch stay version-smoke-only until they have a linker path.
 
 ## JDK Matrix
 
@@ -195,15 +208,20 @@ Shared setup is allowed. Shared assumptions are not.
 
 Current CI stages in `.github/workflows/ci.yml`:
 
-1. JDK 25 setup
+1. JDK 25, Go, Rust, runner Python, and native toolchain setup
 2. `mvn verify`
-3. acceptance suite
-4. Javan self-host jar check
+3. public acceptance suite
+4. host-target native build check
+5. sanitizer suite with required C/Rust/Go/Python binding proof
+6. extracted self-host package smoke with packaged `bin/javan`
 
 Current release workflow stages:
 
 1. native self-host release gate
-2. host-native package upload
+2. extracted-package verification
+3. package-backed acceptance suite
+4. package-backed sanitizer/leak suite
+5. host-native package upload
 
 Planned expanded CI stages:
 

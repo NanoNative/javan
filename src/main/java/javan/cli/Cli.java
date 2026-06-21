@@ -47,6 +47,27 @@ public final class Cli {
     }
 
     /**
+     * Runs the process entrypoint without reachable broad catch handlers.
+     *
+     * @param cwd current working directory
+     * @param out stdout
+     * @param err stderr
+     * @param args command line arguments
+     * @return process exit code
+     * @throws IOException when command IO fails
+     * @throws InterruptedException when interrupted
+     */
+    public int runProcess(final Path cwd, final PrintStream out, final PrintStream err, final String... args)
+        throws IOException, InterruptedException {
+        final Options.ParseResult parsed = Options.parseResult(args);
+        if (!parsed.pass()) {
+            err.println("error[JAVAN900]: " + parsed.error());
+            return 2;
+        }
+        return runParsed(cwd, out, err, parsed.options());
+    }
+
+    /**
      * Runs the command line interface without broad catch handlers.
      *
      * @param cwd current working directory
@@ -60,6 +81,11 @@ public final class Cli {
     public int runUnchecked(final Path cwd, final PrintStream out, final PrintStream err, final String... args)
         throws IOException, InterruptedException {
         final Options options = Options.parse(args);
+        return runParsed(cwd, out, err, options);
+    }
+
+    private int runParsed(final Path cwd, final PrintStream out, final PrintStream err, final Options options)
+        throws IOException, InterruptedException {
         final Command command = options.command();
         if (command == Command.HELP) {
             out.println(help());

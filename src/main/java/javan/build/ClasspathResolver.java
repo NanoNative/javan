@@ -3,6 +3,11 @@ package javan.build;
 import javan.detect.BuildTool;
 import javan.detect.ClassOutputDiscovery;
 import javan.detect.ProjectLayout;
+import javan.dependency.JavanCoordinateResolver;
+import javan.dependency.JavanDependency;
+import javan.dependency.JavanLockWriter;
+import javan.dependency.JavanModule;
+import javan.dependency.JavanModuleParser;
 import javan.util.Files2;
 import javan.util.ProcessRunner;
 import javan.util.Strings2;
@@ -19,6 +24,9 @@ import java.util.List;
  */
 public final class ClasspathResolver {
     private final ProcessRunner processRunner;
+    private final JavanModuleParser moduleParser;
+    private final JavanLockWriter lockWriter;
+    private final JavanCoordinateResolver coordinateResolver;
 
     /**
      * Creates a resolver.
@@ -27,6 +35,21 @@ public final class ClasspathResolver {
      */
     public ClasspathResolver(final ProcessRunner processRunner) {
         this.processRunner = processRunner;
+        this.moduleParser = new JavanModuleParser();
+        this.lockWriter = new JavanLockWriter();
+        this.coordinateResolver = new JavanCoordinateResolver();
+    }
+
+    ClasspathResolver(
+        final ProcessRunner processRunner,
+        final JavanModuleParser moduleParser,
+        final JavanLockWriter lockWriter,
+        final JavanCoordinateResolver coordinateResolver
+    ) {
+        this.processRunner = processRunner;
+        this.moduleParser = moduleParser;
+        this.lockWriter = lockWriter;
+        this.coordinateResolver = coordinateResolver;
     }
 
     /**
@@ -48,6 +71,72 @@ public final class ClasspathResolver {
             resolveGradle(layout, classpath, warnings);
         }
         return layout.withClasspath(classFolders, distinctExistingOrJar(classpath), warnings);
+    }
+
+    /**
+     * Applies local {@code javan.mod} main dependencies before compilation.
+     *
+     * @param layout detected layout
+     * @return layout with declared main dependencies on the classpath
+     * @throws IOException when module or lock files cannot be read or written
+     */
+    public ProjectLayout resolveDeclaredDependencies(final ProjectLayout layout) throws IOException {
+        final JavanModule module = moduleParser.read(layout.root());
+        if (!module.present()) {
+            return layout;
+        }
+        validateModule(module);
+        final JavanModule resolvedModule = coordinateResolver.resolve(module);
+        lockWriter.write(layout.root(), resolvedModule);
+        validateDependencies(resolvedModule);
+        final List<Path> classpath = new ArrayList<>(layout.classpathEntries());
+        for (final JavanDependency dependency : resolvedModule.dependencies()) {
+            if (dependency.mainScope() && dependency.path().isPresent()) {
+                classpath.add(dependency.path().orElseThrow());
+            }
+        }
+        return layout.withClasspath(layout.classFolders(), distinctExistingOrJar(classpath), resolvedModule.warnings());
+    }
+
+    private static void validateModule(final JavanModule module) throws IOException {
+        if (!module.warnings().isEmpty()) {
+            throw new IOException("Invalid javan.mod\n" + joinWarnings(module.warnings()));
+        }
+    }
+
+    private static void validateDependencies(final JavanModule module) throws IOException {
+        for (final JavanDependency dependency : module.dependencies()) {
+            if (!dependency.local() && !dependency.coordinate()) {
+                throw new IOException(
+                    "Unsupported javan.mod dependency at line "
+                        + dependency.line()
+                        + ": "
+                        + dependency.notation()
+                );
+            }
+            final Path path = dependency.path().orElseThrow();
+            if (!Files.exists(path)) {
+                throw new IOException(
+                    "Missing javan.mod dependency at line "
+                        + dependency.line()
+                        + ": "
+                        + dependency.notation()
+                        + " -> "
+                        + path.toString()
+                );
+            }
+        }
+    }
+
+    private static String joinWarnings(final List<String> warnings) {
+        final StringBuilder result = new StringBuilder();
+        for (int index = 0; index < warnings.size(); index++) {
+            if (index > 0) {
+                result.append('\n');
+            }
+            result.append(warnings.get(index));
+        }
+        return result.toString();
     }
 
     /**

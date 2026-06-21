@@ -1,7 +1,7 @@
 package javan.compat;
 
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Explicit JVM bytecode support table for the current native profile.
@@ -73,8 +73,8 @@ public final class BytecodeSupport {
      *
      * @return known opcodes
      */
-    public static Set<Integer> knownOpcodes() {
-        return setOf(KNOWN_JVM);
+    public static List<Integer> knownOpcodes() {
+        return listOf(KNOWN_JVM);
     }
 
     /**
@@ -82,8 +82,8 @@ public final class BytecodeSupport {
      *
      * @return supported opcodes
      */
-    public static Set<Integer> nativeSupportedOpcodes() {
-        return setOf(NATIVE_SUPPORTED);
+    public static List<Integer> nativeSupportedOpcodes() {
+        return listOf(NATIVE_SUPPORTED);
     }
 
     private static boolean contains(final int[] values, final int target) {
@@ -95,12 +95,12 @@ public final class BytecodeSupport {
         return false;
     }
 
-    private static Set<Integer> setOf(final int[] values) {
-        final Set<Integer> result = new TreeSet<>();
+    private static List<Integer> listOf(final int[] values) {
+        final List<Integer> result = new ArrayList<>(values.length);
         for (final int value : values) {
-            result.add(value);
+            result.add(Integer.valueOf(value));
         }
-        return result;
+        return List.copyOf(result);
     }
 
     private static String[] mnemonics() {

@@ -2,6 +2,7 @@ package javan;
 
 import javan.cli.Cli;
 
+import java.io.IOException;
 import java.nio.file.Path;
 
 /**
@@ -16,8 +17,8 @@ public final class Main {
      *
      * @param args command line arguments
      */
-    public static void main(final String[] args) throws Exception {
-        final int exitCode = new Cli().runUnchecked(Path.of(System.getProperty("user.dir")), System.out, System.err, args);
+    public static void main(final String[] args) throws IOException, InterruptedException {
+        final int exitCode = new Cli().runProcess(Path.of(System.getProperty("user.dir")), System.out, System.err, args);
         System.exit(exitCode);
     }
 }

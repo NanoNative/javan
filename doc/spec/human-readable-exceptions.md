@@ -1,17 +1,21 @@
 # Human-Readable Exceptions
 
-Status: roadmap only. This file describes planned behavior and does not claim current
-implementation.
+Status: implemented slice. Generated uncaught `athrow` panic sites now use source-mapped
+runtime diagnostics, generated runtime-helper panics inherit source context from the active
+generated Java statement, source-backed builds print a `Code:` block with the Java source
+line, exception/debug-map reports are written, and generated symbols are preserved only in
+`debug-map.json`. Full Java exception semantics, exact expression/range highlighting, call
+paths, expression-level helper blame, and `--debug-native` frame expansion remain planned.
 
 ## Goal
 
 Build-time and runtime failures should point to the Java source the user wrote. The default
 output must avoid raw JVM, native, generated C, and specialized-method frame noise. Native and
-generated details remain available for compiler debugging through an explicit flag.
+generated detail expansion remains planned behind an explicit `--debug-native` option.
 
 ## Diagnostic Shape
 
-Each human-readable exception diagnostic should contain:
+Target exception diagnostics should contain:
 
 - stable error code
 - short problem summary
@@ -47,6 +51,31 @@ Path:
   Main.main -> UserController.handle -> UserService.save
 ```
 
+## Implemented Slice
+
+Current runtime diagnostics cover generated uncaught Java exception panics lowered from
+reachable `athrow` bytecode and source-context runtime helper panics emitted from generated
+Java statements:
+
+- `LineNumberTable` is parsed and used when present
+- `SourceFile` is parsed and used when present, with a deterministic `<Class>.java` fallback
+- app stderr prints code, summary, Java class/method/file/line, bytecode offset, why, detail, and fix
+- when source files are available, app stderr prints a `Code:` block with the matching Java
+  source line and caret marker
+- native-library exports store a compact `javan_last_error()` envelope with code, summary,
+  where, bytecode offset, and detail; it is not the full app stderr layout yet
+- `.javan/reports/exceptions.json`, `.javan/reports/exceptions.md`, and
+  `.javan/reports/debug-map.json` are written during native builds
+- `.javan/reports/diagnostics.txt`, `.javan/reports/diagnostics.json`, and
+  `.javan/reports/diagnostics.md` are written from the same build/check diagnostic model
+- exception and debug-map JSON include `sourceLine` when Java source was found, and the
+  Markdown exception report includes a source-line section
+- generated C uses allocation-free stack nodes for active source context, so nested generated
+  calls restore the caller context and recovered library panics do not keep stale source pointers
+- runtime-internal panics outside generated Java source context remain message-only
+- helper failures are currently mapped to the consuming generated IR statement; exact expression
+  and operand-source mapping remains planned
+
 ## Runtime Behavior
 
 Planned runtime diagnostics:
@@ -64,8 +93,9 @@ symbols, and specialized method names are hidden unless `--debug-native` is enab
 
 ## Debug Map
 
-Every optimized, specialized, generated wrapper, and C ABI export method should be traceable
-back to its Java origin.
+Current debug-map entries cover generated panic sites. The target debug map should make every
+optimized, specialized, generated wrapper, and C ABI export method traceable back to its Java
+origin.
 
 The debug map should preserve:
 
@@ -77,8 +107,8 @@ The debug map should preserve:
 - optimization or specialization reason
 - reachable call path segment when known
 
-This keeps release-mode diagnostics source-focused even when the executable contains renamed,
-deduplicated, specialized, or inlined generated code.
+This will keep release-mode diagnostics source-focused even when the executable contains
+renamed, deduplicated, specialized, or inlined generated code.
 
 ## Planned Reports
 

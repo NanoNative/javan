@@ -17,6 +17,7 @@ import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 
 @Execution(CONCURRENT)
@@ -61,36 +62,142 @@ final class ClassFileScannerTest {
         assertThat(classes.get(className).application()).isFalse();
     }
 
+    @Test
+    void scanIgnoresMissingJarClasspathEntry(@TempDir final Path tempDir) throws Exception {
+        final String className = "example/directory/Library";
+        final Path classesDirectory = classDirectory(tempDir, "classes", className);
+        final Path missingJar = tempDir.resolve("missing.jar");
+
+        final Map<String, ClassFile> classes = new ClassFileScanner().scan(projectLayout(
+            tempDir,
+            tempDir,
+            List.of(),
+            List.of(missingJar, classesDirectory)
+        ));
+
+        assertThat(classes).containsKey(className);
+    }
+
+    @Test
+    void scanThrowsWhenJarExtractionFails(@TempDir final Path tempDir) throws Exception {
+        final Path brokenJar = tempDir.resolve("broken.jar");
+        Files.writeString(brokenJar, "not a jar");
+
+        assertThatThrownBy(() -> new ClassFileScanner().scan(projectLayoutWithClasspath(tempDir, brokenJar)))
+            .isInstanceOf(IOException.class);
+    }
+
+    @Test
+    void scanReadsClassFromDirectoryClasspathEntry(@TempDir final Path tempDir) throws Exception {
+        final String className = "example/directory/Library";
+        final Path classesDirectory = classDirectory(tempDir, "classes", className);
+
+        final Map<String, ClassFile> classes = new ClassFileScanner().scan(projectLayoutWithClasspath(tempDir, classesDirectory));
+
+        assertThat(classes).containsKey(className);
+    }
+
+    @Test
+    void scanTagsDirectoryClasspathInputAsApplicationCode(@TempDir final Path tempDir) throws Exception {
+        final String className = "example/directory/Main";
+        final Path inputDirectory = classDirectory(tempDir, "input", className);
+
+        final Map<String, ClassFile> classes = new ClassFileScanner().scan(projectLayout(
+            tempDir,
+            inputDirectory,
+            List.of(),
+            List.of(inputDirectory)
+        ));
+
+        assertThat(classes.get(className).application()).isTrue();
+    }
+
+    @Test
+    void scanTagsDependencyDirectoryAsDependencyCode(@TempDir final Path tempDir) throws Exception {
+        final String className = "example/directory/Library";
+        final Path classesDirectory = classDirectory(tempDir, "classes", className);
+
+        final Map<String, ClassFile> classes = new ClassFileScanner().scan(projectLayoutWithClasspath(tempDir, classesDirectory));
+
+        assertThat(classes.get(className).application()).isFalse();
+    }
+
+    @Test
+    void scanUsesLastClasspathEntryForDuplicateClassName(@TempDir final Path tempDir) throws Exception {
+        final String className = "example/duplicate/Main";
+        final Path firstDirectory = classDirectory(tempDir, "first", className);
+        final Path secondDirectory = classDirectory(tempDir, "second", className);
+        final Path secondClassFile = secondDirectory.resolve(className + ".class");
+
+        final Map<String, ClassFile> classes = new ClassFileScanner().scan(projectLayout(
+            tempDir,
+            tempDir,
+            List.of(),
+            List.of(firstDirectory, secondDirectory)
+        ));
+
+        assertThat(classes.get(className).source()).isEqualTo(secondClassFile);
+    }
+
+    @Test
+    void scanReflectsUpdatedJarContentsOnRescan(@TempDir final Path tempDir) throws Exception {
+        final Path input = jar(tempDir, "app.jar", "example/first/Main");
+        final ProjectLayout layout = jarInputLayout(tempDir, input);
+        final ClassFileScanner scanner = new ClassFileScanner();
+        scanner.scan(layout);
+        jar(tempDir, "app.jar", "example/second/Main");
+
+        final Map<String, ClassFile> classes = scanner.scan(layout);
+
+        assertThat(classes).containsKey("example/second/Main");
+    }
+
     private static ProjectLayout jarInputLayout(final Path root, final Path input) {
+        return projectLayout(root, input, List.of(), List.of(input), InputKind.JAR_FILE, BuildTool.JAR);
+    }
+
+    private static ProjectLayout projectLayoutWithClasspath(final Path root, final Path classpathEntry) {
+        return projectLayout(root, root, List.of(), List.of(classpathEntry));
+    }
+
+    private static ProjectLayout projectLayout(
+        final Path root,
+        final Path input,
+        final List<Path> classFolders,
+        final List<Path> classpathEntries
+    ) {
+        return projectLayout(root, input, classFolders, classpathEntries, InputKind.PROJECT_DIRECTORY, BuildTool.JAVAC);
+    }
+
+    private static ProjectLayout projectLayout(
+        final Path root,
+        final Path input,
+        final List<Path> classFolders,
+        final List<Path> classpathEntries,
+        final InputKind inputKind,
+        final BuildTool buildTool
+    ) {
         return new ProjectLayout(
             root,
             input,
-            InputKind.JAR_FILE,
-            BuildTool.JAR,
+            inputKind,
+            buildTool,
             List.of(),
             List.of(),
-            List.of(),
-            List.of(input),
+            classFolders,
+            classpathEntries,
             root.resolve(".javan"),
             "app",
             List.of()
         );
     }
 
-    private static ProjectLayout projectLayoutWithClasspath(final Path root, final Path classpathEntry) {
-        return new ProjectLayout(
-            root,
-            root,
-            InputKind.PROJECT_DIRECTORY,
-            BuildTool.JAVAC,
-            List.of(),
-            List.of(),
-            List.of(),
-            List.of(classpathEntry),
-            root.resolve(".javan"),
-            "app",
-            List.of()
-        );
+    private static Path classDirectory(final Path folder, final String directoryName, final String className) throws IOException {
+        final Path directory = folder.resolve(directoryName);
+        final Path classFile = directory.resolve(className + ".class");
+        Files.createDirectories(classFile.getParent());
+        Files.write(classFile, minimalClassfile(className));
+        return directory;
     }
 
     private static Path jar(final Path folder, final String fileName, final String className) throws IOException {

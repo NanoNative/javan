@@ -26,6 +26,10 @@
         <maven-jar-plugin.version>3.4.2</maven-jar-plugin.version>
         <maven-surefire-plugin.version>3.5.6</maven-surefire-plugin.version>
         <jacoco-maven-plugin.version>0.8.14</jacoco-maven-plugin.version>
+        <surefireArgLine/>
+        <javan.jacoco.surefire.exec>${project.build.directory}/jacoco-surefire.exec</javan.jacoco.surefire.exec>
+        <javan.jacoco.child.dir>${project.build.directory}/jacoco-child</javan.jacoco.child.dir>
+        <javan.jacoco.merged.exec>${project.build.directory}/jacoco-merged.exec</javan.jacoco.merged.exec>
     </properties>
 
     <dependencies>
@@ -102,9 +106,13 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>${maven-surefire-plugin.version}</version>
                 <configuration>
+                    <argLine>@{surefireArgLine}</argLine>
                     <includes>
                         <include>**/*Test.java</include>
                     </includes>
+                    <systemPropertyVariables>
+                        <javan.childJacocoDir>${javan.jacoco.child.dir}</javan.childJacocoDir>
+                    </systemPropertyVariables>
                 </configuration>
             </plugin>
             <plugin>
@@ -113,9 +121,38 @@
                 <version>${jacoco-maven-plugin.version}</version>
                 <executions>
                     <execution>
+                        <id>prepare-surefire-agent</id>
                         <goals>
                             <goal>prepare-agent</goal>
                         </goals>
+                        <configuration>
+                            <propertyName>surefireArgLine</propertyName>
+                            <destFile>${javan.jacoco.surefire.exec}</destFile>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>merge-coverage</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>merge</goal>
+                        </goals>
+                        <configuration>
+                            <fileSets>
+                                <fileSet>
+                                    <directory>${project.build.directory}</directory>
+                                    <includes>
+                                        <include>jacoco-surefire.exec</include>
+                                    </includes>
+                                </fileSet>
+                                <fileSet>
+                                    <directory>${javan.jacoco.child.dir}</directory>
+                                    <includes>
+                                        <include>*.exec</include>
+                                    </includes>
+                                </fileSet>
+                            </fileSets>
+                            <destFile>${javan.jacoco.merged.exec}</destFile>
+                        </configuration>
                     </execution>
                     <execution>
                         <id>report</id>
@@ -123,6 +160,9 @@
                         <goals>
                             <goal>report</goal>
                         </goals>
+                        <configuration>
+                            <dataFile>${javan.jacoco.merged.exec}</dataFile>
+                        </configuration>
                     </execution>
                     <execution>
                         <id>coverage-check</id>
@@ -131,25 +171,7 @@
                             <goal>check</goal>
                         </goals>
                         <configuration>
-                            <excludes>
-                                <!-- Temporary coverage-capture gap: these surfaces are exercised mostly through child JVMs/native binaries, which the Maven JaCoCo agent does not count yet. Do not present this ratio as whole-repo coverage. -->
-                                <exclude>javan/Main*</exclude>
-                                <exclude>javan/Javan*</exclude>
-                                <exclude>javan/ProjectReports*</exclude>
-                                <exclude>javan/build/**</exclude>
-                                <exclude>javan/classfile/**</exclude>
-                                <exclude>javan/cli/**</exclude>
-                                <exclude>javan/compat/ClassMetadata*</exclude>
-                                <exclude>javan/compat/CompatibilityReports*</exclude>
-                                <exclude>javan/compat/CompatibilityResult*</exclude>
-                                <exclude>javan/compat/InstructionMetadata*</exclude>
-                                <exclude>javan/compat/MemberMetadata*</exclude>
-                                <exclude>javan/detect/**</exclude>
-                                <exclude>javan/ir/**</exclude>
-                                <exclude>javan/toolchain/**</exclude>
-                                <exclude>javan/util/**</exclude>
-                                <exclude>javan/codegen/BytecodeToIR*</exclude>
-                            </excludes>
+                            <dataFile>${javan.jacoco.merged.exec}</dataFile>
                             <rules>
                                 <rule>
                                     <element>BUNDLE</element>

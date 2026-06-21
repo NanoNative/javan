@@ -11,6 +11,10 @@ import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
 import javan.compat.BytecodeSupport;
 import javan.compat.JdkCallSupport;
+import javan.compat.JavanHostOnlyMethods;
+import javan.compat.JavanNativeSubstitutions;
+import javan.compat.NetworkApiSupport;
+import javan.util.Strings2;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -72,6 +76,12 @@ public final class StaticVerifier {
                 "Replace the native method with Java code or a future javan runtime intrinsic."
             ));
         }
+        if (reachable == 0 && JavanNativeSubstitutions.isSubstitutedFallbackMethod(classFile.name(), method)) {
+            return diagnostics;
+        }
+        if (reachable == 0 && JavanHostOnlyMethods.isHostOnlyMethod(classFile.name(), method)) {
+            return diagnostics;
+        }
         final Optional<CodeAttribute> code = method.code();
         if (code.isPresent()) {
             final CodeAttribute methodCode = code.orElseThrow();
@@ -79,8 +89,17 @@ public final class StaticVerifier {
                 diagnostics.add(exceptionHandlerDiagnostic(classFile, method, methodCode.exceptionTableLength(), reachable));
             }
             final int application = classFile.application() ? 1 : 0;
+            final int unsupportedStringConstant = containsUnsupportedRuntimeStringConstant(methodCode) ? 1 : 0;
             for (final Instruction instruction : methodCode.instructions()) {
-                diagnostics.addAll(verifyInstruction(classes, classFile, method, instruction, reachable, application));
+                diagnostics.addAll(verifyInstruction(
+                    classes,
+                    classFile,
+                    method,
+                    instruction,
+                    reachable,
+                    application,
+                    unsupportedStringConstant
+                ));
             }
         }
         return diagnostics;
@@ -135,7 +154,8 @@ public final class StaticVerifier {
         final MethodInfo method,
         final Instruction instruction,
         final int reachable,
-        final int application
+        final int application,
+        final int unsupportedStringConstant
     ) {
         final List<Diagnostic> diagnostics = new ArrayList<>();
         if (reachable == 0 && application == 0) {
@@ -148,15 +168,20 @@ public final class StaticVerifier {
             if (forbiddenReason.isPresent()) {
                 diagnostics.add(apiDiagnostic(classFile, method, target, forbiddenReason.orElseThrow(), reachable));
             }
-            if (unsupportedJdkCall(target) && !ignoredGeneratedEnumValueOfCall(classFile, method, target, reachable)) {
+            if (NetworkApiSupport.isNetworkCall(target) && !JdkCallSupport.isSupported(target)) {
+                diagnostics.add(networkCallDiagnostic(classFile, method, target, reachable));
+            } else if (unsupportedJdkCall(target) && !ignoredGeneratedEnumValueOfCall(classFile, method, target, reachable)) {
                 diagnostics.add(jdkCallDiagnostic(classFile, method, target, reachable));
             }
         }
         if (unsupportedNewArrayType(instruction)) {
             diagnostics.add(newArrayDiagnostic(classFile, method, instruction, reachable));
         }
-        if (unsupportedInvokedynamic(instruction)) {
+        if (unsupportedInvokedynamic(instruction) && !ignoredUnreachableRecordObjectMethod(classFile, method, instruction, reachable)) {
             diagnostics.add(invokedynamicDiagnostic(classFile, method, instruction, reachable));
+        }
+        if (unsupportedStringConstant == 1 && unsupportedRuntimeStringSemanticCall(instruction)) {
+            diagnostics.add(stringConstantDiagnostic(classFile, method, instruction, reachable));
         }
         if (unsupportedInstanceOfTarget(classes, instruction)) {
             diagnostics.add(instanceOfTargetDiagnostic(classFile, method, instruction, reachable));
@@ -175,6 +200,57 @@ public final class StaticVerifier {
             return true;
         }
         return !supportedNewArrayType(instruction.operands()[0] & 0xFF);
+    }
+
+    private static boolean containsUnsupportedRuntimeStringConstant(final CodeAttribute code) {
+        for (final Instruction instruction : code.instructions()) {
+            if (instruction.stringValue().isPresent()
+                && !Strings2.isRuntimeAsciiStringConstant(instruction.stringValue().orElseThrow())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean unsupportedRuntimeStringSemanticCall(final Instruction instruction) {
+        final Optional<MethodRef> methodRef = instruction.methodRef();
+        if (methodRef.isEmpty()) {
+            return false;
+        }
+        final MethodRef target = methodRef.orElseThrow();
+        if (!"java/lang/String".equals(target.owner())) {
+            return false;
+        }
+        if ("length".equals(target.name()) && "()I".equals(target.descriptor())) {
+            return true;
+        }
+        if ("charAt".equals(target.name()) && "(I)C".equals(target.descriptor())) {
+            return true;
+        }
+        if ("substring".equals(target.name())
+            && ("(I)Ljava/lang/String;".equals(target.descriptor()) || "(II)Ljava/lang/String;".equals(target.descriptor()))) {
+            return true;
+        }
+        if ("indexOf".equals(target.name())) {
+            return stringIndexDescriptor(target.descriptor());
+        }
+        if ("lastIndexOf".equals(target.name())) {
+            return stringIndexDescriptor(target.descriptor());
+        }
+        return false;
+    }
+
+    private static boolean stringIndexDescriptor(final String descriptor) {
+        if ("(I)I".equals(descriptor)) {
+            return true;
+        }
+        if ("(II)I".equals(descriptor)) {
+            return true;
+        }
+        if ("(Ljava/lang/String;)I".equals(descriptor)) {
+            return true;
+        }
+        return "(Ljava/lang/String;I)I".equals(descriptor);
     }
 
     private static boolean unsupportedExceptionHandlers(final Map<String, ClassFile> classes, final CodeAttribute code) {
@@ -545,7 +621,10 @@ public final class StaticVerifier {
         if ("java/lang/Float".equals(target)) {
             return true;
         }
-        return "java/lang/Double".equals(target);
+        if ("java/lang/Double".equals(target)) {
+            return true;
+        }
+        return "java/lang/Boolean".equals(target);
     }
 
     private static boolean hasAssignableClass(final Map<String, ClassFile> classes, final String target) {
@@ -674,6 +753,42 @@ public final class StaticVerifier {
         return true;
     }
 
+    private static boolean ignoredUnreachableRecordObjectMethod(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final int reachable
+    ) {
+        if (reachable == 1) {
+            return false;
+        }
+        if (!"java/lang/Record".equals(classFile.superName())) {
+            return false;
+        }
+        if (!recordObjectMethod(method)) {
+            return false;
+        }
+        final Optional<DynamicRef> dynamicRef = instruction.dynamicRef();
+        if (dynamicRef.isEmpty()) {
+            return false;
+        }
+        final DynamicRef ref = dynamicRef.orElseThrow();
+        if (!"java/lang/runtime/ObjectMethods".equals(ref.bootstrapOwner())) {
+            return false;
+        }
+        return "bootstrap".equals(ref.bootstrapName());
+    }
+
+    private static boolean recordObjectMethod(final MethodInfo method) {
+        if ("toString".equals(method.name()) && "()Ljava/lang/String;".equals(method.descriptor())) {
+            return true;
+        }
+        if ("hashCode".equals(method.name()) && "()I".equals(method.descriptor())) {
+            return true;
+        }
+        return "equals".equals(method.name()) && "(Ljava/lang/Object;)Z".equals(method.descriptor());
+    }
+
     private static int skipArrayDescriptor(final String descriptor, final int start) {
         int index = start;
         while (index < descriptor.length() && descriptor.charAt(index) == '[') {
@@ -731,6 +846,21 @@ public final class StaticVerifier {
             return error(classFile, method, "JAVAN031", "unsupported reachable JDK call", methodRef.display(), reason, fix);
         }
         return warning(classFile, method, "JAVAN131", "unsupported JDK call in unreachable code", methodRef.display(), reason, fix);
+    }
+
+    private static Diagnostic networkCallDiagnostic(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final MethodRef methodRef,
+        final int reachable
+    ) {
+        final String modules = join("/", NetworkApiSupport.runtimeModules(methodRef));
+        final String reason = "Reachable code needs `" + modules + "`, but the native network runtime is not implemented yet.";
+        final String fix = "Keep this code on the JVM for now, or wait for the planned socket/http runtime slice before native code generation.";
+        if (reachable == 1) {
+            return error(classFile, method, "JAVAN061", "unsupported reachable network API", methodRef.display(), reason, fix);
+        }
+        return warning(classFile, method, "JAVAN161", "unsupported network API in unreachable code", methodRef.display(), reason, fix);
     }
 
     private static Diagnostic opcodeDiagnostic(
@@ -813,6 +943,38 @@ public final class StaticVerifier {
         return warning(classFile, method, "JAVAN145", "unsupported instanceof target in unreachable code", target, reason, fix);
     }
 
+    private static Diagnostic stringConstantDiagnostic(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final int reachable
+    ) {
+        final String reason = "The current native runtime stores strings as UTF-8 C strings for the supported ASCII subset. Accepting this constant would make Java String length, indexing, substring, and ABI ownership semantics unsafe.";
+        final String fix = "Use ASCII string constants for now, or keep this code on the JVM until Javan's full UTF-16 String object model is implemented.";
+        final Optional<MethodRef> methodRef = instruction.methodRef();
+        final String subject = methodRef.isPresent() ? methodRef.orElseThrow().display() : instruction.mnemonic();
+        if (reachable == 1) {
+            return error(
+                classFile,
+                method,
+                "JAVAN046",
+                "non-ASCII string constants require the UTF-16 string model",
+                subject,
+                reason,
+                fix
+            );
+        }
+        return warning(
+            classFile,
+            method,
+            "JAVAN146",
+            "non-ASCII string constant in unreachable code",
+            subject,
+            reason,
+            fix
+        );
+    }
+
     private static String newArrayTypeName(final int atype) {
         return "atype-" + atype;
     }
@@ -839,5 +1001,16 @@ public final class StaticVerifier {
         final String fix
     ) {
         return Diagnostic.warning(code, message, classFile.name(), method.name() + method.descriptor(), subject, reason, fix);
+    }
+
+    private static String join(final String delimiter, final List<String> values) {
+        final StringBuilder result = new StringBuilder();
+        for (int index = 0; index < values.size(); index++) {
+            if (index > 0) {
+                result.append(delimiter);
+            }
+            result.append(values.get(index));
+        }
+        return result.toString();
     }
 }

@@ -3,6 +3,8 @@ package javan.build;
 import javan.analysis.CallGraph;
 import javan.classfile.ClassFile;
 import javan.classfile.Instruction;
+import javan.compat.JavanNativeSubstitutions;
+import javan.compat.JdkCallSupport;
 import javan.util.Files2;
 import javan.util.Json;
 import javan.util.Strings2;
@@ -120,17 +122,11 @@ public final class DeduplicationPlanner {
             return;
         }
         final javan.classfile.MethodRef methodRef = instruction.methodRef().orElseThrow();
-        if ("java/lang/System".equals(methodRef.owner())
-            && ("nanoTime".equals(methodRef.name()) || "currentTimeMillis".equals(methodRef.name()))) {
-            modules.add("time");
-            return;
+        for (final String module : JdkCallSupport.runtimeModules(methodRef)) {
+            modules.add(module);
         }
-        if ("java/lang/Math".equals(methodRef.owner())) {
-            modules.add("math");
-            return;
-        }
-        if ("java/lang/String".equals(methodRef.owner()) || "java/lang/StringBuilder".equals(methodRef.owner())) {
-            modules.add("strings");
+        for (final String module : JavanNativeSubstitutions.runtimeModules(methodRef)) {
+            modules.add(module);
         }
     }
 

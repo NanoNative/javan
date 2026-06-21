@@ -24,12 +24,15 @@ import javan.compat.CompatibilityReports;
 import javan.compat.CompatibilityResult;
 import javan.codegen.NativeLinker;
 import javan.codegen.RuntimeFiles;
+import javan.codegen.SourceLineIndex;
 import javan.detect.MainClassDetector;
 import javan.detect.MainClassDetector.MainClassDetection;
 import javan.detect.ProjectDetector;
 import javan.detect.ProjectLayout;
 import javan.ir.IrProgram;
 import javan.optimizer.OptimizationReports;
+import javan.reporting.DependencyReports;
+import javan.reporting.ExceptionReports;
 import javan.reporting.IntrinsicUsageReports;
 import javan.reporting.ReportSummarizer;
 import javan.reporting.RuntimeContractReports;
@@ -77,6 +80,8 @@ public final class Javan {
     private final ProjectReports reports = new ProjectReports();
     private final CompatibilityReports compatibilityReports = new CompatibilityReports();
     private final OptimizationReports optimizationReports = new OptimizationReports();
+    private final DependencyReports dependencyReports = new DependencyReports();
+    private final ExceptionReports exceptionReports = new ExceptionReports();
     private final IntrinsicUsageReports intrinsicUsageReports = new IntrinsicUsageReports();
     private final RuntimeContractReports runtimeContractReports = new RuntimeContractReports();
     private final RuntimeFootprintReports runtimeFootprintReports = new RuntimeFootprintReports();
@@ -139,9 +144,11 @@ public final class Javan {
         final DeduplicationPlanner.Plan deduplicationPlan = deduplicationPlanner.writePlan(layout.outputDirectory(), classes, callGraph);
         diagnostics.addAll(runtimeFeatureSelection.write(layout.root(), layout.outputDirectory(), deduplicationPlan).diagnostics());
         reports.writeReachability(layout, callGraph);
+        dependencyReports.write(layout, classes, callGraph);
         reports.writeDiagnostics(layout, diagnostics);
         intrinsicUsageReports.write(layout.outputDirectory(), classes, callGraph);
         optimizationReports.writeScaffold(layout.outputDirectory());
+        writeUnifiedReport(layout.outputDirectory());
         final List<Diagnostic> errors = errors(diagnostics);
         if (!errors.isEmpty()) {
             return new CheckResult(layout, classes, mainClass, callGraph, diagnostics, exports);
@@ -196,7 +203,12 @@ public final class Javan {
             return BuildResult.failed(check.diagnostics());
         }
         final Path generated = check.layout().outputDirectory().resolve("generated");
-        final IrProgram program = bytecodeToIR.lower(check.classes(), check.callGraph());
+        final IrProgram program = bytecodeToIR.lower(
+            check.classes(),
+            check.callGraph(),
+            SourceLineIndex.from(check.layout())
+        );
+        exceptionReports.write(check.layout().outputDirectory(), program);
         final Path artifact;
         if (options.appBuild()) {
             artifact = buildApp(check, program, generated, options, out);
@@ -228,6 +240,7 @@ public final class Javan {
             options.profile().cliName(),
             options.release()
         );
+        writeUnifiedReport(check.layout().outputDirectory());
         out.println("Built:");
         out.print("  ");
         out.println(binary.toString());
@@ -266,6 +279,7 @@ public final class Javan {
             options.profile().cliName(),
             options.release()
         );
+        writeUnifiedReport(check.layout().outputDirectory());
         out.println("Built:");
         for (final Path artifact : artifacts) {
             printText(out, "  ", artifact.toString());
@@ -291,6 +305,7 @@ public final class Javan {
         final Path artifact = layout.outputDirectory().resolve("dist").resolve(concat(layout.outputName(), ".jar"));
         final Path jar = jarPackager.packageJar(layout, artifact, options.mainClass());
         resourceBundler.bundle(layout);
+        writeUnifiedReport(layout.outputDirectory());
         out.println("Built:");
         printText(out, "  ", jar.toString());
         out.println("Resources:");
@@ -345,6 +360,7 @@ public final class Javan {
         final List<Diagnostic> diagnostics = new ArrayList<>(callGraph.diagnostics());
         diagnostics.addAll(staticVerifier.verify(classes, callGraph.reachableMethods()));
         reports.writeReachability(layout, callGraph);
+        dependencyReports.write(layout, classes, callGraph);
         reports.writeDiagnostics(layout, diagnostics);
         final List<ClassMetadata> projectMetadata = classMetadataScanner.scanLayout(layout);
         final List<ClassMetadata> jdkMetadata = classMetadataScanner.scanCurrentJdk(layout.outputDirectory());
@@ -355,6 +371,7 @@ public final class Javan {
             jdkMetadata,
             diagnostics
         );
+        writeUnifiedReport(layout.outputDirectory());
         out.println("Compatibility:");
         printCompatibilityStatus(out, result);
         printText(out, "  java:            ", result.javaVersion());
@@ -414,6 +431,10 @@ public final class Javan {
         for (final String warning : layout.warnings()) {
             printText(out, "warning: ", warning);
         }
+    }
+
+    private void writeUnifiedReport(final Path outputDirectory) throws IOException {
+        reportSummarizer.write(outputDirectory);
     }
 
     private MainClassDetection selectedMainClass(final Options options, final Map<String, ClassFile> classes) {
