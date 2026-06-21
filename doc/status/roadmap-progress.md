@@ -24,13 +24,6 @@ Status words are exact. No colors, no mood lighting.
 
 | Measure | Current value | Meaning |
 | --- | ---: | --- |
-| Active support rows | 92 | Deterministic feature scenarios tracked in `doc/support-matrix.*`. |
-| Passing support rows | 75 | Implemented and tested for the named scenario. |
-| Scoped support rows | 15 | Supported subset with explicit rejection for unsupported shapes. |
-| Target rows | 2 | TypeMap/Nano rows tracked, but not claimed as supported yet. |
-| Active JDK inventory | JDK 25 | The only integrated local JDK inventory gate right now. |
-| JDK classes inventoried | 32,482 | Classes discovered in the active JDK image; this is not native support. |
-| JDK methods inventoried | 232,677 | Methods discovered for compatibility accounting; this is not implementation. |
 | Self-check reachable classes | 186 | `javan check target/classes --main javan.Main` on current Javan classes. |
 | Self-check reachable methods | 2,015 | Same self-check. |
 | Self-check diagnostics | 0 | Current Javan source shape is clean for reachable native self-build analysis. |
@@ -42,21 +35,33 @@ Status words are exact. No colors, no mood lighting.
 Release accounting rule: a JDK or feature area is not "done" until
 `supported + explicitly rejected + dismissed = total known variants`, with `unknown = 0`.
 
-## Product Status Snapshot
+## Coverage Snapshot
 
-This snapshot is counted from the Feature Status ledger below.
+| Measure | Done | Total | % | Meaning |
+| --- | ---: | ---: | ---: | --- |
+| Scenario rows fully passing | 76 | 93 | 81.7% | Named deterministic support scenarios implemented and tested. |
+| Scenario rows implemented or scoped | 91 | 93 | 97.8% | Rows with working behavior or an explicit scoped subset. |
+| Roadmap rows fully done | 4 | 38 | 10.5% | Big product rows release-gated for their stated scope. |
+| Roadmap rows with implementation evidence | 23 | 38 | 60.5% | Rows marked `Done`, `Partial`, `In progress`, or `Blocked`. |
+| Remote release rows proven | 0 | 4 | 0.0% | Configured Linux/macOS package rows passed on remote CI. |
 
-| Bucket | Count | Includes |
+## Active JDK Surface
+
+Current active inventory: `JDK 25`
+
+| JDK inventory item | Count | Native support claim today |
 | --- | ---: | --- |
-| Fully implemented | 4 | Rows marked `Done`. |
-| In progress / partial | 19 | Rows marked `Partial`, `In progress`, or `Blocked`; these have implementation evidence but are not complete release claims. |
-| Planned | 12 | Rows specified but not claimed as supported. |
-| Dismissed | 3 | Rows intentionally outside the native-support goal. |
-| Total roadmap feature rows | 38 | Small named rows; each row needs its own evidence gate. |
+| modules | 84 | inventoried, not fully support-accounted |
+| classes | 32,482 | inventoried, not fully support-accounted |
+| fields | 118,632 | inventoried, not fully support-accounted |
+| constructors | 35,209 | inventoried, not fully support-accounted |
+| methods | 232,677 | inventoried, not fully support-accounted |
 
-## Useful Today
+This inventory is complete for the scanned image. Native member-by-member accounting is not.
 
-| Use case | Status | What works now | What is still missing |
+## Honest Targets Today
+
+| Project shape | Status | What works now | Main blockers left |
 | --- | --- | --- | --- |
 | Local standalone `javan` CLI surface | Done | CLI command surface, project detection, reports, native build path. | Remote release artifacts still need validation. |
 | Small deterministic native apps | Partial | Supported bytecode/JDK subset can lower to C and link host-native binaries, including the current plain HTTP client loopback slices for GET/string, POST+headers/byte[], and PUT byte[]. | Full Java/JDK surface, threads, broader HTTP, TLS, full exception semantics. |
@@ -65,6 +70,17 @@ This snapshot is counted from the Feature Status ledger below.
 | Resources as artifacts | Partial | Resources are copied, packaged, and reported. | Native `ClassLoader.getResource*` and embedded resource tables. |
 | Self-build | Partial | Native Javan can rebuild Javan locally and self-check is warning-free. | Remote package/release gate on every supported OS/ARCH. |
 | Dependency/license reports | Partial | Classpath usage, local `javan.mod`, local Maven cache, lock, and license evidence. | Transitive/network resolution, GitHub packages, mirrors/auth, policy gates. |
+
+## Critical Path
+
+1. `Platform threads`: add `Thread.start()` / `Thread.join(...)` only after per-thread
+   runtime state, live-thread root ownership, and GC/thread synchronization are explicit.
+2. `GC` / `Managed heap`: finish thread-root-aware heap correctness so self-build and
+   network/service lifetimes do not depend on single-thread assumptions.
+3. `HTTP` / `HTTPS/TLS/certificates`: extend from the current plain blocking loopback
+   slices to broader client/server coverage and then TLS.
+4. `Remote release validation`: prove the same package/self-host/sanitizer gates on the
+   configured Linux/macOS release rows.
 
 ## Feature Status
 
@@ -90,7 +106,7 @@ This snapshot is counted from the Feature Status ledger below.
 | Rust library bindings | Partial | Generated Rust FFI wrapper over the current C ABI and result/error/free helpers. | CI-required compile/smoke on every release target and richer object ABI. |
 | Go library bindings | Partial | Generated cgo wrapper over the current C ABI and result/error/free helpers. | CI-required compile/smoke on every release target and richer object ABI. |
 | Python library bindings | Partial | Generated `ctypes` wrapper over the current C ABI and result/error/free helpers. | CI-required smoke on every release target and richer object ABI. |
-| Go/Rust backends | Planned | Lab track only. | Separate translator/backend design; not on first useful release path. |
+| Go/Rust backends | Planned | Research track only. | Separate translator/backend design; not on first useful release path. |
 | Self-contained packaging | Planned | Runtime-footprint reports exist. | Bundled runtime packages and size/perf presets. |
 | Containers | In progress | Workflow/spec exists and default image reuses showcase verifier. | Post-release image build from released binaries. |
 | Linux libc-free syscall runtime | Planned | Footprint track exists. | Linux raw syscall runtime slice. |
@@ -198,7 +214,7 @@ flowchart TD
 | Runtime feature selection | Partial | Native builds now write runtime-footprint reports with host target, actual target, footprint statuses, and OS/ARCH coverage rows. `javan.toml` disabled modules are enforced for reachable runtime families and unused disabled modules report as omitted. CI is configured for Linux/macOS x64/aarch64 host-native checks. Open gates remain for self-contained packaging, `runtime.optimize`, debug/profiling selection, Windows, and real cross-linking. |
 | Maven and Gradle integrations | Planned | Build plugins must call the installed/downloaded Javan binary after the normal Java build and consume the same reports. |
 | JDK-like wrapper / SDK distribution | Planned | Not a first-release target. Javan remains a standalone binary beside `javac`; optional SDK-style wrapping can be revisited only if plugins/IDE reports are not enough. |
-| Supported JDK accounting | In progress | Compatibility docs and support matrix exist; `compatibility-summary.*`, `support-matrix.*`, and `javan report` now expose support-row counts for the current evidence ledger: 92 rows, 75 pass, 15 scoped, 2 target. Remaining work is complete inventory coverage and explicit supported/rejected accounting per JDK API variant. |
+| Supported JDK accounting | In progress | Compatibility docs and support matrix exist; `compatibility-summary.*`, `support-matrix.*`, and `javan report` now expose support-row counts for the current evidence ledger: 93 rows, 76 pass, 15 scoped, 2 target. Remaining work is complete inventory coverage and explicit supported/rejected accounting per JDK API variant. |
 | Self-host warning debt | Done | The self-host native check profile is warning-free for current classes. Reachable enum `valueOf(String)` still rejects as `JAVAN015`; reachable record `ObjectMethods` bootstrap still rejects as `JAVAN030`, so unsupported reachable code remains guarded. |
 | Real-world projects: type-map and nano | Planned | Probe scripts exist and can run when the source checkouts are present locally, but these projects are not release-gated native support yet. |
 | CI, release, and installer readiness | In progress | CI and release packaging now define Linux x64, Linux aarch64, macOS aarch64, and macOS x64 host-native rows; each CI row now runs a self-host package smoke that extracts the archive, builds/runs `example` with packaged `bin/javan`, asserts the showcase unified report, clears stale `target/.javan`, runs packaged `check` and `report` on Javan's own class files, uses the packaged binary to build a second native Javan smoke binary that must start with the package version, and runs a package-backed self-host sanitizer proof with nonzero allocation/GC counters plus zero final heap/root residue. Package-backed acceptance and sanitizer/leak suites pass locally on macOS aarch64 and remain release-gated. The post-release default container image reuses the same showcase verifier. Remaining work is remote validation, Windows/runtime porting, and installer/Homebrew path. |

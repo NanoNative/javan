@@ -6,8 +6,6 @@ This directory is split by purpose so the core repository stays readable:
   support accounting, JDK compatibility, and release-readiness tracking
 - `spec/`: stable product and engineering contracts for the core `javan` compiler, CLI,
   reports, runtime model, packaging, and verification
-- `process/`: working agreements for how the team slices work, uses labs, and keeps
-  sibling-project boundaries clear
 - `adr/`: short architecture decisions that explain why the repository is organized the
   way it is
 
@@ -16,7 +14,7 @@ Core entrypoints:
 - [README.md](../README.md): public front door, quick start, supported outputs, and high
   signal status snapshot
 - [status/roadmap-progress.md](status/roadmap-progress.md): implementation progress by
-  roadmap item
+  roadmap item, coverage snapshot, and honest target view
 - [status/support-matrix.md](status/support-matrix.md): named support ledger used for
   release accounting
 - [status/jdk-compatibility.md](status/jdk-compatibility.md): latest deterministic JDK

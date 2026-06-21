@@ -20,9 +20,8 @@ This policy covers:
 - global `~/.javan` cache usage
 - CI stages and release acceptance gates
 
-Feature incubation and agent handoff rules live in
-[../process/feature-lab-workflow.md](../process/feature-lab-workflow.md). This file defines how those slices are
-verified once they touch cross-platform behavior.
+Feature work may be explored outside the main tree, but this file defines how those
+slices are verified once they touch cross-platform behavior.
 
 ## Local Host Gate
 

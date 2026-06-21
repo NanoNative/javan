@@ -8,6 +8,34 @@ adds C `javan_try_*` result wrappers with owned diagnostic fields.
 
 The native ABI is C-first. Rust, Go, and Python bindings wrap the generated C ABI.
 
+Library builds use the same deterministic frontend as app builds:
+
+```text
+Java .class
+-> javan IR
+-> C
+-> native linker
+-> .so / .dylib / .dll / .a
+-> C ABI exports
+-> C / Rust / Go / Python bindings
+```
+
+Implemented build kinds:
+
+- `app`
+- `jar` (JVM jar output, not library mode)
+- `library`
+- `staticlib`
+- `sharedlib`
+
+Library mode:
+
+- does not require `Main.main`
+- starts reachability from explicit exports
+- accepts exports from CLI or `javan.toml`
+- rejects unsupported reachable code before C generation
+- ignores unsupported unreachable code
+
 Current supported export types:
 
 - primitive values
@@ -16,6 +44,19 @@ Current supported export types:
 - `void`
 
 Unsupported export signatures fail before native code generation.
+
+Export declarations:
+
+```sh
+javan build . --library --export com.acme.Math.add
+javan build . --library --format shared --export 'com.acme.Math.add(int,int):int'
+javan build . --library --bindings c,rust,go,python
+```
+
+```toml
+[exports]
+methods = ["com.acme.Math.add(int,int):int"]
+```
 
 ## Versioning
 
@@ -215,6 +256,34 @@ Native-library sanitizer smoke also verifies retained `String` and `byte[]` inpu
 stable after caller-side buffer mutation and are reclaimed after Java clears the retained
 references.
 
+## Generated Outputs
+
+Generated outputs include:
+
+- `.javan/dist/lib<name>.a`
+- `.javan/dist/lib<name>.so`
+- `.javan/dist/lib<name>.dylib`
+- `.javan/dist/<name>.dll`
+- `.javan/dist/bindings/c/<name>.h`
+- `.javan/dist/bindings/rust/lib.rs`
+- `.javan/dist/bindings/go/<name>.go`
+- `.javan/dist/bindings/python/<name>.py`
+- `.javan/dist/lib/<name>/c/`
+- `.javan/dist/lib/<name>/rust/`
+- `.javan/dist/lib/<name>/go/`
+- `.javan/dist/lib/<name>/python/`
+
+The preferred user-facing path is:
+
+```sh
+javan build . --library --format static
+javan build . --library --format shared
+javan build . --library --format both
+```
+
+`--kind staticlib` and `--kind sharedlib` remain compatibility aliases for automation
+that expects a single artifact format.
+
 ## Reports
 
 Library builds report:
@@ -233,3 +302,25 @@ These fields appear in:
 - `.javan/reports/library-build.md`
 - unified `.javan/reports/report.json`
 - unified `.javan/reports/report.md`
+
+Library-build reporting also includes metrics such as:
+
+- input classes and methods
+- reachable classes and methods from exports
+- exported method count
+- binary and library size
+- runtime module families linked
+- dependency reduction
+
+## Open Follow-Ups
+
+Current follow-up work for library output:
+
+- annotation-based exports
+- richer ABI types for records and handles
+- Cargo, Go, and Python package manifests
+- ABI compatibility reports
+- exception-to-result mapping for library mode
+- per-export thread and reentrancy reports
+- cross-target shared library production
+- LLVM and Cranelift backends after the C backend has enough deterministic coverage

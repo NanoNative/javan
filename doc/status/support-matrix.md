@@ -6,8 +6,8 @@ This matrix tracks named javan/JDK behavior scenarios. It is not a claim that ev
 
 | Measure | Count |
 | --- | ---: |
-| rows | 92 |
-| pass | 75 |
+| rows | 93 |
+| pass | 76 |
 | scoped | 15 |
 | target | 2 |
 | rejected | 0 |

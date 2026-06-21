@@ -2,7 +2,7 @@
 
 Status: roadmap.
 
-Existing spike/lab input:
+Existing research input:
 
 - `/Users/yuna/projects/javan-project/javan-virtual-threads-native-spike`
 

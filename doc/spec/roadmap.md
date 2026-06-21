@@ -1,49 +1,12 @@
 # javan Roadmap
 
-## Feature Lab Workflow
+## Scope
 
-Large features should be built as small isolated slices in temporary labs, agent work
-areas, or spike branches, then reviewed and migrated into `javan`. See
-[../process/feature-lab-workflow.md](../process/feature-lab-workflow.md).
-
-## Cross-Platform Verification
-
-Docker, JDK matrix, cache, negative-test, and release-gate policy lives in
-[cross-platform-verification.md](cross-platform-verification.md).
-
-## Independent Workspaces
-
-Large standalone tracks such as JavanUI, Javan Studio, Java SDK wrapping, build plugins,
-Homebrew packaging, and IDE integration may live in separate repositories or ignored labs
-with their own context files. See [../process/independent-workspaces.md](../process/independent-workspaces.md).
-
-## Examples And Test Projects
-
-Public examples, acceptance projects, and test-only projects are intentionally separate.
-See [examples-and-test-projects.md](examples-and-test-projects.md).
-
-## Status Language
-
-Roadmap summary tables use this vocabulary:
-
-| Status | Meaning |
-| --- | --- |
-| Done | Implemented, tested, and release-gated for the stated scope. |
-| Partial | Useful subset exists; unsupported reachable shapes fail clearly. |
-| In progress | Production work is underway, but the release gate is not complete. |
-| Planned | Wanted, specified, and not claimed as supported yet. |
-| Blocked | Waiting on remote platform/tool validation or an external prerequisite. |
-| Dismissed | Deliberately outside the native-support goal, except for narrower future variants. |
-
-Detailed roadmap sections keep implementation-detail language:
-
-- `Implemented details`: behavior available and verified for the stated scope.
-- `Current gates`: checks that keep the slice honest.
-- `Open acceptance criteria`: work still required before the umbrella feature is complete.
-
-Broad Java features are not complete until their open acceptance criteria are empty and
-the support matrix has no unknown leftovers. Partial support must not imply full Java
-compatibility for the whole umbrella feature.
+- status, counts, and honest target coverage: [`../status/roadmap-progress.md`](../status/roadmap-progress.md)
+- cross-platform verification policy: [cross-platform-verification.md](cross-platform-verification.md)
+- examples and acceptance projects: [examples-and-test-projects.md](examples-and-test-projects.md)
+- sibling-product tracks such as Studio, UI, plugins, Homebrew, and IDE integrations stay
+  outside the core compiler repo under `/Users/yuna/projects/javan-project/`
 
 ## 0.1 Native Hello
 
@@ -262,144 +225,26 @@ Open acceptance criteria:
 
 ## 0.285 Memory And Runtime Correctness
 
-Status: implemented process-lifetime cleanup, allocation metadata/accounting, generated
-type descriptors, generated static-root inventory, generated local/parameter root frames,
-CFG-aware local root liveness, statement/label safe points, protected direct object
-returns, safe-point mark/sweep for generated objects, object arrays, primitive arrays,
-boxed primitive wrappers, and runtime-owned strings, generated expression temporary root frames, conservative
-runtime-container pinning, reporting, soak, and sanitizer-stress slice. Full managed heap
-coverage is still planned. See
+Status: partial. The single-thread managed-heap slice is real, leak-tested, and reportable.
+Full heap coverage, thread roots, and broader Java object semantics remain open. Deep
+design and exhaustive test inventory live in
 [memory-runtime-correctness.md](memory-runtime-correctness.md).
 
-Current slice:
+Implemented slice:
 
-- runtime reports state the active allocation model, ownership rules, GC/root status, and
-  sanitizer posture
-- generated runtime tracks `javan_alloc` allocations with kind/type/runtime-kind/mark/
-  collectibility metadata plus live/total/peak accounting and frees remaining allocations
-  during shutdown
-- generated app/library code registers static object-field roots before class
-  initializers run
-- generated app/library code registers class type descriptors and object-field offsets
-- generated functions push object parameter/local root frames and pop them before
-  generated returns
-- generated functions clear dead object local/parameter root slots at CFG-proven
-  safe-point boundaries across straight-line code, labels, branches, and loops
-- generated object-returning functions publish direct return values through a
-  single-threaded static return root until callee safe points and frame pop complete
-- generated object-producing expression temporaries are rooted through statement/return
-  expression root frames for nested object call arguments, store operands, print operands,
-  array operands, and return operands
-- generated safe points can mark static roots, frame roots, generated object fields,
-  object-array elements, primitive-array leaf allocations, boxed primitive wrapper leaf
-  allocations, runtime-owned strings,
-  runtime containers, and owned container storage
-- runtime `HashMap` backing-array growth publishes each moved keys/values buffer before
-  any later allocation can collect and traverse the rooted map
-- generated safe points are emitted at entry/init, labels, non-terminal statement
-  boundaries, protected object returns, and expression-rooted statement/return operands;
-  allocator paths now retry GC under heap pressure before deterministic out-of-memory
-  failure for generated object/array/string allocation
-- generated objects, object arrays, primitive arrays, boxed primitive wrappers,
-  runtime-owned strings,
-  runtime containers, and owned container storage unreachable at safe points are swept;
-  explicit runtime temporaries and FFI exports are excluded from GC
-- native library byte-array ABI inputs are rooted while wrapper-created Java byte arrays
-  are live
-- native library object return values are rooted until `String`/`byte[]` ABI export copies
-  complete
-- explicit `javan_free` of process results releases owned stdout/stderr runtime strings
-- native acceptance runs `memory-soak`, a repeated allocation JVM-vs-native equivalence
-  project, `static-root-inventory`, `root-frame-stack`, `gc-generated-object-graph`, plus
-  `local-root-liveness-gc`, `cfg-local-root-liveness-gc`, `object-registry-gc`,
-  `protected-object-return`, `operand-call-temporary-roots`,
-  `large-arrays`, `primitive-array-gc`, `boxed-boolean-gc`, `runtime-filetime-gc`,
-  `runtime-duration-millis-gc`, `runtime-duration-seconds-gc`, `boxed-integer-gc`,
-  `boxed-long-gc`, `boxed-float-gc`, `boxed-double-gc`,
-  `string-static-root`, `string-growth-limit`,
-  `runtime-container-live-roots`, `runtime-list-reclaim`, `runtime-map-reclaim`,
-  `runtime-map-realloc-gc`,
-  `runtime-optional-reclaim`, `runtime-iterator-reclaim`,
-  `runtime-stringbuilder-reclaim`, `runtime-list-of-array-gc`,
-  `runtime-list-copy-gc`, `runtime-map-copy-gc`, `runtime-map-values-gc`,
-  `runtime-realloc-growth-fit`, `operand-call-receiver-temporary-root`,
-  `operand-array-load-temporary-root`, `operand-object-compare-temporary-root`,
-  `operand-field-load-temporary-root`, `operand-chained-field-load-temporary-root`,
-  `operand-chained-call-receiver-temporary-root`, `runtime-string-temporary-root`,
-  `runtime-string-substring-source-root`, `runtime-string-replace-source-root`,
-  `runtime-string-from-chars-source-root`, `runtime-string-char-array-copy-gc`,
-  `runtime-stringbuilder-append-source-root`, `runtime-nested-container-reclaim`,
-  `runtime-directory-stream-source-root`, `exception-catch-heap-pressure`,
-  `typed-catch-specific-miss`, `typed-catch-runtime-superclass`,
-  `typed-catch-io-superclass`, `typed-catch-util-runtime-superclass`,
-  `typed-catch-error-not-exception`,
-  `exception-default-message-null`, `exception-default-panic`,
-  `panic-string-concat-temporary-root`, `heap-limit-live-root-panic`,
-  `allocation-path-gc`, `negative-array-length`, `allocation-limit-panic`,
-  `string-allocation-limit-panic`, `exception-catch-allocation-limit-panic`,
-  `runtime-list-allocation-limit-panic`, `runtime-map-allocation-limit-panic`,
-  `runtime-path-allocation-limit-panic`,
-  `runtime-read-string-allocation-limit-panic`,
-  `runtime-read-all-bytes-allocation-limit-panic`,
-  `runtime-directory-stream-result-allocation-limit-panic`,
-  `runtime-directory-stream-child-allocation-limit-panic`,
-  `runtime-process-run-output-allocation-limit-panic`,
-  `array-copy-allocation-limit-panic`, and `system-exit`
-- `.github/scripts/sanitizer-suite.sh` recompiles generated C with Address/Undefined sanitizer
-  flags and leak detection when the host compiler supports them; it enables
-  `JAVAN_GC_STRESS` metadata validation plus `JAVAN_GC_SAFEPOINT_INTERVAL` collection
-  stress and covers normal completion, static roots, root frames, generated object graph
-  collection, object-registry GC, protected object returns, operand/call expression
-  temporary roots, large arrays, primitive-array GC, boxed primitive wrapper GC,
-  straight-line and CFG local root liveness,
-  native-library byte-array FFI
-  ownership, runtime list/map copy and view helper rooting under heap pressure,
-  map backing-array realloc publish-before-GC safety,
-  runtime UTF-8 string helper source rooting for substring, replace, char-array
-  construction, copy, concat, StringBuilder append, path helper, and export-copy
-  allocation paths, `FILE*`/`DIR*` panic-time cleanup, directory-stream source path
-  rooting, directory-stream result-allocation denial, directory-entry child allocation denial,
-  process-run output capture allocation denial,
-  panic-expression temporary rooting, array-copy source rooting,
-  deterministic allocation-denial probes for string/list/map/path/read-file/directory-stream/process/array-copy/catch paths,
-  repeated native-library export/free ownership stress, sanitizer failure-signature rejection,
-  `realloc` heap-limit growth accounting, hostile receiver/array-load/runtime-string/
-  nested-container/catch/live-root panic allocation stress, allocator-path GC retry,
-  deterministic panic cleanup, and `system-exit` cleanup
-- the generated-app sanitizer smoke has an opt-in counter wrapper, and the suite runs
-  `memory-soak` with final `javan_gc_collect()`, heap metadata validation, zero final
-  live allocations/bytes, a peak-live-byte ceiling, and minimum total/GC/collected
-  counters. It also writes and suite-asserts `.javan/reports/sanitizer-proof.*`
-  with actual live allocation, live byte, peak byte, total allocation, GC collection,
-  and collected allocation counters, then runs `javan report` and asserts the unified
-  report exposes the sanitizer-proof family and zero-live-heap counters.
-- the native-library sanitizer smoke runs a C ABI counter probe over repeated `String`
-  and `byte[]` export/free paths with final GC, heap metadata validation, zero final
-  live allocations/bytes, zero open root frames, a peak-live-byte ceiling, and minimum
-  total/GC/collected counters. It writes and suite-asserts the same sanitizer proof
-  report with actual live allocation, live byte, root-frame, frame-root, and GC counters,
-  then runs `javan report` and asserts the unified report exposes zero-live-heap and
-  zero-open-root counters.
-- the native-library sanitizer smoke also covers null `String` input, empty `byte[]`
-  input, negative `byte[]` input rejection, structured borrowed last-error fields, and
-  last-error clear semantics
-- generated Rust, Go, and Python bindings expose explicit free helpers for direct
-  javan-owned string and byte-array results, plus result wrappers that copy outputs into
-  language-owned values; the native-library smoke runs Python package result-wrapper
-  ownership when `python3` is available and Rust/Go package result-wrapper ownership
-  when `rustc` or `go` are available. CI and release install Go `1.26.4` and Rust
-  `1.96.0`, and `JAVAN_SANITIZER_REQUIRED=true` makes missing binding proof fail.
-- CI and release verification run sanitizer checks in required mode
+- allocation accounting, root tracking, safe points, direct-return protection, and GC retry
+- collectibility for generated objects, arrays, boxed wrappers, runtime strings, and current
+  runtime containers
+- rooted native-library `String`/`byte[]` ABI paths and explicit ownership/free rules
+- required sanitizer, soak, and proof reports for app and library paths
+- unified report exposure for sanitizer-proof and live-heap counters
 
 Open gates:
 
-- remaining operand/eval-order validation across supported IR shapes beyond the current
-  hostile receiver, array-load, runtime-string, nested-container, caught-exception, and
-  live-root panic probes
-- full Java heap mark/sweep beyond generated objects/arrays, primitive arrays, boxed
-  primitive wrappers, current runtime strings, and current runtime containers
+- operand/eval-order validation beyond the current hostile-root stress slices
+- full Java heap mark/sweep beyond current generated/runtime allocation shapes
 - hostile-point GC collection stress across every supported allocation shape
-- full Java `String` object and UTF-16 ownership beyond current UTF-8 runtime strings
+- full Java `String` object model and UTF-16 ownership
 - exception semantics beyond direct same-method platform catch routing
 - sanitizer/leak CI on Windows and release footprint jobs
 - thread roots once threads exist
@@ -763,142 +608,30 @@ CLI policy:
 
 ## 0.34 Full Concurrency Runtime And Thread Analysis
 
-Status: planned. See [concurrency-runtime.md](concurrency-runtime.md).
-
-Existing spike/lab input:
-
-- `/Users/yuna/projects/javan-project/javan-virtual-threads-native-spike`
-
-The spike is useful migration material only. It does not change production status until
-slices are migrated into `javan`, tested, and accepted through the normal gates.
+Status: planned. Detailed requirements live in
+[concurrency-runtime.md](concurrency-runtime.md). Existing research input lives in
+`/Users/yuna/projects/javan-project/javan-virtual-threads-native-spike`.
 
 Goal:
 
-- support Java virtual threads as a first-class native runtime feature
-- analyze all reachable thread usage for correctness, blocking behavior, scalability, and
+- support platform threads and virtual threads as first-class native runtime features
+- analyze reachable thread usage for correctness, blocking behavior, scalability, and
   pointless overhead
 
-Scope:
+Must ship:
 
-- virtual threads
-- platform threads
-- `ExecutorService`
-- virtual-thread executors
-- blocking calls
-- CPU-bound tasks
-- tiny tasks
-- `synchronized` and locks
-- `ThreadLocal`
-- sleep, join, interrupt
-- park and unpark
-
-Runtime requirements:
-
-- virtual scheduler
-- carrier thread pool
-- virtual `Thread` object model
-- `Thread.startVirtualThread(...)`
-- `Thread.ofVirtual()`
-- `Executors.newVirtualThreadPerTaskExecutor()`
-- sleep, join, interrupt, park, and unpark
-- `ThreadLocal`
-- uncaught exception handling
-- readable virtual-thread stack traces
-- scheduler-aware blocking I/O
-- pinning and blocking diagnostics
-
-Compiler analysis:
-
-For every reachable thread or task root, build a `ThreadTaskSummary`:
-
-- root method
-- reachable call graph
-- estimated instruction count
-- allocation count
-- loop presence
-- blocking calls
-- I/O calls
-- sleep, park, and join usage
-- synchronized and lock usage
-- `ThreadLocal` usage
-- native or unknown calls
-- possible carrier pinning
-- CPU-bound score
-- tiny-task score
-
-Task classification:
-
-- `IO_BOUND`
-- `BLOCKING_WAIT`
-- `CPU_BOUND`
-- `TINY_CPU_TASK`
-- `MIXED`
-- `UNKNOWN`
-- `PINNING_RISK`
-
-Diagnostics:
-
-| Diagnostic | Level | Meaning |
-| --- | --- | --- |
-| `JAVAN-THREAD-SMALL` | info | Task is very small, CPU-only, and has no blocking or I/O. Suggest inline execution or batching. |
-| `JAVAN-THREAD-CPU` | warning | Virtual threads do not improve CPU throughput. Suggest a bounded platform-thread executor near CPU core count. |
-| `JAVAN-THREAD-BLOCKING` | info/warning | Platform thread performs blocking I/O; suggest virtual threads when concurrency is high. |
-| `JAVAN-THREAD-UNKNOWN-BLOCK` | warning | Scheduler-safe blocking behavior cannot be proven. |
-| `JAVAN-THREAD-PIN` | warning | `synchronized`, native, or unknown blocking may pin a carrier. |
-| `JAVAN-THREAD-FLOOD` | warning | Many short-lived threads or tasks detected. |
-| `JAVAN-THREAD-LOCAL` | info | Report memory and lifecycle implications for many virtual threads. |
-
-Rules:
-
-- definite correctness issue is an error
-- likely scalability or performance issue is a warning
-- possibly pointless usage is info
-- be conservative
-- do not fail builds for style or performance opinions unless `--warnings-as-errors` is enabled
-- never claim a task is safe unless proven
-
-Runtime profiling:
-
-Thread profiling is a report mode, not a separate public run command by default. The
-normal `javan run`/`javan build` pipeline should emit thread diagnostics when the project
-settings enable the thread analysis/profiling track.
-
-Collect:
-
-- virtual threads created
-- platform threads created
-- average task duration
-- blocked time
-- CPU time
-- pinning events
-- scheduler queue delay
-- carrier utilization
-- `ThreadLocal` count
-- blocking call sites
-
-Reports:
-
-- `.javan/reports/threads.json`
-- `.javan/reports/threads.md`
-- `.javan/reports/virtual-threads.json`
-- `.javan/reports/virtual-threads.md`
-
-CLI policy:
-
-- normal `javan check` and `javan build` feed thread diagnostics into the unified report
-- normal `javan report` shows the thread sections when present
-- do not add thread-specific public flags as first-choice UX unless settings and report
-  defaults prove insufficient
+- platform-thread lifecycle: `start`, `join`, sleep interruption, roots, cleanup
+- virtual-thread runtime: scheduler, carriers, `Thread.ofVirtual`, per-task executor
+- thread diagnostics: blocking, CPU-bound, tiny-task, pinning, `ThreadLocal`, flood risk
+- report outputs: `.javan/reports/threads.*` and `.javan/reports/virtual-threads.*`
 
 Acceptance:
 
-- full virtual-thread APIs are supported
-- thread diagnostics are emitted only for reachable code
-- blocking, platform-thread, and virtual-thread usage is analyzed
-- reports are stable JSON plus readable Markdown
-- diagnostics include where, why, fix, and reachable path
-- tests cover virtual threads, platform threads, tiny tasks, CPU-bound tasks, blocking
-  tasks, pinning risk, `ThreadLocal`, join, sleep, interrupt, and profiling
+- full virtual-thread APIs supported for the claimed slice
+- diagnostics emitted only for reachable code
+- reports stay stable in JSON and Markdown
+- tests cover platform threads, virtual threads, blocking, pinning, join/sleep/interrupt,
+  and profiling
 
 ## 0.35 JDK Coverage Accounting
 
@@ -909,18 +642,11 @@ Goal:
 - make every supported JDK deterministic enough that inventory count, native support,
   deliberate rejection, and unknown leftovers are all visible
 
-The compatibility inventory should produce per-JDK statistics:
+Per release-gated JDK, the compatibility inventory must expose:
 
-| Statistic | Meaning |
-| --- | --- |
-| classes inventoried | JDK classes discovered in the runtime image |
-| methods inventoried | methods plus descriptors and flags |
-| fields inventoried | fields plus descriptors and flags |
-| constructors inventoried | constructors plus descriptors and flags |
-| bytecode variants observed | opcodes, constant-pool tags, attributes, bootstrap shapes, and invokedynamic shapes |
-| supported variants | variants with native lowering, intrinsic, or substitution coverage |
-| rejected variants | variants that fail clearly with a stable diagnostic |
-| unknown variants | variants neither supported nor rejected |
+- inventory counts for classes, methods, fields, constructors, and observed bytecode variants
+- native coverage counts for supported, rejected, and unknown variants
+- stable JSON/Markdown output that the status page can summarize without reinterpreting it
 
 Release rule:
 
@@ -930,9 +656,8 @@ leftovers = unknown variants
 leftovers must be 0 for a release-gated JDK
 ```
 
-This is separate from "32k classes inventoried". A class being inventoried only means
-`javan` can see it. It does not mean every method in that class can be lowered to native
-code.
+Inventory is not support. A class being inventoried only means `javan` can see it.
+Native coverage is only claimable when the unknown bucket is zero for the release-gated slice.
 
 ## 0.36 IDE Diagnostics Through Javac Wrapper
 
@@ -940,38 +665,22 @@ Status: planned.
 
 Goal:
 
-- let IDEs and build tools see `javan check` warnings as normal compiler-style warnings
-  while still delegating real Java compilation to the original `javac`
+- let IDEs and build tools surface `javan check` diagnostics in compiler-style source form
+  while real Java compilation still runs through the original `javac`
 
-Planned behavior:
+Core contract:
 
-1. `javan javac` delegates to the selected original JDK `javac`.
-2. If `javac` fails, preserve its exact exit code and diagnostics.
-3. If `javac` succeeds and native-profile checking is enabled, run `javan check` on the
-   emitted class files.
-4. Emit diagnostics in javac-style source form:
+- `javan javac` delegates to the selected original `javac`
+- javac failures pass through unchanged
+- successful compilation may run native-profile checks on emitted classes
+- diagnostics map back to Java source and hide generated/native frames by default
+- stable report JSON remains the machine-readable source of truth
 
-```text
-src/main/java/com/acme/Main.java:42: warning: [JAVAN-THREAD-CPU] virtual thread task is CPU-bound
-```
-
-5. Also write stable report JSON for IDE plugins and language servers.
-
-Rules:
-
-- do not replace javac
-- do not emit fake Java compiler errors for unsupported native-only restrictions unless
-  the user enabled the javan native profile
-- generated/internal names must be hidden by default
-- source mapping must use the same diagnostic model as human-readable exceptions
-
-Core `javan` owns the `javac` wrapper contract and stable report/diagnostic formats. IDE
-plugins and build-tool integrations should live in sibling workspaces, not inside the core
-compiler dependency graph.
+IDE plugins and build-tool integrations stay outside the core compiler dependency graph.
 
 ## 0.37 Go And Rust Translator / Binary Experiments
 
-Status: standalone lab track.
+Status: external research track.
 
 Goal:
 
@@ -1003,20 +712,6 @@ Goal:
 - make `javan` capable of building the `javan` CLI itself through Javan's own
   bytecode -> IR -> C/native path
 
-Current state:
-
-- `javan` already compiles small Java applications and libraries through its own bytecode
-  to IR to C/native path
-- `javan build target/classes --main javan.Main --jar` builds Javan's JVM jar from
-  already compiled classes
-- `javan build target/classes --main javan.Main` now builds a self-hosted native Javan
-  bootstrap binary on the current host
-- the production self-host gate covers jar/report acceptance under the rebuilt binary
-  locally; CI package smoke also extracts the archive, clears stale reports, runs packaged
-  `check`/`report` on Javan's own classes, and uses packaged `bin/javan` to build a
-  native Javan smoke binary that must start
-- broader cross-OS/architecture verification still remains open until remote rows pass
-
 Target flow:
 
 ```text
@@ -1028,17 +723,16 @@ javan source
 -> javan executable
 ```
 
-LLVM and Cranelift remain future backend experiments after the C backend is deterministic
-enough for self-hosting and release gates.
+Core gate:
 
-Bootstrap stages:
+- the native `javan` binary must rebuild Javan from compiled Javan classes and then pass
+  the same smoke/report/build acceptance expected from the JVM-hosted path
 
-1. make `javan check` report every unsupported reachable feature in the `javan` codebase
-2. either implement support or deliberately reject/replace each unsupported pattern
-3. compile `javan` with `javan` on the host platform
-4. compare behavior against the JVM jar
-5. add cross-platform self-host smoke tests
-6. make Javan-built binaries the only release artifacts
+Notes:
+
+- LLVM and Cranelift remain future backend experiments after the C backend is deterministic
+  enough for self-hosting and release gates
+- remote cross-OS/architecture proof stays tracked in the status page and release docs, not here
 
 Production acceptance:
 
@@ -1094,17 +788,11 @@ Reflection strategy:
 - dynamic or data-dependent reflection that cannot be resolved at build time must fail
   with a stable diagnostic rather than silently generating a broken binary
 
-## 0.6 IDE Feedback
-
-Generate machine-readable diagnostics and an LSP-compatible profile so IDEs can flag APIs
-that cannot enter the static native subset.
-
 ## Flagship: Javan Studio With JavanUI
 
 Status: external flagship track.
 
-Javan Studio and JavanUI are deliberate sibling-product tracks. The core repo only owns
-the integration contract:
+The core repo only owns the integration contract:
 
 - Studio consumes stable `javan` report formats
 - generated output must remain normal Java and explicit project files
@@ -1113,8 +801,5 @@ the integration contract:
 Detailed product planning belongs in the sibling `javan-studio` and `javan-ui`
 workspaces under `/Users/yuna/projects/javan-project/`.
 
-## UI Separation Rule
-
-Keep JavanUI and Javan Studio out of the core compiler dependency graph. They are flagship
-tracks, but they should live as separate workspaces and integrate through normal Java APIs,
-generated source, stable reports, and explicit build contracts.
+Keep JavanUI and Javan Studio out of the core compiler dependency graph. They integrate
+through normal Java APIs, generated source, stable reports, and explicit build contracts.

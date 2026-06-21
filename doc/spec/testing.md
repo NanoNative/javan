@@ -88,5 +88,5 @@ Required behavior coverage for feature slices:
 - one public-entrypoint case for user-visible behavior
 - one regression case per fixed bug
 
-Feature labs and agent work follow the same rule before migration into the main suite. See
-[../process/feature-lab-workflow.md](../process/feature-lab-workflow.md).
+Research spikes and agent work follow the same one-scenario test rule before migration
+into the main suite.

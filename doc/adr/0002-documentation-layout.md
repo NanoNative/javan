@@ -16,7 +16,6 @@ Documentation is grouped by purpose:
 
 - `doc/status/` for support accounting and release-readiness tracking
 - `doc/spec/` for stable core-product contracts
-- `doc/process/` for working agreements and lab policies
 - `doc/adr/` for architecture decisions
 
 The root README remains the public front door, not the full internal encyclopedia.
