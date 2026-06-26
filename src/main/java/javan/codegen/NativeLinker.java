@@ -6,6 +6,7 @@ import javan.util.Strings2;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -45,7 +46,13 @@ public final class NativeLinker {
     public Path link(final Path root, final Path mainC, final Path runtimeC, final Path output) throws IOException, InterruptedException {
         final String compiler = requiredExecutable(List.of("cc", "clang", "gcc"), "No C compiler found. Install cc, clang, or gcc.");
         Files.createDirectories(output.getParent());
-        final List<String> command = List.of(compiler, mainC.toString(), runtimeC.toString(), "-o", output.toString());
+        final List<String> command = new ArrayList<>();
+        command.add(compiler);
+        command.addAll(threadFlags());
+        command.add(mainC.toString());
+        command.add(runtimeC.toString());
+        command.add("-o");
+        command.add(output.toString());
         final ProcessRunner.Result result = processRunner.run(root, command);
         if (result.exitCode() != 0) {
             throw new IOException("Native link failed\n" + result.stderr() + result.stdout());
@@ -69,9 +76,19 @@ public final class NativeLinker {
         final String compiler = requiredExecutable(List.of("cc", "clang", "gcc"), "No C compiler found. Install cc, clang, or gcc.");
         Files.createDirectories(output.getParent());
         final boolean mac = Strings2.toAsciiLowerCase(System.getProperty("os.name", "")).contains("mac");
-        final List<String> command = mac
-            ? List.of(compiler, "-dynamiclib", "-fPIC", mainC.toString(), runtimeC.toString(), "-o", output.toString())
-            : List.of(compiler, "-shared", "-fPIC", mainC.toString(), runtimeC.toString(), "-o", output.toString());
+        final List<String> command = new ArrayList<>();
+        command.add(compiler);
+        command.addAll(threadFlags());
+        if (mac) {
+            command.add("-dynamiclib");
+        } else {
+            command.add("-shared");
+        }
+        command.add("-fPIC");
+        command.add(mainC.toString());
+        command.add(runtimeC.toString());
+        command.add("-o");
+        command.add(output.toString());
         final ProcessRunner.Result result = processRunner.run(root, command);
         if (result.exitCode() != 0) {
             throw new IOException("Native shared library link failed\n" + result.stderr() + result.stdout());
@@ -116,17 +133,26 @@ public final class NativeLinker {
 
     private void compileObject(final Path root, final String compiler, final Path source, final Path output)
         throws IOException, InterruptedException {
-        final ProcessRunner.Result result = processRunner.run(root, List.of(
-            compiler,
-            "-fPIC",
-            "-c",
-            source.toString(),
-            "-o",
-            output.toString()
-        ));
+        final List<String> command = new ArrayList<>();
+        command.add(compiler);
+        command.addAll(threadFlags());
+        command.add("-fPIC");
+        command.add("-c");
+        command.add(source.toString());
+        command.add("-o");
+        command.add(output.toString());
+        final ProcessRunner.Result result = processRunner.run(root, command);
         if (result.exitCode() != 0) {
             throw new IOException("Native compile failed\n" + result.stderr() + result.stdout());
         }
+    }
+
+    private static List<String> threadFlags() {
+        final String os = Strings2.toAsciiLowerCase(System.getProperty("os.name", ""));
+        if (os.contains("win")) {
+            return List.of();
+        }
+        return List.of("-pthread");
     }
 
     private String requiredExecutable(final List<String> executables, final String message) throws IOException, InterruptedException {

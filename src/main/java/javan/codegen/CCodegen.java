@@ -3,6 +3,7 @@ package javan.codegen;
 import javan.ir.IrFunction;
 import javan.build.AbiType;
 import javan.build.ExportedMethod;
+import javan.classfile.MethodRef;
 import javan.ir.IrClass;
 import javan.ir.IrDispatch;
 import javan.ir.IrDispatchTarget;
@@ -20,6 +21,8 @@ import java.util.List;
  * Emits portable C for the initial javan IR profile.
  */
 public final class CCodegen {
+    private static final String RUNNABLE_RUN_DISPATCH_SYMBOL = BytecodeToIR.dispatchSymbol(new MethodRef("java/lang/Runnable", "run", "()V"));
+
     /**
      * Writes the generated C program.
      *
@@ -67,9 +70,11 @@ public final class CCodegen {
             emitDispatchSignature(dispatch, c);
             c.append(";").append(System.lineSeparator());
         }
+        c.append("void javan_thread_run_target(void* target);").append(System.lineSeparator());
         c.append(System.lineSeparator());
         emitAllocators(program, c);
         emitEnumOrdinalHelpers(program, c);
+        emitThreadHelpers(program, c);
         for (final IrDispatch dispatch : program.dispatches()) {
             emitDispatch(program, dispatch, c);
         }
@@ -129,9 +134,11 @@ public final class CCodegen {
             emitDispatchSignature(dispatch, c);
             c.append(";").append(System.lineSeparator());
         }
+        c.append("void javan_thread_run_target(void* target);").append(System.lineSeparator());
         c.append(System.lineSeparator());
         emitAllocators(program, c);
         emitEnumOrdinalHelpers(program, c);
+        emitThreadHelpers(program, c);
         for (final IrDispatch dispatch : program.dispatches()) {
             emitDispatch(program, dispatch, c);
         }
@@ -395,6 +402,19 @@ public final class CCodegen {
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
     }
 
+    private static void emitThreadHelpers(final IrProgram program, final StringBuilder c) {
+        c.append("void javan_thread_run_target(void* target) {").append(System.lineSeparator());
+        c.append("    if (target == 0) {").append(System.lineSeparator());
+        c.append("        javan_panic(\"Thread.start target is null\");").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        if (hasDispatch(program, RUNNABLE_RUN_DISPATCH_SYMBOL)) {
+            c.append("    ").append(RUNNABLE_RUN_DISPATCH_SYMBOL).append("(target);").append(System.lineSeparator());
+        } else {
+            c.append("    javan_panic(\"Thread.start with Runnable target has no closed-world Runnable.run implementation\");").append(System.lineSeparator());
+        }
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+    }
+
     private static void emitFunction(
         final IrProgram program,
         final IrFunction function,
@@ -404,6 +424,7 @@ public final class CCodegen {
         final boolean entry = appEntry(emitMain, function, program);
         if (entry) {
             c.append("int main(int argc, char** argv) {").append(System.lineSeparator());
+            c.append("    javan_runtime_profile_consume_args(&argc, &argv);").append(System.lineSeparator());
             c.append("    (void) argc;").append(System.lineSeparator());
             c.append("    (void) argv;").append(System.lineSeparator());
             emitEntryParameters(function, c);
@@ -435,10 +456,20 @@ public final class CCodegen {
             emitStatementSafePoint(instruction, c);
         }
         if (entry) {
+            c.append("    javan_wait_for_non_current_threads();").append(System.lineSeparator());
             emitRootFramePop(rootFrameSymbol, !rootNames.isEmpty(), c);
             c.append("    return 0;").append(System.lineSeparator());
         }
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+    }
+
+    private static boolean hasDispatch(final IrProgram program, final String symbol) {
+        for (final IrDispatch dispatch : program.dispatches()) {
+            if (dispatch.symbol().equals(symbol)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean appEntry(final boolean emitMain, final IrFunction function, final IrProgram program) {

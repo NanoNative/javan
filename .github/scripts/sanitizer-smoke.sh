@@ -98,6 +98,12 @@ write_sanitizer_proof() {
   "actualGcCollections": $(json_number_or_null "$(proof_counter gc_collections)"),
   "actualGcCollectedAllocations": $(json_number_or_null "$(proof_counter gc_collected_allocations)"),
   "actualGcCollectedBytes": $(json_number_or_null "$(proof_counter gc_collected_bytes)"),
+  "actualThreadObjects": $(json_number_or_null "$(proof_counter thread_objects)"),
+  "actualStartedThreads": $(json_number_or_null "$(proof_counter started_threads)"),
+  "actualCompletedThreads": $(json_number_or_null "$(proof_counter completed_threads)"),
+  "actualActiveThreads": $(json_number_or_null "$(proof_counter active_threads)"),
+  "actualThreadsWithTarget": $(json_number_or_null "$(proof_counter threads_with_target)"),
+  "actualCurrentThreadRootPresent": $(json_number_or_null "$(proof_counter current_thread_root_present)"),
   "maxLiveAllocations": $(json_number_or_null "${JAVAN_SANITIZER_MAX_LIVE_ALLOCATIONS:-}"),
   "maxLiveBytes": $(json_number_or_null "${JAVAN_SANITIZER_MAX_LIVE_BYTES:-}"),
   "maxPeakLiveBytes": $(json_number_or_null "${JAVAN_SANITIZER_MAX_PEAK_LIVE_BYTES:-}"),
@@ -124,6 +130,12 @@ EOF
 - actual live bytes: \`$(proof_counter live_bytes)\`
 - actual peak live bytes: \`$(proof_counter peak_live_bytes)\`
 - actual GC collections: \`$(proof_counter gc_collections)\`
+- actual thread objects: \`$(proof_counter thread_objects)\`
+- actual started threads: \`$(proof_counter started_threads)\`
+- actual completed threads: \`$(proof_counter completed_threads)\`
+- actual active threads: \`$(proof_counter active_threads)\`
+- actual threads with target: \`$(proof_counter threads_with_target)\`
+- current thread root present: \`$(proof_counter current_thread_root_present)\`
 - failure signatures: \`$failure_signatures\`
 
 This report is written by the sanitizer smoke script after successful validation.
@@ -272,6 +284,12 @@ static void javan_sanitizer_write_proof_counters(void) {
     fprintf(out, "gc_collections=%lu\n", javan_heap_gc_collections());
     fprintf(out, "gc_collected_allocations=%lu\n", javan_heap_gc_collected_allocations());
     fprintf(out, "gc_collected_bytes=%lu\n", javan_heap_gc_collected_bytes());
+    fprintf(out, "thread_objects=%lu\n", javan_heap_thread_objects());
+    fprintf(out, "started_threads=%lu\n", javan_heap_started_threads());
+    fprintf(out, "completed_threads=%lu\n", javan_heap_completed_threads());
+    fprintf(out, "active_threads=%lu\n", javan_heap_active_threads());
+    fprintf(out, "threads_with_target=%lu\n", javan_heap_threads_with_target());
+    fprintf(out, "current_thread_root_present=%d\n", javan_heap_current_thread_root_present());
     fclose(out);
 }
 

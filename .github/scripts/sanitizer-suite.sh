@@ -84,6 +84,16 @@ assert_sanitizer_proof_summary() {
   assert_contains "$report" '"failureSignatures": "false"'
 }
 
+assert_thread_inventory_summary() {
+  file=$1
+  assert_contains "$file" '"actualThreadObjects": 1'
+  assert_contains "$file" '"actualStartedThreads": 1'
+  assert_contains "$file" '"actualCompletedThreads": 0'
+  assert_contains "$file" '"actualActiveThreads": 0'
+  assert_contains "$file" '"actualThreadsWithTarget": 0'
+  assert_contains "$file" '"actualCurrentThreadRootPresent": 1'
+}
+
 JAVAN_HEAP_LIMIT_BYTES=32768 \
 JAVAN_SANITIZER_COUNTER_CHECK=true \
 JAVAN_SANITIZER_MAX_LIVE_ALLOCATIONS=0 \
@@ -117,6 +127,30 @@ MEMORY_SOAK_REPORT=src/test/resources/projects/native-profile/memory-soak/.javan
 assert_json_number_at_least "$MEMORY_SOAK_REPORT" actualTotalAllocations 5000
 assert_json_number_at_least "$MEMORY_SOAK_REPORT" actualGcCollections 1
 assert_json_number_at_least "$MEMORY_SOAK_REPORT" actualGcCollectedAllocations 5000
+
+JAVAN_HEAP_LIMIT_BYTES=4096 \
+JAVAN_SANITIZER_COUNTER_CHECK=true \
+JAVAN_GC_STRESS=1 \
+JAVAN_GC_SAFEPOINT_INTERVAL=1 \
+  sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/thread-current-inventory
+THREAD_CURRENT_PROOF=src/test/resources/projects/native-profile/thread-current-inventory/.javan/reports/sanitizer-proof.json
+assert_sanitizer_proof_file "$THREAD_CURRENT_PROOF"
+assert_contains "$THREAD_CURRENT_PROOF" '"status": "pass"'
+assert_contains "$THREAD_CURRENT_PROOF" '"kind": "app"'
+assert_contains "$THREAD_CURRENT_PROOF" '"counterCheck": true'
+assert_contains "$THREAD_CURRENT_PROOF" '"failureSignatures": false'
+assert_thread_inventory_summary "$THREAD_CURRENT_PROOF"
+run_javan_report src/test/resources/projects/native-profile/thread-current-inventory
+THREAD_CURRENT_REPORT=src/test/resources/projects/native-profile/thread-current-inventory/.javan/reports/report.json
+assert_sanitizer_proof_file "$THREAD_CURRENT_REPORT"
+assert_contains "$THREAD_CURRENT_REPORT" '"name": "sanitizer-proof"'
+assert_contains "$THREAD_CURRENT_REPORT" '"status": "present"'
+assert_contains "$THREAD_CURRENT_REPORT" '"status": "pass"'
+assert_contains "$THREAD_CURRENT_REPORT" '"kind": "app"'
+assert_contains "$THREAD_CURRENT_REPORT" '"counterCheck": "true"'
+assert_contains "$THREAD_CURRENT_REPORT" '"failureSignatures": "false"'
+assert_thread_inventory_summary "$THREAD_CURRENT_REPORT"
+
 JAVAN_SANITIZER_SELF_HOST_MAX_LIVE_ALLOCATIONS=0 \
 JAVAN_SANITIZER_SELF_HOST_MAX_LIVE_BYTES=0 \
 JAVAN_SANITIZER_SELF_HOST_MAX_ROOT_FRAME_DEPTH=0 \

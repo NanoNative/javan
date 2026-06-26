@@ -69,11 +69,53 @@ public final class JdkCallSupport {
         intrinsic("System.arraycopy", "java/lang/System", "arraycopy", "(Ljava/lang/Object;ILjava/lang/Object;II)V"),
         intrinsic("System.exit", "java/lang/System", "exit", "(I)V"),
         runtime("Thread.<init>", "java/lang/Thread", "<init>", "()V", "(Ljava/lang/Runnable;)V"),
+        runtime("Thread.ofVirtual", "java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;"),
+        runtime("Thread.startVirtualThread", "java/lang/Thread", "startVirtualThread", "(Ljava/lang/Runnable;)Ljava/lang/Thread;"),
+        runtime("Thread.Builder.name", "java/lang/Thread$Builder", "name", "(Ljava/lang/String;)Ljava/lang/Thread$Builder;", "(Ljava/lang/String;J)Ljava/lang/Thread$Builder;"),
+        runtime("Thread.Builder.start", "java/lang/Thread$Builder", "start", "(Ljava/lang/Runnable;)Ljava/lang/Thread;"),
+        runtime("Thread.Builder.unstarted", "java/lang/Thread$Builder", "unstarted", "(Ljava/lang/Runnable;)Ljava/lang/Thread;"),
+        runtime("Thread.Builder.factory", "java/lang/Thread$Builder", "factory", "()Ljava/util/concurrent/ThreadFactory;"),
+        runtime("Thread.Builder.toString", "java/lang/Thread$Builder", "toString", "()Ljava/lang/String;"),
+        runtime("Thread.Builder.hashCode", "java/lang/Thread$Builder", "hashCode", "()I"),
+        runtime("Thread.Builder.equals", "java/lang/Thread$Builder", "equals", "(Ljava/lang/Object;)Z"),
+        runtime("Thread.Builder.OfVirtual.name", "java/lang/Thread$Builder$OfVirtual", "name", "(Ljava/lang/String;)Ljava/lang/Thread$Builder$OfVirtual;", "(Ljava/lang/String;J)Ljava/lang/Thread$Builder$OfVirtual;"),
+        runtime("Thread.Builder.OfVirtual.factory", "java/lang/Thread$Builder$OfVirtual", "factory", "()Ljava/util/concurrent/ThreadFactory;"),
+        runtime("Thread.Builder.OfVirtual.start", "java/lang/Thread$Builder$OfVirtual", "start", "(Ljava/lang/Runnable;)Ljava/lang/Thread;"),
+        runtime("Thread.Builder.OfVirtual.unstarted", "java/lang/Thread$Builder$OfVirtual", "unstarted", "(Ljava/lang/Runnable;)Ljava/lang/Thread;"),
+        runtime("Thread.Builder.OfVirtual.toString", "java/lang/Thread$Builder$OfVirtual", "toString", "()Ljava/lang/String;"),
+        runtime("Thread.Builder.OfVirtual.hashCode", "java/lang/Thread$Builder$OfVirtual", "hashCode", "()I"),
+        runtime("Thread.Builder.OfVirtual.equals", "java/lang/Thread$Builder$OfVirtual", "equals", "(Ljava/lang/Object;)Z"),
+        runtime("Executors.newVirtualThreadPerTaskExecutor", "java/util/concurrent/Executors", "newVirtualThreadPerTaskExecutor", "()Ljava/util/concurrent/ExecutorService;"),
+        runtime("Executors.newThreadPerTaskExecutor", "java/util/concurrent/Executors", "newThreadPerTaskExecutor", "(Ljava/util/concurrent/ThreadFactory;)Ljava/util/concurrent/ExecutorService;"),
+        runtime("ThreadFactory.newThread", "java/util/concurrent/ThreadFactory", "newThread", "(Ljava/lang/Runnable;)Ljava/lang/Thread;"),
+        runtime("ThreadFactory.toString", "java/util/concurrent/ThreadFactory", "toString", "()Ljava/lang/String;"),
+        runtime("ThreadFactory.hashCode", "java/util/concurrent/ThreadFactory", "hashCode", "()I"),
+        runtime("ThreadFactory.equals", "java/util/concurrent/ThreadFactory", "equals", "(Ljava/lang/Object;)Z"),
+        runtime("Executor.execute", "java/util/concurrent/Executor", "execute", "(Ljava/lang/Runnable;)V"),
+        runtime("ExecutorService.execute", "java/util/concurrent/ExecutorService", "execute", "(Ljava/lang/Runnable;)V"),
+        runtime("ExecutorService.shutdown", "java/util/concurrent/ExecutorService", "shutdown", "()V"),
+        runtime("ExecutorService.close", "java/util/concurrent/ExecutorService", "close", "()V"),
+        runtime("ExecutorService.toString", "java/util/concurrent/ExecutorService", "toString", "()Ljava/lang/String;"),
+        runtime("ExecutorService.hashCode", "java/util/concurrent/ExecutorService", "hashCode", "()I"),
+        runtime("ExecutorService.equals", "java/util/concurrent/ExecutorService", "equals", "(Ljava/lang/Object;)Z"),
         runtime("Thread.currentThread", "java/lang/Thread", "currentThread", "()Ljava/lang/Thread;"),
         runtime("Thread.sleep", "java/lang/Thread", "sleep", "(J)V"),
         runtime("Thread.interrupted", "java/lang/Thread", "interrupted", "()Z"),
         runtime("Thread.interrupt", "java/lang/Thread", "interrupt", "()V"),
         runtime("Thread.isInterrupted", "java/lang/Thread", "isInterrupted", "()Z"),
+        runtime("Thread.isAlive", "java/lang/Thread", "isAlive", "()Z"),
+        runtime("Thread.isVirtual", "java/lang/Thread", "isVirtual", "()Z"),
+        runtime("Thread.getName", "java/lang/Thread", "getName", "()Ljava/lang/String;"),
+        runtime("Thread.start", "java/lang/Thread", "start", "()V"),
+        runtime("Thread.join", "java/lang/Thread", "join", "()V"),
+        runtime("LockSupport.park", "java/util/concurrent/locks/LockSupport", "park", "()V"),
+        runtime("LockSupport.parkNanos", "java/util/concurrent/locks/LockSupport", "parkNanos", "(J)V"),
+        runtime("LockSupport.parkUntil", "java/util/concurrent/locks/LockSupport", "parkUntil", "(J)V"),
+        runtime("LockSupport.unpark", "java/util/concurrent/locks/LockSupport", "unpark", "(Ljava/lang/Thread;)V"),
+        runtime("ThreadLocal.<init>", "java/lang/ThreadLocal", "<init>", "()V"),
+        runtime("ThreadLocal.get", "java/lang/ThreadLocal", "get", "()Ljava/lang/Object;"),
+        runtime("ThreadLocal.set", "java/lang/ThreadLocal", "set", "(Ljava/lang/Object;)V"),
+        runtime("ThreadLocal.remove", "java/lang/ThreadLocal", "remove", "()V"),
         intrinsic(
             "Arrays.copyOf",
             "java/util/Arrays",
@@ -108,6 +150,7 @@ public final class JdkCallSupport {
         runtime("Double.valueOf", "java/lang/Double", "valueOf", "(D)Ljava/lang/Double;"),
         runtime("Double.doubleValue", "java/lang/Double", "doubleValue", "()D"),
         intrinsic("Double.longBitsToDouble", "java/lang/Double", "longBitsToDouble", "(J)D"),
+        intrinsic("Boolean.toString", "java/lang/Boolean", "toString", "(Z)Ljava/lang/String;"),
         runtime("Boolean.valueOf", "java/lang/Boolean", "valueOf", "(Z)Ljava/lang/Boolean;"),
         runtime("Boolean.booleanValue", "java/lang/Boolean", "booleanValue", "()Z"),
         runtime("Duration.ofMillis", "java/time/Duration", "ofMillis", "(J)Ljava/time/Duration;"),
@@ -618,6 +661,30 @@ public final class JdkCallSupport {
             return List.of("math");
         }
         if ("java/lang/Thread".equals(owner)) {
+            return List.of("threads");
+        }
+        if ("java/lang/Thread$Builder".equals(owner)) {
+            return List.of("threads");
+        }
+        if ("java/lang/Thread$Builder$OfVirtual".equals(owner)) {
+            return List.of("threads");
+        }
+        if ("java/util/concurrent/Executors".equals(owner)) {
+            return List.of("threads");
+        }
+        if ("java/util/concurrent/Executor".equals(owner)) {
+            return List.of("threads");
+        }
+        if ("java/util/concurrent/ExecutorService".equals(owner)) {
+            return List.of("threads");
+        }
+        if ("java/util/concurrent/locks/LockSupport".equals(owner)) {
+            return List.of("threads");
+        }
+        if ("java/lang/ThreadLocal".equals(owner)) {
+            return List.of("threads");
+        }
+        if ("java/util/concurrent/ThreadFactory".equals(owner)) {
             return List.of("threads");
         }
         if ("java/util/Arrays".equals(owner)) {

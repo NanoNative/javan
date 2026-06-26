@@ -6,9 +6,9 @@ This matrix tracks named javan/JDK behavior scenarios. It is not a claim that ev
 
 | Measure | Count |
 | --- | ---: |
-| rows | 93 |
-| pass | 76 |
-| scoped | 15 |
+| rows | 105 |
+| pass | 89 |
+| scoped | 14 |
 | target | 2 |
 | rejected | 0 |
 
@@ -109,8 +109,20 @@ Status mapping:
 | `network-http-client-post-string-byte-array` | pass |
 | `network-http-client-put-byte-array` | pass |
 | `platform-thread-construction` | pass |
-| `platform-thread-current-interrupt-state` | scoped |
+| `platform-thread-empty-start-join` | pass |
+| `platform-thread-runnable-start-join-single-threaded` | pass |
+| `platform-thread-current-interrupt-state` | pass |
+| `platform-thread-current-thread-root-gc-pressure` | pass |
+| `platform-thread-runnable-target-root-gc-pressure` | pass |
+| `platform-thread-current-thread-inventory` | pass |
+| `platform-thread-live-root-registry` | pass |
+| `platform-thread-finished-thread-reclaim` | pass |
 | `platform-thread-sleep-uninterrupted` | pass |
+| `platform-thread-sleep-entry-interrupted-same-method-catch` | pass |
+| `platform-thread-join-entry-interrupted-same-method-catch` | pass |
+| `platform-thread-current-thread-start-build-reject` | pass |
+| `platform-thread-current-thread-join-build-reject` | pass |
+| `platform-thread-duplicate-start-build-reject` | pass |
 | `network-socket-rejection` | pass |
 | `network-http-rejection` | pass |
 | `network-runtime-feature-reporting` | pass |

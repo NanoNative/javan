@@ -59,4 +59,40 @@ final class ClassByteCursorTest {
             .isInstanceOf(UTFDataFormatException.class)
             .hasMessage("Malformed modified UTF-8 at byte 0");
     }
+
+    @Test
+    void cursorRejectsTruncatedTwoByteModifiedUtf8() {
+        final ClassByteCursor cursor = new ClassByteCursor(new byte[]{
+            0x00, 0x01,
+            (byte) 0xC2
+        });
+
+        assertThatThrownBy(cursor::modifiedUtf8)
+            .isInstanceOf(UTFDataFormatException.class)
+            .hasMessage("Malformed modified UTF-8 at byte 0");
+    }
+
+    @Test
+    void cursorRejectsTruncatedThreeByteModifiedUtf8() {
+        final ClassByteCursor cursor = new ClassByteCursor(new byte[]{
+            0x00, 0x02,
+            (byte) 0xE2, (byte) 0x82
+        });
+
+        assertThatThrownBy(cursor::modifiedUtf8)
+            .isInstanceOf(UTFDataFormatException.class)
+            .hasMessage("Malformed modified UTF-8 at byte 0");
+    }
+
+    @Test
+    void cursorRejectsUnsupportedModifiedUtf8LeadByte() {
+        final ClassByteCursor cursor = new ClassByteCursor(new byte[]{
+            0x00, 0x01,
+            (byte) 0x80
+        });
+
+        assertThatThrownBy(cursor::modifiedUtf8)
+            .isInstanceOf(UTFDataFormatException.class)
+            .hasMessage("Malformed modified UTF-8 at byte 0");
+    }
 }

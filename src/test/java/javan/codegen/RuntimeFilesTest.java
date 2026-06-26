@@ -7,6 +7,7 @@ import org.junit.jupiter.api.parallel.Execution;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
@@ -213,6 +214,31 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void writeEmitsRecursiveRuntimeLockForSharedHeapState() throws Exception {
+        final Path runtime = new RuntimeFiles().write(tempDir);
+
+        assertThat(Files.readString(runtime)).contains(
+            "#include <pthread.h>",
+            "static pthread_mutex_t javan_runtime_lock_value;",
+            "static pthread_once_t javan_runtime_lock_once = PTHREAD_ONCE_INIT;",
+            "static JAVAN_THREAD_LOCAL int javan_runtime_lock_depth_value = 0;",
+            "static void javan_runtime_lock_initialize(void) {",
+            "pthread_mutexattr_settype(&attributes, PTHREAD_MUTEX_RECURSIVE)",
+            "pthread_mutex_init(&javan_runtime_lock_value, &attributes)",
+            "static void javan_runtime_lock_enter(void) {",
+            "pthread_once(&javan_runtime_lock_once, javan_runtime_lock_initialize)",
+            "pthread_mutex_lock(&javan_runtime_lock_value)",
+            "static void javan_runtime_lock_leave(void) {",
+            "pthread_mutex_unlock(&javan_runtime_lock_value)",
+            "static void javan_runtime_lock_reset_for_panic(void) {",
+            "while (javan_runtime_lock_depth_value > 0) {",
+            "javan_runtime_lock_enter();",
+            "javan_runtime_lock_leave();",
+            "javan_runtime_lock_reset_for_panic();"
+        );
+    }
+
+    @Test
     void writeEmitsSafePointMarkSweepForGeneratedObjectsAndObjectArrays() throws Exception {
         final Path runtime = new RuntimeFiles().write(tempDir);
 
@@ -221,8 +247,10 @@ final class RuntimeFilesTest {
             "void javan_gc_collect(void)",
             "JavanTypeDescriptor* descriptor = javan_type_descriptor_for(type_id);",
             "javan_gc_mark_object_array((javan_object_array*) value);",
+            "javan_gc_mark_value(((javan_thread*) value)->target);",
             "javan_gc_mark_static_roots();",
-            "javan_gc_mark_value(javan_current_thread_value);",
+            "static void javan_gc_mark_thread_roots(void)",
+            "javan_gc_mark_thread_roots();",
             "javan_gc_mark_frame_roots();",
             "javan_gc_mark_runtime_object_references();",
             "javan_gc_sweep_unmarked();",
@@ -236,21 +264,1234 @@ final class RuntimeFilesTest {
         final Path runtime = new RuntimeFiles().write(tempDir);
 
         assertThat(Files.readString(runtime)).contains(
-            "static void* javan_current_thread_value = NULL;",
+            "#define JAVAN_THREAD_LOCAL _Thread_local",
+            "static JAVAN_THREAD_LOCAL char javan_last_error_value[512];",
+            "static JAVAN_THREAD_LOCAL char javan_last_error_code_value[64];",
+            "static JAVAN_THREAD_LOCAL int javan_last_error_set = 0;",
+            "static JAVAN_THREAD_LOCAL jmp_buf* javan_panic_target = NULL;",
+            "static JAVAN_THREAD_LOCAL JavanSourceContext* javan_source_context_top = NULL;",
+            "static JAVAN_THREAD_LOCAL javan_root_frame* javan_root_frames_value = NULL;",
+            "static JAVAN_THREAD_LOCAL javan_native_resource_frame* javan_native_resource_frames_value = NULL;",
+            "static JAVAN_THREAD_LOCAL int javan_root_frame_depth_value = 0;",
+            "static JAVAN_THREAD_LOCAL int javan_frame_root_count_value = 0;",
+            "static JAVAN_THREAD_LOCAL void* javan_current_thread_value = NULL;",
             "} javan_thread;",
+            "char* name;",
+            "static long long javan_platform_thread_name_counter_value = 0;",
             "void* javan_thread_new(void) {",
+            "void* javan_thread_new_virtual(void) {",
             "static javan_thread* javan_require_thread(void* value) {",
+            "static void javan_thread_mark_started(javan_thread* thread) {",
+            "static void javan_thread_mark_completed(javan_thread* thread) {",
+            "object->virtual_thread = 0;",
+            "object->name = NULL;",
+            "thread->target = NULL;",
+            "static int javan_thread_has_live_lifecycle(javan_thread* thread) {",
+            "static void javan_thread_completion_reset(javan_thread* thread) {",
+            "static void javan_thread_completion_signal(javan_thread* thread) {",
+            "static void javan_thread_enter_live_root(void* value) {",
+            "static void javan_thread_leave_live_root(void* value) {",
+            "static javan_thread* javan_thread_bootstrap_current(void) {",
             "static javan_thread* javan_current_thread_object(void) {",
-            "javan_current_thread_value = javan_thread_new();",
+            "return javan_thread_bootstrap_current();",
             "void* javan_thread_current(void) {",
+            "void* javan_thread_get_name(void* value) {",
+            "void javan_thread_set_name(void* value, void* name) {",
+            "void javan_thread_detach_current(void) {",
+            "javan_panic(\"cannot detach current thread with live root frames\")",
+            "javan_panic(\"cannot detach current thread with live native resources\")",
+            "javan_thread_leave_live_root(javan_current_thread_value);",
+            "javan_current_thread_value = NULL;",
+            "javan_thread_assign_name_text((javan_thread*) value, \"main\");",
+            "void javan_thread_set_target(void* value, void* target) {",
+            "void javan_thread_run_target(void* target) {",
+            "javan_panic(\"Thread.start with Runnable target has no closed-world Runnable.run implementation\")",
             "void javan_thread_sleep_millis(long long millis) {",
             "if (millis < 0) {",
             "javan_panic(\"negative Thread.sleep millis\")",
-            "javan_panic(\"Thread.sleep interrupted is not supported yet\")",
             "usleep((useconds_t) (chunk * 1000LL));",
             "int javan_thread_interrupted(void) {",
             "void javan_thread_interrupt(void* value) {",
-            "int javan_thread_is_interrupted(void* value) {"
+            "int javan_thread_is_interrupted(void* value) {",
+            "int javan_thread_is_alive(void* value) {",
+            "int javan_thread_is_virtual(void* value) {",
+            "int alive = javan_thread_has_live_lifecycle(thread);",
+            "return alive;",
+            "void javan_thread_start(void* value) {",
+            "javan_thread_enter_live_root(value);",
+            "thread->native_completion_signaled = 0;",
+            "void** javan_thread_start_roots[] = { &value, &target };",
+            "javan_root_frame_push(javan_thread_start_roots, 2);",
+            "javan_thread_run_target(target);",
+            "javan_root_frame_pop(javan_thread_start_roots);",
+            "javan_thread_leave_live_root(value);",
+            "javan_thread_completion_signal(thread);",
+            "pthread_attr_setdetachstate(&attributes, PTHREAD_CREATE_DETACHED)",
+            "void javan_thread_join(void* value) {",
+            "pthread_cond_wait(&thread->native_completion_cond, &thread->native_completion_mutex)",
+            "javan_panic(\"Thread.join on current thread is not supported yet\")",
+            "static void** javan_thread_roots_value = NULL;",
+            "static int javan_thread_root_count_value = 0;",
+            "static int javan_thread_root_capacity_value = 0;",
+            "static void javan_thread_root_register(void* value) {",
+            "javan_panic(\"thread root already registered\");",
+            "void** javan_thread_root_register_roots[] = { &value };",
+            "javan_root_frame_push(javan_thread_root_register_roots, 1);",
+            "javan_root_frame_pop(javan_thread_root_register_roots);",
+            "static void javan_thread_root_unregister(void* value) {",
+            "javan_panic(\"thread root not registered\");",
+            "unsigned long javan_heap_registered_thread_roots(void) {",
+            "unsigned long javan_heap_thread_objects(void) {",
+            "unsigned long javan_heap_started_threads(void) {",
+            "unsigned long javan_heap_completed_threads(void) {",
+            "unsigned long javan_heap_active_threads(void) {",
+            "unsigned long javan_heap_threads_with_target(void) {",
+            "int javan_heap_current_thread_root_present(void) {",
+            "&& javan_thread_root_index(javan_current_thread_value) >= 0;",
+            "javan_gc_mark_value(((javan_thread*) value)->name);"
+        );
+    }
+
+    @Test
+    void runtimeThreadCurrentBootstrapIsIdempotentAndRootsCurrentThreadOnce() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* first = javan_thread_current();
+                void* second = javan_thread_current();
+                printf("same=%d\\n", first == second ? 1 : 0);
+                printf("roots=%lu\\n", javan_heap_registered_thread_roots());
+                printf("current=%d\\n", javan_heap_current_thread_root_present());
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            same=1
+            roots=1
+            current=1
+            """
+        );
+    }
+
+    @Test
+    void runtimeThreadDetachCurrentDropsRootAndAllowsFreshBootstrap() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                (void) javan_thread_current();
+                printf("before=%lu\\n", javan_heap_registered_thread_roots());
+                javan_thread_detach_current();
+                printf("after=%lu\\n", javan_heap_registered_thread_roots());
+                printf("current=%d\\n", javan_heap_current_thread_root_present());
+                (void) javan_thread_current();
+                printf("reboot=%lu\\n", javan_heap_registered_thread_roots());
+                printf("recurrent=%d\\n", javan_heap_current_thread_root_present());
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            before=1
+            after=0
+            current=0
+            reboot=1
+            recurrent=1
+            """
+        );
+    }
+
+    @Test
+    void runtimeThreadDetachCurrentRejectsLiveRootFrames() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <setjmp.h>
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* current = javan_thread_current();
+                void** roots[] = {
+                    (void**) &current
+                };
+                jmp_buf target;
+                javan_root_frame_push(roots, 1);
+                javan_panic_set_target(&target);
+                if (setjmp(target) != 0) {
+                    printf("%s\\n", javan_last_error());
+                    return 0;
+                }
+                javan_thread_detach_current();
+                return 2;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("cannot detach current thread with live root frames\n");
+    }
+
+    @Test
+    void runtimeHostThreadGetsDistinctCurrentThreadAndDetachesCleanly() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <pthread.h>
+            #include <stdio.h>
+
+            static void* child_current = NULL;
+            static unsigned long child_roots = 0;
+
+            static void* child_main(void* argument) {
+                (void) argument;
+                child_current = javan_thread_current();
+                child_roots = javan_heap_registered_thread_roots();
+                javan_thread_detach_current();
+                return NULL;
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* main_current = javan_thread_current();
+                pthread_t thread;
+                if (pthread_create(&thread, NULL, child_main, NULL) != 0) {
+                    return 3;
+                }
+                if (pthread_join(thread, NULL) != 0) {
+                    return 4;
+                }
+                printf("same=%d\\n", child_current == main_current ? 1 : 0);
+                printf("during=%lu\\n", child_roots);
+                printf("after=%lu\\n", javan_heap_registered_thread_roots());
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            same=0
+            during=2
+            after=1
+            """
+        );
+    }
+
+    @Test
+    void runtimeConcurrentHostThreadsCanAttachCollectDetachWithoutLeakingRoots() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <pthread.h>
+            #include <stdint.h>
+            #include <stdio.h>
+
+            static void* child_main(void* argument) {
+                (void) argument;
+                for (int index = 0; index < 32; index++) {
+                    (void) javan_thread_current();
+                    if (!javan_heap_current_thread_root_present()) {
+                        return (void*) (uintptr_t) 1;
+                    }
+                    javan_gc_collect();
+                    javan_thread_detach_current();
+                    if (javan_heap_current_thread_root_present()) {
+                        return (void*) (uintptr_t) 2;
+                    }
+                }
+                return NULL;
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                (void) javan_thread_current();
+                pthread_t left;
+                pthread_t right;
+                void* left_result = NULL;
+                void* right_result = NULL;
+                if (pthread_create(&left, NULL, child_main, NULL) != 0) {
+                    return 3;
+                }
+                if (pthread_create(&right, NULL, child_main, NULL) != 0) {
+                    return 4;
+                }
+                if (pthread_join(left, &left_result) != 0) {
+                    return 5;
+                }
+                if (pthread_join(right, &right_result) != 0) {
+                    return 6;
+                }
+                printf("left=%ld\\n", (long) (uintptr_t) left_result);
+                printf("right=%ld\\n", (long) (uintptr_t) right_result);
+                printf("roots=%lu\\n", javan_heap_registered_thread_roots());
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            left=0
+            right=0
+            roots=1
+            """
+        );
+    }
+
+    @Test
+    void runtimeThreadLifecycleInventoryTracksCurrentThreadState() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                (void) javan_thread_current();
+                printf(
+                    "roots=%lu\\nthreads=%lu\\nstarted=%lu\\ncompleted=%lu\\nactive=%lu\\ntargets=%lu\\ncurrent=%d\\n",
+                    javan_heap_registered_thread_roots(),
+                    javan_heap_thread_objects(),
+                    javan_heap_started_threads(),
+                    javan_heap_completed_threads(),
+                    javan_heap_active_threads(),
+                    javan_heap_threads_with_target(),
+                    javan_heap_current_thread_root_present()
+                );
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            roots=1
+            threads=1
+            started=1
+            completed=0
+            active=0
+            targets=0
+            current=1
+            """
+        );
+    }
+
+    @Test
+    void runtimeThreadTargetSurvivesPreStartCollectionThroughWorkerField() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* worker = javan_thread_new();
+                void* target = javan_thread_new();
+                void** roots[] = {
+                    (void**) &worker
+                };
+                javan_root_frame_push(roots, 1);
+                javan_thread_set_target(worker, target);
+                target = NULL;
+                javan_gc_collect();
+                printf("targets=%lu\\n", javan_heap_threads_with_target());
+                printf("alive=%d\\n", javan_thread_is_alive(worker));
+                javan_root_frame_pop(roots);
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            targets=1
+            alive=0
+            """
+        );
+    }
+
+    @Test
+    void runtimeThreadLifecycleInventoryDropsFinishedNonCurrentThreadObjectsAfterCollection() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            void javan_thread_run_target(void* target) {
+                (void) target;
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* worker = javan_thread_new();
+                void* target = javan_thread_new();
+                javan_thread_set_target(worker, target);
+                javan_thread_start(worker);
+                javan_thread_join(worker);
+                worker = NULL;
+                target = NULL;
+                javan_gc_collect();
+                printf(
+                    "roots=%lu\\nthreads=%lu\\nstarted=%lu\\ncompleted=%lu\\nactive=%lu\\ntargets=%lu\\ncurrent=%d\\n",
+                    javan_heap_registered_thread_roots(),
+                    javan_heap_thread_objects(),
+                    javan_heap_started_threads(),
+                    javan_heap_completed_threads(),
+                    javan_heap_active_threads(),
+                    javan_heap_threads_with_target(),
+                    javan_heap_current_thread_root_present()
+                );
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            roots=1
+            threads=1
+            started=1
+            completed=0
+            active=0
+            targets=0
+            current=1
+            """
+        );
+    }
+
+    @Test
+    void runtimeCompletedThreadDoesNotRetainTargetAfterCollectionWhenWorkerStaysReachable() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            void javan_thread_run_target(void* target) {
+                (void) target;
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* worker = javan_thread_new();
+                void* target = javan_thread_new();
+                void** roots[] = {
+                    (void**) &worker
+                };
+                javan_root_frame_push(roots, 1);
+                javan_thread_set_target(worker, target);
+                javan_thread_start(worker);
+                javan_thread_join(worker);
+                target = NULL;
+                javan_gc_collect();
+                printf("targets=%lu\\n", javan_heap_threads_with_target());
+                javan_root_frame_pop(roots);
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("targets=0\n");
+    }
+
+    @Test
+    void runtimeCompletedReachableWorkerClearsThreadLocalStorageOnCompletion() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            void javan_thread_run_target(void* target) {
+                void* retained = javan_thread_new();
+                javan_thread_local_set(target, retained);
+                retained = NULL;
+                javan_gc_collect();
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                (void) javan_thread_current();
+                void* worker = javan_thread_new();
+                void* local = javan_thread_local_new();
+                void** roots[] = {
+                    (void**) &worker,
+                    (void**) &local
+                };
+                javan_root_frame_push(roots, 2);
+                javan_thread_set_target(worker, local);
+                javan_thread_start(worker);
+                javan_thread_join(worker);
+                javan_gc_collect();
+                printf("threads=%lu\\n", javan_heap_thread_objects());
+                printf("roots=%lu\\n", javan_heap_registered_thread_roots());
+                javan_root_frame_pop(roots);
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            threads=2
+            roots=1
+            """
+        );
+    }
+
+    @Test
+    void runtimeDetachedReachableCurrentThreadClearsThreadLocalStorageOnDetach() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            static void* current_root = NULL;
+            static void* local_root = NULL;
+
+            int main(void) {
+                void** static_roots[] = {
+                    (void**) &current_root,
+                    (void**) &local_root
+                };
+                javan_register_static_roots(static_roots, 2);
+                current_root = javan_thread_current();
+                local_root = javan_thread_local_new();
+                javan_thread_local_set(local_root, javan_thread_new());
+                javan_thread_detach_current();
+                javan_gc_collect();
+                printf("threads=%lu\\n", javan_heap_thread_objects());
+                printf("roots=%lu\\n", javan_heap_registered_thread_roots());
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            threads=1
+            roots=0
+            """
+        );
+    }
+
+    @Test
+    void runtimeCurrentThreadParkConsumesExistingPermitImmediately() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* current = javan_thread_current();
+                javan_thread_unpark(current);
+                javan_thread_park();
+                printf("ok\\n");
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("ok\n");
+    }
+
+    @Test
+    void runtimeCurrentThreadParkNanosConsumesExistingPermitImmediately() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* current = javan_thread_current();
+                javan_thread_unpark(current);
+                javan_thread_park_nanos(1000000LL);
+                printf("ok\\n");
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("ok\n");
+    }
+
+    @Test
+    void runtimeCurrentThreadParkUntilPastDeadlineReturnsImmediately() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                javan_thread_current();
+                javan_thread_park_until(javan_system_current_time_millis() - 1LL);
+                printf("ok\\n");
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("ok\n");
+    }
+
+    @Test
+    void runtimeCurrentThreadParkReturnsWithoutClearingInterruptState() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* current = javan_thread_current();
+                javan_thread_interrupt(current);
+                javan_thread_park();
+                printf("interrupted=%d\\n", javan_thread_is_interrupted(current));
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("interrupted=1\n");
+    }
+
+    @Test
+    void runtimeThreadLifecycleCountersShowCompletedWorkerBeforeCollection() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            void javan_thread_run_target(void* target) {
+                (void) target;
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                (void) javan_thread_current();
+                void* worker = javan_thread_new();
+                void* target = javan_thread_new();
+                void** roots[] = {
+                    (void**) &worker
+                };
+                javan_root_frame_push(roots, 1);
+                javan_thread_set_target(worker, target);
+                javan_thread_start(worker);
+                javan_thread_join(worker);
+                printf("alive=%d\\n", javan_thread_is_alive(worker));
+                printf("roots=%lu\\n", javan_heap_registered_thread_roots());
+                printf("threads=%lu\\n", javan_heap_thread_objects());
+                printf("started=%lu\\n", javan_heap_started_threads());
+                printf("completed=%lu\\n", javan_heap_completed_threads());
+                printf("active=%lu\\n", javan_heap_active_threads());
+                printf("targets=%lu\\n", javan_heap_threads_with_target());
+                javan_root_frame_pop(roots);
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            alive=0
+            roots=1
+            threads=3
+            started=2
+            completed=1
+            active=0
+            targets=0
+            """
+        );
+    }
+
+    @Test
+    void runtimeThreadDuplicateStartFailsClearly() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <setjmp.h>
+            #include <stdio.h>
+            #include <unistd.h>
+
+            void javan_thread_run_target(void* target) {
+                (void) target;
+                usleep(200000);
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* worker = javan_thread_new();
+                void* target_thread = javan_thread_new();
+                javan_thread_set_target(worker, target_thread);
+                jmp_buf target;
+                javan_panic_set_target(&target);
+                if (setjmp(target) != 0) {
+                    printf("%s\\n", javan_last_error());
+                    printf("roots=%lu\\n", javan_heap_registered_thread_roots());
+                    javan_thread_join(worker);
+                    return 0;
+                }
+                javan_thread_start(worker);
+                javan_thread_start(worker);
+                return 2;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            Thread.start duplicate is not supported yet
+            roots=2
+            """
+        );
+    }
+
+    @Test
+    void runtimeThreadJoinCurrentThreadFailsClearly() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <setjmp.h>
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* current = javan_thread_current();
+                jmp_buf target;
+                javan_panic_set_target(&target);
+                if (setjmp(target) != 0) {
+                    printf("%s\\n", javan_last_error());
+                    printf("roots=%lu\\n", javan_heap_registered_thread_roots());
+                    return 0;
+                }
+                javan_thread_join(current);
+                return 2;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            Thread.join on current thread is not supported yet
+            roots=1
+            """
+        );
+    }
+
+    @Test
+    void runtimeThreadStartKeepsWorkerAliveDuringTargetCollection() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            static void* worker_ref = NULL;
+
+            void javan_thread_run_target(void* target) {
+                printf("alive=%d\\n", javan_thread_is_alive(worker_ref));
+                printf("roots=%lu\\n", javan_heap_registered_thread_roots());
+                printf("targets=%lu\\n", javan_heap_threads_with_target());
+                javan_gc_collect();
+                printf("alive_after_gc=%d\\n", javan_thread_is_alive(worker_ref));
+                (void) target;
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                (void) javan_thread_current();
+                worker_ref = javan_thread_new();
+                void* target = javan_thread_new();
+                javan_thread_set_target(worker_ref, target);
+                javan_thread_start(worker_ref);
+                javan_thread_join(worker_ref);
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            alive=1
+            roots=2
+            targets=1
+            alive_after_gc=1
+            """
+        );
+    }
+
+    @Test
+    void runtimeThreadRootRegistryTracksInlineWorkerLifetime() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            void javan_thread_run_target(void* target) {
+                (void) target;
+                printf("during=%lu\\n", javan_heap_registered_thread_roots());
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                (void) javan_thread_current();
+                void* worker = javan_thread_new();
+                void* target = javan_thread_new();
+                javan_thread_set_target(worker, target);
+                printf("before=%lu\\n", javan_heap_registered_thread_roots());
+                javan_thread_start(worker);
+                javan_thread_join(worker);
+                printf("after=%lu\\n", javan_heap_registered_thread_roots());
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            before=1
+            during=2
+            after=1
+            """
+        );
+    }
+
+    @Test
+    void runtimeThreadStartReturnsBeforeWorkerCompletionAndJoinWaitsExplicitly() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+            #include <unistd.h>
+
+            static volatile int allow_worker_report = 0;
+            static volatile int release_worker = 0;
+            static void* worker_ref = NULL;
+
+            void javan_thread_run_target(void* target) {
+                (void) target;
+                while (allow_worker_report == 0) {
+                    usleep(1000);
+                }
+                printf("worker-current=%d\\n", javan_thread_current() == worker_ref);
+                while (release_worker == 0) {
+                    usleep(1000);
+                }
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                (void) javan_thread_current();
+                worker_ref = javan_thread_new();
+                void* target = javan_thread_new();
+                javan_thread_set_target(worker_ref, target);
+                javan_thread_start(worker_ref);
+                printf("alive-after-start=%d\\n", javan_thread_is_alive(worker_ref));
+                printf("roots-after-start=%lu\\n", javan_heap_registered_thread_roots());
+                printf("active-after-start=%lu\\n", javan_heap_active_threads());
+                allow_worker_report = 1;
+                release_worker = 1;
+                javan_thread_join(worker_ref);
+                printf("alive-after-join=%d\\n", javan_thread_is_alive(worker_ref));
+                printf("roots-after-join=%lu\\n", javan_heap_registered_thread_roots());
+                printf("active-after-join=%lu\\n", javan_heap_active_threads());
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            alive-after-start=1
+            roots-after-start=2
+            active-after-start=1
+            worker-current=1
+            alive-after-join=0
+            roots-after-join=1
+            active-after-join=0
+            """
+        );
+    }
+
+    @Test
+    void runtimeStartedWorkerAndParentCanCollectConcurrentlyWithoutLosingThreadRoots() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+            #include <unistd.h>
+
+            static volatile int worker_ready = 0;
+            static volatile int worker_done = 0;
+            static volatile int worker_fail = 0;
+            static volatile int parent_fail = 0;
+            static void* worker_ref = NULL;
+
+            void javan_thread_run_target(void* target) {
+                (void) target;
+                worker_ready = 1;
+                for (int index = 0; index < 64; index++) {
+                    if (!javan_heap_current_thread_root_present()) {
+                        worker_fail = 1;
+                        break;
+                    }
+                    (void) javan_thread_new();
+                    javan_gc_collect();
+                    if (!javan_heap_current_thread_root_present()) {
+                        worker_fail = 2;
+                        break;
+                    }
+                    usleep(1000);
+                }
+                worker_done = 1;
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                (void) javan_thread_current();
+                worker_ref = javan_thread_new();
+                void* target = javan_thread_new();
+                javan_thread_set_target(worker_ref, target);
+                javan_thread_start(worker_ref);
+                while (worker_ready == 0) {
+                    usleep(1000);
+                }
+                for (int index = 0; index < 64; index++) {
+                    if (!javan_heap_current_thread_root_present()) {
+                        parent_fail = 1;
+                        break;
+                    }
+                    (void) javan_thread_new();
+                    javan_gc_collect();
+                    if (!javan_heap_current_thread_root_present()) {
+                        parent_fail = 2;
+                        break;
+                    }
+                    if (worker_done != 0) {
+                        break;
+                    }
+                }
+                javan_thread_join(worker_ref);
+                target = NULL;
+                worker_ref = NULL;
+                javan_gc_collect();
+                printf("worker=%d\\n", worker_fail);
+                printf("parent=%d\\n", parent_fail);
+                printf("roots=%lu\\n", javan_heap_registered_thread_roots());
+                printf("active=%lu\\n", javan_heap_active_threads());
+                printf("current=%d\\n", javan_heap_current_thread_root_present());
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            worker=0
+            parent=0
+            roots=1
+            active=0
+            current=1
+            """
+        );
+    }
+
+    @Test
+    void runtimeStartedWorkerAndParentSurviveSafepointTriggeredGcConcurrently() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+            #include <unistd.h>
+
+            static volatile int worker_ready = 0;
+            static volatile int worker_done = 0;
+            static volatile int worker_fail = 0;
+            static volatile int parent_fail = 0;
+            static void* worker_ref = NULL;
+
+            void javan_thread_run_target(void* target) {
+                (void) target;
+                worker_ready = 1;
+                for (int index = 0; index < 64; index++) {
+                    if (!javan_heap_current_thread_root_present()) {
+                        worker_fail = 1;
+                        break;
+                    }
+                    (void) javan_thread_new();
+                    javan_gc_safe_point();
+                    if (!javan_heap_current_thread_root_present()) {
+                        worker_fail = 2;
+                        break;
+                    }
+                    usleep(1000);
+                }
+                worker_done = 1;
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                (void) javan_thread_current();
+                worker_ref = javan_thread_new();
+                void* target = javan_thread_new();
+                javan_thread_set_target(worker_ref, target);
+                javan_thread_start(worker_ref);
+                while (worker_ready == 0) {
+                    usleep(1000);
+                }
+                for (int index = 0; index < 64; index++) {
+                    if (!javan_heap_current_thread_root_present()) {
+                        parent_fail = 1;
+                        break;
+                    }
+                    (void) javan_thread_new();
+                    javan_gc_safe_point();
+                    if (!javan_heap_current_thread_root_present()) {
+                        parent_fail = 2;
+                        break;
+                    }
+                    if (worker_done != 0) {
+                        break;
+                    }
+                }
+                javan_thread_join(worker_ref);
+                target = NULL;
+                worker_ref = NULL;
+                javan_gc_collect();
+                printf("worker=%d\\n", worker_fail);
+                printf("parent=%d\\n", parent_fail);
+                printf("roots=%lu\\n", javan_heap_registered_thread_roots());
+                printf("active=%lu\\n", javan_heap_active_threads());
+                printf("current=%d\\n", javan_heap_current_thread_root_present());
+                return 0;
+            }
+            """,
+            "4096",
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1")
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            worker=0
+            parent=0
+            roots=1
+            active=0
+            current=1
+            """
+        );
+    }
+
+    @Test
+    void runtimeStartedWorkerPanicStateDoesNotLeakBackToMainThread() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <setjmp.h>
+            #include <stdio.h>
+            #include <string.h>
+
+            static int worker_line = 0;
+            static char worker_detail[64];
+
+            void javan_thread_run_target(void* target) {
+                (void) target;
+                jmp_buf panic_target;
+                javan_panic_set_target(&panic_target);
+                if (setjmp(panic_target) != 0) {
+                    worker_line = javan_last_error_line();
+                    snprintf(worker_detail, sizeof(worker_detail), "%s", javan_last_error_detail());
+                    javan_clear_error();
+                    return;
+                }
+                JavanSourceContext context;
+                javan_source_enter(
+                    &context,
+                    "JAVAN-RUNTIME-PANIC",
+                    "runtime helper failure",
+                    "com.acme.Main",
+                    "main()V",
+                    "Main.java",
+                    33,
+                    7,
+                    "",
+                    "why",
+                    "fix"
+                );
+                javan_panic("worker failure");
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                (void) javan_thread_current();
+                memset(worker_detail, 0, sizeof(worker_detail));
+                void* worker = javan_thread_new();
+                javan_thread_set_target(worker, javan_thread_new());
+                javan_thread_start(worker);
+                javan_thread_join(worker);
+                printf("worker=%d:%s\\n", worker_line, worker_detail);
+                printf("main=%s\\n", javan_last_error() == NULL ? "clear" : "dirty");
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            worker=33:worker failure
+            main=clear
+            """
+        );
+    }
+
+    @Test
+    void runtimeThreadRootRegistryGrowsAcrossManyConcurrentStartedWorkers() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+            #include <unistd.h>
+
+            static volatile int ready_count = 0;
+            static volatile int release_workers = 0;
+            static void* workers[6];
+
+            void javan_thread_run_target(void* target) {
+                (void) target;
+                ready_count++;
+                while (release_workers == 0) {
+                    usleep(1000);
+                }
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                (void) javan_thread_current();
+                for (int index = 0; index < 6; index++) {
+                    workers[index] = javan_thread_new();
+                    javan_thread_set_target(workers[index], javan_thread_new());
+                    javan_thread_start(workers[index]);
+                }
+                while (ready_count < 6) {
+                    usleep(1000);
+                }
+                javan_gc_collect();
+                printf("roots-live=%lu\\n", javan_heap_registered_thread_roots());
+                printf("active-live=%lu\\n", javan_heap_active_threads());
+                release_workers = 1;
+                for (int index = 0; index < 6; index++) {
+                    javan_thread_join(workers[index]);
+                }
+                javan_gc_collect();
+                printf("roots-after=%lu\\n", javan_heap_registered_thread_roots());
+                printf("active-after=%lu\\n", javan_heap_active_threads());
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            roots-live=7
+            active-live=6
+            roots-after=1
+            active-after=0
+            """
+        );
+    }
+
+    @Test
+    void runtimeParentCollectionPreservesBlockedWorkerLocalRootedObject() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+            #include <unistd.h>
+
+            static volatile int worker_ready = 0;
+            static volatile int release_worker = 0;
+            static volatile int worker_result = -1;
+
+            void javan_thread_run_target(void* target) {
+                (void) target;
+                void* rooted_thread = javan_thread_new();
+                void** roots[] = {
+                    (void**) &rooted_thread
+                };
+                javan_root_frame_push(roots, 1);
+                worker_ready = 1;
+                while (release_worker == 0) {
+                    usleep(1000);
+                }
+                worker_result = javan_thread_is_alive(rooted_thread);
+                javan_root_frame_pop(roots);
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                (void) javan_thread_current();
+                void* worker = javan_thread_new();
+                javan_thread_set_target(worker, javan_thread_new());
+                javan_thread_start(worker);
+                while (worker_ready == 0) {
+                    usleep(1000);
+                }
+                javan_gc_collect();
+                release_worker = 1;
+                javan_thread_join(worker);
+                javan_gc_collect();
+                printf("worker=%d\\n", worker_result);
+                printf("roots=%lu\\n", javan_heap_registered_thread_roots());
+                printf("active=%lu\\n", javan_heap_active_threads());
+                printf("current=%d\\n", javan_heap_current_thread_root_present());
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            worker=0
+            roots=1
+            active=0
+            current=1
+            """
         );
     }
 
@@ -1127,6 +2368,104 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void runtimePanicAndSourceContextStateStayThreadLocalAcrossHostThreads() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <setjmp.h>
+            #include <stdio.h>
+            #if defined(_WIN32)
+            #include <process.h>
+            #include <windows.h>
+            #else
+            #include <pthread.h>
+            #endif
+
+            typedef struct {
+                const char* label;
+                const char* detail;
+                int line;
+            } worker_arg;
+
+            #if defined(_WIN32)
+            static unsigned __stdcall worker_main(void* raw) {
+            #else
+            static void* worker_main(void* raw) {
+            #endif
+                worker_arg* arg = (worker_arg*) raw;
+                jmp_buf target;
+                javan_panic_set_target(&target);
+                if (setjmp(target) != 0) {
+                    printf("%s:%d:%s\\n", arg->label, javan_last_error_line(), javan_last_error_detail());
+                    javan_clear_error();
+                    #if defined(_WIN32)
+                    return 0U;
+                    #else
+                    return NULL;
+                    #endif
+                }
+                JavanSourceContext context;
+                javan_source_enter(
+                    &context,
+                    "JAVAN-RUNTIME-PANIC",
+                    "runtime helper failure",
+                    "com.acme.Main",
+                    "main()V",
+                    "Main.java",
+                    arg->line,
+                    4,
+                    "",
+                    "why",
+                    "fix"
+                );
+                javan_panic(arg->detail);
+                #if defined(_WIN32)
+                return 0U;
+                #else
+                return NULL;
+                #endif
+            }
+
+            static void run_worker(worker_arg* arg) {
+                #if defined(_WIN32)
+                HANDLE thread = (HANDLE) _beginthreadex(NULL, 0, worker_main, arg, 0, NULL);
+                if (thread == NULL) {
+                    javan_panic("worker create failed");
+                }
+                WaitForSingleObject(thread, INFINITE);
+                CloseHandle(thread);
+                #else
+                pthread_t thread;
+                if (pthread_create(&thread, NULL, worker_main, arg) != 0) {
+                    javan_panic("worker create failed");
+                }
+                pthread_join(thread, NULL);
+                #endif
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                worker_arg left = { "left", "left failure", 11 };
+                worker_arg right = { "right", "right failure", 22 };
+                run_worker(&left);
+                printf("%s\\n", javan_last_error() == NULL ? "main-clear" : "main-dirty");
+                run_worker(&right);
+                printf("%s\\n", javan_last_error() == NULL ? "main-clear" : "main-dirty");
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("""
+            left:11:left failure
+            main-clear
+            right:22:right failure
+            main-clear
+            """);
+    }
+
+    @Test
     void runtimeClearedSourceContextKeepsPlainPanicRaw() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
@@ -1363,20 +2702,32 @@ final class RuntimeFilesTest {
     }
 
     private String runRuntimeBoundaryProbe(final String source, final String heapLimitBytes) throws Exception {
-        final RuntimeProbeOutput output = runRuntimeBoundaryProbeOutput(source, heapLimitBytes);
+        return runRuntimeBoundaryProbe(source, heapLimitBytes, Map.of());
+    }
+
+    private String runRuntimeBoundaryProbe(
+        final String source,
+        final String heapLimitBytes,
+        final Map<String, String> environmentOverrides
+    ) throws Exception {
+        final RuntimeProbeOutput output = runRuntimeBoundaryProbeOutput(source, heapLimitBytes, environmentOverrides);
 
         assertThat(output.stderr()).isEmpty();
         return output.stdout();
     }
 
     private String runRuntimeBoundaryProbeStderr(final String source, final String heapLimitBytes) throws Exception {
-        final RuntimeProbeOutput output = runRuntimeBoundaryProbeOutput(source, heapLimitBytes);
+        final RuntimeProbeOutput output = runRuntimeBoundaryProbeOutput(source, heapLimitBytes, Map.of());
 
         assertThat(output.stdout()).isEmpty();
         return output.stderr();
     }
 
-    private RuntimeProbeOutput runRuntimeBoundaryProbeOutput(final String source, final String heapLimitBytes) throws Exception {
+    private RuntimeProbeOutput runRuntimeBoundaryProbeOutput(
+        final String source,
+        final String heapLimitBytes,
+        final Map<String, String> environmentOverrides
+    ) throws Exception {
         final Path runtime = new RuntimeFiles().write(tempDir);
         final Path main = tempDir.resolve("probe.c");
         Files.writeString(main, source);
@@ -1385,6 +2736,7 @@ final class RuntimeFilesTest {
         processBuilder.directory(tempDir.toFile());
         processBuilder.environment().put("JAVAN_HEAP_LIMIT_BYTES", heapLimitBytes);
         processBuilder.environment().put("JAVAN_GC_STRESS", "1");
+        processBuilder.environment().putAll(environmentOverrides);
 
         final Process process = processBuilder.start();
         final String stdout = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);

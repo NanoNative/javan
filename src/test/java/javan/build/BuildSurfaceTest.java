@@ -556,6 +556,28 @@ final class BuildSurfaceTest {
     }
 
     @Test
+    void runtimeFeatureSelectionWritesDisabledRuntimeProfilingReportByDefault() throws Exception {
+        new RuntimeFeatureSelection().write(
+            tempDir,
+            tempDir.resolve(".javan"),
+            new DeduplicationPlanner.Plan(List.of("core"), 0, List.of(), List.of())
+        );
+
+        assertThat(Files.readString(tempDir.resolve(".javan/reports/runtime-profiling.json"))).contains(
+            "\"status\": \"disabled\"",
+            "\"requested\": false",
+            "\"enabled\": false",
+            "\"collectionState\": \"disabled\"",
+            "\"disabledProfilingModules\": []"
+        );
+        assertThat(Files.readString(tempDir.resolve(".javan/reports/runtime-profiling.md"))).contains(
+            "# Runtime Profiling",
+            "- status: `disabled`",
+            "- requested: `false`"
+        );
+    }
+
+    @Test
     void libraryBuildReportsWriteDeterministicMetricsAndRuntimeModules() throws Exception {
         final ClassFile main = classFile(
             "com/acme/Main",

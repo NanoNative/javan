@@ -1,6 +1,7 @@
 package javan.build;
 
 import javan.toolchain.SimpleToml;
+import javan.reporting.RuntimeProfilingReports;
 import javan.util.Files2;
 import javan.util.Json;
 import javan.util.Strings2;
@@ -18,6 +19,7 @@ import java.util.Optional;
  * Enforces user-selected runtime feature constraints from {@code javan.toml}.
  */
 public final class RuntimeFeatureSelection {
+    private final RuntimeProfilingReports runtimeProfilingReports = new RuntimeProfilingReports();
     private static final List<String> KNOWN_RUNTIME_MODULES = List.of(
         "arrays",
         "collections",
@@ -74,6 +76,7 @@ public final class RuntimeFeatureSelection {
         final Path markdownPath = reports.resolve("runtime-features.md");
         Files2.writeString(jsonPath, json(settings, reachable, disabledReachable, disabledUnused, unknownDisabled));
         Files2.writeString(markdownPath, markdown(settings, reachable, disabledReachable, disabledUnused, unknownDisabled));
+        runtimeProfilingReports.write(reports, settings);
         return new Report(jsonPath, markdownPath, settings, reachable, disabledReachable, disabledUnused, unknownDisabled, diagnostics);
     }
 

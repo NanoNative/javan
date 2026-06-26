@@ -19,6 +19,9 @@ public final class ReportSummarizer {
     private static final List<ReportSpec> REPORTS = List.of(
         new ReportSpec("project", List.of("project.json")),
         new ReportSpec("diagnostics", List.of("diagnostics.txt", "diagnostics.json", "diagnostics.md")),
+        new ReportSpec("threads", List.of("threads.json", "threads.md")),
+        new ReportSpec("virtual-threads", List.of("virtual-threads.json", "virtual-threads.md")),
+        new ReportSpec("runtime-profiling", List.of("runtime-profiling.json", "runtime-profiling.md")),
         new ReportSpec("reachability", List.of("reachability.txt")),
         new ReportSpec("exceptions", List.of("exceptions.json", "exceptions.md", "debug-map.json")),
         new ReportSpec("intrinsics", List.of("intrinsics.json", "intrinsics.md")),
@@ -99,6 +102,15 @@ public final class ReportSummarizer {
         }
         if ("diagnostics".equals(name)) {
             return diagnosticsMetrics(read(reportsDirectory.resolve("diagnostics.txt")));
+        }
+        if ("threads".equals(name)) {
+            return threadsMetrics(read(reportsDirectory.resolve("threads.json")));
+        }
+        if ("virtual-threads".equals(name)) {
+            return virtualThreadMetrics(read(reportsDirectory.resolve("virtual-threads.json")));
+        }
+        if ("runtime-profiling".equals(name)) {
+            return runtimeProfilingMetrics(read(reportsDirectory.resolve("runtime-profiling.json")));
         }
         if ("reachability".equals(name)) {
             return reachabilityMetrics(read(reportsDirectory.resolve("reachability.txt")));
@@ -197,6 +209,48 @@ public final class ReportSummarizer {
         return List.copyOf(result);
     }
 
+    private static List<Metric> threadsMetrics(final Optional<String> report) {
+        if (report.isEmpty()) {
+            return List.of();
+        }
+        final String value = report.orElseThrow();
+        final List<Metric> result = new ArrayList<>();
+        addNumber(result, value, "diagnostics");
+        addNumber(result, value, "errors");
+        addNumber(result, value, "warnings");
+        addNumber(result, value, "lifecycle");
+        addNumber(result, value, "synchronization");
+        addNumber(result, value, "concurrencyRuntime");
+        addNumber(result, value, "blocking");
+        addNumber(result, value, "threadStartSites");
+        addNumber(result, value, "threadStartMethods");
+        addNumber(result, value, "lifecycleMethods");
+        addNumber(result, value, "blockingMethods");
+        addNumber(result, value, "synchronizationMethods");
+        addNumber(result, value, "concurrencyRuntimeMethods");
+        addNumber(result, value, "unknownBlockingMethods");
+        addNumber(result, value, "unsupportedThreadTaskMethods");
+        addNumber(result, value, "sleepWaits");
+        addNumber(result, value, "joinWaits");
+        addNumber(result, value, "blockingTaskMethods");
+        addNumber(result, value, "cpuBoundTaskMethods");
+        addNumber(result, value, "tinyCpuTaskMethods");
+        addNumber(result, value, "pinningRiskMethods");
+        addNumber(result, value, "unknownTaskMethods");
+        addNumber(result, value, "ioSignalMethods");
+        addNumber(result, value, "taskRoots");
+        addNumber(result, value, "threadStartRoots");
+        addNumber(result, value, "blockingRoots");
+        addNumber(result, value, "pinningRiskRoots");
+        addNumber(result, value, "unsupportedRuntimeRoots");
+        addNumber(result, value, "lifecycleRiskRoots");
+        addNumber(result, value, "unknownRoots");
+        addArrayCount(result, value, "methods");
+        addArrayCount(result, value, "roots");
+        addArrayCount(result, value, "items");
+        return List.copyOf(result);
+    }
+
     private static List<Metric> intrinsicsMetrics(final Optional<String> report) {
         if (report.isEmpty()) {
             return List.of();
@@ -207,6 +261,38 @@ public final class ReportSummarizer {
         addArrayNumberSum(result, value, "intrinsics", "count", "intrinsicCallSites");
         addNumber(result, value, "unsupportedJdkCallCandidateCount");
         addArrayCount(result, value, "unsupportedJdkCallCandidates");
+        return List.copyOf(result);
+    }
+
+    private static List<Metric> virtualThreadMetrics(final Optional<String> report) {
+        if (report.isEmpty()) {
+            return List.of();
+        }
+        final String value = report.orElseThrow();
+        final List<Metric> result = new ArrayList<>();
+        addText(result, value, "status");
+        addBoolean(result, value, "runtimeSupported");
+        addBoolean(result, value, "profilingSupported");
+        addBoolean(result, value, "profilingCollected");
+        addBoolean(result, value, "schedulerImplemented");
+        addBoolean(result, value, "carrierPoolImplemented");
+        addBoolean(result, value, "threadModelImplemented");
+        addBoolean(result, value, "threadLocalImplemented");
+        addBoolean(result, value, "blockingIoAware");
+        addText(result, value, "reachableApiScan");
+        addNumber(result, value, "reachableVirtualStartSites");
+        addNumber(result, value, "reachableVirtualStartMethods");
+        addNumber(result, value, "reachableIsVirtualSites");
+        addNumber(result, value, "unsupportedBuilderApis");
+        addNumber(result, value, "unsupportedBuilderApisReachable");
+        addNumber(result, value, "unsupportedBuilderApisUnreachable");
+        addNumber(result, value, "unsupportedExecutorApis");
+        addNumber(result, value, "unsupportedExecutorApisReachable");
+        addNumber(result, value, "unsupportedExecutorApisUnreachable");
+        addText(result, value, "diagnosticSource");
+        addNumber(result, value, "reasonCount");
+        addText(result, value, "nextGate");
+        addArrayCount(result, value, "reasons");
         return List.copyOf(result);
     }
 
@@ -328,6 +414,7 @@ public final class ReportSummarizer {
         addText(result, value, "status");
         addText(result, value, "containment");
         addText(result, value, "optimize");
+        addBoolean(result, value, "profiling");
         addArrayText(result, value, "reachableRuntimeModules", "reachableRuntimeModuleNames");
         addArrayText(result, value, "disabledRuntimeModules", "disabledRuntimeModuleNames");
         addArrayCount(result, value, "reachableRuntimeModules");
@@ -335,6 +422,37 @@ public final class ReportSummarizer {
         addArrayCount(result, value, "disabledReachableRuntimeModules");
         addArrayCount(result, value, "disabledUnusedRuntimeModules");
         addArrayCount(result, value, "unknownDisabledRuntimeModules");
+        return List.copyOf(result);
+    }
+
+    private static List<Metric> runtimeProfilingMetrics(final Optional<String> report) {
+        if (report.isEmpty()) {
+            return List.of();
+        }
+        final String value = report.orElseThrow();
+        final List<Metric> result = new ArrayList<>();
+        addText(result, value, "status");
+        addBoolean(result, value, "requested");
+        addBoolean(result, value, "enabled");
+        addText(result, value, "collectionState");
+        addText(result, value, "reason");
+        addArrayText(result, value, "disabledProfilingModules", "disabledProfilingModuleNames");
+        addArrayCount(result, value, "disabledProfilingModules");
+        addNumber(result, value, "platformThreadObjectsCreated");
+        addNumber(result, value, "virtualThreadObjectsCreated");
+        addNumber(result, value, "threadStartCalls");
+        addNumber(result, value, "threadCompletions");
+        addNumber(result, value, "threadJoinCalls");
+        addNumber(result, value, "threadJoinInterruptions");
+        addNumber(result, value, "threadInterruptCalls");
+        addNumber(result, value, "threadParkCalls");
+        addNumber(result, value, "threadParkNanosCalls");
+        addNumber(result, value, "threadParkUntilCalls");
+        addNumber(result, value, "threadUnparkCalls");
+        addNumber(result, value, "threadLocalGetCalls");
+        addNumber(result, value, "threadLocalSetCalls");
+        addNumber(result, value, "threadLocalRemoveCalls");
+        addNumber(result, value, "executorExecuteCalls");
         return List.copyOf(result);
     }
 
@@ -411,6 +529,10 @@ public final class ReportSummarizer {
         addBoolean(result, value, "rootScanning");
         addText(result, value, "rootModel");
         addBoolean(result, value, "threadRoots");
+        addBoolean(result, value, "threadRootRegistry");
+        addText(result, value, "threadRootScope");
+        addBoolean(result, value, "threadLifecycleInventory");
+        addText(result, value, "threadLifecycleInventoryScope");
         addBoolean(result, value, "javaHeapAllocationsManaged");
         addText(result, value, "exceptions");
         addText(result, value, "threads");
@@ -456,6 +578,12 @@ public final class ReportSummarizer {
         addNumber(result, value, "actualGcCollections");
         addNumber(result, value, "actualGcCollectedAllocations");
         addNumber(result, value, "actualGcCollectedBytes");
+        addNumber(result, value, "actualThreadObjects");
+        addNumber(result, value, "actualStartedThreads");
+        addNumber(result, value, "actualCompletedThreads");
+        addNumber(result, value, "actualActiveThreads");
+        addNumber(result, value, "actualThreadsWithTarget");
+        addNumber(result, value, "actualCurrentThreadRootPresent");
         addNumber(result, value, "actualRootFrameDepth");
         addNumber(result, value, "actualFrameRootCount");
         addNumber(result, value, "maxLiveAllocations");

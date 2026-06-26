@@ -68,8 +68,8 @@ final class ReportSummarizerTest {
 
         final ReportSummarizer.Summary summary = new ReportSummarizer().write(tempDir);
 
-        assertThat(summary.markdown()).contains("Known report families: `0` present, `0` partial, `16` absent.");
-        assertThat(summary.json()).contains("\"presentFamilyCount\": 0", "\"partialFamilyCount\": 0", "\"absentFamilyCount\": 16");
+        assertThat(summary.markdown()).contains("Known report families: `0` present, `0` partial, `19` absent.");
+        assertThat(summary.json()).contains("\"presentFamilyCount\": 0", "\"partialFamilyCount\": 0", "\"absentFamilyCount\": 19");
     }
 
     @Test
@@ -199,6 +199,195 @@ final class ReportSummarizerTest {
             "diagnostics: `2`",
             "errors: `1`",
             "warnings: `1`"
+        );
+    }
+
+    @Test
+    void writeSummarizesThreadMetrics() throws Exception {
+        final Path reports = reportsDirectory();
+        Files.writeString(reports.resolve("threads.json"), """
+            {
+              "diagnostics": 2,
+              "errors": 1,
+              "warnings": 1,
+              "lifecycle": 1,
+              "synchronization": 0,
+              "concurrencyRuntime": 1,
+              "blocking": 0,
+              "threadStartSites": 0,
+              "threadStartMethods": 0,
+              "lifecycleMethods": 1,
+              "blockingMethods": 0,
+              "synchronizationMethods": 0,
+              "concurrencyRuntimeMethods": 1,
+              "unknownBlockingMethods": 1,
+              "unsupportedThreadTaskMethods": 1,
+              "sleepWaits": 0,
+              "joinWaits": 0,
+              "blockingTaskMethods": 0,
+              "cpuBoundTaskMethods": 0,
+              "tinyCpuTaskMethods": 0,
+              "pinningRiskMethods": 0,
+              "unknownTaskMethods": 1,
+              "ioSignalMethods": 0,
+              "taskRoots": 1,
+              "threadStartRoots": 0,
+              "blockingRoots": 0,
+              "pinningRiskRoots": 0,
+              "unsupportedRuntimeRoots": 1,
+              "lifecycleRiskRoots": 0,
+              "unknownRoots": 0,
+              "methods": [
+                {"class": "com/acme/Main", "method": "dead", "threadStartSites": 0, "lifecycleRisks": 1, "blockingWaits": 0, "synchronizationRisks": 0, "concurrencyRuntimeRisks": 1, "sleepWaits": 0, "joinWaits": 0, "estimatedInstructions": 0, "allocationSites": 0, "ioCallSites": 0, "hasLoop": false, "classification": "UNKNOWN"}
+              ],
+              "roots": [
+                {"class": "com/acme/Main", "method": "dead", "rootKind": "UNSUPPORTED_RUNTIME", "classification": "UNKNOWN", "threadStartSites": 0, "blockingWaits": 0, "lifecycleRisks": 1, "synchronizationRisks": 0, "concurrencyRuntimeRisks": 1, "ioCallSites": 0}
+              ],
+              "items": [
+                {"code": "JAVAN075"},
+                {"code": "JAVAN177"}
+              ]
+            }
+            """);
+        Files.writeString(reports.resolve("threads.md"), "# Thread Analysis\n");
+
+        final ReportSummarizer.Summary summary = new ReportSummarizer().write(tempDir);
+
+        assertThat(summary.markdown()).contains(
+            "| `threads` | present |",
+            "`threads.json`",
+            "`threads.md`",
+            "diagnostics: `2`",
+            "errors: `1`",
+            "warnings: `1`",
+            "lifecycle: `1`",
+            "synchronization: `0`",
+            "concurrencyRuntime: `1`",
+            "blocking: `0`",
+            "threadStartSites: `0`",
+            "threadStartMethods: `0`",
+            "lifecycleMethods: `1`",
+            "blockingMethods: `0`",
+            "synchronizationMethods: `0`",
+            "concurrencyRuntimeMethods: `1`",
+            "unknownBlockingMethods: `1`",
+            "unsupportedThreadTaskMethods: `1`",
+            "sleepWaits: `0`",
+            "joinWaits: `0`",
+            "blockingTaskMethods: `0`",
+            "cpuBoundTaskMethods: `0`",
+            "tinyCpuTaskMethods: `0`",
+            "pinningRiskMethods: `0`",
+            "unknownTaskMethods: `1`",
+            "ioSignalMethods: `0`",
+            "taskRoots: `1`",
+            "threadStartRoots: `0`",
+            "blockingRoots: `0`",
+            "pinningRiskRoots: `0`",
+            "unsupportedRuntimeRoots: `1`",
+            "lifecycleRiskRoots: `0`",
+            "unknownRoots: `0`",
+            "methods: `1`",
+            "roots: `1`",
+            "items: `2`"
+        );
+    }
+
+    @Test
+    void writeSummarizesVirtualThreadMetrics() throws Exception {
+        final Path reports = reportsDirectory();
+        Files.writeString(reports.resolve("virtual-threads.json"), """
+            {
+              "status": "partial",
+              "runtimeSupported": true,
+              "profilingSupported": false,
+              "profilingCollected": false,
+              "schedulerImplemented": false,
+              "carrierPoolImplemented": false,
+              "threadModelImplemented": true,
+              "threadLocalImplemented": true,
+              "blockingIoAware": false,
+              "reachableApiScan": "not-collected",
+              "reachableVirtualStartSites": 0,
+              "reachableVirtualStartMethods": 0,
+              "reachableIsVirtualSites": 0,
+              "unsupportedBuilderApis": 0,
+              "unsupportedBuilderApisReachable": 0,
+              "unsupportedBuilderApisUnreachable": 0,
+              "unsupportedExecutorApis": 0,
+              "unsupportedExecutorApisReachable": 0,
+              "unsupportedExecutorApisUnreachable": 0,
+              "diagnosticSource": "platform-thread-analysis-plus-virtual-builder-executor-park-slice",
+              "reasonCount": 3,
+              "nextGate": "land remaining builder/factory/executor introspection such as getClass() plus scheduler/carrier runtime and runtime-backed profiling counters",
+              "reasons": [
+                "a",
+                "b",
+                "c"
+              ]
+            }
+            """);
+        Files.writeString(reports.resolve("virtual-threads.md"), "# Virtual Thread Analysis\n");
+
+        final ReportSummarizer.Summary summary = new ReportSummarizer().write(tempDir);
+
+        assertThat(summary.markdown()).contains(
+            "| `virtual-threads` | present |",
+            "`virtual-threads.json`",
+            "`virtual-threads.md`",
+            "status: `partial`",
+            "runtimeSupported: `true`",
+            "profilingSupported: `false`",
+            "profilingCollected: `false`",
+            "schedulerImplemented: `false`",
+            "carrierPoolImplemented: `false`",
+            "threadModelImplemented: `true`",
+            "threadLocalImplemented: `true`",
+            "blockingIoAware: `false`",
+            "reachableApiScan: `not-collected`",
+            "reachableVirtualStartSites: `0`",
+            "reachableVirtualStartMethods: `0`",
+            "reachableIsVirtualSites: `0`",
+            "unsupportedBuilderApis: `0`",
+            "unsupportedBuilderApisReachable: `0`",
+            "unsupportedBuilderApisUnreachable: `0`",
+            "unsupportedExecutorApis: `0`",
+            "unsupportedExecutorApisReachable: `0`",
+            "unsupportedExecutorApisUnreachable: `0`",
+            "diagnosticSource: `platform-thread-analysis-plus-virtual-builder-executor-park-slice`",
+            "reasonCount: `3`",
+            "nextGate: `land remaining builder/factory/executor introspection such as getClass() plus scheduler/carrier runtime and runtime-backed profiling counters`",
+            "reasons: `3`"
+        );
+    }
+
+    @Test
+    void writeSummarizesRuntimeProfilingMetrics() throws Exception {
+        final Path reports = reportsDirectory();
+        Files.writeString(reports.resolve("runtime-profiling.json"), """
+            {
+              "status": "ready",
+              "requested": true,
+              "enabled": true,
+              "collectionState": "linked-not-run",
+              "reason": "Runtime profiling is linked and will collect counters when the native binary runs through a profiling-enabled launch path.",
+              "disabledProfilingModules": []
+            }
+            """);
+        Files.writeString(reports.resolve("runtime-profiling.md"), "# Runtime Profiling\n");
+
+        final ReportSummarizer.Summary summary = new ReportSummarizer().write(tempDir);
+
+        assertThat(summary.markdown()).contains(
+            "| `runtime-profiling` | present |",
+            "`runtime-profiling.json`",
+            "`runtime-profiling.md`",
+            "status: `ready`",
+            "requested: `true`",
+            "enabled: `true`",
+            "collectionState: `linked-not-run`",
+            "reason: `Runtime profiling is linked and will collect counters when the native binary runs through a profiling-enabled launch path.`",
+            "disabledProfilingModules: `0`"
         );
     }
 
@@ -364,7 +553,7 @@ final class ReportSummarizerTest {
               "byteArrayOwnership": "input-copied-gc-managed-output-javan-owned-data-free-with-javan_free",
               "errorResultAbi": "abi-v2-c-owned-javanresult-try-wrappers-v1-direct-exports-compatible",
               "exceptionMapping": "caught-runtime-panic-to-last-error-limited-same-method-catch",
-              "threadRuntimeRules": "single-threaded-native-profile-no-thread-api-yet",
+              "threadRuntimeRules": "parallel-host-thread-bootstrap-current-thread-interrupt-isalive-sleep-start-join-runnable-target-plus-startvirtualthread-builderstart-builderunstarted-factory-executor-threadlocal-park-parknanos-parkuntil-unpark-and-isvirtual-no-virtual-scheduler",
               "generatedAbiTests": "c-header-compile-test",
               "inputClasses": 3,
               "inputMethods": 4,
@@ -388,7 +577,7 @@ final class ReportSummarizerTest {
             "byteArrayOwnership: `input-copied-gc-managed-output-javan-owned-data-free-with-javan_free`",
             "errorResultAbi: `abi-v2-c-owned-javanresult-try-wrappers-v1-direct-exports-compatible`",
             "exceptionMapping: `caught-runtime-panic-to-last-error-limited-same-method-catch`",
-            "threadRuntimeRules: `single-threaded-native-profile-no-thread-api-yet`",
+            "threadRuntimeRules: `parallel-host-thread-bootstrap-current-thread-interrupt-isalive-sleep-start-join-runnable-target-plus-startvirtualthread-builderstart-builderunstarted-factory-executor-threadlocal-park-parknanos-parkuntil-unpark-and-isvirtual-no-virtual-scheduler`",
             "generatedAbiTests: `c-header-compile-test`",
             "inputClasses: `3`",
             "exportedMethods: `1`",
@@ -469,6 +658,7 @@ final class ReportSummarizerTest {
               "status": "pass",
               "containment": "system-linked",
               "optimize": "size",
+              "profiling": true,
               "reachableRuntimeModules": ["core", "network", "socket"],
               "disabledRuntimeModules": ["thread-profiling"],
               "disabledReachableRuntimeModules": [],
@@ -484,6 +674,7 @@ final class ReportSummarizerTest {
             "status: `pass`",
             "containment: `system-linked`",
             "optimize: `size`",
+            "profiling: `true`",
             "reachableRuntimeModuleNames: `core, network, socket`",
             "reachableRuntimeModules: `3`",
             "disabledRuntimeModuleNames: `thread-profiling`",
@@ -562,10 +753,14 @@ final class ReportSummarizerTest {
               "localRootLivenessModel": "cfg-safe-point-dead-root-clearing",
               "rootScanning": false,
               "rootModel": "generated-static-frame-return-and-expression-root-inventory-no-heap-scan",
-              "threadRoots": false,
+              "threadRoots": true,
+              "threadRootRegistry": true,
+              "threadRootScope": "parallel-host-thread-bootstrap-live-thread-root-registry-current-thread-root-membership-and-thread-target-field-traversal",
+              "threadLifecycleInventory": true,
+              "threadLifecycleInventoryScope": "heap-thread-object-thread-root-registry-started-completed-active-non-current-target-current-root-and-completed-target-release-counters",
               "javaHeapAllocationsManaged": false,
               "exceptions": "panic-and-limited-same-method-catch",
-              "threads": "current-thread-interrupt-state-uninterrupted-sleep-and-thread-construction-only",
+              "threads": "current-thread-interrupt-state-isalive-isvirtual-entry-interrupted-sleep-start-startvirtualthread-builderstart-builderunstarted-factory-executor-threadlocal-park-parknanos-parkuntil-unpark-parallel-host-thread-bootstrap-join-same-method-catch-thread-construction-duplicate-start-rejection-current-join-rejection-and-runnable-target-no-virtual-scheduler",
               "sanitizerInstrumentation": "not-built",
               "sanitizers": "not-enabled"
             }
@@ -620,10 +815,14 @@ final class ReportSummarizerTest {
             "localRootLivenessModel: `cfg-safe-point-dead-root-clearing`",
             "rootScanning: `false`",
             "rootModel: `generated-static-frame-return-and-expression-root-inventory-no-heap-scan`",
-            "threadRoots: `false`",
+            "threadRoots: `true`",
+            "threadRootRegistry: `true`",
+            "threadRootScope: `parallel-host-thread-bootstrap-live-thread-root-registry-current-thread-root-membership-and-thread-target-field-traversal`",
+            "threadLifecycleInventory: `true`",
+            "threadLifecycleInventoryScope: `heap-thread-object-thread-root-registry-started-completed-active-non-current-target-current-root-and-completed-target-release-counters`",
             "javaHeapAllocationsManaged: `false`",
             "sanitizerInstrumentation: `not-built`",
-            "threads: `current-thread-interrupt-state-uninterrupted-sleep-and-thread-construction-only`"
+            "threads: `current-thread-interrupt-state-isalive-isvirtual-entry-interrupted-sleep-start-startvirtualthread-builderstart-builderunstarted-factory-executor-threadlocal-park-parknanos-parkuntil-unpark-parallel-host-thread-bootstrap-join-same-method-catch-thread-construction-duplicate-start-rejection-current-join-rejection-and-runnable-target-no-virtual-scheduler`"
         );
     }
 
@@ -709,6 +908,12 @@ final class ReportSummarizerTest {
               "actualGcCollections": 8,
               "actualGcCollectedAllocations": 5500,
               "actualGcCollectedBytes": 24192,
+              "actualThreadObjects": 1,
+              "actualStartedThreads": 1,
+              "actualCompletedThreads": 0,
+              "actualActiveThreads": 0,
+              "actualThreadsWithTarget": 0,
+              "actualCurrentThreadRootPresent": 1,
               "actualRootFrameDepth": 0,
               "actualFrameRootCount": 0,
               "maxLiveAllocations": 0,
@@ -740,6 +945,12 @@ final class ReportSummarizerTest {
             "actualGcCollections: `8`",
             "actualGcCollectedAllocations: `5500`",
             "actualGcCollectedBytes: `24192`",
+            "actualThreadObjects: `1`",
+            "actualStartedThreads: `1`",
+            "actualCompletedThreads: `0`",
+            "actualActiveThreads: `0`",
+            "actualThreadsWithTarget: `0`",
+            "actualCurrentThreadRootPresent: `1`",
             "actualRootFrameDepth: `0`",
             "actualFrameRootCount: `0`",
             "maxLiveAllocations: `0`",

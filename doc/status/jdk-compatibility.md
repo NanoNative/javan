@@ -48,9 +48,9 @@ Current support ledger for the active JDK 25 evidence set:
 
 | Measure | Count |
 | --- | ---: |
-| support rows | 93 |
-| pass rows | 76 |
-| scoped rows | 15 |
+| support rows | 105 |
+| pass rows | 89 |
+| scoped rows | 14 |
 | target rows | 2 |
 | rejected rows | 0 |
 

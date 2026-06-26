@@ -79,8 +79,13 @@ final class RuntimeContractReportsTest {
             "\"localRootLiveness\": true",
             "\"localRootLivenessModel\": \"cfg-safe-point-dead-root-clearing\"",
             "\"rootModel\": \"generated-static-frame-return-and-expression-root-inventory-no-heap-scan\"",
+            "\"threadRoots\": true",
+            "\"threadRootRegistry\": true",
+            "\"threadRootScope\": \"parallel-host-thread-bootstrap-live-thread-root-registry-current-thread-root-membership-and-thread-target-field-traversal\"",
+            "\"threadLifecycleInventory\": true",
+            "\"threadLifecycleInventoryScope\": \"heap-thread-object-thread-root-registry-started-completed-active-non-current-target-current-root-and-completed-target-release-counters\"",
             "\"sanitizerInstrumentation\": \"not-built\"",
-            "\"threads\": \"current-thread-interrupt-state-uninterrupted-sleep-and-thread-construction-only\""
+            "\"threads\": \"current-thread-interrupt-state-isalive-isvirtual-entry-interrupted-sleep-start-startvirtualthread-builderstart-builderunstarted-factory-executor-threadlocal-park-parknanos-parkuntil-unpark-parallel-host-thread-bootstrap-join-same-method-catch-thread-construction-duplicate-start-rejection-current-join-rejection-and-runnable-target-no-virtual-scheduler\""
         );
         assertThat(markdown).contains(
             "Runtime Contract",
@@ -115,6 +120,12 @@ final class RuntimeContractReportsTest {
             "local root liveness: `true`",
             "local root liveness model: `cfg-safe-point-dead-root-clearing`",
             "root model: `generated-static-frame-return-and-expression-root-inventory-no-heap-scan`",
+            "thread roots: `true`",
+            "thread root registry: `true`",
+            "thread root scope: `parallel-host-thread-bootstrap-live-thread-root-registry-current-thread-root-membership-and-thread-target-field-traversal`",
+            "thread lifecycle inventory: `true`",
+            "thread lifecycle inventory scope: `heap-thread-object-thread-root-registry-started-completed-active-non-current-target-current-root-and-completed-target-release-counters`",
+            "threads: `current-thread-interrupt-state-isalive-isvirtual-entry-interrupted-sleep-start-startvirtualthread-builderstart-builderunstarted-factory-executor-threadlocal-park-parknanos-parkuntil-unpark-parallel-host-thread-bootstrap-join-same-method-catch-thread-construction-duplicate-start-rejection-current-join-rejection-and-runnable-target-no-virtual-scheduler`",
             "static-archive"
         );
         assertThat(report.artifacts()).hasSize(1);
@@ -226,5 +237,30 @@ final class RuntimeContractReportsTest {
         } finally {
             System.setProperty("os.name", originalOs);
         }
+    }
+
+    @Test
+    void writeReportsInspectRealHostExecutableWhenAvailable() throws Exception {
+        final Path javaHome = Path.of(System.getProperty("java.home"));
+        final String executableName = System.getProperty("os.name", "").toLowerCase().contains("win") ? "java.exe" : "java";
+        final Path executable = javaHome.resolve("bin").resolve(executableName);
+
+        final RuntimeContractReports.Report report = new RuntimeContractReports().write(
+            tempDir.resolve(".javan"),
+            "app",
+            List.of(executable)
+        );
+
+        assertThat(report.artifacts()).singleElement().satisfies(artifact -> {
+            assertThat(artifact.bytes()).isGreaterThan(0L);
+            assertThat(artifact.linkage()).isEqualTo("dynamic-executable");
+            assertThat(artifact.debugInfo()).isEqualTo("not-requested");
+            assertThat(artifact.symbolTable()).isNotEqualTo("unknown");
+            assertThat(artifact.systemLibraries()).isNotEmpty();
+        });
+        assertThat(Files.readString(report.jsonPath())).contains(
+            "\"artifactKind\": \"app\"",
+            "\"path\": \"" + executable + "\""
+        );
     }
 }

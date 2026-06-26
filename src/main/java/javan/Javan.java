@@ -145,7 +145,7 @@ public final class Javan {
         diagnostics.addAll(runtimeFeatureSelection.write(layout.root(), layout.outputDirectory(), deduplicationPlan).diagnostics());
         reports.writeReachability(layout, callGraph);
         dependencyReports.write(layout, classes, callGraph);
-        reports.writeDiagnostics(layout, diagnostics);
+        reports.writeDiagnostics(layout, diagnostics, classes, callGraph);
         intrinsicUsageReports.write(layout.outputDirectory(), classes, callGraph);
         optimizationReports.writeScaffold(layout.outputDirectory());
         writeUnifiedReport(layout.outputDirectory());
@@ -324,6 +324,7 @@ public final class Javan {
      * @throws InterruptedException when interrupted while running
      */
     public RunResult run(final Path cwd, final Options options, final PrintStream out) throws IOException, InterruptedException {
+        final ProjectLayout detected = projectDetector.detect(cwd, options);
         final BuildResult build = build(cwd, options, out);
         if (!build.pass()) {
             return RunResult.failed(build.diagnostics());
@@ -331,13 +332,35 @@ public final class Javan {
         final Path binary = build.artifact().orElseThrow();
         final List<String> command = new ArrayList<>();
         command.add(binary.toString());
+        command.addAll(runtimeProfilingArguments(detected));
         command.addAll(options.passthroughArgs());
         final ProcessRunner.Result result = processRunner.run(binary.getParent(), command);
         out.print(result.stdout());
         if (!Strings2.isBlank(result.stderr())) {
             out.print(result.stderr());
         }
+        writeUnifiedReport(detected.outputDirectory());
         return RunResult.success(result.exitCode());
+    }
+
+    private List<String> runtimeProfilingArguments(final ProjectLayout layout) throws IOException {
+        final RuntimeFeatureSelection.Settings settings = runtimeFeatureSelection.read(layout.root());
+        if (!settings.profiling()) {
+            return List.of();
+        }
+        for (final String module : settings.disabledRuntimeModules()) {
+            if ("live-profiling".equals(module) || "thread-profiling".equals(module)) {
+                return List.of();
+            }
+        }
+        final Path reports = layout.outputDirectory().resolve("reports");
+        Files.createDirectories(reports);
+        final String jsonPath = reports.resolve("runtime-profiling.json").toString();
+        final String markdownPath = reports.resolve("runtime-profiling.md").toString();
+        return List.of(
+            "--javan-runtime-profile-json=" + jsonPath,
+            "--javan-runtime-profile-md=" + markdownPath
+        );
     }
 
     /**
@@ -361,7 +384,7 @@ public final class Javan {
         diagnostics.addAll(staticVerifier.verify(classes, callGraph.reachableMethods()));
         reports.writeReachability(layout, callGraph);
         dependencyReports.write(layout, classes, callGraph);
-        reports.writeDiagnostics(layout, diagnostics);
+        reports.writeDiagnostics(layout, diagnostics, classes, callGraph);
         final List<ClassMetadata> projectMetadata = classMetadataScanner.scanLayout(layout);
         final List<ClassMetadata> jdkMetadata = classMetadataScanner.scanCurrentJdk(layout.outputDirectory());
         final CompatibilityResult result = compatibilityReports.write(
@@ -487,7 +510,7 @@ public final class Javan {
     }
 
     private static CallGraph emptyCallGraph() {
-        return new CallGraph(new EntryPoint("", "", ""), List.of(), List.of());
+        return new CallGraph(new EntryPoint("", "", ""), List.of(), List.of(), List.of());
     }
 
     private static List<Diagnostic> errors(final List<Diagnostic> diagnostics) {

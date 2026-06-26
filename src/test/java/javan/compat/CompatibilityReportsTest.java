@@ -1,5 +1,6 @@
 package javan.compat;
 
+import javan.verify.Diagnostic;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -48,10 +49,10 @@ final class CompatibilityReportsTest {
         final String summary = Files.readString(tempDir.resolve(".javan/reports/compatibility-summary.json"));
 
         assertThat(summary).contains(
-            "\"supportRows\": ",
-            "\"passRows\": ",
-            "\"scopedRows\": ",
-            "\"targetRows\": "
+            "\"supportRows\": 105",
+            "\"passRows\": 89",
+            "\"scopedRows\": 14",
+            "\"targetRows\": 2"
         );
     }
 
@@ -85,8 +86,20 @@ final class CompatibilityReportsTest {
             "| `network-http-client-post-string-byte-array` | pass |",
             "| `network-http-client-put-byte-array` | pass |",
             "| `platform-thread-construction` | pass |",
-            "| `platform-thread-current-interrupt-state` | scoped |",
+            "| `platform-thread-empty-start-join` | pass |",
+            "| `platform-thread-runnable-start-join-single-threaded` | pass |",
+            "| `platform-thread-current-interrupt-state` | pass |",
+            "| `platform-thread-current-thread-root-gc-pressure` | pass |",
+            "| `platform-thread-runnable-target-root-gc-pressure` | pass |",
+            "| `platform-thread-current-thread-inventory` | pass |",
+            "| `platform-thread-live-root-registry` | pass |",
+            "| `platform-thread-finished-thread-reclaim` | pass |",
             "| `platform-thread-sleep-uninterrupted` | pass |",
+            "| `platform-thread-sleep-entry-interrupted-same-method-catch` | pass |",
+            "| `platform-thread-join-entry-interrupted-same-method-catch` | pass |",
+            "| `platform-thread-current-thread-start-build-reject` | pass |",
+            "| `platform-thread-current-thread-join-build-reject` | pass |",
+            "| `platform-thread-duplicate-start-build-reject` | pass |",
             "| `network-socket-rejection` | pass |",
             "| `network-http-rejection` | pass |",
             "| `network-runtime-feature-reporting` | pass |"
@@ -103,20 +116,138 @@ final class CompatibilityReportsTest {
             "\"feature\": \"network-http-client-post-string-byte-array\"",
             "\"feature\": \"network-http-client-put-byte-array\"",
             "\"feature\": \"platform-thread-construction\"",
+            "\"feature\": \"platform-thread-empty-start-join\"",
+            "\"feature\": \"platform-thread-runnable-start-join-single-threaded\"",
             "\"feature\": \"platform-thread-current-interrupt-state\"",
+            "\"feature\": \"platform-thread-current-thread-root-gc-pressure\"",
+            "\"feature\": \"platform-thread-runnable-target-root-gc-pressure\"",
+            "\"feature\": \"platform-thread-current-thread-inventory\"",
+            "\"feature\": \"platform-thread-live-root-registry\"",
+            "\"feature\": \"platform-thread-finished-thread-reclaim\"",
             "\"feature\": \"platform-thread-sleep-uninterrupted\"",
+            "\"feature\": \"platform-thread-sleep-entry-interrupted-same-method-catch\"",
+            "\"feature\": \"platform-thread-join-entry-interrupted-same-method-catch\"",
+            "\"feature\": \"platform-thread-current-thread-start-build-reject\"",
+            "\"feature\": \"platform-thread-current-thread-join-build-reject\"",
+            "\"feature\": \"platform-thread-duplicate-start-build-reject\"",
             "\"feature\": \"network-socket-rejection\"",
             "\"feature\": \"network-http-rejection\"",
             "\"feature\": \"network-runtime-feature-reporting\""
         );
     }
 
+    @Test
+    void writeUsesLegacyJavaVersionPrefixForFeatureDetection() throws Exception {
+        withJavaVersion("1.8.0_442", () -> {
+            new CompatibilityReports().write(
+                tempDir,
+                tempDir.resolve(".javan"),
+                List.of(metadata("", "com/acme/Main")),
+                List.of(metadata("java.base", "java/lang/Object")),
+                List.of()
+            );
+
+            assertThat(tempDir.resolve(".javan/reports/jdk-8-inventory.json")).isRegularFile();
+            assertThat(Files.readString(tempDir.resolve(".javan/reports/compatibility-summary.json")))
+                .contains("\"javaFeatureVersion\": 8");
+        });
+    }
+
+    @Test
+    void writeUsesZeroFeatureForBlankJavaVersion() throws Exception {
+        withJavaVersion(" ", () -> {
+            new CompatibilityReports().write(
+                tempDir,
+                tempDir.resolve(".javan"),
+                List.of(metadata("", "com/acme/Main")),
+                List.of(metadata("java.base", "java/lang/Object")),
+                List.of()
+            );
+
+            assertThat(tempDir.resolve(".javan/reports/jdk-0-inventory.json")).isRegularFile();
+            assertThat(Files.readString(tempDir.resolve(".javan/reports/compatibility-summary.json")))
+                .contains("\"javaFeatureVersion\": 0");
+        });
+    }
+
+    @Test
+    void writeStopsFeatureParsingAtSuffixAndCountsPreviewSyntheticAndErrors() throws Exception {
+        withJavaVersion("25-ea", () -> {
+            final List<ClassMetadata> projectClasses = List.of(
+                metadata(
+                    "",
+                    "com/acme/Preview",
+                    65_535,
+                    List.of(
+                        member(
+                            0x1000,
+                            "<init>",
+                            "()V",
+                            List.of("Synthetic"),
+                            List.of(new InstructionMetadata(0, 197, "multianewarray", 3, BytecodeSupport.Status.RECOGNIZED_REJECTED))
+                        )
+                    ),
+                    List.of(
+                        member(
+                            0x1000,
+                            "bridge",
+                            "()V",
+                            List.of(),
+                            List.of(new InstructionMetadata(1, 255, "opcode_255", 0, BytecodeSupport.Status.UNKNOWN_FATAL))
+                        )
+                    )
+                )
+            );
+            final List<ClassMetadata> jdkClasses = List.of(
+                metadata("java.logging", "java/util/logging/Logger"),
+                metadata("java.base", "java/lang/Object"),
+                metadata("java.base", "java/lang/String")
+            );
+
+            new CompatibilityReports().write(
+                tempDir,
+                tempDir.resolve(".javan"),
+                projectClasses,
+                jdkClasses,
+                List.of(
+                    Diagnostic.error("JAVAN999", "fatal", "com/acme/Preview", "bridge()V", "opcode_255", "reason", "fix"),
+                    Diagnostic.warning("JAVAN199", "warning", "com/acme/Preview", "<init>()V", "multianewarray", "reason", "fix")
+                )
+            );
+
+            assertThat(Files.readString(tempDir.resolve(".javan/reports/compatibility-summary.json"))).contains(
+                "\"javaFeatureVersion\": 25",
+                "\"diagnosticErrors\": 1",
+                "\"recognizedRejectedOpcodeUses\": 1",
+                "\"unknownFatalOpcodeUses\": 1",
+                "\"status\": \"fail\""
+            );
+            assertThat(Files.readString(tempDir.resolve(".javan/reports/bytecode-patterns-jdk-25.json"))).contains(
+                "\"previewClasses\": [\"com/acme/Preview\"]",
+                "\"syntheticMethods\": [\"com/acme/Preview.<init>()V\", \"com/acme/Preview.bridge()V\"]"
+            );
+            assertThat(Files.readString(tempDir.resolve("doc/status/jdk-compatibility.md"))).contains(
+                "- JDK modules: `2`"
+            );
+        });
+    }
+
     private static ClassMetadata metadata(final String moduleName, final String className) {
+        return metadata(moduleName, className, 0, List.of(), List.of());
+    }
+
+    private static ClassMetadata metadata(
+        final String moduleName,
+        final String className,
+        final int minorVersion,
+        final List<MemberMetadata> constructors,
+        final List<MemberMetadata> methods
+    ) {
         return new ClassMetadata(
             Path.of(className + ".class"),
             true,
             moduleName,
-            0,
+            minorVersion,
             69,
             0,
             className,
@@ -126,8 +257,8 @@ final class CompatibilityReportsTest {
             List.of(),
             List.of(),
             List.of(),
-            List.of(),
-            List.of()
+            constructors,
+            methods
         );
     }
 
@@ -136,5 +267,34 @@ final class CompatibilityReportsTest {
             return "0" + value;
         }
         return Integer.toString(value);
+    }
+
+    private static MemberMetadata member(
+        final int accessFlags,
+        final String name,
+        final String descriptor,
+        final List<String> attributes,
+        final List<InstructionMetadata> instructions
+    ) {
+        return new MemberMetadata(accessFlags, name, descriptor, attributes, instructions);
+    }
+
+    private static void withJavaVersion(final String value, final ThrowingRunnable runnable) throws Exception {
+        final String previous = System.getProperty("java.version");
+        try {
+            System.setProperty("java.version", value);
+            runnable.run();
+        } finally {
+            if (previous == null) {
+                System.clearProperty("java.version");
+            } else {
+                System.setProperty("java.version", previous);
+            }
+        }
+    }
+
+    @FunctionalInterface
+    private interface ThrowingRunnable {
+        void run() throws Exception;
     }
 }

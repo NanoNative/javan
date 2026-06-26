@@ -2,8 +2,11 @@ package javan;
 
 import javan.analysis.CallGraph;
 import javan.analysis.EntryPoint;
+import javan.classfile.ClassFile;
 import javan.detect.ProjectLayout;
 import javan.profile.Profile;
+import javan.reporting.ThreadReports;
+import javan.reporting.VirtualThreadReports;
 import javan.util.Files2;
 import javan.util.Strings2;
 import javan.verify.Diagnostic;
@@ -13,11 +16,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Writes machine-readable and text reports under .javan/reports.
  */
 public final class ProjectReports {
+    private final ThreadReports threadReports = new ThreadReports();
+    private final VirtualThreadReports virtualThreadReports = new VirtualThreadReports();
+
     /**
      * Writes the detected project layout as JSON.
      *
@@ -79,12 +86,57 @@ public final class ProjectReports {
      * @throws IOException when writing fails
      */
     public void writeDiagnostics(final ProjectLayout layout, final List<Diagnostic> diagnostics) throws IOException {
+        writeDiagnostics(layout, diagnostics, ThreadReports.summarize(diagnostics));
+    }
+
+    /**
+     * Writes diagnostics and reachable thread summary details.
+     *
+     * @param layout detected project layout
+     * @param diagnostics diagnostics
+     * @param classes scanned classes
+     * @param callGraph reachable methods and caller edges
+     * @throws IOException when writing fails
+     */
+    public void writeDiagnostics(
+        final ProjectLayout layout,
+        final List<Diagnostic> diagnostics,
+        final Map<String, ClassFile> classes,
+        final CallGraph callGraph
+    ) throws IOException {
+        writeDiagnostics(layout, diagnostics, ThreadReports.summarize(diagnostics, classes, callGraph), classes, callGraph);
+    }
+
+    private void writeDiagnostics(
+        final ProjectLayout layout,
+        final List<Diagnostic> diagnostics,
+        final ThreadReports.Summary threadSummary
+    ) throws IOException {
         final String value = diagnosticsValue(diagnostics);
         Files.createDirectories(layout.outputDirectory().resolve("reports"));
         final Path reports = layout.outputDirectory().resolve("reports");
         Files2.writeString(reports.resolve("diagnostics.txt"), value);
         Files2.writeString(reports.resolve("diagnostics.json"), diagnosticsJson(diagnostics));
         Files2.writeString(reports.resolve("diagnostics.md"), diagnosticsMarkdown(diagnostics));
+        threadReports.write(reports, diagnostics, threadSummary);
+        virtualThreadReports.write(reports);
+    }
+
+    private void writeDiagnostics(
+        final ProjectLayout layout,
+        final List<Diagnostic> diagnostics,
+        final ThreadReports.Summary threadSummary,
+        final Map<String, ClassFile> classes,
+        final CallGraph callGraph
+    ) throws IOException {
+        final String value = diagnosticsValue(diagnostics);
+        Files.createDirectories(layout.outputDirectory().resolve("reports"));
+        final Path reports = layout.outputDirectory().resolve("reports");
+        Files2.writeString(reports.resolve("diagnostics.txt"), value);
+        Files2.writeString(reports.resolve("diagnostics.json"), diagnosticsJson(diagnostics));
+        Files2.writeString(reports.resolve("diagnostics.md"), diagnosticsMarkdown(diagnostics));
+        threadReports.write(reports, diagnostics, threadSummary);
+        virtualThreadReports.write(reports, diagnostics, classes, callGraph);
     }
 
     private static String jsonList(final List<String> values) {

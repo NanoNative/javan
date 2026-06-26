@@ -608,7 +608,7 @@ CLI policy:
 
 ## 0.34 Full Concurrency Runtime And Thread Analysis
 
-Status: planned. Detailed requirements live in
+Status: in progress. Detailed requirements live in
 [concurrency-runtime.md](concurrency-runtime.md). Existing research input lives in
 `/Users/yuna/projects/javan-project/javan-virtual-threads-native-spike`.
 
@@ -621,13 +621,13 @@ Goal:
 Must ship:
 
 - platform-thread lifecycle: `start`, `join`, sleep interruption, roots, cleanup
-- virtual-thread runtime: scheduler, carriers, `Thread.ofVirtual`, per-task executor
+- virtual-thread runtime: scheduler, carriers, broader `Thread.ofVirtual` object flows
 - thread diagnostics: blocking, CPU-bound, tiny-task, pinning, `ThreadLocal`, flood risk
 - report outputs: `.javan/reports/threads.*` and `.javan/reports/virtual-threads.*`
 
 Acceptance:
 
-- full virtual-thread APIs supported for the claimed slice
+- claimed virtual-thread slice supported with unsupported broader runtime shapes rejected clearly
 - diagnostics emitted only for reachable code
 - reports stay stable in JSON and Markdown
 - tests cover platform threads, virtual threads, blocking, pinning, join/sleep/interrupt,

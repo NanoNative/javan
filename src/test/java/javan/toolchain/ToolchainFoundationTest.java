@@ -11,6 +11,8 @@ import java.util.Optional;
 import java.util.Properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 final class ToolchainFoundationTest {
     @TempDir
@@ -47,6 +49,36 @@ final class ToolchainFoundationTest {
         );
 
         assertThat(resolved).isEqualTo(configured.toAbsolutePath().normalize());
+    }
+
+    @Test
+    void blankPropertyFallsBackToEnvironmentOverride() {
+        final Path configured = tempDir.resolve("environment");
+        final Properties properties = new Properties();
+        properties.setProperty(JavanHome.PROPERTY, "   ");
+
+        final Path resolved = JavanHome.resolve(
+            Map.of(JavanHome.ENVIRONMENT, configured.toString()),
+            properties,
+            tempDir.resolve("home")
+        );
+
+        assertThat(resolved).isEqualTo(configured.toAbsolutePath().normalize());
+    }
+
+    @Test
+    void blankPropertyAndEnvironmentFallBackToUserHome() {
+        final Properties properties = new Properties();
+        properties.setProperty(JavanHome.PROPERTY, "   ");
+        final Path userHome = tempDir.resolve("home");
+
+        final Path resolved = JavanHome.resolve(
+            Map.of(JavanHome.ENVIRONMENT, "   "),
+            properties,
+            userHome
+        );
+
+        assertThat(resolved).isEqualTo(userHome.resolve(".javan").toAbsolutePath().normalize());
     }
 
     @Test
@@ -123,6 +155,96 @@ final class ToolchainFoundationTest {
             Toolchains
               alpha | jdk | 21 | %s
               beta | jdk | 25 | %s""".formatted(alpha.javacExecutable(), beta.javacExecutable()));
+    }
+
+    @Test
+    void listRendererSortsTiesByKindVersionAndHome() {
+        final ToolchainMetadata jdk21 = new ToolchainMetadata(
+            "temurin",
+            ToolchainKind.JDK,
+            "21",
+            tempDir.resolve("jdk-21"),
+            tempDir.resolve("jdk-21/bin/java"),
+            tempDir.resolve("jdk-21/bin/javac"),
+            Optional.empty(),
+            Optional.empty()
+        );
+        final ToolchainMetadata jdk25b = new ToolchainMetadata(
+            "temurin",
+            ToolchainKind.JDK,
+            "25",
+            tempDir.resolve("jdk-25-b"),
+            tempDir.resolve("jdk-25-b/bin/java"),
+            tempDir.resolve("jdk-25-b/bin/javac"),
+            Optional.empty(),
+            Optional.empty()
+        );
+        final ToolchainMetadata jdk25a = new ToolchainMetadata(
+            "temurin",
+            ToolchainKind.JDK,
+            "25",
+            tempDir.resolve("jdk-25-a"),
+            tempDir.resolve("jdk-25-a/bin/java"),
+            tempDir.resolve("jdk-25-a/bin/javac"),
+            Optional.empty(),
+            Optional.empty()
+        );
+
+        final String rendered = new ToolchainListRenderer().render(List.of(jdk25b, jdk21, jdk25a));
+
+        assertThat(rendered).isEqualTo("""
+            Toolchains
+              temurin | jdk | 21 | %s
+              temurin | jdk | 25 | %s
+              temurin | jdk | 25 | %s""".formatted(
+            jdk21.javacExecutable(),
+            jdk25a.javacExecutable(),
+            jdk25b.javacExecutable()
+        ));
+    }
+
+    @Test
+    void listRendererRejectsNullInput() {
+        assertThatThrownBy(() -> new ToolchainListRenderer().render(null))
+            .isInstanceOf(NullPointerException.class)
+            .hasMessage("toolchains");
+    }
+
+    @Test
+    void registrySortsDirectoriesAndMetadataDeterministically() throws Exception {
+        final Path zulu = tempDir.resolve("toolchains/zulu");
+        final Path alphaB = tempDir.resolve("toolchains/alpha-b");
+        final Path alphaA = tempDir.resolve("toolchains/alpha-a");
+        Files.createDirectories(zulu);
+        Files.createDirectories(alphaB);
+        Files.createDirectories(alphaA);
+        Files.writeString(zulu.resolve("toolchain.toml"), """
+            id = "zulu"
+            kind = "jdk"
+            version = "25"
+            home = "."
+            """);
+        Files.writeString(alphaB.resolve("toolchain.toml"), """
+            id = "alpha"
+            kind = "jdk"
+            version = "25"
+            home = "."
+            """);
+        Files.writeString(alphaA.resolve("toolchain.toml"), """
+            id = "alpha"
+            kind = "jdk"
+            version = "25"
+            home = "."
+            """);
+
+        final List<ToolchainMetadata> installed = new ToolchainRegistry(tempDir).installed();
+
+        assertThat(installed).extracting(ToolchainMetadata::id, metadata -> metadata.home().getFileName().toString())
+            .containsExactly(
+                tuple("alpha", "alpha-a"),
+                tuple("alpha", "alpha-b"),
+                tuple("zulu", "zulu")
+            );
     }
 
     private ToolchainMetadata metadata(final String id, final String version) {

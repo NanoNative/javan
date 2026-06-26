@@ -58,6 +58,30 @@ final class ToolchainManagerTest {
     }
 
     @Test
+    void doctorReportsAvailableFallbackCCompilerPath() {
+        final Path clang = Path.of("/usr/bin/clang");
+        final ToolchainManager manager = new ToolchainManager(tempDir.resolve("home"), executable -> {
+            if ("clang".equals(executable)) {
+                return new ToolchainManager.ToolStatus(executable, Optional.of(clang));
+            }
+            return new ToolchainManager.ToolStatus(executable);
+        });
+
+        final String report = manager.doctor();
+
+        assertThat(report).contains("c compiler:      available (" + clang + ")");
+    }
+
+    @Test
+    void doctorReportsMissingCCompilerWhenNoneAreAvailable() {
+        final ToolchainManager manager = new ToolchainManager(tempDir.resolve("home"), missingProbe());
+
+        final String report = manager.doctor();
+
+        assertThat(report).contains("c compiler:      missing (cc|clang|gcc)");
+    }
+
+    @Test
     void doctorDoesNotReportNativeImage() {
         final ToolchainManager manager = new ToolchainManager(tempDir.resolve("home"), missingProbe());
 

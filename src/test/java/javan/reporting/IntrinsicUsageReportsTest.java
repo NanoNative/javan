@@ -74,7 +74,8 @@ final class IntrinsicUsageReportsTest {
             new IntrinsicCallCount("Float.toString", 0),
             new IntrinsicCallCount("Float.intBitsToFloat", 0),
             new IntrinsicCallCount("Double.toString", 0),
-            new IntrinsicCallCount("Double.longBitsToDouble", 0)
+            new IntrinsicCallCount("Double.longBitsToDouble", 0),
+            new IntrinsicCallCount("Boolean.toString", 0)
         );
         assertThat(report.unsupportedJdkCallCandidateCount()).isEqualTo(1);
         assertThat(report.unsupportedJdkCallCandidates()).containsExactly(

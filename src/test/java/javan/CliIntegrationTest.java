@@ -19,6 +19,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.jar.JarFile;
@@ -1280,8 +1281,8 @@ final class CliIntegrationTest {
     }
 
     @Test
-    void checkRejectsReachableThreadStartAfterConstructionSlice() throws Exception {
-        final Path project = project("thread-start-unsupported");
+    void reachableThreadStartWritesThreadStartSiteCount() throws Exception {
+        final Path project = project("thread-start-report");
         writeJava(project, "com.acme.Main", """
             package com.acme;
 
@@ -1290,20 +1291,61 @@ final class CliIntegrationTest {
                 }
 
                 public static void main(final String[] args) {
-                    new Thread().start();
+                    final Thread thread = new Thread();
+                    thread.start();
                 }
             }
             """);
 
         final CliRun run = run(tempDir, "check", project.toString());
 
-        assertThat(run.exitCode()).isEqualTo(2);
-        assertThat(run.stderr()).contains("error[JAVAN031]", "java/lang/Thread.start()V");
+        assertThat(run.exitCode()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/reports/threads.json"))).contains(
+            "\"threadStartSites\": 1",
+            "\"threadStartMethods\": 1",
+            "\"lifecycleMethods\": 0",
+            "\"blockingMethods\": 0",
+            "\"synchronizationMethods\": 0",
+            "\"concurrencyRuntimeMethods\": 0",
+            "\"unknownBlockingMethods\": 0",
+            "\"unsupportedThreadTaskMethods\": 0",
+            "\"tinyCpuTaskMethods\": 1",
+            "\"ioSignalMethods\": 0",
+            "\"taskRoots\": 1",
+            "\"threadStartRoots\": 1",
+            "\"methods\": [",
+            "\"roots\": [",
+            "\"method\": \"main([Ljava/lang/String;)V\"",
+            "\"lifecycleRisks\": 0",
+            "\"synchronizationRisks\": 0",
+            "\"concurrencyRuntimeRisks\": 0",
+            "\"rootKind\": \"THREAD_START\"",
+            "\"hasLoop\": false",
+            "\"classification\": \"TINY_CPU_TASK\""
+        );
+        assertThat(Files.readString(project.resolve(".javan/reports/threads.md"))).contains(
+            "- threadStartSites: `1`",
+            "- threadStartMethods: `1`",
+            "- lifecycleMethods: `0`",
+            "- blockingMethods: `0`",
+            "- synchronizationMethods: `0`",
+            "- concurrencyRuntimeMethods: `0`",
+            "- unknownBlockingMethods: `0`",
+            "- unsupportedThreadTaskMethods: `0`",
+            "- tinyCpuTaskMethods: `1`",
+            "- ioSignalMethods: `0`",
+            "- taskRoots: `1`",
+            "- threadStartRoots: `1`",
+            "## Task Roots",
+            "`com/acme/Main#main([Ljava/lang/String;)V`: rootKind=`THREAD_START`, classification=`TINY_CPU_TASK`, threadStartSites=`1`, blockingWaits=`0`, lifecycleRisks=`0`, synchronizationRisks=`0`, concurrencyRuntimeRisks=`0`, ioCallSites=`0`",
+            "## Reachable Thread Methods",
+            "`com/acme/Main#main([Ljava/lang/String;)V`: threadStartSites=`1`, lifecycleRisks=`0`, blockingWaits=`0`, synchronizationRisks=`0`, concurrencyRuntimeRisks=`0`, sleepWaits=`0`, joinWaits=`0`, estimatedInstructions=`7`, allocationSites=`1`, ioCallSites=`0`, hasLoop=`false`, classification=`TINY_CPU_TASK`"
+        );
     }
 
     @Test
-    void checkRejectsReachableThreadJoinAfterConstructionSlice() throws Exception {
-        final Path project = project("thread-join-unsupported");
+    void reachableThreadSleepWritesBlockingThreadWarning() throws Exception {
+        final Path project = project("thread-sleep-blocking-report");
         writeJava(project, "com.acme.Main", """
             package com.acme;
 
@@ -1312,15 +1354,493 @@ final class CliIntegrationTest {
                 }
 
                 public static void main(final String[] args) throws Exception {
-                    new Thread().join();
+                    Thread.sleep(1L);
                 }
             }
             """);
 
         final CliRun run = run(tempDir, "check", project.toString());
 
-        assertThat(run.exitCode()).isEqualTo(2);
-        assertThat(run.stderr()).contains("error[JAVAN031]", "java/lang/Thread.join()V");
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stdout()).contains("warning[JAVAN178]");
+        assertThat(run.stdout()).contains("Thread.sleep(long)");
+        assertThat(Files.readString(project.resolve(".javan/reports/threads.json"))).contains(
+            "\"diagnostics\": 1",
+            "\"warnings\": 1",
+            "\"blocking\": 1",
+            "\"threadStartSites\": 0",
+            "\"threadStartMethods\": 0",
+            "\"lifecycleMethods\": 0",
+            "\"blockingMethods\": 1",
+            "\"synchronizationMethods\": 0",
+            "\"concurrencyRuntimeMethods\": 0",
+            "\"unknownBlockingMethods\": 0",
+            "\"unsupportedThreadTaskMethods\": 0",
+            "\"sleepWaits\": 1",
+            "\"joinWaits\": 0",
+            "\"blockingTaskMethods\": 1",
+            "\"ioSignalMethods\": 0",
+            "\"taskRoots\": 1",
+            "\"blockingRoots\": 1",
+            "\"methods\": [",
+            "\"roots\": [",
+            "\"method\": \"main([Ljava/lang/String;)V\"",
+            "\"lifecycleRisks\": 0",
+            "\"synchronizationRisks\": 0",
+            "\"concurrencyRuntimeRisks\": 0",
+            "\"classification\": \"BLOCKING_WAIT\"",
+            "\"rootKind\": \"BLOCKING_WAIT\"",
+            "\"code\": \"JAVAN178\"",
+            "\"subject\": \"Thread.sleep(long)\""
+        );
+        assertThat(Files.readString(project.resolve(".javan/reports/threads.md"))).contains(
+            "# Thread Analysis",
+            "## warning[JAVAN178] reachable blocking wait",
+            "- threadStartSites: `0`",
+            "- threadStartMethods: `0`",
+            "- lifecycleMethods: `0`",
+            "- blockingMethods: `1`",
+            "- synchronizationMethods: `0`",
+            "- concurrencyRuntimeMethods: `0`",
+            "- unknownBlockingMethods: `0`",
+            "- unsupportedThreadTaskMethods: `0`",
+            "- sleepWaits: `1`",
+            "- joinWaits: `0`",
+            "- blockingTaskMethods: `1`",
+            "- ioSignalMethods: `0`",
+            "- taskRoots: `1`",
+            "- blockingRoots: `1`",
+            "## Task Roots",
+            "`com/acme/Main#main([Ljava/lang/String;)V`: rootKind=`BLOCKING_WAIT`, classification=`BLOCKING_WAIT`, threadStartSites=`0`, blockingWaits=`1`, lifecycleRisks=`0`, synchronizationRisks=`0`, concurrencyRuntimeRisks=`0`, ioCallSites=`0`",
+            "## Reachable Thread Methods",
+            "`com/acme/Main#main([Ljava/lang/String;)V`: threadStartSites=`0`, lifecycleRisks=`0`, blockingWaits=`1`, synchronizationRisks=`0`, concurrencyRuntimeRisks=`0`, sleepWaits=`1`, joinWaits=`0`, estimatedInstructions=`3`, allocationSites=`0`, ioCallSites=`0`, hasLoop=`false`, classification=`BLOCKING_WAIT`",
+            "- category: `blocking`"
+        );
+    }
+
+    @Test
+    void checkAcceptsReachableEmptyThreadStartAndReportsThreadRuntimeModules() throws Exception {
+        final Path project = project("thread-start-runtime-modules");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Thread thread = new Thread();
+                    thread.start();
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stderr()).isEmpty();
+        assertThat(Files.readString(project.resolve(".javan/reports/runtime-features.json"))).contains(
+            "\"reachableRuntimeModules\": [\"core\", \"threads\"]",
+            "\"status\": \"pass\""
+        );
+    }
+
+    @Test
+    void checkAcceptsReachableEmptyThreadJoinAndReportsThreadRuntimeModules() throws Exception {
+        final Path project = project("thread-join-runtime-modules");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread thread = new Thread();
+                    thread.join();
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stderr()).isEmpty();
+        assertThat(Files.readString(project.resolve(".javan/reports/runtime-features.json"))).contains(
+            "\"reachableRuntimeModules\": [\"core\", \"threads\"]",
+            "\"status\": \"pass\""
+        );
+    }
+
+    @Test
+    void reachableThreadJoinWritesBlockingThreadWarning() throws Exception {
+        final Path project = project("thread-join-blocking-report");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread thread = new Thread();
+                    thread.join();
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stdout()).contains("warning[JAVAN178]");
+        assertThat(run.stdout()).contains("Thread.join()");
+        assertThat(Files.readString(project.resolve(".javan/reports/threads.json"))).contains(
+            "\"diagnostics\": 1",
+            "\"warnings\": 1",
+            "\"blocking\": 1",
+            "\"threadStartSites\": 0",
+            "\"threadStartMethods\": 0",
+            "\"lifecycleMethods\": 0",
+            "\"blockingMethods\": 1",
+            "\"synchronizationMethods\": 0",
+            "\"concurrencyRuntimeMethods\": 0",
+            "\"unknownBlockingMethods\": 0",
+            "\"unsupportedThreadTaskMethods\": 0",
+            "\"sleepWaits\": 0",
+            "\"joinWaits\": 1",
+            "\"blockingTaskMethods\": 1",
+            "\"ioSignalMethods\": 0",
+            "\"taskRoots\": 1",
+            "\"blockingRoots\": 1",
+            "\"methods\": [",
+            "\"roots\": [",
+            "\"method\": \"main([Ljava/lang/String;)V\"",
+            "\"lifecycleRisks\": 0",
+            "\"synchronizationRisks\": 0",
+            "\"concurrencyRuntimeRisks\": 0",
+            "\"classification\": \"BLOCKING_WAIT\"",
+            "\"rootKind\": \"BLOCKING_WAIT\"",
+            "\"code\": \"JAVAN178\"",
+            "\"subject\": \"Thread.join()\""
+        );
+        assertThat(Files.readString(project.resolve(".javan/reports/threads.md"))).contains(
+            "# Thread Analysis",
+            "## warning[JAVAN178] reachable blocking wait",
+            "- threadStartSites: `0`",
+            "- threadStartMethods: `0`",
+            "- lifecycleMethods: `0`",
+            "- blockingMethods: `1`",
+            "- synchronizationMethods: `0`",
+            "- concurrencyRuntimeMethods: `0`",
+            "- unknownBlockingMethods: `0`",
+            "- unsupportedThreadTaskMethods: `0`",
+            "- sleepWaits: `0`",
+            "- joinWaits: `1`",
+            "- blockingTaskMethods: `1`",
+            "- ioSignalMethods: `0`",
+            "- taskRoots: `1`",
+            "- blockingRoots: `1`",
+            "## Task Roots",
+            "`com/acme/Main#main([Ljava/lang/String;)V`: rootKind=`BLOCKING_WAIT`, classification=`BLOCKING_WAIT`, threadStartSites=`0`, blockingWaits=`1`, lifecycleRisks=`0`, synchronizationRisks=`0`, concurrencyRuntimeRisks=`0`, ioCallSites=`0`",
+            "## Reachable Thread Methods",
+            "`com/acme/Main#main([Ljava/lang/String;)V`: threadStartSites=`0`, lifecycleRisks=`0`, blockingWaits=`1`, synchronizationRisks=`0`, concurrencyRuntimeRisks=`0`, sleepWaits=`0`, joinWaits=`1`, estimatedInstructions=`7`, allocationSites=`1`, ioCallSites=`0`, hasLoop=`false`, classification=`BLOCKING_WAIT`",
+            "- category: `blocking`"
+        );
+    }
+
+    @Test
+    void reachableRunnableBlockingWaitCollapsesToSingleThreadRoot() throws Exception {
+        final Path project = project("thread-runnable-blocking-root-report");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Thread thread = new Thread(new Worker());
+                    thread.start();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Worker", """
+            package com.acme;
+
+            public final class Worker implements Runnable {
+                @Override
+                public void run() {
+                    try {
+                        Thread.sleep(1L);
+                    } catch (final InterruptedException exception) {
+                        return;
+                    }
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/reports/threads.json"))).contains(
+            "\"threadStartSites\": 1",
+            "\"blockingTaskMethods\": 1",
+            "\"taskRoots\": 1",
+            "\"threadStartRoots\": 1",
+            "\"blockingRoots\": 0",
+            "\"methods\": [",
+            "\"method\": \"main([Ljava/lang/String;)V\"",
+            "\"method\": \"run()V\"",
+            "\"rootKind\": \"THREAD_START\""
+        );
+        assertThat(Files.readString(project.resolve(".javan/reports/threads.md"))).contains(
+            "- taskRoots: `1`",
+            "- threadStartRoots: `1`",
+            "- blockingRoots: `0`",
+            "## Task Roots",
+            "`com/acme/Main#main([Ljava/lang/String;)V`: rootKind=`THREAD_START`",
+            "## Reachable Thread Methods",
+            "`com/acme/Worker#run()V`: threadStartSites=`0`, lifecycleRisks=`0`, blockingWaits=`1`"
+        );
+    }
+
+    @Test
+    void reachableThreadStartLoopClassifiesCpuBoundThreadMethod() throws Exception {
+        final Path project = project("thread-start-loop-cpu-bound-report");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    for (int index = 0; index < 2; index++) {
+                        final Thread thread = new Thread();
+                        thread.start();
+                    }
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/reports/threads.json"))).contains(
+            "\"threadStartSites\": 1",
+            "\"cpuBoundTaskMethods\": 1",
+            "\"ioSignalMethods\": 0",
+            "\"taskRoots\": 1",
+            "\"threadStartRoots\": 1",
+            "\"hasLoop\": true",
+            "\"rootKind\": \"THREAD_START\"",
+            "\"classification\": \"CPU_BOUND\""
+        );
+        assertThat(Files.readString(project.resolve(".javan/reports/threads.md"))).contains(
+            "- cpuBoundTaskMethods: `1`",
+            "- ioSignalMethods: `0`",
+            "- taskRoots: `1`",
+            "## Task Roots",
+            "rootKind=`THREAD_START`, classification=`CPU_BOUND`, threadStartSites=`1`, blockingWaits=`0`, lifecycleRisks=`0`, synchronizationRisks=`0`, concurrencyRuntimeRisks=`0`, ioCallSites=`0`",
+            "classification=`CPU_BOUND`"
+        );
+    }
+
+    @Test
+    void reachableThreadStartWithPrintlnRecordsIoSignal() throws Exception {
+        final Path project = project("thread-start-io-signal-report");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Thread thread = new Thread();
+                    thread.start();
+                    System.out.println("io");
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/reports/threads.json"))).contains(
+            "\"threadStartSites\": 1",
+            "\"ioBoundTaskMethods\": 1",
+            "\"mixedTaskMethods\": 0",
+            "\"ioSignalMethods\": 1",
+            "\"threadStartRoots\": 1",
+            "\"ioCallSites\": 1",
+            "\"classification\": \"IO_BOUND\""
+        );
+        assertThat(Files.readString(project.resolve(".javan/reports/threads.md"))).contains(
+            "- ioBoundTaskMethods: `1`",
+            "- mixedTaskMethods: `0`",
+            "- ioSignalMethods: `1`",
+            "rootKind=`THREAD_START`, classification=`IO_BOUND`, threadStartSites=`1`, blockingWaits=`0`, lifecycleRisks=`0`, synchronizationRisks=`0`, concurrencyRuntimeRisks=`0`, ioCallSites=`1`",
+            "ioCallSites=`1`, hasLoop=`false`, classification=`IO_BOUND`"
+        );
+    }
+
+    @Test
+    void nestedBlockingHelperDoesNotBecomeSeparateTaskRoot() throws Exception {
+        final Path project = project("thread-nested-blocking-root-report");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    outer();
+                }
+
+                private static void outer() throws Exception {
+                    Thread.sleep(1L);
+                    inner();
+                }
+
+                private static void inner() throws Exception {
+                    Thread.sleep(1L);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/reports/threads.json"))).contains(
+            "\"blockingMethods\": 2",
+            "\"sleepWaits\": 2",
+            "\"taskRoots\": 1",
+            "\"blockingRoots\": 1"
+        );
+        assertThat(Files.readString(project.resolve(".javan/reports/threads.md"))).contains(
+            "- blockingMethods: `2`",
+            "- sleepWaits: `2`",
+            "- taskRoots: `1`",
+            "## Task Roots",
+            "`com/acme/Main#outer()V`: rootKind=`BLOCKING_WAIT`, classification=`BLOCKING_WAIT`, threadStartSites=`0`, blockingWaits=`1`, lifecycleRisks=`0`, synchronizationRisks=`0`, concurrencyRuntimeRisks=`0`, ioCallSites=`0`",
+            "## Reachable Thread Methods",
+            "`com/acme/Main#inner()V`: threadStartSites=`0`, lifecycleRisks=`0`, blockingWaits=`1`, synchronizationRisks=`0`, concurrencyRuntimeRisks=`0`, sleepWaits=`1`, joinWaits=`0`, estimatedInstructions=`3`, allocationSites=`0`, ioCallSites=`0`, hasLoop=`false`, classification=`BLOCKING_WAIT`"
+        ).doesNotContain(
+            "`com/acme/Main#inner()V`: rootKind=`BLOCKING_WAIT`, classification=`BLOCKING_WAIT`, threadStartSites=`0`, blockingWaits=`1`, lifecycleRisks=`0`, synchronizationRisks=`0`, concurrencyRuntimeRisks=`0`, ioCallSites=`0`"
+        );
+    }
+
+    @Test
+    void spawnedRunnableBlockingTaskRemainsSeparateTaskRoot() throws Exception {
+        final Path project = project("thread-runnable-separate-root-report");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Thread thread = new Thread(new Task());
+                    thread.start();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    try {
+                        Thread.sleep(1L);
+                    } catch (final InterruptedException ignored) {
+                    }
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/reports/threads.json"))).contains(
+            "\"threadStartMethods\": 1",
+            "\"blockingMethods\": 1",
+            "\"taskRoots\": 1",
+            "\"threadStartRoots\": 1",
+            "\"blockingRoots\": 0"
+        );
+        assertThat(Files.readString(project.resolve(".javan/reports/threads.md"))).contains(
+            "- taskRoots: `1`",
+            "`com/acme/Main#main([Ljava/lang/String;)V`: rootKind=`THREAD_START`, classification=`UNKNOWN`, threadStartSites=`1`, blockingWaits=`0`, lifecycleRisks=`0`, synchronizationRisks=`0`, concurrencyRuntimeRisks=`0`, ioCallSites=`0`"
+        );
+    }
+
+    @Test
+    void checkWritesVirtualThreadStatusReports() throws Exception {
+        final Path project = project("virtual-thread-status-report");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("ok");
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/reports/virtual-threads.json"))).contains(
+            "\"status\": \"partial\"",
+            "\"runtimeSupported\": true",
+            "\"profilingCollected\": false",
+            "\"reachableApiScan\": \"reachable-method-scan\"",
+            "\"reachableVirtualStartSites\": 0",
+            "\"reachableVirtualStartMethods\": 0",
+            "\"reachableIsVirtualSites\": 0",
+            "\"unsupportedBuilderApis\": 0",
+            "\"unsupportedExecutorApis\": 0",
+            "\"reasonCount\": 3"
+        );
+        assertThat(Files.readString(project.resolve(".javan/reports/virtual-threads.md"))).contains(
+            "# Virtual Thread Analysis",
+            "- status: `partial`",
+            "- reachableVirtualStartSites: `0`",
+            "- diagnosticSource: `platform-thread-analysis-plus-virtual-builder-executor-park-slice`"
+        );
+    }
+
+    @Test
+    void checkAcceptsReachableThreadIsAliveAndReportsThreadRuntimeModules() throws Exception {
+        final Path project = project("thread-isalive-runtime-modules");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    Thread.currentThread().isAlive();
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stderr()).isEmpty();
+        assertThat(Files.readString(project.resolve(".javan/reports/runtime-features.json"))).contains(
+            "\"reachableRuntimeModules\": [\"core\", \"threads\"]",
+            "\"status\": \"pass\""
+        );
     }
 
     @Test
@@ -1453,6 +1973,167 @@ final class CliIntegrationTest {
             "\"disabledReachableRuntimeModules\": []",
             "\"disabledUnusedRuntimeModules\": [\"thread-profiling\"]",
             "\"status\": \"pass\""
+        );
+    }
+
+    @Test
+    void checkAndReportExposeReadyRuntimeProfilingWhenRequested() throws Exception {
+        final Path project = project("runtime-profiling-requested");
+        Files.writeString(project.resolve("javan.toml"), """
+            [runtime]
+            profiling = true
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("profile");
+                }
+            }
+            """);
+
+        final CliRun check = run(tempDir, "check", project.toString());
+        final CliRun report = run(tempDir, "report", project.toString());
+
+        assertThat(check.exitCode()).isZero();
+        assertThat(report.exitCode()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/reports/runtime-profiling.json"))).contains(
+            "\"status\": \"ready\"",
+            "\"requested\": true",
+            "\"enabled\": true",
+            "\"collectionState\": \"linked-not-run\""
+        );
+        assertThat(Files.readString(project.resolve(".javan/reports/report.md"))).contains(
+            "| `runtime-profiling` | present |",
+            "status: `ready`",
+            "requested: `true`",
+            "enabled: `true`",
+            "collectionState: `linked-not-run`"
+        );
+    }
+
+    @Test
+    void runCollectsRuntimeProfilingThreadCountersWhenRequested() throws Exception {
+        final Path project = project("runtime-profiling-run");
+        Files.writeString(project.resolve("javan.toml"), """
+            [runtime]
+            profiling = true
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread worker = Thread.startVirtualThread(new Task());
+                    worker.join();
+                    System.out.println("profiled");
+                }
+
+                private static final class Task implements Runnable {
+                    @Override
+                    public void run() {
+                        System.out.print("");
+                    }
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "run", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stdout()).contains("Built:", "profiled");
+        assertThat(Files.readString(project.resolve(".javan/reports/runtime-profiling.json"))).contains(
+            "\"status\": \"collected\"",
+            "\"requested\": true",
+            "\"enabled\": true",
+            "\"collectionState\": \"collected\"",
+            "\"platformThreadObjectsCreated\": 1",
+            "\"virtualThreadObjectsCreated\": 1",
+            "\"threadStartCalls\": 1",
+            "\"threadCompletions\": 1",
+            "\"threadJoinCalls\": 1"
+        );
+        assertThat(Files.readString(project.resolve(".javan/reports/runtime-profiling.md"))).contains(
+            "- status: `collected`",
+            "- platformThreadObjectsCreated: `1`",
+            "- virtualThreadObjectsCreated: `1`",
+            "- threadStartCalls: `1`",
+            "- threadJoinCalls: `1`"
+        );
+        assertThat(Files.readString(project.resolve(".javan/reports/report.md"))).contains(
+            "| `runtime-profiling` | present |",
+            "status: `collected`",
+            "platformThreadObjectsCreated: `1`",
+            "virtualThreadObjectsCreated: `1`"
+        );
+    }
+
+    @Test
+    void runKeepsRuntimeProfilingDisabledWhenThreadProfilingModuleIsBlocked() throws Exception {
+        final Path project = project("runtime-profiling-thread-module-blocked");
+        Files.writeString(project.resolve("javan.toml"), """
+            [runtime]
+            profiling = true
+            disabled = ["thread-profiling"]
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("blocked");
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "run", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/reports/runtime-profiling.json"))).contains(
+            "\"status\": \"disabled\"",
+            "\"collectionState\": \"disabled-by-module\"",
+            "\"disabledProfilingModules\": [\"thread-profiling\"]"
+        );
+    }
+
+    @Test
+    void runKeepsRuntimeProfilingDisabledWhenLiveProfilingModuleIsBlocked() throws Exception {
+        final Path project = project("runtime-profiling-live-module-blocked");
+        Files.writeString(project.resolve("javan.toml"), """
+            [runtime]
+            profiling = true
+            disabled = ["live-profiling"]
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("blocked");
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "run", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/reports/runtime-profiling.json"))).contains(
+            "\"status\": \"disabled\"",
+            "\"collectionState\": \"disabled-by-module\"",
+            "\"disabledProfilingModules\": [\"live-profiling\"]"
         );
     }
 
@@ -1643,7 +2324,12 @@ final class CliIntegrationTest {
             "\"localRootLiveness\": true",
             "\"localRootLivenessModel\": \"cfg-safe-point-dead-root-clearing\"",
             "\"rootModel\": \"generated-static-frame-return-and-expression-root-inventory-no-heap-scan\"",
-            "\"threads\": \"current-thread-interrupt-state-uninterrupted-sleep-and-thread-construction-only\"",
+            "\"threadRoots\": true",
+            "\"threadRootRegistry\": true",
+            "\"threadRootScope\": \"parallel-host-thread-bootstrap-live-thread-root-registry-current-thread-root-membership-and-thread-target-field-traversal\"",
+            "\"threadLifecycleInventory\": true",
+            "\"threadLifecycleInventoryScope\": \"heap-thread-object-thread-root-registry-started-completed-active-non-current-target-current-root-and-completed-target-release-counters\"",
+            "\"threads\": \"current-thread-interrupt-state-isalive-isvirtual-entry-interrupted-sleep-start-startvirtualthread-builderstart-builderunstarted-factory-executor-threadlocal-park-parknanos-parkuntil-unpark-parallel-host-thread-bootstrap-join-same-method-catch-thread-construction-duplicate-start-rejection-current-join-rejection-and-runnable-target-no-virtual-scheduler\"",
             "\"sanitizers\": \"not-enabled\""
         );
         final String footprint = Files.readString(project.resolve(".javan/reports/runtime-footprint.json"));
@@ -1662,7 +2348,21 @@ final class CliIntegrationTest {
             "{\"name\": \"runtime\", \"status\": \"present\"",
             "{\"name\": \"runtime-footprint\", \"status\": \"present\"",
             "\"artifactKind\": \"app\"",
-            "\"actualTarget\": \"" + RuntimeFootprintReports.hostTarget() + "\""
+            "\"actualTarget\": \"" + RuntimeFootprintReports.hostTarget() + "\"",
+            "\"threadRoots\": \"true\"",
+            "\"threadRootRegistry\": \"true\"",
+            "\"threadRootScope\": \"parallel-host-thread-bootstrap-live-thread-root-registry-current-thread-root-membership-and-thread-target-field-traversal\"",
+            "\"threadLifecycleInventory\": \"true\"",
+            "\"threadLifecycleInventoryScope\": \"heap-thread-object-thread-root-registry-started-completed-active-non-current-target-current-root-and-completed-target-release-counters\"",
+            "\"threads\": \"current-thread-interrupt-state-isalive-isvirtual-entry-interrupted-sleep-start-startvirtualthread-builderstart-builderunstarted-factory-executor-threadlocal-park-parknanos-parkuntil-unpark-parallel-host-thread-bootstrap-join-same-method-catch-thread-construction-duplicate-start-rejection-current-join-rejection-and-runnable-target-no-virtual-scheduler\""
+        );
+        assertThat(Files.readString(project.resolve(".javan/reports/report.md"))).contains(
+            "threadRoots: `true`",
+            "threadRootRegistry: `true`",
+            "threadRootScope: `parallel-host-thread-bootstrap-live-thread-root-registry-current-thread-root-membership-and-thread-target-field-traversal`",
+            "threadLifecycleInventory: `true`",
+            "threadLifecycleInventoryScope: `heap-thread-object-thread-root-registry-started-completed-active-non-current-target-current-root-and-completed-target-release-counters`",
+            "threads: `current-thread-interrupt-state-isalive-isvirtual-entry-interrupted-sleep-start-startvirtualthread-builderstart-builderunstarted-factory-executor-threadlocal-park-parknanos-parkuntil-unpark-parallel-host-thread-bootstrap-join-same-method-catch-thread-construction-duplicate-start-rejection-current-join-rejection-and-runnable-target-no-virtual-scheduler`"
         );
     }
 
@@ -1795,7 +2495,7 @@ final class CliIntegrationTest {
             "\"byteArrayOwnership\": \"input-copied-gc-managed-output-javan-owned-data-free-with-javan_free\"",
             "\"errorResultAbi\": \"abi-v2-c-owned-javanresult-try-wrappers-v1-direct-exports-compatible\"",
             "\"exceptionMapping\": \"caught-runtime-panic-to-last-error-limited-same-method-catch\"",
-            "\"threadRuntimeRules\": \"single-threaded-native-profile-no-thread-api-yet\"",
+            "\"threadRuntimeRules\": \"parallel-host-thread-bootstrap-current-thread-interrupt-isalive-sleep-start-join-runnable-target-plus-startvirtualthread-builderstart-builderunstarted-factory-executor-threadlocal-park-parknanos-parkuntil-unpark-and-isvirtual-no-virtual-scheduler\"",
             "\"generatedAbiTests\": \"c-header-compile-test\""
         );
         assertThat(project.resolve(".javan/reports/deduplication-plan.json")).exists();
@@ -7081,6 +7781,2187 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void threadIsAliveBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-isalive");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread current = Thread.currentThread();
+                    final Thread fresh = new Thread();
+                    final Thread started = new Thread(new Task("task"));
+                    System.out.println(current.isAlive());
+                    System.out.println(fresh.isAlive());
+                    System.out.println(started.isAlive());
+                    started.start();
+                    started.join();
+                    System.out.println(started.isAlive());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                private final String value;
+
+                public Task(final String value) {
+                    this.value = value;
+                }
+
+                @Override
+                public void run() {
+                    System.out.println(value);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-isalive").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void startedThreadCurrentThreadIdentityBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-current-identity");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Holder holder = new Holder();
+                    final Thread started = new Thread(new Task(holder));
+                    holder.value = started;
+                    started.start();
+                    started.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                private final Holder holder;
+
+                public Task(final Holder holder) {
+                    this.holder = holder;
+                }
+
+                @Override
+                public void run() {
+                    System.out.println(Thread.currentThread() == holder.value);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Holder", """
+            package com.acme;
+
+            final class Holder {
+                Thread value;
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-current-identity").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadStartReturnsBeforeJoinBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-start-before-join");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread started = new Thread(new Task());
+                    started.start();
+                    System.out.println(started.isAlive());
+                    started.join();
+                    System.out.println(started.isAlive());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    final long until = System.nanoTime() + 50_000_000L;
+                    while (System.nanoTime() < until) {
+                        // spin
+                    }
+                    System.out.println("worker");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-start-before-join").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void currentThreadSurvivesGcPressureBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("current-thread-root-gc-pressure");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Thread current = Thread.currentThread();
+                    for (int index = 0; index < 4_000; index++) {
+                        final String value = "v" + index;
+                        if (value.length() < 0) {
+                            throw new IllegalStateException(value);
+                        }
+                    }
+                    current.interrupt();
+                    System.out.println(current.isInterrupted());
+                    System.out.println(Thread.currentThread() == current);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(
+            project,
+            List.of(project.resolve(".javan/bin/current-thread-root-gc-pressure").toString()),
+            Duration.ofSeconds(10),
+            Map.of(
+                "JAVAN_HEAP_LIMIT_BYTES", "65536",
+                "JAVAN_GC_SAFEPOINT_INTERVAL", "1"
+            )
+        ).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void startVirtualThreadReturnedThreadIsVirtualBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-returned-isvirtual");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread worker = Thread.startVirtualThread(new Task());
+                    System.out.println(worker.isVirtual());
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println("worker");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-returned-isvirtual").toString())).stdout().lines().toList())
+            .containsExactlyInAnyOrderElementsOf(jvmOutput.lines().toList());
+    }
+
+    @Test
+    void startVirtualThreadCurrentThreadIsVirtualBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-current-isvirtual");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread worker = Thread.startVirtualThread(new Task());
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Thread.currentThread().isVirtual());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-current-isvirtual").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOfVirtualStartBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-start");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread worker = Thread.ofVirtual().start(new Task());
+                    System.out.println(worker.isVirtual());
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Thread.currentThread().isVirtual());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-start").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOfVirtualStartViaStaticBuilderHelperBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-start-static-helper");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                private static Thread.Builder.OfVirtual builder() {
+                    return Thread.ofVirtual();
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread worker = builder().start(new Task());
+                    System.out.println(worker.isVirtual());
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Thread.currentThread().isVirtual());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-start-static-helper").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOfVirtualStartViaParameterizedStaticBuilderHelperBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-start-parameterized-static-helper");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                private static Thread.Builder.OfVirtual builder(final String name) {
+                    return Thread.ofVirtual().name(name);
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread worker = builder("helper-worker").start(new Task());
+                    System.out.println(worker.getName());
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Thread.currentThread().getName());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-start-parameterized-static-helper").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOfVirtualBuilderAliasStartBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-alias-start");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final var builder = Thread.ofVirtual();
+                    final Thread worker = builder.start(new Task());
+                    System.out.println(worker.isVirtual());
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Thread.currentThread().isVirtual());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-alias-start").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOfVirtualTypedBuilderAliasStartBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-typed-alias-start");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread.Builder.OfVirtual builder = Thread.ofVirtual();
+                    final Thread worker = builder.start(new Task());
+                    System.out.println(worker.isVirtual());
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Thread.currentThread().isVirtual());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-typed-alias-start").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOfVirtualGenericBuilderAliasStartBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-generic-alias-start");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread.Builder builder = Thread.ofVirtual();
+                    final Thread worker = builder.start(new Task());
+                    System.out.println(worker.isVirtual());
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Thread.currentThread().isVirtual());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-generic-alias-start").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOfVirtualNameStartBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-name-start");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread worker = Thread.ofVirtual().name("x").start(new Task());
+                    System.out.println(worker.getName());
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Thread.currentThread().getName());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-name-start").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOfVirtualNameBuilderAliasStartBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-name-alias-start");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final var builder = Thread.ofVirtual().name("x");
+                    final Thread worker = builder.start(new Task());
+                    System.out.println(worker.getName());
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Thread.currentThread().getName());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-name-alias-start").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOfVirtualTypedNameBuilderAliasStartBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-typed-name-alias-start");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread.Builder.OfVirtual builder = Thread.ofVirtual().name("x");
+                    final Thread worker = builder.start(new Task());
+                    System.out.println(worker.getName());
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Thread.currentThread().getName());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-typed-name-alias-start").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOfVirtualGenericNamedBuilderAliasStartBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-generic-named-alias-start");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread.Builder builder = Thread.ofVirtual().name("x");
+                    final Thread worker = builder.start(new Task());
+                    System.out.println(worker.getName());
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Thread.currentThread().getName());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-generic-named-alias-start").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOfVirtualNameCounterGenericBuilderAliasReuseBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-name-counter-generic-alias-reuse");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread.Builder builder = Thread.ofVirtual().name("worker-", 7);
+                    final Thread first = builder.unstarted(new Task());
+                    System.out.println(first.getName());
+                    first.start();
+                    first.join();
+                    final Thread second = builder.start(new Task());
+                    System.out.println(second.getName());
+                    second.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Thread.currentThread().getName());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-name-counter-generic-alias-reuse").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOfVirtualNameCounterFactorySnapshotBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-name-counter-factory-snapshot");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.ThreadFactory;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Thread.Builder.OfVirtual builder = Thread.ofVirtual().name("snap-", 1);
+                    final ThreadFactory factory = builder.factory();
+                    final Thread.Builder.OfVirtual renamed = builder.name("changed");
+                    System.out.println(factory.newThread(new Task()).getName());
+                    System.out.println(renamed.unstarted(new Task()).getName());
+                    System.out.println(factory.newThread(new Task()).getName());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-name-counter-factory-snapshot").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOfVirtualDiscardedNameMutationBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-discarded-name-mutation");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread.Builder.OfVirtual builder = Thread.ofVirtual();
+                    builder.name("changed");
+                    final Thread worker = builder.start(new Task());
+                    System.out.println(worker.getName());
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-discarded-name-mutation").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOfVirtualDiscardedNameCounterMutationBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-discarded-name-counter-mutation");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Thread.Builder.OfVirtual builder = Thread.ofVirtual();
+                    builder.name("worker-", 2);
+                    System.out.println(builder.unstarted(new Task()).getName());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-discarded-name-counter-mutation").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOfVirtualFactorySnapshotAfterDiscardedRenameBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-factory-snapshot-discarded-rename");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.ThreadFactory;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Thread.Builder.OfVirtual builder = Thread.ofVirtual().name("snap-", 1);
+                    final ThreadFactory factory = builder.factory();
+                    builder.name("changed");
+                    System.out.println(factory.newThread(new Task()).getName());
+                    System.out.println(builder.unstarted(new Task()).getName());
+                    System.out.println(factory.newThread(new Task()).getName());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-factory-snapshot-discarded-rename").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOfVirtualNameAfterNameCounterBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-name-after-name-counter");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Thread.Builder.OfVirtual builder = Thread.ofVirtual().name("alpha-", 7).name("beta");
+                    System.out.println(builder.unstarted(new Task()).getName());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-name-after-name-counter").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOfVirtualNameCounterAfterNameBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-name-counter-after-name");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Thread.Builder.OfVirtual builder = Thread.ofVirtual().name("gamma").name("delta-", 5);
+                    System.out.println(builder.unstarted(new Task()).getName());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-name-counter-after-name").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOfVirtualUnstartedBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-unstarted");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread worker = Thread.ofVirtual().unstarted(new Task());
+                    System.out.println(worker.isVirtual());
+                    worker.start();
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Thread.currentThread().isVirtual());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-unstarted").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOfVirtualBuilderAliasUnstartedBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-alias-unstarted");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final var builder = Thread.ofVirtual();
+                    final Thread worker = builder.unstarted(new Task());
+                    System.out.println(worker.isVirtual());
+                    worker.start();
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Thread.currentThread().isVirtual());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-alias-unstarted").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOfVirtualGenericBuilderAliasUnstartedBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-generic-alias-unstarted");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread.Builder builder = Thread.ofVirtual();
+                    final Thread worker = builder.unstarted(new Task());
+                    System.out.println(worker.isVirtual());
+                    worker.start();
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Thread.currentThread().isVirtual());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-generic-alias-unstarted").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOfVirtualNameBuilderAliasUnstartedBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-name-alias-unstarted");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final var builder = Thread.ofVirtual().name("x");
+                    final Thread worker = builder.unstarted(new Task());
+                    System.out.println(worker.getName());
+                    worker.start();
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Thread.currentThread().getName());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-name-alias-unstarted").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOfVirtualFactoryNewThreadBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-factory-new-thread");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread worker = Thread.ofVirtual().factory().newThread(new Task());
+                    System.out.println(worker.isVirtual());
+                    worker.start();
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Thread.currentThread().isVirtual());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-factory-new-thread").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOfVirtualFactoryViaStaticHelperBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-factory-static-helper");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.ThreadFactory;
+
+            public final class Main {
+                private Main() {
+                }
+
+                private static ThreadFactory factory() {
+                    return Thread.ofVirtual().factory();
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread worker = factory().newThread(new Task());
+                    System.out.println(worker.isVirtual());
+                    worker.start();
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Thread.currentThread().isVirtual());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-factory-static-helper").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOfVirtualFactoryViaParameterizedStaticHelperBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-factory-parameterized-static-helper");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.ThreadFactory;
+
+            public final class Main {
+                private Main() {
+                }
+
+                private static ThreadFactory factory(final String prefix, final long start) {
+                    return Thread.ofVirtual().name(prefix, start).factory();
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread worker = factory("helper-", 3L).newThread(new Task());
+                    System.out.println(worker.getName());
+                    worker.start();
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Thread.currentThread().getName());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-factory-parameterized-static-helper").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOfVirtualStartWithPrebuiltRunnableAliasBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-start-prebuilt-runnable-alias");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Runnable task = new Task();
+                    final Thread worker = Thread.ofVirtual().start(task);
+                    System.out.println(worker.isVirtual());
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Thread.currentThread().isVirtual());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-start-prebuilt-runnable-alias").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOfVirtualUnstartedWithPrebuiltRunnableAliasBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-unstarted-prebuilt-runnable-alias");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Runnable task = new Task();
+                    final Thread worker = Thread.ofVirtual().unstarted(task);
+                    System.out.println(worker.isVirtual());
+                    worker.start();
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Thread.currentThread().isVirtual());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-unstarted-prebuilt-runnable-alias").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOfVirtualFactoryWithPrebuiltRunnableAliasBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-factory-prebuilt-runnable-alias");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Runnable task = new Task();
+                    final Thread worker = Thread.ofVirtual().factory().newThread(task);
+                    System.out.println(worker.isVirtual());
+                    worker.start();
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Thread.currentThread().isVirtual());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-factory-prebuilt-runnable-alias").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOfVirtualFactoryAliasNewThreadBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-factory-alias-new-thread");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.ThreadFactory;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ThreadFactory factory = Thread.ofVirtual().factory();
+                    final Thread worker = factory.newThread(new Task());
+                    System.out.println(worker.isVirtual());
+                    worker.start();
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Thread.currentThread().isVirtual());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-factory-alias-new-thread").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOfVirtualNamedFactoryNewThreadBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-named-factory-new-thread");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.ThreadFactory;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ThreadFactory factory = Thread.ofVirtual().name("x").factory();
+                    final Thread worker = factory.newThread(new Task());
+                    System.out.println(worker.getName());
+                    worker.start();
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Thread.currentThread().getName());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-named-factory-new-thread").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOfVirtualGenericBuilderFactoryNewThreadBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-generic-factory-new-thread");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.ThreadFactory;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread.Builder builder = Thread.ofVirtual();
+                    final ThreadFactory factory = builder.factory();
+                    final Thread worker = factory.newThread(new Task());
+                    System.out.println(worker.isVirtual());
+                    worker.start();
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Thread.currentThread().isVirtual());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-generic-factory-new-thread").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOfVirtualObjectAliasCheckcastStartBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-object-alias-checkcast-start");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Object raw = Thread.ofVirtual();
+                    final Thread worker = ((Thread.Builder.OfVirtual) raw).start(new Task());
+                    System.out.println(worker.isVirtual());
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Thread.currentThread().isVirtual());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-object-alias-checkcast-start").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOfVirtualFactoryObjectAliasCheckcastNewThreadBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-factory-object-alias-checkcast-new-thread");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.ThreadFactory;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Object raw = Thread.ofVirtual().factory();
+                    final Thread worker = ((ThreadFactory) raw).newThread(new Task());
+                    System.out.println(worker.isVirtual());
+                    worker.start();
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Thread.currentThread().isVirtual());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-factory-object-alias-checkcast-new-thread").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void virtualThreadExecutorFromObjectAliasCheckcastBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-executor-object-alias-checkcast");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.ExecutorService;
+            import java.util.concurrent.Executors;
+            import java.util.concurrent.ThreadFactory;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Object raw = Thread.ofVirtual().factory();
+                    final ExecutorService executor = Executors.newThreadPerTaskExecutor((ThreadFactory) raw);
+                    executor.execute(new Task());
+                    executor.close();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Thread.currentThread().isVirtual());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-executor-object-alias-checkcast").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void buildWritesVirtualThreadReachableCounts() throws Exception {
+        final Path project = project("virtual-thread-report-counts");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread worker = Thread.startVirtualThread(new Task());
+                    System.out.println(worker.isVirtual());
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println("worker");
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/reports/virtual-threads.json"))).contains(
+            "\"reachableApiScan\": \"reachable-method-scan\"",
+            "\"reachableVirtualStartSites\": 1",
+            "\"reachableVirtualStartMethods\": 1",
+            "\"reachableIsVirtualSites\": 1",
+            "\"unsupportedBuilderApis\": 0",
+            "\"unsupportedExecutorApis\": 0"
+        );
+        assertThat(Files.readString(project.resolve(".javan/reports/virtual-threads.md"))).contains(
+            "- reachableVirtualStartSites: `1`",
+            "- reachableVirtualStartMethods: `1`",
+            "- reachableIsVirtualSites: `1`"
+        );
+    }
+
+    @Test
+    void checkWritesVirtualThreadBuilderReachableCounts() throws Exception {
+        final Path project = project("virtual-thread-builder-report-counts");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread worker = Thread.ofVirtual().start(new Task());
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println("worker");
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/reports/virtual-threads.json"))).contains(
+            "\"reachableApiScan\": \"reachable-method-scan\"",
+            "\"reachableVirtualStartSites\": 1",
+            "\"reachableVirtualStartMethods\": 1",
+            "\"reachableIsVirtualSites\": 0",
+            "\"unsupportedBuilderApis\": 0",
+            "\"unsupportedExecutorApis\": 0"
+        );
+    }
+
+    @Test
+    void checkWritesVirtualThreadBuilderAliasReachableCounts() throws Exception {
+        final Path project = project("virtual-thread-builder-alias-report-counts");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final var builder = Thread.ofVirtual();
+                    final Thread worker = builder.start(new Task());
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println("worker");
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/reports/virtual-threads.json"))).contains(
+            "\"reachableApiScan\": \"reachable-method-scan\"",
+            "\"reachableVirtualStartSites\": 1",
+            "\"reachableVirtualStartMethods\": 1",
+            "\"reachableIsVirtualSites\": 0",
+            "\"unsupportedBuilderApis\": 0",
+            "\"unsupportedExecutorApis\": 0"
+        );
+    }
+
+    @Test
+    void checkWritesVirtualThreadNamedBuilderReachableCounts() throws Exception {
+        final Path project = project("virtual-thread-builder-name-report-counts");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread worker = Thread.ofVirtual().name("x").start(new Task());
+                    System.out.println(worker.getName());
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println("worker");
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/reports/virtual-threads.json"))).contains(
+            "\"reachableApiScan\": \"reachable-method-scan\"",
+            "\"reachableVirtualStartSites\": 1",
+            "\"reachableVirtualStartMethods\": 1",
+            "\"reachableIsVirtualSites\": 0",
+            "\"unsupportedBuilderApis\": 0",
+            "\"unsupportedBuilderApisReachable\": 0",
+            "\"unsupportedBuilderApisUnreachable\": 0",
+            "\"unsupportedExecutorApis\": 0",
+            "\"unsupportedExecutorApisReachable\": 0",
+            "\"unsupportedExecutorApisUnreachable\": 0"
+        );
+        assertThat(Files.readString(project.resolve(".javan/reports/virtual-threads.md"))).contains(
+            "- unsupportedBuilderApis: `0`",
+            "- unsupportedBuilderApisReachable: `0`",
+            "- unsupportedBuilderApisUnreachable: `0`",
+            "- unsupportedExecutorApis: `0`"
+        );
+    }
+
+    @Test
+    void discardedThreadOfVirtualFactoryWritesCleanBuilderApiCounts() throws Exception {
+        final Path project = project("virtual-thread-builder-factory-report-counts");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    Thread.ofVirtual().factory();
+                    System.out.println("ok");
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/reports/virtual-threads.json"))).contains(
+            "\"reachableApiScan\": \"reachable-method-scan\"",
+            "\"reachableVirtualStartSites\": 0",
+            "\"reachableVirtualStartMethods\": 0",
+            "\"unsupportedBuilderApis\": 0",
+            "\"unsupportedBuilderApisReachable\": 0",
+            "\"unsupportedBuilderApisUnreachable\": 0",
+            "\"unsupportedExecutorApis\": 0",
+            "\"unsupportedExecutorApisReachable\": 0",
+            "\"unsupportedExecutorApisUnreachable\": 0"
+        );
+        assertThat(Files.readString(project.resolve(".javan/reports/virtual-threads.md"))).contains(
+            "- unsupportedBuilderApis: `0`",
+            "- unsupportedBuilderApisReachable: `0`",
+            "- unsupportedBuilderApisUnreachable: `0`",
+            "- unsupportedExecutorApis: `0`"
+        );
+    }
+
+    @Test
+    void unreachableDiscardedThreadOfVirtualFactoryWritesCleanBuilderApiCounts() throws Exception {
+        final Path project = project("virtual-thread-builder-factory-unreachable-report-counts");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("ok");
+                }
+
+                public static void dead() {
+                    Thread.ofVirtual().factory();
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/reports/virtual-threads.json"))).contains(
+            "\"reachableApiScan\": \"reachable-method-scan\"",
+            "\"reachableVirtualStartSites\": 0",
+            "\"reachableVirtualStartMethods\": 0",
+            "\"unsupportedBuilderApis\": 0",
+            "\"unsupportedBuilderApisReachable\": 0",
+            "\"unsupportedBuilderApisUnreachable\": 0",
+            "\"unsupportedExecutorApis\": 0",
+            "\"unsupportedExecutorApisReachable\": 0",
+            "\"unsupportedExecutorApisUnreachable\": 0"
+        );
+        assertThat(Files.readString(project.resolve(".javan/reports/virtual-threads.md"))).contains(
+            "- unsupportedBuilderApis: `0`",
+            "- unsupportedBuilderApisReachable: `0`",
+            "- unsupportedBuilderApisUnreachable: `0`",
+            "- unsupportedExecutorApis: `0`"
+        );
+    }
+
+    @Test
+    void virtualThreadExecutorFactoryBuildsAndWritesCleanExecutorCounts() throws Exception {
+        final Path project = project("virtual-thread-executor-report-counts");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.Executors;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    Executors.newVirtualThreadPerTaskExecutor();
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/reports/virtual-threads.json"))).contains(
+            "\"reachableApiScan\": \"reachable-method-scan\"",
+            "\"reachableVirtualStartSites\": 0",
+            "\"reachableVirtualStartMethods\": 0",
+            "\"unsupportedBuilderApis\": 0",
+            "\"unsupportedBuilderApisReachable\": 0",
+            "\"unsupportedBuilderApisUnreachable\": 0",
+            "\"unsupportedExecutorApis\": 0",
+            "\"unsupportedExecutorApisReachable\": 0",
+            "\"unsupportedExecutorApisUnreachable\": 0"
+        );
+        assertThat(Files.readString(project.resolve(".javan/reports/virtual-threads.md"))).contains(
+            "- unsupportedBuilderApis: `0`",
+            "- unsupportedExecutorApis: `0`",
+            "- unsupportedExecutorApisReachable: `0`",
+            "- unsupportedExecutorApisUnreachable: `0`"
+        );
+    }
+
+    @Test
+    void unreachableVirtualThreadExecutorFactoryWritesCleanExecutorCounts() throws Exception {
+        final Path project = project("virtual-thread-executor-unreachable-report-counts");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.Executors;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("ok");
+                }
+
+                public static void dead() {
+                    Executors.newVirtualThreadPerTaskExecutor();
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/reports/virtual-threads.json"))).contains(
+            "\"reachableApiScan\": \"reachable-method-scan\"",
+            "\"reachableVirtualStartSites\": 0",
+            "\"reachableVirtualStartMethods\": 0",
+            "\"unsupportedBuilderApis\": 0",
+            "\"unsupportedBuilderApisReachable\": 0",
+            "\"unsupportedBuilderApisUnreachable\": 0",
+            "\"unsupportedExecutorApis\": 0",
+            "\"unsupportedExecutorApisReachable\": 0",
+            "\"unsupportedExecutorApisUnreachable\": 0"
+        );
+        assertThat(Files.readString(project.resolve(".javan/reports/virtual-threads.md"))).contains(
+            "- unsupportedBuilderApis: `0`",
+            "- unsupportedExecutorApis: `0`",
+            "- unsupportedExecutorApisReachable: `0`",
+            "- unsupportedExecutorApisUnreachable: `0`"
+        );
+    }
+
+    @Test
+    void virtualThreadPerTaskExecutorExecuteAndCloseBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-executor-execute-close");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.Executors;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final var executor = Executors.newVirtualThreadPerTaskExecutor();
+                    executor.execute(new Task());
+                    executor.close();
+                    System.out.println("done");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println("task");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-executor-execute-close").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadPerTaskExecutorWithVirtualFactoryBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-factory-executor-execute");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.Executors;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final var executor = Executors.newThreadPerTaskExecutor(Thread.ofVirtual().factory());
+                    executor.execute(new Task());
+                    executor.shutdown();
+                    System.out.println("done");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    final long end = System.nanoTime() + 25_000_000L;
+                    while (System.nanoTime() < end) {
+                        // keep the task alive long enough to make shutdown ordering deterministic
+                    }
+                    System.out.println("task");
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/virtual-thread-factory-executor-execute").toString()));
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stdout().lines().toList()).containsExactlyInAnyOrder("done", "task");
+    }
+
+    @Test
+    void discardedThreadOfVirtualBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-reject");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    Thread.ofVirtual();
+                    System.out.println("ok");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-reject").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOfVirtualBuilderAliasObjectPrintAndToStringBuildsWithStableShape() throws Exception {
+        final Path project = project("virtual-thread-builder-alias-object-print");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final var builder = Thread.ofVirtual();
+                    System.out.println(builder);
+                    System.out.println(builder.toString());
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final String[] lines = process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-alias-object-print").toString()))
+            .stdout()
+            .trim()
+            .split("\\R");
+        assertThat(lines).hasSize(2);
+        assertThat(lines[0]).startsWith("java.lang.ThreadBuilders$VirtualThreadBuilder@");
+        assertThat(lines[1]).startsWith("java.lang.ThreadBuilders$VirtualThreadBuilder@");
+    }
+
+    @Test
+    void threadOfVirtualNameBuilderEqualsAndHashCodeSemanticsMatchJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-name-alias-equals-hash");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final var builder = Thread.ofVirtual().name("x");
+                    System.out.println(builder.equals(builder));
+                    System.out.println(builder.equals(null));
+                    System.out.println(builder.hashCode() == builder.hashCode());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-name-alias-equals-hash").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void virtualThreadFactoryPrintAndToStringBuildsWithStableShape() throws Exception {
+        final Path project = project("virtual-thread-factory-print");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final var factory = Thread.ofVirtual().factory();
+                    System.out.println(factory);
+                    System.out.println(factory.toString());
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final String[] lines = process(project, List.of(project.resolve(".javan/bin/virtual-thread-factory-print").toString()))
+            .stdout()
+            .trim()
+            .split("\\R");
+        assertThat(lines).hasSize(2);
+        assertThat(lines[0]).startsWith("java.lang.ThreadBuilders$VirtualThreadFactory@");
+        assertThat(lines[1]).startsWith("java.lang.ThreadBuilders$VirtualThreadFactory@");
+    }
+
+    @Test
+    void virtualThreadFactoryEqualsAndHashCodeSemanticsMatchJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-factory-equals-hash");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final var factory = Thread.ofVirtual().factory();
+                    System.out.println(factory.equals(factory));
+                    System.out.println(factory.equals(null));
+                    System.out.println(factory.hashCode() == factory.hashCode());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-factory-equals-hash").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void virtualThreadExecutorPrintAndToStringBuildsWithStableShape() throws Exception {
+        final Path project = project("virtual-thread-executor-print");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.Executors;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final var executor = Executors.newVirtualThreadPerTaskExecutor();
+                    System.out.println(executor);
+                    System.out.println(executor.toString());
+                    executor.close();
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final String[] lines = process(project, List.of(project.resolve(".javan/bin/virtual-thread-executor-print").toString()))
+            .stdout()
+            .trim()
+            .split("\\R");
+        assertThat(lines).hasSize(2);
+        assertThat(lines[0]).startsWith("java.util.concurrent.ThreadPerTaskExecutor@");
+        assertThat(lines[1]).startsWith("java.util.concurrent.ThreadPerTaskExecutor@");
+    }
+
+    @Test
+    void virtualThreadExecutorEqualsAndHashCodeSemanticsMatchJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-executor-equals-hash");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.Executors;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final var executor = Executors.newVirtualThreadPerTaskExecutor();
+                    final var other = Executors.newVirtualThreadPerTaskExecutor();
+                    System.out.println(executor.equals(executor));
+                    System.out.println(executor.equals(other));
+                    System.out.println(executor.hashCode() == executor.hashCode());
+                    executor.close();
+                    other.close();
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-executor-equals-hash").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void virtualThreadBuilderGetClassStillFailsClearlyAtBuildTime() throws Exception {
+        final Path project = project("virtual-thread-builder-get-class-reject");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final var builder = Thread.ofVirtual();
+                    System.out.println(builder.getClass().getName());
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isNotZero();
+        assertThat(run.stderr()).contains("Thread.ofVirtual()");
+        assertThat(run.stderr()).contains("unsupported reachable concurrency runtime API");
+    }
+
+    @Test
+    void discardedThreadOfVirtualNameBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-name-discard");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    Thread.ofVirtual().name("x");
+                    System.out.println("ok");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-name-discard").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void discardedThreadOfVirtualFactoryBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-name-reject");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    Thread.ofVirtual().factory();
+                    System.out.println("ok");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-name-reject").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void threadSleepUninterruptedBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("thread-sleep-uninterrupted");
         writeJava(project, "com.acme.Main", """
@@ -7104,6 +9985,89 @@ final class CliIntegrationTest {
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/thread-sleep-uninterrupted").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadSleepInterruptedBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-sleep-interrupted");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    Thread.currentThread().interrupt();
+                    try {
+                        Thread.sleep(25L);
+                        System.out.println("ok");
+                    } catch (final InterruptedException interrupted) {
+                        System.out.println(interrupted.getMessage() == null);
+                        System.out.println(Thread.currentThread().isInterrupted());
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-sleep-interrupted").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadSleepInterruptedByWorkerBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-sleep-runtime-interrupted");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread current = Thread.currentThread();
+                    final Thread interrupter = new Thread(new InterruptTask(current));
+                    interrupter.start();
+                    try {
+                        Thread.sleep(500L);
+                        System.out.println("ok");
+                    } catch (final InterruptedException interrupted) {
+                        System.out.println(interrupted.getMessage() == null);
+                        System.out.println(Thread.currentThread().isInterrupted());
+                    }
+                    interrupter.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.InterruptTask", """
+            package com.acme;
+
+            public final class InterruptTask implements Runnable {
+                private final Thread target;
+
+                public InterruptTask(final Thread target) {
+                    this.target = target;
+                }
+
+                @Override
+                public void run() {
+                    final long until = System.nanoTime() + 25_000_000L;
+                    while (System.nanoTime() < until) {
+                        // spin
+                    }
+                    target.interrupt();
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-sleep-runtime-interrupted").toString())).stdout()).isEqualTo(jvmOutput);
     }
 
     @Test
@@ -7142,6 +10106,976 @@ final class CliIntegrationTest {
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/thread-construction").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadSubclassAllocationFailsClearlyAtBuildTime() throws Exception {
+        final Path project = project("thread-subclass-allocation");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread thread = new WorkerThread();
+                    thread.start();
+                    thread.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.WorkerThread", """
+            package com.acme;
+
+            public final class WorkerThread extends Thread {
+                @Override
+                public void run() {
+                    System.out.println("task");
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isNotZero();
+        assertThat(run.stderr()).contains("JAVAN074");
+        assertThat(run.stderr()).contains("Thread subclass allocation is not supported");
+    }
+
+    @Test
+    void currentThreadStartFailsClearlyAtBuildTime() throws Exception {
+        final Path project = project("thread-current-start");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    Thread.currentThread().start();
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isNotZero();
+        assertThat(run.stderr()).contains("JAVAN075");
+        assertThat(run.stderr()).contains("Thread.currentThread().start()");
+    }
+
+    @Test
+    void aliasedCurrentThreadStartFailsClearlyAtBuildTime() throws Exception {
+        final Path project = project("thread-current-start-alias");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Thread current = Thread.currentThread();
+                    current.start();
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isNotZero();
+        assertThat(run.stderr()).contains("JAVAN075");
+        assertThat(run.stderr()).contains("Thread.currentThread() alias on local");
+    }
+
+    @Test
+    void currentThreadJoinFailsClearlyAtBuildTime() throws Exception {
+        final Path project = project("thread-current-join");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    Thread.currentThread().join();
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isNotZero();
+        assertThat(run.stderr()).contains("JAVAN075");
+        assertThat(run.stderr()).contains("Thread.currentThread().join()");
+    }
+
+    @Test
+    void aliasedCurrentThreadJoinFailsClearlyAtBuildTime() throws Exception {
+        final Path project = project("thread-current-join-alias");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread current = Thread.currentThread();
+                    current.join();
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isNotZero();
+        assertThat(run.stderr()).contains("JAVAN075");
+        assertThat(run.stderr()).contains("Thread.currentThread() alias on local");
+    }
+
+    @Test
+    void duplicateThreadStartOnSameLocalFailsClearlyAtBuildTime() throws Exception {
+        final Path project = project("thread-duplicate-start");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Thread thread = new Thread();
+                    thread.start();
+                    thread.start();
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isNotZero();
+        assertThat(run.stderr()).contains("JAVAN075");
+        assertThat(run.stderr()).contains("duplicate Thread.start() on local");
+    }
+
+    @Test
+    void synchronizedMainFailsClearlyAtBuildTime() throws Exception {
+        final Path project = project("thread-synchronized-main");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static synchronized void main(final String[] args) {
+                    System.out.println("sync");
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isNotZero();
+        assertThat(run.stderr()).contains("JAVAN076");
+        assertThat(run.stderr()).contains("synchronized method");
+    }
+
+    @Test
+    void unreachableSynchronizedMethodWarnsClearly() throws Exception {
+        final Path project = project("thread-synchronized-unreachable");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("ok");
+                }
+
+                public static synchronized void dead() {
+                    System.out.println("sync");
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stdout()).contains("warning[JAVAN176]");
+        assertThat(run.stdout()).contains("synchronized method");
+    }
+
+    @Test
+    void synchronizedBlockFailsClearlyAtBuildTime() throws Exception {
+        final Path project = project("thread-synchronized-block");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    synchronized (Main.class) {
+                        System.out.println("sync");
+                    }
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isNotZero();
+        assertThat(run.stderr()).contains("JAVAN076");
+        assertThat(run.stderr()).contains("synchronized block");
+        assertThat(run.stderr()).doesNotContain("JAVAN014", "JAVAN030");
+    }
+
+    @Test
+    void unreachableSynchronizedBlockWarnsClearly() throws Exception {
+        final Path project = project("thread-synchronized-block-unreachable");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("ok");
+                }
+
+                public static void dead() {
+                    synchronized (Main.class) {
+                        System.out.println("sync");
+                    }
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stdout()).contains("warning[JAVAN176]");
+        assertThat(run.stdout()).contains("synchronized block");
+        assertThat(run.stdout()).doesNotContain("warning[JAVAN114]", "warning[JAVAN130]");
+    }
+
+    @Test
+    void synchronizedBlockDoesNotHideUnrelatedCatchFailure() throws Exception {
+        final Path project = project("thread-synchronized-block-catch");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    try {
+                        synchronized (Main.class) {
+                            System.out.println("sync");
+                        }
+                    } catch (RuntimeException exception) {
+                        System.out.println(exception.getMessage());
+                    }
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isNotZero();
+        assertThat(run.stderr()).contains("JAVAN076");
+        assertThat(run.stderr()).contains("synchronized block");
+        assertThat(Files.readString(project.resolve(".javan/reports/diagnostics.json"))).contains("JAVAN014");
+    }
+
+    @Test
+    void objectWaitFailsClearlyAtBuildTime() throws Exception {
+        final Path project = project("thread-object-wait");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    new Object().wait();
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isNotZero();
+        assertThat(run.stderr()).contains("JAVAN076");
+        assertThat(run.stderr()).contains("Object.wait()");
+        assertThat(run.stderr()).doesNotContain("JAVAN031");
+    }
+
+    @Test
+    void objectWaitWithInterruptedCatchFailsClearlyAtBuildTime() throws Exception {
+        final Path project = project("thread-object-wait-catch");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Object lock = new Object();
+                    try {
+                        lock.wait();
+                    } catch (InterruptedException exception) {
+                        System.out.println(exception.getMessage());
+                    }
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isNotZero();
+        assertThat(run.stderr()).contains("JAVAN076");
+        assertThat(run.stderr()).contains("Object.wait()");
+        assertThat(run.stderr()).doesNotContain("JAVAN014", "JAVAN031");
+    }
+
+    @Test
+    void objectNotifyFailsClearlyAtBuildTime() throws Exception {
+        final Path project = project("thread-object-notify");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    new Object().notify();
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isNotZero();
+        assertThat(run.stderr()).contains("JAVAN076");
+        assertThat(run.stderr()).contains("Object.notify()");
+        assertThat(run.stderr()).doesNotContain("JAVAN031");
+    }
+
+    @Test
+    void unreachableNotifyAllWarnsClearly() throws Exception {
+        final Path project = project("thread-object-notify-all-unreachable");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("ok");
+                }
+
+                public static void dead() {
+                    new Object().notifyAll();
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stdout()).contains("warning[JAVAN176]");
+        assertThat(run.stdout()).contains("Object.notifyAll()");
+        assertThat(run.stdout()).doesNotContain("warning[JAVAN131]");
+    }
+
+    @Test
+    void executorsFactoryFailsClearlyAtBuildTime() throws Exception {
+        final Path project = project("thread-executors-factory");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.Executors;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    Executors.newSingleThreadExecutor();
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isNotZero();
+        assertThat(run.stderr()).contains("JAVAN077");
+        assertThat(run.stderr()).contains("Executors.newSingleThreadExecutor()");
+        assertThat(run.stderr()).doesNotContain("JAVAN031");
+    }
+
+    @Test
+    void threadLocalSetThenGetBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-threadlocal-set-get");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final ThreadLocal<String> local = new ThreadLocal<>();
+                    local.set("main");
+                    System.out.println(local.get());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-threadlocal-set-get").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadLocalRemoveBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-threadlocal-remove");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final ThreadLocal<String> local = new ThreadLocal<>();
+                    local.set("main");
+                    local.remove();
+                    System.out.println(local.get() == null);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-threadlocal-remove").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadLocalStateIsIsolatedAcrossStartedThreadBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-threadlocal-started-thread-isolation");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ThreadLocal<String> local = new ThreadLocal<>();
+                    local.set("main");
+                    final Thread worker = new Thread(new Task(local));
+                    worker.start();
+                    worker.join();
+                    System.out.println(local.get());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                private final ThreadLocal<String> local;
+
+                public Task(final ThreadLocal<String> local) {
+                    this.local = local;
+                }
+
+                @Override
+                public void run() {
+                    System.out.println(local.get() == null);
+                    local.set("worker");
+                    System.out.println(local.get());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-threadlocal-started-thread-isolation").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadLocalBuildWritesCleanThreadAndUnifiedReports() throws Exception {
+        final Path project = project("thread-threadlocal-clean-report");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final ThreadLocal<String> local = new ThreadLocal<>();
+                    local.set("main");
+                    System.out.println(local.get());
+                }
+            }
+            """);
+
+        final CliRun build = run(tempDir, "build", project.toString());
+        final CliRun report = run(tempDir, "report", project.toString());
+
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        assertThat(report.exitCode()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/reports/threads.json"))).contains(
+            "\"diagnostics\": 0",
+            "\"errors\": 0"
+        ).doesNotContain(
+            "ThreadLocal.<init>()",
+            "\"code\": \"JAVAN077\""
+        );
+        assertThat(Files.readString(project.resolve(".javan/reports/report.json"))).contains(
+            "{\"name\": \"threads\", \"status\": \"present\"",
+            "\"diagnostics\": 0",
+            "\"errors\": 0"
+        );
+    }
+
+    @Test
+    void virtualThreadLockSupportParkUnparkBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-virtual-locksupport-park-unpark");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.locks.LockSupport;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread worker = Thread.startVirtualThread(new Task());
+                    LockSupport.unpark(worker);
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            import java.util.concurrent.locks.LockSupport;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println("ready");
+                    LockSupport.park();
+                    System.out.println("done");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-virtual-locksupport-park-unpark").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void virtualThreadLockSupportParkNanosBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-virtual-locksupport-park-nanos");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.locks.LockSupport;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread worker = Thread.startVirtualThread(new Task());
+                    LockSupport.unpark(worker);
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            import java.util.concurrent.locks.LockSupport;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println("ready");
+                    LockSupport.parkNanos(1_000_000L);
+                    System.out.println("done");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-virtual-locksupport-park-nanos").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void currentThreadLockSupportParkUntilPastDeadlineBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-current-locksupport-park-until");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.locks.LockSupport;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    LockSupport.parkUntil(System.currentTimeMillis() - 1L);
+                    System.out.println("done");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-current-locksupport-park-until").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void unreachableExecutorsFactoryWarnsClearly() throws Exception {
+        final Path project = project("thread-executors-unreachable");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.Executors;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("ok");
+                }
+
+                public static void dead() {
+                    Executors.newCachedThreadPool();
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stdout()).contains("warning[JAVAN177]");
+        assertThat(run.stdout()).contains("Executors.newCachedThreadPool()");
+        assertThat(run.stdout()).doesNotContain("warning[JAVAN131]");
+    }
+
+    @Test
+    void branchExclusiveThreadStartOnSameLocalBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-branch-exclusive-start");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread thread = new Thread();
+                    if (args.length == 0) {
+                        thread.start();
+                    } else {
+                        thread.start();
+                    }
+                    thread.join();
+                    System.out.println("done");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-branch-exclusive-start").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void emptyThreadStartBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-start-empty");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Thread thread = new Thread();
+                    thread.start();
+                    System.out.println("done");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-start-empty").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void emptyThreadJoinBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-join-empty");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread thread = new Thread();
+                    thread.start();
+                    thread.join();
+                    System.out.println("done");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-join-empty").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadJoinInterruptedBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-join-interrupted");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread thread = new Thread();
+                    thread.start();
+                    Thread.currentThread().interrupt();
+                    try {
+                        thread.join();
+                        System.out.println("ok");
+                    } catch (final InterruptedException interrupted) {
+                        System.out.println(interrupted.getMessage() == null);
+                        System.out.println(Thread.currentThread().isInterrupted());
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-join-interrupted").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadJoinInterruptedByWorkerBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-join-runtime-interrupted");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread current = Thread.currentThread();
+                    final Thread worker = new Thread(new SlowTask());
+                    final Thread interrupter = new Thread(new InterruptTask(current));
+                    worker.start();
+                    interrupter.start();
+                    try {
+                        worker.join();
+                        System.out.println("ok");
+                    } catch (final InterruptedException interrupted) {
+                        System.out.println(interrupted.getMessage() == null);
+                        System.out.println(Thread.currentThread().isInterrupted());
+                    }
+                    worker.join();
+                    interrupter.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.SlowTask", """
+            package com.acme;
+
+            public final class SlowTask implements Runnable {
+                @Override
+                public void run() {
+                    final long until = System.nanoTime() + 150_000_000L;
+                    while (System.nanoTime() < until) {
+                        // spin
+                    }
+                }
+            }
+            """);
+        writeJava(project, "com.acme.InterruptTask", """
+            package com.acme;
+
+            public final class InterruptTask implements Runnable {
+                private final Thread target;
+
+                public InterruptTask(final Thread target) {
+                    this.target = target;
+                }
+
+                @Override
+                public void run() {
+                    final long until = System.nanoTime() + 25_000_000L;
+                    while (System.nanoTime() < until) {
+                        // spin
+                    }
+                    target.interrupt();
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-join-runtime-interrupted").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void runnableTargetThreadStartJoinBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-start-runnable-target");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread thread = new Thread(new Task());
+                    thread.start();
+                    thread.join();
+                    System.out.println("done");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println("task");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-start-runnable-target").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void runnableThreadTargetSurvivesGcPressureBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-runnable-target-root-gc-pressure");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread thread = new Thread(new Task("task"));
+                    thread.start();
+                    thread.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                private final String message;
+
+                public Task(final String message) {
+                    this.message = message;
+                }
+
+                @Override
+                public void run() {
+                    for (int index = 0; index < 4_000; index++) {
+                        final String value = message + index;
+                        if (value.length() < 0) {
+                            throw new IllegalStateException(value);
+                        }
+                    }
+                    System.out.println(message);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(
+            project,
+            List.of(project.resolve(".javan/bin/thread-runnable-target-root-gc-pressure").toString()),
+            Duration.ofSeconds(10),
+            Map.of(
+                "JAVAN_HEAP_LIMIT_BYTES", "65536",
+                "JAVAN_GC_SAFEPOINT_INTERVAL", "1"
+            )
+        ).stdout()).isEqualTo(jvmOutput);
     }
 
     @Test
@@ -9280,9 +13214,15 @@ final class CliIntegrationTest {
     }
 
     private static ProcessResult process(final Path cwd, final List<String> command, final Duration timeout) {
+        return process(cwd, command, timeout, Map.of());
+    }
+
+    private static ProcessResult process(final Path cwd, final List<String> command, final Duration timeout, final Map<String, String> environment) {
         try {
             final List<String> actualCommand = childCoverageCommand(command);
-            final Process process = new ProcessBuilder(actualCommand).directory(cwd.toFile()).start();
+            final ProcessBuilder builder = new ProcessBuilder(actualCommand).directory(cwd.toFile());
+            builder.environment().putAll(environment);
+            final Process process = builder.start();
             final CompletableFuture<String> stdout = CompletableFuture.supplyAsync(() -> readStream(process.getInputStream()));
             final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
             if (!process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {

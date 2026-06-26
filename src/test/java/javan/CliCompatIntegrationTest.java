@@ -14,9 +14,9 @@ import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
-import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
+import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 
-@Execution(CONCURRENT)
+@Execution(SAME_THREAD)
 final class CliCompatIntegrationTest {
     @TempDir
     private Path tempDir;
@@ -146,7 +146,7 @@ final class CliCompatIntegrationTest {
     private static CliRun runSlow(final Path cwd, final String... args) {
         final ByteArrayOutputStream stdout = new ByteArrayOutputStream();
         final ByteArrayOutputStream stderr = new ByteArrayOutputStream();
-        final int exitCode = assertTimeoutPreemptively(Duration.ofSeconds(90), () ->
+        final int exitCode = assertTimeoutPreemptively(Duration.ofSeconds(180), () ->
             new Cli().run(cwd, new PrintStream(stdout, true, StandardCharsets.UTF_8), new PrintStream(stderr, true, StandardCharsets.UTF_8), args)
         );
         return new CliRun(

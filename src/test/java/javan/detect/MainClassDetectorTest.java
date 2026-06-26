@@ -50,6 +50,34 @@ final class MainClassDetectorTest {
     }
 
     @Test
+    void findRejectsExplicitMainWithoutPublicFlag() {
+        final MainClassDetector.MainClassDetection detection = new MainClassDetector().find(Optional.of("com.acme.Main"), Map.of(
+            "com/acme/Main",
+            classFile("com/acme/Main", true, method("main", "([Ljava/lang/String;)V", 0x0008))
+        ));
+
+        assertThat(detection.pass()).isFalse();
+        assertThat(detection.diagnostics()).singleElement().satisfies(diagnostic -> {
+            assertThat(diagnostic.code()).isEqualTo("JAVAN021");
+            assertThat(diagnostic.subject()).isEqualTo("com/acme/Main");
+        });
+    }
+
+    @Test
+    void findRejectsExplicitMainWithoutStaticFlag() {
+        final MainClassDetector.MainClassDetection detection = new MainClassDetector().find(Optional.of("com.acme.Main"), Map.of(
+            "com/acme/Main",
+            classFile("com/acme/Main", true, method("main", "([Ljava/lang/String;)V", 0x0001))
+        ));
+
+        assertThat(detection.pass()).isFalse();
+        assertThat(detection.diagnostics()).singleElement().satisfies(diagnostic -> {
+            assertThat(diagnostic.code()).isEqualTo("JAVAN021");
+            assertThat(diagnostic.subject()).isEqualTo("com/acme/Main");
+        });
+    }
+
+    @Test
     void findRejectsWhenNoApplicationMainClassExists() {
         final MainClassDetector.MainClassDetection detection = new MainClassDetector().find(Optional.empty(), Map.of(
             "com/acme/Library",

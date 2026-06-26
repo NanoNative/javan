@@ -12,6 +12,7 @@ import java.util.Optional;
  */
 public record MethodInfo(int accessFlags, String name, String descriptor, Optional<CodeAttribute> code) {
     private static final int ACC_PUBLIC = 0x0001;
+    private static final int ACC_SYNCHRONIZED = 0x0020;
     private static final int ACC_STATIC = 0x0008;
     private static final int ACC_NATIVE = 0x0100;
 
@@ -55,6 +56,18 @@ public record MethodInfo(int accessFlags, String name, String descriptor, Option
      */
     public boolean isNative() {
         if ((accessFlags & ACC_NATIVE) == 0) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Returns true when the method is synchronized.
+     *
+     * @return true when synchronized
+     */
+    public boolean isSynchronized() {
+        if ((accessFlags & ACC_SYNCHRONIZED) == 0) {
             return false;
         }
         return true;
