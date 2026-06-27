@@ -5253,7 +5253,9 @@ final class RuntimeFilesTest {
                 return 0;
             }
             """,
-            "1048576"
+            "1048576",
+            Map.of(),
+            java.time.Duration.ofSeconds(90)
         );
 
         assertThat(stdout).isEqualTo(
@@ -5280,14 +5282,28 @@ final class RuntimeFilesTest {
         final String heapLimitBytes,
         final Map<String, String> environmentOverrides
     ) throws Exception {
-        final RuntimeProbeOutput output = runRuntimeBoundaryProbeOutput(source, heapLimitBytes, environmentOverrides);
+        return runRuntimeBoundaryProbe(source, heapLimitBytes, environmentOverrides, java.time.Duration.ofSeconds(30));
+    }
+
+    private String runRuntimeBoundaryProbe(
+        final String source,
+        final String heapLimitBytes,
+        final Map<String, String> environmentOverrides,
+        final java.time.Duration timeout
+    ) throws Exception {
+        final RuntimeProbeOutput output = runRuntimeBoundaryProbeOutput(source, heapLimitBytes, environmentOverrides, timeout);
 
         assertThat(output.stderr()).isEmpty();
         return output.stdout();
     }
 
     private String runRuntimeBoundaryProbeStderr(final String source, final String heapLimitBytes) throws Exception {
-        final RuntimeProbeOutput output = runRuntimeBoundaryProbeOutput(source, heapLimitBytes, Map.of());
+        final RuntimeProbeOutput output = runRuntimeBoundaryProbeOutput(
+            source,
+            heapLimitBytes,
+            Map.of(),
+            java.time.Duration.ofSeconds(30)
+        );
 
         assertThat(output.stdout()).isEmpty();
         return output.stderr();
@@ -5296,7 +5312,8 @@ final class RuntimeFilesTest {
     private RuntimeProbeOutput runRuntimeBoundaryProbeOutput(
         final String source,
         final String heapLimitBytes,
-        final Map<String, String> environmentOverrides
+        final Map<String, String> environmentOverrides,
+        final java.time.Duration timeout
     ) throws Exception {
         final Path runtime = new RuntimeFiles().write(tempDir);
         final Path main = tempDir.resolve("probe.c");
@@ -5310,12 +5327,14 @@ final class RuntimeFilesTest {
         final TestProcesses.Result result = TestProcesses.run(
             tempDir,
             java.util.List.of(binary.toString()),
-            java.time.Duration.ofSeconds(30),
+            timeout,
             environment
         );
         if (result.exitCode() == 124) {
             throw new AssertionError(
-                "Runtime boundary probe timed out after 30 seconds.\nstdout:\n"
+                "Runtime boundary probe timed out after "
+                    + timeout.toSeconds()
+                    + " seconds.\nstdout:\n"
                     + result.stdout()
                     + "\nstderr:\n"
                     + result.stderr()

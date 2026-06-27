@@ -688,7 +688,16 @@ final class RuntimeSourceCoreSection {
         }
 
         long long javan_system_nano_time(void) {
-        #if defined(CLOCK_MONOTONIC)
+        #if defined(_WIN32)
+            LARGE_INTEGER frequency;
+            LARGE_INTEGER counter;
+            if (QueryPerformanceFrequency(&frequency) != 0
+                && frequency.QuadPart > 0
+                && QueryPerformanceCounter(&counter) != 0) {
+                return (long long) ((((long double) counter.QuadPart) * 1000000000.0L) / (long double) frequency.QuadPart);
+            }
+            return (long long) GetTickCount64() * 1000000LL;
+        #elif defined(CLOCK_MONOTONIC)
             struct timespec now;
             if (clock_gettime(CLOCK_MONOTONIC, &now) == 0) {
                 return ((long long) now.tv_sec * 1000000000LL) + (long long) now.tv_nsec;

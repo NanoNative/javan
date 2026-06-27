@@ -307,9 +307,16 @@ public final class ToolchainManager {
 
         @Override
         public ToolStatus find(final String executable) {
-            return resolveExecutableOnPath(path, executable, System.getenv("PATHEXT"), System.getProperty("os.name", ""))
-                .map(path -> new ToolStatus(executable, Optional.of(path)))
-                .orElseGet(() -> new ToolStatus(executable));
+            final Optional<Path> resolved = resolveExecutableOnPath(
+                path,
+                executable,
+                System.getenv("PATHEXT"),
+                System.getProperty("os.name", "")
+            );
+            if (resolved.isPresent()) {
+                return new ToolStatus(executable, resolved);
+            }
+            return new ToolStatus(executable);
         }
 
         private static Optional<Path> resolveExecutableOnPath(
@@ -339,12 +346,19 @@ public final class ToolchainManager {
                 return Optional.empty();
             }
             for (final String extension : windowsExecutableExtensions(pathExt)) {
-                final Path extended = Path.of(candidate.toString() + extension);
+                final Path extended = appendExtension(candidate, extension);
                 if (Files.isExecutable(extended)) {
                     return Optional.of(extended);
                 }
             }
             return Optional.empty();
+        }
+
+        private static Path appendExtension(final Path candidate, final String extension) {
+            final StringBuilder value = new StringBuilder();
+            value.append(candidate);
+            value.append(extension);
+            return Path.of(value.toString());
         }
 
         private List<Path> pathEntries() {
@@ -401,9 +415,9 @@ public final class ToolchainManager {
             int start = 0;
             for (int index = 0; index <= pathExt.length(); index++) {
                 if (index == pathExt.length() || pathExt.charAt(index) == ';') {
-                    final String extension = Strings2.slice(pathExt, start, index).trim();
+                    final String extension = Strings2.toAsciiLowerCase(Strings2.slice(pathExt, start, index).trim());
                     if (!Strings2.isBlank(extension)) {
-                        result.add(extension.startsWith(".") ? extension : "." + extension);
+                        result.add(dotPrefixedExtension(extension));
                     }
                     start = index + 1;
                 }
@@ -412,6 +426,16 @@ public final class ToolchainManager {
                 return List.of(".exe", ".cmd", ".bat", ".com");
             }
             return List.copyOf(result);
+        }
+
+        private static String dotPrefixedExtension(final String extension) {
+            if (extension.startsWith(".")) {
+                return extension;
+            }
+            final StringBuilder value = new StringBuilder();
+            value.append('.');
+            value.append(extension);
+            return value.toString();
         }
     }
 }

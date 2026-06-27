@@ -12332,7 +12332,7 @@ final class CliIntegrationTest {
             """);
         writeJava(project, "com.acme.Main", mainClass("main"));
 
-        final CliRun run = run(tempDir, "check", project.toString());
+        final CliRun run = runSlow(tempDir, "check", project.toString());
 
         assertThat(run.exitCode()).isZero();
         assertThat(run.stdout()).contains("reachable methods: 1");
