@@ -251,6 +251,19 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void writeEmitsWindowsHighResolutionNanoTimeFallback() throws Exception {
+        final Path runtime = new RuntimeFiles().write(tempDir);
+
+        assertThat(Files.readString(runtime)).contains(
+            "LARGE_INTEGER frequency;",
+            "LARGE_INTEGER counter;",
+            "QueryPerformanceFrequency(&frequency)",
+            "QueryPerformanceCounter(&counter)",
+            "GetTickCount64() * 1000000LL"
+        );
+    }
+
+    @Test
     void writeMarksWindowsProcessExecutionUnsupportedUntilPorted() throws Exception {
         final Path runtime = new RuntimeFiles().write(tempDir);
 

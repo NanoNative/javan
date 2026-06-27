@@ -123,6 +123,221 @@ final class ToolchainManagerTest {
     }
 
     @Test
+    void windowsPathProbeAddsLeadingDotAndNormalizesCaseFromPathext() throws Exception {
+        final Path compiler = Files.createFile(tempDir.resolve("gcc.exe"));
+        assertThat(compiler.toFile().setExecutable(true)).isTrue();
+
+        final Optional<Path> resolved = ToolchainManager.resolveExecutableOnPath(
+            tempDir.toString(),
+            "gcc",
+            "EXE;Cmd",
+            "Windows 11"
+        );
+
+        assertThat(resolved).contains(compiler);
+    }
+
+    @Test
+    void findExecutableOnPathReturnsResolvedStatusWhenExecutableExists() throws Exception {
+        final Path compiler = Files.createFile(tempDir.resolve("gcc.exe"));
+        assertThat(compiler.toFile().setExecutable(true)).isTrue();
+
+        final ToolchainManager.ToolStatus status = ToolchainManager.findExecutableOnPath(
+            tempDir.toString(),
+            "gcc",
+            ".EXE",
+            "Windows 11"
+        );
+
+        assertThat(status.available()).isTrue();
+        assertThat(status.path()).contains(compiler);
+    }
+
+    @Test
+    void findExecutableOnPathReturnsMissingStatusWhenExecutableDoesNotExist() {
+        final ToolchainManager.ToolStatus status = ToolchainManager.findExecutableOnPath(
+            tempDir.toString(),
+            "gcc",
+            ".EXE",
+            "Windows 11"
+        );
+
+        assertThat(status.available()).isFalse();
+        assertThat(status.path()).isEmpty();
+    }
+
+    @Test
+    void windowsPathProbeUsesDefaultExtensionsWhenPathextIsMissing() throws Exception {
+        final Path compiler = Files.createFile(tempDir.resolve("gcc.exe"));
+        assertThat(compiler.toFile().setExecutable(true)).isTrue();
+
+        final Optional<Path> resolved = ToolchainManager.resolveExecutableOnPath(
+            tempDir.toString(),
+            "gcc",
+            null,
+            "Windows 11"
+        );
+
+        assertThat(resolved).contains(compiler);
+    }
+
+    @Test
+    void windowsPathProbeUsesDefaultExtensionsWhenPathextContainsOnlyBlankEntries() throws Exception {
+        final Path compiler = Files.createFile(tempDir.resolve("gcc.exe"));
+        assertThat(compiler.toFile().setExecutable(true)).isTrue();
+
+        final Optional<Path> resolved = ToolchainManager.resolveExecutableOnPath(
+            tempDir.toString(),
+            "gcc",
+            " ; ; ",
+            "Windows 11"
+        );
+
+        assertThat(resolved).contains(compiler);
+    }
+
+    @Test
+    void pathProbeReturnsEmptyWhenPathIsBlank() {
+        final Optional<Path> resolved = ToolchainManager.resolveExecutableOnPath(
+            "",
+            "gcc",
+            ".EXE",
+            "Windows 11"
+        );
+
+        assertThat(resolved).isEmpty();
+    }
+
+    @Test
+    void pathProbeReturnsEmptyWhenPathContainsOnlySeparators() {
+        final String separators = java.io.File.pathSeparator + java.io.File.pathSeparator;
+        final Optional<Path> resolved = ToolchainManager.resolveExecutableOnPath(
+            separators,
+            "gcc",
+            ".EXE",
+            "Windows 11"
+        );
+
+        assertThat(resolved).isEmpty();
+    }
+
+    @Test
+    void pathProbeReturnsEmptyWhenExecutableIsBlank() {
+        final Optional<Path> resolved = ToolchainManager.resolveExecutableOnPath(
+            tempDir.toString(),
+            "",
+            ".EXE",
+            "Windows 11"
+        );
+
+        assertThat(resolved).isEmpty();
+    }
+
+    @Test
+    void windowsPathProbeIgnoresEmptyPathEntries() throws Exception {
+        final Path nested = Files.createDirectories(tempDir.resolve("nested"));
+        final Path compiler = Files.createFile(nested.resolve("gcc.exe"));
+        assertThat(compiler.toFile().setExecutable(true)).isTrue();
+
+        final String path = tempDir + java.io.File.pathSeparator + java.io.File.pathSeparator + nested;
+        final Optional<Path> resolved = ToolchainManager.resolveExecutableOnPath(
+            path,
+            "gcc",
+            ".EXE",
+            "Windows 11"
+        );
+
+        assertThat(resolved).contains(compiler);
+    }
+
+    @Test
+    void windowsPathProbeReturnsEmptyForMissingExecutableWithExplicitExtension() {
+        final Optional<Path> resolved = ToolchainManager.resolveExecutableOnPath(
+            tempDir.toString(),
+            "gcc.exe",
+            ".EXE",
+            "Windows 11"
+        );
+
+        assertThat(resolved).isEmpty();
+    }
+
+    @Test
+    void windowsPathProbeReturnsEmptyForLeadingDotExecutableName() {
+        final Optional<Path> resolved = ToolchainManager.resolveExecutableOnPath(
+            tempDir.toString(),
+            ".gcc",
+            ".EXE",
+            "Windows 11"
+        );
+
+        assertThat(resolved).isEmpty();
+    }
+
+    @Test
+    void windowsPathProbeReturnsEmptyForTrailingDotExecutableName() {
+        final Optional<Path> resolved = ToolchainManager.resolveExecutableOnPath(
+            tempDir.toString(),
+            "gcc.",
+            ".EXE",
+            "Windows 11"
+        );
+
+        assertThat(resolved).isEmpty();
+    }
+
+    @Test
+    void indentInstalledReportHandlesCrLfAndSkipsBlankLines() {
+        final String indented = ToolchainManager.indentInstalledReportForTesting("Toolchains\r\n\r\nentry\r\n");
+
+        assertThat(indented).isEqualTo("    entry");
+    }
+
+    @Test
+    void indentInstalledReportReturnsEmptyWhenNothingCanBeIndented() {
+        assertThat(ToolchainManager.indentInstalledReportForTesting("Toolchains")).isEmpty();
+    }
+
+    @Test
+    void normalizedProbePathUsesEmptyStringWhenInputIsNull() {
+        assertThat(ToolchainManager.normalizedProbePathForTesting(null)).isEmpty();
+    }
+
+    @Test
+    void pathEntriesForTestingReturnsEmptyWhenPathIsBlank() {
+        assertThat(ToolchainManager.pathEntriesForTesting("")).isEmpty();
+    }
+
+    @Test
+    void hasExplicitExtensionForTestingReturnsFalseForRootPath() {
+        assertThat(ToolchainManager.hasExplicitExtensionForTesting(Path.of("/"))).isFalse();
+    }
+
+    @Test
+    void doctorReportsMissingJavaHomeWhenSystemPropertyIsBlank() {
+        final ToolchainManager manager = new ToolchainManager(tempDir.resolve("home"), missingProbe());
+        final String previousJavaHome = System.getProperty("java.home");
+        System.clearProperty("java.home");
+        try {
+            assertThat(manager.doctor()).contains("java.home:       missing");
+        } finally {
+            restoreSystemProperty("java.home", previousJavaHome);
+        }
+    }
+
+    @Test
+    void doctorReportsMissingJavaVersionWhenSystemPropertyIsBlank() {
+        final ToolchainManager manager = new ToolchainManager(tempDir.resolve("home"), missingProbe());
+        final String previousJavaVersion = System.getProperty("java.version");
+        System.clearProperty("java.version");
+        try {
+            assertThat(manager.doctor()).contains("java.version:    missing");
+        } finally {
+            restoreSystemProperty("java.version", previousJavaVersion);
+        }
+    }
+
+    @Test
     void doctorDoesNotReportNativeImage() {
         final ToolchainManager manager = new ToolchainManager(tempDir.resolve("home"), missingProbe());
 
@@ -241,6 +456,13 @@ final class ToolchainManagerTest {
             .hasMessage("processRunner");
     }
 
+    @Test
+    void processRunnerConstructorAcceptsNonNullProcessRunner() {
+        final ToolchainManager manager = new ToolchainManager(new javan.util.ProcessRunner());
+
+        assertThat(manager.javanHome()).isNotNull();
+    }
+
     private static ToolchainManager.CommandProbe missingProbe() {
         return ToolchainManager.ToolStatus::new;
     }
@@ -259,6 +481,14 @@ final class ToolchainManagerTest {
             return;
         }
         System.setProperty("os.name", value);
+    }
+
+    private static void restoreSystemProperty(final String name, final String value) {
+        if (value == null) {
+            System.clearProperty(name);
+            return;
+        }
+        System.setProperty(name, value);
     }
 
     private static Path writeToolchain(final Path home, final String id, final String version) throws Exception {

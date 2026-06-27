@@ -221,6 +221,10 @@ public final class ToolchainManager {
         return result.toString();
     }
 
+    static String indentInstalledReportForTesting(final String report) {
+        return indentInstalledReport(report);
+    }
+
     private static Path defaultJavanHome() {
         return JavanHome.resolve();
     }
@@ -244,6 +248,31 @@ public final class ToolchainManager {
         final String osName
     ) {
         return PathCommandProbe.resolveExecutableOnPath(path, executable, pathExt, osName);
+    }
+
+    static ToolStatus findExecutableOnPath(
+        final String path,
+        final String executable,
+        final String pathExt,
+        final String osName
+    ) {
+        final Optional<Path> resolved = resolveExecutableOnPath(path, executable, pathExt, osName);
+        if (resolved.isPresent()) {
+            return new ToolStatus(executable, resolved);
+        }
+        return new ToolStatus(executable);
+    }
+
+    static String normalizedProbePathForTesting(final String path) {
+        return new PathCommandProbe(path).path;
+    }
+
+    static List<Path> pathEntriesForTesting(final String path) {
+        return PathCommandProbe.pathEntries(path);
+    }
+
+    static boolean hasExplicitExtensionForTesting(final Path candidate) {
+        return PathCommandProbe.hasExplicitExtension(candidate);
     }
 
     /**
@@ -307,16 +336,12 @@ public final class ToolchainManager {
 
         @Override
         public ToolStatus find(final String executable) {
-            final Optional<Path> resolved = resolveExecutableOnPath(
+            return findExecutableOnPath(
                 path,
                 executable,
                 System.getenv("PATHEXT"),
                 System.getProperty("os.name", "")
             );
-            if (resolved.isPresent()) {
-                return new ToolStatus(executable, resolved);
-            }
-            return new ToolStatus(executable);
         }
 
         private static Optional<Path> resolveExecutableOnPath(
