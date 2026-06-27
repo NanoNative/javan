@@ -94,6 +94,10 @@ final class CliTestHarness {
         }
     }
 
+    static List<String> childCoverageCommandForTesting(final List<String> command) {
+        return childCoverageCommand(command);
+    }
+
     private static List<String> childCoverageCommand(final List<String> command) {
         final String agent = childCoverageAgentTemplate();
         final String directory = System.getProperty("javan.childJacocoDir", "");
