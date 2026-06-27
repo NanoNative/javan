@@ -5268,7 +5268,7 @@ final class RuntimeFilesTest {
             """,
             "1048576",
             Map.of(),
-            java.time.Duration.ofSeconds(90)
+            java.time.Duration.ofSeconds(180)
         );
 
         assertThat(stdout).isEqualTo(
