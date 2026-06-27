@@ -1269,6 +1269,40 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void reachabilitySkipsAbstractVirtualTargetWithoutCode() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo("main", "([Ljava/lang/String;)V", instruction(0, 182, "invokevirtual", new MethodRef("com/acme/Base", "value", "()I")))
+                ),
+                "com/acme/Base", classWithMethods(
+                    "com/acme/Base",
+                    "java/lang/Object",
+                    0x0400,
+                    List.of(),
+                    new MethodInfo(0x0401, "value", "()I", Optional.empty())
+                ),
+                "com/acme/Leaf", classWithMethods(
+                    "com/acme/Leaf",
+                    "com/acme/Base",
+                    0,
+                    List.of(),
+                    methodInfo("value", "()I")
+                )
+            ),
+            List.of(new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+        assertThat(graph.reachableMethods()).contains(new EntryPoint("com/acme/Leaf", "value", "()I"));
+        assertThat(graph.reachableMethods()).doesNotContain(new EntryPoint("com/acme/Base", "value", "()I"));
+    }
+
+    @Test
     void reachabilityResolvesInterfaceCallWithConcreteImplementation() {
         final CallGraph graph = new ReachabilityAnalyzer().analyze(
             Map.of(

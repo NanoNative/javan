@@ -3780,6 +3780,49 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersVirtualDispatchSkipsAbstractResolvedTargetsWithoutCode() {
+        final MethodInfo main = method(
+            0x0008,
+            "main",
+            "(Lcom/acme/Base;)I",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("com/acme/Base", "value", "()I")),
+            plain(2, 172, "ireturn")
+        );
+        final ClassFile base = classFile(
+            "com/acme/Base",
+            "java/lang/Object",
+            0x0400,
+            List.of(),
+            List.of(),
+            List.of(new MethodInfo(0x0401, "value", "()I", Optional.empty()))
+        );
+        final ClassFile leaf = classFile(
+            "com/acme/Leaf",
+            "com/acme/Base",
+            0,
+            List.of(),
+            List.of(),
+            List.of(method(0, "value", "()I", 1, 1, plain(0, 3, "iconst_0"), plain(1, 172, "ireturn")))
+        );
+
+        final IrProgram program = lowerProgram(main, base, leaf);
+
+        assertThat(program.functions().getFirst().instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_dispatch_com_acme_Base_value___I",
+                List.of(IrExpression.objectLocal("arg0"))
+            ))
+        );
+        assertThat(program.dispatches()).singleElement().satisfies(dispatch -> {
+            assertThat(dispatch.symbol()).isEqualTo("javan_dispatch_com_acme_Base_value___I");
+            assertThat(dispatch.targets()).extracting("owner").containsExactly("com/acme/Leaf");
+        });
+    }
+
+    @Test
     void lowerProgramAddsRunnableDispatchForVirtualThreadExecutorExecute() {
         final MethodInfo main = method(
             0x0008,

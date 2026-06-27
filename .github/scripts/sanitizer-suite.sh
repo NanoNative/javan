@@ -86,12 +86,12 @@ assert_sanitizer_proof_summary() {
 
 assert_thread_inventory_summary() {
   file=$1
-  assert_contains "$file" '"actualThreadObjects": 1'
-  assert_contains "$file" '"actualStartedThreads": 1'
+  assert_contains "$file" '"actualThreadObjects": 0'
+  assert_contains "$file" '"actualStartedThreads": 0'
   assert_contains "$file" '"actualCompletedThreads": 0'
   assert_contains "$file" '"actualActiveThreads": 0'
   assert_contains "$file" '"actualThreadsWithTarget": 0'
-  assert_contains "$file" '"actualCurrentThreadRootPresent": 1'
+  assert_contains "$file" '"actualCurrentThreadRootPresent": 0'
 }
 
 JAVAN_HEAP_LIMIT_BYTES=32768 \

@@ -2067,7 +2067,7 @@ public final class BytecodeToIR {
         final List<EntryPoint> result = new ArrayList<>();
         for (final ClassFile candidate : classes.values()) {
             if (!candidate.isInterface() && isSubtypeOf(classes, candidate.name(), methodRef.owner())) {
-                final Optional<EntryPoint> resolved = resolvedVirtualTarget(classes, candidate.name(), methodRef);
+                final Optional<EntryPoint> resolved = lowerableResolvedVirtualTarget(classes, candidate.name(), methodRef);
                 if (resolved.isPresent()) {
                     final EntryPoint entryPoint = resolved.orElseThrow();
                     if (!result.contains(entryPoint)) {
@@ -2093,6 +2093,27 @@ public final class BytecodeToIR {
             current = classFile.superName();
         }
         return Optional.empty();
+    }
+
+    private static Optional<EntryPoint> lowerableResolvedVirtualTarget(
+        final Map<String, ClassFile> classes,
+        final String receiver,
+        final MethodRef methodRef
+    ) {
+        final Optional<EntryPoint> resolved = resolvedVirtualTarget(classes, receiver, methodRef);
+        if (resolved.isEmpty()) {
+            return Optional.empty();
+        }
+        final EntryPoint entryPoint = resolved.orElseThrow();
+        final ClassFile owner = classes.get(entryPoint.className());
+        if (owner == null) {
+            return Optional.empty();
+        }
+        final Optional<MethodInfo> method = owner.method(entryPoint.methodName(), entryPoint.descriptor());
+        if (method.isEmpty() || method.orElseThrow().code().isEmpty()) {
+            return Optional.empty();
+        }
+        return resolved;
     }
 
     static List<Integer> assignableTypeIds(final Map<String, ClassFile> classes, final String target) {
