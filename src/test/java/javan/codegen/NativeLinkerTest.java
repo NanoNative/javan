@@ -50,6 +50,12 @@ final class NativeLinkerTest {
     }
 
     @Test
+    void nonWindowsHostPrefersCcBeforeClangAndGcc() {
+        assertThat(NativeLinker.compilerCandidatesForOs("Linux", null))
+            .containsExactly("cc", "clang", "gcc");
+    }
+
+    @Test
     void firstOnPathForWindowsResolvesExeFromConcretePathEntries() throws Exception {
         final Path compiler = Files.createFile(tempDir.resolve("gcc.exe"));
         assertThat(compiler.toFile().setExecutable(true)).isTrue();
@@ -60,5 +66,51 @@ final class NativeLinkerTest {
             "Windows 11",
             List.of(".exe", ".cmd")
         )).contains(compiler.toString());
+    }
+
+    @Test
+    void resolveExecutablePathForWindowsDoesNotAppendSuffixWhenExtensionIsExplicit() throws Exception {
+        final Path compiler = Files.createFile(tempDir.resolve("gcc.cmd"));
+        assertThat(compiler.toFile().setExecutable(true)).isTrue();
+
+        assertThat(NativeLinker.resolveExecutablePathForOs(
+            tempDir.resolve("gcc.cmd"),
+            "Windows 11",
+            List.of(".exe", ".cmd")
+        )).contains(compiler.toString());
+
+        assertThat(NativeLinker.resolveExecutablePathForOs(
+            tempDir.resolve("gcc.bat"),
+            "Windows 11",
+            List.of(".exe", ".cmd")
+        )).isEmpty();
+    }
+
+    @Test
+    void resolveExecutablePathForNonWindowsRequiresExactMatch() throws Exception {
+        final Path compiler = Files.createFile(tempDir.resolve("cc"));
+        assertThat(compiler.toFile().setExecutable(true)).isTrue();
+
+        assertThat(NativeLinker.resolveExecutablePathForOs(
+            tempDir.resolve("cc"),
+            "Linux",
+            List.of(".exe")
+        )).contains(compiler.toString());
+
+        assertThat(NativeLinker.resolveExecutablePathForOs(
+            tempDir.resolve("gcc"),
+            "Linux",
+            List.of(".exe")
+        )).isEmpty();
+    }
+
+    @Test
+    void firstOnPathForNonWindowsReturnsEmptyWhenExecutableIsMissing() {
+        assertThat(NativeLinker.firstOnPathForOs(
+            List.of("cc"),
+            tempDir.toString(),
+            "Linux",
+            List.of(".exe")
+        )).isEmpty();
     }
 }
