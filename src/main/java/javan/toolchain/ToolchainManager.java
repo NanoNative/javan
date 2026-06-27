@@ -59,7 +59,7 @@ public final class ToolchainManager {
     public String doctor() {
         final Path settings = settingsPath();
         final ToolStatus javac = commandProbe.find("javac");
-        final ToolStatus cCompiler = firstAvailable(commandProbe, List.of("cc", "clang", "gcc"));
+        final ToolStatus cCompiler = firstAvailable(commandProbe, cCompilerCandidates());
         final StringBuilder report = new StringBuilder();
         report.append("Toolchain").append(System.lineSeparator());
         report.append("  javan home:      ").append(javanHome).append(System.lineSeparator());
@@ -225,6 +225,13 @@ public final class ToolchainManager {
         return JavanHome.resolve();
     }
 
+    private static List<String> cCompilerCandidates() {
+        if (Strings2.toAsciiLowerCase(System.getProperty("os.name", "")).contains("win")) {
+            return List.of("gcc", "clang", "cc");
+        }
+        return List.of("cc", "clang", "gcc");
+    }
+
     private static CommandProbe pathCommandProbe(final ProcessRunner processRunner) {
         Objects.requireNonNull(processRunner, "processRunner");
         return new PathCommandProbe(System.getenv("PATH"));
@@ -292,12 +299,28 @@ public final class ToolchainManager {
         @Override
         public ToolStatus find(final String executable) {
             for (final Path directory : pathEntries()) {
-                final Path candidate = directory.resolve(executable);
-                if (Files.isExecutable(candidate)) {
-                    return new ToolStatus(executable, Optional.of(candidate));
+                final Optional<Path> candidate = resolveExecutable(directory.resolve(executable));
+                if (candidate.isPresent()) {
+                    return new ToolStatus(executable, candidate);
                 }
             }
             return new ToolStatus(executable);
+        }
+
+        private Optional<Path> resolveExecutable(final Path candidate) {
+            if (Files.isExecutable(candidate)) {
+                return Optional.of(candidate);
+            }
+            if (!isWindowsHost() || hasExplicitExtension(candidate)) {
+                return Optional.empty();
+            }
+            for (final String extension : windowsExecutableExtensions()) {
+                final Path extended = Path.of(candidate.toString() + extension);
+                if (Files.isExecutable(extended)) {
+                    return Optional.of(extended);
+                }
+            }
+            return Optional.empty();
         }
 
         private List<Path> pathEntries() {
@@ -326,6 +349,42 @@ public final class ToolchainManager {
             if (!entry.isEmpty()) {
                 result.add(Path.of(entry.toString()));
             }
+        }
+
+        private static boolean isWindowsHost() {
+            return Strings2.toAsciiLowerCase(System.getProperty("os.name", "")).contains("win");
+        }
+
+        private static boolean hasExplicitExtension(final Path candidate) {
+            final Path fileName = candidate.getFileName();
+            if (fileName == null) {
+                return false;
+            }
+            final String name = fileName.toString();
+            final int index = name.lastIndexOf('.');
+            return index > 0 && index < name.length() - 1;
+        }
+
+        private static List<String> windowsExecutableExtensions() {
+            final String pathExt = System.getenv("PATHEXT");
+            if (Strings2.isBlank(pathExt)) {
+                return List.of(".exe", ".cmd", ".bat", ".com");
+            }
+            final List<String> result = new ArrayList<>();
+            int start = 0;
+            for (int index = 0; index <= pathExt.length(); index++) {
+                if (index == pathExt.length() || pathExt.charAt(index) == ';') {
+                    final String extension = Strings2.slice(pathExt, start, index).trim();
+                    if (!Strings2.isBlank(extension)) {
+                        result.add(extension.startsWith(".") ? extension : "." + extension);
+                    }
+                    start = index + 1;
+                }
+            }
+            if (result.isEmpty()) {
+                return List.of(".exe", ".cmd", ".bat", ".com");
+            }
+            return List.copyOf(result);
         }
     }
 }

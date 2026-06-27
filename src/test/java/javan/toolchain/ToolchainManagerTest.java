@@ -78,7 +78,30 @@ final class ToolchainManagerTest {
 
         final String report = manager.doctor();
 
-        assertThat(report).contains("c compiler:      missing (cc|clang|gcc)");
+        assertThat(report).contains("c compiler:      missing (" + expectedCompilerMissingLabel() + ")");
+    }
+
+    @Test
+    void doctorPrefersGccOnWindowsProbeOrder() {
+        final Path gcc = Path.of("/toolchains/mingw/bin/gcc");
+        final Path clang = Path.of("/toolchains/llvm/bin/clang");
+        final ToolchainManager manager = new ToolchainManager(tempDir.resolve("home"), executable -> {
+            if ("gcc".equals(executable)) {
+                return new ToolchainManager.ToolStatus(executable, Optional.of(gcc));
+            }
+            if ("clang".equals(executable)) {
+                return new ToolchainManager.ToolStatus(executable, Optional.of(clang));
+            }
+            return new ToolchainManager.ToolStatus(executable);
+        });
+
+        final String previousOs = System.getProperty("os.name");
+        System.setProperty("os.name", "Windows 11");
+        try {
+            assertThat(manager.doctor()).contains("c compiler:      available (" + gcc + ")");
+        } finally {
+            restoreOsName(previousOs);
+        }
     }
 
     @Test
@@ -202,6 +225,22 @@ final class ToolchainManagerTest {
 
     private static ToolchainManager.CommandProbe missingProbe() {
         return ToolchainManager.ToolStatus::new;
+    }
+
+    private static String expectedCompilerMissingLabel() {
+        final String osName = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT);
+        if (osName.contains("win")) {
+            return "gcc|clang|cc";
+        }
+        return "cc|clang|gcc";
+    }
+
+    private static void restoreOsName(final String value) {
+        if (value == null) {
+            System.clearProperty("os.name");
+            return;
+        }
+        System.setProperty("os.name", value);
     }
 
     private static Path writeToolchain(final Path home, final String id, final String version) throws Exception {
