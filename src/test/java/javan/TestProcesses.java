@@ -232,9 +232,13 @@ public final class TestProcesses {
                 throw new IllegalStateException("Interrupted while collecting child process output.", exception);
             }
             synchronized (buffer) {
-                return buffer.toString(StandardCharsets.UTF_8);
+                return normalizeLineEndings(buffer.toString(StandardCharsets.UTF_8));
             }
         }
+    }
+
+    private static String normalizeLineEndings(final String value) {
+        return value.replace("\r\n", "\n");
     }
 
     private static void closeQuietly(final java.io.Closeable closeable) {

@@ -38,4 +38,28 @@ final class TestProcessesTest {
         assertThat(result.exitCode()).isEqualTo(124);
         assertThat(ProcessHandle.of(childPid)).isEmpty();
     }
+
+    @Test
+    void normalizesWindowsStyleStdoutLineEndings() {
+        final TestProcesses.Result result = TestProcesses.run(
+            Path.of("").toAbsolutePath(),
+            java.util.List.of("python3", "-c", "import sys; sys.stdout.write('ok\\r\\n')"),
+            Duration.ofSeconds(2)
+        );
+
+        assertThat(result.exitCode()).isZero();
+        assertThat(result.stdout()).isEqualTo("ok\n");
+    }
+
+    @Test
+    void normalizesWindowsStyleStderrLineEndings() {
+        final TestProcesses.Result result = TestProcesses.run(
+            Path.of("").toAbsolutePath(),
+            java.util.List.of("python3", "-c", "import sys; sys.stderr.write('bad\\r\\n')"),
+            Duration.ofSeconds(2)
+        );
+
+        assertThat(result.exitCode()).isZero();
+        assertThat(result.stderr()).isEqualTo("bad\n");
+    }
 }
