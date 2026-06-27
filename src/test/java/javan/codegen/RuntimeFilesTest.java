@@ -1,18 +1,23 @@
 package javan.codegen;
 
+import javan.TestProcesses;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ResourceLock;
 
+import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 
 @Execution(CONCURRENT)
+@ResourceLock("native-cli-heavy")
 final class RuntimeFilesTest {
     @TempDir
     private Path tempDir;
@@ -214,10 +219,17 @@ final class RuntimeFilesTest {
     }
 
     @Test
-    void writeEmitsRecursiveRuntimeLockForSharedHeapState() throws Exception {
+    void writeEmitsPlatformRecursiveRuntimeLockForSharedHeapState() throws Exception {
         final Path runtime = new RuntimeFiles().write(tempDir);
 
         assertThat(Files.readString(runtime)).contains(
+            "static CRITICAL_SECTION javan_runtime_lock_value;",
+            "static INIT_ONCE javan_runtime_lock_once = INIT_ONCE_STATIC_INIT;",
+            "static BOOL CALLBACK javan_runtime_lock_initialize_once(",
+            "InitializeCriticalSection(&javan_runtime_lock_value);",
+            "InitOnceExecuteOnce(",
+            "EnterCriticalSection(&javan_runtime_lock_value)",
+            "LeaveCriticalSection(&javan_runtime_lock_value)",
             "#include <pthread.h>",
             "static pthread_mutex_t javan_runtime_lock_value;",
             "static pthread_once_t javan_runtime_lock_once = PTHREAD_ONCE_INIT;",
@@ -236,6 +248,111 @@ final class RuntimeFilesTest {
             "javan_runtime_lock_leave();",
             "javan_runtime_lock_reset_for_panic();"
         );
+    }
+
+    @Test
+    void writeMarksWindowsProcessExecutionUnsupportedUntilPorted() throws Exception {
+        final Path runtime = new RuntimeFiles().write(tempDir);
+
+        assertThat(Files.readString(runtime)).contains(
+            "static void javan_sleep_micros(unsigned long micros) {",
+            "Sleep(millis);",
+            "return javan_process_result_new(127, \"\", \"process execution unsupported on Windows\");"
+        );
+    }
+
+    @Test
+    void generatedRuntimeCrossCompilesToWindowsPeWhenMinGwIsAvailable() throws Exception {
+        final Path compiler = findFirstExecutableOnPath("x86_64-w64-mingw32-gcc");
+        assumeTrue(compiler != null, "MinGW cross compiler is not installed");
+
+        final Path runtime = new RuntimeFiles().write(tempDir);
+        final Path main = tempDir.resolve("windows-probe.c");
+        Files.writeString(main, """
+            #include "javan_runtime.h"
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                return 0;
+            }
+            """);
+        final Path output = tempDir.resolve("windows-probe.exe");
+        final TestProcesses.Result result = TestProcesses.run(
+            tempDir,
+            java.util.List.of(
+                compiler.toString(),
+                "-std=c11",
+                "-Wall",
+                "-Wextra",
+                "-Werror",
+                "-Wno-error=unused-function",
+                "-Wno-error=unused-variable",
+                main.toString(),
+                runtime.toString(),
+                "-lws2_32",
+                "-o",
+                output.toString()
+            ),
+            java.time.Duration.ofSeconds(60)
+        );
+
+        assertThat(result.exitCode())
+            .describedAs(result.stderr())
+            .isEqualTo(0);
+        assertThat(output).exists();
+        assertThat(Files.readAllBytes(output)).startsWith((byte) 'M', (byte) 'Z');
+    }
+
+    @Test
+    void generatedRuntimeExecutesBasicWindowsProbeWhenHostCompilerIsAvailable() throws Exception {
+        assumeTrue(isWindowsHost(), "Host is not Windows");
+        final Path compiler = findFirstExecutableOnPath("gcc.exe", "gcc", "x86_64-w64-mingw32-gcc.exe", "x86_64-w64-mingw32-gcc");
+        assumeTrue(compiler != null, "Windows C compiler is not installed");
+
+        final Path runtime = new RuntimeFiles().write(tempDir);
+        final Path main = tempDir.resolve("windows-host-probe.c");
+        Files.writeString(main, """
+            #include "javan_runtime.h"
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                javan_println("ok");
+                return 0;
+            }
+            """);
+        final Path output = tempDir.resolve("windows-host-probe.exe");
+        final TestProcesses.Result compile = TestProcesses.run(
+            tempDir,
+            java.util.List.of(
+                compiler.toString(),
+                "-std=c11",
+                "-Wall",
+                "-Wextra",
+                "-Werror",
+                "-Wno-error=unused-function",
+                "-Wno-error=unused-variable",
+                main.toString(),
+                runtime.toString(),
+                "-lws2_32",
+                "-o",
+                output.toString()
+            ),
+            java.time.Duration.ofSeconds(60)
+        );
+        assertThat(compile.exitCode())
+            .describedAs(compile.stderr())
+            .isEqualTo(0);
+
+        final TestProcesses.Result run = TestProcesses.run(
+            tempDir,
+            java.util.List.of(output.toString()),
+            java.time.Duration.ofSeconds(30)
+        );
+        assertThat(run.exitCode())
+            .describedAs(run.stderr())
+            .isEqualTo(0);
+        assertThat(run.stderr()).isEmpty();
+        assertThat(run.stdout()).isEqualTo("ok\n");
     }
 
     @Test
@@ -309,7 +426,8 @@ final class RuntimeFilesTest {
             "void javan_thread_sleep_millis(long long millis) {",
             "if (millis < 0) {",
             "javan_panic(\"negative Thread.sleep millis\")",
-            "usleep((useconds_t) (chunk * 1000LL));",
+            "static void javan_sleep_micros(unsigned long micros);",
+            "javan_sleep_micros((unsigned long) (chunk * 1000LL));",
             "int javan_thread_interrupted(void) {",
             "void javan_thread_interrupt(void* value) {",
             "int javan_thread_is_interrupted(void* value) {",
@@ -451,23 +569,47 @@ final class RuntimeFilesTest {
         final String stdout = runRuntimeBoundaryProbe(
             """
             #include "javan_runtime.h"
+            #if defined(_WIN32)
+            #include <process.h>
+            #include <windows.h>
+            #else
             #include <pthread.h>
+            #endif
             #include <stdio.h>
 
             static void* child_current = NULL;
             static unsigned long child_roots = 0;
 
+            #if defined(_WIN32)
+            static unsigned __stdcall child_main(void* argument) {
+            #else
             static void* child_main(void* argument) {
+            #endif
                 (void) argument;
                 child_current = javan_thread_current();
                 child_roots = javan_heap_registered_thread_roots();
                 javan_thread_detach_current();
+                #if defined(_WIN32)
+                return 0U;
+                #else
                 return NULL;
+                #endif
             }
 
             int main(void) {
                 javan_register_static_roots(0, 0);
                 void* main_current = javan_thread_current();
+                #if defined(_WIN32)
+                HANDLE thread = (HANDLE) _beginthreadex(NULL, 0, child_main, NULL, 0, NULL);
+                if (thread == NULL) {
+                    return 3;
+                }
+                if (WaitForSingleObject(thread, INFINITE) != WAIT_OBJECT_0) {
+                    CloseHandle(thread);
+                    return 4;
+                }
+                CloseHandle(thread);
+                #else
                 pthread_t thread;
                 if (pthread_create(&thread, NULL, child_main, NULL) != 0) {
                     return 3;
@@ -475,6 +617,7 @@ final class RuntimeFilesTest {
                 if (pthread_join(thread, NULL) != 0) {
                     return 4;
                 }
+                #endif
                 printf("same=%d\\n", child_current == main_current ? 1 : 0);
                 printf("during=%lu\\n", child_roots);
                 printf("after=%lu\\n", javan_heap_registered_thread_roots());
@@ -498,29 +641,87 @@ final class RuntimeFilesTest {
         final String stdout = runRuntimeBoundaryProbe(
             """
             #include "javan_runtime.h"
+            #if defined(_WIN32)
+            #include <process.h>
+            #include <windows.h>
+            #else
             #include <pthread.h>
+            #endif
             #include <stdint.h>
             #include <stdio.h>
 
+            #if defined(_WIN32)
+            static unsigned __stdcall child_main(void* argument) {
+            #else
             static void* child_main(void* argument) {
+            #endif
                 (void) argument;
                 for (int index = 0; index < 32; index++) {
                     (void) javan_thread_current();
                     if (!javan_heap_current_thread_root_present()) {
+                        #if defined(_WIN32)
+                        return 1U;
+                        #else
                         return (void*) (uintptr_t) 1;
+                        #endif
                     }
                     javan_gc_collect();
                     javan_thread_detach_current();
                     if (javan_heap_current_thread_root_present()) {
+                        #if defined(_WIN32)
+                        return 2U;
+                        #else
                         return (void*) (uintptr_t) 2;
+                        #endif
                     }
                 }
+                #if defined(_WIN32)
+                return 0U;
+                #else
                 return NULL;
+                #endif
             }
 
             int main(void) {
                 javan_register_static_roots(0, 0);
                 (void) javan_thread_current();
+                #if defined(_WIN32)
+                HANDLE left = (HANDLE) _beginthreadex(NULL, 0, child_main, NULL, 0, NULL);
+                if (left == NULL) {
+                    return 3;
+                }
+                HANDLE right = (HANDLE) _beginthreadex(NULL, 0, child_main, NULL, 0, NULL);
+                if (right == NULL) {
+                    CloseHandle(left);
+                    return 4;
+                }
+                if (WaitForSingleObject(left, INFINITE) != WAIT_OBJECT_0) {
+                    CloseHandle(left);
+                    CloseHandle(right);
+                    return 5;
+                }
+                if (WaitForSingleObject(right, INFINITE) != WAIT_OBJECT_0) {
+                    CloseHandle(left);
+                    CloseHandle(right);
+                    return 6;
+                }
+                DWORD left_result = 0;
+                DWORD right_result = 0;
+                if (!GetExitCodeThread(left, &left_result)) {
+                    CloseHandle(left);
+                    CloseHandle(right);
+                    return 7;
+                }
+                if (!GetExitCodeThread(right, &right_result)) {
+                    CloseHandle(left);
+                    CloseHandle(right);
+                    return 8;
+                }
+                CloseHandle(left);
+                CloseHandle(right);
+                printf("left=%ld\\n", (long) left_result);
+                printf("right=%ld\\n", (long) right_result);
+                #else
                 pthread_t left;
                 pthread_t right;
                 void* left_result = NULL;
@@ -539,6 +740,7 @@ final class RuntimeFilesTest {
                 }
                 printf("left=%ld\\n", (long) (uintptr_t) left_result);
                 printf("right=%ld\\n", (long) (uintptr_t) right_result);
+                #endif
                 printf("roots=%lu\\n", javan_heap_registered_thread_roots());
                 return 0;
             }
@@ -551,6 +753,1662 @@ final class RuntimeFilesTest {
             left=0
             right=0
             roots=1
+            """
+        );
+    }
+
+    @Test
+    void runtimeHostThreadRootFramesStayPublishedAcrossConcurrentGc() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #if defined(_WIN32)
+            #include <process.h>
+            #include <windows.h>
+            #else
+            #include <pthread.h>
+            #include <unistd.h>
+            #endif
+            #include <stdatomic.h>
+            #include <stdio.h>
+
+            static atomic_int worker_ready;
+            static atomic_int gc_done;
+            static atomic_int worker_result;
+
+            static void wait_tick(void) {
+                #if defined(_WIN32)
+                Sleep(1);
+                #else
+                usleep(1000);
+                #endif
+            }
+
+            #if defined(_WIN32)
+            static unsigned __stdcall child_main(void* argument) {
+            #else
+            static void* child_main(void* argument) {
+            #endif
+                (void) argument;
+                (void) javan_thread_current();
+                void* rooted = javan_thread_new();
+                void** roots[] = {
+                    (void**) &rooted
+                };
+                javan_root_frame_push(roots, 1);
+                atomic_store_explicit(&worker_ready, 1, memory_order_release);
+                while (atomic_load_explicit(&gc_done, memory_order_acquire) == 0) {
+                    wait_tick();
+                }
+                atomic_store_explicit(&worker_result, javan_thread_is_alive(rooted), memory_order_release);
+                javan_root_frame_pop(roots);
+                javan_thread_detach_current();
+                #if defined(_WIN32)
+                return 0U;
+                #else
+                return NULL;
+                #endif
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                (void) javan_thread_current();
+                #if defined(_WIN32)
+                HANDLE thread = (HANDLE) _beginthreadex(NULL, 0, child_main, NULL, 0, NULL);
+                if (thread == NULL) {
+                    return 3;
+                }
+                #else
+                pthread_t thread;
+                if (pthread_create(&thread, NULL, child_main, NULL) != 0) {
+                    return 3;
+                }
+                #endif
+                while (atomic_load_explicit(&worker_ready, memory_order_acquire) == 0) {
+                    wait_tick();
+                }
+                javan_gc_collect();
+                atomic_store_explicit(&gc_done, 1, memory_order_release);
+                #if defined(_WIN32)
+                if (WaitForSingleObject(thread, INFINITE) != WAIT_OBJECT_0) {
+                    CloseHandle(thread);
+                    return 4;
+                }
+                CloseHandle(thread);
+                #else
+                if (pthread_join(thread, NULL) != 0) {
+                    return 4;
+                }
+                #endif
+                javan_gc_collect();
+                printf("worker=%d\\n", atomic_load_explicit(&worker_result, memory_order_acquire));
+                printf("roots=%lu\\n", javan_heap_registered_thread_roots());
+                printf("current=%d\\n", javan_heap_current_thread_root_present());
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            worker=0
+            roots=1
+            current=1
+            """
+        );
+    }
+
+    @Test
+    void runtimeBootstrapThreadRootFramesStayPublishedAcrossConcurrentWorkerGc() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdatomic.h>
+            #include <stdio.h>
+            #include <unistd.h>
+
+            static atomic_int worker_ready;
+            static atomic_int worker_cycles;
+            static atomic_int release_worker;
+
+            void javan_thread_run_target(void* target) {
+                (void) target;
+                atomic_store_explicit(&worker_ready, 1, memory_order_release);
+                while (atomic_load_explicit(&release_worker, memory_order_acquire) == 0) {
+                    javan_gc_collect();
+                    atomic_fetch_add_explicit(&worker_cycles, 1, memory_order_release);
+                    usleep(1000);
+                }
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                (void) javan_thread_current();
+                void* rooted = javan_string_value_of_int(41);
+                void** rooted_roots[] = {
+                    (void**) &rooted
+                };
+                javan_root_frame_push(rooted_roots, 1);
+                void* worker = javan_thread_new();
+                void* target = javan_thread_new();
+                void** worker_roots[] = {
+                    (void**) &worker,
+                    (void**) &target
+                };
+                javan_root_frame_push(worker_roots, 2);
+                javan_thread_set_target(worker, target);
+                javan_thread_start(worker);
+                while (atomic_load_explicit(&worker_ready, memory_order_acquire) == 0) {
+                    usleep(1000);
+                }
+                while (atomic_load_explicit(&worker_cycles, memory_order_acquire) < 8) {
+                    usleep(1000);
+                }
+                atomic_store_explicit(&release_worker, 1, memory_order_release);
+                javan_thread_join(worker);
+                javan_root_frame_pop(worker_roots);
+                worker = NULL;
+                target = NULL;
+                javan_gc_collect();
+                printf("rooted=%d\\n", javan_string_length((const char*) rooted));
+                printf("live=%lu\\n", javan_heap_live_allocations());
+                javan_root_frame_pop(rooted_roots);
+                javan_gc_collect();
+                printf("after=%lu\\n", javan_heap_live_allocations());
+                printf("current=%d\\n", javan_heap_current_thread_root_present());
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            rooted=2
+            live=3
+            after=2
+            current=1
+            """
+        );
+    }
+
+    @Test
+    void runtimeHostThreadThreadLocalValueSurvivesConcurrentGcAndDetachesCleanly() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #if defined(_WIN32)
+            #include <process.h>
+            #include <windows.h>
+            #else
+            #include <pthread.h>
+            #include <unistd.h>
+            #endif
+            #include <stdatomic.h>
+            #include <stdio.h>
+
+            static atomic_int worker_ready;
+            static atomic_int release_worker;
+            static atomic_int worker_result;
+
+            static void wait_tick(void) {
+                #if defined(_WIN32)
+                Sleep(1);
+                #else
+                usleep(1000);
+                #endif
+            }
+
+            #if defined(_WIN32)
+            static unsigned __stdcall child_main(void* argument) {
+            #else
+            static void* child_main(void* argument) {
+            #endif
+                (void) argument;
+                (void) javan_thread_current();
+                void* local = javan_thread_local_new();
+                javan_thread_local_set(local, javan_string_value_of_int(41));
+                atomic_store_explicit(&worker_ready, 1, memory_order_release);
+                while (atomic_load_explicit(&release_worker, memory_order_acquire) == 0) {
+                    wait_tick();
+                }
+                void* retained = javan_thread_local_get(local);
+                if (retained == NULL) {
+                    atomic_store_explicit(&worker_result, -1, memory_order_release);
+                } else {
+                    atomic_store_explicit(&worker_result, javan_string_length((const char*) retained), memory_order_release);
+                }
+                javan_thread_detach_current();
+                #if defined(_WIN32)
+                return 0U;
+                #else
+                return NULL;
+                #endif
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                (void) javan_thread_current();
+                #if defined(_WIN32)
+                HANDLE thread = (HANDLE) _beginthreadex(NULL, 0, child_main, NULL, 0, NULL);
+                if (thread == NULL) {
+                    return 3;
+                }
+                #else
+                pthread_t thread;
+                if (pthread_create(&thread, NULL, child_main, NULL) != 0) {
+                    return 3;
+                }
+                #endif
+                while (atomic_load_explicit(&worker_ready, memory_order_acquire) == 0) {
+                    wait_tick();
+                }
+                javan_gc_collect();
+                atomic_store_explicit(&release_worker, 1, memory_order_release);
+                #if defined(_WIN32)
+                if (WaitForSingleObject(thread, INFINITE) != WAIT_OBJECT_0) {
+                    CloseHandle(thread);
+                    return 4;
+                }
+                CloseHandle(thread);
+                #else
+                if (pthread_join(thread, NULL) != 0) {
+                    return 4;
+                }
+                #endif
+                javan_gc_collect();
+                printf("worker=%d\\n", atomic_load_explicit(&worker_result, memory_order_acquire));
+                printf("threads=%lu\\n", javan_heap_thread_objects());
+                printf("live=%lu\\n", javan_heap_live_allocations());
+                printf("roots=%lu\\n", javan_heap_registered_thread_roots());
+                printf("current=%d\\n", javan_heap_current_thread_root_present());
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            worker=2
+            threads=1
+            live=2
+            roots=1
+            current=1
+            """
+        );
+    }
+
+    @Test
+    void runtimeHostThreadThreadLocalObjectGraphSurvivesConcurrentGcAndDetachesCleanly() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #if defined(_WIN32)
+            #include <process.h>
+            #include <windows.h>
+            #else
+            #include <pthread.h>
+            #include <unistd.h>
+            #endif
+            #include <stdatomic.h>
+            #include <stdio.h>
+
+            static atomic_int worker_ready;
+            static atomic_int release_worker;
+            static atomic_int worker_present;
+            static atomic_int worker_map_size;
+            static atomic_int worker_list_size;
+            static atomic_int worker_payload_length;
+
+            static void wait_tick(void) {
+                #if defined(_WIN32)
+                Sleep(1);
+                #else
+                usleep(1000);
+                #endif
+            }
+
+            #if defined(_WIN32)
+            static unsigned __stdcall child_main(void* argument) {
+            #else
+            static void* child_main(void* argument) {
+            #endif
+                (void) argument;
+                (void) javan_thread_current();
+                void* local = javan_thread_local_new();
+                void* key = javan_string_value_of_int(7);
+                void* payload = javan_string_value_of_int(41);
+                void* list = javan_arraylist_new();
+                (void) javan_arraylist_add(list, payload);
+                void* map = javan_hashmap_new();
+                (void) javan_map_put(map, key, list);
+                void* optional = javan_optional_of(map);
+                javan_thread_local_set(local, optional);
+                atomic_store_explicit(&worker_ready, 1, memory_order_release);
+                while (atomic_load_explicit(&release_worker, memory_order_acquire) == 0) {
+                    wait_tick();
+                }
+                void* retained_optional = javan_thread_local_get(local);
+                atomic_store_explicit(&worker_present, javan_optional_is_present(retained_optional), memory_order_release);
+                void* retained_map = javan_optional_or_else_throw(retained_optional);
+                atomic_store_explicit(&worker_map_size, javan_map_size(retained_map), memory_order_release);
+                void* retained_list = javan_map_get(retained_map, key);
+                atomic_store_explicit(&worker_list_size, javan_list_size(retained_list), memory_order_release);
+                void* retained_payload = javan_list_get(retained_list, 0);
+                atomic_store_explicit(&worker_payload_length, javan_string_length((const char*) retained_payload), memory_order_release);
+                javan_thread_detach_current();
+                #if defined(_WIN32)
+                return 0U;
+                #else
+                return NULL;
+                #endif
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                (void) javan_thread_current();
+                #if defined(_WIN32)
+                HANDLE thread = (HANDLE) _beginthreadex(NULL, 0, child_main, NULL, 0, NULL);
+                if (thread == NULL) {
+                    return 3;
+                }
+                #else
+                pthread_t thread;
+                if (pthread_create(&thread, NULL, child_main, NULL) != 0) {
+                    return 3;
+                }
+                #endif
+                while (atomic_load_explicit(&worker_ready, memory_order_acquire) == 0) {
+                    wait_tick();
+                }
+                javan_gc_collect();
+                atomic_store_explicit(&release_worker, 1, memory_order_release);
+                #if defined(_WIN32)
+                if (WaitForSingleObject(thread, INFINITE) != WAIT_OBJECT_0) {
+                    CloseHandle(thread);
+                    return 4;
+                }
+                CloseHandle(thread);
+                #else
+                if (pthread_join(thread, NULL) != 0) {
+                    return 4;
+                }
+                #endif
+                javan_gc_collect();
+                printf("present=%d\\n", atomic_load_explicit(&worker_present, memory_order_acquire));
+                printf("map=%d\\n", atomic_load_explicit(&worker_map_size, memory_order_acquire));
+                printf("list=%d\\n", atomic_load_explicit(&worker_list_size, memory_order_acquire));
+                printf("payload=%d\\n", atomic_load_explicit(&worker_payload_length, memory_order_acquire));
+                printf("threads=%lu\\n", javan_heap_thread_objects());
+                printf("live=%lu\\n", javan_heap_live_allocations());
+                printf("roots=%lu\\n", javan_heap_registered_thread_roots());
+                printf("current=%d\\n", javan_heap_current_thread_root_present());
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            present=1
+            map=1
+            list=1
+            payload=2
+            threads=1
+            live=2
+            roots=1
+            current=1
+            """
+        );
+    }
+
+    @Test
+    void runtimeHostThreadThreadLocalSiblingRemoveKeepsRetainedGraphAliveDuringConcurrentGcAndDetachesCleanly() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #if defined(_WIN32)
+            #include <process.h>
+            #include <windows.h>
+            #else
+            #include <pthread.h>
+            #include <unistd.h>
+            #endif
+            #include <stdatomic.h>
+            #include <stdio.h>
+
+            static atomic_int worker_ready;
+            static atomic_int release_worker;
+            static atomic_int retained_present;
+            static atomic_int retained_map_size;
+            static atomic_int retained_list_size;
+            static atomic_int retained_payload_length;
+
+            static void wait_tick(void) {
+                #if defined(_WIN32)
+                Sleep(1);
+                #else
+                usleep(1000);
+                #endif
+            }
+
+            #if defined(_WIN32)
+            static unsigned __stdcall child_main(void* argument) {
+            #else
+            static void* child_main(void* argument) {
+            #endif
+                (void) argument;
+                (void) javan_thread_current();
+                void* removed_local = javan_thread_local_new();
+                void* retained_local = javan_thread_local_new();
+
+                void* removed_key = javan_string_value_of_int(5);
+                void* removed_payload = javan_string_value_of_int(55);
+                void* removed_list = javan_arraylist_new();
+                (void) javan_arraylist_add(removed_list, removed_payload);
+                void* removed_map = javan_hashmap_new();
+                (void) javan_map_put(removed_map, removed_key, removed_list);
+                void* removed_optional = javan_optional_of(removed_map);
+                javan_thread_local_set(removed_local, removed_optional);
+
+                void* retained_key = javan_string_value_of_int(6);
+                void* retained_payload = javan_string_value_of_int(66);
+                void* retained_list = javan_arraylist_new();
+                (void) javan_arraylist_add(retained_list, retained_payload);
+                void* retained_map = javan_hashmap_new();
+                (void) javan_map_put(retained_map, retained_key, retained_list);
+                void* retained_optional = javan_optional_of(retained_map);
+                javan_thread_local_set(retained_local, retained_optional);
+                javan_thread_local_remove(removed_local);
+
+                removed_key = NULL;
+                removed_payload = NULL;
+                removed_list = NULL;
+                removed_map = NULL;
+                removed_optional = NULL;
+                retained_payload = NULL;
+                retained_list = NULL;
+                retained_map = NULL;
+                retained_optional = NULL;
+                atomic_store_explicit(&worker_ready, 1, memory_order_release);
+                while (atomic_load_explicit(&release_worker, memory_order_acquire) == 0) {
+                    wait_tick();
+                }
+
+                void* live_optional = javan_thread_local_get(retained_local);
+                atomic_store_explicit(&retained_present, javan_optional_is_present(live_optional), memory_order_release);
+                void* live_map = javan_optional_or_else_throw(live_optional);
+                atomic_store_explicit(&retained_map_size, javan_map_size(live_map), memory_order_release);
+                void* live_list = javan_map_get(live_map, retained_key);
+                atomic_store_explicit(&retained_list_size, javan_list_size(live_list), memory_order_release);
+                void* live_payload = javan_list_get(live_list, 0);
+                atomic_store_explicit(&retained_payload_length, javan_string_length((const char*) live_payload), memory_order_release);
+                javan_thread_detach_current();
+                #if defined(_WIN32)
+                return 0U;
+                #else
+                return NULL;
+                #endif
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                (void) javan_thread_current();
+                #if defined(_WIN32)
+                HANDLE thread = (HANDLE) _beginthreadex(NULL, 0, child_main, NULL, 0, NULL);
+                if (thread == NULL) {
+                    return 3;
+                }
+                #else
+                pthread_t thread;
+                if (pthread_create(&thread, NULL, child_main, NULL) != 0) {
+                    return 3;
+                }
+                #endif
+                while (atomic_load_explicit(&worker_ready, memory_order_acquire) == 0) {
+                    wait_tick();
+                }
+                javan_gc_collect();
+                atomic_store_explicit(&release_worker, 1, memory_order_release);
+                #if defined(_WIN32)
+                if (WaitForSingleObject(thread, INFINITE) != WAIT_OBJECT_0) {
+                    CloseHandle(thread);
+                    return 4;
+                }
+                CloseHandle(thread);
+                #else
+                if (pthread_join(thread, NULL) != 0) {
+                    return 4;
+                }
+                #endif
+                javan_gc_collect();
+                printf("present=%d\\n", atomic_load_explicit(&retained_present, memory_order_acquire));
+                printf("map=%d\\n", atomic_load_explicit(&retained_map_size, memory_order_acquire));
+                printf("list=%d\\n", atomic_load_explicit(&retained_list_size, memory_order_acquire));
+                printf("payload=%d\\n", atomic_load_explicit(&retained_payload_length, memory_order_acquire));
+                printf("threads=%lu\\n", javan_heap_thread_objects());
+                printf("live=%lu\\n", javan_heap_live_allocations());
+                printf("roots=%lu\\n", javan_heap_registered_thread_roots());
+                printf("current=%d\\n", javan_heap_current_thread_root_present());
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            present=1
+            map=1
+            list=1
+            payload=2
+            threads=1
+            live=2
+            roots=1
+            current=1
+            """
+        );
+    }
+
+    @Test
+    void runtimeHostThreadThreadLocalSiblingRemoveKeepsRetainedGraphAliveDuringRepeatedSafepointGcAndDetachesCleanly() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <pthread.h>
+            #include <stdatomic.h>
+            #include <stdio.h>
+            #include <unistd.h>
+
+            static atomic_int worker_ready;
+            static atomic_int release_worker;
+            static atomic_int retained_present;
+            static atomic_int retained_map_size;
+            static atomic_int retained_list_size;
+            static atomic_int retained_payload_length;
+
+            static void* child_main(void* argument) {
+                (void) argument;
+                (void) javan_thread_current();
+                void* removed_local = javan_thread_local_new();
+                void* retained_local = javan_thread_local_new();
+
+                void* removed_key = javan_string_value_of_int(5);
+                void* removed_payload = javan_string_value_of_int(55);
+                void* removed_list = javan_arraylist_new();
+                (void) javan_arraylist_add(removed_list, removed_payload);
+                void* removed_map = javan_hashmap_new();
+                (void) javan_map_put(removed_map, removed_key, removed_list);
+                void* removed_optional = javan_optional_of(removed_map);
+                javan_thread_local_set(removed_local, removed_optional);
+
+                void* retained_key = javan_string_value_of_int(6);
+                void* retained_payload = javan_string_value_of_int(66);
+                void* retained_list = javan_arraylist_new();
+                (void) javan_arraylist_add(retained_list, retained_payload);
+                void* retained_map = javan_hashmap_new();
+                (void) javan_map_put(retained_map, retained_key, retained_list);
+                void* retained_optional = javan_optional_of(retained_map);
+                javan_thread_local_set(retained_local, retained_optional);
+                javan_thread_local_remove(removed_local);
+
+                removed_key = NULL;
+                removed_payload = NULL;
+                removed_list = NULL;
+                removed_map = NULL;
+                removed_optional = NULL;
+                retained_payload = NULL;
+                retained_list = NULL;
+                retained_map = NULL;
+                retained_optional = NULL;
+                atomic_store_explicit(&worker_ready, 1, memory_order_release);
+                while (atomic_load_explicit(&release_worker, memory_order_acquire) == 0) {
+                    (void) javan_thread_new();
+                    javan_gc_safe_point();
+                    usleep(1000);
+                }
+
+                void* live_optional = javan_thread_local_get(retained_local);
+                atomic_store_explicit(&retained_present, javan_optional_is_present(live_optional), memory_order_release);
+                void* live_map = javan_optional_or_else_throw(live_optional);
+                atomic_store_explicit(&retained_map_size, javan_map_size(live_map), memory_order_release);
+                void* live_list = javan_map_get(live_map, retained_key);
+                atomic_store_explicit(&retained_list_size, javan_list_size(live_list), memory_order_release);
+                void* live_payload = javan_list_get(live_list, 0);
+                atomic_store_explicit(&retained_payload_length, javan_string_length((const char*) live_payload), memory_order_release);
+                javan_thread_detach_current();
+                return NULL;
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                (void) javan_thread_current();
+                pthread_t thread;
+                if (pthread_create(&thread, NULL, child_main, NULL) != 0) {
+                    return 3;
+                }
+                while (atomic_load_explicit(&worker_ready, memory_order_acquire) == 0) {
+                    usleep(1000);
+                }
+                for (int index = 0; index < 16; index++) {
+                    (void) javan_thread_new();
+                    javan_gc_safe_point();
+                    usleep(1000);
+                }
+                atomic_store_explicit(&release_worker, 1, memory_order_release);
+                if (pthread_join(thread, NULL) != 0) {
+                    return 4;
+                }
+                javan_gc_collect();
+                printf("present=%d\\n", atomic_load_explicit(&retained_present, memory_order_acquire));
+                printf("map=%d\\n", atomic_load_explicit(&retained_map_size, memory_order_acquire));
+                printf("list=%d\\n", atomic_load_explicit(&retained_list_size, memory_order_acquire));
+                printf("payload=%d\\n", atomic_load_explicit(&retained_payload_length, memory_order_acquire));
+                printf("threads=%lu\\n", javan_heap_thread_objects());
+                printf("live=%lu\\n", javan_heap_live_allocations());
+                printf("roots=%lu\\n", javan_heap_registered_thread_roots());
+                printf("current=%d\\n", javan_heap_current_thread_root_present());
+                return 0;
+            }
+            """,
+            "16384",
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1")
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            present=1
+            map=1
+            list=1
+            payload=2
+            threads=1
+            live=2
+            roots=1
+            current=1
+            """
+        );
+    }
+
+    @Test
+    void runtimeHostThreadThreadLocalOverwriteSurvivesRepeatedSafepointGcDuringMutationAndDetachesCleanly() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #if defined(_WIN32)
+            #include <process.h>
+            #include <windows.h>
+            #else
+            #include <pthread.h>
+            #include <unistd.h>
+            #endif
+            #include <stdatomic.h>
+            #include <stdio.h>
+
+            static atomic_int worker_ready;
+            static atomic_int release_worker;
+            static atomic_int retained_present;
+            static atomic_int retained_map_size;
+            static atomic_int retained_list_size;
+            static atomic_int retained_payload_length;
+
+            static void wait_tick(void) {
+                #if defined(_WIN32)
+                Sleep(1);
+                #else
+                usleep(1000);
+                #endif
+            }
+
+            static void wait_half_tick(void) {
+                #if defined(_WIN32)
+                Sleep(1);
+                #else
+                usleep(500);
+                #endif
+            }
+
+            #if defined(_WIN32)
+            static unsigned __stdcall child_main(void* argument) {
+            #else
+            static void* child_main(void* argument) {
+            #endif
+                (void) argument;
+                (void) javan_thread_current();
+                void* local = javan_thread_local_new();
+                void* prepared = NULL;
+                void* final_key = NULL;
+                void* final_payload = NULL;
+                void* final_list = NULL;
+                void* final_map = NULL;
+                void* final_optional = NULL;
+                void** worker_roots[] = {
+                    (void**) &local,
+                    (void**) &prepared,
+                    (void**) &final_key,
+                    (void**) &final_payload,
+                    (void**) &final_list,
+                    (void**) &final_map,
+                    (void**) &final_optional
+                };
+                javan_root_frame_push(worker_roots, 7);
+                prepared = javan_arraylist_new();
+                for (int index = 0; index < 16; index++) {
+                    void* loop_key = javan_string_value_of_int(2100 + index);
+                    void* loop_payload = javan_string_value_of_int(3100 + index);
+                    void* loop_list = javan_arraylist_new();
+                    (void) javan_arraylist_add(loop_list, loop_payload);
+                    void* loop_map = javan_hashmap_new();
+                    (void) javan_map_put(loop_map, loop_key, loop_list);
+                    void* loop_optional = javan_optional_of(loop_map);
+                    (void) javan_arraylist_add(prepared, loop_optional);
+                }
+                final_key = javan_string_value_of_int(999);
+                final_payload = javan_string_value_of_int(123456);
+                final_list = javan_arraylist_new();
+                (void) javan_arraylist_add(final_list, final_payload);
+                final_map = javan_hashmap_new();
+                (void) javan_map_put(final_map, final_key, final_list);
+                final_optional = javan_optional_of(final_map);
+
+                atomic_store_explicit(&worker_ready, 1, memory_order_release);
+                while (atomic_load_explicit(&release_worker, memory_order_acquire) == 0) {
+                    for (int index = 0; index < 16; index++) {
+                        javan_thread_local_set(local, javan_list_get(prepared, index));
+                        wait_half_tick();
+                    }
+                    javan_thread_local_set(local, final_optional);
+                    wait_half_tick();
+                }
+
+                void* retained_optional = javan_thread_local_get(local);
+                atomic_store_explicit(&retained_present, javan_optional_is_present(retained_optional), memory_order_release);
+                void* retained_map = javan_optional_or_else_throw(retained_optional);
+                atomic_store_explicit(&retained_map_size, javan_map_size(retained_map), memory_order_release);
+                void* retained_list = javan_map_get(retained_map, final_key);
+                atomic_store_explicit(&retained_list_size, javan_list_size(retained_list), memory_order_release);
+                void* retained_payload = javan_list_get(retained_list, 0);
+                atomic_store_explicit(&retained_payload_length, javan_string_length((const char*) retained_payload), memory_order_release);
+                javan_root_frame_pop(worker_roots);
+                javan_thread_detach_current();
+                #if defined(_WIN32)
+                return 0U;
+                #else
+                return NULL;
+                #endif
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                (void) javan_thread_current();
+                #if defined(_WIN32)
+                HANDLE thread = (HANDLE) _beginthreadex(NULL, 0, child_main, NULL, 0, NULL);
+                if (thread == NULL) {
+                    return 3;
+                }
+                #else
+                pthread_t thread;
+                if (pthread_create(&thread, NULL, child_main, NULL) != 0) {
+                    return 3;
+                }
+                #endif
+                while (atomic_load_explicit(&worker_ready, memory_order_acquire) == 0) {
+                    wait_tick();
+                }
+                for (int index = 0; index < 64; index++) {
+                    (void) javan_thread_new();
+                    javan_gc_safe_point();
+                    wait_half_tick();
+                }
+                atomic_store_explicit(&release_worker, 1, memory_order_release);
+                #if defined(_WIN32)
+                if (WaitForSingleObject(thread, INFINITE) != WAIT_OBJECT_0) {
+                    CloseHandle(thread);
+                    return 4;
+                }
+                CloseHandle(thread);
+                #else
+                if (pthread_join(thread, NULL) != 0) {
+                    return 4;
+                }
+                #endif
+                javan_gc_collect();
+                printf("present=%d\\n", atomic_load_explicit(&retained_present, memory_order_acquire));
+                printf("map=%d\\n", atomic_load_explicit(&retained_map_size, memory_order_acquire));
+                printf("list=%d\\n", atomic_load_explicit(&retained_list_size, memory_order_acquire));
+                printf("payload=%d\\n", atomic_load_explicit(&retained_payload_length, memory_order_acquire));
+                printf("threads=%lu\\n", javan_heap_thread_objects());
+                printf("live=%lu\\n", javan_heap_live_allocations());
+                printf("roots=%lu\\n", javan_heap_registered_thread_roots());
+                printf("current=%d\\n", javan_heap_current_thread_root_present());
+                return 0;
+            }
+            """,
+            "32768",
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1")
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            present=1
+            map=1
+            list=1
+            payload=6
+            threads=1
+            live=2
+            roots=1
+            current=1
+            """
+        );
+    }
+
+    @Test
+    void runtimeHostThreadThreadLocalRemoveAndSiblingRetentionSurviveRepeatedSafepointGcDuringMutationAndDetachesCleanly() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #if defined(_WIN32)
+            #include <process.h>
+            #include <windows.h>
+            #else
+            #include <pthread.h>
+            #include <unistd.h>
+            #endif
+            #include <stdatomic.h>
+            #include <stdio.h>
+
+            static atomic_int worker_ready;
+            static atomic_int release_worker;
+            static atomic_int removed_missing;
+            static atomic_int retained_present;
+            static atomic_int retained_map_size;
+            static atomic_int retained_list_size;
+            static atomic_int retained_payload_length;
+
+            static void wait_tick(void) {
+                #if defined(_WIN32)
+                Sleep(1);
+                #else
+                usleep(1000);
+                #endif
+            }
+
+            static void wait_half_tick(void) {
+                #if defined(_WIN32)
+                Sleep(1);
+                #else
+                usleep(500);
+                #endif
+            }
+
+            #if defined(_WIN32)
+            static unsigned __stdcall child_main(void* argument) {
+            #else
+            static void* child_main(void* argument) {
+            #endif
+                (void) argument;
+                (void) javan_thread_current();
+                void* removed_local = NULL;
+                void* retained_local = NULL;
+                void* prepared = NULL;
+                void* retained_key = NULL;
+                void* retained_payload = NULL;
+                void* retained_list = NULL;
+                void* retained_map = NULL;
+                void* retained_optional = NULL;
+                void** worker_roots[] = {
+                    (void**) &removed_local,
+                    (void**) &retained_local,
+                    (void**) &prepared,
+                    (void**) &retained_key,
+                    (void**) &retained_payload,
+                    (void**) &retained_list,
+                    (void**) &retained_map,
+                    (void**) &retained_optional
+                };
+                javan_root_frame_push(worker_roots, 8);
+                removed_local = javan_thread_local_new();
+                retained_local = javan_thread_local_new();
+                prepared = javan_arraylist_new();
+                retained_key = javan_string_value_of_int(6);
+                retained_payload = javan_string_value_of_int(66);
+                retained_list = javan_arraylist_new();
+                (void) javan_arraylist_add(retained_list, retained_payload);
+                retained_map = javan_hashmap_new();
+                (void) javan_map_put(retained_map, retained_key, retained_list);
+                retained_optional = javan_optional_of(retained_map);
+                javan_thread_local_set(retained_local, retained_optional);
+                for (int index = 0; index < 16; index++) {
+                    void* loop_key = javan_string_value_of_int(8000 + index);
+                    void* loop_payload = javan_string_value_of_int(9000 + index);
+                    void* loop_list = javan_arraylist_new();
+                    (void) javan_arraylist_add(loop_list, loop_payload);
+                    void* loop_map = javan_hashmap_new();
+                    (void) javan_map_put(loop_map, loop_key, loop_list);
+                    void* loop_optional = javan_optional_of(loop_map);
+                    (void) javan_arraylist_add(prepared, loop_optional);
+                }
+
+                atomic_store_explicit(&worker_ready, 1, memory_order_release);
+                while (atomic_load_explicit(&release_worker, memory_order_acquire) == 0) {
+                    for (int index = 0; index < 16; index++) {
+                        javan_thread_local_set(removed_local, javan_list_get(prepared, index));
+                        javan_thread_local_remove(removed_local);
+                        wait_half_tick();
+                    }
+                    wait_half_tick();
+                }
+
+                atomic_store_explicit(&removed_missing, javan_thread_local_get(removed_local) == NULL, memory_order_release);
+                void* live_optional = javan_thread_local_get(retained_local);
+                atomic_store_explicit(&retained_present, javan_optional_is_present(live_optional), memory_order_release);
+                void* live_map = javan_optional_or_else_throw(live_optional);
+                atomic_store_explicit(&retained_map_size, javan_map_size(live_map), memory_order_release);
+                void* live_list = javan_map_get(live_map, retained_key);
+                atomic_store_explicit(&retained_list_size, javan_list_size(live_list), memory_order_release);
+                void* live_payload = javan_list_get(live_list, 0);
+                atomic_store_explicit(&retained_payload_length, javan_string_length((const char*) live_payload), memory_order_release);
+                javan_root_frame_pop(worker_roots);
+                javan_thread_detach_current();
+                #if defined(_WIN32)
+                return 0U;
+                #else
+                return NULL;
+                #endif
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                (void) javan_thread_current();
+                #if defined(_WIN32)
+                HANDLE thread = (HANDLE) _beginthreadex(NULL, 0, child_main, NULL, 0, NULL);
+                if (thread == NULL) {
+                    return 3;
+                }
+                #else
+                pthread_t thread;
+                if (pthread_create(&thread, NULL, child_main, NULL) != 0) {
+                    return 3;
+                }
+                #endif
+                while (atomic_load_explicit(&worker_ready, memory_order_acquire) == 0) {
+                    wait_tick();
+                }
+                for (int index = 0; index < 64; index++) {
+                    (void) javan_thread_new();
+                    javan_gc_safe_point();
+                    wait_half_tick();
+                }
+                atomic_store_explicit(&release_worker, 1, memory_order_release);
+                #if defined(_WIN32)
+                if (WaitForSingleObject(thread, INFINITE) != WAIT_OBJECT_0) {
+                    CloseHandle(thread);
+                    return 4;
+                }
+                CloseHandle(thread);
+                #else
+                if (pthread_join(thread, NULL) != 0) {
+                    return 4;
+                }
+                #endif
+                javan_gc_collect();
+                printf("removed=%d\\n", atomic_load_explicit(&removed_missing, memory_order_acquire));
+                printf("present=%d\\n", atomic_load_explicit(&retained_present, memory_order_acquire));
+                printf("map=%d\\n", atomic_load_explicit(&retained_map_size, memory_order_acquire));
+                printf("list=%d\\n", atomic_load_explicit(&retained_list_size, memory_order_acquire));
+                printf("payload=%d\\n", atomic_load_explicit(&retained_payload_length, memory_order_acquire));
+                printf("threads=%lu\\n", javan_heap_thread_objects());
+                printf("live=%lu\\n", javan_heap_live_allocations());
+                printf("roots=%lu\\n", javan_heap_registered_thread_roots());
+                printf("current=%d\\n", javan_heap_current_thread_root_present());
+                return 0;
+            }
+            """,
+            "32768",
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1")
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            removed=1
+            present=1
+            map=1
+            list=1
+            payload=2
+            threads=1
+            live=2
+            roots=1
+            current=1
+            """
+        );
+    }
+
+    @Test
+    void runtimeHostThreadThreadLocalMapGrowthSurvivesRepeatedSafepointGcAndDetachesCleanly() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #if defined(_WIN32)
+            #include <process.h>
+            #include <windows.h>
+            #else
+            #include <pthread.h>
+            #include <unistd.h>
+            #endif
+            #include <stdatomic.h>
+            #include <stdio.h>
+
+            static atomic_int worker_ready;
+            static atomic_int release_worker;
+            static atomic_int retained_count;
+            static atomic_int payload_checksum;
+
+            static void wait_tick(void) {
+                #if defined(_WIN32)
+                Sleep(1);
+                #else
+                usleep(1000);
+                #endif
+            }
+
+            static void wait_half_tick(void) {
+                #if defined(_WIN32)
+                Sleep(1);
+                #else
+                usleep(500);
+                #endif
+            }
+
+            #if defined(_WIN32)
+            static unsigned __stdcall child_main(void* argument) {
+            #else
+            static void* child_main(void* argument) {
+            #endif
+                (void) argument;
+                (void) javan_thread_current();
+                void* locals = NULL;
+                void* prepared = NULL;
+                void** worker_roots[] = {
+                    (void**) &locals,
+                    (void**) &prepared
+                };
+                javan_root_frame_push(worker_roots, 2);
+                locals = javan_arraylist_new();
+                prepared = javan_arraylist_new();
+                for (int index = 0; index < 16; index++) {
+                    void* local = javan_thread_local_new();
+                    (void) javan_arraylist_add(locals, local);
+
+                    void* loop_key = javan_string_value_of_int(6000 + index);
+                    void* loop_payload = javan_string_value_of_int(7000 + index);
+                    void* loop_list = javan_arraylist_new();
+                    (void) javan_arraylist_add(loop_list, loop_payload);
+                    void* loop_map = javan_hashmap_new();
+                    (void) javan_map_put(loop_map, loop_key, loop_list);
+                    void* loop_optional = javan_optional_of(loop_map);
+                    (void) javan_arraylist_add(prepared, loop_optional);
+                }
+
+                atomic_store_explicit(&worker_ready, 1, memory_order_release);
+                while (atomic_load_explicit(&release_worker, memory_order_acquire) == 0) {
+                    for (int index = 0; index < 16; index++) {
+                        javan_thread_local_set(
+                            javan_list_get(locals, index),
+                            javan_list_get(prepared, index)
+                        );
+                        wait_half_tick();
+                    }
+                    wait_half_tick();
+                }
+
+                int count = 0;
+                int checksum = 0;
+                for (int index = 0; index < 16; index++) {
+                    void* retained_optional = javan_thread_local_get(javan_list_get(locals, index));
+                    if (javan_optional_is_present(retained_optional) != 0) {
+                        count++;
+                    }
+                    void* retained_map = javan_optional_or_else_throw(retained_optional);
+                    void* retained_list = javan_map_get(retained_map, javan_string_value_of_int(6000 + index));
+                    void* retained_payload = javan_list_get(retained_list, 0);
+                    checksum += javan_string_length((const char*) retained_payload);
+                }
+                atomic_store_explicit(&retained_count, count, memory_order_release);
+                atomic_store_explicit(&payload_checksum, checksum, memory_order_release);
+                javan_root_frame_pop(worker_roots);
+                javan_thread_detach_current();
+                #if defined(_WIN32)
+                return 0U;
+                #else
+                return NULL;
+                #endif
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                (void) javan_thread_current();
+                #if defined(_WIN32)
+                HANDLE thread = (HANDLE) _beginthreadex(NULL, 0, child_main, NULL, 0, NULL);
+                if (thread == NULL) {
+                    return 3;
+                }
+                #else
+                pthread_t thread;
+                if (pthread_create(&thread, NULL, child_main, NULL) != 0) {
+                    return 3;
+                }
+                #endif
+                while (atomic_load_explicit(&worker_ready, memory_order_acquire) == 0) {
+                    wait_tick();
+                }
+                for (int index = 0; index < 64; index++) {
+                    (void) javan_thread_new();
+                    javan_gc_safe_point();
+                    wait_half_tick();
+                }
+                atomic_store_explicit(&release_worker, 1, memory_order_release);
+                #if defined(_WIN32)
+                if (WaitForSingleObject(thread, INFINITE) != WAIT_OBJECT_0) {
+                    CloseHandle(thread);
+                    return 4;
+                }
+                CloseHandle(thread);
+                #else
+                if (pthread_join(thread, NULL) != 0) {
+                    return 4;
+                }
+                #endif
+                javan_gc_collect();
+                printf("count=%d\\n", atomic_load_explicit(&retained_count, memory_order_acquire));
+                printf("checksum=%d\\n", atomic_load_explicit(&payload_checksum, memory_order_acquire));
+                printf("threads=%lu\\n", javan_heap_thread_objects());
+                printf("live=%lu\\n", javan_heap_live_allocations());
+                printf("roots=%lu\\n", javan_heap_registered_thread_roots());
+                printf("current=%d\\n", javan_heap_current_thread_root_present());
+                return 0;
+            }
+            """,
+            "65536",
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1")
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            count=16
+            checksum=64
+            threads=1
+            live=2
+            roots=1
+            current=1
+            """
+        );
+    }
+
+    @Test
+    void runtimeStartedWorkerThreadLocalObjectGraphSurvivesConcurrentGcAndCleansUpAfterJoin() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+            #include <stdatomic.h>
+            #if defined(_WIN32)
+            #include <windows.h>
+            #else
+            #include <unistd.h>
+            #endif
+
+            static atomic_int worker_ready;
+            static atomic_int release_worker;
+            static atomic_int worker_present;
+            static atomic_int worker_map_size;
+            static atomic_int worker_list_size;
+            static atomic_int worker_payload_length;
+            static atomic_ulong live_during_gc;
+            static atomic_ulong threads_during_gc;
+
+            static void wait_tick(void) {
+                #if defined(_WIN32)
+                Sleep(1);
+                #else
+                usleep(1000);
+                #endif
+            }
+
+            void javan_thread_run_target(void* target) {
+                void* local = target;
+                void* key = javan_string_value_of_int(4);
+                void* payload = javan_string_value_of_int(44);
+                void* list = javan_arraylist_new();
+                (void) javan_arraylist_add(list, payload);
+                void* map = javan_hashmap_new();
+                (void) javan_map_put(map, key, list);
+                void* optional = javan_optional_of(map);
+                javan_thread_local_set(local, optional);
+                atomic_store_explicit(&worker_ready, 1, memory_order_release);
+                while (atomic_load_explicit(&release_worker, memory_order_acquire) == 0) {
+                    wait_tick();
+                }
+                void* retained_optional = javan_thread_local_get(local);
+                atomic_store_explicit(&worker_present, javan_optional_is_present(retained_optional), memory_order_release);
+                void* retained_map = javan_optional_or_else_throw(retained_optional);
+                atomic_store_explicit(&worker_map_size, javan_map_size(retained_map), memory_order_release);
+                void* retained_list = javan_map_get(retained_map, key);
+                atomic_store_explicit(&worker_list_size, javan_list_size(retained_list), memory_order_release);
+                void* retained_payload = javan_list_get(retained_list, 0);
+                atomic_store_explicit(&worker_payload_length, javan_string_length((const char*) retained_payload), memory_order_release);
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                (void) javan_thread_current();
+                void* worker = javan_thread_new();
+                void* local = javan_thread_local_new();
+                void** roots[] = {
+                    (void**) &worker,
+                    (void**) &local
+                };
+                javan_root_frame_push(roots, 2);
+                javan_thread_set_target(worker, local);
+                javan_thread_start(worker);
+                while (atomic_load_explicit(&worker_ready, memory_order_acquire) == 0) {
+                    wait_tick();
+                }
+                javan_gc_collect();
+                atomic_store_explicit(&live_during_gc, javan_heap_live_allocations(), memory_order_release);
+                atomic_store_explicit(&threads_during_gc, javan_heap_thread_objects(), memory_order_release);
+                atomic_store_explicit(&release_worker, 1, memory_order_release);
+                javan_thread_join(worker);
+                worker = NULL;
+                local = NULL;
+                javan_root_frame_pop(roots);
+                javan_gc_collect();
+                printf("present=%d\\n", atomic_load_explicit(&worker_present, memory_order_acquire));
+                printf("map=%d\\n", atomic_load_explicit(&worker_map_size, memory_order_acquire));
+                printf("list=%d\\n", atomic_load_explicit(&worker_list_size, memory_order_acquire));
+                printf("payload=%d\\n", atomic_load_explicit(&worker_payload_length, memory_order_acquire));
+                printf("threads-live=%lu\\n", atomic_load_explicit(&threads_during_gc, memory_order_acquire));
+                printf("live-live=%lu\\n", atomic_load_explicit(&live_during_gc, memory_order_acquire));
+                printf("threads-after=%lu\\n", javan_heap_thread_objects());
+                printf("live-after=%lu\\n", javan_heap_live_allocations());
+                printf("roots=%lu\\n", javan_heap_registered_thread_roots());
+                printf("current=%d\\n", javan_heap_current_thread_root_present());
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            present=1
+            map=1
+            list=1
+            payload=2
+            threads-live=2
+            live-live=16
+            threads-after=1
+            live-after=2
+            roots=1
+            current=1
+            """
+        );
+    }
+
+    @Test
+    void runtimeStartedWorkerThreadLocalOverwriteCollectsPreviousGraphDuringConcurrentGc() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+            #include <stdatomic.h>
+            #if defined(_WIN32)
+            #include <windows.h>
+            #else
+            #include <unistd.h>
+            #endif
+
+            static atomic_int worker_ready;
+            static atomic_int release_worker;
+            static atomic_int worker_present;
+            static atomic_int worker_map_size;
+            static atomic_int worker_list_size;
+            static atomic_int worker_payload_length;
+            static atomic_ulong live_during_gc;
+            static atomic_ulong threads_during_gc;
+
+            static void wait_tick(void) {
+                #if defined(_WIN32)
+                Sleep(1);
+                #else
+                usleep(1000);
+                #endif
+            }
+
+            void javan_thread_run_target(void* target) {
+                void* local = target;
+                void* old_key = javan_string_value_of_int(1);
+                void* old_payload = javan_string_value_of_int(11);
+                void* old_list = javan_arraylist_new();
+                (void) javan_arraylist_add(old_list, old_payload);
+                void* old_map = javan_hashmap_new();
+                (void) javan_map_put(old_map, old_key, old_list);
+                void* old_optional = javan_optional_of(old_map);
+                javan_thread_local_set(local, old_optional);
+
+                void* new_key = javan_string_value_of_int(2);
+                void* new_payload = javan_string_value_of_int(22);
+                void* new_list = javan_arraylist_new();
+                (void) javan_arraylist_add(new_list, new_payload);
+                void* new_map = javan_hashmap_new();
+                (void) javan_map_put(new_map, new_key, new_list);
+                void* new_optional = javan_optional_of(new_map);
+                javan_thread_local_set(local, new_optional);
+
+                old_key = NULL;
+                old_payload = NULL;
+                old_list = NULL;
+                old_map = NULL;
+                old_optional = NULL;
+                atomic_store_explicit(&worker_ready, 1, memory_order_release);
+                while (atomic_load_explicit(&release_worker, memory_order_acquire) == 0) {
+                    wait_tick();
+                }
+                void* retained_optional = javan_thread_local_get(local);
+                atomic_store_explicit(&worker_present, javan_optional_is_present(retained_optional), memory_order_release);
+                void* retained_map = javan_optional_or_else_throw(retained_optional);
+                atomic_store_explicit(&worker_map_size, javan_map_size(retained_map), memory_order_release);
+                void* retained_list = javan_map_get(retained_map, new_key);
+                atomic_store_explicit(&worker_list_size, javan_list_size(retained_list), memory_order_release);
+                void* retained_payload = javan_list_get(retained_list, 0);
+                atomic_store_explicit(&worker_payload_length, javan_string_length((const char*) retained_payload), memory_order_release);
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                (void) javan_thread_current();
+                void* worker = javan_thread_new();
+                void* local = javan_thread_local_new();
+                void** roots[] = {
+                    (void**) &worker,
+                    (void**) &local
+                };
+                javan_root_frame_push(roots, 2);
+                javan_thread_set_target(worker, local);
+                javan_thread_start(worker);
+                while (atomic_load_explicit(&worker_ready, memory_order_acquire) == 0) {
+                    wait_tick();
+                }
+                javan_gc_collect();
+                atomic_store_explicit(&live_during_gc, javan_heap_live_allocations(), memory_order_release);
+                atomic_store_explicit(&threads_during_gc, javan_heap_thread_objects(), memory_order_release);
+                atomic_store_explicit(&release_worker, 1, memory_order_release);
+                javan_thread_join(worker);
+                worker = NULL;
+                local = NULL;
+                javan_root_frame_pop(roots);
+                javan_gc_collect();
+                printf("present=%d\\n", atomic_load_explicit(&worker_present, memory_order_acquire));
+                printf("map=%d\\n", atomic_load_explicit(&worker_map_size, memory_order_acquire));
+                printf("list=%d\\n", atomic_load_explicit(&worker_list_size, memory_order_acquire));
+                printf("payload=%d\\n", atomic_load_explicit(&worker_payload_length, memory_order_acquire));
+                printf("threads-live=%lu\\n", atomic_load_explicit(&threads_during_gc, memory_order_acquire));
+                printf("live-live=%lu\\n", atomic_load_explicit(&live_during_gc, memory_order_acquire));
+                printf("threads-after=%lu\\n", javan_heap_thread_objects());
+                printf("live-after=%lu\\n", javan_heap_live_allocations());
+                printf("roots=%lu\\n", javan_heap_registered_thread_roots());
+                printf("current=%d\\n", javan_heap_current_thread_root_present());
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            present=1
+            map=1
+            list=1
+            payload=2
+            threads-live=2
+            live-live=16
+            threads-after=1
+            live-after=2
+            roots=1
+            current=1
+            """
+        );
+    }
+
+    @Test
+    void runtimeStartedWorkerThreadLocalRemoveCollectsRemovedGraphDuringConcurrentGc() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+            #include <stdatomic.h>
+            #if defined(_WIN32)
+            #include <windows.h>
+            #else
+            #include <unistd.h>
+            #endif
+
+            static atomic_int worker_ready;
+            static atomic_int release_worker;
+            static atomic_int worker_missing;
+            static atomic_ulong live_during_gc;
+            static atomic_ulong threads_during_gc;
+
+            static void wait_tick(void) {
+                #if defined(_WIN32)
+                Sleep(1);
+                #else
+                usleep(1000);
+                #endif
+            }
+
+            void javan_thread_run_target(void* target) {
+                void* local = target;
+                void* key = javan_string_value_of_int(3);
+                void* payload = javan_string_value_of_int(33);
+                void* list = javan_arraylist_new();
+                (void) javan_arraylist_add(list, payload);
+                void* map = javan_hashmap_new();
+                (void) javan_map_put(map, key, list);
+                void* optional = javan_optional_of(map);
+                javan_thread_local_set(local, optional);
+                javan_thread_local_remove(local);
+                key = NULL;
+                payload = NULL;
+                list = NULL;
+                map = NULL;
+                optional = NULL;
+                atomic_store_explicit(&worker_ready, 1, memory_order_release);
+                while (atomic_load_explicit(&release_worker, memory_order_acquire) == 0) {
+                    wait_tick();
+                }
+                atomic_store_explicit(&worker_missing, javan_thread_local_get(local) == NULL, memory_order_release);
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                (void) javan_thread_current();
+                void* worker = javan_thread_new();
+                void* local = javan_thread_local_new();
+                void** roots[] = {
+                    (void**) &worker,
+                    (void**) &local
+                };
+                javan_root_frame_push(roots, 2);
+                javan_thread_set_target(worker, local);
+                javan_thread_start(worker);
+                while (atomic_load_explicit(&worker_ready, memory_order_acquire) == 0) {
+                    wait_tick();
+                }
+                javan_gc_collect();
+                atomic_store_explicit(&live_during_gc, javan_heap_live_allocations(), memory_order_release);
+                atomic_store_explicit(&threads_during_gc, javan_heap_thread_objects(), memory_order_release);
+                atomic_store_explicit(&release_worker, 1, memory_order_release);
+                javan_thread_join(worker);
+                worker = NULL;
+                local = NULL;
+                javan_root_frame_pop(roots);
+                javan_gc_collect();
+                printf("missing=%d\\n", atomic_load_explicit(&worker_missing, memory_order_acquire));
+                printf("threads-live=%lu\\n", atomic_load_explicit(&threads_during_gc, memory_order_acquire));
+                printf("live-live=%lu\\n", atomic_load_explicit(&live_during_gc, memory_order_acquire));
+                printf("threads-after=%lu\\n", javan_heap_thread_objects());
+                printf("live-after=%lu\\n", javan_heap_live_allocations());
+                printf("roots=%lu\\n", javan_heap_registered_thread_roots());
+                printf("current=%d\\n", javan_heap_current_thread_root_present());
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            missing=1
+            threads-live=2
+            live-live=8
+            threads-after=1
+            live-after=2
+            roots=1
+            current=1
+            """
+        );
+    }
+
+    @Test
+    void runtimeStartedWorkerThreadLocalSiblingRemoveKeepsOtherGraphAliveDuringConcurrentGc() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+            #include <stdatomic.h>
+            #if defined(_WIN32)
+            #include <windows.h>
+            #else
+            #include <unistd.h>
+            #endif
+
+            static atomic_int worker_ready;
+            static atomic_int release_worker;
+            static atomic_int removed_missing;
+            static atomic_int retained_present;
+            static atomic_int retained_map_size;
+            static atomic_int retained_list_size;
+            static atomic_int retained_payload_length;
+
+            static void wait_tick(void) {
+                #if defined(_WIN32)
+                Sleep(1);
+                #else
+                usleep(1000);
+                #endif
+            }
+
+            void javan_thread_run_target(void* target) {
+                void* locals = target;
+                void* removed_local = javan_list_get(locals, 0);
+                void* retained_local = javan_list_get(locals, 1);
+
+                void* removed_key = javan_string_value_of_int(5);
+                void* removed_payload = javan_string_value_of_int(55);
+                void* removed_list = javan_arraylist_new();
+                (void) javan_arraylist_add(removed_list, removed_payload);
+                void* removed_map = javan_hashmap_new();
+                (void) javan_map_put(removed_map, removed_key, removed_list);
+                void* removed_optional = javan_optional_of(removed_map);
+                javan_thread_local_set(removed_local, removed_optional);
+
+                void* retained_key = javan_string_value_of_int(6);
+                void* retained_payload = javan_string_value_of_int(66);
+                void* retained_list = javan_arraylist_new();
+                (void) javan_arraylist_add(retained_list, retained_payload);
+                void* retained_map = javan_hashmap_new();
+                (void) javan_map_put(retained_map, retained_key, retained_list);
+                void* retained_optional = javan_optional_of(retained_map);
+                javan_thread_local_set(retained_local, retained_optional);
+                javan_thread_local_remove(removed_local);
+
+                removed_key = NULL;
+                removed_payload = NULL;
+                removed_list = NULL;
+                removed_map = NULL;
+                removed_optional = NULL;
+                retained_payload = NULL;
+                retained_list = NULL;
+                retained_map = NULL;
+                retained_optional = NULL;
+                atomic_store_explicit(&worker_ready, 1, memory_order_release);
+                while (atomic_load_explicit(&release_worker, memory_order_acquire) == 0) {
+                    wait_tick();
+                }
+
+                atomic_store_explicit(&removed_missing, javan_thread_local_get(removed_local) == NULL, memory_order_release);
+                void* live_optional = javan_thread_local_get(retained_local);
+                atomic_store_explicit(&retained_present, javan_optional_is_present(live_optional), memory_order_release);
+                void* live_map = javan_optional_or_else_throw(live_optional);
+                atomic_store_explicit(&retained_map_size, javan_map_size(live_map), memory_order_release);
+                void* live_list = javan_map_get(live_map, retained_key);
+                atomic_store_explicit(&retained_list_size, javan_list_size(live_list), memory_order_release);
+                void* live_payload = javan_list_get(live_list, 0);
+                atomic_store_explicit(&retained_payload_length, javan_string_length((const char*) live_payload), memory_order_release);
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                (void) javan_thread_current();
+                void* worker = javan_thread_new();
+                void* removed_local = javan_thread_local_new();
+                void* retained_local = javan_thread_local_new();
+                void* locals = javan_arraylist_new();
+                (void) javan_arraylist_add(locals, removed_local);
+                (void) javan_arraylist_add(locals, retained_local);
+                void** roots[] = {
+                    (void**) &worker,
+                    (void**) &removed_local,
+                    (void**) &retained_local,
+                    (void**) &locals
+                };
+                javan_root_frame_push(roots, 4);
+                javan_thread_set_target(worker, locals);
+                javan_thread_start(worker);
+                while (atomic_load_explicit(&worker_ready, memory_order_acquire) == 0) {
+                    wait_tick();
+                }
+                javan_gc_collect();
+                atomic_store_explicit(&release_worker, 1, memory_order_release);
+                javan_thread_join(worker);
+                worker = NULL;
+                removed_local = NULL;
+                retained_local = NULL;
+                locals = NULL;
+                javan_root_frame_pop(roots);
+                javan_gc_collect();
+                printf("removed=%d\\n", atomic_load_explicit(&removed_missing, memory_order_acquire));
+                printf("present=%d\\n", atomic_load_explicit(&retained_present, memory_order_acquire));
+                printf("map=%d\\n", atomic_load_explicit(&retained_map_size, memory_order_acquire));
+                printf("list=%d\\n", atomic_load_explicit(&retained_list_size, memory_order_acquire));
+                printf("payload=%d\\n", atomic_load_explicit(&retained_payload_length, memory_order_acquire));
+                printf("clean=%d\\n", javan_heap_live_allocations() == 2);
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            removed=1
+            present=1
+            map=1
+            list=1
+            payload=2
+            clean=1
             """
         );
     }
@@ -760,6 +2618,670 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void runtimeStartedWorkerThreadLocalSiblingRemoveKeepsOtherGraphAliveDuringRepeatedSafepointGc() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+            #include <stdatomic.h>
+            #if defined(_WIN32)
+            #include <windows.h>
+            #else
+            #include <unistd.h>
+            #endif
+
+            static atomic_int worker_ready;
+            static atomic_int release_worker;
+            static atomic_int removed_missing;
+            static atomic_int retained_present;
+            static atomic_int retained_map_size;
+            static atomic_int retained_list_size;
+            static atomic_int retained_payload_length;
+
+            static void wait_tick(void) {
+                #if defined(_WIN32)
+                Sleep(1);
+                #else
+                usleep(1000);
+                #endif
+            }
+
+            void javan_thread_run_target(void* target) {
+                void* locals = target;
+                void* removed_local = javan_list_get(locals, 0);
+                void* retained_local = javan_list_get(locals, 1);
+
+                void* removed_key = javan_string_value_of_int(5);
+                void* removed_payload = javan_string_value_of_int(55);
+                void* removed_list = javan_arraylist_new();
+                (void) javan_arraylist_add(removed_list, removed_payload);
+                void* removed_map = javan_hashmap_new();
+                (void) javan_map_put(removed_map, removed_key, removed_list);
+                void* removed_optional = javan_optional_of(removed_map);
+                javan_thread_local_set(removed_local, removed_optional);
+
+                void* retained_key = javan_string_value_of_int(6);
+                void* retained_payload = javan_string_value_of_int(66);
+                void* retained_list = javan_arraylist_new();
+                (void) javan_arraylist_add(retained_list, retained_payload);
+                void* retained_map = javan_hashmap_new();
+                (void) javan_map_put(retained_map, retained_key, retained_list);
+                void* retained_optional = javan_optional_of(retained_map);
+                javan_thread_local_set(retained_local, retained_optional);
+                javan_thread_local_remove(removed_local);
+
+                removed_key = NULL;
+                removed_payload = NULL;
+                removed_list = NULL;
+                removed_map = NULL;
+                removed_optional = NULL;
+                retained_payload = NULL;
+                retained_list = NULL;
+                retained_map = NULL;
+                retained_optional = NULL;
+                atomic_store_explicit(&worker_ready, 1, memory_order_release);
+                while (atomic_load_explicit(&release_worker, memory_order_acquire) == 0) {
+                    (void) javan_thread_new();
+                    javan_gc_safe_point();
+                    wait_tick();
+                }
+
+                atomic_store_explicit(&removed_missing, javan_thread_local_get(removed_local) == NULL, memory_order_release);
+                void* live_optional = javan_thread_local_get(retained_local);
+                atomic_store_explicit(&retained_present, javan_optional_is_present(live_optional), memory_order_release);
+                void* live_map = javan_optional_or_else_throw(live_optional);
+                atomic_store_explicit(&retained_map_size, javan_map_size(live_map), memory_order_release);
+                void* live_list = javan_map_get(live_map, retained_key);
+                atomic_store_explicit(&retained_list_size, javan_list_size(live_list), memory_order_release);
+                void* live_payload = javan_list_get(live_list, 0);
+                atomic_store_explicit(&retained_payload_length, javan_string_length((const char*) live_payload), memory_order_release);
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                (void) javan_thread_current();
+                void* worker = javan_thread_new();
+                void* removed_local = javan_thread_local_new();
+                void* retained_local = javan_thread_local_new();
+                void* locals = javan_arraylist_new();
+                (void) javan_arraylist_add(locals, removed_local);
+                (void) javan_arraylist_add(locals, retained_local);
+                void** roots[] = {
+                    (void**) &worker,
+                    (void**) &removed_local,
+                    (void**) &retained_local,
+                    (void**) &locals
+                };
+                javan_root_frame_push(roots, 4);
+                javan_thread_set_target(worker, locals);
+                javan_thread_start(worker);
+                while (atomic_load_explicit(&worker_ready, memory_order_acquire) == 0) {
+                    wait_tick();
+                }
+                for (int index = 0; index < 64; index++) {
+                    (void) javan_thread_new();
+                    javan_gc_safe_point();
+                    wait_tick();
+                }
+                atomic_store_explicit(&release_worker, 1, memory_order_release);
+                javan_thread_join(worker);
+                worker = NULL;
+                removed_local = NULL;
+                retained_local = NULL;
+                locals = NULL;
+                javan_root_frame_pop(roots);
+                javan_gc_collect();
+                printf("removed=%d\\n", atomic_load_explicit(&removed_missing, memory_order_acquire));
+                printf("present=%d\\n", atomic_load_explicit(&retained_present, memory_order_acquire));
+                printf("map=%d\\n", atomic_load_explicit(&retained_map_size, memory_order_acquire));
+                printf("list=%d\\n", atomic_load_explicit(&retained_list_size, memory_order_acquire));
+                printf("payload=%d\\n", atomic_load_explicit(&retained_payload_length, memory_order_acquire));
+                printf("clean=%d\\n", javan_heap_live_allocations() == 2);
+                printf("roots=%lu\\n", javan_heap_registered_thread_roots());
+                printf("current=%d\\n", javan_heap_current_thread_root_present());
+                return 0;
+            }
+            """,
+            "16384",
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1")
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            removed=1
+            present=1
+            map=1
+            list=1
+            payload=2
+            clean=1
+            roots=1
+            current=1
+            """
+        );
+    }
+
+    @Test
+    void runtimeStartedWorkerThreadLocalOverwriteSurvivesRepeatedParentSafepointGcDuringMutation() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+            #include <stdatomic.h>
+            #if defined(_WIN32)
+            #include <windows.h>
+            #else
+            #include <unistd.h>
+            #endif
+
+            static atomic_int worker_ready;
+            static atomic_int worker_done;
+            static atomic_int retained_present;
+            static atomic_int retained_map_size;
+            static atomic_int retained_list_size;
+            static atomic_int retained_payload_length;
+
+            static void wait_tick(void) {
+                #if defined(_WIN32)
+                Sleep(1);
+                #else
+                usleep(1000);
+                #endif
+            }
+
+            static void wait_half_tick(void) {
+                #if defined(_WIN32)
+                Sleep(1);
+                #else
+                usleep(500);
+                #endif
+            }
+
+            void javan_thread_run_target(void* target) {
+                void* local = target;
+                void* prepared = NULL;
+                void* final_key = NULL;
+                void* final_payload = NULL;
+                void* final_list = NULL;
+                void* final_map = NULL;
+                void* final_optional = NULL;
+                void** worker_roots[] = {
+                    (void**) &prepared,
+                    (void**) &final_key,
+                    (void**) &final_payload,
+                    (void**) &final_list,
+                    (void**) &final_map,
+                    (void**) &final_optional
+                };
+                javan_root_frame_push(worker_roots, 6);
+                prepared = javan_arraylist_new();
+                for (int index = 0; index < 64; index++) {
+                    void* loop_key = javan_string_value_of_int(2000 + index);
+                    void* loop_payload = javan_string_value_of_int(3000 + index);
+                    void* loop_list = javan_arraylist_new();
+                    (void) javan_arraylist_add(loop_list, loop_payload);
+                    void* loop_map = javan_hashmap_new();
+                    (void) javan_map_put(loop_map, loop_key, loop_list);
+                    void* loop_optional = javan_optional_of(loop_map);
+                    (void) javan_arraylist_add(prepared, loop_optional);
+                }
+                final_key = javan_string_value_of_int(999);
+                final_payload = javan_string_value_of_int(123456);
+                final_list = javan_arraylist_new();
+                (void) javan_arraylist_add(final_list, final_payload);
+                final_map = javan_hashmap_new();
+                (void) javan_map_put(final_map, final_key, final_list);
+                final_optional = javan_optional_of(final_map);
+
+                atomic_store_explicit(&worker_ready, 1, memory_order_release);
+                for (int index = 0; index < 16; index++) {
+                    javan_thread_local_set(local, javan_list_get(prepared, index));
+                    wait_tick();
+                }
+                javan_thread_local_set(local, final_optional);
+
+                void* retained_optional = javan_thread_local_get(local);
+                atomic_store_explicit(&retained_present, javan_optional_is_present(retained_optional), memory_order_release);
+                void* retained_map = javan_optional_or_else_throw(retained_optional);
+                atomic_store_explicit(&retained_map_size, javan_map_size(retained_map), memory_order_release);
+                void* retained_list = javan_map_get(retained_map, final_key);
+                atomic_store_explicit(&retained_list_size, javan_list_size(retained_list), memory_order_release);
+                void* retained_payload = javan_list_get(retained_list, 0);
+                atomic_store_explicit(&retained_payload_length, javan_string_length((const char*) retained_payload), memory_order_release);
+                javan_root_frame_pop(worker_roots);
+                prepared = NULL;
+                final_key = NULL;
+                final_payload = NULL;
+                final_list = NULL;
+                final_map = NULL;
+                final_optional = NULL;
+                atomic_store_explicit(&worker_done, 1, memory_order_release);
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                (void) javan_thread_current();
+                void* worker = javan_thread_new();
+                void* local = javan_thread_local_new();
+                void** roots[] = {
+                    (void**) &worker,
+                    (void**) &local
+                };
+                javan_root_frame_push(roots, 2);
+                javan_thread_set_target(worker, local);
+                javan_thread_start(worker);
+                while (atomic_load_explicit(&worker_ready, memory_order_acquire) == 0) {
+                    wait_tick();
+                }
+                for (int index = 0; index < 64; index++) {
+                    (void) javan_thread_new();
+                    javan_gc_safe_point();
+                    wait_half_tick();
+                    if (atomic_load_explicit(&worker_done, memory_order_acquire) != 0) {
+                        break;
+                    }
+                }
+                javan_thread_join(worker);
+                worker = NULL;
+                local = NULL;
+                javan_root_frame_pop(roots);
+                javan_gc_collect();
+                printf("present=%d\\n", atomic_load_explicit(&retained_present, memory_order_acquire));
+                printf("map=%d\\n", atomic_load_explicit(&retained_map_size, memory_order_acquire));
+                printf("list=%d\\n", atomic_load_explicit(&retained_list_size, memory_order_acquire));
+                printf("payload=%d\\n", atomic_load_explicit(&retained_payload_length, memory_order_acquire));
+                printf("clean=%d\\n", javan_heap_live_allocations() == 2);
+                printf("roots=%lu\\n", javan_heap_registered_thread_roots());
+                printf("current=%d\\n", javan_heap_current_thread_root_present());
+                return 0;
+            }
+            """,
+            "32768",
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1")
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            present=1
+            map=1
+            list=1
+            payload=6
+            clean=1
+            roots=1
+            current=1
+            """
+        );
+    }
+
+    @Test
+    void runtimeStartedWorkerThreadLocalRemoveAndSiblingRetentionSurviveRepeatedParentSafepointGcDuringMutation() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+            #include <stdatomic.h>
+            #if defined(_WIN32)
+            #include <windows.h>
+            #else
+            #include <unistd.h>
+            #endif
+
+            static atomic_int worker_ready;
+            static atomic_int worker_done;
+            static atomic_int removed_missing;
+            static atomic_int retained_present;
+            static atomic_int retained_map_size;
+            static atomic_int retained_list_size;
+            static atomic_int retained_payload_length;
+
+            static void wait_tick(void) {
+                #if defined(_WIN32)
+                Sleep(1);
+                #else
+                usleep(1000);
+                #endif
+            }
+
+            static void wait_half_tick(void) {
+                #if defined(_WIN32)
+                Sleep(1);
+                #else
+                usleep(500);
+                #endif
+            }
+
+            void javan_thread_run_target(void* target) {
+                void* locals = target;
+                void* removed_local = javan_list_get(locals, 0);
+                void* retained_local = javan_list_get(locals, 1);
+                void* prepared = NULL;
+
+                void* retained_key = NULL;
+                void* retained_payload = NULL;
+                void* retained_list = NULL;
+                void* retained_map = NULL;
+                void* retained_optional = NULL;
+                void** retained_roots[] = {
+                    (void**) &prepared,
+                    (void**) &retained_key,
+                    (void**) &retained_payload,
+                    (void**) &retained_list,
+                    (void**) &retained_map,
+                    (void**) &retained_optional
+                };
+                javan_root_frame_push(retained_roots, 6);
+                prepared = javan_arraylist_new();
+                retained_key = javan_string_value_of_int(6);
+                retained_payload = javan_string_value_of_int(66);
+                retained_list = javan_arraylist_new();
+                (void) javan_arraylist_add(retained_list, retained_payload);
+                retained_map = javan_hashmap_new();
+                (void) javan_map_put(retained_map, retained_key, retained_list);
+                retained_optional = javan_optional_of(retained_map);
+                javan_thread_local_set(retained_local, retained_optional);
+
+                for (int index = 0; index < 16; index++) {
+                    void* loop_key = javan_string_value_of_int(4000 + index);
+                    void* loop_payload = javan_string_value_of_int(5000 + index);
+                    void* loop_list = javan_arraylist_new();
+                    (void) javan_arraylist_add(loop_list, loop_payload);
+                    void* loop_map = javan_hashmap_new();
+                    (void) javan_map_put(loop_map, loop_key, loop_list);
+                    void* loop_optional = javan_optional_of(loop_map);
+                    (void) javan_arraylist_add(prepared, loop_optional);
+                }
+
+                atomic_store_explicit(&worker_ready, 1, memory_order_release);
+                for (int index = 0; index < 16; index++) {
+                    javan_thread_local_set(removed_local, javan_list_get(prepared, index));
+                    javan_thread_local_remove(removed_local);
+                    wait_tick();
+                }
+                atomic_store_explicit(&removed_missing, javan_thread_local_get(removed_local) == NULL, memory_order_release);
+                void* live_optional = javan_thread_local_get(retained_local);
+                atomic_store_explicit(&retained_present, javan_optional_is_present(live_optional), memory_order_release);
+                void* live_map = javan_optional_or_else_throw(live_optional);
+                atomic_store_explicit(&retained_map_size, javan_map_size(live_map), memory_order_release);
+                void* live_list = javan_map_get(live_map, retained_key);
+                atomic_store_explicit(&retained_list_size, javan_list_size(live_list), memory_order_release);
+                void* live_payload = javan_list_get(live_list, 0);
+                atomic_store_explicit(&retained_payload_length, javan_string_length((const char*) live_payload), memory_order_release);
+                javan_root_frame_pop(retained_roots);
+                retained_key = NULL;
+                retained_payload = NULL;
+                retained_list = NULL;
+                retained_map = NULL;
+                retained_optional = NULL;
+                atomic_store_explicit(&worker_done, 1, memory_order_release);
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                (void) javan_thread_current();
+                void* worker = javan_thread_new();
+                void* removed_local = javan_thread_local_new();
+                void* retained_local = javan_thread_local_new();
+                void* locals = javan_arraylist_new();
+                (void) javan_arraylist_add(locals, removed_local);
+                (void) javan_arraylist_add(locals, retained_local);
+                void** roots[] = {
+                    (void**) &worker,
+                    (void**) &removed_local,
+                    (void**) &retained_local,
+                    (void**) &locals
+                };
+                javan_root_frame_push(roots, 4);
+                javan_thread_set_target(worker, locals);
+                javan_thread_start(worker);
+                while (atomic_load_explicit(&worker_ready, memory_order_acquire) == 0) {
+                    wait_tick();
+                }
+                for (int index = 0; index < 64; index++) {
+                    (void) javan_thread_new();
+                    javan_gc_safe_point();
+                    wait_half_tick();
+                    if (atomic_load_explicit(&worker_done, memory_order_acquire) != 0) {
+                        break;
+                    }
+                }
+                javan_thread_join(worker);
+                worker = NULL;
+                removed_local = NULL;
+                retained_local = NULL;
+                locals = NULL;
+                javan_root_frame_pop(roots);
+                javan_gc_collect();
+                printf("removed=%d\\n", atomic_load_explicit(&removed_missing, memory_order_acquire));
+                printf("present=%d\\n", atomic_load_explicit(&retained_present, memory_order_acquire));
+                printf("map=%d\\n", atomic_load_explicit(&retained_map_size, memory_order_acquire));
+                printf("list=%d\\n", atomic_load_explicit(&retained_list_size, memory_order_acquire));
+                printf("payload=%d\\n", atomic_load_explicit(&retained_payload_length, memory_order_acquire));
+                printf("clean=%d\\n", javan_heap_live_allocations() == 2);
+                printf("roots=%lu\\n", javan_heap_registered_thread_roots());
+                printf("current=%d\\n", javan_heap_current_thread_root_present());
+                return 0;
+            }
+            """,
+            "32768",
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1")
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            removed=1
+            present=1
+            map=1
+            list=1
+            payload=2
+            clean=1
+            roots=1
+            current=1
+            """
+        );
+    }
+
+    @Test
+    void runtimeSharedThreadLocalKeyRemainsThreadIsolatedAcrossWorkerRemoveAndConcurrentGc() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+            #include <stdatomic.h>
+            #if defined(_WIN32)
+            #include <windows.h>
+            #else
+            #include <unistd.h>
+            #endif
+
+            static atomic_int worker_ready;
+            static atomic_int release_worker;
+            static atomic_int worker_missing;
+            static atomic_int parent_before_present;
+            static atomic_int parent_before_map_size;
+            static atomic_int parent_before_list_size;
+            static atomic_int parent_before_payload_length;
+            static atomic_int parent_after_present;
+            static atomic_int parent_after_map_size;
+            static atomic_int parent_after_list_size;
+            static atomic_int parent_after_payload_length;
+            static atomic_int parent_cleared;
+
+            static void wait_tick(void) {
+                #if defined(_WIN32)
+                Sleep(1);
+                #else
+                usleep(1000);
+                #endif
+            }
+
+            void javan_thread_run_target(void* target) {
+                void* shared_local = target;
+                void* worker_key = javan_string_value_of_int(8);
+                void* worker_payload = javan_string_value_of_int(88);
+                void* worker_list = javan_arraylist_new();
+                (void) javan_arraylist_add(worker_list, worker_payload);
+                void* worker_map = javan_hashmap_new();
+                (void) javan_map_put(worker_map, worker_key, worker_list);
+                void* worker_optional = javan_optional_of(worker_map);
+                javan_thread_local_set(shared_local, worker_optional);
+                worker_key = NULL;
+                worker_payload = NULL;
+                worker_list = NULL;
+                worker_map = NULL;
+                worker_optional = NULL;
+                atomic_store_explicit(&worker_ready, 1, memory_order_release);
+                while (atomic_load_explicit(&release_worker, memory_order_acquire) == 0) {
+                    wait_tick();
+                }
+                javan_thread_local_remove(shared_local);
+                atomic_store_explicit(&worker_missing, javan_thread_local_get(shared_local) == NULL, memory_order_release);
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                (void) javan_thread_current();
+                void* worker = javan_thread_new();
+                void* shared_local = javan_thread_local_new();
+                void* parent_key = javan_string_value_of_int(777);
+                void* parent_payload = javan_string_value_of_int(777);
+                void* parent_list = javan_arraylist_new();
+                (void) javan_arraylist_add(parent_list, parent_payload);
+                void* parent_map = javan_hashmap_new();
+                (void) javan_map_put(parent_map, parent_key, parent_list);
+                void* parent_optional = javan_optional_of(parent_map);
+                void** roots[] = {
+                    (void**) &worker,
+                    (void**) &shared_local
+                };
+                javan_root_frame_push(roots, 2);
+                javan_thread_local_set(shared_local, parent_optional);
+                javan_thread_set_target(worker, shared_local);
+                javan_thread_start(worker);
+                while (atomic_load_explicit(&worker_ready, memory_order_acquire) == 0) {
+                    wait_tick();
+                }
+                javan_gc_collect();
+
+                void* parent_live_optional = javan_thread_local_get(shared_local);
+                atomic_store_explicit(&parent_before_present, javan_optional_is_present(parent_live_optional), memory_order_release);
+                void* parent_live_map = javan_optional_or_else_throw(parent_live_optional);
+                atomic_store_explicit(&parent_before_map_size, javan_map_size(parent_live_map), memory_order_release);
+                void* parent_live_list = javan_map_get(parent_live_map, parent_key);
+                atomic_store_explicit(&parent_before_list_size, javan_list_size(parent_live_list), memory_order_release);
+                void* parent_live_payload = javan_list_get(parent_live_list, 0);
+                atomic_store_explicit(&parent_before_payload_length, javan_string_length((const char*) parent_live_payload), memory_order_release);
+
+                atomic_store_explicit(&release_worker, 1, memory_order_release);
+                javan_thread_join(worker);
+
+                parent_live_optional = javan_thread_local_get(shared_local);
+                atomic_store_explicit(&parent_after_present, javan_optional_is_present(parent_live_optional), memory_order_release);
+                parent_live_map = javan_optional_or_else_throw(parent_live_optional);
+                atomic_store_explicit(&parent_after_map_size, javan_map_size(parent_live_map), memory_order_release);
+                parent_live_list = javan_map_get(parent_live_map, parent_key);
+                atomic_store_explicit(&parent_after_list_size, javan_list_size(parent_live_list), memory_order_release);
+                parent_live_payload = javan_list_get(parent_live_list, 0);
+                atomic_store_explicit(&parent_after_payload_length, javan_string_length((const char*) parent_live_payload), memory_order_release);
+
+                javan_thread_local_remove(shared_local);
+                atomic_store_explicit(&parent_cleared, javan_thread_local_get(shared_local) == NULL, memory_order_release);
+                worker = NULL;
+                shared_local = NULL;
+                parent_key = NULL;
+                parent_payload = NULL;
+                parent_list = NULL;
+                parent_map = NULL;
+                parent_optional = NULL;
+                javan_root_frame_pop(roots);
+                javan_gc_collect();
+                printf("worker-missing=%d\\n", atomic_load_explicit(&worker_missing, memory_order_acquire));
+                printf("before-present=%d\\n", atomic_load_explicit(&parent_before_present, memory_order_acquire));
+                printf("before-map=%d\\n", atomic_load_explicit(&parent_before_map_size, memory_order_acquire));
+                printf("before-list=%d\\n", atomic_load_explicit(&parent_before_list_size, memory_order_acquire));
+                printf("before-payload=%d\\n", atomic_load_explicit(&parent_before_payload_length, memory_order_acquire));
+                printf("after-present=%d\\n", atomic_load_explicit(&parent_after_present, memory_order_acquire));
+                printf("after-map=%d\\n", atomic_load_explicit(&parent_after_map_size, memory_order_acquire));
+                printf("after-list=%d\\n", atomic_load_explicit(&parent_after_list_size, memory_order_acquire));
+                printf("after-payload=%d\\n", atomic_load_explicit(&parent_after_payload_length, memory_order_acquire));
+                printf("parent-cleared=%d\\n", atomic_load_explicit(&parent_cleared, memory_order_acquire));
+                printf("roots=%lu\\n", javan_heap_registered_thread_roots());
+                printf("current=%d\\n", javan_heap_current_thread_root_present());
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            worker-missing=1
+            before-present=1
+            before-map=1
+            before-list=1
+            before-payload=3
+            after-present=1
+            after-map=1
+            after-list=1
+            after-payload=3
+            parent-cleared=1
+            roots=1
+            current=1
+            """
+        );
+    }
+
+    @Test
+    void runtimeCompletedReachableWorkerClearsNestedThreadLocalObjectGraphOnCompletion() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            void javan_thread_run_target(void* target) {
+                void* local = target;
+                void* key = javan_string_value_of_int(7);
+                void* payload = javan_string_value_of_int(77);
+                void* list = javan_arraylist_new();
+                (void) javan_arraylist_add(list, payload);
+                void* map = javan_hashmap_new();
+                (void) javan_map_put(map, key, list);
+                void* optional = javan_optional_of(map);
+                javan_thread_local_set(local, optional);
+                key = NULL;
+                payload = NULL;
+                list = NULL;
+                map = NULL;
+                optional = NULL;
+                javan_gc_collect();
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                (void) javan_thread_current();
+                void* worker = javan_thread_new();
+                void* local = javan_thread_local_new();
+                void** roots[] = {
+                    (void**) &worker,
+                    (void**) &local
+                };
+                javan_root_frame_push(roots, 2);
+                javan_thread_set_target(worker, local);
+                javan_thread_start(worker);
+                javan_thread_join(worker);
+                worker = NULL;
+                local = NULL;
+                javan_root_frame_pop(roots);
+                javan_gc_collect();
+                printf("clean=%d\\n", javan_heap_live_allocations() == 2);
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("clean=1\n");
+    }
+
+    @Test
     void runtimeDetachedReachableCurrentThreadClearsThreadLocalStorageOnDetach() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
@@ -794,6 +3316,49 @@ final class RuntimeFilesTest {
             roots=0
             """
         );
+    }
+
+    @Test
+    void runtimeDetachedReachableCurrentThreadClearsNestedThreadLocalObjectGraphOnDetach() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            static void* current_root = NULL;
+            static void* local_root = NULL;
+
+            int main(void) {
+                void** static_roots[] = {
+                    (void**) &current_root,
+                    (void**) &local_root
+                };
+                javan_register_static_roots(static_roots, 2);
+                current_root = javan_thread_current();
+                local_root = javan_thread_local_new();
+                void* key = javan_string_value_of_int(8);
+                void* payload = javan_string_value_of_int(88);
+                void* list = javan_arraylist_new();
+                (void) javan_arraylist_add(list, payload);
+                void* map = javan_hashmap_new();
+                (void) javan_map_put(map, key, list);
+                void* optional = javan_optional_of(map);
+                javan_thread_local_set(local_root, optional);
+                key = NULL;
+                payload = NULL;
+                list = NULL;
+                map = NULL;
+                optional = NULL;
+                javan_thread_detach_current();
+                javan_gc_collect();
+                printf("after=%lu\\n", javan_heap_live_allocations());
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("after=3\n");
     }
 
     @Test
@@ -1094,19 +3659,20 @@ final class RuntimeFilesTest {
             """
             #include "javan_runtime.h"
             #include <stdio.h>
+            #include <stdatomic.h>
             #include <unistd.h>
 
-            static volatile int allow_worker_report = 0;
-            static volatile int release_worker = 0;
+            static atomic_int allow_worker_report;
+            static atomic_int release_worker;
             static void* worker_ref = NULL;
 
             void javan_thread_run_target(void* target) {
                 (void) target;
-                while (allow_worker_report == 0) {
+                while (atomic_load_explicit(&allow_worker_report, memory_order_acquire) == 0) {
                     usleep(1000);
                 }
                 printf("worker-current=%d\\n", javan_thread_current() == worker_ref);
-                while (release_worker == 0) {
+                while (atomic_load_explicit(&release_worker, memory_order_acquire) == 0) {
                     usleep(1000);
                 }
             }
@@ -1121,8 +3687,8 @@ final class RuntimeFilesTest {
                 printf("alive-after-start=%d\\n", javan_thread_is_alive(worker_ref));
                 printf("roots-after-start=%lu\\n", javan_heap_registered_thread_roots());
                 printf("active-after-start=%lu\\n", javan_heap_active_threads());
-                allow_worker_report = 1;
-                release_worker = 1;
+                atomic_store_explicit(&allow_worker_report, 1, memory_order_release);
+                atomic_store_explicit(&release_worker, 1, memory_order_release);
                 javan_thread_join(worker_ref);
                 printf("alive-after-join=%d\\n", javan_thread_is_alive(worker_ref));
                 printf("roots-after-join=%lu\\n", javan_heap_registered_thread_roots());
@@ -1152,31 +3718,32 @@ final class RuntimeFilesTest {
             """
             #include "javan_runtime.h"
             #include <stdio.h>
+            #include <stdatomic.h>
             #include <unistd.h>
 
-            static volatile int worker_ready = 0;
-            static volatile int worker_done = 0;
-            static volatile int worker_fail = 0;
-            static volatile int parent_fail = 0;
+            static atomic_int worker_ready;
+            static atomic_int worker_done;
+            static atomic_int worker_fail;
+            static atomic_int parent_fail;
             static void* worker_ref = NULL;
 
             void javan_thread_run_target(void* target) {
                 (void) target;
-                worker_ready = 1;
+                atomic_store_explicit(&worker_ready, 1, memory_order_release);
                 for (int index = 0; index < 64; index++) {
                     if (!javan_heap_current_thread_root_present()) {
-                        worker_fail = 1;
+                        atomic_store_explicit(&worker_fail, 1, memory_order_release);
                         break;
                     }
                     (void) javan_thread_new();
                     javan_gc_collect();
                     if (!javan_heap_current_thread_root_present()) {
-                        worker_fail = 2;
+                        atomic_store_explicit(&worker_fail, 2, memory_order_release);
                         break;
                     }
                     usleep(1000);
                 }
-                worker_done = 1;
+                atomic_store_explicit(&worker_done, 1, memory_order_release);
             }
 
             int main(void) {
@@ -1186,21 +3753,21 @@ final class RuntimeFilesTest {
                 void* target = javan_thread_new();
                 javan_thread_set_target(worker_ref, target);
                 javan_thread_start(worker_ref);
-                while (worker_ready == 0) {
+                while (atomic_load_explicit(&worker_ready, memory_order_acquire) == 0) {
                     usleep(1000);
                 }
                 for (int index = 0; index < 64; index++) {
                     if (!javan_heap_current_thread_root_present()) {
-                        parent_fail = 1;
+                        atomic_store_explicit(&parent_fail, 1, memory_order_release);
                         break;
                     }
                     (void) javan_thread_new();
                     javan_gc_collect();
                     if (!javan_heap_current_thread_root_present()) {
-                        parent_fail = 2;
+                        atomic_store_explicit(&parent_fail, 2, memory_order_release);
                         break;
                     }
-                    if (worker_done != 0) {
+                    if (atomic_load_explicit(&worker_done, memory_order_acquire) != 0) {
                         break;
                     }
                 }
@@ -1208,8 +3775,8 @@ final class RuntimeFilesTest {
                 target = NULL;
                 worker_ref = NULL;
                 javan_gc_collect();
-                printf("worker=%d\\n", worker_fail);
-                printf("parent=%d\\n", parent_fail);
+                printf("worker=%d\\n", atomic_load_explicit(&worker_fail, memory_order_acquire));
+                printf("parent=%d\\n", atomic_load_explicit(&parent_fail, memory_order_acquire));
                 printf("roots=%lu\\n", javan_heap_registered_thread_roots());
                 printf("active=%lu\\n", javan_heap_active_threads());
                 printf("current=%d\\n", javan_heap_current_thread_root_present());
@@ -1236,31 +3803,32 @@ final class RuntimeFilesTest {
             """
             #include "javan_runtime.h"
             #include <stdio.h>
+            #include <stdatomic.h>
             #include <unistd.h>
 
-            static volatile int worker_ready = 0;
-            static volatile int worker_done = 0;
-            static volatile int worker_fail = 0;
-            static volatile int parent_fail = 0;
+            static atomic_int worker_ready;
+            static atomic_int worker_done;
+            static atomic_int worker_fail;
+            static atomic_int parent_fail;
             static void* worker_ref = NULL;
 
             void javan_thread_run_target(void* target) {
                 (void) target;
-                worker_ready = 1;
+                atomic_store_explicit(&worker_ready, 1, memory_order_release);
                 for (int index = 0; index < 64; index++) {
                     if (!javan_heap_current_thread_root_present()) {
-                        worker_fail = 1;
+                        atomic_store_explicit(&worker_fail, 1, memory_order_release);
                         break;
                     }
                     (void) javan_thread_new();
                     javan_gc_safe_point();
                     if (!javan_heap_current_thread_root_present()) {
-                        worker_fail = 2;
+                        atomic_store_explicit(&worker_fail, 2, memory_order_release);
                         break;
                     }
                     usleep(1000);
                 }
-                worker_done = 1;
+                atomic_store_explicit(&worker_done, 1, memory_order_release);
             }
 
             int main(void) {
@@ -1270,21 +3838,21 @@ final class RuntimeFilesTest {
                 void* target = javan_thread_new();
                 javan_thread_set_target(worker_ref, target);
                 javan_thread_start(worker_ref);
-                while (worker_ready == 0) {
+                while (atomic_load_explicit(&worker_ready, memory_order_acquire) == 0) {
                     usleep(1000);
                 }
                 for (int index = 0; index < 64; index++) {
                     if (!javan_heap_current_thread_root_present()) {
-                        parent_fail = 1;
+                        atomic_store_explicit(&parent_fail, 1, memory_order_release);
                         break;
                     }
                     (void) javan_thread_new();
                     javan_gc_safe_point();
                     if (!javan_heap_current_thread_root_present()) {
-                        parent_fail = 2;
+                        atomic_store_explicit(&parent_fail, 2, memory_order_release);
                         break;
                     }
-                    if (worker_done != 0) {
+                    if (atomic_load_explicit(&worker_done, memory_order_acquire) != 0) {
                         break;
                     }
                 }
@@ -1292,8 +3860,8 @@ final class RuntimeFilesTest {
                 target = NULL;
                 worker_ref = NULL;
                 javan_gc_collect();
-                printf("worker=%d\\n", worker_fail);
-                printf("parent=%d\\n", parent_fail);
+                printf("worker=%d\\n", atomic_load_explicit(&worker_fail, memory_order_acquire));
+                printf("parent=%d\\n", atomic_load_explicit(&parent_fail, memory_order_acquire));
                 printf("roots=%lu\\n", javan_heap_registered_thread_roots());
                 printf("active=%lu\\n", javan_heap_active_threads());
                 printf("current=%d\\n", javan_heap_current_thread_root_present());
@@ -1384,16 +3952,17 @@ final class RuntimeFilesTest {
             """
             #include "javan_runtime.h"
             #include <stdio.h>
+            #include <stdatomic.h>
             #include <unistd.h>
 
-            static volatile int ready_count = 0;
-            static volatile int release_workers = 0;
+            static atomic_int ready_count;
+            static atomic_int release_workers;
             static void* workers[6];
 
             void javan_thread_run_target(void* target) {
                 (void) target;
-                ready_count++;
-                while (release_workers == 0) {
+                atomic_fetch_add_explicit(&ready_count, 1, memory_order_release);
+                while (atomic_load_explicit(&release_workers, memory_order_acquire) == 0) {
                     usleep(1000);
                 }
             }
@@ -1406,13 +3975,13 @@ final class RuntimeFilesTest {
                     javan_thread_set_target(workers[index], javan_thread_new());
                     javan_thread_start(workers[index]);
                 }
-                while (ready_count < 6) {
+                while (atomic_load_explicit(&ready_count, memory_order_acquire) < 6) {
                     usleep(1000);
                 }
                 javan_gc_collect();
                 printf("roots-live=%lu\\n", javan_heap_registered_thread_roots());
                 printf("active-live=%lu\\n", javan_heap_active_threads());
-                release_workers = 1;
+                atomic_store_explicit(&release_workers, 1, memory_order_release);
                 for (int index = 0; index < 6; index++) {
                     javan_thread_join(workers[index]);
                 }
@@ -1441,11 +4010,12 @@ final class RuntimeFilesTest {
             """
             #include "javan_runtime.h"
             #include <stdio.h>
+            #include <stdatomic.h>
             #include <unistd.h>
 
-            static volatile int worker_ready = 0;
-            static volatile int release_worker = 0;
-            static volatile int worker_result = -1;
+            static atomic_int worker_ready;
+            static atomic_int release_worker;
+            static atomic_int worker_result;
 
             void javan_thread_run_target(void* target) {
                 (void) target;
@@ -1454,11 +4024,11 @@ final class RuntimeFilesTest {
                     (void**) &rooted_thread
                 };
                 javan_root_frame_push(roots, 1);
-                worker_ready = 1;
-                while (release_worker == 0) {
+                atomic_store_explicit(&worker_ready, 1, memory_order_release);
+                while (atomic_load_explicit(&release_worker, memory_order_acquire) == 0) {
                     usleep(1000);
                 }
-                worker_result = javan_thread_is_alive(rooted_thread);
+                atomic_store_explicit(&worker_result, javan_thread_is_alive(rooted_thread), memory_order_release);
                 javan_root_frame_pop(roots);
             }
 
@@ -1468,14 +4038,14 @@ final class RuntimeFilesTest {
                 void* worker = javan_thread_new();
                 javan_thread_set_target(worker, javan_thread_new());
                 javan_thread_start(worker);
-                while (worker_ready == 0) {
+                while (atomic_load_explicit(&worker_ready, memory_order_acquire) == 0) {
                     usleep(1000);
                 }
                 javan_gc_collect();
-                release_worker = 1;
+                atomic_store_explicit(&release_worker, 1, memory_order_release);
                 javan_thread_join(worker);
                 javan_gc_collect();
-                printf("worker=%d\\n", worker_result);
+                printf("worker=%d\\n", atomic_load_explicit(&worker_result, memory_order_acquire));
                 printf("roots=%lu\\n", javan_heap_registered_thread_roots());
                 printf("active=%lu\\n", javan_heap_active_threads());
                 printf("current=%d\\n", javan_heap_current_thread_root_present());
@@ -2732,20 +5302,53 @@ final class RuntimeFilesTest {
         final Path main = tempDir.resolve("probe.c");
         Files.writeString(main, source);
         final Path binary = new NativeLinker().link(tempDir, main, runtime, tempDir.resolve("probe"));
-        final ProcessBuilder processBuilder = new ProcessBuilder(binary.toString());
-        processBuilder.directory(tempDir.toFile());
-        processBuilder.environment().put("JAVAN_HEAP_LIMIT_BYTES", heapLimitBytes);
-        processBuilder.environment().put("JAVAN_GC_STRESS", "1");
-        processBuilder.environment().putAll(environmentOverrides);
+        final Map<String, String> environment = new java.util.LinkedHashMap<>();
+        environment.put("JAVAN_HEAP_LIMIT_BYTES", heapLimitBytes);
+        environment.put("JAVAN_GC_STRESS", "1");
+        environment.putAll(environmentOverrides);
 
-        final Process process = processBuilder.start();
-        final String stdout = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-        final String stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
-        final int exitCode = process.waitFor();
+        final TestProcesses.Result result = TestProcesses.run(
+            tempDir,
+            java.util.List.of(binary.toString()),
+            java.time.Duration.ofSeconds(30),
+            environment
+        );
+        if (result.exitCode() == 124) {
+            throw new AssertionError(
+                "Runtime boundary probe timed out after 30 seconds.\nstdout:\n"
+                    + result.stdout()
+                    + "\nstderr:\n"
+                    + result.stderr()
+            );
+        }
 
-        assertThat(exitCode)
-            .describedAs(stderr)
+        assertThat(result.exitCode())
+            .describedAs(result.stderr())
             .isEqualTo(0);
-        return new RuntimeProbeOutput(stdout, stderr);
+        return new RuntimeProbeOutput(result.stdout(), result.stderr());
+    }
+
+    private static boolean isWindowsHost() {
+        final String osName = System.getProperty("os.name", "");
+        return osName.toLowerCase(java.util.Locale.ROOT).contains("win");
+    }
+
+    private static Path findFirstExecutableOnPath(final String... executables) {
+        final String path = System.getenv("PATH");
+        if (path == null || path.isBlank()) {
+            return null;
+        }
+        for (final String executable : executables) {
+            for (final String entry : path.split(File.pathSeparator)) {
+                if (entry == null || entry.isBlank()) {
+                    continue;
+                }
+                final Path candidate = Path.of(entry).resolve(executable);
+                if (Files.isRegularFile(candidate) && Files.isExecutable(candidate)) {
+                    return candidate;
+                }
+            }
+        }
+        return null;
     }
 }
