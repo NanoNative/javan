@@ -926,7 +926,7 @@ final class RuntimeSourcePlatformSection {
         }
 
         static void* javan_socket_stream_new(void* socket_value, int output_stream) {
-            javan_socket* socket = javan_socket_checked(socket_value);
+            (void) javan_socket_checked(socket_value);
             if (output_stream != 0) {
                 javan_socket_output_stream_value* stream = (javan_socket_output_stream_value*) javan_alloc(sizeof(javan_socket_output_stream_value));
                 void* stream_root = (void*) stream;

@@ -716,7 +716,11 @@ final class RuntimeSourceIoSections {
             if (path[0] == '\\0') {
                 return;
             }
+            #if defined(_WIN32)
+            if (mkdir(path) == 0) {
+            #else
             if (mkdir(path, 0777) == 0) {
+            #endif
                 return;
             }
             if (errno == EEXIST) {

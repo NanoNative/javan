@@ -19,17 +19,19 @@ final class RuntimeSourceCoreSection {
         #include <ws2tcpip.h>
         #include <windows.h>
         #include <process.h>
+        #include <io.h>
+        #include <sys/time.h>
         #else
         #include <arpa/inet.h>
         #include <netinet/in.h>
         #include <pthread.h>
         #include <sys/socket.h>
+        #include <sys/wait.h>
+        #include <unistd.h>
         #endif
         #include <sys/stat.h>
         #include <sys/time.h>
-        #include <sys/wait.h>
         #include <time.h>
-        #include <unistd.h>
         #if defined(_MSC_VER)
         #define JAVAN_THREAD_LOCAL __declspec(thread)
         #else
@@ -39,6 +41,7 @@ final class RuntimeSourceCoreSection {
         static char* javan_string_alloc(unsigned long size);
         static void* javan_string_copy(const char* value);
         static int javan_socket_native_close(int fd);
+        static void javan_sleep_micros(unsigned long micros);
         static JAVAN_THREAD_LOCAL char javan_last_error_value[512];
         static JAVAN_THREAD_LOCAL char javan_last_error_code_value[64];
         static JAVAN_THREAD_LOCAL char javan_last_error_summary_value[128];
@@ -54,6 +57,21 @@ final class RuntimeSourceCoreSection {
         static JAVAN_THREAD_LOCAL int javan_last_error_set = 0;
         static JAVAN_THREAD_LOCAL jmp_buf* javan_panic_target = NULL;
         static JAVAN_THREAD_LOCAL JavanSourceContext* javan_source_context_top = NULL;
+
+        static void javan_sleep_micros(unsigned long micros) {
+            if (micros == 0UL) {
+                return;
+            }
+        #if defined(_WIN32)
+            DWORD millis = (DWORD) ((micros + 999UL) / 1000UL);
+            if (millis == 0U) {
+                millis = 1U;
+            }
+            Sleep(millis);
+        #else
+            usleep((useconds_t) micros);
+        #endif
+        }
 
         static void javan_copy_error_field(char* target, unsigned long target_size, const char* value) {
             if (target_size == 0) {
