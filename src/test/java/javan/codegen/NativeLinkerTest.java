@@ -20,6 +20,18 @@ final class NativeLinkerTest {
     }
 
     @Test
+    void windowsHostAddsWinsockLibraryDuringLink() {
+        assertThat(NativeLinker.platformLinkFlagsForOs("Windows 11"))
+            .containsExactly("-lws2_32");
+    }
+
+    @Test
+    void nonWindowsHostDoesNotAddWinsockLibraryDuringLink() {
+        assertThat(NativeLinker.platformLinkFlagsForOs("Mac OS X"))
+            .isEmpty();
+    }
+
+    @Test
     void windowsHostResolvesExeSuffixFromPathEntry() throws Exception {
         final Path compiler = Files.createFile(tempDir.resolve("gcc.exe"));
         assertThat(compiler.toFile().setExecutable(true)).isTrue();

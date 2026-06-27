@@ -51,6 +51,7 @@ public final class NativeLinker {
         command.addAll(threadFlags());
         command.add(mainC.toString());
         command.add(runtimeC.toString());
+        command.addAll(platformLinkFlags());
         command.add("-o");
         command.add(output.toString());
         final ProcessRunner.Result result = processRunner.run(root, command);
@@ -87,6 +88,7 @@ public final class NativeLinker {
         command.add("-fPIC");
         command.add(mainC.toString());
         command.add(runtimeC.toString());
+        command.addAll(platformLinkFlags());
         command.add("-o");
         command.add(output.toString());
         final ProcessRunner.Result result = processRunner.run(root, command);
@@ -153,6 +155,17 @@ public final class NativeLinker {
             return List.of();
         }
         return List.of("-pthread");
+    }
+
+    private static List<String> platformLinkFlags() {
+        return platformLinkFlagsForOs(System.getProperty("os.name", ""));
+    }
+
+    static List<String> platformLinkFlagsForOs(final String osName) {
+        if (isWindowsHost(osName)) {
+            return List.of("-lws2_32");
+        }
+        return List.of();
     }
 
     private static List<String> compilerCandidates() {
