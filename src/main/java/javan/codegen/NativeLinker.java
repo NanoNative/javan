@@ -156,14 +156,24 @@ public final class NativeLinker {
     }
 
     private static List<String> compilerCandidates() {
-        return compilerCandidatesForOs(System.getProperty("os.name", ""));
+        return compilerCandidatesForOs(System.getProperty("os.name", ""), System.getenv("CC"));
     }
 
-    static List<String> compilerCandidatesForOs(final String osName) {
-        if (isWindowsHost(osName)) {
-            return List.of("gcc", "clang", "cc");
+    static List<String> compilerCandidatesForOs(final String osName, final String configuredCompiler) {
+        final List<String> result = new ArrayList<>();
+        if (!Strings2.isBlank(configuredCompiler)) {
+            result.add(configuredCompiler.trim());
         }
-        return List.of("cc", "clang", "gcc");
+        if (isWindowsHost(osName)) {
+            result.add("gcc");
+            result.add("clang");
+            result.add("cc");
+            return List.copyOf(result);
+        }
+        result.add("cc");
+        result.add("clang");
+        result.add("gcc");
+        return List.copyOf(result);
     }
 
     private String requiredExecutable(final List<String> executables, final String message) throws IOException, InterruptedException {
@@ -179,8 +189,22 @@ public final class NativeLinker {
     }
 
     private static Optional<String> firstOnPath(final List<String> executables) {
+        return firstOnPathForOs(
+            executables,
+            System.getenv("PATH"),
+            System.getProperty("os.name", ""),
+            windowsExecutableExtensions()
+        );
+    }
+
+    static Optional<String> firstOnPathForOs(
+        final List<String> executables,
+        final String path,
+        final String osName,
+        final List<String> windowsExtensions
+    ) {
         for (final String executable : executables) {
-            final Optional<String> resolved = resolveOnPath(executable);
+            final Optional<String> resolved = resolveOnPath(executable, path, osName, windowsExtensions);
             if (resolved.isPresent()) {
                 return resolved;
             }
@@ -189,13 +213,26 @@ public final class NativeLinker {
     }
 
     private static Optional<String> resolveOnPath(final String executable) {
+        return resolveOnPath(
+            executable,
+            System.getenv("PATH"),
+            System.getProperty("os.name", ""),
+            windowsExecutableExtensions()
+        );
+    }
+
+    private static Optional<String> resolveOnPath(
+        final String executable,
+        final String path,
+        final String osName,
+        final List<String> windowsExtensions
+    ) {
         if (Strings2.isBlank(executable)) {
             return Optional.empty();
         }
         if (containsPathSeparator(executable)) {
-            return resolveExecutablePath(Path.of(executable));
+            return resolveExecutablePathForOs(Path.of(executable), osName, windowsExtensions);
         }
-        final String path = System.getenv("PATH");
         if (Strings2.isBlank(path)) {
             return Optional.empty();
         }
@@ -207,7 +244,7 @@ public final class NativeLinker {
                 if (Strings2.isBlank(directory)) {
                     directory = ".";
                 }
-                final Optional<String> resolved = resolveExecutablePath(Path.of(directory).resolve(executable));
+                final Optional<String> resolved = resolveExecutablePathForOs(Path.of(directory).resolve(executable), osName, windowsExtensions);
                 if (resolved.isPresent()) {
                     return resolved;
                 }
@@ -218,19 +255,7 @@ public final class NativeLinker {
     }
 
     private static Optional<String> resolveExecutablePath(final Path candidate) {
-        if (Files.isExecutable(candidate)) {
-            return Optional.of(candidate.toString());
-        }
-        if (!isWindowsHost() || hasExplicitExtension(candidate)) {
-            return Optional.empty();
-        }
-        for (final String extension : windowsExecutableExtensions()) {
-            final Path extended = Path.of(candidate.toString() + extension);
-            if (Files.isExecutable(extended)) {
-                return Optional.of(extended.toString());
-            }
-        }
-        return Optional.empty();
+        return resolveExecutablePathForOs(candidate, System.getProperty("os.name", ""), windowsExecutableExtensions());
     }
 
     static Optional<String> resolveExecutablePathForOs(final Path candidate, final String osName, final List<String> windowsExtensions) {

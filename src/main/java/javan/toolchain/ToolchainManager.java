@@ -237,6 +237,15 @@ public final class ToolchainManager {
         return new PathCommandProbe(System.getenv("PATH"));
     }
 
+    static Optional<Path> resolveExecutableOnPath(
+        final String path,
+        final String executable,
+        final String pathExt,
+        final String osName
+    ) {
+        return PathCommandProbe.resolveExecutableOnPath(path, executable, pathExt, osName);
+    }
+
     /**
      * Resolves executable availability.
      */
@@ -298,23 +307,38 @@ public final class ToolchainManager {
 
         @Override
         public ToolStatus find(final String executable) {
-            for (final Path directory : pathEntries()) {
-                final Optional<Path> candidate = resolveExecutable(directory.resolve(executable));
-                if (candidate.isPresent()) {
-                    return new ToolStatus(executable, candidate);
-                }
-            }
-            return new ToolStatus(executable);
+            return resolveExecutableOnPath(path, executable, System.getenv("PATHEXT"), System.getProperty("os.name", ""))
+                .map(path -> new ToolStatus(executable, Optional.of(path)))
+                .orElseGet(() -> new ToolStatus(executable));
         }
 
-        private Optional<Path> resolveExecutable(final Path candidate) {
+        private static Optional<Path> resolveExecutableOnPath(
+            final String path,
+            final String executable,
+            final String pathExt,
+            final String osName
+        ) {
+            if (Strings2.isBlank(path) || Strings2.isBlank(executable)) {
+                return Optional.empty();
+            }
+            final List<Path> entries = pathEntries(path);
+            for (final Path directory : entries) {
+                final Optional<Path> candidate = resolveExecutable(directory.resolve(executable), pathExt, osName);
+                if (candidate.isPresent()) {
+                    return candidate;
+                }
+            }
+            return Optional.empty();
+        }
+
+        private static Optional<Path> resolveExecutable(final Path candidate, final String pathExt, final String osName) {
             if (Files.isExecutable(candidate)) {
                 return Optional.of(candidate);
             }
-            if (!isWindowsHost() || hasExplicitExtension(candidate)) {
+            if (!isWindowsHost(osName) || hasExplicitExtension(candidate)) {
                 return Optional.empty();
             }
-            for (final String extension : windowsExecutableExtensions()) {
+            for (final String extension : windowsExecutableExtensions(pathExt)) {
                 final Path extended = Path.of(candidate.toString() + extension);
                 if (Files.isExecutable(extended)) {
                     return Optional.of(extended);
@@ -324,6 +348,10 @@ public final class ToolchainManager {
         }
 
         private List<Path> pathEntries() {
+            return pathEntries(path);
+        }
+
+        private static List<Path> pathEntries(final String path) {
             if (Strings2.isBlank(path)) {
                 return List.of();
             }
@@ -351,8 +379,8 @@ public final class ToolchainManager {
             }
         }
 
-        private static boolean isWindowsHost() {
-            return Strings2.toAsciiLowerCase(System.getProperty("os.name", "")).contains("win");
+        private static boolean isWindowsHost(final String osName) {
+            return Strings2.toAsciiLowerCase(osName).contains("win");
         }
 
         private static boolean hasExplicitExtension(final Path candidate) {
@@ -365,8 +393,7 @@ public final class ToolchainManager {
             return index > 0 && index < name.length() - 1;
         }
 
-        private static List<String> windowsExecutableExtensions() {
-            final String pathExt = System.getenv("PATHEXT");
+        private static List<String> windowsExecutableExtensions(final String pathExt) {
             if (Strings2.isBlank(pathExt)) {
                 return List.of(".exe", ".cmd", ".bat", ".com");
             }

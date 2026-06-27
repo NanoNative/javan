@@ -105,6 +105,24 @@ final class ToolchainManagerTest {
     }
 
     @Test
+    void windowsPathProbeResolvesExeSuffixFromPathext() throws Exception {
+        final Path compiler = Files.createFile(tempDir.resolve("gcc.exe"));
+        assertThat(compiler.toFile().setExecutable(true)).isTrue();
+
+        final Optional<Path> resolved = ToolchainManager.resolveExecutableOnPath(
+            tempDir.toString(),
+            "gcc",
+            ".EXE;.CMD",
+            "Windows 11"
+        );
+
+        assertThat(resolved).isPresent();
+        assertThat(resolved.orElseThrow().getParent()).isEqualTo(compiler.getParent());
+        assertThat(resolved.orElseThrow().getFileName().toString().toLowerCase(java.util.Locale.ROOT))
+            .isEqualTo("gcc.exe");
+    }
+
+    @Test
     void doctorDoesNotReportNativeImage() {
         final ToolchainManager manager = new ToolchainManager(tempDir.resolve("home"), missingProbe());
 

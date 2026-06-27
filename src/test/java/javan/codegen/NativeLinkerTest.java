@@ -15,7 +15,7 @@ final class NativeLinkerTest {
 
     @Test
     void windowsHostPrefersGccBeforeClangAndCc() {
-        assertThat(NativeLinker.compilerCandidatesForOs("Windows 11"))
+        assertThat(NativeLinker.compilerCandidatesForOs("Windows 11", null))
             .containsExactly("gcc", "clang", "cc");
     }
 
@@ -26,6 +26,25 @@ final class NativeLinkerTest {
 
         assertThat(NativeLinker.resolveExecutablePathForOs(
             tempDir.resolve("gcc"),
+            "Windows 11",
+            List.of(".exe", ".cmd")
+        )).contains(compiler.toString());
+    }
+
+    @Test
+    void windowsHostPrefersConfiguredCompilerBeforeFallbackCandidates() {
+        assertThat(NativeLinker.compilerCandidatesForOs("Windows 11", "C:\\toolchain\\gcc.exe"))
+            .containsExactly("C:\\toolchain\\gcc.exe", "gcc", "clang", "cc");
+    }
+
+    @Test
+    void firstOnPathForWindowsResolvesExeFromConcretePathEntries() throws Exception {
+        final Path compiler = Files.createFile(tempDir.resolve("gcc.exe"));
+        assertThat(compiler.toFile().setExecutable(true)).isTrue();
+
+        assertThat(NativeLinker.firstOnPathForOs(
+            List.of("gcc", "clang", "cc"),
+            tempDir.toString(),
             "Windows 11",
             List.of(".exe", ".cmd")
         )).contains(compiler.toString());
