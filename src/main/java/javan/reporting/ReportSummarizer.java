@@ -483,6 +483,12 @@ public final class ReportSummarizer {
         addNestedNumber(result, value, "exactSupportedJdkCallables", "totalCallables", "totalJdkCallables");
         addNestedNumber(result, value, "exactSupportedJdkCallables", "leftCallables", "leftJdkCallables");
         addNestedText(result, value, "exactSupportedJdkCallables", "coveragePercent", "exactSupportedJdkCallableCoveragePercent");
+        addNestedNumber(result, value, "exactJdkCallableAccounting", "supportedCallables", "accountedSupportedJdkCallables");
+        addNestedNumber(result, value, "exactJdkCallableAccounting", "explicitRejectedCallables", "accountedRejectedJdkCallables");
+        addNestedNumber(result, value, "exactJdkCallableAccounting", "doneCallables", "accountedDoneJdkCallables");
+        addNestedNumber(result, value, "exactJdkCallableAccounting", "unknownCallables", "unknownJdkCallables");
+        addNestedNumber(result, value, "exactJdkCallableAccounting", "totalCallables", "accountingTotalJdkCallables");
+        addNestedText(result, value, "exactJdkCallableAccounting", "donePercent", "accountedDoneJdkCallablePercent");
         addNumber(result, value, "supportRows");
         addNumber(result, value, "passRows");
         addNumber(result, value, "scopedRows");

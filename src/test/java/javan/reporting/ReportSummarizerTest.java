@@ -882,6 +882,14 @@ final class ReportSummarizerTest {
                 "leftCallables": 267727,
                 "coveragePercent": "0.0"
               },
+              "exactJdkCallableAccounting": {
+                "supportedCallables": 159,
+                "explicitRejectedCallables": 8,
+                "doneCallables": 167,
+                "unknownCallables": 267719,
+                "totalCallables": 267886,
+                "donePercent": "0.0"
+              },
               "supportRows": 108,
               "passRows": 107,
               "scopedRows": 0,
@@ -909,6 +917,12 @@ final class ReportSummarizerTest {
             "totalJdkCallables: `267886`",
             "leftJdkCallables: `267727`",
             "exactSupportedJdkCallableCoveragePercent: `0.0`",
+            "accountedSupportedJdkCallables: `159`",
+            "accountedRejectedJdkCallables: `8`",
+            "accountedDoneJdkCallables: `167`",
+            "unknownJdkCallables: `267719`",
+            "accountingTotalJdkCallables: `267886`",
+            "accountedDoneJdkCallablePercent: `0.0`",
             "supportRows: `108`",
             "passRows: `107`",
             "scopedRows: `0`",

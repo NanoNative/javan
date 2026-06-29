@@ -43,9 +43,8 @@ no unknown leftovers.
 ## Support Accounting
 
 Inventory is implemented. Exact supported callable-member accounting is implemented as a
-lower-bound progress signal. Reachable JDK reports now also split current reachable call
-sites into intrinsic, runtime-registry, supported-direct, and unsupported buckets. Full
-supported/rejected/unknown JDK API variant accounting is still planned.
+lower-bound progress signal. Exact explicit rejected and unknown callable counts are now
+reported as a baseline, but full member-by-member rejection accounting is still planned.
 
 Current support ledger for the active JDK 25 evidence set:
 
@@ -62,6 +61,9 @@ Current support ledger for the active JDK 25 evidence set:
 | exact supported JDK constructors | 778 |
 | exact supported JDK methods | 287 |
 | exact supported JDK callables | 1065 / 267886 (0.3%) |
+| exact explicit rejected JDK callables | 1398 |
+| exact done JDK callables | 2463 / 267886 (0.9%) |
+| exact unknown JDK callables | 265423 |
 | exact supported JDK callables left | 266821 |
 
 Release-gated JDKs must report:
@@ -72,10 +74,13 @@ leftovers = unknown variants
 leftovers must be 0
 ```
 
+The exact supported and done JDK callable counts above are lower-bound progress signals.
+Unknown callables still include everything not yet counted as supported or explicitly rejected,
+so this is not a full JDK completion claim.
+
 Compatibility reports are generated under `.javan/reports`, `.javan/jdk-inventory`, and `.javan/bytecode-patterns`.
 New opcodes, constant-pool tags, attributes, and bootstrap patterns must be classified before native code generation accepts them.
 
-Current full-first-JDK progress remains `0.0%` for the actual release gate because
-supported/rejected/unknown accounting is not complete yet. The exact supported callable
-ledger above is a lower-bound progress signal with an explicit total and left value, not
-a complete JDK support claim.
+Current full-first-JDK progress remains `0.0%` for the strict release gate because
+explicit rejected callable-member coverage is still incomplete and unknown callables are
+not zero.

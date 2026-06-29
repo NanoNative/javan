@@ -4,6 +4,7 @@ import javan.util.Files2;
 import javan.util.Json;
 import javan.util.Strings2;
 import javan.verify.Diagnostic;
+import javan.verify.ForbiddenApiRules;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -119,10 +120,17 @@ public final class CompatibilityReports {
             .append(", \"leftCallables\": ").append(callableSupport.leftCallables())
             .append(", \"coveragePercent\": ").append(Json.string(coveragePercentText(callableSupport.supportedCallables(), callableSupport.totalCallables())))
             .append("},\n")
+            .append("  \"exactJdkCallableAccounting\": {\"supportedCallables\": ").append(callableSupport.supportedCallables())
+            .append(", \"explicitRejectedCallables\": ").append(callableSupport.explicitRejectedCallables())
+            .append(", \"doneCallables\": ").append(callableSupport.doneCallables())
+            .append(", \"unknownCallables\": ").append(callableSupport.unknownCallables())
+            .append(", \"totalCallables\": ").append(callableSupport.totalCallables())
+            .append(", \"donePercent\": ").append(Json.string(coveragePercentText(callableSupport.doneCallables(), callableSupport.totalCallables())))
+            .append("},\n")
             .append("  \"jdkCoverageAccounting\": {\"implemented\": true, \"complete\": false, \"scope\": ")
-            .append(Json.string("exact-supported-callables"))
+            .append(Json.string("exact-supported-plus-unknown-baseline"))
             .append(", \"note\": ")
-            .append(Json.string("inventory is generated; exact supported callable-member accounting is implemented; full supported/rejected/unknown JDK API variant accounting is still planned")).append("},\n")
+            .append(Json.string("inventory is generated; exact supported callable-member accounting is implemented; explicit rejected callable-member accounting is still incomplete; unknown callables currently include every callable that is not yet counted as supported or explicitly rejected")).append("},\n")
             .append("  \"supportRows\": ").append(rows.size()).append(",\n")
             .append("  \"passRows\": ").append(passRows).append(",\n")
             .append("  \"scopedRows\": ").append(scopedRows).append(",\n")
@@ -177,8 +185,13 @@ public final class CompatibilityReports {
             .append("- exact supported JDK callables: `").append(callableSupport.supportedCallables())
             .append(" / ").append(callableSupport.totalCallables()).append("` (`")
             .append(coveragePercentDisplay(callableSupport.supportedCallables(), callableSupport.totalCallables())).append("`)\n")
+            .append("- exact explicit rejected JDK callables: `").append(callableSupport.explicitRejectedCallables()).append("`\n")
+            .append("- exact done JDK callables: `").append(callableSupport.doneCallables())
+            .append(" / ").append(callableSupport.totalCallables()).append("` (`")
+            .append(coveragePercentDisplay(callableSupport.doneCallables(), callableSupport.totalCallables())).append("`)\n")
+            .append("- exact unknown JDK callables: `").append(callableSupport.unknownCallables()).append("`\n")
             .append("- exact supported JDK callables left: `").append(callableSupport.leftCallables()).append("`\n")
-            .append("- JDK coverage accounting: `partial (exact supported callables)`\n")
+            .append("- JDK coverage accounting: `partial (exact supported + unknown baseline)`\n")
             .append("- support rows: `").append(rows.size()).append("`\n")
             .append("- pass rows: `").append(passRows).append("`\n")
             .append("- scoped rows: `").append(scopedRows).append("`\n")
@@ -564,7 +577,9 @@ public final class CompatibilityReports {
             .append("or deliberately rejected with a clear diagnostic. A release-gated JDK must have\n")
             .append("no unknown leftovers.\n\n")
             .append("## Support Accounting\n\n")
-            .append("Inventory is implemented. Full JDK API variant accounting is planned.\n\n")
+            .append("Inventory is implemented. Exact supported callable-member accounting is implemented as a\n")
+            .append("lower-bound progress signal. Exact explicit rejected and unknown callable counts are now\n")
+            .append("reported as a baseline, but full member-by-member rejection accounting is still planned.\n\n")
             .append("Current support ledger for the active JDK ").append(feature).append(" evidence set:\n\n")
             .append("| Measure | Count |\n")
             .append("| --- | ---: |\n")
@@ -580,6 +595,10 @@ public final class CompatibilityReports {
             .append("| exact supported JDK methods | ").append(callableSupport.supportedMethods()).append(" |\n")
             .append("| exact supported JDK callables | ").append(callableSupport.supportedCallables()).append(" / ")
             .append(callableSupport.totalCallables()).append(" (").append(coveragePercentDisplay(callableSupport.supportedCallables(), callableSupport.totalCallables())).append(") |\n")
+            .append("| exact explicit rejected JDK callables | ").append(callableSupport.explicitRejectedCallables()).append(" |\n")
+            .append("| exact done JDK callables | ").append(callableSupport.doneCallables()).append(" / ")
+            .append(callableSupport.totalCallables()).append(" (").append(coveragePercentDisplay(callableSupport.doneCallables(), callableSupport.totalCallables())).append(") |\n")
+            .append("| exact unknown JDK callables | ").append(callableSupport.unknownCallables()).append(" |\n")
             .append("| exact supported JDK callables left | ").append(callableSupport.leftCallables()).append(" |\n\n")
             .append("Release-gated JDKs must report:\n\n")
             .append("```text\n")
@@ -587,8 +606,9 @@ public final class CompatibilityReports {
             .append("leftovers = unknown variants\n")
             .append("leftovers must be 0\n")
             .append("```\n\n")
-            .append("The exact supported JDK callable counts above are a lower-bound progress signal for members that\n")
-            .append("already match the native support registry today. They are not a full JDK completion claim.\n\n")
+            .append("The exact supported and done JDK callable counts above are lower-bound progress signals.\n")
+            .append("Unknown callables still include everything not yet counted as supported or explicitly rejected,\n")
+            .append("so this is not a full JDK completion claim.\n\n")
             .append("Compatibility reports are generated under `.javan/reports`, `.javan/jdk-inventory`, and `.javan/bytecode-patterns`.\n")
             .append("New opcodes, constant-pool tags, attributes, and bootstrap patterns must be classified before native code generation accepts them.\n");
         return markdown.toString();
@@ -625,15 +645,22 @@ public final class CompatibilityReports {
     private static JdkCallableSupportTotals jdkCallableSupportTotals(final List<ClassMetadata> classes) {
         long supportedConstructors = 0;
         long supportedMethods = 0;
+        long explicitRejectedConstructors = 0;
+        long explicitRejectedMethods = 0;
         long totalConstructors = 0;
         long totalMethods = 0;
         long classesWithSupportedCallables = 0;
+        final ForbiddenApiRules forbiddenApiRules = new ForbiddenApiRules();
         for (int classIndex = 0; classIndex < classes.size(); classIndex++) {
             final ClassMetadata metadata = classes.get(classIndex);
             long classSupportedConstructors = countSupportedMembers(metadata.name(), metadata.constructors());
             long classSupportedMethods = countSupportedMembers(metadata.name(), metadata.methods());
+            long classExplicitRejectedConstructors = countExplicitRejectedMembers(metadata.name(), metadata.constructors(), forbiddenApiRules);
+            long classExplicitRejectedMethods = countExplicitRejectedMembers(metadata.name(), metadata.methods(), forbiddenApiRules);
             supportedConstructors += classSupportedConstructors;
             supportedMethods += classSupportedMethods;
+            explicitRejectedConstructors += classExplicitRejectedConstructors;
+            explicitRejectedMethods += classExplicitRejectedMethods;
             totalConstructors += metadata.constructors().size();
             totalMethods += metadata.methods().size();
             if ((classSupportedConstructors + classSupportedMethods) > 0) {
@@ -644,6 +671,8 @@ public final class CompatibilityReports {
             classesWithSupportedCallables,
             supportedConstructors,
             supportedMethods,
+            explicitRejectedConstructors,
+            explicitRejectedMethods,
             totalConstructors + totalMethods
         );
     }
@@ -659,14 +688,43 @@ public final class CompatibilityReports {
         return supported;
     }
 
+    private static long countExplicitRejectedMembers(
+        final String owner,
+        final List<MemberMetadata> members,
+        final ForbiddenApiRules forbiddenApiRules
+    ) {
+        long rejected = 0;
+        for (int memberIndex = 0; memberIndex < members.size(); memberIndex++) {
+            final MemberMetadata member = members.get(memberIndex);
+            if (forbiddenApiRules.forbiddenReason(new javan.classfile.MethodRef(owner, member.name(), member.descriptor())).isPresent()) {
+                rejected++;
+            }
+        }
+        return rejected;
+    }
+
     private record JdkCallableSupportTotals(
         long classesWithSupportedCallables,
         long supportedConstructors,
         long supportedMethods,
+        long explicitRejectedConstructors,
+        long explicitRejectedMethods,
         long totalCallables
     ) {
         private long supportedCallables() {
             return supportedConstructors + supportedMethods;
+        }
+
+        private long explicitRejectedCallables() {
+            return explicitRejectedConstructors + explicitRejectedMethods;
+        }
+
+        private long doneCallables() {
+            return supportedCallables() + explicitRejectedCallables();
+        }
+
+        private long unknownCallables() {
+            return totalCallables - doneCallables();
         }
 
         private long leftCallables() {
