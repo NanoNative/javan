@@ -608,6 +608,14 @@ final class RuntimeSourceCoreSection {
             return value < 0 ? -value : value;
         }
 
+        float javan_math_abs_float(float value) {
+            return fabsf(value);
+        }
+
+        double javan_math_abs_double(double value) {
+            return fabs(value);
+        }
+
         int javan_math_min_int(int left, int right) {
             return left <= right ? left : right;
         }

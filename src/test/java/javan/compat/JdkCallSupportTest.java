@@ -81,6 +81,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void mathAbsFloatIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Math",
+            "abs",
+            "(F)F"
+        ))).isTrue();
+    }
+
+    @Test
+    void mathAbsDoubleIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Math",
+            "abs",
+            "(D)D"
+        ))).isTrue();
+    }
+
+    @Test
     void executorCloseIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/concurrent/ExecutorService",

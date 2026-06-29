@@ -1295,6 +1295,14 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.longExpression(IrExpression.longCall("javan_math_abs_long", List.of(popLong(classFile, method, stack)))));
             return true;
         }
+        if ("abs".equals(methodRef.name()) && "(F)F".equals(methodRef.descriptor())) {
+            stack.add(StackValue.floatExpression(IrExpression.floatCall("javan_math_abs_float", List.of(popFloat(classFile, method, stack)))));
+            return true;
+        }
+        if ("abs".equals(methodRef.name()) && "(D)D".equals(methodRef.descriptor())) {
+            stack.add(StackValue.doubleExpression(IrExpression.doubleCall("javan_math_abs_double", List.of(popDouble(classFile, method, stack)))));
+            return true;
+        }
         if ("min".equals(methodRef.name()) && "(II)I".equals(methodRef.descriptor())) {
             final IrExpression right = popInt(classFile, method, stack);
             final IrExpression left = popInt(classFile, method, stack);

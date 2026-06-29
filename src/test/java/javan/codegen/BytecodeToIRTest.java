@@ -9300,6 +9300,42 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersMathAbsFloatToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(F)F",
+            1,
+            1,
+            plain(0, 34, "fload_0"),
+            invokeStatic(1, new MethodRef("java/lang/Math", "abs", "(F)F")),
+            plain(2, 174, "freturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnFloat(IrExpression.floatCall("javan_math_abs_float", List.of(IrExpression.floatLocal("arg0"))))
+        );
+    }
+
+    @Test
+    void lowersMathAbsDoubleToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(D)D",
+            2,
+            2,
+            plain(0, 38, "dload_0"),
+            invokeStatic(1, new MethodRef("java/lang/Math", "abs", "(D)D")),
+            plain(2, 175, "dreturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnDouble(IrExpression.doubleCall("javan_math_abs_double", List.of(IrExpression.doubleLocal("arg0"))))
+        );
+    }
+
+    @Test
     void lowersMathMinIntToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,

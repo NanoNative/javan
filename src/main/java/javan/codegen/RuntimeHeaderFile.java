@@ -51,6 +51,8 @@ final class RuntimeHeaderFile {
         void javan_eprintln_bool(int value);
         int javan_math_abs_int(int value);
         long long javan_math_abs_long(long long value);
+        float javan_math_abs_float(float value);
+        double javan_math_abs_double(double value);
         int javan_math_min_int(int left, int right);
         long long javan_math_min_long(long long left, long long right);
         int javan_math_max_int(int left, int right);

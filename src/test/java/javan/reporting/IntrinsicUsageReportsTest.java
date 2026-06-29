@@ -169,16 +169,15 @@ final class IntrinsicUsageReportsTest {
         final IntrinsicUsageReport report = reports.analyze(classes, List.of(entry));
 
         assertThat(report.intrinsics()).contains(
-            new IntrinsicCallCount("Math.abs", 0),
+            new IntrinsicCallCount("Math.abs", 1),
             new IntrinsicCallCount("Arrays.copyOf", 0),
             new IntrinsicCallCount("Objects.requireNonNull", 0)
         );
         assertThat(report.runtimeCallSiteCount()).isZero();
         assertThat(report.supportedDirectJdkCallSiteCount()).isZero();
-        assertThat(report.supportedJdkCallSiteCount()).isZero();
-        assertThat(report.unsupportedJdkCallCandidateCount()).isEqualTo(2);
+        assertThat(report.supportedJdkCallSiteCount()).isEqualTo(1);
+        assertThat(report.unsupportedJdkCallCandidateCount()).isEqualTo(1);
         assertThat(report.unsupportedJdkCallCandidates()).containsExactly(
-            new UnsupportedJdkCallCandidate("java/lang/Math.abs(F)F", 1),
             new UnsupportedJdkCallCandidate("java/util/Objects.requireNonNullElse(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;", 1)
         );
     }

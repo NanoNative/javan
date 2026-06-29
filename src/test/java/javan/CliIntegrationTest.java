@@ -5871,6 +5871,10 @@ final class CliIntegrationTest {
                     System.out.println(Math.abs(Long.MIN_VALUE));
                     System.out.println(Math.min(100L, -200L));
                     System.out.println(Math.max(100L, -200L));
+                    System.out.println(Math.abs(-1.25f));
+                    System.out.println(1.0f / Math.abs(-0.0f));
+                    System.out.println(1.0d / Math.abs(-0.0d));
+                    System.out.println(Math.abs(-3.5d));
                 }
             }
             """);
@@ -5880,7 +5884,7 @@ final class CliIntegrationTest {
 
         assertThat(run.exitCode()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/jdk-math-intrinsics").toString())).stdout()).isEqualTo(jvmOutput);
-        assertThat(jvmOutput).isEqualTo("9\n-2147483648\n-7\n4\n12\n-9223372036854775808\n-200\n100\n");
+        assertThat(jvmOutput).isEqualTo("9\n-2147483648\n-7\n4\n12\n-9223372036854775808\n-200\n100\n1.25\nInfinity\nInfinity\n3.5\n");
     }
 
     @Test
@@ -7513,30 +7517,6 @@ final class CliIntegrationTest {
 
     @Test
     void unsupportedJdkIntrinsicOverloadsFailClearly() throws Exception {
-        final Path mathProject = project("unsupported-math-overload");
-        writeJava(mathProject, "com.acme.Main", """
-            package com.acme;
-
-            public final class Main {
-                private Main() {
-                }
-
-                public static void main(final String[] args) {
-                    System.out.println(Math.abs(1.25f));
-                }
-            }
-            """);
-
-        final CliRun mathRun = run(tempDir, "build", mathProject.toString());
-
-        assertThat(mathRun.exitCode()).isEqualTo(2);
-        assertThat(mathRun.stderr()).contains("error[JAVAN031]", "java/lang/Math.abs(F)F");
-        assertThat(Files.readString(mathProject.resolve(".javan/reports/intrinsics.json")))
-            .contains(
-                "{\"name\": \"Math.abs\", \"count\": 0}",
-                "{\"target\": \"java/lang/Math.abs(F)F\", \"count\": 1}"
-            );
-
         final Path objectsProject = project("unsupported-objects-overload");
         writeJava(objectsProject, "com.acme.Main", """
             package com.acme;

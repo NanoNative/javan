@@ -189,7 +189,7 @@ Every test checks one assumption, scenario, or case.
 Good tests:
 
 - `Math.abs(int)` lowers and matches JVM output
-- `Math.abs(float)` fails as an unsupported overload
+- `Math.abs(float)` lowers and matches JVM output
 - `System.arraycopy` rejects primitive type mismatch
 - Maven wrapper is preferred over system Maven
 - missing configured JDK cache entry fails with a toolchain diagnostic
