@@ -489,6 +489,15 @@ public final class ReportSummarizer {
         addNestedNumber(result, value, "exactJdkCallableAccounting", "unknownCallables", "unknownJdkCallables");
         addNestedNumber(result, value, "exactJdkCallableAccounting", "totalCallables", "accountingTotalJdkCallables");
         addNestedText(result, value, "exactJdkCallableAccounting", "donePercent", "accountedDoneJdkCallablePercent");
+        addNestedNumber(result, value, "flowQualifiedRejectedJdkCalls", "reachableCurrentThreadLifecycle", "flowQualifiedReachableCurrentThreadLifecycleRejects");
+        addNestedNumber(result, value, "flowQualifiedRejectedJdkCalls", "unreachableCurrentThreadLifecycle", "flowQualifiedUnreachableCurrentThreadLifecycleRejects");
+        addNestedNumber(result, value, "flowQualifiedRejectedJdkCalls", "reachableThreadBuilderReceiverShape", "flowQualifiedReachableThreadBuilderReceiverRejects");
+        addNestedNumber(result, value, "flowQualifiedRejectedJdkCalls", "unreachableThreadBuilderReceiverShape", "flowQualifiedUnreachableThreadBuilderReceiverRejects");
+        addNestedNumber(result, value, "flowQualifiedRejectedJdkCalls", "reachableVirtualThreadFactoryShape", "flowQualifiedReachableVirtualThreadFactoryRejects");
+        addNestedNumber(result, value, "flowQualifiedRejectedJdkCalls", "unreachableVirtualThreadFactoryShape", "flowQualifiedUnreachableVirtualThreadFactoryRejects");
+        addNestedNumber(result, value, "flowQualifiedRejectedJdkCalls", "reachableExecutorReceiverShape", "flowQualifiedReachableExecutorReceiverRejects");
+        addNestedNumber(result, value, "flowQualifiedRejectedJdkCalls", "unreachableExecutorReceiverShape", "flowQualifiedUnreachableExecutorReceiverRejects");
+        addNestedNumber(result, value, "flowQualifiedRejectedJdkCalls", "total", "flowQualifiedRejectedJdkCallShapes");
         addNumber(result, value, "supportRows");
         addNumber(result, value, "passRows");
         addNumber(result, value, "scopedRows");

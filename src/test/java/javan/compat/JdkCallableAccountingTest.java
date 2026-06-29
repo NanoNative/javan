@@ -8,7 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 final class JdkCallableAccountingTest {
     @Test
     void marksSupportedCallableAsSupported() {
-        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Object", "getClass", "()Ljava/lang/Class;")))
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Object", "<init>", "()V")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 

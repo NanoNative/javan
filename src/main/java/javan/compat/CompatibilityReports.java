@@ -48,7 +48,7 @@ public final class CompatibilityReports {
         files.add(Files2.writeString(reports.resolve("compatibility-summary.md"), summaryMarkdown(javaVersion, feature, projectClasses, jdkClasses, diagnostics)));
         files.add(Files2.writeString(root.resolve("doc/status/support-matrix.json"), supportMatrixJson(feature)));
         files.add(Files2.writeString(root.resolve("doc/status/support-matrix.md"), supportMatrixMarkdown(feature)));
-        files.add(Files2.writeString(root.resolve("doc/status/jdk-compatibility.md"), jdkCompatibilityMarkdown(javaVersion, feature, projectClasses, jdkClasses)));
+        files.add(Files2.writeString(root.resolve("doc/status/jdk-compatibility.md"), jdkCompatibilityMarkdown(javaVersion, feature, projectClasses, jdkClasses, diagnostics)));
         return new CompatibilityResult(
             outputDirectory,
             javaVersion,
@@ -94,6 +94,7 @@ public final class CompatibilityReports {
         final InventoryTotals jdkTotals = inventoryTotals(jdkClasses);
         final JdkCallableSupportTotals callableSupport = jdkCallableSupportTotals(jdkClasses);
         final List<SupportRow> rows = supportRows();
+        final FlowQualifiedRejectedTotals flowQualifiedRejected = flowQualifiedRejectedTotals(diagnostics);
         final int passRows = countSupportRows(rows, "pass");
         final int scopedRows = countSupportRows(rows, "scoped");
         final int targetRows = countSupportRows(rows, "target");
@@ -126,10 +127,20 @@ public final class CompatibilityReports {
             .append(", \"totalCallables\": ").append(callableSupport.totalCallables())
             .append(", \"donePercent\": ").append(Json.string(coveragePercentText(callableSupport.doneCallables(), callableSupport.totalCallables())))
             .append("},\n")
+            .append("  \"flowQualifiedRejectedJdkCalls\": {\"reachableCurrentThreadLifecycle\": ").append(flowQualifiedRejected.reachableCurrentThreadLifecycle())
+            .append(", \"unreachableCurrentThreadLifecycle\": ").append(flowQualifiedRejected.unreachableCurrentThreadLifecycle())
+            .append(", \"reachableThreadBuilderReceiverShape\": ").append(flowQualifiedRejected.reachableThreadBuilderReceiverShape())
+            .append(", \"unreachableThreadBuilderReceiverShape\": ").append(flowQualifiedRejected.unreachableThreadBuilderReceiverShape())
+            .append(", \"reachableVirtualThreadFactoryShape\": ").append(flowQualifiedRejected.reachableVirtualThreadFactoryShape())
+            .append(", \"unreachableVirtualThreadFactoryShape\": ").append(flowQualifiedRejected.unreachableVirtualThreadFactoryShape())
+            .append(", \"reachableExecutorReceiverShape\": ").append(flowQualifiedRejected.reachableExecutorReceiverShape())
+            .append(", \"unreachableExecutorReceiverShape\": ").append(flowQualifiedRejected.unreachableExecutorReceiverShape())
+            .append(", \"total\": ").append(flowQualifiedRejected.total())
+            .append("},\n")
             .append("  \"jdkCoverageAccounting\": {\"implemented\": true, \"complete\": false, \"scope\": ")
-            .append(Json.string("exact-supported-plus-unknown-baseline"))
+            .append(Json.string("exact-member-baseline-plus-flow-qualified-diagnostics"))
             .append(", \"note\": ")
-            .append(Json.string("inventory is generated; exact supported callable-member accounting is implemented; explicit rejected callable-member accounting is still incomplete; unknown callables currently include every callable that is not yet counted as supported or explicitly rejected")).append("},\n")
+            .append(Json.string("inventory is generated; exact supported callable-member accounting is implemented; explicit rejected callable-member accounting is still incomplete; flow-qualified rejected JDK call shapes are tracked separately from the exact member denominator; unknown callables currently include every callable that is not yet counted as supported or explicitly rejected")).append("},\n")
             .append("  \"supportRows\": ").append(rows.size()).append(",\n")
             .append("  \"passRows\": ").append(passRows).append(",\n")
             .append("  \"scopedRows\": ").append(scopedRows).append(",\n")
@@ -162,6 +173,7 @@ public final class CompatibilityReports {
         final InventoryTotals jdkTotals = inventoryTotals(jdkClasses);
         final JdkCallableSupportTotals callableSupport = jdkCallableSupportTotals(jdkClasses);
         final List<SupportRow> rows = supportRows();
+        final FlowQualifiedRejectedTotals flowQualifiedRejected = flowQualifiedRejectedTotals(diagnostics);
         final int passRows = countSupportRows(rows, "pass");
         final int scopedRows = countSupportRows(rows, "scoped");
         final int targetRows = countSupportRows(rows, "target");
@@ -190,7 +202,16 @@ public final class CompatibilityReports {
             .append(coveragePercentDisplay(callableSupport.doneCallables(), callableSupport.totalCallables())).append("`)\n")
             .append("- exact unknown JDK callables: `").append(callableSupport.unknownCallables()).append("`\n")
             .append("- exact supported JDK callables left: `").append(callableSupport.leftCallables()).append("`\n")
-            .append("- JDK coverage accounting: `partial (exact supported + unknown baseline)`\n")
+            .append("- flow-qualified reachable current-thread lifecycle rejects: `").append(flowQualifiedRejected.reachableCurrentThreadLifecycle()).append("`\n")
+            .append("- flow-qualified unreachable current-thread lifecycle rejects: `").append(flowQualifiedRejected.unreachableCurrentThreadLifecycle()).append("`\n")
+            .append("- flow-qualified reachable thread-builder receiver-shape rejects: `").append(flowQualifiedRejected.reachableThreadBuilderReceiverShape()).append("`\n")
+            .append("- flow-qualified unreachable thread-builder receiver-shape rejects: `").append(flowQualifiedRejected.unreachableThreadBuilderReceiverShape()).append("`\n")
+            .append("- flow-qualified reachable virtual-thread factory-shape rejects: `").append(flowQualifiedRejected.reachableVirtualThreadFactoryShape()).append("`\n")
+            .append("- flow-qualified unreachable virtual-thread factory-shape rejects: `").append(flowQualifiedRejected.unreachableVirtualThreadFactoryShape()).append("`\n")
+            .append("- flow-qualified reachable executor receiver-shape rejects: `").append(flowQualifiedRejected.reachableExecutorReceiverShape()).append("`\n")
+            .append("- flow-qualified unreachable executor receiver-shape rejects: `").append(flowQualifiedRejected.unreachableExecutorReceiverShape()).append("`\n")
+            .append("- flow-qualified rejected JDK call shapes total: `").append(flowQualifiedRejected.total()).append("`\n")
+            .append("- JDK coverage accounting: `partial (exact member baseline + flow-qualified diagnostics)`\n")
             .append("- support rows: `").append(rows.size()).append("`\n")
             .append("- pass rows: `").append(passRows).append("`\n")
             .append("- scoped rows: `").append(scopedRows).append("`\n")
@@ -537,10 +558,12 @@ public final class CompatibilityReports {
         final String javaVersion,
         final int feature,
         final List<ClassMetadata> projectClasses,
-        final List<ClassMetadata> jdkClasses
+        final List<ClassMetadata> jdkClasses,
+        final List<Diagnostic> diagnostics
     ) {
         final InventoryTotals totals = inventoryTotals(jdkClasses);
         final JdkCallableSupportTotals callableSupport = jdkCallableSupportTotals(jdkClasses);
+        final FlowQualifiedRejectedTotals flowQualifiedRejected = flowQualifiedRejectedTotals(diagnostics);
         final List<SupportRow> rows = supportRows();
         final StringBuilder markdown = new StringBuilder();
         markdown.append("# JDK Compatibility\n\n")
@@ -598,7 +621,16 @@ public final class CompatibilityReports {
             .append("| exact done JDK callables | ").append(callableSupport.doneCallables()).append(" / ")
             .append(callableSupport.totalCallables()).append(" (").append(coveragePercentDisplay(callableSupport.doneCallables(), callableSupport.totalCallables())).append(") |\n")
             .append("| exact unknown JDK callables | ").append(callableSupport.unknownCallables()).append(" |\n")
-            .append("| exact supported JDK callables left | ").append(callableSupport.leftCallables()).append(" |\n\n")
+            .append("| exact supported JDK callables left | ").append(callableSupport.leftCallables()).append(" |\n")
+            .append("| flow-qualified reachable current-thread lifecycle rejects | ").append(flowQualifiedRejected.reachableCurrentThreadLifecycle()).append(" |\n")
+            .append("| flow-qualified unreachable current-thread lifecycle rejects | ").append(flowQualifiedRejected.unreachableCurrentThreadLifecycle()).append(" |\n")
+            .append("| flow-qualified reachable thread-builder receiver-shape rejects | ").append(flowQualifiedRejected.reachableThreadBuilderReceiverShape()).append(" |\n")
+            .append("| flow-qualified unreachable thread-builder receiver-shape rejects | ").append(flowQualifiedRejected.unreachableThreadBuilderReceiverShape()).append(" |\n")
+            .append("| flow-qualified reachable virtual-thread factory-shape rejects | ").append(flowQualifiedRejected.reachableVirtualThreadFactoryShape()).append(" |\n")
+            .append("| flow-qualified unreachable virtual-thread factory-shape rejects | ").append(flowQualifiedRejected.unreachableVirtualThreadFactoryShape()).append(" |\n")
+            .append("| flow-qualified reachable executor receiver-shape rejects | ").append(flowQualifiedRejected.reachableExecutorReceiverShape()).append(" |\n")
+            .append("| flow-qualified unreachable executor receiver-shape rejects | ").append(flowQualifiedRejected.unreachableExecutorReceiverShape()).append(" |\n")
+            .append("| flow-qualified rejected JDK call shapes total | ").append(flowQualifiedRejected.total()).append(" |\n\n")
             .append("Release-gated JDKs must report:\n\n")
             .append("```text\n")
             .append("done = supported variants + rejected variants\n")
@@ -606,6 +638,8 @@ public final class CompatibilityReports {
             .append("leftovers must be 0\n")
             .append("```\n\n")
             .append("The exact supported and done JDK callable counts above are lower-bound progress signals.\n")
+            .append("Flow-qualified rejected JDK call shapes above are diagnostic-shape accounting only.\n")
+            .append("They are tracked separately because they depend on receiver or call-flow facts rather than raw member inventory.\n")
             .append("Unknown callables still include everything not yet counted as supported or explicitly rejected,\n")
             .append("so this is not a full JDK completion claim.\n\n")
             .append("Compatibility reports are generated under `.javan/reports`, `.javan/jdk-inventory`, and `.javan/bytecode-patterns`.\n")
@@ -694,6 +728,62 @@ public final class CompatibilityReports {
     }
 
     private record MemberAccountingTotals(long supported, long explicitRejected) {
+    }
+
+    private static FlowQualifiedRejectedTotals flowQualifiedRejectedTotals(final List<Diagnostic> diagnostics) {
+        return new FlowQualifiedRejectedTotals(
+            countMatchingDiagnostics(diagnostics, "JAVAN075", "Thread.currentThread().", "Thread.currentThread() alias on local ", "duplicate Thread.start() on local "),
+            countMatchingDiagnostics(diagnostics, "JAVAN175", "Thread.currentThread().", "Thread.currentThread() alias on local ", "duplicate Thread.start() on local "),
+            countMatchingDiagnostics(diagnostics, "JAVAN077", "Thread.Builder.start(Runnable)", "Thread.Builder.unstarted(Runnable)", "Thread.Builder.name(...)", "Thread.Builder.factory()"),
+            countMatchingDiagnostics(diagnostics, "JAVAN177", "Thread.Builder.start(Runnable)", "Thread.Builder.unstarted(Runnable)", "Thread.Builder.name(...)", "Thread.Builder.factory()"),
+            countMatchingDiagnostics(diagnostics, "JAVAN077", "Thread.ofVirtual()", "Thread.Builder.OfVirtual.", "Executors.newVirtualThreadPerTaskExecutor()"),
+            countMatchingDiagnostics(diagnostics, "JAVAN177", "Thread.ofVirtual()", "Thread.Builder.OfVirtual.", "Executors.newVirtualThreadPerTaskExecutor()"),
+            countMatchingDiagnostics(diagnostics, "JAVAN077", "Executor.execute(Runnable)", "ExecutorService.close()", "Executors.newThreadPerTaskExecutor(ThreadFactory)"),
+            countMatchingDiagnostics(diagnostics, "JAVAN177", "Executor.execute(Runnable)", "ExecutorService.close()", "Executors.newThreadPerTaskExecutor(ThreadFactory)")
+        );
+    }
+
+    private static long countMatchingDiagnostics(final List<Diagnostic> diagnostics, final String code, final String... subjectPrefixesOrValues) {
+        long count = 0;
+        for (int index = 0; index < diagnostics.size(); index++) {
+            final Diagnostic diagnostic = diagnostics.get(index);
+            if (code.equals(diagnostic.code()) && matchesAnySubject(diagnostic.subject(), subjectPrefixesOrValues)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private static boolean matchesAnySubject(final String subject, final String... subjectPrefixesOrValues) {
+        for (int index = 0; index < subjectPrefixesOrValues.length; index++) {
+            final String candidate = subjectPrefixesOrValues[index];
+            if (subject.startsWith(candidate)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private record FlowQualifiedRejectedTotals(
+        long reachableCurrentThreadLifecycle,
+        long unreachableCurrentThreadLifecycle,
+        long reachableThreadBuilderReceiverShape,
+        long unreachableThreadBuilderReceiverShape,
+        long reachableVirtualThreadFactoryShape,
+        long unreachableVirtualThreadFactoryShape,
+        long reachableExecutorReceiverShape,
+        long unreachableExecutorReceiverShape
+    ) {
+        private long total() {
+            return reachableCurrentThreadLifecycle
+                + unreachableCurrentThreadLifecycle
+                + reachableThreadBuilderReceiverShape
+                + unreachableThreadBuilderReceiverShape
+                + reachableVirtualThreadFactoryShape
+                + unreachableVirtualThreadFactoryShape
+                + reachableExecutorReceiverShape
+                + unreachableExecutorReceiverShape;
+        }
     }
 
     private record JdkCallableSupportTotals(

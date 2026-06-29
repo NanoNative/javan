@@ -57,14 +57,23 @@ Current support ledger for the active JDK 25 evidence set:
 | rejected rows | 0 |
 | accounted rows | 107 |
 | unaccounted rows | 1 |
-| exact supported JDK callable classes | 459 |
-| exact supported JDK constructors | 778 |
-| exact supported JDK methods | 287 |
-| exact supported JDK callables | 1065 / 267886 (0.3%) |
+| exact supported JDK callable classes | 456 |
+| exact supported JDK constructors | 678 |
+| exact supported JDK methods | 285 |
+| exact supported JDK callables | 963 / 267886 (0.3%) |
 | exact explicit rejected JDK callables | 1391 |
-| exact done JDK callables | 2456 / 267886 (0.9%) |
-| exact unknown JDK callables | 265430 |
-| exact supported JDK callables left | 266821 |
+| exact done JDK callables | 2354 / 267886 (0.8%) |
+| exact unknown JDK callables | 265532 |
+| exact supported JDK callables left | 266923 |
+| flow-qualified reachable current-thread lifecycle rejects | 0 |
+| flow-qualified unreachable current-thread lifecycle rejects | 0 |
+| flow-qualified reachable thread-builder receiver-shape rejects | 0 |
+| flow-qualified unreachable thread-builder receiver-shape rejects | 0 |
+| flow-qualified reachable virtual-thread factory-shape rejects | 0 |
+| flow-qualified unreachable virtual-thread factory-shape rejects | 0 |
+| flow-qualified reachable executor receiver-shape rejects | 0 |
+| flow-qualified unreachable executor receiver-shape rejects | 0 |
+| flow-qualified rejected JDK call shapes total | 0 |
 
 Release-gated JDKs must report:
 
@@ -78,6 +87,8 @@ The exact supported and done JDK callable counts above are lower-bound progress 
 The current explicit rejected callable set now includes deterministic forbidden APIs plus
 exact verifier-backed monitor/concurrency rejects such as `Object.wait/notify`,
 unsupported `Executors` single/cached pool factories, and `InheritableThreadLocal.<init>()`.
+Flow-qualified rejected JDK call shapes above are diagnostic-shape accounting only.
+They are tracked separately because they depend on receiver or call-flow facts rather than raw member inventory.
 Unknown callables still include everything not yet counted as supported or explicitly rejected,
 so this is not a full JDK completion claim.
 

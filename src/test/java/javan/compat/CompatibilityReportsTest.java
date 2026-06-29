@@ -74,8 +74,8 @@ final class CompatibilityReportsTest {
         final String summary = Files.readString(tempDir.resolve(".javan/reports/compatibility-summary.json"));
 
         assertThat(summary).contains(
-            "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 5, \"leftCallables\": 3, \"coveragePercent\": \"40.0\"}",
-            "\"exactJdkCallableAccounting\": {\"supportedCallables\": 2, \"explicitRejectedCallables\": 3, \"doneCallables\": 5, \"unknownCallables\": 0, \"totalCallables\": 5, \"donePercent\": \"100.0\"}",
+            "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 0, \"callables\": 1, \"totalCallables\": 5, \"leftCallables\": 4, \"coveragePercent\": \"20.0\"}",
+            "\"exactJdkCallableAccounting\": {\"supportedCallables\": 1, \"explicitRejectedCallables\": 3, \"doneCallables\": 4, \"unknownCallables\": 1, \"totalCallables\": 5, \"donePercent\": \"80.0\"}",
             "\"supportRows\": 108",
             "\"passRows\": 107",
             "\"scopedRows\": 0",
@@ -337,11 +337,59 @@ final class CompatibilityReportsTest {
         );
 
         assertThat(Files.readString(tempDir.resolve("doc/status/jdk-compatibility.md"))).contains(
-            "| exact supported JDK callables | 2 / 7 (28.5%) |",
+            "| exact supported JDK callables | 1 / 7 (14.2%) |",
             "| exact explicit rejected JDK callables | 4 |",
-            "| exact done JDK callables | 6 / 7 (85.7%) |",
-            "| exact unknown JDK callables | 1 |",
-            "| exact supported JDK callables left | 5 |"
+            "| exact done JDK callables | 5 / 7 (71.4%) |",
+            "| exact unknown JDK callables | 2 |",
+            "| exact supported JDK callables left | 6 |"
+        );
+    }
+
+    @Test
+    void writeSummaryReportsFlowQualifiedRejectedJdkShapesSeparatelyFromExactMemberAccounting() throws Exception {
+        new CompatibilityReports().write(
+            tempDir,
+            tempDir.resolve(".javan"),
+            List.of(metadata("", "com/acme/Main")),
+            List.of(metadata("java.base", "java/lang/Object")),
+            List.of(
+                Diagnostic.error("JAVAN075", "lifecycle", "com/acme/Main", "run()V", "Thread.currentThread().start()", "reason", "fix"),
+                Diagnostic.warning("JAVAN175", "lifecycle", "com/acme/Main", "run()V", "duplicate Thread.start() on local 1", "reason", "fix"),
+                Diagnostic.error("JAVAN077", "concurrency", "com/acme/Main", "run()V", "Thread.Builder.start(Runnable)", "reason", "fix"),
+                Diagnostic.warning("JAVAN177", "concurrency", "com/acme/Main", "run()V", "Thread.Builder.factory()", "reason", "fix"),
+                Diagnostic.error("JAVAN077", "concurrency", "com/acme/Main", "run()V", "Thread.ofVirtual()", "reason", "fix"),
+                Diagnostic.warning("JAVAN177", "concurrency", "com/acme/Main", "run()V", "Thread.Builder.OfVirtual.factory()", "reason", "fix"),
+                Diagnostic.error("JAVAN077", "concurrency", "com/acme/Main", "run()V", "Executor.execute(Runnable)", "reason", "fix"),
+                Diagnostic.warning("JAVAN177", "concurrency", "com/acme/Main", "run()V", "ExecutorService.close()", "reason", "fix"),
+                Diagnostic.error("JAVAN076", "sync", "com/acme/Main", "run()V", "Object.wait()", "reason", "fix")
+            )
+        );
+
+        assertThat(Files.readString(tempDir.resolve(".javan/reports/compatibility-summary.json"))).contains(
+            "\"flowQualifiedRejectedJdkCalls\": {\"reachableCurrentThreadLifecycle\": 1, \"unreachableCurrentThreadLifecycle\": 1, \"reachableThreadBuilderReceiverShape\": 1, \"unreachableThreadBuilderReceiverShape\": 1, \"reachableVirtualThreadFactoryShape\": 1, \"unreachableVirtualThreadFactoryShape\": 1, \"reachableExecutorReceiverShape\": 1, \"unreachableExecutorReceiverShape\": 1, \"total\": 8}",
+            "\"jdkCoverageAccounting\": {\"implemented\": true, \"complete\": false, \"scope\": \"exact-member-baseline-plus-flow-qualified-diagnostics\""
+        );
+        assertThat(Files.readString(tempDir.resolve(".javan/reports/compatibility-summary.md"))).contains(
+            "- flow-qualified reachable current-thread lifecycle rejects: `1`",
+            "- flow-qualified unreachable current-thread lifecycle rejects: `1`",
+            "- flow-qualified reachable thread-builder receiver-shape rejects: `1`",
+            "- flow-qualified unreachable thread-builder receiver-shape rejects: `1`",
+            "- flow-qualified reachable virtual-thread factory-shape rejects: `1`",
+            "- flow-qualified unreachable virtual-thread factory-shape rejects: `1`",
+            "- flow-qualified reachable executor receiver-shape rejects: `1`",
+            "- flow-qualified unreachable executor receiver-shape rejects: `1`",
+            "- flow-qualified rejected JDK call shapes total: `8`"
+        );
+        assertThat(Files.readString(tempDir.resolve("doc/status/jdk-compatibility.md"))).contains(
+            "| flow-qualified reachable current-thread lifecycle rejects | 1 |",
+            "| flow-qualified unreachable current-thread lifecycle rejects | 1 |",
+            "| flow-qualified reachable thread-builder receiver-shape rejects | 1 |",
+            "| flow-qualified unreachable thread-builder receiver-shape rejects | 1 |",
+            "| flow-qualified reachable virtual-thread factory-shape rejects | 1 |",
+            "| flow-qualified unreachable virtual-thread factory-shape rejects | 1 |",
+            "| flow-qualified reachable executor receiver-shape rejects | 1 |",
+            "| flow-qualified unreachable executor receiver-shape rejects | 1 |",
+            "| flow-qualified rejected JDK call shapes total | 8 |"
         );
     }
 
