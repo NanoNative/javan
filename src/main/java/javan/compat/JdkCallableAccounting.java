@@ -41,6 +41,12 @@ final class JdkCallableAccounting {
             }
             return false;
         }
+        if (owner.startsWith("jdk/jfr/")) {
+            return true;
+        }
+        if ("sun/misc/Unsafe".equals(owner)) {
+            return true;
+        }
         return "java/lang/InheritableThreadLocal".equals(owner)
             && "<init>".equals(methodName)
             && "()V".equals(descriptor);

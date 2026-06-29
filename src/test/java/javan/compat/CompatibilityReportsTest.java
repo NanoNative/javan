@@ -393,6 +393,51 @@ final class CompatibilityReportsTest {
         );
     }
 
+    @Test
+    void writeSummaryCountsDeliberateOwnerFamilyRejectionsInExactCallableAccounting() throws Exception {
+        new CompatibilityReports().write(
+            tempDir,
+            tempDir.resolve(".javan"),
+            List.of(metadata("", "com/acme/Main")),
+            List.of(
+                metadata(
+                    "java.base",
+                    "java/lang/Object",
+                    0,
+                    List.of(member(0, "<init>", "()V", List.of(), List.of())),
+                    List.of()
+                ),
+                metadata(
+                    "jdk.jfr",
+                    "jdk/jfr/FlightRecorder",
+                    0,
+                    List.of(),
+                    List.of(member(0, "isAvailable", "()Z", List.of(), List.of()))
+                ),
+                metadata(
+                    "jdk.unsupported",
+                    "sun/misc/Unsafe",
+                    0,
+                    List.of(),
+                    List.of(member(0, "getUnsafe", "()Lsun/misc/Unsafe;", List.of(), List.of()))
+                ),
+                metadata(
+                    "java.base",
+                    "java/lang/String",
+                    0,
+                    List.of(),
+                    List.of(member(0, "valueOf", "(I)Ljava/lang/String;", List.of(), List.of()))
+                )
+            ),
+            List.of()
+        );
+
+        assertThat(Files.readString(tempDir.resolve(".javan/reports/compatibility-summary.json"))).contains(
+            "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 0, \"callables\": 1, \"totalCallables\": 4, \"leftCallables\": 3, \"coveragePercent\": \"25.0\"}",
+            "\"exactJdkCallableAccounting\": {\"supportedCallables\": 1, \"explicitRejectedCallables\": 2, \"doneCallables\": 3, \"unknownCallables\": 1, \"totalCallables\": 4, \"donePercent\": \"75.0\"}"
+        );
+    }
+
     private static ClassMetadata metadata(final String moduleName, final String className) {
         return metadata(moduleName, className, 0, List.of(), List.of());
     }

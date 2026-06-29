@@ -55,6 +55,18 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksJfrCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("jdk/jfr/FlightRecorder", "isAvailable", "()Z")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksUnsafeCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("sun/misc/Unsafe", "getUnsafe", "()Lsun/misc/Unsafe;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
     void leavesUnimplementedCallableAsUnknown() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/String", "valueOf", "(I)Ljava/lang/String;")))
             .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
