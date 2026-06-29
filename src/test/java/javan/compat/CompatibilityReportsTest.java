@@ -49,10 +49,13 @@ final class CompatibilityReportsTest {
         final String summary = Files.readString(tempDir.resolve(".javan/reports/compatibility-summary.json"));
 
         assertThat(summary).contains(
-            "\"supportRows\": 105",
-            "\"passRows\": 89",
-            "\"scopedRows\": 14",
-            "\"targetRows\": 2"
+            "\"supportRows\": 108",
+            "\"passRows\": 107",
+            "\"scopedRows\": 0",
+            "\"targetRows\": 1",
+            "\"rejectedRows\": 0",
+            "\"accountedRows\": 107",
+            "\"unaccountedRows\": 1"
         );
     }
 
@@ -71,13 +74,25 @@ final class CompatibilityReportsTest {
         final String json = Files.readString(tempDir.resolve("doc/status/support-matrix.json"));
 
         assertThat(matrix).contains(
-            "| `boxed-primitive-gc` | scoped |",
+            "| `try-catch` | pass |",
+            "| `try-finally` | target |",
+            "| `boxed-primitive-gc` | pass |",
+            "| `enum-basic` | pass |",
+            "| `enum-ordinal` | pass |",
+            "| `enum-values` | pass |",
+            "| `enum-switch` | pass |",
+            "| `enum-value-of` | pass |",
+            "| `interface-dispatch` | pass |",
+            "| `polymorphic-virtual` | pass |",
+            "| `interface-polymorphic` | pass |",
+            "| `string-intrinsics` | pass |",
+            "| `library-last-error-abi` | pass |",
             "| `library-c-result-wrapper-success` | pass |",
             "| `library-retained-input-ownership` | pass |",
             "| `library-negative-byte-array-rejection` | pass |",
-            "| `hashmap-realloc-gc` | scoped |",
-            "| `list-of-varargs-gc` | scoped |",
-            "| `owned-buffer-realloc-validation` | scoped |",
+            "| `hashmap-realloc-gc` | pass |",
+            "| `list-of-varargs-gc` | pass |",
+            "| `owned-buffer-realloc-validation` | pass |",
             "| `network-address-runtime` | pass |",
             "| `network-tcp-client-socket` | pass |",
             "| `network-tcp-server-socket` | pass |",
@@ -102,11 +117,21 @@ final class CompatibilityReportsTest {
             "| `platform-thread-duplicate-start-build-reject` | pass |",
             "| `network-socket-rejection` | pass |",
             "| `network-http-rejection` | pass |",
-            "| `network-runtime-feature-reporting` | pass |"
+            "| `network-runtime-feature-reporting` | pass |",
+            "| `typemap-pair` | pass |",
+            "| `nano-metric` | pass |",
+            "| `nano-duration` | pass |"
         );
         assertThat(json).contains(
             "\"generatedForJdk\": " + feature,
+            "\"feature\": \"try-catch\"",
+            "\"feature\": \"try-finally\"",
             "\"feature\": \"boxed-primitive-gc\"",
+            "\"feature\": \"enum-value-of\"",
+            "\"feature\": \"interface-dispatch\"",
+            "\"feature\": \"polymorphic-virtual\"",
+            "\"feature\": \"interface-polymorphic\"",
+            "\"feature\": \"string-intrinsics\"",
             "\"feature\": \"library-c-result-wrapper-success\"",
             "\"feature\": \"network-address-runtime\"",
             "\"feature\": \"network-tcp-client-socket\"",
@@ -132,7 +157,10 @@ final class CompatibilityReportsTest {
             "\"feature\": \"platform-thread-duplicate-start-build-reject\"",
             "\"feature\": \"network-socket-rejection\"",
             "\"feature\": \"network-http-rejection\"",
-            "\"feature\": \"network-runtime-feature-reporting\""
+            "\"feature\": \"network-runtime-feature-reporting\"",
+            "\"feature\": \"typemap-pair\"",
+            "\"feature\": \"nano-metric\"",
+            "\"feature\": \"nano-duration\""
         );
     }
 

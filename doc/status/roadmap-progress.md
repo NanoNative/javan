@@ -1,6 +1,6 @@
 # Javan Roadmap Progress
 
-Last updated: 2026-06-27
+Last updated: 2026-06-29
 
 This page tracks verified progress toward a standalone native Javan release toolchain.
 "Done" means implemented, tested, and release-gated for the stated scope, not full Java
@@ -24,9 +24,11 @@ Status words are exact. No colors, no mood lighting.
 
 | Measure | Current value | Meaning |
 | --- | ---: | --- |
-| Self-check reachable classes | 186 | `javan check target/classes --main javan.Main` on current Javan classes. |
-| Self-check reachable methods | 2,015 | Same self-check. |
+| Self-check reachable classes | 221 | `sh scripts/build.sh` self-build chain on current Javan classes. |
+| Self-check reachable methods | 2,616 | Same self-build chain. |
 | Self-check diagnostics | 0 | Current Javan source shape is clean for reachable native self-build analysis. |
+| Scenario ledger accounted rows | 107/108 | Named support scenarios with explicit pass/reject status; one named row still remains a target. |
+| Full first-JDK release gate | 0.0% | Inventory is complete, but member-by-member supported/rejected accounting for the first release-gated JDK is not implemented yet. |
 | CI package target rows | 4 | Linux x64, Linux aarch64, macOS x64, macOS aarch64 are configured. |
 | Remote release validation | 0/4 completed | Local macOS aarch64 passes; remote rows still must prove the same gates. |
 | Native network positive support | 7 runtime rows | Address objects, blocking TCP client/server socket state, socket-derived stream I/O, plain HTTP client GET with string body, plain HTTP client POST with headers plus byte-array response handling, and plain HTTP client PUT with byte-array request/response handling are verified; TLS is still not claimed. |
@@ -39,9 +41,9 @@ Release accounting rule: a JDK or feature area is not "done" until
 
 | Measure | Done | Total | % | Meaning |
 | --- | ---: | ---: | ---: | --- |
-| Scenario rows fully passing | 89 | 105 | 84.8% | Named deterministic support scenarios implemented and tested. |
-| Scenario rows implemented or scoped | 103 | 105 | 98.1% | Rows with working behavior or an explicit scoped subset. |
-| Roadmap rows fully done | 4 | 38 | 10.5% | Big product rows release-gated for their stated scope. |
+| Scenario rows fully passing | 107 | 108 | 99.1% | Named deterministic support scenarios implemented and tested. |
+| Scenario rows implemented or scoped | 107 | 108 | 99.1% | Rows with working behavior or an explicit scoped subset. |
+| Roadmap rows fully done | 3 | 38 | 7.9% | Big product rows release-gated for their stated scope. |
 | Roadmap rows with implementation evidence | 25 | 38 | 65.8% | Rows marked `Done`, `Partial`, `In progress`, or `Blocked`. |
 | Remote release rows proven | 0 | 4 | 0.0% | Configured Linux/macOS package rows passed on remote CI. |
 
@@ -365,10 +367,10 @@ flowchart TD
 | Runtime feature selection | Partial | Native builds now write runtime-footprint reports with host target, actual target, footprint statuses, and OS/ARCH coverage rows. `javan.toml` disabled modules are enforced for reachable runtime families and unused disabled modules report as omitted. CI is configured for Linux/macOS x64/aarch64 host-native checks plus one narrow Windows runtime smoke row. Open gates remain for self-contained packaging, `runtime.optimize`, debug/profiling selection, broader Windows runtime coverage, and real cross-linking. |
 | Maven and Gradle integrations | Planned | Build plugins must call the installed/downloaded Javan binary after the normal Java build and consume the same reports. |
 | JDK-like wrapper / SDK distribution | Planned | Not a first-release target. Javan remains a standalone binary beside `javac`; optional SDK-style wrapping can be revisited only if plugins/IDE reports are not enough. |
-| Supported JDK accounting | In progress | Compatibility docs and support matrix exist; `compatibility-summary.*`, `support-matrix.*`, and `javan report` now expose support-row counts for the current evidence ledger: 105 rows, 89 pass, 14 scoped, 2 target. Remaining work is complete inventory coverage and explicit supported/rejected accounting per JDK API variant. |
-| Self-host warning debt | Done | The self-host native check profile is warning-free for current classes. Reachable enum `valueOf(String)` still rejects as `JAVAN015`; reachable record `ObjectMethods` bootstrap still rejects as `JAVAN030`, so unsupported reachable code remains guarded. |
-| Real-world projects: type-map and nano | Planned | Probe scripts exist and can run when the source checkouts are present locally, but these projects are not release-gated native support yet. |
-| CI, release, and installer readiness | In progress | CI and release packaging now define Linux x64, Linux aarch64, macOS aarch64, and macOS x64 host-native rows; each CI row now runs a self-host package smoke that extracts the archive, builds/runs `example` with packaged `bin/javan`, asserts the showcase unified report, clears stale `target/.javan`, runs packaged `check` and `report` on Javan's own class files, uses the packaged binary to build a second native Javan smoke binary that must start with the package version, and runs a package-backed self-host sanitizer proof with nonzero allocation/GC counters plus zero final heap/root residue. CI also now carries one narrow Windows-host runtime smoke row scoped only to generated-runtime compile/execute proof. Package-backed acceptance and sanitizer/leak suites pass locally on macOS aarch64 and remain release-gated. The post-release default container image reuses the same showcase verifier. Remaining work is remote validation, broader Windows/runtime porting, and installer/Homebrew path. |
+| Supported JDK accounting | In progress | Compatibility docs and support matrix exist; `compatibility-summary.*`, `support-matrix.*`, and `javan report` now expose support-row counts for the current evidence ledger: 108 rows, 107 pass, 0 scoped, 1 target, 0 rejected, 107 accounted, 1 unaccounted. `typemap-pair`, `nano-metric`, and `nano-duration` are now promoted from target to pass because the pinned real-probe gate proves exact stdout plus `diagnostics: 0`. `try-finally` remains the only named target row in this scenario ledger. Remaining work is complete inventory coverage and explicit supported/rejected accounting per JDK API variant. |
+| Self-host warning debt | Done | The self-host native check profile is warning-free for current classes. Reachable normal enum `valueOf(String)` call sites now lower natively; only unsupported synthetic/direct helper-entry shapes still reject as `JAVAN015`, and reachable record `ObjectMethods` bootstrap still rejects as `JAVAN030`, so unsupported reachable code remains guarded. |
+| Real-world projects: type-map and nano | Partial | Local native acceptance proves `typemap-pair`, `nano-metric`, and `nano-duration` against pinned real external artifacts with auto-discovered defaults and checksum verification, CI/release fetch the exact pinned jars and require the exact native probe stdout, and the current helper probes now pass with `diagnostics: 0`. Broader Nano/TypeMap slices remain outside the current helper proof. |
+| CI, release, and installer readiness | In progress | CI and release packaging now define Linux x64, Linux aarch64, macOS aarch64, and macOS x64 host-native rows; each CI row now runs a self-host package smoke that extracts the archive, builds/runs `example` with packaged `bin/javan`, asserts the showcase unified report, clears stale `target/.javan`, runs packaged `check` and `report` on Javan's own class files, uses the packaged binary to build a second native Javan smoke binary that must start with the package version, and runs a package-backed self-host sanitizer proof with nonzero allocation/GC counters plus zero final heap/root residue. Deterministic repository tests now also lock the workflow/package surface so required host-native rows, packaged acceptance/sanitizer gates, Windows smoke presence, showcase verification, and packaged self-check/self-build smoke cannot drift silently before the next push. CI also now carries one narrow Windows-host runtime smoke row scoped only to generated-runtime compile/execute proof. Package-backed acceptance and sanitizer/leak suites pass locally on macOS aarch64 and remain release-gated. The post-release default container image reuses the same showcase verifier. Remaining work is remote validation, broader Windows/runtime porting, and installer/Homebrew path. |
 
 ## Self-Hosted Milestone Definition
 
@@ -395,11 +397,11 @@ smoke, negative test projects, jar output, and `javan report` under the rebuilt 
 | M3: self-host feature suite | Partial | Done locally: rebuilt native Javan covers native app probes, resource distribution, jar output, unified reports, native-library C ABI smoke, and negative test projects. Remote rows remain. |
 | M4: clean user commands | Partial | Default commands auto-detect project type, main class, output name, target, resources, and dependencies. Plugins remain planned. |
 | M5: release packaging gate | In progress | Release workflow runs native self-host checks before packaging; CI now runs Maven, acceptance, sanitizer, host-target native build, extracted package showcase/report proof, stale-report-resistant packaged self-check/report proof, package-built Javan jar proof, package-built native Javan smoke, package-backed self-host sanitizer proof, and one narrow Windows-host generated-runtime smoke. |
-| M6: real-probe gates | Planned | Pin/reproduce TypeMap Pair, Nano MetricUpdate, and Nano duration so at least one CI row requires exact stdout and `diagnostics: 0`. |
+| M6: real-probe gates | Done | TypeMap Pair, Nano MetricUpdate, and Nano duration now build natively against pinned real external artifacts with auto-discovered calm defaults, exact stdout verification, `diagnostics: 0`, and checksum-verified CI/release gates. |
 | M7: network rejection gates | Done | Unsupported socket and server-side HTTP shapes fail with stable diagnostics and runtime-module reports instead of silently lowering. |
 | M8: network reporting | Done | Reachable network code appears in runtime-feature and unified reports as `network`, `socket`, or `http` even before positive support lands. |
 | M9: TCP sockets | Partial | Native TCP client/server loopback probes and socket-derived stream I/O pass; broader hostnames, timeouts, and socket options remain. |
 | M10: plain HTTP | Partial | Native HTTP GET against loopback passes for the current `HttpClient` + `BodyHandlers.ofString()` slice. Native loopback POST with headers, `BodyPublishers.ofString()`, and `BodyHandlers.ofByteArray()` also passes. Native loopback PUT with `BodyPublishers.ofByteArray()` and `BodyHandlers.ofByteArray()` also passes. Broader client/server semantics and TLS remain. |
 | M11: Nano service slice | Planned | `YunaBraska/nano-graalvm-example` without dev console/reflection-heavy path runs native for a deterministic HTTP route. |
 | M12: HTTPS/TLS/certificates | Planned | TLS, certificate validation, and trust-store policy are implemented after plain HTTP is deterministic. |
-| M13R: remote release-matrix self-host sanitizer proof | Partial | Local package-backed self-host sanitizer proof exists on macOS aarch64. Remote release validation remains 0/4 completed across linux-x64, linux-aarch64, macos-aarch64, and macos-x64. |
+| M13R: remote release-matrix self-host sanitizer proof | Partial | Local package-backed self-host sanitizer proof exists on macOS aarch64, the native stage2 self-host rebuild now finishes and exits under the 90-second guard (`stage2-ok`, `real 88.19s`) on macOS aarch64, and deterministic repository tests now lock the release/package workflow surface so required rows and package-backed proof steps cannot drift silently before the next push. Remote release validation remains 0/4 completed across linux-x64, linux-aarch64, macos-aarch64, and macos-x64. |

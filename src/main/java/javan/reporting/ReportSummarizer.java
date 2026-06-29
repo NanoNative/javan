@@ -48,7 +48,12 @@ public final class ReportSummarizer {
     public Summary write(final Path target) throws IOException {
         final Path reportsDirectory = reportsDirectory(target);
         if (!Files.isDirectory(reportsDirectory)) {
-            throw new IllegalArgumentException("No .javan/reports directory at " + reportsDirectory.toString());
+            throw new IllegalArgumentException(
+                new StringBuilder()
+                    .append("No .javan/reports directory at ")
+                    .append(reportsDirectory)
+                    .toString()
+            );
         }
         final List<ReportSection> sections = sections(reportsDirectory);
         final String markdown = markdown(reportsDirectory, sections);
@@ -470,6 +475,9 @@ public final class ReportSummarizer {
         addNumber(result, value, "passRows");
         addNumber(result, value, "scopedRows");
         addNumber(result, value, "targetRows");
+        addNumber(result, value, "rejectedRows");
+        addNumber(result, value, "accountedRows");
+        addNumber(result, value, "unaccountedRows");
         addNumber(result, value, "diagnosticErrors");
         addNumber(result, value, "recognizedRejectedOpcodeUses");
         addNumber(result, value, "unknownFatalOpcodeUses");
@@ -847,7 +855,7 @@ public final class ReportSummarizer {
     }
 
     private static int fieldValueStart(final String report, final String name, final int offset) {
-        final String field = "\"" + name + "\"";
+        final String field = new StringBuilder().append('"').append(name).append('"').toString();
         int search = offset;
         while (search < report.length()) {
             final int fieldStart = report.indexOf(field, search);

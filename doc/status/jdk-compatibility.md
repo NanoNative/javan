@@ -48,11 +48,13 @@ Current support ledger for the active JDK 25 evidence set:
 
 | Measure | Count |
 | --- | ---: |
-| support rows | 105 |
-| pass rows | 89 |
-| scoped rows | 14 |
-| target rows | 2 |
+| support rows | 108 |
+| pass rows | 107 |
+| scoped rows | 0 |
+| target rows | 1 |
 | rejected rows | 0 |
+| accounted rows | 107 |
+| unaccounted rows | 1 |
 
 Release-gated JDKs must report:
 
@@ -64,3 +66,7 @@ leftovers must be 0
 
 Compatibility reports are generated under `.javan/reports`, `.javan/jdk-inventory`, and `.javan/bytecode-patterns`.
 New opcodes, constant-pool tags, attributes, and bootstrap patterns must be classified before native code generation accepts them.
+
+Current full-first-JDK progress remains `0.0%` for the actual release gate because
+member-by-member JDK API variant accounting is not implemented yet. The scenario ledger
+above is useful progress, but it is not the same thing as complete JDK support.

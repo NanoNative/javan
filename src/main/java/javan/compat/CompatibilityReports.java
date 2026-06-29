@@ -34,15 +34,15 @@ public final class CompatibilityReports {
     ) throws IOException {
         final String javaVersion = System.getProperty("java.version");
         final int feature = javaFeature(javaVersion);
-        final String jdkName = "jdk-" + feature;
+        final String jdkName = jdkName(feature);
         final List<Path> files = new ArrayList<>();
         final Path reports = outputDirectory.resolve("reports");
-        final Path jdkInventory = outputDirectory.resolve("jdk-inventory").resolve(jdkName + ".json");
-        final Path bytecodePatterns = outputDirectory.resolve("bytecode-patterns").resolve(jdkName + ".json");
+        final Path jdkInventory = outputDirectory.resolve("jdk-inventory").resolve(suffixedJsonName(jdkName));
+        final Path bytecodePatterns = outputDirectory.resolve("bytecode-patterns").resolve(suffixedJsonName(jdkName));
 
-        files.add(Files2.writeString(reports.resolve(jdkName + "-inventory.json"), jdkInventoryJson(javaVersion, feature, jdkClasses)));
+        files.add(Files2.writeString(reports.resolve(inventoryReportName(jdkName)), jdkInventoryJson(javaVersion, feature, jdkClasses)));
         files.add(Files2.writeString(jdkInventory, jdkInventoryJson(javaVersion, feature, jdkClasses)));
-        files.add(Files2.writeString(reports.resolve("bytecode-patterns-" + jdkName + ".json"), bytecodePatternsJson(javaVersion, feature, root, projectClasses)));
+        files.add(Files2.writeString(reports.resolve(bytecodePatternReportName(jdkName)), bytecodePatternsJson(javaVersion, feature, root, projectClasses)));
         files.add(Files2.writeString(bytecodePatterns, bytecodePatternsJson(javaVersion, feature, root, projectClasses)));
         files.add(Files2.writeString(reports.resolve("compatibility-summary.json"), summaryJson(javaVersion, feature, projectClasses, jdkClasses, diagnostics)));
         files.add(Files2.writeString(reports.resolve("compatibility-summary.md"), summaryMarkdown(javaVersion, feature, projectClasses, jdkClasses, diagnostics)));
@@ -93,29 +93,40 @@ public final class CompatibilityReports {
         final boolean pass = unknown == 0 && errors == 0;
         final InventoryTotals jdkTotals = inventoryTotals(jdkClasses);
         final List<SupportRow> rows = supportRows();
-        return "{\n"
-            + "  \"status\": " + Json.string(pass ? "pass" : "fail") + ",\n"
-            + "  \"javaVersion\": " + Json.string(javaVersion) + ",\n"
-            + "  \"javaFeatureVersion\": " + feature + ",\n"
-            + "  \"projectClasses\": " + projectClasses.size() + ",\n"
-            + "  \"jdkClasses\": " + jdkClasses.size() + ",\n"
-            + "  \"jdkInventory\": {\"classes\": " + jdkTotals.classes()
-            + ", \"fields\": " + jdkTotals.fields()
-            + ", \"constructors\": " + jdkTotals.constructors()
-            + ", \"methods\": " + jdkTotals.methods() + "},\n"
-            + "  \"jdkCoverageAccounting\": {\"implemented\": false, \"note\": "
-            + Json.string("inventory is generated; supported/rejected/unknown JDK API variant accounting is planned") + "},\n"
-            + "  \"supportRows\": " + rows.size() + ",\n"
-            + "  \"passRows\": " + countSupportRows(rows, "pass") + ",\n"
-            + "  \"scopedRows\": " + countSupportRows(rows, "scoped") + ",\n"
-            + "  \"targetRows\": " + countSupportRows(rows, "target") + ",\n"
-            + "  \"diagnosticErrors\": " + errors + ",\n"
-            + "  \"recognizedRejectedOpcodeUses\": " + rejected + ",\n"
-            + "  \"unknownFatalOpcodeUses\": " + unknown + ",\n"
-            + "  \"classFileMajorVersions\": " + Json.intList(majorVersions(projectClasses)) + ",\n"
-            + "  \"constantPoolTags\": " + Json.intList(constantPoolTags(projectClasses)) + ",\n"
-            + "  \"attributes\": " + Json.stringList(attributes(projectClasses)) + "\n"
-            + "}\n";
+        final int passRows = countSupportRows(rows, "pass");
+        final int scopedRows = countSupportRows(rows, "scoped");
+        final int targetRows = countSupportRows(rows, "target");
+        final int rejectedRows = countSupportRows(rows, "rejected");
+        final int accountedRows = passRows + rejectedRows;
+        final int unaccountedRows = rows.size() - accountedRows;
+        final StringBuilder json = new StringBuilder();
+        json.append("{\n")
+            .append("  \"status\": ").append(Json.string(pass ? "pass" : "fail")).append(",\n")
+            .append("  \"javaVersion\": ").append(Json.string(javaVersion)).append(",\n")
+            .append("  \"javaFeatureVersion\": ").append(feature).append(",\n")
+            .append("  \"projectClasses\": ").append(projectClasses.size()).append(",\n")
+            .append("  \"jdkClasses\": ").append(jdkClasses.size()).append(",\n")
+            .append("  \"jdkInventory\": {\"classes\": ").append(jdkTotals.classes())
+            .append(", \"fields\": ").append(jdkTotals.fields())
+            .append(", \"constructors\": ").append(jdkTotals.constructors())
+            .append(", \"methods\": ").append(jdkTotals.methods()).append("},\n")
+            .append("  \"jdkCoverageAccounting\": {\"implemented\": false, \"note\": ")
+            .append(Json.string("inventory is generated; supported/rejected/unknown JDK API variant accounting is planned")).append("},\n")
+            .append("  \"supportRows\": ").append(rows.size()).append(",\n")
+            .append("  \"passRows\": ").append(passRows).append(",\n")
+            .append("  \"scopedRows\": ").append(scopedRows).append(",\n")
+            .append("  \"targetRows\": ").append(targetRows).append(",\n")
+            .append("  \"rejectedRows\": ").append(rejectedRows).append(",\n")
+            .append("  \"accountedRows\": ").append(accountedRows).append(",\n")
+            .append("  \"unaccountedRows\": ").append(unaccountedRows).append(",\n")
+            .append("  \"diagnosticErrors\": ").append(errors).append(",\n")
+            .append("  \"recognizedRejectedOpcodeUses\": ").append(rejected).append(",\n")
+            .append("  \"unknownFatalOpcodeUses\": ").append(unknown).append(",\n")
+            .append("  \"classFileMajorVersions\": ").append(Json.intList(majorVersions(projectClasses))).append(",\n")
+            .append("  \"constantPoolTags\": ").append(Json.intList(constantPoolTags(projectClasses))).append(",\n")
+            .append("  \"attributes\": ").append(Json.stringList(attributes(projectClasses))).append("\n")
+            .append("}\n");
+        return json.toString();
     }
 
     private static String summaryMarkdown(
@@ -132,25 +143,36 @@ public final class CompatibilityReports {
         final String status = errors == 0 && unknown == 0 ? "pass" : "fail";
         final InventoryTotals jdkTotals = inventoryTotals(jdkClasses);
         final List<SupportRow> rows = supportRows();
-        return "# Compatibility Summary\n\n"
-            + "- status: `" + status + "`\n"
-            + "- java: `" + javaVersion + "`\n"
-            + "- jdk: `JDK" + feature + "`\n"
-            + "- project classes: `" + projectClasses.size() + "`\n"
-            + "- JDK inventory classes: `" + jdkClasses.size() + "`\n"
-            + "- JDK inventory fields: `" + jdkTotals.fields() + "`\n"
-            + "- JDK inventory constructors: `" + jdkTotals.constructors() + "`\n"
-            + "- JDK inventory methods: `" + jdkTotals.methods() + "`\n"
-            + "- JDK coverage accounting: `planned`\n"
-            + "- support rows: `" + rows.size() + "`\n"
-            + "- pass rows: `" + countSupportRows(rows, "pass") + "`\n"
-            + "- scoped rows: `" + countSupportRows(rows, "scoped") + "`\n"
-            + "- target rows: `" + countSupportRows(rows, "target") + "`\n"
-            + "- diagnostic errors: `" + errors + "`\n"
-            + "- recognized rejected opcode uses: `" + rejected + "`\n"
-            + "- unknown fatal opcode uses: `" + unknown + "`\n\n"
-            + "Inventory counts say what exists in the scanned JDK. They do not claim native support.\n"
-            + "Unknown bytecode is fatal. Recognized rejected bytecode must be added to the native profile or remain explicitly unsupported.\n";
+        final int passRows = countSupportRows(rows, "pass");
+        final int scopedRows = countSupportRows(rows, "scoped");
+        final int targetRows = countSupportRows(rows, "target");
+        final int rejectedRows = countSupportRows(rows, "rejected");
+        final int accountedRows = passRows + rejectedRows;
+        final int unaccountedRows = rows.size() - accountedRows;
+        final StringBuilder markdown = new StringBuilder();
+        markdown.append("# Compatibility Summary\n\n")
+            .append("- status: `").append(status).append("`\n")
+            .append("- java: `").append(javaVersion).append("`\n")
+            .append("- jdk: `JDK").append(feature).append("`\n")
+            .append("- project classes: `").append(projectClasses.size()).append("`\n")
+            .append("- JDK inventory classes: `").append(jdkClasses.size()).append("`\n")
+            .append("- JDK inventory fields: `").append(jdkTotals.fields()).append("`\n")
+            .append("- JDK inventory constructors: `").append(jdkTotals.constructors()).append("`\n")
+            .append("- JDK inventory methods: `").append(jdkTotals.methods()).append("`\n")
+            .append("- JDK coverage accounting: `planned`\n")
+            .append("- support rows: `").append(rows.size()).append("`\n")
+            .append("- pass rows: `").append(passRows).append("`\n")
+            .append("- scoped rows: `").append(scopedRows).append("`\n")
+            .append("- target rows: `").append(targetRows).append("`\n")
+            .append("- rejected rows: `").append(rejectedRows).append("`\n")
+            .append("- accounted rows: `").append(accountedRows).append("`\n")
+            .append("- unaccounted rows: `").append(unaccountedRows).append("`\n")
+            .append("- diagnostic errors: `").append(errors).append("`\n")
+            .append("- recognized rejected opcode uses: `").append(rejected).append("`\n")
+            .append("- unknown fatal opcode uses: `").append(unknown).append("`\n\n")
+            .append("Inventory counts say what exists in the scanned JDK. They do not claim native support.\n")
+            .append("Unknown bytecode is fatal. Recognized rejected bytecode must be added to the native profile or remain explicitly unsupported.\n");
+        return markdown.toString();
     }
 
     private static String bytecodePatternsJson(
@@ -161,18 +183,20 @@ public final class CompatibilityReports {
     ) {
         final List<InstructionMetadata> instructions = projectInstructions(classes);
         final List<OpcodeCount> opcodeCounts = opcodeCounts(instructions);
-        return "{\n"
-            + "  \"javaVersion\": " + Json.string(javaVersion) + ",\n"
-            + "  \"javaFeatureVersion\": " + feature + ",\n"
-            + "  \"root\": " + Json.string(root.toString()) + ",\n"
-            + "  \"classFileMajorVersions\": " + Json.intList(majorVersions(classes)) + ",\n"
-            + "  \"opcodes\": " + opcodeCountsJson(opcodeCounts) + ",\n"
-            + "  \"constantPoolTags\": " + Json.intList(constantPoolTags(classes)) + ",\n"
-            + "  \"attributes\": " + Json.stringList(attributes(classes)) + ",\n"
-            + "  \"bootstrapMethodPatterns\": " + Json.stringList(bootstrapMethodPatterns(classes)) + ",\n"
-            + "  \"syntheticMethods\": " + Json.stringList(syntheticMethods(classes)) + ",\n"
-            + "  \"previewClasses\": " + Json.stringList(previewClasses(classes)) + "\n"
-            + "}\n";
+        final StringBuilder json = new StringBuilder();
+        json.append("{\n")
+            .append("  \"javaVersion\": ").append(Json.string(javaVersion)).append(",\n")
+            .append("  \"javaFeatureVersion\": ").append(feature).append(",\n")
+            .append("  \"root\": ").append(Json.string(root.toString())).append(",\n")
+            .append("  \"classFileMajorVersions\": ").append(Json.intList(majorVersions(classes))).append(",\n")
+            .append("  \"opcodes\": ").append(opcodeCountsJson(opcodeCounts)).append(",\n")
+            .append("  \"constantPoolTags\": ").append(Json.intList(constantPoolTags(classes))).append(",\n")
+            .append("  \"attributes\": ").append(Json.stringList(attributes(classes))).append(",\n")
+            .append("  \"bootstrapMethodPatterns\": ").append(Json.stringList(bootstrapMethodPatterns(classes))).append(",\n")
+            .append("  \"syntheticMethods\": ").append(Json.stringList(syntheticMethods(classes))).append(",\n")
+            .append("  \"previewClasses\": ").append(Json.stringList(previewClasses(classes))).append("\n")
+            .append("}\n");
+        return json.toString();
     }
 
     private static String opcodeCountsJson(final List<OpcodeCount> opcodeCounts) {
@@ -238,15 +262,17 @@ public final class CompatibilityReports {
     }
 
     private static String classJson(final ClassMetadata metadata) {
-        return "        {\"name\": " + Json.string(metadata.name())
-            + ", \"major\": " + metadata.majorVersion()
-            + ", \"flags\": " + metadata.accessFlags()
-            + ", \"preview\": " + metadata.preview()
-            + ", \"deprecated\": " + metadata.deprecated()
-            + ", \"fields\": " + membersJson(metadata.fields())
-            + ", \"constructors\": " + membersJson(metadata.constructors())
-            + ", \"methods\": " + membersJson(metadata.methods())
-            + "}";
+        return new StringBuilder()
+            .append("        {\"name\": ").append(Json.string(metadata.name()))
+            .append(", \"major\": ").append(metadata.majorVersion())
+            .append(", \"flags\": ").append(metadata.accessFlags())
+            .append(", \"preview\": ").append(metadata.preview())
+            .append(", \"deprecated\": ").append(metadata.deprecated())
+            .append(", \"fields\": ").append(membersJson(metadata.fields()))
+            .append(", \"constructors\": ").append(membersJson(metadata.constructors()))
+            .append(", \"methods\": ").append(membersJson(metadata.methods()))
+            .append("}")
+            .toString();
     }
 
     private static String membersJson(final List<MemberMetadata> members) {
@@ -350,20 +376,22 @@ public final class CompatibilityReports {
             pass("int-bitwise-and"),
             pass("long-basic"),
             pass("float-double"),
-            scoped("boxed-primitive-gc"),
+            pass("boxed-primitive-gc"),
             pass("boolean-basic"),
             pass("static-fields"),
             pass("string-concat"),
             pass("exception-panic"),
-            scoped("try-catch"),
-            scoped("enum-basic"),
-            scoped("enum-ordinal"),
-            scoped("enum-values"),
-            scoped("enum-switch"),
-            scoped("interface-dispatch"),
-            scoped("polymorphic-virtual"),
-            scoped("interface-polymorphic"),
-            scoped("string-intrinsics"),
+            pass("try-catch"),
+            target("try-finally"),
+            pass("enum-basic"),
+            pass("enum-ordinal"),
+            pass("enum-values"),
+            pass("enum-switch"),
+            pass("enum-value-of"),
+            pass("interface-dispatch"),
+            pass("polymorphic-virtual"),
+            pass("interface-polymorphic"),
+            pass("string-intrinsics"),
             pass("non-ascii-string-semantic-rejection"),
             pass("operand-object-compare-temporary-root"),
             pass("operand-field-load-temporary-root"),
@@ -401,7 +429,7 @@ public final class CompatibilityReports {
             pass("library-python-ctypes-smoke"),
             pass("library-binding-ownership-smoke"),
             pass("library-retained-input-ownership"),
-            scoped("library-last-error-abi"),
+            pass("library-last-error-abi"),
             pass("library-c-result-wrapper-success"),
             pass("library-c-result-wrapper-error"),
             pass("library-c-result-wrapper-null-out"),
@@ -414,9 +442,9 @@ public final class CompatibilityReports {
             pass("library-negative-byte-array-rejection"),
             pass("library-structured-last-error-fields"),
             pass("deduplication-plan"),
-            scoped("hashmap-realloc-gc"),
-            scoped("list-of-varargs-gc"),
-            scoped("owned-buffer-realloc-validation"),
+            pass("hashmap-realloc-gc"),
+            pass("list-of-varargs-gc"),
+            pass("owned-buffer-realloc-validation"),
             pass("stringbuilder-setlength-overflow-panic"),
             pass("network-address-runtime"),
             pass("network-tcp-client-socket"),
@@ -443,8 +471,9 @@ public final class CompatibilityReports {
             pass("network-socket-rejection"),
             pass("network-http-rejection"),
             pass("network-runtime-feature-reporting"),
-            target("typemap-pair"),
-            target("nano-metric")
+            pass("typemap-pair"),
+            pass("nano-metric"),
+            pass("nano-duration")
         );
     }
 
@@ -481,56 +510,60 @@ public final class CompatibilityReports {
     ) {
         final InventoryTotals totals = inventoryTotals(jdkClasses);
         final List<SupportRow> rows = supportRows();
-        return "# JDK Compatibility\n\n"
-            + "`javan` reads classfile versions directly from `.class` files. Users should not need\n"
-            + "to pass a Java version for supported classfiles; the compiler either understands the\n"
-            + "bytecode pattern or rejects it before native code generation.\n\n"
-            + "| JDK | Class file major | Release-gate status |\n"
-            + "| --- | ---: | --- |\n"
-            + "| 21 | 65 | planned matrix target |\n"
-            + "| 22 | 66 | planned matrix target |\n"
-            + "| 23 | 67 | planned matrix target |\n"
-            + "| 24 | 68 | planned matrix target |\n"
-            + "| 25 | 69 | integrated local gate |\n\n"
-            + "## Active Scan\n\n"
-            + "- scanned java: `" + javaVersion + "`\n"
-            + "- scanned JDK: `JDK" + feature + "`\n"
-            + "- project classfile majors: `" + intListText(majorVersions(projectClasses)) + "`\n"
-            + "- JDK classfile majors: `" + intListText(majorVersions(jdkClasses)) + "`\n"
-            + "- JDK modules: `" + jdkModuleCount(jdkClasses) + "`\n\n"
-            + "## Inventory Totals\n\n"
-            + "| item | count |\n"
-            + "| --- | ---: |\n"
-            + "| classes | " + totals.classes() + " |\n"
-            + "| fields | " + totals.fields() + " |\n"
-            + "| constructors | " + totals.constructors() + " |\n"
-            + "| methods | " + totals.methods() + " |\n\n"
-            + "## Inventory Is Not Support\n\n"
-            + "Inventory means `javan` can see the JDK surface: modules, packages, classes,\n"
-            + "methods, fields, constructors, descriptors, flags, attributes, constant-pool\n"
-            + "tags, bootstrap methods, synthetic members, deprecated markers, and preview\n"
-            + "markers.\n\n"
-            + "Native support means a reachable API or bytecode variant is either implemented\n"
-            + "or deliberately rejected with a clear diagnostic. A release-gated JDK must have\n"
-            + "no unknown leftovers.\n\n"
-            + "## Support Accounting\n\n"
-            + "Inventory is implemented. Full JDK API variant accounting is planned.\n\n"
-            + "Current support ledger for the active JDK " + feature + " evidence set:\n\n"
-            + "| Measure | Count |\n"
-            + "| --- | ---: |\n"
-            + "| support rows | " + rows.size() + " |\n"
-            + "| pass rows | " + countSupportRows(rows, "pass") + " |\n"
-            + "| scoped rows | " + countSupportRows(rows, "scoped") + " |\n"
-            + "| target rows | " + countSupportRows(rows, "target") + " |\n"
-            + "| rejected rows | " + countSupportRows(rows, "rejected") + " |\n\n"
-            + "Release-gated JDKs must report:\n\n"
-            + "```text\n"
-            + "done = supported variants + rejected variants\n"
-            + "leftovers = unknown variants\n"
-            + "leftovers must be 0\n"
-            + "```\n\n"
-            + "Compatibility reports are generated under `.javan/reports`, `.javan/jdk-inventory`, and `.javan/bytecode-patterns`.\n"
-            + "New opcodes, constant-pool tags, attributes, and bootstrap patterns must be classified before native code generation accepts them.\n";
+        final StringBuilder markdown = new StringBuilder();
+        markdown.append("# JDK Compatibility\n\n")
+            .append("`javan` reads classfile versions directly from `.class` files. Users should not need\n")
+            .append("to pass a Java version for supported classfiles; the compiler either understands the\n")
+            .append("bytecode pattern or rejects it before native code generation.\n\n")
+            .append("| JDK | Class file major | Release-gate status |\n")
+            .append("| --- | ---: | --- |\n")
+            .append("| 21 | 65 | planned matrix target |\n")
+            .append("| 22 | 66 | planned matrix target |\n")
+            .append("| 23 | 67 | planned matrix target |\n")
+            .append("| 24 | 68 | planned matrix target |\n")
+            .append("| 25 | 69 | integrated local gate |\n\n")
+            .append("## Active Scan\n\n")
+            .append("- scanned java: `").append(javaVersion).append("`\n")
+            .append("- scanned JDK: `JDK").append(feature).append("`\n")
+            .append("- project classfile majors: `").append(intListText(majorVersions(projectClasses))).append("`\n")
+            .append("- JDK classfile majors: `").append(intListText(majorVersions(jdkClasses))).append("`\n")
+            .append("- JDK modules: `").append(jdkModuleCount(jdkClasses)).append("`\n\n")
+            .append("## Inventory Totals\n\n")
+            .append("| item | count |\n")
+            .append("| --- | ---: |\n")
+            .append("| classes | ").append(totals.classes()).append(" |\n")
+            .append("| fields | ").append(totals.fields()).append(" |\n")
+            .append("| constructors | ").append(totals.constructors()).append(" |\n")
+            .append("| methods | ").append(totals.methods()).append(" |\n\n")
+            .append("## Inventory Is Not Support\n\n")
+            .append("Inventory means `javan` can see the JDK surface: modules, packages, classes,\n")
+            .append("methods, fields, constructors, descriptors, flags, attributes, constant-pool\n")
+            .append("tags, bootstrap methods, synthetic members, deprecated markers, and preview\n")
+            .append("markers.\n\n")
+            .append("Native support means a reachable API or bytecode variant is either implemented\n")
+            .append("or deliberately rejected with a clear diagnostic. A release-gated JDK must have\n")
+            .append("no unknown leftovers.\n\n")
+            .append("## Support Accounting\n\n")
+            .append("Inventory is implemented. Full JDK API variant accounting is planned.\n\n")
+            .append("Current support ledger for the active JDK ").append(feature).append(" evidence set:\n\n")
+            .append("| Measure | Count |\n")
+            .append("| --- | ---: |\n")
+            .append("| support rows | ").append(rows.size()).append(" |\n")
+            .append("| pass rows | ").append(countSupportRows(rows, "pass")).append(" |\n")
+            .append("| scoped rows | ").append(countSupportRows(rows, "scoped")).append(" |\n")
+            .append("| target rows | ").append(countSupportRows(rows, "target")).append(" |\n")
+            .append("| rejected rows | ").append(countSupportRows(rows, "rejected")).append(" |\n")
+            .append("| accounted rows | ").append(countSupportRows(rows, "pass") + countSupportRows(rows, "rejected")).append(" |\n")
+            .append("| unaccounted rows | ").append(rows.size() - countSupportRows(rows, "pass") - countSupportRows(rows, "rejected")).append(" |\n\n")
+            .append("Release-gated JDKs must report:\n\n")
+            .append("```text\n")
+            .append("done = supported variants + rejected variants\n")
+            .append("leftovers = unknown variants\n")
+            .append("leftovers must be 0\n")
+            .append("```\n\n")
+            .append("Compatibility reports are generated under `.javan/reports`, `.javan/jdk-inventory`, and `.javan/bytecode-patterns`.\n")
+            .append("New opcodes, constant-pool tags, attributes, and bootstrap patterns must be classified before native code generation accepts them.\n");
+        return markdown.toString();
     }
 
     private static String intListText(final List<Integer> values) {
@@ -635,9 +668,33 @@ public final class CompatibilityReports {
         for (int memberIndex = 0; memberIndex < members.size(); memberIndex++) {
             final MemberMetadata member = members.get(memberIndex);
             if (member.synthetic()) {
-                addStringSorted(result, className + "." + member.name() + member.descriptor());
+                addStringSorted(
+                    result,
+                    new StringBuilder()
+                        .append(className)
+                        .append('.')
+                        .append(member.name())
+                        .append(member.descriptor())
+                        .toString()
+                );
             }
         }
+    }
+
+    private static String jdkName(final int feature) {
+        return new StringBuilder().append("jdk-").append(feature).toString();
+    }
+
+    private static String suffixedJsonName(final String value) {
+        return new StringBuilder().append(value).append(".json").toString();
+    }
+
+    private static String inventoryReportName(final String jdkName) {
+        return new StringBuilder().append(jdkName).append("-inventory.json").toString();
+    }
+
+    private static String bytecodePatternReportName(final String jdkName) {
+        return new StringBuilder().append("bytecode-patterns-").append(jdkName).append(".json").toString();
     }
 
     private static List<InstructionMetadata> projectInstructions(final List<ClassMetadata> classes) {
