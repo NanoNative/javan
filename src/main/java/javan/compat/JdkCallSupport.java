@@ -624,6 +624,21 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Lists exact supported runtime-registry calls in deterministic report order.
+     *
+     * @return runtime-registry calls
+     */
+    public static List<SupportedCall> runtimes() {
+        final java.util.ArrayList<SupportedCall> result = new java.util.ArrayList<>();
+        for (final SupportedCall call : SUPPORTED_CALLS) {
+            if (call.kind() == Kind.RUNTIME) {
+                result.add(call);
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    /**
      * Finds the exact supported call metadata.
      *
      * @param methodRef method reference

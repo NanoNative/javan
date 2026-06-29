@@ -418,6 +418,12 @@ final class ReportSummarizerTest {
         Files.writeString(reports.resolve("intrinsics.json"), """
             {
               "intrinsics": [{"name": "Math.abs", "count": 2}, {"name": "System.nanoTime", "count": 3}],
+              "intrinsicCallSiteCount": 5,
+              "runtimeCalls": [{"name": "PrintStream.println", "count": 1}],
+              "runtimeCallSiteCount": 1,
+              "supportedDirectJdkCalls": [{"target": "java/util/List.of()Ljava/util/List;", "count": 2}],
+              "supportedDirectJdkCallSiteCount": 2,
+              "supportedJdkCallSiteCount": 8,
               "unsupportedJdkCallCandidateCount": 1,
               "unsupportedJdkCallCandidates": [{"owner": "java/lang/Class"}]
             }
@@ -429,6 +435,11 @@ final class ReportSummarizerTest {
         assertThat(summary.markdown()).contains(
             "intrinsics: `2`",
             "intrinsicCallSites: `5`",
+            "runtimeCalls: `1`",
+            "runtimeCallSites: `1`",
+            "supportedDirectJdkCalls: `1`",
+            "supportedDirectJdkCallSiteCount: `2`",
+            "supportedJdkCallSiteCount: `8`",
             "unsupportedJdkCallCandidateCount: `1`",
             "unsupportedJdkCallCandidates: `1`"
         );

@@ -264,6 +264,11 @@ public final class ReportSummarizer {
         final List<Metric> result = new ArrayList<>();
         addArrayCount(result, value, "intrinsics");
         addArrayNumberSum(result, value, "intrinsics", "count", "intrinsicCallSites");
+        addArrayCount(result, value, "runtimeCalls");
+        addArrayNumberSum(result, value, "runtimeCalls", "count", "runtimeCallSites");
+        addArrayCount(result, value, "supportedDirectJdkCalls");
+        addNumber(result, value, "supportedDirectJdkCallSiteCount");
+        addNumber(result, value, "supportedJdkCallSiteCount");
         addNumber(result, value, "unsupportedJdkCallCandidateCount");
         addArrayCount(result, value, "unsupportedJdkCallCandidates");
         return List.copyOf(result);

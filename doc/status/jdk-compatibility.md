@@ -43,8 +43,9 @@ no unknown leftovers.
 ## Support Accounting
 
 Inventory is implemented. Exact supported callable-member accounting is implemented as a
-lower-bound progress signal. Full supported/rejected/unknown JDK API variant accounting
-is still planned.
+lower-bound progress signal. Reachable JDK reports now also split current reachable call
+sites into intrinsic, runtime-registry, supported-direct, and unsupported buckets. Full
+supported/rejected/unknown JDK API variant accounting is still planned.
 
 Current support ledger for the active JDK 25 evidence set:
 

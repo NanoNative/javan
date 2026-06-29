@@ -219,6 +219,87 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void checkWritesReachableJdkLedgerBreakdownForSupportedCalls() throws Exception {
+        final Path project = project("check-reachable-jdk-ledger");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(1);
+                    Thread.currentThread();
+                    System.out.println(List.of("x").getFirst());
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/reports/intrinsics.json")))
+            .contains(
+                "\"runtimeCallSiteCount\": 5",
+                "\"supportedDirectJdkCallSiteCount\": 0",
+                "\"supportedJdkCallSiteCount\": 5",
+                "{\"name\": \"PrintStream.println\", \"count\": 2}",
+                "{\"name\": \"Thread.currentThread\", \"count\": 1}",
+                "{\"name\": \"List.getFirst\", \"count\": 1}",
+                "{\"name\": \"List.of\", \"count\": 1}",
+                "\"unsupportedJdkCallCandidateCount\": 0"
+            );
+        assertThat(Files.readString(project.resolve(".javan/reports/intrinsics.md")))
+            .contains(
+                "Supported reachable JDK call sites: `5`",
+                "Runtime-registry reachable call sites: `5`",
+                "Supported-direct reachable call sites: `0`",
+                "Unsupported reachable call sites: `0`"
+            );
+    }
+
+    @Test
+    void checkRejectsUnsupportedReachableJdkCallAndReportsIt() throws Exception {
+        final Path project = project("check-unsupported-reachable-jdk-call");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(String.valueOf(1));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains("unsupported reachable JDK call", "java/lang/String.valueOf(I)Ljava/lang/String;");
+        assertThat(Files.readString(project.resolve(".javan/reports/intrinsics.json")))
+            .contains(
+                "\"runtimeCallSiteCount\": 1",
+                "\"supportedDirectJdkCallSiteCount\": 0",
+                "\"supportedJdkCallSiteCount\": 1",
+                "{\"name\": \"PrintStream.println\", \"count\": 1}",
+                "\"unsupportedJdkCallCandidateCount\": 1",
+                "{\"target\": \"java/lang/String.valueOf(I)Ljava/lang/String;\", \"count\": 1}"
+            );
+        assertThat(Files.readString(project.resolve(".javan/reports/intrinsics.md")))
+            .contains(
+                "Supported reachable JDK call sites: `1`",
+                "Runtime-registry reachable call sites: `1`",
+                "Supported-direct reachable call sites: `0`",
+                "Unsupported reachable call sites: `1`"
+            );
+    }
+
+    @Test
     void checkRejectsReachableDisabledRuntimeModule() throws Exception {
         final Path project = project("disabled-time-check");
         Files.writeString(project.resolve("javan.toml"), """

@@ -49,6 +49,8 @@ public final class IntrinsicUsageReports {
      */
     public IntrinsicUsageReport analyze(final Map<String, ClassFile> classes, final List<EntryPoint> reachable) {
         final List<IntrinsicCallCount> intrinsicCounts = zeroIntrinsicCounts();
+        final List<RuntimeJdkCallCount> runtimeCounts = zeroRuntimeCounts();
+        final List<SupportedDirectJdkCallCount> supportedDirectCounts = new ArrayList<>();
         final List<UnsupportedJdkCallCandidate> unsupportedCounts = new ArrayList<>();
 
         for (final EntryPoint entry : reachable) {
@@ -60,7 +62,7 @@ public final class IntrinsicUsageReports {
                 if (instruction.methodRef().isPresent()) {
                     final MethodRef methodRef = instruction.methodRef().orElseThrow();
                     if (JdkCallSupport.isJdkCall(methodRef)) {
-                        countCall(methodRef, intrinsicCounts, unsupportedCounts);
+                        countCall(methodRef, intrinsicCounts, runtimeCounts, supportedDirectCounts, unsupportedCounts);
                     }
                 }
             }
@@ -68,6 +70,11 @@ public final class IntrinsicUsageReports {
 
         return new IntrinsicUsageReport(
             List.copyOf(intrinsicCounts),
+            List.copyOf(runtimeCounts),
+            runtimeCount(runtimeCounts),
+            List.copyOf(supportedDirectCounts),
+            supportedDirectCount(supportedDirectCounts),
+            intrinsicCount(intrinsicCounts) + runtimeCount(runtimeCounts) + supportedDirectCount(supportedDirectCounts),
             List.copyOf(unsupportedCounts),
             unsupportedCount(unsupportedCounts)
         );
@@ -84,6 +91,8 @@ public final class IntrinsicUsageReports {
     private static void countCall(
         final MethodRef methodRef,
         final List<IntrinsicCallCount> intrinsicCounts,
+        final List<RuntimeJdkCallCount> runtimeCounts,
+        final List<SupportedDirectJdkCallCount> supportedDirectCounts,
         final List<UnsupportedJdkCallCandidate> unsupportedCounts
     ) {
         final Optional<JdkCallSupport.SupportedCall> supported = JdkCallSupport.supportedCall(methodRef);
@@ -91,7 +100,12 @@ public final class IntrinsicUsageReports {
             incrementIntrinsic(intrinsicCounts, supported.orElseThrow().name());
             return;
         }
-        if (supported.isPresent() || JdkCallSupport.isSupported(methodRef)) {
+        if (supported.isPresent() && supported.orElseThrow().kind() == JdkCallSupport.Kind.RUNTIME) {
+            incrementRuntime(runtimeCounts, supported.orElseThrow().name());
+            return;
+        }
+        if (JdkCallSupport.isSupported(methodRef)) {
+            incrementSupportedDirect(supportedDirectCounts, methodRef.display());
             return;
         }
         incrementUnsupported(unsupportedCounts, methodRef.display());
@@ -105,6 +119,14 @@ public final class IntrinsicUsageReports {
         return result;
     }
 
+    private static List<RuntimeJdkCallCount> zeroRuntimeCounts() {
+        final List<RuntimeJdkCallCount> result = new ArrayList<>();
+        for (final JdkCallSupport.SupportedCall runtime : JdkCallSupport.runtimes()) {
+            result.add(new RuntimeJdkCallCount(runtime.name(), 0));
+        }
+        return result;
+    }
+
     private static void incrementIntrinsic(final List<IntrinsicCallCount> counts, final String name) {
         for (int index = 0; index < counts.size(); index++) {
             final IntrinsicCallCount count = counts.get(index);
@@ -113,6 +135,32 @@ public final class IntrinsicUsageReports {
                 return;
             }
         }
+    }
+
+    private static void incrementRuntime(final List<RuntimeJdkCallCount> counts, final String name) {
+        for (int index = 0; index < counts.size(); index++) {
+            final RuntimeJdkCallCount count = counts.get(index);
+            if (count.name().equals(name)) {
+                counts.set(index, new RuntimeJdkCallCount(name, count.count() + 1));
+                return;
+            }
+        }
+    }
+
+    private static void incrementSupportedDirect(final List<SupportedDirectJdkCallCount> counts, final String target) {
+        for (int index = 0; index < counts.size(); index++) {
+            final SupportedDirectJdkCallCount candidate = counts.get(index);
+            final int comparison = Strings2.compareAscii(target, candidate.target());
+            if (comparison == 0) {
+                counts.set(index, new SupportedDirectJdkCallCount(target, candidate.count() + 1));
+                return;
+            }
+            if (comparison < 0) {
+                counts.add(index, new SupportedDirectJdkCallCount(target, 1));
+                return;
+            }
+        }
+        counts.add(new SupportedDirectJdkCallCount(target, 1));
     }
 
     private static void incrementUnsupported(final List<UnsupportedJdkCallCandidate> counts, final String target) {
@@ -139,16 +187,52 @@ public final class IntrinsicUsageReports {
         return result;
     }
 
+    private static int intrinsicCount(final List<IntrinsicCallCount> counts) {
+        int result = 0;
+        for (final IntrinsicCallCount count : counts) {
+            result += count.count();
+        }
+        return result;
+    }
+
+    private static int runtimeCount(final List<RuntimeJdkCallCount> counts) {
+        int result = 0;
+        for (final RuntimeJdkCallCount count : counts) {
+            result += count.count();
+        }
+        return result;
+    }
+
+    private static int supportedDirectCount(final List<SupportedDirectJdkCallCount> counts) {
+        int result = 0;
+        for (final SupportedDirectJdkCallCount count : counts) {
+            result += count.count();
+        }
+        return result;
+    }
+
     private static String json(final IntrinsicUsageReport report) {
-        return "{\n"
-            + "  \"intrinsics\": [\n"
-            + intrinsicJson(report.intrinsics())
-            + "  ],\n"
-            + "  \"unsupportedJdkCallCandidateCount\": " + report.unsupportedJdkCallCandidateCount() + ",\n"
-            + "  \"unsupportedJdkCallCandidates\": [\n"
-            + unsupportedJson(report.unsupportedJdkCallCandidates())
-            + "  ]\n"
-            + "}\n";
+        return new StringBuilder()
+            .append("{\n")
+            .append("  \"intrinsics\": [\n")
+            .append(intrinsicJson(report.intrinsics()))
+            .append("  ],\n")
+            .append("  \"intrinsicCallSiteCount\": ").append(intrinsicCount(report.intrinsics())).append(",\n")
+            .append("  \"runtimeCalls\": [\n")
+            .append(runtimeJson(report.runtimeCalls()))
+            .append("  ],\n")
+            .append("  \"runtimeCallSiteCount\": ").append(report.runtimeCallSiteCount()).append(",\n")
+            .append("  \"supportedDirectJdkCalls\": [\n")
+            .append(supportedDirectJson(report.supportedDirectJdkCalls()))
+            .append("  ],\n")
+            .append("  \"supportedDirectJdkCallSiteCount\": ").append(report.supportedDirectJdkCallSiteCount()).append(",\n")
+            .append("  \"supportedJdkCallSiteCount\": ").append(report.supportedJdkCallSiteCount()).append(",\n")
+            .append("  \"unsupportedJdkCallCandidateCount\": ").append(report.unsupportedJdkCallCandidateCount()).append(",\n")
+            .append("  \"unsupportedJdkCallCandidates\": [\n")
+            .append(unsupportedJson(report.unsupportedJdkCallCandidates()))
+            .append("  ]\n")
+            .append("}\n")
+            .toString();
     }
 
     private static String intrinsicJson(final List<IntrinsicCallCount> intrinsics) {
@@ -162,6 +246,41 @@ public final class IntrinsicUsageReports {
                 .append(Json.string(intrinsic.name()))
                 .append(", \"count\": ")
                 .append(intrinsic.count())
+                .append("}");
+        }
+        return result.append("\n").toString();
+    }
+
+    private static String runtimeJson(final List<RuntimeJdkCallCount> runtimes) {
+        final StringBuilder result = new StringBuilder();
+        for (int index = 0; index < runtimes.size(); index++) {
+            if (index > 0) {
+                result.append(",\n");
+            }
+            final RuntimeJdkCallCount runtime = runtimes.get(index);
+            result.append("    {\"name\": ")
+                .append(Json.string(runtime.name()))
+                .append(", \"count\": ")
+                .append(runtime.count())
+                .append("}");
+        }
+        return result.append("\n").toString();
+    }
+
+    private static String supportedDirectJson(final List<SupportedDirectJdkCallCount> calls) {
+        if (calls.isEmpty()) {
+            return "";
+        }
+        final StringBuilder result = new StringBuilder();
+        for (int index = 0; index < calls.size(); index++) {
+            if (index > 0) {
+                result.append(",\n");
+            }
+            final SupportedDirectJdkCallCount call = calls.get(index);
+            result.append("    {\"target\": ")
+                .append(Json.string(call.target()))
+                .append(", \"count\": ")
+                .append(call.count())
                 .append("}");
         }
         return result.append("\n").toString();
@@ -187,22 +306,56 @@ public final class IntrinsicUsageReports {
     }
 
     private static String markdown(final IntrinsicUsageReport report) {
-        return "# Intrinsic Usage\n\n"
-            + "## Planned intrinsics\n\n"
-            + "| Intrinsic | Reachable call sites |\n"
-            + "| --- | ---: |\n"
-            + plannedRows(report.intrinsics())
-            + "\n## Unsupported reachable JDK call candidates\n\n"
-            + "Total reachable call sites: `" + report.unsupportedJdkCallCandidateCount() + "`\n\n"
-            + "| Target | Reachable call sites |\n"
-            + "| --- | ---: |\n"
-            + unsupportedRows(report.unsupportedJdkCallCandidates());
+        return new StringBuilder()
+            .append("# Intrinsic Usage\n\n")
+            .append("Supported reachable JDK call sites: `").append(report.supportedJdkCallSiteCount()).append("`\n")
+            .append("Intrinsic reachable call sites: `").append(intrinsicCount(report.intrinsics())).append("`\n")
+            .append("Runtime-registry reachable call sites: `").append(report.runtimeCallSiteCount()).append("`\n")
+            .append("Supported-direct reachable call sites: `").append(report.supportedDirectJdkCallSiteCount()).append("`\n")
+            .append("Unsupported reachable call sites: `").append(report.unsupportedJdkCallCandidateCount()).append("`\n\n")
+            .append("## Supported intrinsics\n\n")
+            .append("| Intrinsic | Reachable call sites |\n")
+            .append("| --- | ---: |\n")
+            .append(plannedRows(report.intrinsics()))
+            .append("\n## Supported runtime-registry calls\n\n")
+            .append("| Runtime call | Reachable call sites |\n")
+            .append("| --- | ---: |\n")
+            .append(runtimeRows(report.runtimeCalls()))
+            .append("\n## Supported direct JDK calls\n\n")
+            .append("| Target | Reachable call sites |\n")
+            .append("| --- | ---: |\n")
+            .append(supportedDirectRows(report.supportedDirectJdkCalls()))
+            .append("\n## Unsupported reachable JDK call candidates\n\n")
+            .append("Total reachable call sites: `").append(report.unsupportedJdkCallCandidateCount()).append("`\n\n")
+            .append("| Target | Reachable call sites |\n")
+            .append("| --- | ---: |\n")
+            .append(unsupportedRows(report.unsupportedJdkCallCandidates()))
+            .toString();
     }
 
     private static String plannedRows(final List<IntrinsicCallCount> intrinsics) {
         final StringBuilder result = new StringBuilder();
         for (final IntrinsicCallCount intrinsic : intrinsics) {
             result.append("| `").append(intrinsic.name()).append("` | ").append(intrinsic.count()).append(" |\n");
+        }
+        return result.toString();
+    }
+
+    private static String runtimeRows(final List<RuntimeJdkCallCount> runtimes) {
+        final StringBuilder result = new StringBuilder();
+        for (final RuntimeJdkCallCount runtime : runtimes) {
+            result.append("| `").append(runtime.name()).append("` | ").append(runtime.count()).append(" |\n");
+        }
+        return result.toString();
+    }
+
+    private static String supportedDirectRows(final List<SupportedDirectJdkCallCount> calls) {
+        if (calls.isEmpty()) {
+            return "| none | 0 |\n";
+        }
+        final StringBuilder result = new StringBuilder();
+        for (final SupportedDirectJdkCallCount call : calls) {
+            result.append("| `").append(call.target()).append("` | ").append(call.count()).append(" |\n");
         }
         return result.toString();
     }
