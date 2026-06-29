@@ -42,13 +42,22 @@ final class CompatibilityReportsTest {
             tempDir,
             tempDir.resolve(".javan"),
             List.of(metadata("", "com/acme/Main")),
-            List.of(metadata("java.base", "java/lang/Object")),
+            List.of(
+                metadata(
+                    "java.base",
+                    "java/lang/Object",
+                    0,
+                    List.of(member(0, "<init>", "()V", List.of(), List.of())),
+                    List.of(member(0, "getClass", "()Ljava/lang/Class;", List.of(), List.of()))
+                )
+            ),
             List.of()
         );
 
         final String summary = Files.readString(tempDir.resolve(".javan/reports/compatibility-summary.json"));
 
         assertThat(summary).contains(
+            "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 2, \"coveragePercent\": \"100.0\"}",
             "\"supportRows\": 108",
             "\"passRows\": 107",
             "\"scopedRows\": 0",

@@ -92,6 +92,7 @@ public final class CompatibilityReports {
         final long errors = countDiagnosticErrors(diagnostics);
         final boolean pass = unknown == 0 && errors == 0;
         final InventoryTotals jdkTotals = inventoryTotals(jdkClasses);
+        final JdkCallableSupportTotals callableSupport = jdkCallableSupportTotals(jdkClasses);
         final List<SupportRow> rows = supportRows();
         final int passRows = countSupportRows(rows, "pass");
         final int scopedRows = countSupportRows(rows, "scoped");
@@ -110,8 +111,17 @@ public final class CompatibilityReports {
             .append(", \"fields\": ").append(jdkTotals.fields())
             .append(", \"constructors\": ").append(jdkTotals.constructors())
             .append(", \"methods\": ").append(jdkTotals.methods()).append("},\n")
-            .append("  \"jdkCoverageAccounting\": {\"implemented\": false, \"note\": ")
-            .append(Json.string("inventory is generated; supported/rejected/unknown JDK API variant accounting is planned")).append("},\n")
+            .append("  \"exactSupportedJdkCallables\": {\"classes\": ").append(callableSupport.classesWithSupportedCallables())
+            .append(", \"constructors\": ").append(callableSupport.supportedConstructors())
+            .append(", \"methods\": ").append(callableSupport.supportedMethods())
+            .append(", \"callables\": ").append(callableSupport.supportedCallables())
+            .append(", \"totalCallables\": ").append(callableSupport.totalCallables())
+            .append(", \"coveragePercent\": ").append(Json.string(coveragePercentText(callableSupport.supportedCallables(), callableSupport.totalCallables())))
+            .append("},\n")
+            .append("  \"jdkCoverageAccounting\": {\"implemented\": true, \"complete\": false, \"scope\": ")
+            .append(Json.string("exact-supported-callables"))
+            .append(", \"note\": ")
+            .append(Json.string("inventory is generated; exact supported callable-member accounting is implemented; full supported/rejected/unknown JDK API variant accounting is still planned")).append("},\n")
             .append("  \"supportRows\": ").append(rows.size()).append(",\n")
             .append("  \"passRows\": ").append(passRows).append(",\n")
             .append("  \"scopedRows\": ").append(scopedRows).append(",\n")
@@ -142,6 +152,7 @@ public final class CompatibilityReports {
         final long rejected = countInstructionsWithStatus(instructions, BytecodeSupport.Status.RECOGNIZED_REJECTED);
         final String status = errors == 0 && unknown == 0 ? "pass" : "fail";
         final InventoryTotals jdkTotals = inventoryTotals(jdkClasses);
+        final JdkCallableSupportTotals callableSupport = jdkCallableSupportTotals(jdkClasses);
         final List<SupportRow> rows = supportRows();
         final int passRows = countSupportRows(rows, "pass");
         final int scopedRows = countSupportRows(rows, "scoped");
@@ -159,7 +170,13 @@ public final class CompatibilityReports {
             .append("- JDK inventory fields: `").append(jdkTotals.fields()).append("`\n")
             .append("- JDK inventory constructors: `").append(jdkTotals.constructors()).append("`\n")
             .append("- JDK inventory methods: `").append(jdkTotals.methods()).append("`\n")
-            .append("- JDK coverage accounting: `planned`\n")
+            .append("- exact supported JDK callable classes: `").append(callableSupport.classesWithSupportedCallables()).append("`\n")
+            .append("- exact supported JDK constructors: `").append(callableSupport.supportedConstructors()).append("`\n")
+            .append("- exact supported JDK methods: `").append(callableSupport.supportedMethods()).append("`\n")
+            .append("- exact supported JDK callables: `").append(callableSupport.supportedCallables())
+            .append(" / ").append(callableSupport.totalCallables()).append("` (`")
+            .append(coveragePercentDisplay(callableSupport.supportedCallables(), callableSupport.totalCallables())).append("`)\n")
+            .append("- JDK coverage accounting: `partial (exact supported callables)`\n")
             .append("- support rows: `").append(rows.size()).append("`\n")
             .append("- pass rows: `").append(passRows).append("`\n")
             .append("- scoped rows: `").append(scopedRows).append("`\n")
@@ -509,6 +526,7 @@ public final class CompatibilityReports {
         final List<ClassMetadata> jdkClasses
     ) {
         final InventoryTotals totals = inventoryTotals(jdkClasses);
+        final JdkCallableSupportTotals callableSupport = jdkCallableSupportTotals(jdkClasses);
         final List<SupportRow> rows = supportRows();
         final StringBuilder markdown = new StringBuilder();
         markdown.append("# JDK Compatibility\n\n")
@@ -554,13 +572,20 @@ public final class CompatibilityReports {
             .append("| target rows | ").append(countSupportRows(rows, "target")).append(" |\n")
             .append("| rejected rows | ").append(countSupportRows(rows, "rejected")).append(" |\n")
             .append("| accounted rows | ").append(countSupportRows(rows, "pass") + countSupportRows(rows, "rejected")).append(" |\n")
-            .append("| unaccounted rows | ").append(rows.size() - countSupportRows(rows, "pass") - countSupportRows(rows, "rejected")).append(" |\n\n")
+            .append("| unaccounted rows | ").append(rows.size() - countSupportRows(rows, "pass") - countSupportRows(rows, "rejected")).append(" |\n")
+            .append("| exact supported JDK callable classes | ").append(callableSupport.classesWithSupportedCallables()).append(" |\n")
+            .append("| exact supported JDK constructors | ").append(callableSupport.supportedConstructors()).append(" |\n")
+            .append("| exact supported JDK methods | ").append(callableSupport.supportedMethods()).append(" |\n")
+            .append("| exact supported JDK callables | ").append(callableSupport.supportedCallables()).append(" / ")
+            .append(callableSupport.totalCallables()).append(" (").append(coveragePercentDisplay(callableSupport.supportedCallables(), callableSupport.totalCallables())).append(") |\n\n")
             .append("Release-gated JDKs must report:\n\n")
             .append("```text\n")
             .append("done = supported variants + rejected variants\n")
             .append("leftovers = unknown variants\n")
             .append("leftovers must be 0\n")
             .append("```\n\n")
+            .append("The exact supported JDK callable counts above are a lower-bound progress signal for members that\n")
+            .append("already match the native support registry today. They are not a full JDK completion claim.\n\n")
             .append("Compatibility reports are generated under `.javan/reports`, `.javan/jdk-inventory`, and `.javan/bytecode-patterns`.\n")
             .append("New opcodes, constant-pool tags, attributes, and bootstrap patterns must be classified before native code generation accepts them.\n");
         return markdown.toString();
@@ -592,6 +617,69 @@ public final class CompatibilityReports {
     }
 
     private record InventoryTotals(long classes, long fields, long constructors, long methods) {
+    }
+
+    private static JdkCallableSupportTotals jdkCallableSupportTotals(final List<ClassMetadata> classes) {
+        long supportedConstructors = 0;
+        long supportedMethods = 0;
+        long totalConstructors = 0;
+        long totalMethods = 0;
+        long classesWithSupportedCallables = 0;
+        for (int classIndex = 0; classIndex < classes.size(); classIndex++) {
+            final ClassMetadata metadata = classes.get(classIndex);
+            long classSupportedConstructors = countSupportedMembers(metadata.name(), metadata.constructors());
+            long classSupportedMethods = countSupportedMembers(metadata.name(), metadata.methods());
+            supportedConstructors += classSupportedConstructors;
+            supportedMethods += classSupportedMethods;
+            totalConstructors += metadata.constructors().size();
+            totalMethods += metadata.methods().size();
+            if ((classSupportedConstructors + classSupportedMethods) > 0) {
+                classesWithSupportedCallables++;
+            }
+        }
+        return new JdkCallableSupportTotals(
+            classesWithSupportedCallables,
+            supportedConstructors,
+            supportedMethods,
+            totalConstructors + totalMethods
+        );
+    }
+
+    private static long countSupportedMembers(final String owner, final List<MemberMetadata> members) {
+        long supported = 0;
+        for (int memberIndex = 0; memberIndex < members.size(); memberIndex++) {
+            final MemberMetadata member = members.get(memberIndex);
+            if (JdkCallSupport.isSupported(new javan.classfile.MethodRef(owner, member.name(), member.descriptor()))) {
+                supported++;
+            }
+        }
+        return supported;
+    }
+
+    private record JdkCallableSupportTotals(
+        long classesWithSupportedCallables,
+        long supportedConstructors,
+        long supportedMethods,
+        long totalCallables
+    ) {
+        private long supportedCallables() {
+            return supportedConstructors + supportedMethods;
+        }
+    }
+
+    private static String coveragePercentText(final long supported, final long total) {
+        if (total == 0) {
+            return "0.0";
+        }
+        return new StringBuilder()
+            .append((supported * 1000L) / total / 10L)
+            .append('.')
+            .append((supported * 1000L) / total % 10L)
+            .toString();
+    }
+
+    private static String coveragePercentDisplay(final long supported, final long total) {
+        return new StringBuilder().append(coveragePercentText(supported, total)).append('%').toString();
     }
 
     private static List<Integer> majorVersions(final List<ClassMetadata> classes) {

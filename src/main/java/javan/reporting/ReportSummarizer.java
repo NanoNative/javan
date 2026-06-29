@@ -471,6 +471,12 @@ public final class ReportSummarizer {
         addNumber(result, value, "javaFeatureVersion");
         addNumber(result, value, "projectClasses");
         addNumber(result, value, "jdkClasses");
+        addNestedNumber(result, value, "exactSupportedJdkCallables", "classes", "exactSupportedJdkCallableClasses");
+        addNestedNumber(result, value, "exactSupportedJdkCallables", "constructors", "exactSupportedJdkConstructors");
+        addNestedNumber(result, value, "exactSupportedJdkCallables", "methods", "exactSupportedJdkMethods");
+        addNestedNumber(result, value, "exactSupportedJdkCallables", "callables", "exactSupportedJdkCallables");
+        addNestedNumber(result, value, "exactSupportedJdkCallables", "totalCallables", "totalJdkCallables");
+        addNestedText(result, value, "exactSupportedJdkCallables", "coveragePercent", "exactSupportedJdkCallableCoveragePercent");
         addNumber(result, value, "supportRows");
         addNumber(result, value, "passRows");
         addNumber(result, value, "scopedRows");
@@ -655,6 +661,40 @@ public final class ReportSummarizer {
         }
     }
 
+    private static void addNestedNumber(
+        final List<Metric> result,
+        final String report,
+        final String objectName,
+        final String fieldName,
+        final String metricName
+    ) {
+        final Optional<String> body = objectBody(report, objectName);
+        if (body.isEmpty()) {
+            return;
+        }
+        final long value = numberField(body.orElseThrow(), fieldName);
+        if (value != NO_NUMBER) {
+            result.add(Metric.number(metricName, value));
+        }
+    }
+
+    private static void addNestedText(
+        final List<Metric> result,
+        final String report,
+        final String objectName,
+        final String fieldName,
+        final String metricName
+    ) {
+        final Optional<String> body = objectBody(report, objectName);
+        if (body.isEmpty()) {
+            return;
+        }
+        final Optional<String> value = stringField(body.orElseThrow(), fieldName);
+        if (value.isPresent()) {
+            result.add(Metric.text(metricName, value.orElseThrow()));
+        }
+    }
+
     private static Optional<String> stringField(final String report, final String name) {
         final int valueStart = fieldValueStart(report, name, 0);
         if (valueStart < 0 || valueStart >= report.length() || report.charAt(valueStart) != '"') {
@@ -777,6 +817,18 @@ public final class ReportSummarizer {
         return Optional.of(Strings2.slice(report, valueStart + 1, valueEnd));
     }
 
+    private static Optional<String> objectBody(final String report, final String name) {
+        final int valueStart = fieldValueStart(report, name, 0);
+        if (valueStart < 0 || valueStart >= report.length() || report.charAt(valueStart) != '{') {
+            return Optional.empty();
+        }
+        final int valueEnd = objectEnd(report, valueStart);
+        if (valueEnd < 0) {
+            return Optional.empty();
+        }
+        return Optional.of(Strings2.slice(report, valueStart + 1, valueEnd));
+    }
+
     private static Optional<String> stringArrayText(final String report, final String name) {
         final Optional<String> body = arrayBody(report, name);
         if (body.isEmpty()) {
@@ -828,6 +880,30 @@ public final class ReportSummarizer {
             } else if (!quoted && ch == '[') {
                 depth++;
             } else if (!quoted && ch == ']') {
+                depth--;
+                if (depth == 0) {
+                    return index;
+                }
+            }
+        }
+        return -1;
+    }
+
+    private static int objectEnd(final String value, final int start) {
+        int depth = 0;
+        boolean quoted = false;
+        boolean escaped = false;
+        for (int index = start; index < value.length(); index++) {
+            final char ch = value.charAt(index);
+            if (escaped) {
+                escaped = false;
+            } else if (quoted && ch == '\\') {
+                escaped = true;
+            } else if (ch == '"') {
+                quoted = !quoted;
+            } else if (!quoted && ch == '{') {
+                depth++;
+            } else if (!quoted && ch == '}') {
                 depth--;
                 if (depth == 0) {
                     return index;

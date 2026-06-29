@@ -42,7 +42,9 @@ no unknown leftovers.
 
 ## Support Accounting
 
-Inventory is implemented. Full JDK API variant accounting is planned.
+Inventory is implemented. Exact supported callable-member accounting is implemented as a
+lower-bound progress signal. Full supported/rejected/unknown JDK API variant accounting
+is still planned.
 
 Current support ledger for the active JDK 25 evidence set:
 
@@ -55,6 +57,10 @@ Current support ledger for the active JDK 25 evidence set:
 | rejected rows | 0 |
 | accounted rows | 107 |
 | unaccounted rows | 1 |
+| exact supported JDK callable classes | 459 |
+| exact supported JDK constructors | 778 |
+| exact supported JDK methods | 287 |
+| exact supported JDK callables | 1065 / 267886 (0.3%) |
 
 Release-gated JDKs must report:
 
@@ -68,5 +74,5 @@ Compatibility reports are generated under `.javan/reports`, `.javan/jdk-inventor
 New opcodes, constant-pool tags, attributes, and bootstrap patterns must be classified before native code generation accepts them.
 
 Current full-first-JDK progress remains `0.0%` for the actual release gate because
-member-by-member JDK API variant accounting is not implemented yet. The scenario ledger
-above is useful progress, but it is not the same thing as complete JDK support.
+supported/rejected/unknown accounting is not complete yet. The exact supported callable
+ledger above is a lower-bound progress signal, not a complete JDK support claim.
