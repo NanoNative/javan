@@ -57,7 +57,7 @@ final class CompatibilityReportsTest {
         final String summary = Files.readString(tempDir.resolve(".javan/reports/compatibility-summary.json"));
 
         assertThat(summary).contains(
-            "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 2, \"coveragePercent\": \"100.0\"}",
+            "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 2, \"leftCallables\": 0, \"coveragePercent\": \"100.0\"}",
             "\"supportRows\": 108",
             "\"passRows\": 107",
             "\"scopedRows\": 0",

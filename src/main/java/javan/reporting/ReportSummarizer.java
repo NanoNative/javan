@@ -476,6 +476,7 @@ public final class ReportSummarizer {
         addNestedNumber(result, value, "exactSupportedJdkCallables", "methods", "exactSupportedJdkMethods");
         addNestedNumber(result, value, "exactSupportedJdkCallables", "callables", "exactSupportedJdkCallables");
         addNestedNumber(result, value, "exactSupportedJdkCallables", "totalCallables", "totalJdkCallables");
+        addNestedNumber(result, value, "exactSupportedJdkCallables", "leftCallables", "leftJdkCallables");
         addNestedText(result, value, "exactSupportedJdkCallables", "coveragePercent", "exactSupportedJdkCallableCoveragePercent");
         addNumber(result, value, "supportRows");
         addNumber(result, value, "passRows");

@@ -116,6 +116,7 @@ public final class CompatibilityReports {
             .append(", \"methods\": ").append(callableSupport.supportedMethods())
             .append(", \"callables\": ").append(callableSupport.supportedCallables())
             .append(", \"totalCallables\": ").append(callableSupport.totalCallables())
+            .append(", \"leftCallables\": ").append(callableSupport.leftCallables())
             .append(", \"coveragePercent\": ").append(Json.string(coveragePercentText(callableSupport.supportedCallables(), callableSupport.totalCallables())))
             .append("},\n")
             .append("  \"jdkCoverageAccounting\": {\"implemented\": true, \"complete\": false, \"scope\": ")
@@ -176,6 +177,7 @@ public final class CompatibilityReports {
             .append("- exact supported JDK callables: `").append(callableSupport.supportedCallables())
             .append(" / ").append(callableSupport.totalCallables()).append("` (`")
             .append(coveragePercentDisplay(callableSupport.supportedCallables(), callableSupport.totalCallables())).append("`)\n")
+            .append("- exact supported JDK callables left: `").append(callableSupport.leftCallables()).append("`\n")
             .append("- JDK coverage accounting: `partial (exact supported callables)`\n")
             .append("- support rows: `").append(rows.size()).append("`\n")
             .append("- pass rows: `").append(passRows).append("`\n")
@@ -577,7 +579,8 @@ public final class CompatibilityReports {
             .append("| exact supported JDK constructors | ").append(callableSupport.supportedConstructors()).append(" |\n")
             .append("| exact supported JDK methods | ").append(callableSupport.supportedMethods()).append(" |\n")
             .append("| exact supported JDK callables | ").append(callableSupport.supportedCallables()).append(" / ")
-            .append(callableSupport.totalCallables()).append(" (").append(coveragePercentDisplay(callableSupport.supportedCallables(), callableSupport.totalCallables())).append(") |\n\n")
+            .append(callableSupport.totalCallables()).append(" (").append(coveragePercentDisplay(callableSupport.supportedCallables(), callableSupport.totalCallables())).append(") |\n")
+            .append("| exact supported JDK callables left | ").append(callableSupport.leftCallables()).append(" |\n\n")
             .append("Release-gated JDKs must report:\n\n")
             .append("```text\n")
             .append("done = supported variants + rejected variants\n")
@@ -664,6 +667,10 @@ public final class CompatibilityReports {
     ) {
         private long supportedCallables() {
             return supportedConstructors + supportedMethods;
+        }
+
+        private long leftCallables() {
+            return totalCallables - supportedCallables();
         }
     }
 

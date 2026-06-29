@@ -27,8 +27,10 @@ Status words are exact. No colors, no mood lighting.
 | Self-check reachable classes | 222 | `java -cp target/classes javan.Main check target/classes --main javan.Main` on current Javan classes. |
 | Self-check reachable methods | 2,630 | Same self-check. |
 | Self-check diagnostics | 0 | Current Javan source shape is clean for reachable native self-build analysis. |
-| Scenario ledger accounted rows | 107/108 | Named support scenarios with explicit pass/reject status; one named row still remains a target. |
+| Scenario ledger done | 107/108 | Named support scenarios with explicit pass/reject status. |
+| Scenario ledger left | 1 | The remaining scenario row is the `try-finally` target. |
 | Exact supported JDK callables | 1065/267886 (0.3%) | Lower-bound callable-member coverage on the scanned JDK 25 image for members that already match the exact native support registry. |
+| Exact supported JDK callables left | 266821 | Callables on the scanned JDK 25 image that are not yet in the exact supported callable ledger. |
 | Full first-JDK release gate | 0.0% | Inventory and exact supported callable counts exist, but supported/rejected/unknown accounting for the first release-gated JDK is still incomplete. |
 | CI package target rows | 4 | Linux x64, Linux aarch64, macOS x64, macOS aarch64 are configured. |
 | Remote release validation | 0/4 completed | Local macOS aarch64 passes; remote rows still must prove the same gates. |

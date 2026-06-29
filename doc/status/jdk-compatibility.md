@@ -61,6 +61,7 @@ Current support ledger for the active JDK 25 evidence set:
 | exact supported JDK constructors | 778 |
 | exact supported JDK methods | 287 |
 | exact supported JDK callables | 1065 / 267886 (0.3%) |
+| exact supported JDK callables left | 266821 |
 
 Release-gated JDKs must report:
 
@@ -75,4 +76,5 @@ New opcodes, constant-pool tags, attributes, and bootstrap patterns must be clas
 
 Current full-first-JDK progress remains `0.0%` for the actual release gate because
 supported/rejected/unknown accounting is not complete yet. The exact supported callable
-ledger above is a lower-bound progress signal, not a complete JDK support claim.
+ledger above is a lower-bound progress signal with an explicit total and left value, not
+a complete JDK support claim.

@@ -868,6 +868,7 @@ final class ReportSummarizerTest {
                 "methods": 141,
                 "callables": 159,
                 "totalCallables": 267886,
+                "leftCallables": 267727,
                 "coveragePercent": "0.0"
               },
               "supportRows": 108,
@@ -895,6 +896,7 @@ final class ReportSummarizerTest {
             "exactSupportedJdkMethods: `141`",
             "exactSupportedJdkCallables: `159`",
             "totalJdkCallables: `267886`",
+            "leftJdkCallables: `267727`",
             "exactSupportedJdkCallableCoveragePercent: `0.0`",
             "supportRows: `108`",
             "passRows: `107`",
