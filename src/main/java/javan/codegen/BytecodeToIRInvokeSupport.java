@@ -102,11 +102,11 @@ final class BytecodeToIRInvokeSupport {
             }
         }
         if (isSupportedJdkEnumConstant(fieldRef)) {
-            stack.add(StackValue.objectExpression(IrExpression.stringLiteral(fieldRef.name())));
+            stack.add(StackValue.objectExpression(enumConstantExpression(classes, fieldRef)));
             return;
         }
         if (isEnumConstant(classes, fieldRef)) {
-            stack.add(StackValue.objectExpression(IrExpression.stringLiteral(fieldRef.name())));
+            stack.add(StackValue.objectExpression(enumConstantExpression(classes, fieldRef)));
             return;
         }
         final Optional<IrType> type = staticFieldType(classes, fieldRef);
@@ -1039,8 +1039,14 @@ final class BytecodeToIRInvokeSupport {
         final List<StackValue> stack
     ) {
         final MethodRef methodRef = instruction.methodRef().orElseThrow();
+        if (isZeroArgNoopPlatformConstructor(methodRef)) {
+            popObject(classFile, method, stack);
+            return;
+        }
         final MethodDescriptor descriptor = MethodDescriptor.parse(methodRef.descriptor());
-        final List<IrExpression> arguments = new ArrayList<>(popArguments(classFile, method, stack, descriptor));
+        final List<IrExpression> arguments = descriptor.parameterTypes().isEmpty()
+            ? List.of()
+            : popArguments(classFile, method, stack, descriptor);
         final IrExpression receiver = popObject(classFile, method, stack);
         if (isPlatformThrowableStringConstructor(methodRef)) {
             updatePendingThrowableMessage(stack, arguments.getFirst());
@@ -1077,9 +1083,17 @@ final class BytecodeToIRInvokeSupport {
         if (!classes.containsKey(methodRef.owner())) {
             throw unsupported(classFile, method, instruction);
         }
-        arguments.addFirst(receiver);
+        final List<IrExpression> callArguments = new ArrayList<>(arguments);
+        callArguments.addFirst(receiver);
         final String symbol = symbol(new EntryPoint(methodRef.owner(), methodRef.name(), methodRef.descriptor()));
-        appendCallResult(instructions, stack, descriptor.returnType(), symbol, arguments);
+        appendCallResult(instructions, stack, descriptor.returnType(), symbol, callArguments);
+    }
+
+    private static boolean isZeroArgNoopPlatformConstructor(final MethodRef methodRef) {
+        if (!"<init>".equals(methodRef.name()) || !"()V".equals(methodRef.descriptor())) {
+            return false;
+        }
+        return "java/lang/Object".equals(methodRef.owner()) || "java/lang/Record".equals(methodRef.owner());
     }
     static void lowerStaticCall(
         final Map<String, ClassFile> classes,
@@ -1170,6 +1184,13 @@ final class BytecodeToIRInvokeSupport {
         final List<StackValue> stack
     ) {
         final IrExpression receiver = popObject(classFile, method, stack);
+        if (receiver.kind() == IrExpression.Kind.STATIC_FIELD_OBJECT) {
+            final Optional<Integer> ordinal = enumOrdinalForStaticField(receiver.value(), methodRef.owner(), classes);
+            if (ordinal.isPresent()) {
+                stack.add(StackValue.intExpression(IrExpression.intLiteral(ordinal.orElseThrow().intValue())));
+                return;
+            }
+        }
         if (receiver.kind() == IrExpression.Kind.STRING_LITERAL) {
             final Optional<Integer> ordinal = enumOrdinal(classes.get(methodRef.owner()), receiver.value());
             if (ordinal.isEmpty()) {
@@ -1204,11 +1225,39 @@ final class BytecodeToIRInvokeSupport {
             instructions.add(IrInstruction.assignArrayObject(
                 local,
                 IrExpression.intLiteral(index),
-                IrExpression.stringLiteral(constants.get(index))
+                IrExpression.objectStaticField(methodRef.owner(), constants.get(index))
             ));
         }
         stack.add(StackValue.objectExpression(local));
         return true;
+    }
+
+    private static IrExpression enumConstantExpression(final Map<String, ClassFile> classes, final FieldRef fieldRef) {
+        final ClassFile owner = classes.get(fieldRef.owner());
+        if (owner != null && owner.isEnum()) {
+            return IrExpression.objectStaticField(fieldRef.owner(), fieldRef.name());
+        }
+        return IrExpression.stringLiteral(fieldRef.name());
+    }
+
+    private static Optional<Integer> enumOrdinalForStaticField(
+        final String ownerField,
+        final String enumOwner,
+        final Map<String, ClassFile> classes
+    ) {
+        final int separator = ownerField.indexOf('#');
+        if (separator < 1 || separator == ownerField.length() - 1) {
+            return Optional.empty();
+        }
+        final String owner = ownerField.substring(0, separator);
+        if (!enumOwner.equals(owner)) {
+            return Optional.empty();
+        }
+        final ClassFile enumClass = classes.get(owner);
+        if (enumClass == null || !enumClass.isEnum()) {
+            return Optional.empty();
+        }
+        return enumOrdinal(enumClass, ownerField.substring(separator + 1));
     }
     static boolean lowerJdkStaticIntrinsic(
         final ClassFile classFile,

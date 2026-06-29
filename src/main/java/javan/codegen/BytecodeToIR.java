@@ -113,12 +113,10 @@ public final class BytecodeToIR {
         final List<Integer> handlerOffsets = exceptionHandlerOffsets(code);
         final List<Integer> branchTargets = branchTargets(code);
         final List<Integer> skippedOffsets = new ArrayList<>();
+        final List<Integer> replacementLabelOffsets = new ArrayList<>();
         BytecodeToIRMetadataSupport.bindParameters(method, descriptor, parameters, locals);
         for (int index = 0; index < bytecode.size(); index++) {
             final Instruction instruction = bytecode.get(index);
-            if (containsInt(branchTargets, instruction.offset())) {
-                instructions.add(IrInstruction.label(label(instruction.offset())));
-            }
             if (containsInt(handlerOffsets, instruction.offset())) {
                 final StackValue pendingException = pendingExceptionHandlerStacks.get(instruction.offset());
                 if (pendingException != null) {
@@ -127,6 +125,10 @@ public final class BytecodeToIR {
                 } else if (stack.isEmpty()) {
                     stack.add(StackValue.objectExpression(IrExpression.objectNull()));
                 }
+            }
+            if (containsInt(branchTargets, instruction.offset())
+                && !containsInt(replacementLabelOffsets, instruction.offset())) {
+                instructions.add(IrInstruction.label(label(instruction.offset())));
             }
             if (shouldSkipOffset(ignoredHandlerOffsets, skippedOffsets, instruction.offset())) {
                 continue;
@@ -150,7 +152,8 @@ public final class BytecodeToIR {
                 objectLocalKinds,
                 localDeclarations,
                 dispatches,
-                skippedOffsets
+                skippedOffsets,
+                replacementLabelOffsets
             )) {
                 BytecodeToIRControlFlowSupport.annotateNewInstructions(instructions, instructionStart, sourceLocation);
                 continue;

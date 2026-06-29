@@ -2133,6 +2133,7 @@ public final class CCodegen {
     }
 
     private static void emitClassInitializers(final IrProgram program, final StringBuilder c) {
+        emitEnumConstantInitializers(program, c);
         final List<IrFunction> initializers = new java.util.ArrayList<>();
         for (final IrFunction function : program.functions()) {
             if ("<clinit>".equals(function.name())) {
@@ -2144,6 +2145,22 @@ public final class CCodegen {
                 .append(function.symbol())
                 .append("();")
                 .append(System.lineSeparator());
+        }
+    }
+
+    private static void emitEnumConstantInitializers(final IrProgram program, final StringBuilder c) {
+        for (final IrClass classInfo : program.classes()) {
+            if (classInfo.enumConstants().isEmpty()) {
+                continue;
+            }
+            for (final String constant : classInfo.enumConstants()) {
+                c.append("    ")
+                    .append(staticFieldSymbol(classInfo.jvmName(), constant))
+                    .append(" = javan_string_from(\"")
+                    .append(escapeCString(constant))
+                    .append("\");")
+                    .append(System.lineSeparator());
+            }
         }
     }
 

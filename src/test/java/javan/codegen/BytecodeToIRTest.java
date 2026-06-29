@@ -7431,7 +7431,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowersEnumValuesToStringLiteralArray() {
+    void lowersEnumValuesToCanonicalStaticFieldArray() {
         final ClassFile mode = classFile(
             "com/acme/Mode",
             "java/lang/Enum",
@@ -7457,8 +7457,8 @@ final class BytecodeToIRTest {
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
         assertThat(function.instructions()).containsExactly(
             IrInstruction.assignObject("object0", IrExpression.objectArrayAllocation(IrExpression.intLiteral(2))),
-            IrInstruction.assignArrayObject(IrExpression.objectLocal("object0"), IrExpression.intLiteral(0), IrExpression.stringLiteral("FIRST")),
-            IrInstruction.assignArrayObject(IrExpression.objectLocal("object0"), IrExpression.intLiteral(1), IrExpression.stringLiteral("SECOND")),
+            IrInstruction.assignArrayObject(IrExpression.objectLocal("object0"), IrExpression.intLiteral(0), IrExpression.objectStaticField("com/acme/Mode", "FIRST")),
+            IrInstruction.assignArrayObject(IrExpression.objectLocal("object0"), IrExpression.intLiteral(1), IrExpression.objectStaticField("com/acme/Mode", "SECOND")),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
@@ -7486,12 +7486,12 @@ final class BytecodeToIRTest {
         ), mode);
 
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.stringLiteral("READY"))
+            IrInstruction.returnObject(IrExpression.objectStaticField("com/acme/Mode", "READY"))
         );
     }
 
     @Test
-    void lowersEnumConstantStaticFieldToStringLiteral() {
+    void lowersEnumConstantStaticFieldToCanonicalStaticField() {
         final ClassFile mode = classFile(
             "com/acme/Mode",
             "java/lang/Enum",
@@ -7512,7 +7512,7 @@ final class BytecodeToIRTest {
         ), mode);
 
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.stringLiteral("READY"))
+            IrInstruction.returnObject(IrExpression.objectStaticField("com/acme/Mode", "READY"))
         );
     }
 
@@ -7539,7 +7539,7 @@ final class BytecodeToIRTest {
         ), mode);
 
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.stringLiteral("READY"))
+            IrInstruction.returnObject(IrExpression.objectStaticField("com/acme/Mode", "READY"))
         );
     }
 

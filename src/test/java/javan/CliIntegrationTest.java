@@ -4826,6 +4826,106 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void enumIdentityComparisonBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("enum-identity");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<Holder> values = new ArrayList<>();
+                    values.add(new Holder(Kind.OBJECT));
+                    final Holder removed = values.removeLast();
+                    System.out.println(removed.kind() == Kind.OBJECT);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Kind", """
+            package com.acme;
+
+            public enum Kind {
+                INT,
+                LONG,
+                FLOAT,
+                OBJECT
+            }
+            """);
+        writeJava(project, "com.acme.Holder", """
+            package com.acme;
+
+            public record Holder(Kind kind) {
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/enum-identity").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n");
+    }
+
+    @Test
+    void enumIdentityDisjunctionBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("enum-identity-disjunction");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<Holder> values = new ArrayList<>();
+                    values.add(new Holder(Kind.OBJECT));
+                    final Holder removed = values.removeLast();
+                    System.out.println(isObjectLike(removed.kind()));
+                }
+
+                private static boolean isObjectLike(final Kind kind) {
+                    return kind == Kind.OBJECT
+                        || kind == Kind.PRINT_STREAM
+                        || kind == Kind.ERROR_PRINT_STREAM;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Kind", """
+            package com.acme;
+
+            public enum Kind {
+                INT,
+                LONG,
+                FLOAT,
+                OBJECT,
+                PRINT_STREAM,
+                ERROR_PRINT_STREAM
+            }
+            """);
+        writeJava(project, "com.acme.Holder", """
+            package com.acme;
+
+            public record Holder(Kind kind) {
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/enum-identity-disjunction").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n");
+    }
+
+    @Test
     void enumSwitchBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("enum-switch");
         writeJava(project, "com.acme.Main", """

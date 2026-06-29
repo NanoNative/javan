@@ -226,7 +226,8 @@ final class BytecodeToIRControlFlowSupport {
         final Map<Integer, StackKind> objectLocalKinds,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
-        final List<Integer> skippedOffsets
+        final List<Integer> skippedOffsets,
+        final List<Integer> replacementLabelOffsets
     ) {
         final Instruction instruction = bytecode.get(index);
         if (!isConditionalBranch(instruction.opcode())) {
@@ -264,9 +265,7 @@ final class BytecodeToIRControlFlowSupport {
         if (doneIndex < 0 || doneIndex <= targetIndex) {
             return false;
         }
-        if (hasEarlierBranchTarget(bytecode, index, doneOffset)) {
-            return false;
-        }
+        final int elseOffset = bytecode.get(index + 1).offset();
         if (containsControlTransfer(bytecode, index + 1, jumpIndex) || containsControlTransfer(bytecode, targetIndex, doneIndex)) {
             return false;
         }
@@ -319,6 +318,10 @@ final class BytecodeToIRControlFlowSupport {
         final String targetLabel = "branch_value_target_" + instruction.offset();
         final String doneLabel = "branch_value_done_" + instruction.offset();
         instructions.add(IrInstruction.branchIf(targetLabel, condition));
+        if (hasEarlierBranchTarget(bytecode, index, elseOffset)) {
+            instructions.add(IrInstruction.label(label(elseOffset)));
+            addInt(replacementLabelOffsets, elseOffset);
+        }
         instructions.addAll(elseBlock.instructions());
         instructions.add(assignLocal(valueKind, localName, elseValue.expression().orElseThrow()));
         instructions.add(IrInstruction.jump(doneLabel));
@@ -606,6 +609,7 @@ final class BytecodeToIRControlFlowSupport {
         }
         return false;
     }
+
     static boolean isSimpleBranch(final int opcode) {
         return (opcode >= 153 && opcode <= 168)
             || opcode == 198
