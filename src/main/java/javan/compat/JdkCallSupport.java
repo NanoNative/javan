@@ -120,6 +120,7 @@ public final class JdkCallSupport {
             "Arrays.copyOf",
             "java/util/Arrays",
             "copyOf",
+            "([ZI)[Z",
             "([II)[I",
             "([JI)[J",
             "([BI)[B",
@@ -153,6 +154,7 @@ public final class JdkCallSupport {
         intrinsic("Boolean.toString", "java/lang/Boolean", "toString", "(Z)Ljava/lang/String;"),
         runtime("Boolean.valueOf", "java/lang/Boolean", "valueOf", "(Z)Ljava/lang/Boolean;"),
         runtime("Boolean.booleanValue", "java/lang/Boolean", "booleanValue", "()Z"),
+        intrinsic("String.valueOf", "java/lang/String", "valueOf", "(I)Ljava/lang/String;"),
         runtime("Duration.ofMillis", "java/time/Duration", "ofMillis", "(J)Ljava/time/Duration;"),
         runtime("Duration.ofSeconds", "java/time/Duration", "ofSeconds", "(J)Ljava/time/Duration;"),
         runtime("Duration.toMillis", "java/time/Duration", "toMillis", "()J"),
@@ -259,6 +261,7 @@ public final class JdkCallSupport {
         runtime("LinkedHashMap.getOrDefault", "java/util/LinkedHashMap", "getOrDefault", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("TreeMap.getOrDefault", "java/util/TreeMap", "getOrDefault", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Path.of", "java/nio/file/Path", "of", "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;"),
+        runtime("Paths.get", "java/nio/file/Paths", "get", "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;"),
         runtime("Path.resolve", "java/nio/file/Path", "resolve", "(Ljava/lang/String;)Ljava/nio/file/Path;"),
         runtime("Path.resolve", "java/nio/file/Path", "resolve", "(Ljava/nio/file/Path;)Ljava/nio/file/Path;"),
         runtime("Path.toAbsolutePath", "java/nio/file/Path", "toAbsolutePath", "()Ljava/nio/file/Path;"),
@@ -407,6 +410,10 @@ public final class JdkCallSupport {
         }
         if ("java/nio/file/Path".equals(methodRef.owner())) {
             return isSupportedPathCall(methodRef.name(), methodRef.descriptor());
+        }
+        if ("java/nio/file/Paths".equals(methodRef.owner())) {
+            return "get".equals(methodRef.name())
+                && "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;".equals(methodRef.descriptor());
         }
         if ("java/nio/file/DirectoryStream".equals(methodRef.owner())) {
             return isSupportedDirectoryStreamCall(methodRef.name(), methodRef.descriptor());
@@ -873,6 +880,9 @@ public final class JdkCallSupport {
 
     private static boolean isFileRuntimeOwner(final String owner) {
         if ("java/nio/file/Path".equals(owner)) {
+            return true;
+        }
+        if ("java/nio/file/Paths".equals(owner)) {
             return true;
         }
         if ("java/nio/file/Files".equals(owner)) {

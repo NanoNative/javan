@@ -3930,6 +3930,10 @@ final class RuntimeSourceMemorySections {
             return javan_arrays_copy_of(array, new_length, JAVAN_ARRAY_KIND_OBJECT, javan_object_array_new);
         }
 
+        void* javan_arrays_copy_of_boolean(void* array, int new_length) {
+            return javan_arrays_copy_of(array, new_length, JAVAN_ARRAY_KIND_BOOLEAN, javan_boolean_array_new);
+        }
+
         void* javan_arrays_copy_of_int(void* array, int new_length) {
             return javan_arrays_copy_of(array, new_length, JAVAN_ARRAY_KIND_INT, javan_int_array_new);
         }

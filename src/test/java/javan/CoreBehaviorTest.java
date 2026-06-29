@@ -675,15 +675,13 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void staticVerifierRejectsUnsupportedPathsGetCall() {
+    void staticVerifierAcceptsSupportedPathsGetCall() {
         final List<Diagnostic> diagnostics = verifyInstruction(
             instruction(0, 184, "invokestatic", new MethodRef("java/nio/file/Paths", "get", "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;")),
             true
         );
 
-        assertThat(diagnostics).hasSize(1);
-        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN031");
-        assertThat(diagnostics.getFirst().subject()).isEqualTo("java/nio/file/Paths.get(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;");
+        assertThat(diagnostics).isEmpty();
     }
 
     @Test

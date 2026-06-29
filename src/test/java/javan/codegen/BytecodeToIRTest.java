@@ -1193,8 +1193,8 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void rejectsUnsupportedBooleanArrayCopyOf() {
-        assertThatThrownBy(() -> lowerMain(method(
+    void lowersBooleanArrayCopyOfToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
             0x0008,
             "main",
             "([ZI)[Z",
@@ -1204,10 +1204,14 @@ final class BytecodeToIRTest {
             plain(1, 27, "iload_1"),
             invokeStatic(2, new MethodRef("java/util/Arrays", "copyOf", "([ZI)[Z")),
             plain(3, 176, "areturn")
-        )))
-            .isInstanceOf(DiagnosticException.class)
-            .hasMessageContaining("error[JAVAN040]: bytecode is not implemented by native code generation")
-            .hasMessageContaining("invokestatic java/util/Arrays.copyOf([ZI)[Z");
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_arrays_copy_of_boolean",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"))
+            ))
+        );
     }
 
     @Test
@@ -9420,6 +9424,24 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersStringValueOfIntToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(I)Ljava/lang/String;",
+            1,
+            1,
+            plain(0, 26, "iload_0"),
+            invokeStatic(1, new MethodRef("java/lang/String", "valueOf", "(I)Ljava/lang/String;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall("javan_string_value_of_int", List.of(IrExpression.intLocal("arg0"))))
+        );
+    }
+
+    @Test
     void lowersLongToStringToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -11292,6 +11314,28 @@ final class BytecodeToIRTest {
             plain(0, 42, "aload_0"),
             plain(1, 43, "aload_1"),
             invokeStatic(2, new MethodRef("java/nio/file/Path", "of", "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;")),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_path_of",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersPathsGetToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeStatic(2, new MethodRef("java/nio/file/Paths", "get", "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;")),
             plain(3, 176, "areturn")
         ));
 

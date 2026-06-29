@@ -170,6 +170,7 @@ final class RuntimeHeaderFile {
         void javan_char_array_set(void* array, int index, int value);
         int javan_array_length(void* array);
         void* javan_arrays_copy_of_object(void* array, int new_length);
+        void* javan_arrays_copy_of_boolean(void* array, int new_length);
         void* javan_arrays_copy_of_int(void* array, int new_length);
         void* javan_arrays_copy_of_long(void* array, int new_length);
         void* javan_arrays_copy_of_float(void* array, int new_length);

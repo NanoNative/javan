@@ -262,8 +262,8 @@ final class CliIntegrationTest {
     }
 
     @Test
-    void checkRejectsUnsupportedReachableJdkCallAndReportsIt() throws Exception {
-        final Path project = project("check-unsupported-reachable-jdk-call");
+    void stringValueOfIntBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-value-of-int");
         writeJava(project, "com.acme.Main", """
             package com.acme;
 
@@ -277,25 +277,27 @@ final class CliIntegrationTest {
             }
             """);
 
-        final CliRun run = run(tempDir, "check", project.toString());
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
 
-        assertThat(run.exitCode()).isEqualTo(2);
-        assertThat(run.stderr()).contains("unsupported reachable JDK call", "java/lang/String.valueOf(I)Ljava/lang/String;");
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-value-of-int").toString())).stdout()).isEqualTo(jvmOutput);
         assertThat(Files.readString(project.resolve(".javan/reports/intrinsics.json")))
             .contains(
                 "\"runtimeCallSiteCount\": 1",
+                "\"intrinsicCallSiteCount\": 1",
                 "\"supportedDirectJdkCallSiteCount\": 0",
-                "\"supportedJdkCallSiteCount\": 1",
+                "\"supportedJdkCallSiteCount\": 2",
                 "{\"name\": \"PrintStream.println\", \"count\": 1}",
-                "\"unsupportedJdkCallCandidateCount\": 1",
-                "{\"target\": \"java/lang/String.valueOf(I)Ljava/lang/String;\", \"count\": 1}"
+                "{\"name\": \"String.valueOf\", \"count\": 1}",
+                "\"unsupportedJdkCallCandidateCount\": 0"
             );
         assertThat(Files.readString(project.resolve(".javan/reports/intrinsics.md")))
             .contains(
-                "Supported reachable JDK call sites: `1`",
+                "Supported reachable JDK call sites: `2`",
                 "Runtime-registry reachable call sites: `1`",
                 "Supported-direct reachable call sites: `0`",
-                "Unsupported reachable call sites: `1`"
+                "Unsupported reachable call sites: `0`"
             );
     }
 
@@ -6120,6 +6122,11 @@ final class CliIntegrationTest {
                 }
 
                 public static void main(final String[] args) {
+                    final boolean[] booleans = Arrays.copyOf(new boolean[] {true}, 2);
+                    System.out.println(booleans.length);
+                    System.out.println(booleans[0]);
+                    System.out.println(booleans[1]);
+
                     final int[] ints = Arrays.copyOf(new int[] {4, 5}, 4);
                     System.out.println(ints.length);
                     System.out.println(ints[0]);
@@ -6161,7 +6168,7 @@ final class CliIntegrationTest {
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/arrays-copy-of-intrinsic").toString())).stdout()).isEqualTo(jvmOutput);
         assertThat(Files.readString(project.resolve(".javan/reports/intrinsics.json")))
-            .contains("{\"name\": \"Arrays.copyOf\", \"count\": 8}");
+            .contains("{\"name\": \"Arrays.copyOf\", \"count\": 9}");
     }
 
     @Test
@@ -6947,6 +6954,34 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void pathsGetBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("paths-get");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.nio.file.Path;
+            import java.nio.file.Paths;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Path path = Paths.get("data", "message.txt");
+                    System.out.println(path.toString());
+                    System.out.println(path.getFileName().toString());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/paths-get").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void pathOperationsBuildAndMatchJvmOutput() throws Exception {
         final Path project = project("path-operations");
         writeJava(project, "com.acme.Main", """
@@ -7530,33 +7565,6 @@ final class CliIntegrationTest {
             .contains(
                 "{\"name\": \"Objects.requireNonNull\", \"count\": 0}",
                 "{\"target\": \"java/util/Objects.requireNonNullElse(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;\", \"count\": 1}"
-            );
-
-        final Path arraysProject = project("unsupported-arrays-copy-of-overload");
-        writeJava(arraysProject, "com.acme.Main", """
-            package com.acme;
-
-            import java.util.Arrays;
-
-            public final class Main {
-                private Main() {
-                }
-
-                public static void main(final String[] args) {
-                    final boolean[] values = Arrays.copyOf(new boolean[] {true}, 2);
-                    System.out.println(values[0]);
-                }
-            }
-            """);
-
-        final CliRun arraysRun = run(tempDir, "build", arraysProject.toString());
-
-        assertThat(arraysRun.exitCode()).isEqualTo(2);
-        assertThat(arraysRun.stderr()).contains("error[JAVAN031]", "java/util/Arrays.copyOf([ZI)[Z");
-        assertThat(Files.readString(arraysProject.resolve(".javan/reports/intrinsics.json")))
-            .contains(
-                "{\"name\": \"Arrays.copyOf\", \"count\": 0}",
-                "{\"target\": \"java/util/Arrays.copyOf([ZI)[Z\", \"count\": 1}"
             );
 
         final Path numberProject = project("unsupported-number-to-string-overload");

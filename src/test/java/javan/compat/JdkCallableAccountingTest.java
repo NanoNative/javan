@@ -67,8 +67,8 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void leavesUnimplementedCallableAsUnknown() {
+    void marksStringValueOfIntAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/String", "valueOf", "(I)Ljava/lang/String;")))
-            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 }

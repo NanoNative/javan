@@ -78,7 +78,8 @@ final class IntrinsicUsageReportsTest {
             new IntrinsicCallCount("Float.intBitsToFloat", 0),
             new IntrinsicCallCount("Double.toString", 0),
             new IntrinsicCallCount("Double.longBitsToDouble", 0),
-            new IntrinsicCallCount("Boolean.toString", 0)
+            new IntrinsicCallCount("Boolean.toString", 0),
+            new IntrinsicCallCount("String.valueOf", 1)
         );
         assertThat(report.runtimeCalls()).contains(
             new RuntimeJdkCallCount("List.getFirst", 1),
@@ -89,42 +90,40 @@ final class IntrinsicUsageReportsTest {
         assertThat(report.runtimeCallSiteCount()).isEqualTo(4);
         assertThat(report.supportedDirectJdkCalls()).isEmpty();
         assertThat(report.supportedDirectJdkCallSiteCount()).isZero();
-        assertThat(report.supportedJdkCallSiteCount()).isEqualTo(12);
-        assertThat(report.unsupportedJdkCallCandidateCount()).isEqualTo(1);
-        assertThat(report.unsupportedJdkCallCandidates()).containsExactly(
-            new UnsupportedJdkCallCandidate("java/lang/String.valueOf(I)Ljava/lang/String;", 1)
-        );
+        assertThat(report.supportedJdkCallSiteCount()).isEqualTo(13);
+        assertThat(report.unsupportedJdkCallCandidateCount()).isZero();
+        assertThat(report.unsupportedJdkCallCandidates()).isEmpty();
         assertThat(Files.readString(tempDir.resolve("reports/intrinsics.json")))
             .contains(
                 "{\"name\": \"Objects.requireNonNull\", \"count\": 0}",
                 "{\"name\": \"Math.abs\", \"count\": 1}",
                 "{\"name\": \"Arrays.copyOf\", \"count\": 1}",
                 "{\"name\": \"Integer.toString\", \"count\": 1}",
-                "\"intrinsicCallSiteCount\": 8",
+                "{\"name\": \"String.valueOf\", \"count\": 1}",
+                "\"intrinsicCallSiteCount\": 9",
                 "{\"name\": \"List.getFirst\", \"count\": 1}",
                 "{\"name\": \"List.of\", \"count\": 1}",
                 "{\"name\": \"PrintStream.println\", \"count\": 1}",
                 "{\"name\": \"Thread.currentThread\", \"count\": 1}",
                 "\"runtimeCallSiteCount\": 4",
                 "\"supportedDirectJdkCallSiteCount\": 0",
-                "\"supportedJdkCallSiteCount\": 12",
-                "\"unsupportedJdkCallCandidateCount\": 1",
-                "{\"target\": \"java/lang/String.valueOf(I)Ljava/lang/String;\", \"count\": 1}"
+                "\"supportedJdkCallSiteCount\": 13",
+                "\"unsupportedJdkCallCandidateCount\": 0"
             );
         assertThat(Files.readString(tempDir.resolve("reports/intrinsics.md")))
             .contains(
-                "Supported reachable JDK call sites: `12`",
+                "Supported reachable JDK call sites: `13`",
                 "Runtime-registry reachable call sites: `4`",
                 "Supported-direct reachable call sites: `0`",
                 "| `System.nanoTime` | 2 |",
                 "| `System.arraycopy` | 1 |",
+                "| `String.valueOf` | 1 |",
                 "| `List.getFirst` | 1 |",
                 "| `List.of` | 1 |",
                 "| `PrintStream.println` | 1 |",
                 "| `Thread.currentThread` | 1 |",
                 "| none | 0 |",
-                "Total reachable call sites: `1`",
-                "| `java/lang/String.valueOf(I)Ljava/lang/String;` | 1 |"
+                "Total reachable call sites: `0`"
             );
     }
 
@@ -163,8 +162,7 @@ final class IntrinsicUsageReportsTest {
                 "main",
                 "([Ljava/lang/String;)V",
                 instruction("java/lang/Math", "abs", "(F)F"),
-                instruction("java/util/Objects", "requireNonNullElse", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
-                instruction("java/util/Arrays", "copyOf", "([ZI)[Z")
+                instruction("java/util/Objects", "requireNonNullElse", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")
             ))
         );
 
@@ -178,10 +176,9 @@ final class IntrinsicUsageReportsTest {
         assertThat(report.runtimeCallSiteCount()).isZero();
         assertThat(report.supportedDirectJdkCallSiteCount()).isZero();
         assertThat(report.supportedJdkCallSiteCount()).isZero();
-        assertThat(report.unsupportedJdkCallCandidateCount()).isEqualTo(3);
+        assertThat(report.unsupportedJdkCallCandidateCount()).isEqualTo(2);
         assertThat(report.unsupportedJdkCallCandidates()).containsExactly(
             new UnsupportedJdkCallCandidate("java/lang/Math.abs(F)F", 1),
-            new UnsupportedJdkCallCandidate("java/util/Arrays.copyOf([ZI)[Z", 1),
             new UnsupportedJdkCallCandidate("java/util/Objects.requireNonNullElse(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;", 1)
         );
     }

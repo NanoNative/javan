@@ -1248,6 +1248,15 @@ final class BytecodeToIRInvokeSupport {
         if ("java/lang/Boolean".equals(methodRef.owner())) {
             return lowerBooleanIntrinsic(classFile, method, methodRef, stack);
         }
+        if ("java/lang/String".equals(methodRef.owner())
+            && "valueOf".equals(methodRef.name())
+            && "(I)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_string_value_of_int",
+                List.of(popInt(classFile, method, stack))
+            )));
+            return true;
+        }
         if ("java/time/Duration".equals(methodRef.owner())) {
             return lowerDurationIntrinsic(classFile, method, methodRef, stack);
         }
@@ -1606,6 +1615,9 @@ final class BytecodeToIRInvokeSupport {
     static Optional<String> arraysCopyOfSymbol(final String descriptor) {
         if ("([II)[I".equals(descriptor)) {
             return Optional.of("javan_arrays_copy_of_int");
+        }
+        if ("([ZI)[Z".equals(descriptor)) {
+            return Optional.of("javan_arrays_copy_of_boolean");
         }
         if ("([JI)[J".equals(descriptor)) {
             return Optional.of("javan_arrays_copy_of_long");
@@ -2323,6 +2335,13 @@ final class BytecodeToIRInvokeSupport {
         final List<StackValue> stack,
         final Map<Integer, IrLocal> localDeclarations
     ) {
+        if ("java/nio/file/Paths".equals(methodRef.owner())
+            && "get".equals(methodRef.name())
+            && "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;".equals(methodRef.descriptor())) {
+            final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_path_of", arguments)));
+            return true;
+        }
         if ("java/nio/file/Path".equals(methodRef.owner())
             && "of".equals(methodRef.name())
             && "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;".equals(methodRef.descriptor())) {

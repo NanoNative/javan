@@ -337,11 +337,11 @@ final class CompatibilityReportsTest {
         );
 
         assertThat(Files.readString(tempDir.resolve("doc/status/jdk-compatibility.md"))).contains(
-            "| exact supported JDK callables | 1 / 7 (14.2%) |",
+            "| exact supported JDK callables | 2 / 7 (28.5%) |",
             "| exact explicit rejected JDK callables | 4 |",
-            "| exact done JDK callables | 5 / 7 (71.4%) |",
-            "| exact unknown JDK callables | 2 |",
-            "| exact supported JDK callables left | 6 |"
+            "| exact done JDK callables | 6 / 7 (85.7%) |",
+            "| exact unknown JDK callables | 1 |",
+            "| exact supported JDK callables left | 5 |"
         );
     }
 
@@ -433,8 +433,8 @@ final class CompatibilityReportsTest {
         );
 
         assertThat(Files.readString(tempDir.resolve(".javan/reports/compatibility-summary.json"))).contains(
-            "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 0, \"callables\": 1, \"totalCallables\": 4, \"leftCallables\": 3, \"coveragePercent\": \"25.0\"}",
-            "\"exactJdkCallableAccounting\": {\"supportedCallables\": 1, \"explicitRejectedCallables\": 2, \"doneCallables\": 3, \"unknownCallables\": 1, \"totalCallables\": 4, \"donePercent\": \"75.0\"}"
+            "\"exactSupportedJdkCallables\": {\"classes\": 2, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 4, \"leftCallables\": 2, \"coveragePercent\": \"50.0\"}",
+            "\"exactJdkCallableAccounting\": {\"supportedCallables\": 2, \"explicitRejectedCallables\": 2, \"doneCallables\": 4, \"unknownCallables\": 0, \"totalCallables\": 4, \"donePercent\": \"100.0\"}"
         );
     }
 

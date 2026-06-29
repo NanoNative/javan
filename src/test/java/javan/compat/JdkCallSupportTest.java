@@ -162,6 +162,33 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void stringValueOfIntIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/String",
+            "valueOf",
+            "(I)Ljava/lang/String;"
+        ))).isTrue();
+    }
+
+    @Test
+    void booleanArraysCopyOfIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Arrays",
+            "copyOf",
+            "([ZI)[Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void pathsGetRequiresFilesystemRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/nio/file/Paths",
+            "get",
+            "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;"
+        ))).containsExactly("filesystem");
+    }
+
+    @Test
     void fileNotFoundExceptionIsAssignableToIOException() {
         assertThat(JdkCallSupport.isPlatformThrowableAssignable("java/io/FileNotFoundException", "java/io/IOException"))
             .isTrue();
