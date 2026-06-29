@@ -48,7 +48,10 @@ final class CompatibilityReportsTest {
                     "java/lang/Object",
                     0,
                     List.of(member(0, "<init>", "()V", List.of(), List.of())),
-                    List.of(member(0, "getClass", "()Ljava/lang/Class;", List.of(), List.of()))
+                    List.of(
+                        member(0, "getClass", "()Ljava/lang/Class;", List.of(), List.of()),
+                        member(0, "wait", "()V", List.of(), List.of())
+                    )
                 ),
                 metadata(
                     "java.base",
@@ -56,6 +59,13 @@ final class CompatibilityReportsTest {
                     0,
                     List.of(),
                     List.of(member(0, "forName", "(Ljava/lang/String;)Ljava/lang/Class;", List.of(), List.of()))
+                ),
+                metadata(
+                    "java.base",
+                    "java/util/concurrent/Executors",
+                    0,
+                    List.of(),
+                    List.of(member(0, "newSingleThreadExecutor", "()Ljava/util/concurrent/ExecutorService;", List.of(), List.of()))
                 )
             ),
             List.of()
@@ -64,8 +74,8 @@ final class CompatibilityReportsTest {
         final String summary = Files.readString(tempDir.resolve(".javan/reports/compatibility-summary.json"));
 
         assertThat(summary).contains(
-            "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 3, \"leftCallables\": 1, \"coveragePercent\": \"66.6\"}",
-            "\"exactJdkCallableAccounting\": {\"supportedCallables\": 2, \"explicitRejectedCallables\": 1, \"doneCallables\": 3, \"unknownCallables\": 0, \"totalCallables\": 3, \"donePercent\": \"100.0\"}",
+            "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 5, \"leftCallables\": 3, \"coveragePercent\": \"40.0\"}",
+            "\"exactJdkCallableAccounting\": {\"supportedCallables\": 2, \"explicitRejectedCallables\": 3, \"doneCallables\": 5, \"unknownCallables\": 0, \"totalCallables\": 5, \"donePercent\": \"100.0\"}",
             "\"supportRows\": 108",
             "\"passRows\": 107",
             "\"scopedRows\": 0",
@@ -289,7 +299,10 @@ final class CompatibilityReportsTest {
                     "java/lang/Object",
                     0,
                     List.of(member(0, "<init>", "()V", List.of(), List.of())),
-                    List.of(member(0, "getClass", "()Ljava/lang/Class;", List.of(), List.of()))
+                    List.of(
+                        member(0, "getClass", "()Ljava/lang/Class;", List.of(), List.of()),
+                        member(0, "wait", "(J)V", List.of(), List.of())
+                    )
                 ),
                 metadata(
                     "java.base",
@@ -297,6 +310,20 @@ final class CompatibilityReportsTest {
                     0,
                     List.of(),
                     List.of(member(0, "forName", "(Ljava/lang/String;)Ljava/lang/Class;", List.of(), List.of()))
+                ),
+                metadata(
+                    "java.base",
+                    "java/util/concurrent/Executors",
+                    0,
+                    List.of(),
+                    List.of(member(0, "newCachedThreadPool", "()Ljava/util/concurrent/ExecutorService;", List.of(), List.of()))
+                ),
+                metadata(
+                    "java.base",
+                    "java/lang/InheritableThreadLocal",
+                    0,
+                    List.of(member(0, "<init>", "()V", List.of(), List.of())),
+                    List.of()
                 ),
                 metadata(
                     "java.base",
@@ -310,11 +337,11 @@ final class CompatibilityReportsTest {
         );
 
         assertThat(Files.readString(tempDir.resolve("doc/status/jdk-compatibility.md"))).contains(
-            "| exact supported JDK callables | 2 / 4 (50.0%) |",
-            "| exact explicit rejected JDK callables | 1 |",
-            "| exact done JDK callables | 3 / 4 (75.0%) |",
+            "| exact supported JDK callables | 2 / 7 (28.5%) |",
+            "| exact explicit rejected JDK callables | 4 |",
+            "| exact done JDK callables | 6 / 7 (85.7%) |",
             "| exact unknown JDK callables | 1 |",
-            "| exact supported JDK callables left | 2 |"
+            "| exact supported JDK callables left | 5 |"
         );
     }
 

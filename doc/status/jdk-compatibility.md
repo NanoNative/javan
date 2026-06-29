@@ -61,9 +61,9 @@ Current support ledger for the active JDK 25 evidence set:
 | exact supported JDK constructors | 778 |
 | exact supported JDK methods | 287 |
 | exact supported JDK callables | 1065 / 267886 (0.3%) |
-| exact explicit rejected JDK callables | 1398 |
-| exact done JDK callables | 2463 / 267886 (0.9%) |
-| exact unknown JDK callables | 265423 |
+| exact explicit rejected JDK callables | 1391 |
+| exact done JDK callables | 2456 / 267886 (0.9%) |
+| exact unknown JDK callables | 265430 |
 | exact supported JDK callables left | 266821 |
 
 Release-gated JDKs must report:
@@ -75,6 +75,9 @@ leftovers must be 0
 ```
 
 The exact supported and done JDK callable counts above are lower-bound progress signals.
+The current explicit rejected callable set now includes deterministic forbidden APIs plus
+exact verifier-backed monitor/concurrency rejects such as `Object.wait/notify`,
+unsupported `Executors` single/cached pool factories, and `InheritableThreadLocal.<init>()`.
 Unknown callables still include everything not yet counted as supported or explicitly rejected,
 so this is not a full JDK completion claim.
 

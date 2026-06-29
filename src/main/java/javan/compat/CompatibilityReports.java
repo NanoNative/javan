@@ -4,7 +4,6 @@ import javan.util.Files2;
 import javan.util.Json;
 import javan.util.Strings2;
 import javan.verify.Diagnostic;
-import javan.verify.ForbiddenApiRules;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -650,13 +649,14 @@ public final class CompatibilityReports {
         long totalConstructors = 0;
         long totalMethods = 0;
         long classesWithSupportedCallables = 0;
-        final ForbiddenApiRules forbiddenApiRules = new ForbiddenApiRules();
         for (int classIndex = 0; classIndex < classes.size(); classIndex++) {
             final ClassMetadata metadata = classes.get(classIndex);
-            long classSupportedConstructors = countSupportedMembers(metadata.name(), metadata.constructors());
-            long classSupportedMethods = countSupportedMembers(metadata.name(), metadata.methods());
-            long classExplicitRejectedConstructors = countExplicitRejectedMembers(metadata.name(), metadata.constructors(), forbiddenApiRules);
-            long classExplicitRejectedMethods = countExplicitRejectedMembers(metadata.name(), metadata.methods(), forbiddenApiRules);
+            final MemberAccountingTotals constructorTotals = countMembers(metadata.name(), metadata.constructors());
+            final MemberAccountingTotals methodTotals = countMembers(metadata.name(), metadata.methods());
+            final long classSupportedConstructors = constructorTotals.supported();
+            final long classSupportedMethods = methodTotals.supported();
+            final long classExplicitRejectedConstructors = constructorTotals.explicitRejected();
+            final long classExplicitRejectedMethods = methodTotals.explicitRejected();
             supportedConstructors += classSupportedConstructors;
             supportedMethods += classSupportedMethods;
             explicitRejectedConstructors += classExplicitRejectedConstructors;
@@ -677,30 +677,23 @@ public final class CompatibilityReports {
         );
     }
 
-    private static long countSupportedMembers(final String owner, final List<MemberMetadata> members) {
+    private static MemberAccountingTotals countMembers(final String owner, final List<MemberMetadata> members) {
         long supported = 0;
-        for (int memberIndex = 0; memberIndex < members.size(); memberIndex++) {
-            final MemberMetadata member = members.get(memberIndex);
-            if (JdkCallSupport.isSupported(new javan.classfile.MethodRef(owner, member.name(), member.descriptor()))) {
-                supported++;
-            }
-        }
-        return supported;
-    }
-
-    private static long countExplicitRejectedMembers(
-        final String owner,
-        final List<MemberMetadata> members,
-        final ForbiddenApiRules forbiddenApiRules
-    ) {
         long rejected = 0;
         for (int memberIndex = 0; memberIndex < members.size(); memberIndex++) {
             final MemberMetadata member = members.get(memberIndex);
-            if (forbiddenApiRules.forbiddenReason(new javan.classfile.MethodRef(owner, member.name(), member.descriptor())).isPresent()) {
+            final JdkCallableAccounting.Status status =
+                JdkCallableAccounting.status(new javan.classfile.MethodRef(owner, member.name(), member.descriptor()));
+            if (status == JdkCallableAccounting.Status.SUPPORTED) {
+                supported++;
+            } else if (status == JdkCallableAccounting.Status.EXPLICIT_REJECTED) {
                 rejected++;
             }
         }
-        return rejected;
+        return new MemberAccountingTotals(supported, rejected);
+    }
+
+    private record MemberAccountingTotals(long supported, long explicitRejected) {
     }
 
     private record JdkCallableSupportTotals(
