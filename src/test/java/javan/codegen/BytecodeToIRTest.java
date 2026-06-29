@@ -5425,31 +5425,22 @@ final class BytecodeToIRTest {
             plain(2, 177, "return")
         ));
 
-        assertThat(function.instructions()).hasSize(10);
-        assertThat(function.instructions().get(0)).isEqualTo(IrInstruction.assignInt(
-            "int0",
-            IrExpression.intCall("javan_thread_interrupted", List.of())
-        ));
-        assertThat(function.instructions().get(1)).isEqualTo(IrInstruction.branchIf(
-            "label_thread_wait_continue_1_0",
+        assertThat(function.instructions()).hasSize(7);
+        assertThat(function.instructions().get(0)).isEqualTo(IrInstruction.label("label_thread_wait_continue_1_0"));
+        assertThat(function.instructions().get(1)).isEqualTo(
+            IrInstruction.assignInt("int0", IrExpression.intCall("javan_thread_join_interruptible", List.of(IrExpression.objectLocal("arg0"))))
+        );
+        assertThat(function.instructions().get(2)).isEqualTo(IrInstruction.branchIf(
+            "label_thread_wait_success_1_0",
             IrExpression.intComparison("==", IrExpression.intLocal("int0"), IrExpression.intLiteral(0))
         ));
-        assertThat(function.instructions().get(2)).isEqualTo(IrInstruction.jump("label_thread_wait_interrupted_1_0"));
-        assertThat(function.instructions().get(3)).isEqualTo(IrInstruction.label("label_thread_wait_continue_1_0"));
-        assertThat(function.instructions().get(4)).isEqualTo(
-            IrInstruction.assignInt("int1", IrExpression.intCall("javan_thread_join_interruptible", List.of(IrExpression.objectLocal("arg0"))))
-        );
-        assertThat(function.instructions().get(5)).isEqualTo(IrInstruction.branchIf(
-            "label_thread_wait_success_1_1",
-            IrExpression.intComparison("==", IrExpression.intLocal("int1"), IrExpression.intLiteral(0))
-        ));
-        assertThat(function.instructions().get(6)).isEqualTo(IrInstruction.label("label_thread_wait_interrupted_1_0"));
-        assertThat(function.instructions().get(7)).satisfies(instruction -> {
+        assertThat(function.instructions().get(3)).isEqualTo(IrInstruction.label("label_thread_wait_interrupted_1_0"));
+        assertThat(function.instructions().get(4)).satisfies(instruction -> {
             assertThat(instruction.op()).isEqualTo(IrInstruction.Op.PANIC);
             assertThat(instruction.expression()).contains(IrExpression.stringLiteral("java/lang/InterruptedException"));
         });
-        assertThat(function.instructions().get(8)).isEqualTo(IrInstruction.label("label_thread_wait_success_1_1"));
-        assertThat(function.instructions().get(9)).isEqualTo(IrInstruction.returnVoid());
+        assertThat(function.instructions().get(5)).isEqualTo(IrInstruction.label("label_thread_wait_success_1_0"));
+        assertThat(function.instructions().get(6)).isEqualTo(IrInstruction.returnVoid());
     }
 
     @Test
@@ -5524,25 +5515,19 @@ final class BytecodeToIRTest {
 
         assertThat(function.instructions()).containsExactly(
             IrInstruction.callStaticVoid("javan_thread_interrupt", List.of(IrExpression.objectCall("javan_thread_current", List.of()))),
-            IrInstruction.assignInt("int0", IrExpression.intCall("javan_thread_interrupted", List.of())),
-            IrInstruction.branchIf(
-                "label_thread_wait_continue_3_0",
-                IrExpression.intComparison("==", IrExpression.intLocal("int0"), IrExpression.intLiteral(0))
-            ),
-            IrInstruction.jump("label_thread_wait_interrupted_3_0"),
             IrInstruction.label("label_thread_wait_continue_3_0"),
-            IrInstruction.assignInt("int1", IrExpression.intCall("javan_thread_join_interruptible", List.of(IrExpression.objectLocal("arg0")))),
+            IrInstruction.assignInt("int0", IrExpression.intCall("javan_thread_join_interruptible", List.of(IrExpression.objectLocal("arg0")))),
             IrInstruction.branchIf(
-                "label_thread_wait_success_3_1",
-                IrExpression.intComparison("==", IrExpression.intLocal("int1"), IrExpression.intLiteral(0))
+                "label_thread_wait_success_3_0",
+                IrExpression.intComparison("==", IrExpression.intLocal("int0"), IrExpression.intLiteral(0))
             ),
             IrInstruction.label("label_thread_wait_interrupted_3_0"),
             IrInstruction.jump("label_6"),
-            IrInstruction.label("label_thread_wait_success_3_1"),
+            IrInstruction.label("label_thread_wait_success_3_0"),
             IrInstruction.returnObject(IrExpression.stringLiteral("ok")),
             IrInstruction.label("label_6"),
-            IrInstruction.assignObject("local1_object_2", IrExpression.objectNull()),
-            IrInstruction.returnObject(IrExpression.objectLocal("local1_object_2"))
+            IrInstruction.assignObject("local1_object_1", IrExpression.objectNull()),
+            IrInstruction.returnObject(IrExpression.objectLocal("local1_object_1"))
         );
     }
 

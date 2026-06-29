@@ -11068,6 +11068,9 @@ final class CliIntegrationTest {
                 public static void main(final String[] args) throws Exception {
                     final Thread thread = new Thread();
                     thread.start();
+                    while (thread.isAlive()) {
+                        Thread.sleep(1L);
+                    }
                     Thread.currentThread().interrupt();
                     try {
                         thread.join();

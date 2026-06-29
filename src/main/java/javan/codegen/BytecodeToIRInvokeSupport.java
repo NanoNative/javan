@@ -1522,6 +1522,7 @@ final class BytecodeToIRInvokeSupport {
                 localDeclarations,
                 pendingExceptionHandlerStacks,
                 sourceLines,
+                true,
                 IrExpression.stringLiteral("sleep interrupted"),
                 "javan_thread_sleep_millis_interruptible",
                 List.of(popLong(classFile, method, stack))
@@ -2267,24 +2268,27 @@ final class BytecodeToIRInvokeSupport {
         final Map<Integer, IrLocal> localDeclarations,
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final SourceLineIndex sourceLines,
+        final boolean precheckInterrupt,
         final IrExpression interruptedMessage,
         final String symbol,
         final List<IrExpression> arguments
     ) {
-        final int localIndex = localDeclarations.size();
-        final String interruptedLocalName = "int" + localIndex;
-        localDeclarations.put(Integer.MIN_VALUE + localIndex, new IrLocal(IrType.INT, interruptedLocalName));
-        instructions.add(IrInstruction.assignInt(
-            interruptedLocalName,
-            IrExpression.intCall("javan_thread_interrupted", List.of())
-        ));
-        final String continueLabel = "label_thread_wait_continue_" + instruction.offset() + "_" + localIndex;
-        final String interruptedLabel = "label_thread_wait_interrupted_" + instruction.offset() + "_" + localIndex;
-        instructions.add(IrInstruction.branchIf(
-            continueLabel,
-            IrExpression.intComparison("==", IrExpression.intLocal(interruptedLocalName), IrExpression.intLiteral(0))
-        ));
-        instructions.add(IrInstruction.jump(interruptedLabel));
+        final String continueLabel = "label_thread_wait_continue_" + instruction.offset() + "_" + localDeclarations.size();
+        final String interruptedLabel = "label_thread_wait_interrupted_" + instruction.offset() + "_" + localDeclarations.size();
+        if (precheckInterrupt) {
+            final int localIndex = localDeclarations.size();
+            final String interruptedLocalName = "int" + localIndex;
+            localDeclarations.put(Integer.MIN_VALUE + localIndex, new IrLocal(IrType.INT, interruptedLocalName));
+            instructions.add(IrInstruction.assignInt(
+                interruptedLocalName,
+                IrExpression.intCall("javan_thread_interrupted", List.of())
+            ));
+            instructions.add(IrInstruction.branchIf(
+                continueLabel,
+                IrExpression.intComparison("==", IrExpression.intLocal(interruptedLocalName), IrExpression.intLiteral(0))
+            ));
+            instructions.add(IrInstruction.jump(interruptedLabel));
+        }
         instructions.add(IrInstruction.label(continueLabel));
         final int interruptedResultLocalIndex = localDeclarations.size();
         final String interruptedResultLocalName = "int" + interruptedResultLocalIndex;
@@ -2542,6 +2546,7 @@ final class BytecodeToIRInvokeSupport {
                 localDeclarations,
                 pendingExceptionHandlerStacks,
                 sourceLines,
+                false,
                 IrExpression.objectNull(),
                 "javan_thread_join_interruptible",
                 List.of(receiver)

@@ -3168,18 +3168,18 @@ final class RuntimeSourceMemorySections {
             javan_profile_thread_join_calls_value++;
             javan_runtime_lock_leave();
             while (1) {
+                javan_runtime_lock_enter();
+                int done = thread->started == 0 || thread->native_completion_signaled != 0;
+                javan_runtime_lock_leave();
+                if (done != 0) {
+                    return 0;
+                }
                 if (javan_thread_current_interrupted_peek() != 0) {
                     (void) javan_thread_interrupted();
                     javan_runtime_lock_enter();
                     javan_profile_thread_join_interruptions_value++;
                     javan_runtime_lock_leave();
                     return 1;
-                }
-                javan_runtime_lock_enter();
-                int done = thread->started == 0 || thread->native_completion_signaled != 0;
-                javan_runtime_lock_leave();
-                if (done != 0) {
-                    return 0;
                 }
                 javan_sleep_micros(5000UL);
             }
