@@ -429,6 +429,8 @@ final class RuntimeHeaderFile {
         void* javan_stringbuilder_insert_long(void* builder, int index, long long value);
         void* javan_stringbuilder_insert_float(void* builder, int index, float value);
         void* javan_stringbuilder_insert_double(void* builder, int index, double value);
+        void* javan_stringbuilder_insert_chars(void* builder, int index, void* chars);
+        void* javan_stringbuilder_insert_chars_range(void* builder, int index, void* chars, int offset, int count);
         void* javan_stringbuilder_insert_string(void* builder, int index, void* value);
         void* javan_stringbuilder_insert_char(void* builder, int index, int value);
         void* javan_stringbuilder_replace_string(void* builder, int start, int end, void* value);
