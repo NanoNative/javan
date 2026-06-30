@@ -4962,6 +4962,121 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void enumSwitchExpressionRecordBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("enum-switch-expression-record");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                enum Kind {
+                    PRINT_STREAM,
+                    ERROR_PRINT_STREAM,
+                    OBJECT
+                }
+
+                record Value(Kind kind, Object expression) {
+                }
+
+                private Main() {
+                }
+
+                static Value map(final Value value) {
+                    return switch (value.kind()) {
+                        case PRINT_STREAM -> new Value(Kind.OBJECT, "out");
+                        case ERROR_PRINT_STREAM -> new Value(Kind.OBJECT, "err");
+                        default -> value;
+                    };
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(map(new Value(Kind.PRINT_STREAM, null)).expression() != null);
+                    System.out.println(map(new Value(Kind.ERROR_PRINT_STREAM, null)).expression());
+                    System.out.println(map(new Value(Kind.OBJECT, "same")).expression());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/enum-switch-expression-record").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\nerr\nsame\n");
+    }
+
+    @Test
+    void denseIntSwitchExpressionBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("dense-int-switch-expression");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                static String map(final int value) {
+                    return switch (value) {
+                        case 1 -> "one";
+                        case 2 -> "two";
+                        case 3 -> "three";
+                        default -> "other";
+                    };
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(map(1));
+                    System.out.println(map(2));
+                    System.out.println(map(3));
+                    System.out.println(map(9));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/dense-int-switch-expression").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("one\ntwo\nthree\nother\n");
+    }
+
+    @Test
+    void denseIntSwitchExpressionOutOfOrderBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("dense-int-switch-expression-out-of-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                static String map(final int value) {
+                    return switch (value) {
+                        case 3 -> "three";
+                        case 1 -> "one";
+                        case 2 -> "two";
+                        default -> "other";
+                    };
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(map(3));
+                    System.out.println(map(1));
+                    System.out.println(map(2));
+                    System.out.println(map(9));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/dense-int-switch-expression-out-of-order").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("three\none\ntwo\nother\n");
+    }
+
+    @Test
     void stringIntrinsicsBuildAndMatchJvmOutput() throws Exception {
         final Path project = project("string-intrinsics");
         writeJava(project, "com.acme.Main", """

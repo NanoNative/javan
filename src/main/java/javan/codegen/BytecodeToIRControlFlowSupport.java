@@ -520,6 +520,142 @@ final class BytecodeToIRControlFlowSupport {
         }
         return true;
     }
+    static boolean lowerSwitchValueSelection(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final List<Instruction> bytecode,
+        final int index,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrExpression> locals,
+        final Map<Integer, StackKind> objectLocalKinds,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<String, IrDispatch> dispatches,
+        final List<Integer> skippedOffsets,
+        final List<Integer> replacementLabelOffsets
+    ) {
+        final Instruction instruction = bytecode.get(index);
+        if (instruction.opcode() != 170 && instruction.opcode() != 171) {
+            return false;
+        }
+        final List<SwitchEntry> entries = switchEntries(instruction);
+        if (entries.isEmpty()) {
+            return false;
+        }
+        final List<Integer> targetOffsets = uniqueSortedTargetOffsets(entries);
+        if (targetOffsets.isEmpty()) {
+            return false;
+        }
+        int doneOffset = -1;
+        final Map<Integer, Integer> blockEnds = new HashMap<>();
+        for (int targetCursor = 0; targetCursor < targetOffsets.size(); targetCursor++) {
+            final int targetOffset = targetOffsets.get(targetCursor);
+            final int targetIndex = instructionIndex(bytecode, targetOffset);
+            if (targetIndex < 0 || targetIndex <= index) {
+                return false;
+            }
+            final int nextTargetIndex = targetCursor + 1 < targetOffsets.size()
+                ? instructionIndex(bytecode, targetOffsets.get(targetCursor + 1))
+                : bytecode.size();
+            final int jumpIndex = unconditionalJumpBefore(bytecode, targetIndex, nextTargetIndex);
+            if (jumpIndex >= 0) {
+                final int candidateDoneOffset = branchTarget(bytecode.get(jumpIndex));
+                if (candidateDoneOffset <= targetOffset) {
+                    return false;
+                }
+                if (doneOffset >= 0 && doneOffset != candidateDoneOffset) {
+                    return false;
+                }
+                doneOffset = candidateDoneOffset;
+                blockEnds.put(targetOffset, jumpIndex);
+                continue;
+            }
+            if (targetCursor + 1 < targetOffsets.size()) {
+                return false;
+            }
+        }
+        if (doneOffset < 0) {
+            return false;
+        }
+        final int doneIndex = instructionIndex(bytecode, doneOffset);
+        if (doneIndex < 0 || doneIndex <= index || !isValueConsumer(bytecode.get(doneIndex).opcode())) {
+            return false;
+        }
+        final int lastTargetOffset = targetOffsets.getLast();
+        final int lastTargetIndex = instructionIndex(bytecode, lastTargetOffset);
+        if (lastTargetIndex < 0 || lastTargetIndex > doneIndex || containsControlTransfer(bytecode, lastTargetIndex, doneIndex)) {
+            return false;
+        }
+        blockEnds.put(lastTargetOffset, doneIndex);
+
+        final List<StackValue> selectorStack = new ArrayList<>(stack);
+        popInt(classFile, method, selectorStack);
+        final List<StackValue> prefix = List.copyOf(selectorStack);
+        final int originalLocalDeclarationCount = localDeclarations.size();
+        final Map<Integer, IrLocal> workingDeclarations = copyLocalDeclarations(localDeclarations);
+        final List<SwitchBlock> blocks = new ArrayList<>();
+        StackKind selectedKind = null;
+        for (final int targetOffset : targetOffsets) {
+            final int targetIndex = instructionIndex(bytecode, targetOffset);
+            final int blockEndIndex = blockEnds.get(targetOffset);
+            final BlockResult block = lowerLinearBlock(
+                classes,
+                classFile,
+                method,
+                bytecode,
+                targetIndex,
+                blockEndIndex,
+                prefix,
+                locals,
+                objectLocalKinds,
+                workingDeclarations,
+                dispatches
+            );
+            if (!hasSelectedValue(prefix, block.stack())) {
+                return false;
+            }
+            final StackValue selectedValue = block.stack().getLast();
+            if (selectedKind == null) {
+                selectedKind = selectedValue.kind();
+            } else if (selectedKind != selectedValue.kind()) {
+                throw unsupportedBranchValueMerge(classFile, method, instruction);
+            }
+            blocks.add(new SwitchBlock(targetOffset, blockEndIndex, block.instructions(), selectedValue));
+        }
+        if (selectedKind == null) {
+            return false;
+        }
+        appendNewLocalDeclarations(localDeclarations, workingDeclarations, originalLocalDeclarationCount);
+        final IrExpression selector = switchSelector(classFile, method, instructions, stack, localDeclarations);
+        final IrType valueType = stackKindType(selectedKind);
+        final String localName = "switchValue" + localDeclarations.size() + "_" + instruction.offset();
+        localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(valueType, localName));
+        final String doneLabel = "switch_value_done_" + instruction.offset();
+        for (final SwitchEntry entry : entries) {
+            if (entry.value().isPresent()) {
+                instructions.add(IrInstruction.branchIf(
+                    label(entry.targetOffset()),
+                    IrExpression.intComparison("==", selector, IrExpression.intLiteral(entry.value().orElseThrow()))
+                ));
+            }
+        }
+        instructions.add(IrInstruction.jump(label(defaultTarget(entries))));
+        for (final SwitchBlock block : blocks) {
+            addInt(replacementLabelOffsets, block.targetOffset());
+            instructions.add(IrInstruction.label(label(block.targetOffset())));
+            instructions.addAll(block.instructions());
+            instructions.add(assignLocal(selectedKind, localName, stackValueExpression(block.selectedValue())));
+            instructions.add(IrInstruction.jump(doneLabel));
+            addInstructionOffsets(bytecode, instructionIndex(bytecode, block.targetOffset()), block.endIndex(), skippedOffsets);
+            if (block.endIndex() < bytecode.size() && bytecode.get(block.endIndex()).opcode() == 167) {
+                addInt(skippedOffsets, bytecode.get(block.endIndex()).offset());
+            }
+        }
+        instructions.add(IrInstruction.label(doneLabel));
+        stack.add(stackValue(selectedKind, localExpression(valueType, new IrLocal(valueType, localName))));
+        return true;
+    }
     static IrExpression branchCondition(
         final ClassFile classFile,
         final MethodInfo method,
@@ -847,6 +983,71 @@ final class BytecodeToIRControlFlowSupport {
         localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.INT, localName));
         instructions.add(IrInstruction.assignInt(localName, value));
         return IrExpression.intLocal(localName);
+    }
+
+    static List<SwitchEntry> switchEntries(final Instruction instruction) {
+        final List<SwitchEntry> result = new ArrayList<>();
+        final int padding = switchPadding(instruction.offset());
+        if (instruction.opcode() == 170) {
+            final int defaultTarget = instruction.offset() + int32(instruction.operands(), padding);
+            final int low = int32(instruction.operands(), padding + 4);
+            final int high = int32(instruction.operands(), padding + 8);
+            int operandOffset = padding + 12;
+            for (int value = low; value <= high; value++) {
+                final int target = instruction.offset() + int32(instruction.operands(), operandOffset);
+                result.add(new SwitchEntry(Optional.of(value), target));
+                operandOffset += 4;
+            }
+            result.add(new SwitchEntry(Optional.empty(), defaultTarget));
+            return result;
+        }
+        final int defaultTarget = instruction.offset() + int32(instruction.operands(), padding);
+        final int pairs = int32(instruction.operands(), padding + 4);
+        int operandOffset = padding + 8;
+        for (int index = 0; index < pairs; index++) {
+            final int value = int32(instruction.operands(), operandOffset);
+            final int target = instruction.offset() + int32(instruction.operands(), operandOffset + 4);
+            result.add(new SwitchEntry(Optional.of(value), target));
+            operandOffset += 8;
+        }
+        result.add(new SwitchEntry(Optional.empty(), defaultTarget));
+        return result;
+    }
+
+    static List<Integer> uniqueSortedTargetOffsets(final List<SwitchEntry> entries) {
+        final List<Integer> result = new ArrayList<>();
+        for (final SwitchEntry entry : entries) {
+            addInt(result, entry.targetOffset());
+        }
+        for (int leftIndex = 0; leftIndex < result.size(); leftIndex++) {
+            int smallestIndex = leftIndex;
+            for (int rightIndex = leftIndex + 1; rightIndex < result.size(); rightIndex++) {
+                if (result.get(rightIndex) < result.get(smallestIndex)) {
+                    smallestIndex = rightIndex;
+                }
+            }
+            if (smallestIndex != leftIndex) {
+                final int left = result.get(leftIndex);
+                result.set(leftIndex, result.get(smallestIndex));
+                result.set(smallestIndex, left);
+            }
+        }
+        return result;
+    }
+
+    static int defaultTarget(final List<SwitchEntry> entries) {
+        for (final SwitchEntry entry : entries) {
+            if (entry.value().isEmpty()) {
+                return entry.targetOffset();
+            }
+        }
+        throw new IllegalArgumentException("Missing default switch target");
+    }
+
+    record SwitchEntry(Optional<Integer> value, int targetOffset) {
+    }
+
+    record SwitchBlock(int targetOffset, int endIndex, List<IrInstruction> instructions, StackValue selectedValue) {
     }
 
 }

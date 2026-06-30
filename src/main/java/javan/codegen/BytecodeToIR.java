@@ -158,6 +158,24 @@ public final class BytecodeToIR {
                 BytecodeToIRControlFlowSupport.annotateNewInstructions(instructions, instructionStart, sourceLocation);
                 continue;
             }
+            if (BytecodeToIRControlFlowSupport.lowerSwitchValueSelection(
+                classes,
+                classFile,
+                method,
+                bytecode,
+                index,
+                instructions,
+                stack,
+                locals,
+                objectLocalKinds,
+                localDeclarations,
+                dispatches,
+                skippedOffsets,
+                replacementLabelOffsets
+            )) {
+                BytecodeToIRControlFlowSupport.annotateNewInstructions(instructions, instructionStart, sourceLocation);
+                continue;
+            }
             lowerInstruction(
                 classes,
                 classFile,
@@ -961,7 +979,7 @@ public final class BytecodeToIR {
         }
         final StackValue value = popObjectValue(classFile, method, instruction, stack);
         final IrExpression target = localOrCreate(locals, localDeclarations, slot, IrType.OBJECT);
-        instructions.add(IrInstruction.assignObject(target.value(), value.expression().orElseThrow()));
+        instructions.add(IrInstruction.assignObject(target.value(), stackValueExpression(value)));
         updateObjectLocalKind(objectLocalKinds, slot, value.kind());
     }
 
@@ -1299,7 +1317,7 @@ public final class BytecodeToIR {
         final Instruction instruction,
         final List<StackValue> stack
     ) {
-        return popObjectValue(classFile, method, instruction, stack).expression().orElseThrow();
+        return stackValueExpression(popObjectValue(classFile, method, instruction, stack));
     }
 
     static StackValue popObjectValue(
@@ -1313,11 +1331,13 @@ public final class BytecodeToIR {
         }
         final StackValue value = pop(stack);
         if (BytecodeToIRControlFlowSupport.isObjectLike(value.kind())) {
-            return switch (value.kind()) {
-                case PRINT_STREAM -> StackValue.objectExpression(IrExpression.objectCall("javan_system_out", List.of()));
-                case ERROR_PRINT_STREAM -> StackValue.objectExpression(IrExpression.objectCall("javan_system_err", List.of()));
-                default -> value;
-            };
+            if (value.kind() == StackKind.PRINT_STREAM) {
+                return StackValue.objectExpression(IrExpression.objectCall("javan_system_out", List.of()));
+            }
+            if (value.kind() == StackKind.ERROR_PRINT_STREAM) {
+                return StackValue.objectExpression(IrExpression.objectCall("javan_system_err", List.of()));
+            }
+            return value;
         }
         throw invalidStack(classFile, method, instruction, wrongStackTypeReason("object", value.kind()));
     }
@@ -1388,6 +1408,16 @@ public final class BytecodeToIR {
 
     static String stackKindName(final StackKind kind) {
         return Strings2.toAsciiLowerCase(kind.name()).replace('_', ' ');
+    }
+
+    static IrExpression stackValueExpression(final StackValue value) {
+        if (value.kind() == StackKind.PRINT_STREAM) {
+            return IrExpression.objectCall("javan_system_out", List.of());
+        }
+        if (value.kind() == StackKind.ERROR_PRINT_STREAM) {
+            return IrExpression.objectCall("javan_system_err", List.of());
+        }
+        return value.expression().orElseThrow();
     }
 
     static Instruction firstInstruction(final MethodInfo method) {
