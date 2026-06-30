@@ -667,6 +667,36 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksCharsetForNameAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/nio/charset/Charset", "forName", "(Ljava/lang/String;)Ljava/nio/charset/Charset;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksCharsetDefaultCharsetAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/nio/charset/Charset", "defaultCharset", "()Ljava/nio/charset/Charset;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksCharsetEncoderEncodeCharBufferAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/nio/charset/CharsetEncoder", "encode", "(Ljava/nio/CharBuffer;)Ljava/nio/ByteBuffer;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksCharsetDecoderDecodeByteBufferAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/nio/charset/CharsetDecoder", "decode", "(Ljava/nio/ByteBuffer;)Ljava/nio/CharBuffer;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksStandardCharsetsInitializerAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/nio/charset/StandardCharsets", "<clinit>", "()V")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
     void marksFormatFormatObjectAsExplicitRejected() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/text/Format", "format", "(Ljava/lang/Object;)Ljava/lang/String;")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);

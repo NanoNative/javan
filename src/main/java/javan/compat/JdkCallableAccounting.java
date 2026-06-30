@@ -250,6 +250,9 @@ final class JdkCallableAccounting {
         if (owner.startsWith("java/math/")) {
             return true;
         }
+        if (owner.startsWith("java/nio/charset/")) {
+            return true;
+        }
         if (owner.startsWith("java/text/")) {
             return true;
         }
