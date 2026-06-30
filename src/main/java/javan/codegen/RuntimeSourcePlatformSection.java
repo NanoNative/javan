@@ -97,6 +97,19 @@ final class RuntimeSourcePlatformSection {
             return builder;
         }
 
+        void javan_stringbuilder_reserve(void* builder_value, int capacity) {
+            if (capacity < 0) {
+                javan_panic("negative string builder capacity");
+            }
+            javan_string_builder* builder = javan_stringbuilder_checked(builder_value);
+            void** javan_builder_owner_roots[] = {
+                (void**) &builder
+            };
+            javan_root_frame_push(javan_builder_owner_roots, 1);
+            javan_stringbuilder_ensure_capacity(builder, capacity);
+            javan_root_frame_pop(javan_builder_owner_roots);
+        }
+
         void* javan_stringbuilder_append_string(void* builder_value, void* value) {
             javan_string_builder* builder = javan_stringbuilder_checked(builder_value);
             javan_stringbuilder_append_bytes(builder, (const char*) value);

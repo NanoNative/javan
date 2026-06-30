@@ -1880,6 +1880,10 @@ final class BytecodeToIRInvokeSupport {
         if ("()V".equals(methodRef.descriptor())) {
             return true;
         }
+        if ("(I)V".equals(methodRef.descriptor())) {
+            instructions.add(IrInstruction.callStaticVoid("javan_stringbuilder_reserve", List.of(receiver, arguments.getFirst())));
+            return true;
+        }
         if ("(Ljava/lang/String;)V".equals(methodRef.descriptor())) {
             instructions.add(IrInstruction.callStaticVoid("javan_stringbuilder_append_string", List.of(receiver, arguments.getFirst())));
             return true;

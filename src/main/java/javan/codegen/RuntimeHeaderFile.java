@@ -400,6 +400,7 @@ final class RuntimeHeaderFile {
         void* javan_string_concat(const char* recipe, int argc, const char** values);
         char* javan_string_export(const char* value);
         void* javan_stringbuilder_new(void);
+        void javan_stringbuilder_reserve(void* builder, int capacity);
         void* javan_stringbuilder_append_string(void* builder, void* value);
         void* javan_stringbuilder_append_object(void* builder, void* value);
         void* javan_stringbuilder_append_boolean(void* builder, int value);

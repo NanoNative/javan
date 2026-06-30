@@ -6240,6 +6240,58 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void stringBuilderCapacityConstructorBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-capacity-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder(64);
+                    builder.append("cap");
+                    builder.append('-');
+                    builder.append(64);
+                    System.out.println(builder.toString());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-capacity-constructor").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("cap-64\n");
+    }
+
+    @Test
+    void stringBuilderNegativeCapacityFailsClearlyAtRuntime() throws Exception {
+        final Path project = project("stringbuilder-negative-capacity");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    new StringBuilder(-1);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/stringbuilder-negative-capacity").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("negative string builder capacity");
+    }
+
+    @Test
     void stringBuilderIsEmptyBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("stringbuilder-is-empty");
         writeJava(project, "com.acme.Main", """

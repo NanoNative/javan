@@ -1618,8 +1618,8 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void rejectsUnsupportedStringBuilderCapacityConstructor() {
-        assertThatThrownBy(() -> lowerMain(method(
+    void lowersStringBuilderCapacityConstructorToReserveRuntimeCall() {
+        final IrFunction function = lowerMain(method(
             0x0008,
             "main",
             "()Ljava/lang/StringBuilder;",
@@ -1630,10 +1630,20 @@ final class BytecodeToIRTest {
             plain(2, 7, "iconst_4"),
             invokeSpecial(3, new MethodRef("java/lang/StringBuilder", "<init>", "(I)V")),
             plain(4, 176, "areturn")
-        )))
-            .isInstanceOf(DiagnosticException.class)
-            .hasMessageContaining("error[JAVAN040]: bytecode is not implemented by native code generation")
-            .hasMessageContaining("invokespecial java/lang/StringBuilder.<init>(I)V");
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall("javan_stringbuilder_new", List.of())
+            ),
+            IrInstruction.callStaticVoid(
+                "javan_stringbuilder_reserve",
+                List.of(IrExpression.objectLocal("object0"), IrExpression.intLiteral(4))
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
     }
 
     @Test
