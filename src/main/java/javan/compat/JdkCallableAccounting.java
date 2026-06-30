@@ -244,6 +244,9 @@ final class JdkCallableAccounting {
         if (owner.startsWith("java/util/zip/")) {
             return true;
         }
+        if (owner.startsWith("java/time/format/")) {
+            return true;
+        }
         if (owner.startsWith("java/text/")) {
             return true;
         }

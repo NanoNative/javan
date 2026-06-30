@@ -607,6 +607,36 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksDateTimeFormatterOfPatternAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/time/format/DateTimeFormatter", "ofPattern", "(Ljava/lang/String;)Ljava/time/format/DateTimeFormatter;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksDateTimeFormatterFormatAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/time/format/DateTimeFormatter", "format", "(Ljava/time/temporal/TemporalAccessor;)Ljava/lang/String;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksDateTimeFormatterBuilderAppendPatternAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/time/format/DateTimeFormatterBuilder", "appendPattern", "(Ljava/lang/String;)Ljava/time/format/DateTimeFormatterBuilder;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksDateTimeParseExceptionConstructorAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/time/format/DateTimeParseException", "<init>", "(Ljava/lang/String;Ljava/lang/CharSequence;I)V")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksDecimalStyleOfDefaultLocaleAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/time/format/DecimalStyle", "ofDefaultLocale", "()Ljava/time/format/DecimalStyle;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
     void marksFormatFormatObjectAsExplicitRejected() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/text/Format", "format", "(Ljava/lang/Object;)Ljava/lang/String;")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
