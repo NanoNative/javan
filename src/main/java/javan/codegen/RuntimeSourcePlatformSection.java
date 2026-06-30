@@ -182,6 +182,20 @@ final class RuntimeSourcePlatformSection {
             return builder_value;
         }
 
+        void* javan_stringbuilder_append_float(void* builder_value, float value) {
+            char buffer[64];
+            javan_format_real(buffer, sizeof(buffer), value, "%.9g");
+            javan_stringbuilder_append_bytes(javan_stringbuilder_checked(builder_value), buffer);
+            return builder_value;
+        }
+
+        void* javan_stringbuilder_append_double(void* builder_value, double value) {
+            char buffer[128];
+            javan_format_real(buffer, sizeof(buffer), value, "%.17g");
+            javan_stringbuilder_append_bytes(javan_stringbuilder_checked(builder_value), buffer);
+            return builder_value;
+        }
+
         void* javan_stringbuilder_to_string(void* builder_value) {
             javan_string_builder* builder = javan_stringbuilder_checked(builder_value);
             void** javan_builder_to_string_roots[] = {

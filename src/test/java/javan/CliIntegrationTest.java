@@ -584,6 +584,60 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void stringBuilderAppendFloatBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-append-float");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder();
+                    builder.append(1.5f);
+                    builder.append('/');
+                    builder.append(2.5f);
+                    System.out.println(builder);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-append-float").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderAppendDoubleBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-append-double");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder();
+                    builder.append(1.5d);
+                    builder.append('/');
+                    builder.append(2.5d);
+                    System.out.println(builder);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-append-double").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void checkRejectsReachableDisabledRuntimeModule() throws Exception {
         final Path project = project("disabled-time-check");
         Files.writeString(project.resolve("javan.toml"), """

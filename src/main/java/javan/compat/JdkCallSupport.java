@@ -196,6 +196,8 @@ public final class JdkCallSupport {
         runtime("StringBuilder.append", "java/lang/StringBuilder", "append", "(C)Ljava/lang/StringBuilder;"),
         runtime("StringBuilder.append", "java/lang/StringBuilder", "append", "(I)Ljava/lang/StringBuilder;"),
         runtime("StringBuilder.append", "java/lang/StringBuilder", "append", "(J)Ljava/lang/StringBuilder;"),
+        runtime("StringBuilder.append", "java/lang/StringBuilder", "append", "(F)Ljava/lang/StringBuilder;"),
+        runtime("StringBuilder.append", "java/lang/StringBuilder", "append", "(D)Ljava/lang/StringBuilder;"),
         runtime("StringBuilder.toString", "java/lang/StringBuilder", "toString", "()Ljava/lang/String;"),
         runtime("StringBuilder.length", "java/lang/StringBuilder", "length", "()I"),
         runtime("StringBuilder.isEmpty", "java/lang/StringBuilder", "isEmpty", "()Z"),

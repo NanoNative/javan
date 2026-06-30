@@ -1183,8 +1183,8 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void rejectsUnsupportedStringBuilderAppendFloat() {
-        assertThatThrownBy(() -> lowerMain(method(
+    void lowersStringBuilderAppendFloatToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
             0x0008,
             "main",
             "(Ljava/lang/StringBuilder;F)Ljava/lang/StringBuilder;",
@@ -1198,10 +1198,19 @@ final class BytecodeToIRTest {
                 "(F)Ljava/lang/StringBuilder;"
             )),
             plain(3, 176, "areturn")
-        )))
-            .isInstanceOf(DiagnosticException.class)
-            .hasMessageContaining("error[JAVAN040]: bytecode is not implemented by native code generation")
-            .hasMessageContaining("invokevirtual java/lang/StringBuilder.append(F)Ljava/lang/StringBuilder;");
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_stringbuilder_append_float",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.floatLocal("arg1"))
+                )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
     }
 
     @Test
@@ -9221,8 +9230,8 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void rejectsUnsupportedStringBuilderAppendDouble() {
-        assertThatThrownBy(() -> lowerMain(method(
+    void lowersStringBuilderAppendDoubleToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
             0x0008,
             "main",
             "(Ljava/lang/StringBuilder;D)Ljava/lang/StringBuilder;",
@@ -9232,12 +9241,19 @@ final class BytecodeToIRTest {
             plain(1, 39, "dload_1"),
             invokeVirtual(2, new MethodRef("java/lang/StringBuilder", "append", "(D)Ljava/lang/StringBuilder;")),
             plain(3, 176, "areturn")
-        )))
-            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
-                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
-                assertThat(exception.diagnostic().subject())
-                    .isEqualTo("invokevirtual java/lang/StringBuilder.append(D)Ljava/lang/StringBuilder;");
-            });
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_stringbuilder_append_double",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.doubleLocal("arg1"))
+                )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
     }
 
     @Test

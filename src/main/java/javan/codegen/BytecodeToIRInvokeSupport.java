@@ -2013,6 +2013,14 @@ final class BytecodeToIRInvokeSupport {
                 pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_append_long", List.of(receiver, arguments.getFirst()));
                 return true;
             }
+            if ("(F)Ljava/lang/StringBuilder;".equals(descriptorText)) {
+                pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_append_float", List.of(receiver, arguments.getFirst()));
+                return true;
+            }
+            if ("(D)Ljava/lang/StringBuilder;".equals(descriptorText)) {
+                pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_append_double", List.of(receiver, arguments.getFirst()));
+                return true;
+            }
             return false;
         }
         if ("toString".equals(name)) {
