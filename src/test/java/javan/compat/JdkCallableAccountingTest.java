@@ -823,6 +823,24 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksIsoChronologyDateNowAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/time/chrono/IsoChronology", "dateNow", "()Ljava/time/chrono/LocalDate;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksHijrahDateNowAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/time/chrono/HijrahDate", "now", "()Ljava/time/chrono/HijrahDate;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksChronologyOfLocaleAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/time/chrono/Chronology", "ofLocale", "(Ljava/util/Locale;)Ljava/time/chrono/Chronology;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
     void marksFormatFormatObjectAsExplicitRejected() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/text/Format", "format", "(Ljava/lang/Object;)Ljava/lang/String;")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);

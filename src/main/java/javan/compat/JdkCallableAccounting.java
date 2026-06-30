@@ -286,6 +286,9 @@ final class JdkCallableAccounting {
             }
             return true;
         }
+        if (owner.startsWith("java/time/chrono/")) {
+            return true;
+        }
         if (owner.startsWith("jdk/jfr/")) {
             return true;
         }
