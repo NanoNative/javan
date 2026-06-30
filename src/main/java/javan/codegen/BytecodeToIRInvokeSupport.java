@@ -2125,6 +2125,18 @@ final class BytecodeToIRInvokeSupport {
             pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_delete_char_at", List.of(receiver, arguments.getFirst()));
             return true;
         }
+        if ("insert".equals(name) && "(ILjava/lang/String;)Ljava/lang/StringBuilder;".equals(descriptorText)) {
+            pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_insert_string", List.of(receiver, arguments.getFirst(), arguments.get(1)));
+            return true;
+        }
+        if ("insert".equals(name) && "(IC)Ljava/lang/StringBuilder;".equals(descriptorText)) {
+            pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_insert_char", List.of(receiver, arguments.getFirst(), arguments.get(1)));
+            return true;
+        }
+        if ("replace".equals(name) && "(IILjava/lang/String;)Ljava/lang/StringBuilder;".equals(descriptorText)) {
+            pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_replace_string", List.of(receiver, arguments.getFirst(), arguments.get(1), arguments.get(2)));
+            return true;
+        }
         if ("reverse".equals(name) && "()Ljava/lang/StringBuilder;".equals(descriptorText)) {
             pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_reverse", List.of(receiver));
             return true;

@@ -6695,6 +6695,127 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void stringBuilderInsertStringBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-insert-string");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("abef");
+                    System.out.println(builder.insert(2, "cd"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-insert-string").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderInsertCharBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-insert-char");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("abef");
+                    System.out.println(builder.insert(2, 'c'));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-insert-char").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderReplaceStringBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-replace-string");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("abcdef");
+                    System.out.println(builder.replace(2, 4, "XY"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-replace-string").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderReplaceEndBeyondLengthBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-replace-end-beyond-length");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("abcdef");
+                    System.out.println(builder.replace(2, 20, "XY"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-replace-end-beyond-length").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderInsertIndexOutOfBoundsFailsClearlyAtRuntime() throws Exception {
+        final Path project = project("stringbuilder-insert-index-oob");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("abc");
+                    System.out.println(builder.insert(4, "x"));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/stringbuilder-insert-index-oob").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("string builder insert index out of bounds");
+    }
+
+    @Test
     void stringBuilderIsEmptyBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("stringbuilder-is-empty");
         writeJava(project, "com.acme.Main", """
