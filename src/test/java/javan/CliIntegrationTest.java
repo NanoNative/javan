@@ -6390,6 +6390,137 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void stringBuilderIndexOfStringBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-index-of-string");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("abcabc");
+                    System.out.println(builder.indexOf("abc"));
+                    System.out.println(builder.indexOf("cab"));
+                    System.out.println(builder.indexOf("zzz"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-index-of-string").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderIndexOfStringFromBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-index-of-string-from");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("abcabc");
+                    System.out.println(builder.indexOf("abc", 1));
+                    System.out.println(builder.indexOf("abc", 3));
+                    System.out.println(builder.indexOf("", -1));
+                    System.out.println(builder.indexOf("", 7));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-index-of-string-from").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderLastIndexOfStringBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-last-index-of-string");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("abcabc");
+                    System.out.println(builder.lastIndexOf("abc"));
+                    System.out.println(builder.lastIndexOf("cab"));
+                    System.out.println(builder.lastIndexOf("zzz"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-last-index-of-string").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderLastIndexOfStringFromBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-last-index-of-string-from");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("abcabc");
+                    System.out.println(builder.lastIndexOf("abc", 5));
+                    System.out.println(builder.lastIndexOf("abc", 1));
+                    System.out.println(builder.lastIndexOf("", -1));
+                    System.out.println(builder.lastIndexOf("", 7));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-last-index-of-string-from").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderIndexOfNullStringFailsClearlyAtRuntime() throws Exception {
+        final Path project = project("stringbuilder-index-of-null-string");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("abc");
+                    System.out.println(builder.indexOf((String) null));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/stringbuilder-index-of-null-string").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("null string");
+    }
+
+    @Test
     void stringBuilderIsEmptyBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("stringbuilder-is-empty");
         writeJava(project, "com.acme.Main", """

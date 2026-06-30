@@ -2093,6 +2093,22 @@ final class BytecodeToIRInvokeSupport {
             pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_substring_range", List.of(receiver, arguments.getFirst(), arguments.get(1)));
             return true;
         }
+        if ("indexOf".equals(name) && "(Ljava/lang/String;)I".equals(descriptorText)) {
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_stringbuilder_index_of_string", List.of(receiver, arguments.getFirst()))));
+            return true;
+        }
+        if ("indexOf".equals(name) && "(Ljava/lang/String;I)I".equals(descriptorText)) {
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_stringbuilder_index_of_string_from", List.of(receiver, arguments.getFirst(), arguments.get(1)))));
+            return true;
+        }
+        if ("lastIndexOf".equals(name) && "(Ljava/lang/String;)I".equals(descriptorText)) {
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_stringbuilder_last_index_of_string", List.of(receiver, arguments.getFirst()))));
+            return true;
+        }
+        if ("lastIndexOf".equals(name) && "(Ljava/lang/String;I)I".equals(descriptorText)) {
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_stringbuilder_last_index_of_string_from", List.of(receiver, arguments.getFirst(), arguments.get(1)))));
+            return true;
+        }
         if ("setLength".equals(name)) {
             instructions.add(IrInstruction.callStaticVoid("javan_stringbuilder_set_length", List.of(receiver, arguments.getFirst())));
             return true;

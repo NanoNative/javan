@@ -258,6 +258,26 @@ final class RuntimeSourcePlatformSection {
             return result;
         }
 
+        int javan_stringbuilder_index_of_string(void* builder_value, void* needle_value) {
+            javan_string_builder* builder = javan_stringbuilder_checked(builder_value);
+            return javan_string_index_of_string(builder->values, (const char*) needle_value);
+        }
+
+        int javan_stringbuilder_index_of_string_from(void* builder_value, void* needle_value, int from_index) {
+            javan_string_builder* builder = javan_stringbuilder_checked(builder_value);
+            return javan_string_index_of_string_from(builder->values, (const char*) needle_value, from_index);
+        }
+
+        int javan_stringbuilder_last_index_of_string(void* builder_value, void* needle_value) {
+            javan_string_builder* builder = javan_stringbuilder_checked(builder_value);
+            return javan_string_last_index_of_string(builder->values, (const char*) needle_value);
+        }
+
+        int javan_stringbuilder_last_index_of_string_from(void* builder_value, void* needle_value, int from_index) {
+            javan_string_builder* builder = javan_stringbuilder_checked(builder_value);
+            return javan_string_last_index_of_string_from(builder->values, (const char*) needle_value, from_index);
+        }
+
         void javan_stringbuilder_set_length(void* builder_value, int length) {
             if (length < 0) {
                 javan_panic("negative string builder length");

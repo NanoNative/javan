@@ -9847,6 +9847,96 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersStringBuilderIndexOfStringToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/StringBuilder;Ljava/lang/String;)I",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/lang/StringBuilder", "indexOf", "(Ljava/lang/String;)I")),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_stringbuilder_index_of_string",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersStringBuilderIndexOfStringFromToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/StringBuilder;Ljava/lang/String;I)I",
+            3,
+            3,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            plain(2, 28, "iload_2"),
+            invokeVirtual(3, new MethodRef("java/lang/StringBuilder", "indexOf", "(Ljava/lang/String;I)I")),
+            plain(4, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_stringbuilder_index_of_string_from",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.intLocal("arg2"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersStringBuilderLastIndexOfStringToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/StringBuilder;Ljava/lang/String;)I",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/lang/StringBuilder", "lastIndexOf", "(Ljava/lang/String;)I")),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_stringbuilder_last_index_of_string",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersStringBuilderLastIndexOfStringFromToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/StringBuilder;Ljava/lang/String;I)I",
+            3,
+            3,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            plain(2, 28, "iload_2"),
+            invokeVirtual(3, new MethodRef("java/lang/StringBuilder", "lastIndexOf", "(Ljava/lang/String;I)I")),
+            plain(4, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_stringbuilder_last_index_of_string_from",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.intLocal("arg2"))
+            ))
+        );
+    }
+
+    @Test
     void rejectsStringBuilderIsEmptyWithWrongDescriptor() {
         assertThatThrownBy(() -> lowerMain(method(
             0x0008,
