@@ -3,6 +3,7 @@ package javan.reporting;
 import javan.util.ProcessRunner;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.Isolated;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -12,6 +13,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@Isolated
 final class RuntimeContractReportsTest {
     @TempDir
     private Path tempDir;

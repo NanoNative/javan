@@ -7,6 +7,7 @@ import javan.classfile.CodeAttribute;
 import javan.classfile.MethodInfo;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.Isolated;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -17,6 +18,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+@Isolated
 final class BuildSurfaceTest {
     @TempDir
     private Path tempDir;
