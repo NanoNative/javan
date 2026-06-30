@@ -2342,6 +2342,37 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersStringBuilderInsertObjectToPrintableStringInsert() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/StringBuilder;ILjava/lang/Object;)Ljava/lang/StringBuilder;",
+            3,
+            3,
+            plain(0, 42, "aload_0"),
+            plain(1, 27, "iload_1"),
+            plain(2, 44, "aload_2"),
+            invokeVirtual(3, new MethodRef("java/lang/StringBuilder", "insert", "(ILjava/lang/Object;)Ljava/lang/StringBuilder;")),
+            plain(4, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_stringbuilder_insert_string",
+                    List.of(
+                        IrExpression.objectLocal("arg0"),
+                        IrExpression.intLocal("arg1"),
+                        IrExpression.objectCall("javan_printable_object_string", List.of(IrExpression.objectLocal("arg2")))
+                    )
+                )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
     void lowersSystemOutPrintlnStringToPrintlnInstruction() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -10913,6 +10944,27 @@ final class BytecodeToIRTest {
 
         assertThat(function.instructions()).containsExactly(
             IrInstruction.returnDouble(IrExpression.doubleCall("javan_math_abs_double", List.of(IrExpression.doubleLocal("arg0"))))
+        );
+    }
+
+    @Test
+    void lowersStringValueOfObjectToPrintableRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Object;)Ljava/lang/String;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeStatic(1, new MethodRef("java/lang/String", "valueOf", "(Ljava/lang/Object;)Ljava/lang/String;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_printable_object_string",
+                List.of(IrExpression.objectLocal("arg0"))
+            ))
         );
     }
 

@@ -1415,6 +1415,15 @@ final class BytecodeToIRInvokeSupport {
         }
         if ("java/lang/String".equals(methodRef.owner())
             && "valueOf".equals(methodRef.name())
+            && "(Ljava/lang/Object;)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_printable_object_string",
+                List.of(popPrintableObject(classFile, method, instruction, stack))
+            )));
+            return true;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
+            && "valueOf".equals(methodRef.name())
             && "([C)Ljava/lang/String;".equals(methodRef.descriptor())) {
             final IrExpression array = popObject(classFile, method, stack);
             stack.add(StackValue.objectExpression(IrExpression.objectCall(
@@ -2250,6 +2259,20 @@ final class BytecodeToIRInvokeSupport {
         }
         if ("insert".equals(name) && "(ILjava/lang/String;)Ljava/lang/StringBuilder;".equals(descriptorText)) {
             pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_insert_string", List.of(receiver, arguments.getFirst(), arguments.get(1)));
+            return true;
+        }
+        if ("insert".equals(name) && "(ILjava/lang/Object;)Ljava/lang/StringBuilder;".equals(descriptorText)) {
+            pushObjectCall(
+                instructions,
+                stack,
+                localDeclarations,
+                "javan_stringbuilder_insert_string",
+                List.of(
+                    receiver,
+                    arguments.getFirst(),
+                    IrExpression.objectCall("javan_printable_object_string", List.of(arguments.get(1)))
+                )
+            );
             return true;
         }
         if ("insert".equals(name) && "(IZ)Ljava/lang/StringBuilder;".equals(descriptorText)) {

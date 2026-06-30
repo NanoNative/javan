@@ -417,6 +417,54 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void stringValueOfObjectBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-value-of-object");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Object value = "javan";
+                    System.out.println(String.valueOf(value));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-value-of-object").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringValueOfNullObjectBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-value-of-null-object");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Object value = null;
+                    System.out.println(String.valueOf(value));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-value-of-null-object").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void stringValueOfCharArrayBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("string-value-of-char-array");
         writeJava(project, "com.acme.Main", """
@@ -7404,6 +7452,58 @@ final class CliIntegrationTest {
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-insert-double").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderInsertObjectBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-insert-object");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("ab");
+                    final Object value = "MID";
+                    builder.insert(1, value);
+                    System.out.println(builder);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-insert-object").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderInsertNullObjectBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-insert-null-object");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("ab");
+                    final Object value = null;
+                    builder.insert(1, value);
+                    System.out.println(builder);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-insert-null-object").toString())).stdout()).isEqualTo(jvmOutput);
     }
 
     @Test
