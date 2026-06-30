@@ -637,6 +637,36 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksBigIntegerStringConstructorAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/math/BigInteger", "<init>", "(Ljava/lang/String;)V")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksBigIntegerAddAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/math/BigInteger", "add", "(Ljava/math/BigInteger;)Ljava/math/BigInteger;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksBigDecimalStringConstructorAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/math/BigDecimal", "<init>", "(Ljava/lang/String;)V")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksBigDecimalValueOfLongAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/math/BigDecimal", "valueOf", "(J)Ljava/math/BigDecimal;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksMathContextIntRoundingConstructorAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/math/MathContext", "<init>", "(ILjava/math/RoundingMode;)V")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
     void marksFormatFormatObjectAsExplicitRejected() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/text/Format", "format", "(Ljava/lang/Object;)Ljava/lang/String;")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);

@@ -247,6 +247,9 @@ final class JdkCallableAccounting {
         if (owner.startsWith("java/time/format/")) {
             return true;
         }
+        if (owner.startsWith("java/math/")) {
+            return true;
+        }
         if (owner.startsWith("java/text/")) {
             return true;
         }
