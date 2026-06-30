@@ -7263,8 +7263,8 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void rejectsUnsupportedStringLastIndexOfStringDescriptor() {
-        assertThatThrownBy(() -> lowerMain(method(
+    void lowersStringLastIndexOfStringToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
             0x0008,
             "main",
             "(Ljava/lang/String;Ljava/lang/String;)I",
@@ -7274,10 +7274,56 @@ final class BytecodeToIRTest {
             plain(1, 43, "aload_1"),
             invokeVirtual(2, new MethodRef("java/lang/String", "lastIndexOf", "(Ljava/lang/String;)I")),
             plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_string_last_index_of_string",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersStringLastIndexOfStringFromIndexToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/String;Ljava/lang/String;I)I",
+            3,
+            3,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            plain(2, 28, "iload_2"),
+            invokeVirtual(3, new MethodRef("java/lang/String", "lastIndexOf", "(Ljava/lang/String;I)I")),
+            plain(4, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_string_last_index_of_string_from",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.intLocal("arg2"))
+            ))
+        );
+    }
+
+    @Test
+    void rejectsUnsupportedStringLastIndexOfStringWithLongFromIndexDescriptor() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/String;Ljava/lang/String;J)I",
+            4,
+            4,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            plain(2, 32, "lload_2"),
+            invokeVirtual(3, new MethodRef("java/lang/String", "lastIndexOf", "(Ljava/lang/String;J)I")),
+            plain(4, 172, "ireturn")
         )))
             .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
                 assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
-                assertThat(exception.diagnostic().subject()).isEqualTo("invokevirtual java/lang/String.lastIndexOf(Ljava/lang/String;)I");
+                assertThat(exception.diagnostic().subject()).isEqualTo("invokevirtual java/lang/String.lastIndexOf(Ljava/lang/String;J)I");
             });
     }
 

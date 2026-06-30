@@ -4226,6 +4226,42 @@ final class RuntimeSourceMemorySections {
             return -1;
         }
 
+        int javan_string_last_index_of_string(const char* value, const char* needle) {
+            int length = javan_string_length(value);
+            return javan_string_last_index_of_string_from(value, needle, length);
+        }
+
+        int javan_string_last_index_of_string_from(const char* value, const char* needle, int from_index) {
+            if (value == NULL || needle == NULL) {
+                javan_panic("null string");
+            }
+            int length = javan_string_length(value);
+            int needle_length = javan_string_length(needle);
+            if (needle_length == 0) {
+                if (from_index < 0) {
+                    return -1;
+                }
+                return from_index > length ? length : from_index;
+            }
+            if (needle_length > length || from_index < 0) {
+                return -1;
+            }
+            int start = from_index > length - needle_length ? length - needle_length : from_index;
+            for (int index = start; index >= 0; index--) {
+                int matched = 1;
+                for (int needle_index = 0; needle_index < needle_length; needle_index++) {
+                    if (value[index + needle_index] != needle[needle_index]) {
+                        matched = 0;
+                        break;
+                    }
+                }
+                if (matched) {
+                    return index;
+                }
+            }
+            return -1;
+        }
+
         int javan_string_equals(const char* left, const char* right) {
             if (left == NULL || right == NULL) {
                 return left == right;

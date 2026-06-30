@@ -306,6 +306,27 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if ("java/lang/String".equals(methodRef.owner())
+            && "lastIndexOf".equals(methodRef.name())
+            && "(Ljava/lang/String;)I".equals(methodRef.descriptor())) {
+            final IrExpression needle = popObject(classFile, method, stack);
+            final IrExpression receiver = popObject(classFile, method, stack);
+            rejectUnsupportedStringSemantic(classFile, method, instruction, receiver);
+            rejectUnsupportedStringSemantic(classFile, method, instruction, needle);
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_string_last_index_of_string", List.of(receiver, needle))));
+            return;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
+            && "lastIndexOf".equals(methodRef.name())
+            && "(Ljava/lang/String;I)I".equals(methodRef.descriptor())) {
+            final IrExpression fromIndex = popInt(classFile, method, stack);
+            final IrExpression needle = popObject(classFile, method, stack);
+            final IrExpression receiver = popObject(classFile, method, stack);
+            rejectUnsupportedStringSemantic(classFile, method, instruction, receiver);
+            rejectUnsupportedStringSemantic(classFile, method, instruction, needle);
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_string_last_index_of_string_from", List.of(receiver, needle, fromIndex))));
+            return;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
             && "equals".equals(methodRef.name())
             && "(Ljava/lang/Object;)Z".equals(methodRef.descriptor())) {
             final IrExpression argument = popObject(classFile, method, stack);

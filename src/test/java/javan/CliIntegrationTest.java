@@ -5750,6 +5750,58 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void stringLastIndexOfStringBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-last-index-of-string");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("abcabc".lastIndexOf("abc"));
+                    System.out.println("abcabc".lastIndexOf("cab"));
+                    System.out.println("abcabc".lastIndexOf("zzz"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-last-index-of-string").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringLastIndexOfStringFromIndexBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-last-index-of-string-from-index");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("abcabc".lastIndexOf("abc", 5));
+                    System.out.println("abcabc".lastIndexOf("abc", 2));
+                    System.out.println("abcabc".lastIndexOf("abc", 1));
+                    System.out.println("abc".lastIndexOf("", -1));
+                    System.out.println("abc".lastIndexOf("", 4));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-last-index-of-string-from-index").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void stringSubstringBeginBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("string-substring-begin");
         writeJava(project, "com.acme.Main", """
