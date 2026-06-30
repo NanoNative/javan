@@ -683,6 +683,36 @@ final class BytecodeToIRInvokeSupport {
             emitPrintObject(classFile, method, instruction, instructions, stack, argument);
             return true;
         }
+        if ("print".equals(methodRef.name()) && "(C)V".equals(methodRef.descriptor())) {
+            final IrExpression argument = IrExpression.objectCall("javan_string_value_of_char", List.of(popInt(classFile, method, stack)));
+            emitPrintObject(classFile, method, instruction, instructions, stack, argument);
+            return true;
+        }
+        if ("print".equals(methodRef.name()) && "(Z)V".equals(methodRef.descriptor())) {
+            final IrExpression argument = IrExpression.objectCall("javan_string_value_of_bool", List.of(popInt(classFile, method, stack)));
+            emitPrintObject(classFile, method, instruction, instructions, stack, argument);
+            return true;
+        }
+        if ("print".equals(methodRef.name()) && "(I)V".equals(methodRef.descriptor())) {
+            final IrExpression argument = IrExpression.objectCall("javan_string_value_of_int", List.of(popInt(classFile, method, stack)));
+            emitPrintObject(classFile, method, instruction, instructions, stack, argument);
+            return true;
+        }
+        if ("print".equals(methodRef.name()) && "(J)V".equals(methodRef.descriptor())) {
+            final IrExpression argument = IrExpression.objectCall("javan_string_value_of_long", List.of(popLong(classFile, method, stack)));
+            emitPrintObject(classFile, method, instruction, instructions, stack, argument);
+            return true;
+        }
+        if ("print".equals(methodRef.name()) && "(F)V".equals(methodRef.descriptor())) {
+            final IrExpression argument = IrExpression.objectCall("javan_string_value_of_float", List.of(popFloat(classFile, method, stack)));
+            emitPrintObject(classFile, method, instruction, instructions, stack, argument);
+            return true;
+        }
+        if ("print".equals(methodRef.name()) && "(D)V".equals(methodRef.descriptor())) {
+            final IrExpression argument = IrExpression.objectCall("javan_string_value_of_double", List.of(popDouble(classFile, method, stack)));
+            emitPrintObject(classFile, method, instruction, instructions, stack, argument);
+            return true;
+        }
         if ("println".equals(methodRef.name()) && "(Ljava/lang/String;)V".equals(methodRef.descriptor())) {
             final IrExpression argument = popObject(classFile, method, instruction, stack);
             emitPrintlnObject(classFile, method, instruction, instructions, stack, argument);
@@ -716,6 +746,11 @@ final class BytecodeToIRInvokeSupport {
         if ("println".equals(methodRef.name()) && "(Z)V".equals(methodRef.descriptor())) {
             final IrExpression argument = popInt(classFile, method, instruction, stack);
             emitPrintlnBoolean(classFile, method, instruction, instructions, stack, argument);
+            return true;
+        }
+        if ("println".equals(methodRef.name()) && "(C)V".equals(methodRef.descriptor())) {
+            final IrExpression argument = IrExpression.objectCall("javan_string_value_of_char", List.of(popInt(classFile, method, stack)));
+            emitPrintlnObject(classFile, method, instruction, instructions, stack, argument);
             return true;
         }
         return false;

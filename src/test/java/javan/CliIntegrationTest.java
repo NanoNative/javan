@@ -417,6 +417,173 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void printStreamPrintCharBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("printstream-print-char");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.print('A');
+                    System.out.print('B');
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/printstream-print-char").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void printStreamPrintlnCharBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("printstream-println-char");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println('A');
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/printstream-println-char").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void printStreamPrintBooleanBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("printstream-print-boolean");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.print(true);
+                    System.out.print(false);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/printstream-print-boolean").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void printStreamPrintIntBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("printstream-print-int");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.print(12);
+                    System.out.print(34);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/printstream-print-int").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void printStreamPrintLongBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("printstream-print-long");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.print(12L);
+                    System.out.print(34L);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/printstream-print-long").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void printStreamPrintFloatBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("printstream-print-float");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.print(1.5f);
+                    System.out.print(2.5f);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/printstream-print-float").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void printStreamPrintDoubleBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("printstream-print-double");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.print(1.5d);
+                    System.out.print(2.5d);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/printstream-print-double").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void checkRejectsReachableDisabledRuntimeModule() throws Exception {
         final Path project = project("disabled-time-check");
         Files.writeString(project.resolve("javan.toml"), """
@@ -13587,7 +13754,7 @@ final class CliIntegrationTest {
     }
 
     private static CliRun run(final Path cwd, final String... args) {
-        return runWithTimeout(cwd, Duration.ofSeconds(20), args);
+        return runWithTimeout(cwd, defaultCliTimeout(), args);
     }
 
     private static CliRun runSlow(final Path cwd, final String... args) {
@@ -13608,11 +13775,23 @@ final class CliIntegrationTest {
     }
 
     private static ProcessResult process(final Path cwd, final List<String> command) {
-        return process(cwd, command, Duration.ofSeconds(10));
+        return process(cwd, command, defaultProcessTimeout());
     }
 
     private static ProcessResult processSlow(final Path cwd, final List<String> command) {
         return process(cwd, command, Duration.ofSeconds(60));
+    }
+
+    private static Duration defaultCliTimeout() {
+        return isCiEnvironment() ? Duration.ofSeconds(45) : Duration.ofSeconds(20);
+    }
+
+    private static Duration defaultProcessTimeout() {
+        return isCiEnvironment() ? Duration.ofSeconds(20) : Duration.ofSeconds(10);
+    }
+
+    private static boolean isCiEnvironment() {
+        return !"".equals(System.getenv().getOrDefault("CI", ""));
     }
 
     private static ProcessResult process(final Path cwd, final List<String> command, final Duration timeout) {
