@@ -329,4 +329,64 @@ final class JdkCallableAccountingTest {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/StringBuffer", "getChars", "(II[CI)V")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
     }
+
+    @Test
+    void marksAbstractStringBuilderCharSequenceConstructorAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/AbstractStringBuilder", "<init>", "(Ljava/lang/CharSequence;)V")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksAbstractStringBuilderAppendStringBufferAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/AbstractStringBuilder", "append", "(Ljava/lang/StringBuffer;)Ljava/lang/AbstractStringBuilder;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksAbstractStringBuilderAppendAbstractStringBuilderAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/AbstractStringBuilder", "append", "(Ljava/lang/AbstractStringBuilder;)Ljava/lang/AbstractStringBuilder;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksAbstractStringBuilderAppendCharSequenceRangeAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/AbstractStringBuilder", "append", "(Ljava/lang/CharSequence;II)Ljava/lang/AbstractStringBuilder;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksAbstractStringBuilderAppendCodePointAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/AbstractStringBuilder", "appendCodePoint", "(I)Ljava/lang/AbstractStringBuilder;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksAbstractStringBuilderInsertCharSequenceAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/AbstractStringBuilder", "insert", "(ILjava/lang/CharSequence;)Ljava/lang/AbstractStringBuilder;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksAbstractStringBuilderRepeatAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/AbstractStringBuilder", "repeat", "(II)Ljava/lang/AbstractStringBuilder;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksAbstractStringBuilderCodePointAtAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/AbstractStringBuilder", "codePointAt", "(I)I")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksAbstractStringBuilderCharsAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/AbstractStringBuilder", "chars", "()Ljava/util/stream/IntStream;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksAbstractStringBuilderGetCharsAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/AbstractStringBuilder", "getChars", "(II[CI)V")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
 }

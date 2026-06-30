@@ -61,9 +61,9 @@ Current support ledger for the active JDK 25 evidence set:
 | exact supported JDK constructors | 683 |
 | exact supported JDK methods | 349 |
 | exact supported JDK callables | 1032 / 267886 (0.3%) |
-| exact explicit rejected JDK callables | 5128 |
-| exact done JDK callables | 6160 / 267886 (2.2%) |
-| exact unknown JDK callables | 261726 |
+| exact explicit rejected JDK callables | 5145 |
+| exact done JDK callables | 6177 / 267886 (2.3%) |
+| exact unknown JDK callables | 261709 |
 | exact supported JDK callables left | 266854 |
 | flow-qualified reachable current-thread lifecycle rejects | 0 |
 | flow-qualified unreachable current-thread lifecycle rejects | 0 |
@@ -89,7 +89,8 @@ exact verifier-backed monitor/concurrency rejects such as `Object.wait/notify`,
 unsupported `Executors` single/cached pool factories, `InheritableThreadLocal.<init>()`,
 the deliberate `jdk.jfr.*` owner family, `sun.misc.Unsafe`, the exact `String`
 regex/formatter/text-normalization plus binary/charset/code-point family, and the
-current `StringBuilder` plus `StringBuffer` char-sequence/string-buffer/code-point/stream/repeat family.
+current `StringBuilder`, `StringBuffer`, plus `AbstractStringBuilder`
+char-sequence/string-buffer/code-point/stream/repeat family.
 Flow-qualified rejected JDK call shapes above are diagnostic-shape accounting only.
 They are tracked separately because they depend on receiver or call-flow facts rather than raw member inventory.
 Unknown callables still include everything not yet counted as supported or explicitly rejected,

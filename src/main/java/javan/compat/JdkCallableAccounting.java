@@ -187,6 +187,38 @@ final class JdkCallableAccounting {
             }
             return "getChars".equals(methodName) && "(II[CI)V".equals(descriptor);
         }
+        if ("java/lang/AbstractStringBuilder".equals(owner)) {
+            if ("<init>".equals(methodName)) {
+                return "(Ljava/lang/CharSequence;)V".equals(descriptor);
+            }
+            if ("append".equals(methodName)) {
+                return "(Ljava/lang/StringBuffer;)Ljava/lang/AbstractStringBuilder;".equals(descriptor)
+                    || "(Ljava/lang/AbstractStringBuilder;)Ljava/lang/AbstractStringBuilder;".equals(descriptor)
+                    || "(Ljava/lang/CharSequence;)Ljava/lang/AbstractStringBuilder;".equals(descriptor)
+                    || "(Ljava/lang/CharSequence;II)Ljava/lang/AbstractStringBuilder;".equals(descriptor);
+            }
+            if ("appendCodePoint".equals(methodName)) {
+                return "(I)Ljava/lang/AbstractStringBuilder;".equals(descriptor);
+            }
+            if ("insert".equals(methodName)) {
+                return "(ILjava/lang/CharSequence;)Ljava/lang/AbstractStringBuilder;".equals(descriptor)
+                    || "(ILjava/lang/CharSequence;II)Ljava/lang/AbstractStringBuilder;".equals(descriptor);
+            }
+            if ("repeat".equals(methodName)) {
+                return "(II)Ljava/lang/AbstractStringBuilder;".equals(descriptor)
+                    || "(Ljava/lang/CharSequence;I)Ljava/lang/AbstractStringBuilder;".equals(descriptor);
+            }
+            if ("chars".equals(methodName) || "codePoints".equals(methodName)) {
+                return "()Ljava/util/stream/IntStream;".equals(descriptor);
+            }
+            if ("codePointAt".equals(methodName) || "codePointBefore".equals(methodName)) {
+                return "(I)I".equals(descriptor);
+            }
+            if ("codePointCount".equals(methodName) || "offsetByCodePoints".equals(methodName)) {
+                return "(II)I".equals(descriptor);
+            }
+            return "getChars".equals(methodName) && "(II[CI)V".equals(descriptor);
+        }
         if (owner.startsWith("jdk/jfr/")) {
             return true;
         }
