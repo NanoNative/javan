@@ -9362,6 +9362,10 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).containsExactly(
             IrInstruction.assignObject("object0", IrExpression.objectCall("javan_stringbuilder_new", List.of())),
             IrInstruction.callStaticVoid(
+                "javan_stringbuilder_reserve_for_string",
+                List.of(IrExpression.objectLocal("object0"), IrExpression.objectLocal("arg0"))
+            ),
+            IrInstruction.callStaticVoid(
                 "javan_stringbuilder_append_string",
                 List.of(IrExpression.objectLocal("object0"), IrExpression.objectLocal("arg0"))
             ),
@@ -9397,6 +9401,10 @@ final class BytecodeToIRTest {
         );
         assertThat(function.instructions()).containsExactly(
             IrInstruction.assignObject("object0", IrExpression.objectCall("javan_stringbuilder_new", List.of())),
+            IrInstruction.callStaticVoid(
+                "javan_stringbuilder_reserve_for_string",
+                List.of(IrExpression.objectLocal("object0"), IrExpression.stringLiteral("x"))
+            ),
             IrInstruction.callStaticVoid(
                 "javan_stringbuilder_append_string",
                 List.of(IrExpression.objectLocal("object0"), IrExpression.stringLiteral("x"))
@@ -10469,6 +10477,29 @@ final class BytecodeToIRTest {
                 )
             ),
             IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
+    void lowersStringBuilderCapacityToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/StringBuilder;)I",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/StringBuilder", "capacity", "()I")),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(
+                IrExpression.intCall(
+                    "javan_stringbuilder_capacity",
+                    List.of(IrExpression.objectLocal("arg0"))
+                )
+            )
         );
     }
 

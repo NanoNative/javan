@@ -20,22 +20,30 @@ final class RuntimeSourcePlatformSection {
             if (required == INT_MAX) {
                 javan_panic("string builder length overflow");
             }
-            unsigned long required_size = (unsigned long) required + 1UL;
-            if (required_size <= (unsigned long) builder->capacity) {
+            if (builder->values != NULL && required <= builder->capacity) {
                 return;
             }
-            int next_capacity = 32;
-            if (builder->capacity > 0) {
-                if (builder->capacity > INT_MAX / 2) {
-                    javan_panic("string builder length overflow");
-                }
-                next_capacity = builder->capacity * 2;
+            int next_capacity = builder->capacity;
+            if (next_capacity <= 0) {
+                next_capacity = 16;
             }
-            while ((unsigned long) next_capacity < required_size) {
-                if (next_capacity > INT_MAX / 2) {
-                    javan_panic("string builder length overflow");
+            if (builder->capacity > 0) {
+                while (next_capacity < required) {
+                    if (next_capacity > (INT_MAX - 2) / 2) {
+                        javan_panic("string builder length overflow");
+                    }
+                    next_capacity = next_capacity * 2 + 2;
                 }
-                next_capacity *= 2;
+            } else if (required > next_capacity) {
+                while (next_capacity < required) {
+                    if (next_capacity > (INT_MAX - 2) / 2) {
+                        javan_panic("string builder length overflow");
+                    }
+                    next_capacity = next_capacity * 2 + 2;
+                }
+            }
+            if (next_capacity < 0) {
+                javan_panic("string builder length overflow");
             }
             int old_capacity = builder->capacity;
             int created_buffer = builder->values == NULL;
@@ -43,7 +51,7 @@ final class RuntimeSourcePlatformSection {
                 (void**) &builder
             };
             javan_root_frame_push(javan_builder_growth_roots, 1);
-            char* next = (char*) javan_realloc_owned_buffer(builder->values, (unsigned long) next_capacity);
+            char* next = (char*) javan_realloc_owned_buffer(builder->values, (unsigned long) next_capacity + 1UL);
             builder->values = next;
             builder->capacity = next_capacity;
             if (created_buffer != 0) {
@@ -54,10 +62,22 @@ final class RuntimeSourcePlatformSection {
             if (next == NULL) {
                 javan_panic("out of memory");
             }
-            if (next_capacity > old_capacity) {
-                memset(next + old_capacity, 0, (unsigned long) (next_capacity - old_capacity));
+            if (created_buffer != 0) {
+                memset(next, 0, (unsigned long) next_capacity + 1UL);
+            } else if (next_capacity > old_capacity) {
+                memset(next + old_capacity + 1, 0, (unsigned long) (next_capacity - old_capacity));
             }
             javan_root_frame_pop(javan_builder_growth_roots);
+        }
+
+        void javan_stringbuilder_reserve_for_string(void* builder_value, void* string_value) {
+            const char* text = string_value == NULL ? "null" : (const char*) string_value;
+            int reserve = javan_string_length(text);
+            if (reserve > INT_MAX - 16) {
+                javan_panic("string builder length overflow");
+            }
+            reserve += 16;
+            javan_stringbuilder_reserve(builder_value, reserve);
         }
 
         static void javan_stringbuilder_append_bytes(javan_string_builder* builder, const char* value) {
@@ -110,7 +130,7 @@ final class RuntimeSourcePlatformSection {
             javan_string_builder* builder = (javan_string_builder*) javan_alloc(sizeof(javan_string_builder));
             builder->magic = JAVAN_STRING_BUILDER_MAGIC;
             builder->length = 0;
-            builder->capacity = 0;
+            builder->capacity = 16;
             builder->reserved = 0;
             builder->values = NULL;
             javan_update_runtime_allocation_kind((void*) builder, JAVAN_RUNTIME_KIND_STRING_BUILDER);
@@ -129,11 +149,21 @@ final class RuntimeSourcePlatformSection {
                 javan_panic("negative string builder capacity");
             }
             javan_string_builder* builder = javan_stringbuilder_checked(builder_value);
+            if (capacity <= builder->capacity) {
+                return;
+            }
             void** javan_builder_owner_roots[] = {
                 (void**) &builder
             };
             javan_root_frame_push(javan_builder_owner_roots, 1);
-            javan_stringbuilder_ensure_capacity(builder, capacity);
+            char* next = (char*) javan_realloc_owned_buffer(builder->values, (unsigned long) capacity + 1UL);
+            if (next == NULL) {
+                javan_panic("out of memory");
+            }
+            memset(next + builder->capacity + 1, 0, (unsigned long) (capacity - builder->capacity));
+            builder->values = next;
+            builder->capacity = capacity;
+            javan_heap_maybe_validate();
             javan_root_frame_pop(javan_builder_owner_roots);
         }
 
@@ -480,18 +510,21 @@ final class RuntimeSourcePlatformSection {
 
         void javan_stringbuilder_trim_to_size(void* builder_value) {
             javan_string_builder* builder = javan_stringbuilder_checked(builder_value);
-            int target_capacity = builder->length + 1;
-            if (target_capacity <= 0) {
-                target_capacity = 1;
-            }
+            int target_capacity = builder->length;
             if (builder->capacity == target_capacity) {
+                return;
+            }
+            if (target_capacity == 0) {
+                javan_free_owned_runtime_buffer((void*) builder->values);
+                builder->values = NULL;
+                builder->capacity = 0;
                 return;
             }
             void** javan_builder_trim_roots[] = {
                 (void**) &builder
             };
             javan_root_frame_push(javan_builder_trim_roots, 1);
-            char* next = (char*) javan_realloc_owned_buffer(builder->values, (unsigned long) target_capacity);
+            char* next = (char*) javan_realloc_owned_buffer(builder->values, (unsigned long) target_capacity + 1UL);
             if (next == NULL) {
                 javan_panic("out of memory");
             }
@@ -526,6 +559,10 @@ final class RuntimeSourcePlatformSection {
             builder->length = length;
             builder->values[length] = '\\0';
             javan_root_frame_pop(javan_builder_set_length_roots);
+        }
+
+        int javan_stringbuilder_capacity(void* builder_value) {
+            return javan_stringbuilder_checked(builder_value)->capacity;
         }
 
         static const char* javan_path_checked(void* value) {

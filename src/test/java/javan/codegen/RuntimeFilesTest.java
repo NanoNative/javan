@@ -4135,7 +4135,7 @@ final class RuntimeFilesTest {
             "javan_validate_runtime_managed_reference((void*) builder->headers);",
             "javan_validate_runtime_managed_reference((void*) request->headers);",
             "javan_validate_runtime_managed_reference(publisher->value);",
-            "builder->values != NULL && (builder->capacity <= 0 || builder->length >= builder->capacity)",
+            "builder->values != NULL && (builder->capacity < 0 || builder->length > builder->capacity)",
             "static void* javan_realloc_tracked(void* value, unsigned long size, int validate_after)",
             "static void* javan_realloc_owned_buffer(void* value, unsigned long size)",
             "static void javan_free_owned_runtime_buffer(void* value)",
@@ -4396,9 +4396,10 @@ final class RuntimeFilesTest {
         assertThat(Files.readString(runtime)).contains(
             "if (required == INT_MAX) {",
             "javan_panic(\"string builder length overflow\");",
-            "unsigned long required_size = (unsigned long) required + 1UL;",
-            "if (builder->capacity > INT_MAX / 2) {",
-            "if (next_capacity > INT_MAX / 2) {"
+            "if (builder->values != NULL && required <= builder->capacity) {",
+            "if (next_capacity > (INT_MAX - 2) / 2) {",
+            "next_capacity = next_capacity * 2 + 2;",
+            "char* next = (char*) javan_realloc_owned_buffer(builder->values, (unsigned long) next_capacity + 1UL);"
         );
     }
 

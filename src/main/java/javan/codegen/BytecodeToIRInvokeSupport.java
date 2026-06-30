@@ -1885,6 +1885,7 @@ final class BytecodeToIRInvokeSupport {
             return true;
         }
         if ("(Ljava/lang/String;)V".equals(methodRef.descriptor())) {
+            instructions.add(IrInstruction.callStaticVoid("javan_stringbuilder_reserve_for_string", List.of(receiver, arguments.getFirst())));
             instructions.add(IrInstruction.callStaticVoid("javan_stringbuilder_append_string", List.of(receiver, arguments.getFirst())));
             return true;
         }
@@ -2083,6 +2084,10 @@ final class BytecodeToIRInvokeSupport {
         }
         if ("length".equals(name)) {
             stack.add(StackValue.intExpression(IrExpression.intCall("javan_stringbuilder_length", List.of(receiver))));
+            return true;
+        }
+        if ("capacity".equals(name) && "()I".equals(descriptorText)) {
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_stringbuilder_capacity", List.of(receiver))));
             return true;
         }
         if ("isEmpty".equals(name)) {

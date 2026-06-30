@@ -1055,7 +1055,7 @@ final class RuntimeSourceMemorySections {
                 if (builder->magic != JAVAN_STRING_BUILDER_MAGIC || builder->length < 0 || builder->capacity < 0 || builder->length > builder->capacity) {
                     javan_panic("invalid runtime string builder metadata");
                 }
-                if (builder->values != NULL && (builder->capacity <= 0 || builder->length >= builder->capacity)) {
+                if (builder->values != NULL && (builder->capacity < 0 || builder->length > builder->capacity)) {
                     javan_panic("invalid runtime string builder owned buffer");
                 }
                 javan_validate_owned_runtime_buffer_reference((void*) builder->values);

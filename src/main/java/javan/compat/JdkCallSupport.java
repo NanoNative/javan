@@ -218,6 +218,7 @@ public final class JdkCallSupport {
         runtime("StringBuilder.trimToSize", "java/lang/StringBuilder", "trimToSize", "()V"),
         runtime("StringBuilder.setCharAt", "java/lang/StringBuilder", "setCharAt", "(IC)V"),
         runtime("StringBuilder.setLength", "java/lang/StringBuilder", "setLength", "(I)V"),
+        runtime("StringBuilder.capacity", "java/lang/StringBuilder", "capacity", "()I"),
         runtime("ArrayList.<init>", "java/util/ArrayList", "<init>", "()V", "(I)V", "(Ljava/util/Collection;)V"),
         runtime("ArrayList.add", "java/util/ArrayList", "add", "(Ljava/lang/Object;)Z"),
         runtime("ArrayList.addAll", "java/util/ArrayList", "addAll", "(Ljava/util/Collection;)Z"),
