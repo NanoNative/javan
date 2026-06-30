@@ -61,9 +61,9 @@ Current support ledger for the active JDK 25 evidence set:
 | exact supported JDK constructors | 683 |
 | exact supported JDK methods | 349 |
 | exact supported JDK callables | 1032 / 267886 (0.3%) |
-| exact explicit rejected JDK callables | 5685 |
-| exact done JDK callables | 6717 / 267886 (2.5%) |
-| exact unknown JDK callables | 261169 |
+| exact explicit rejected JDK callables | 6031 |
+| exact done JDK callables | 7063 / 267886 (2.6%) |
+| exact unknown JDK callables | 260823 |
 | exact supported JDK callables left | 266854 |
 | flow-qualified reachable current-thread lifecycle rejects | 0 |
 | flow-qualified unreachable current-thread lifecycle rejects | 0 |
@@ -95,7 +95,8 @@ char-sequence/string-buffer/code-point/stream/repeat family, and the internal
 owner families including their nested helper classes, and the internal
 `CharacterData*` owner family, plus the internal
 `ConditionalSpecialCasing`, `ConditionalSpecialCasing$Entry`, and
-`String$CaseInsensitiveComparator` owners.
+`String$CaseInsensitiveComparator` owners, plus the
+`java.util.regex.Pattern*` and `java.util.regex.Matcher*` owner families.
 Flow-qualified rejected JDK call shapes above are diagnostic-shape accounting only.
 They are tracked separately because they depend on receiver or call-flow facts rather than raw member inventory.
 Unknown callables still include everything not yet counted as supported or explicitly rejected,

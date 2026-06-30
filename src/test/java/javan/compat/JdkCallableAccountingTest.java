@@ -479,4 +479,22 @@ final class JdkCallableAccountingTest {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/ConditionalSpecialCasing$Entry", "getUpperCase", "()[C")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
     }
+
+    @Test
+    void marksRegexPatternCompileAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/regex/Pattern", "compile", "(Ljava/lang/String;)Ljava/util/regex/Pattern;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksRegexPatternNestedIteratorAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/regex/Pattern$1MatcherIterator", "<init>", "(Ljava/util/regex/Pattern;Ljava/lang/CharSequence;)V")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksRegexMatcherFindAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/regex/Matcher", "find", "()Z")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
 }
