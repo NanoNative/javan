@@ -36,7 +36,7 @@
     {"feature": "string-concat", "jdk25": "pass"},
     {"feature": "exception-panic", "jdk25": "pass"},
     {"feature": "try-catch", "jdk25": "pass"},
-    {"feature": "try-finally", "jdk25": "target"},
+    {"feature": "try-finally", "jdk25": "pass"},
     {"feature": "enum-basic", "jdk25": "pass"},
     {"feature": "enum-ordinal", "jdk25": "pass"},
     {"feature": "enum-values", "jdk25": "pass"},

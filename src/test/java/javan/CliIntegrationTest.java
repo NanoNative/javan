@@ -4766,6 +4766,38 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void reachableExplicitThrowFinallyCatchBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("try-finally");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    try {
+                        try {
+                            throw new IllegalStateException("boom");
+                        } finally {
+                            System.out.println("finally");
+                        }
+                    } catch (final IllegalStateException exception) {
+                        System.out.println(exception.getMessage());
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/try-finally").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("finally\nboom\n");
+    }
+
+    @Test
     void typedCatchSkipsNonMatchingSpecificHandler() throws Exception {
         final Path project = project("typed-catch-specific-miss");
         writeJava(project, "com.acme.Main", """

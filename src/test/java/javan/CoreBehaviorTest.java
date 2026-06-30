@@ -4289,7 +4289,6 @@ final class CoreBehaviorTest {
             new Instruction(2, 191, "athrow", new byte[0], Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty())
         );
         final List<List<Diagnostic>> rejected = List.of(
-            verifyExceptionTable(explicitThrow, new CodeException(0, 3, 3, Optional.empty())),
             verifyExceptionTable(explicitThrow, new CodeException(0, 3, 3, Optional.of("java/lang/String"))),
             verifyExceptionTable(List.of(
                 new Instruction(0, 183, "invokespecial", new byte[0], Optional.of(new MethodRef("java/lang/Object", "<init>", "()V")), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()),
@@ -4305,6 +4304,25 @@ final class CoreBehaviorTest {
             assertThat(diagnostics).hasSize(1);
             assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN014");
         }
+    }
+
+    @Test
+    void staticVerifierAcceptsExplicitThrowRangeWithFinallyRethrowHandler() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            classInstruction(0, 187, "new", "java/lang/IllegalStateException"),
+            instruction(1, 89, "dup"),
+            instruction(2, 18, "ldc"),
+            instruction(3, 183, "invokespecial", new MethodRef("java/lang/IllegalStateException", "<init>", "(Ljava/lang/String;)V")),
+            instruction(4, 191, "athrow"),
+            instruction(5, 75, "astore_0"),
+            instruction(6, 178, "getstatic", new FieldRef("java/lang/System", "out", "Ljava/io/PrintStream;")),
+            instruction(7, 18, "ldc"),
+            instruction(8, 182, "invokevirtual", new MethodRef("java/io/PrintStream", "println", "(Ljava/lang/String;)V")),
+            instruction(9, 42, "aload_0"),
+            instruction(10, 191, "athrow")
+        ), new CodeException(0, 5, 5, Optional.empty()));
+
+        assertThat(diagnostics).isEmpty();
     }
 
     @Test

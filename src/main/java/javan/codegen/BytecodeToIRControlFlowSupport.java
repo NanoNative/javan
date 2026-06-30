@@ -144,6 +144,9 @@ final class BytecodeToIRControlFlowSupport {
                 continue;
             }
             if (handler.catchType().isEmpty()) {
+                if (supportedFinallyRethrowHandler(method.code().orElseThrow(), handler)) {
+                    return Optional.of(handler.handlerPc());
+                }
                 continue;
             }
             if (JdkCallSupport.isPlatformThrowableAssignable(thrownType, handler.catchType().orElseThrow())) {
@@ -151,6 +154,61 @@ final class BytecodeToIRControlFlowSupport {
             }
         }
         return Optional.empty();
+    }
+
+    static boolean supportedFinallyRethrowHandler(
+        final CodeAttribute code,
+        final javan.classfile.CodeException handler
+    ) {
+        if (handler.catchType().isPresent()) {
+            return false;
+        }
+        final Optional<Instruction> first = instructionAtOffset(code, handler.handlerPc());
+        if (first.isEmpty()) {
+            return false;
+        }
+        final int throwableLocal = astoreLocalIndex(first.orElseThrow());
+        if (throwableLocal < 0) {
+            return false;
+        }
+        for (int index = 0; index + 1 < code.instructions().size(); index++) {
+            final Instruction instruction = code.instructions().get(index);
+            if (instruction.offset() < handler.handlerPc()) {
+                continue;
+            }
+            if (aloadLocalIndex(instruction) == throwableLocal && code.instructions().get(index + 1).opcode() == 191) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static int aloadLocalIndex(final Instruction instruction) {
+        final int opcode = instruction.opcode();
+        if (opcode == 25) {
+            if (instruction.operands().length == 0) {
+                return -1;
+            }
+            return instruction.operands()[0] & 0xFF;
+        }
+        if (opcode >= 42 && opcode <= 45) {
+            return opcode - 42;
+        }
+        return -1;
+    }
+
+    private static int astoreLocalIndex(final Instruction instruction) {
+        final int opcode = instruction.opcode();
+        if (opcode == 58) {
+            if (instruction.operands().length == 0) {
+                return -1;
+            }
+            return instruction.operands()[0] & 0xFF;
+        }
+        if (opcode >= 75 && opcode <= 78) {
+            return opcode - 75;
+        }
+        return -1;
     }
     static boolean hasExceptionHandler(final MethodInfo method, final int offset) {
         for (final javan.classfile.CodeException handler : method.code().orElseThrow().exceptionTable()) {

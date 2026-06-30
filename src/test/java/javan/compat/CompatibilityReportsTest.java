@@ -77,12 +77,12 @@ final class CompatibilityReportsTest {
             "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 0, \"callables\": 1, \"totalCallables\": 5, \"leftCallables\": 4, \"coveragePercent\": \"20.0\"}",
             "\"exactJdkCallableAccounting\": {\"supportedCallables\": 1, \"explicitRejectedCallables\": 3, \"doneCallables\": 4, \"unknownCallables\": 1, \"totalCallables\": 5, \"donePercent\": \"80.0\"}",
             "\"supportRows\": 108",
-            "\"passRows\": 107",
+            "\"passRows\": 108",
             "\"scopedRows\": 0",
-            "\"targetRows\": 1",
+            "\"targetRows\": 0",
             "\"rejectedRows\": 0",
-            "\"accountedRows\": 107",
-            "\"unaccountedRows\": 1"
+            "\"accountedRows\": 108",
+            "\"unaccountedRows\": 0"
         );
     }
 
@@ -102,7 +102,7 @@ final class CompatibilityReportsTest {
 
         assertThat(matrix).contains(
             "| `try-catch` | pass |",
-            "| `try-finally` | target |",
+            "| `try-finally` | pass |",
             "| `boxed-primitive-gc` | pass |",
             "| `enum-basic` | pass |",
             "| `enum-ordinal` | pass |",

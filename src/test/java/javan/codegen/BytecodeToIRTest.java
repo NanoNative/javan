@@ -292,31 +292,32 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void panicsWhenProtectedThrowOnlyHasCatchAllHandlerShape() {
+    void jumpsWhenProtectedThrowHasCatchAllFinallyRethrowHandler() {
         final MethodInfo main = methodWithHandlers(
             0x0008,
             "main",
             "()Ljava/lang/String;",
             3,
-            0,
+            1,
             List.of(new CodeException(0, 5, 5, Optional.empty())),
             classInstruction(0, 187, "new", "java/lang/NullPointerException"),
             plain(1, 89, "dup"),
             stringConstant(2, "boom"),
             invokeSpecial(3, new MethodRef("java/lang/NullPointerException", "<init>", "(Ljava/lang/String;)V")),
             plain(4, 191, "athrow"),
-            plain(5, 176, "areturn")
+            plain(5, 75, "astore_0"),
+            plain(6, 42, "aload_0"),
+            plain(7, 191, "athrow")
         );
 
         final IrFunction function = lowerMain(main);
 
-        assertThat(function.instructions().getFirst()).satisfies(instruction -> {
-            assertThat(instruction.op()).isEqualTo(IrInstruction.Op.PANIC);
-            assertThat(instruction.expression()).contains(IrExpression.stringLiteral("boom"));
-            assertThat(instruction.sourceLocation()).isPresent();
-            assertThat(instruction.sourceLocation().orElseThrow().bytecodeOffset()).isEqualTo(4);
-        });
-        assertThat(function.instructions().stream().anyMatch(instruction -> instruction.op() == IrInstruction.Op.JUMP)).isFalse();
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.jump("label_5"),
+            IrInstruction.label("label_5"),
+            IrInstruction.assignObject("local0", IrExpression.stringLiteral("boom")),
+            IrInstruction.panic(IrExpression.objectLocal("local0"))
+        );
     }
 
     @Test

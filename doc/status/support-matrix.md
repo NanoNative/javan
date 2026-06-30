@@ -7,11 +7,11 @@ This matrix tracks named javan/JDK behavior scenarios. It is not a claim that ev
 | Measure | Count |
 | --- | ---: |
 | rows | 108 |
-| done (`pass` + `rejected`) | 107 |
-| left (`scoped` + `target`) | 1 |
-| pass | 107 |
+| done (`pass` + `rejected`) | 108 |
+| left (`scoped` + `target`) | 0 |
+| pass | 108 |
 | scoped | 0 |
-| target | 1 |
+| target | 0 |
 | rejected | 0 |
 
 Status mapping:
@@ -41,7 +41,7 @@ Status mapping:
 | `string-concat` | pass |
 | `exception-panic` | pass |
 | `try-catch` | pass |
-| `try-finally` | target |
+| `try-finally` | pass |
 | `enum-basic` | pass |
 | `enum-ordinal` | pass |
 | `enum-values` | pass |
