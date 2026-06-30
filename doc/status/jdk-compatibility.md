@@ -61,9 +61,9 @@ Current support ledger for the active JDK 25 evidence set:
 | exact supported JDK constructors | 683 |
 | exact supported JDK methods | 349 |
 | exact supported JDK callables | 1032 / 267886 (0.3%) |
-| exact explicit rejected JDK callables | 11868 |
-| exact done JDK callables | 12900 / 267886 (4.8%) |
-| exact unknown JDK callables | 254986 |
+| exact explicit rejected JDK callables | 12285 |
+| exact done JDK callables | 13317 / 267886 (4.9%) |
+| exact unknown JDK callables | 254569 |
 | exact supported JDK callables left | 266854 |
 | flow-qualified reachable current-thread lifecycle rejects | 0 |
 | flow-qualified unreachable current-thread lifecycle rejects | 0 |
@@ -104,7 +104,8 @@ full `java.text.*` owner namespace, plus the
 full `java.util.zip.*` owner namespace, plus the
 full `java.time.format.*` owner namespace, plus the
 full `java.math.*` owner namespace, plus the
-full `java.nio.charset.*` owner namespace.
+full `java.nio.charset.*` owner namespace, plus the
+full `java.util.concurrent.atomic.*` owner namespace.
 Flow-qualified rejected JDK call shapes above are diagnostic-shape accounting only.
 They are tracked separately because they depend on receiver or call-flow facts rather than raw member inventory.
 Unknown callables still include everything not yet counted as supported or explicitly rejected,

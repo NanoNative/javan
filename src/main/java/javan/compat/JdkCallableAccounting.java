@@ -256,6 +256,9 @@ final class JdkCallableAccounting {
         if (owner.startsWith("java/text/")) {
             return true;
         }
+        if (owner.startsWith("java/util/concurrent/atomic/")) {
+            return true;
+        }
         if (owner.startsWith("java/lang/module/")) {
             return true;
         }
