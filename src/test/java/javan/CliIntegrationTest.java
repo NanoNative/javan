@@ -1969,6 +1969,34 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void inetAddressGetByNameStillFailsClearlyWhenReachable() throws Exception {
+        final Path project = project("unsupported-inet-address-get-by-name");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.InetAddress;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    System.out.println(InetAddress.getByName("127.0.0.1").getHostAddress());
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains(
+            "error[JAVAN061]",
+            "java/net/InetAddress.getByName(Ljava/lang/String;)Ljava/net/InetAddress;",
+            "network/socket"
+        );
+    }
+
+    @Test
     void inetSocketAddressGetPortBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("inet-socket-address-get-port");
         writeJava(project, "com.acme.Main", """

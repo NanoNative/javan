@@ -524,6 +524,11 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void jdkCallSupportRejectsInetAddressGetByNameCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/InetAddress", "getByName", "(Ljava/lang/String;)Ljava/net/InetAddress;"))).isFalse();
+    }
+
+    @Test
     void jdkCallSupportAcceptsServerSocketPortConstructor() {
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/ServerSocket", "<init>", "(I)V"))).isTrue();
     }
@@ -575,6 +580,20 @@ final class CoreBehaviorTest {
         );
 
         assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierRejectsReachableInetAddressGetByNameCallWithNetworkDiagnostic() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 184, "invokestatic", new MethodRef("java/net/InetAddress", "getByName", "(Ljava/lang/String;)Ljava/net/InetAddress;")),
+            true
+        );
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN061");
+        assertThat(diagnostics.getFirst().message()).isEqualTo("unsupported reachable network API");
+        assertThat(diagnostics.getFirst().subject()).isEqualTo("java/net/InetAddress.getByName(Ljava/lang/String;)Ljava/net/InetAddress;");
+        assertThat(diagnostics.getFirst().reason()).contains("network/socket");
     }
 
     @Test
