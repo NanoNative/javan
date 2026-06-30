@@ -819,7 +819,19 @@ final class JdkCallableAccountingTest {
     @Test
     void keepsCertificateFactoryOutsideSecurityFamilyRejects() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/security/cert/CertificateFactory", "getInstance", "(Ljava/lang/String;)Ljava/security/cert/CertificateFactory;")))
-            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void keepsCertificateExceptionConstructorsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/security/cert/CertificateException", "<init>", "()V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksCertPathValidatorGetInstanceAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/security/cert/CertPathValidator", "getInstance", "(Ljava/lang/String;)Ljava/security/cert/CertPathValidator;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
     }
 
     @Test
