@@ -69,26 +69,7 @@ jobs:
       - name: Verify Maven suite
         run: |
           if ! mvn -q verify; then
-            python3 - <<'PY'
-            import pathlib
-            import xml.etree.ElementTree as ET
-
-            report = pathlib.Path("target/site/jacoco/jacoco.xml")
-            if not report.exists():
-                print("JaCoCo report missing after failed verify.")
-            else:
-                root = ET.parse(report).getroot()
-                bundle = {counter.attrib["type"]: counter.attrib for counter in root.findall("counter")}
-                for counter_type in ("BRANCH", "LINE"):
-                    counter = bundle.get(counter_type)
-                    if counter is None:
-                        continue
-                    missed = int(counter["missed"])
-                    covered = int(counter["covered"])
-                    total = missed + covered
-                    ratio = covered / total if total else 1.0
-                    print(f"JaCoCo {counter_type.lower()} bundle ratio: {covered}/{total} = {ratio:.6%}")
-            PY
+            python3 -c $'import pathlib\nimport xml.etree.ElementTree as ET\n\nreport = pathlib.Path("target/site/jacoco/jacoco.xml")\nif not report.exists():\n    print("JaCoCo report missing after failed verify.")\nelse:\n    root = ET.parse(report).getroot()\n    bundle = {counter.attrib["type"]: counter.attrib for counter in root.findall("counter")}\n    for counter_type in ("BRANCH", "LINE"):\n        counter = bundle.get(counter_type)\n        if counter is None:\n            continue\n        missed = int(counter["missed"])\n        covered = int(counter["covered"])\n        total = missed + covered\n        ratio = covered / total if total else 1.0\n        print(f"JaCoCo {counter_type.lower()} bundle ratio: {covered}/{total} = {ratio:.6%}")'
             exit 1
           fi
 
