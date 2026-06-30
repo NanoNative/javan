@@ -853,6 +853,24 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksLoggerGetLoggerAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/logging/Logger", "getLogger", "(Ljava/lang/String;)Ljava/util/logging/Logger;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksLogManagerGetLogManagerAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/logging/LogManager", "getLogManager", "()Ljava/util/logging/LogManager;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksFileHandlerConstructorAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/logging/FileHandler", "<init>", "()V")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
     void marksFormatFormatObjectAsExplicitRejected() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/text/Format", "format", "(Ljava/lang/Object;)Ljava/lang/String;")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
