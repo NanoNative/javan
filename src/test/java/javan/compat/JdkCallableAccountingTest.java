@@ -577,6 +577,36 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksZipFileStringConstructorAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/zip/ZipFile", "<init>", "(Ljava/lang/String;)V")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksZipInputStreamGetNextEntryAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/zip/ZipInputStream", "getNextEntry", "()Ljava/util/zip/ZipEntry;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksZipOutputStreamPutNextEntryAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/zip/ZipOutputStream", "putNextEntry", "(Ljava/util/zip/ZipEntry;)V")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksCrc32UpdateByteArraySliceAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/zip/CRC32", "update", "([BII)V")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksDeflaterDeflateByteArraySliceAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/zip/Deflater", "deflate", "([BII)I")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
     void marksFormatFormatObjectAsExplicitRejected() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/text/Format", "format", "(Ljava/lang/Object;)Ljava/lang/String;")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
