@@ -30,9 +30,9 @@ Status words are exact. No colors, no mood lighting.
 | Scenario ledger done | 108/108 | Named support scenarios with explicit pass/reject status. |
 | Scenario ledger left | 0 | No named support scenario rows remain outside `pass`/`rejected`. |
 | Exact supported JDK callables | 1032/267886 (0.3%) | Lower-bound callable-member coverage on the scanned JDK 25 image for members that already match the exact native support registry on the current branch baseline. |
-| Exact explicit rejected JDK callables | 5102 | Deterministic callable-member rejects currently counted exactly from forbidden APIs, verifier-backed monitor/concurrency members, the deliberate `jdk.jfr.*` owner family, `sun.misc.Unsafe`, the exact `String` regex/formatter/text-normalization plus binary/charset/code-point family, and the current exact `StringBuilder` char-sequence/string-buffer/code-point/stream/repeat family. |
-| Exact done JDK callables | 6134/267886 (2.2%) | Lower-bound supported-plus-explicitly-rejected callable-member accounting on the scanned JDK 25 image for the current branch baseline. |
-| Exact unknown JDK callables | 261752 | Callable members on the scanned JDK 25 image not yet counted as supported or explicitly rejected. |
+| Exact explicit rejected JDK callables | 5128 | Deterministic callable-member rejects currently counted exactly from forbidden APIs, verifier-backed monitor/concurrency members, the deliberate `jdk.jfr.*` owner family, `sun.misc.Unsafe`, the exact `String` regex/formatter/text-normalization plus binary/charset/code-point family, and the current exact `StringBuilder` plus `StringBuffer` char-sequence/string-buffer/code-point/stream/repeat family. |
+| Exact done JDK callables | 6160/267886 (2.2%) | Lower-bound supported-plus-explicitly-rejected callable-member accounting on the scanned JDK 25 image for the current branch baseline. |
+| Exact unknown JDK callables | 261726 | Callable members on the scanned JDK 25 image not yet counted as supported or explicitly rejected. |
 | Exact supported JDK callables left | 266854 | Callables on the scanned JDK 25 image that are not yet in the exact supported callable ledger. |
 | Flow-qualified rejected JDK call shapes | 0 | Separate diagnostic-shape ledger exists now; the current self-check profile has no such diagnostics. |
 | Full first-JDK release gate | 0.0% | Inventory and exact supported callable counts exist, but supported/rejected/unknown accounting for the first release-gated JDK is still incomplete. |
@@ -77,6 +77,7 @@ supported/rejected/unknown accounting is not complete yet.
 | M50: exact explicit rejection expansion v1 | Done | Added exact `String` regex/formatter/text-normalization rejects. |
 | M51: exact explicit rejection expansion v2 | Done | Added exact `String` binary/charset/code-point rejects, moving explicit rejects to `5078`, done to `6110`, unknown to `261776`. |
 | M52: exact explicit rejection expansion v3 | Done | Added exact `StringBuilder` char-sequence/string-buffer/code-point/stream/repeat rejects, moving explicit rejects to `5102`, done to `6134`, unknown to `261752`. |
+| M53: exact explicit rejection expansion v4 | Done | Added exact `StringBuffer` char-sequence/string-buffer/code-point/stream/repeat rejects, moving explicit rejects to `5128`, done to `6160`, unknown to `261726`. |
 
 ## Honest Targets Today
 

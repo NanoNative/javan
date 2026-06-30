@@ -275,4 +275,58 @@ final class JdkCallableAccountingTest {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/StringBuilder", "getChars", "(II[CI)V")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
     }
+
+    @Test
+    void marksStringBufferCharSequenceConstructorAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/StringBuffer", "<init>", "(Ljava/lang/CharSequence;)V")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksStringBufferAppendStringBufferAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/StringBuffer", "append", "(Ljava/lang/StringBuffer;)Ljava/lang/StringBuffer;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksStringBufferAppendCharSequenceRangeAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/StringBuffer", "append", "(Ljava/lang/CharSequence;II)Ljava/lang/StringBuffer;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksStringBufferAppendCodePointAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/StringBuffer", "appendCodePoint", "(I)Ljava/lang/StringBuffer;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksStringBufferInsertCharSequenceAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/StringBuffer", "insert", "(ILjava/lang/CharSequence;)Ljava/lang/StringBuffer;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksStringBufferRepeatAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/StringBuffer", "repeat", "(II)Ljava/lang/StringBuffer;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksStringBufferCodePointAtAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/StringBuffer", "codePointAt", "(I)I")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksStringBufferCharsAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/StringBuffer", "chars", "()Ljava/util/stream/IntStream;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksStringBufferGetCharsAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/StringBuffer", "getChars", "(II[CI)V")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
 }
