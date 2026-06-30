@@ -294,6 +294,51 @@ final class RuntimeSourcePlatformSection {
             return left_length - right_length;
         }
 
+        void* javan_stringbuilder_delete(void* builder_value, int start, int end) {
+            javan_string_builder* builder = javan_stringbuilder_checked(builder_value);
+            if (start < 0 || start > builder->length) {
+                javan_panic("string builder delete range out of bounds");
+            }
+            if (end < start) {
+                javan_panic("string builder delete start greater than end");
+            }
+            int effective_end = end > builder->length ? builder->length : end;
+            if (effective_end == start) {
+                return builder_value;
+            }
+            memmove(
+                builder->values + start,
+                builder->values + effective_end,
+                (unsigned long) (builder->length - effective_end + 1)
+            );
+            builder->length -= effective_end - start;
+            return builder_value;
+        }
+
+        void* javan_stringbuilder_delete_char_at(void* builder_value, int index) {
+            javan_string_builder* builder = javan_stringbuilder_checked(builder_value);
+            if (index < 0 || index >= builder->length) {
+                javan_panic("string builder delete char index out of bounds");
+            }
+            memmove(
+                builder->values + index,
+                builder->values + index + 1,
+                (unsigned long) (builder->length - index)
+            );
+            builder->length -= 1;
+            return builder_value;
+        }
+
+        void* javan_stringbuilder_reverse(void* builder_value) {
+            javan_string_builder* builder = javan_stringbuilder_checked(builder_value);
+            for (int left = 0, right = builder->length - 1; left < right; left++, right--) {
+                char swap = builder->values[left];
+                builder->values[left] = builder->values[right];
+                builder->values[right] = swap;
+            }
+            return builder_value;
+        }
+
         void javan_stringbuilder_set_length(void* builder_value, int length) {
             if (length < 0) {
                 javan_panic("negative string builder length");
