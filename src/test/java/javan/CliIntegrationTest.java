@@ -6292,6 +6292,104 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void stringBuilderCharAtBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-char-at");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("native");
+                    System.out.println(builder.charAt(2));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-char-at").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("t\n");
+    }
+
+    @Test
+    void stringBuilderCharAtOutOfBoundsFailsClearlyAtRuntime() throws Exception {
+        final Path project = project("stringbuilder-char-at-oob");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("native");
+                    System.out.println(builder.charAt(6));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/stringbuilder-char-at-oob").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("string builder index out of bounds");
+    }
+
+    @Test
+    void stringBuilderSubstringBeginBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-substring-begin");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("javan native");
+                    System.out.println(builder.substring(6));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-substring-begin").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderSubstringRangeBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-substring-range");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("javan native");
+                    System.out.println(builder.substring(0, 5));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-substring-range").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void stringBuilderIsEmptyBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("stringbuilder-is-empty");
         writeJava(project, "com.acme.Main", """

@@ -228,6 +228,36 @@ final class RuntimeSourcePlatformSection {
             return javan_stringbuilder_checked(builder_value)->length == 0;
         }
 
+        int javan_stringbuilder_char_at(void* builder_value, int index) {
+            javan_string_builder* builder = javan_stringbuilder_checked(builder_value);
+            if (index < 0 || index >= builder->length) {
+                javan_panic("string builder index out of bounds");
+            }
+            return (unsigned char) builder->values[index];
+        }
+
+        void* javan_stringbuilder_substring(void* builder_value, int begin) {
+            javan_string_builder* builder = javan_stringbuilder_checked(builder_value);
+            void** javan_builder_substring_roots[] = {
+                (void**) &builder
+            };
+            javan_root_frame_push(javan_builder_substring_roots, 1);
+            void* result = javan_string_substring(builder->values, begin);
+            javan_root_frame_pop(javan_builder_substring_roots);
+            return result;
+        }
+
+        void* javan_stringbuilder_substring_range(void* builder_value, int begin, int end) {
+            javan_string_builder* builder = javan_stringbuilder_checked(builder_value);
+            void** javan_builder_substring_range_roots[] = {
+                (void**) &builder
+            };
+            javan_root_frame_push(javan_builder_substring_range_roots, 1);
+            void* result = javan_string_substring_range(builder->values, begin, end);
+            javan_root_frame_pop(javan_builder_substring_range_roots);
+            return result;
+        }
+
         void javan_stringbuilder_set_length(void* builder_value, int length) {
             if (length < 0) {
                 javan_panic("negative string builder length");

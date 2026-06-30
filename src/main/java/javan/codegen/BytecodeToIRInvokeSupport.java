@@ -2081,6 +2081,18 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.intExpression(IrExpression.intCall("javan_stringbuilder_is_empty", List.of(receiver))));
             return true;
         }
+        if ("charAt".equals(name) && "(I)C".equals(descriptorText)) {
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_stringbuilder_char_at", List.of(receiver, arguments.getFirst()))));
+            return true;
+        }
+        if ("substring".equals(name) && "(I)Ljava/lang/String;".equals(descriptorText)) {
+            pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_substring", List.of(receiver, arguments.getFirst()));
+            return true;
+        }
+        if ("substring".equals(name) && "(II)Ljava/lang/String;".equals(descriptorText)) {
+            pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_substring_range", List.of(receiver, arguments.getFirst(), arguments.get(1)));
+            return true;
+        }
         if ("setLength".equals(name)) {
             instructions.add(IrInstruction.callStaticVoid("javan_stringbuilder_set_length", List.of(receiver, arguments.getFirst())));
             return true;

@@ -412,6 +412,9 @@ final class RuntimeHeaderFile {
         void* javan_stringbuilder_to_string(void* builder);
         int javan_stringbuilder_length(void* builder);
         int javan_stringbuilder_is_empty(void* builder);
+        int javan_stringbuilder_char_at(void* builder, int index);
+        void* javan_stringbuilder_substring(void* builder, int begin);
+        void* javan_stringbuilder_substring_range(void* builder, int begin, int end);
         void javan_stringbuilder_set_length(void* builder, int length);
         int javan_lcmp(long long left, long long right);
         int javan_float_compare(float left, float right, int nan_value);

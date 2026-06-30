@@ -9770,6 +9770,83 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersStringBuilderCharAtToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/StringBuilder;I)C",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 27, "iload_1"),
+            invokeVirtual(2, new MethodRef("java/lang/StringBuilder", "charAt", "(I)C")),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_stringbuilder_char_at",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersStringBuilderSubstringBeginToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/StringBuilder;I)Ljava/lang/String;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 27, "iload_1"),
+            invokeVirtual(2, new MethodRef("java/lang/StringBuilder", "substring", "(I)Ljava/lang/String;")),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_stringbuilder_substring",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"))
+                )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersStringBuilderSubstringRangeToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/StringBuilder;II)Ljava/lang/String;",
+            3,
+            3,
+            plain(0, 42, "aload_0"),
+            plain(1, 27, "iload_1"),
+            plain(2, 28, "iload_2"),
+            invokeVirtual(3, new MethodRef("java/lang/StringBuilder", "substring", "(II)Ljava/lang/String;")),
+            plain(4, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_stringbuilder_substring_range",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"), IrExpression.intLocal("arg2"))
+                )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
     void rejectsStringBuilderIsEmptyWithWrongDescriptor() {
         assertThatThrownBy(() -> lowerMain(method(
             0x0008,
