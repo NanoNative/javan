@@ -235,6 +235,9 @@ final class JdkCallableAccounting {
         if (owner.startsWith("java/util/regex/")) {
             return true;
         }
+        if (owner.startsWith("java/util/function/")) {
+            return true;
+        }
         if (owner.startsWith("jdk/jfr/")) {
             return true;
         }
