@@ -10219,6 +10219,90 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersStringBuilderInsertBooleanToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/StringBuilder;IZ)V",
+            3,
+            3,
+            plain(0, 42, "aload_0"),
+            plain(1, 27, "iload_1"),
+            plain(2, 28, "iload_2"),
+            invokeVirtual(3, new MethodRef("java/lang/StringBuilder", "insert", "(IZ)Ljava/lang/StringBuilder;")),
+            plain(4, 87, "pop"),
+            plain(5, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_stringbuilder_insert_boolean",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"), IrExpression.intLocal("arg2"))
+                )
+            ),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
+    void lowersStringBuilderInsertIntToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/StringBuilder;II)V",
+            3,
+            3,
+            plain(0, 42, "aload_0"),
+            plain(1, 27, "iload_1"),
+            plain(2, 28, "iload_2"),
+            invokeVirtual(3, new MethodRef("java/lang/StringBuilder", "insert", "(II)Ljava/lang/StringBuilder;")),
+            plain(4, 87, "pop"),
+            plain(5, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_stringbuilder_insert_int",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"), IrExpression.intLocal("arg2"))
+                )
+            ),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
+    void lowersStringBuilderInsertLongToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/StringBuilder;IJ)V",
+            4,
+            4,
+            plain(0, 42, "aload_0"),
+            plain(1, 27, "iload_1"),
+            plain(2, 32, "lload_2"),
+            invokeVirtual(3, new MethodRef("java/lang/StringBuilder", "insert", "(IJ)Ljava/lang/StringBuilder;")),
+            plain(4, 87, "pop"),
+            plain(5, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_stringbuilder_insert_long",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"), IrExpression.longLocal("arg2"))
+                )
+            ),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
     void rejectsStringBuilderIsEmptyWithWrongDescriptor() {
         assertThatThrownBy(() -> lowerMain(method(
             0x0008,

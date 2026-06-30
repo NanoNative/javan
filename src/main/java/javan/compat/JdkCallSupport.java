@@ -211,7 +211,7 @@ public final class JdkCallSupport {
         runtime("StringBuilder.compareTo", "java/lang/StringBuilder", "compareTo", "(Ljava/lang/StringBuilder;)I"),
         runtime("StringBuilder.delete", "java/lang/StringBuilder", "delete", "(II)Ljava/lang/StringBuilder;"),
         runtime("StringBuilder.deleteCharAt", "java/lang/StringBuilder", "deleteCharAt", "(I)Ljava/lang/StringBuilder;"),
-        runtime("StringBuilder.insert", "java/lang/StringBuilder", "insert", "(ILjava/lang/String;)Ljava/lang/StringBuilder;", "(IC)Ljava/lang/StringBuilder;"),
+        runtime("StringBuilder.insert", "java/lang/StringBuilder", "insert", "(ILjava/lang/String;)Ljava/lang/StringBuilder;", "(IZ)Ljava/lang/StringBuilder;", "(IC)Ljava/lang/StringBuilder;", "(II)Ljava/lang/StringBuilder;", "(IJ)Ljava/lang/StringBuilder;"),
         runtime("StringBuilder.replace", "java/lang/StringBuilder", "replace", "(IILjava/lang/String;)Ljava/lang/StringBuilder;"),
         runtime("StringBuilder.reverse", "java/lang/StringBuilder", "reverse", "()Ljava/lang/StringBuilder;"),
         runtime("StringBuilder.ensureCapacity", "java/lang/StringBuilder", "ensureCapacity", "(I)V"),

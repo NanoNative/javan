@@ -6918,6 +6918,81 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void stringBuilderInsertBooleanBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-insert-boolean");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("ac");
+                    builder.insert(1, true);
+                    System.out.println(builder);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-insert-boolean").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderInsertIntBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-insert-int");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("ac");
+                    builder.insert(1, 42);
+                    System.out.println(builder);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-insert-int").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderInsertLongBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-insert-long");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("ac");
+                    builder.insert(1, 1234567890123L);
+                    System.out.println(builder);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-insert-long").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void stringBuilderIsEmptyBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("stringbuilder-is-empty");
         writeJava(project, "com.acme.Main", """

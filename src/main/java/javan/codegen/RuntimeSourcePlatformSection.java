@@ -356,6 +356,26 @@ final class RuntimeSourcePlatformSection {
             return builder_value;
         }
 
+        void* javan_stringbuilder_insert_boolean(void* builder_value, int index, int value) {
+            javan_string_builder* builder = javan_stringbuilder_checked(builder_value);
+            javan_stringbuilder_insert_bytes(builder, index, value == 0 ? "false" : "true");
+            return builder_value;
+        }
+
+        void* javan_stringbuilder_insert_int(void* builder_value, int index, int value) {
+            char buffer[32];
+            snprintf(buffer, sizeof(buffer), "%d", value);
+            javan_stringbuilder_insert_bytes(javan_stringbuilder_checked(builder_value), index, buffer);
+            return builder_value;
+        }
+
+        void* javan_stringbuilder_insert_long(void* builder_value, int index, long long value) {
+            char buffer[64];
+            snprintf(buffer, sizeof(buffer), "%lld", value);
+            javan_stringbuilder_insert_bytes(javan_stringbuilder_checked(builder_value), index, buffer);
+            return builder_value;
+        }
+
         void* javan_stringbuilder_insert_string(void* builder_value, int index, void* value) {
             javan_string_builder* builder = javan_stringbuilder_checked(builder_value);
             javan_stringbuilder_insert_bytes(builder, index, (const char*) value);
