@@ -66,7 +66,30 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y build-essential mingw-w64
 
       - name: Verify Maven suite
-        run: mvn -q verify
+        run: |
+          mvn -q verify || {
+            python3 - <<'PY'
+            import pathlib
+            import xml.etree.ElementTree as ET
+
+            report = pathlib.Path("target/site/jacoco/jacoco.xml")
+            if not report.exists():
+                print("JaCoCo report missing after failed verify.")
+            else:
+                root = ET.parse(report).getroot()
+                bundle = {counter.attrib["type"]: counter.attrib for counter in root.findall("counter")}
+                for counter_type in ("BRANCH", "LINE"):
+                    counter = bundle.get(counter_type)
+                    if counter is None:
+                        continue
+                    missed = int(counter["missed"])
+                    covered = int(counter["covered"])
+                    total = missed + covered
+                    ratio = covered / total if total else 1.0
+                    print(f"JaCoCo {counter_type.lower()} bundle ratio: {covered}/{total} = {ratio:.6%}")
+            PY
+            exit 1
+          }
 
       - name: Verify acceptance suite
         run: sh .github/scripts/acceptance.sh

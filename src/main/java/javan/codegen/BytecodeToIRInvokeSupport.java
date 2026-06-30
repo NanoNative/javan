@@ -330,6 +330,18 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if ("java/lang/String".equals(methodRef.owner())
+            && "startsWith".equals(methodRef.name())
+            && "(Ljava/lang/String;I)Z".equals(methodRef.descriptor())) {
+            final IrExpression fromIndex = popInt(classFile, method, stack);
+            final IrExpression argument = popObject(classFile, method, stack);
+            final IrExpression receiver = popObject(classFile, method, stack);
+            stack.add(StackValue.intExpression(IrExpression.intCall(
+                "javan_string_starts_with_from",
+                List.of(receiver, argument, fromIndex)
+            )));
+            return;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
             && "endsWith".equals(methodRef.name())
             && "(Ljava/lang/String;)Z".equals(methodRef.descriptor())) {
             final IrExpression argument = popObject(classFile, method, stack);
@@ -2976,16 +2988,6 @@ final class BytecodeToIRInvokeSupport {
         };
     }
 
-    private static int localStoreSlot(final Instruction instruction) {
-        return switch (instruction.opcode()) {
-            case 58 -> instruction.operands()[0] & 0xFF;
-            case 75 -> 0;
-            case 76 -> 1;
-            case 77 -> 2;
-            case 78 -> 3;
-            default -> -1;
-        };
-    }
     static Optional<EntryPoint> inferRunnableThreadTarget(
         final Map<String, ClassFile> classes,
         final List<Instruction> instructions,

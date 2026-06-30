@@ -200,6 +200,7 @@ final class RuntimeHeaderFile {
         int javan_string_equals(const char* left, const char* right);
         int javan_string_contains(const char* left, const char* right);
         int javan_string_starts_with(const char* left, const char* prefix);
+        int javan_string_starts_with_from(const char* left, const char* prefix, int from_index);
         int javan_string_ends_with(const char* left, const char* suffix);
         void* javan_string_replace_char(const char* value, int old_ch, int new_ch);
         void* javan_string_trim(const char* value);

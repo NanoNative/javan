@@ -4248,6 +4248,24 @@ final class RuntimeSourceMemorySections {
             return strncmp(left, prefix, prefix_length) == 0;
         }
 
+        int javan_string_starts_with_from(const char* left, const char* prefix, int from_index) {
+            if (left == NULL || prefix == NULL) {
+                javan_panic("null string");
+            }
+            size_t left_length = strlen(left);
+            size_t prefix_length = strlen(prefix);
+            if (from_index < 0) {
+                return 0;
+            }
+            if ((size_t) from_index > left_length) {
+                return 0;
+            }
+            if (prefix_length > left_length - (size_t) from_index) {
+                return 0;
+            }
+            return strncmp(left + from_index, prefix, prefix_length) == 0;
+        }
+
         int javan_string_ends_with(const char* left, const char* suffix) {
             if (left == NULL || suffix == NULL) {
                 javan_panic("null string");

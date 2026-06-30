@@ -4612,6 +4612,29 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void runtimeStringStartsWithFromMatchesJavaOffsetSemantics() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                printf("%d\\n", javan_string_starts_with_from("javan native", "native", 6));
+                printf("%d\\n", javan_string_starts_with_from("javan native", "native", 7));
+                printf("%d\\n", javan_string_starts_with_from("javan native", "javan", -1));
+                printf("%d\\n", javan_string_starts_with_from("javan native", "", 12));
+                printf("%d\\n", javan_string_starts_with_from("javan native", "", 13));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("1\n0\n0\n1\n0\n");
+    }
+
+    @Test
     void runtimeRepeatedByteArrayExportFreeReturnsToZeroLiveHeap() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """

@@ -5548,6 +5548,34 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void stringStartsWithOffsetBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-starts-with-offset");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("javan native".startsWith("native", 6));
+                    System.out.println("javan native".startsWith("native", 7));
+                    System.out.println("javan native".startsWith("", 12));
+                    System.out.println("javan native".startsWith("", 13));
+                    System.out.println("javan native".startsWith("javan", -1));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-starts-with-offset").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\nfalse\ntrue\nfalse\nfalse\n");
+    }
+
+    @Test
     void stringIndexOfCharBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("string-index-of-char");
         writeJava(project, "com.acme.Main", """

@@ -182,7 +182,7 @@ public final class JdkCallSupport {
         runtime("String.lastIndexOf", "java/lang/String", "lastIndexOf", "(II)I"),
         runtime("String.equals", "java/lang/String", "equals", "(Ljava/lang/Object;)Z"),
         runtime("String.contains", "java/lang/String", "contains", "(Ljava/lang/CharSequence;)Z"),
-        runtime("String.startsWith", "java/lang/String", "startsWith", "(Ljava/lang/String;)Z"),
+        runtime("String.startsWith", "java/lang/String", "startsWith", "(Ljava/lang/String;)Z", "(Ljava/lang/String;I)Z"),
         runtime("String.endsWith", "java/lang/String", "endsWith", "(Ljava/lang/String;)Z"),
         runtime("String.replace", "java/lang/String", "replace", "(CC)Ljava/lang/String;"),
         runtime("String.intern", "java/lang/String", "intern", "()Ljava/lang/String;"),

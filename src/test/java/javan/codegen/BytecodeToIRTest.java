@@ -7304,8 +7304,8 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void rejectsUnsupportedStringStartsWithOffsetDescriptor() {
-        assertThatThrownBy(() -> lowerMain(method(
+    void lowersStringStartsWithOffsetToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
             0x0008,
             "main",
             "(Ljava/lang/String;Ljava/lang/String;I)Z",
@@ -7316,10 +7316,37 @@ final class BytecodeToIRTest {
             plain(2, 28, "iload_2"),
             invokeVirtual(3, new MethodRef("java/lang/String", "startsWith", "(Ljava/lang/String;I)Z")),
             plain(4, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_string_starts_with_from",
+                List.of(
+                    IrExpression.objectLocal("arg0"),
+                    IrExpression.objectLocal("arg1"),
+                    IrExpression.intLocal("arg2")
+                )
+            ))
+        );
+    }
+
+    @Test
+    void rejectsUnsupportedStringStartsWithOffsetLongDescriptor() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/String;Ljava/lang/String;J)Z",
+            4,
+            4,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            plain(2, 32, "lload_2"),
+            invokeVirtual(3, new MethodRef("java/lang/String", "startsWith", "(Ljava/lang/String;J)Z")),
+            plain(4, 172, "ireturn")
         )))
             .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
                 assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
-                assertThat(exception.diagnostic().subject()).isEqualTo("invokevirtual java/lang/String.startsWith(Ljava/lang/String;I)Z");
+                assertThat(exception.diagnostic().subject()).isEqualTo("invokevirtual java/lang/String.startsWith(Ljava/lang/String;J)Z");
             });
     }
 
