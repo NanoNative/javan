@@ -757,6 +757,36 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksMethodTypeDescriptorStringAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/invoke/MethodType", "descriptorString", "()Ljava/lang/String;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksCallSiteTypeAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/invoke/CallSite", "type", "()Ljava/lang/invoke/MethodType;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksLambdaMetafactoryMetafactoryAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/invoke/LambdaMetafactory", "metafactory", "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void keepsStringConcatFactoryCarveOutUnknown() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/invoke/StringConcatFactory", "makeConcat", "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;")))
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
+    }
+
+    @Test
+    void keepsInvokeThrowableConstructorsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/invoke/WrongMethodTypeException", "<init>", "()V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksFormatFormatObjectAsExplicitRejected() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/text/Format", "format", "(Ljava/lang/Object;)Ljava/lang/String;")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);

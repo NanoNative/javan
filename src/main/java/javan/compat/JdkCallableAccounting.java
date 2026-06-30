@@ -265,6 +265,15 @@ final class JdkCallableAccounting {
         if (owner.startsWith("java/lang/foreign/")) {
             return true;
         }
+        if (owner.startsWith("java/lang/invoke/")) {
+            if (isOwnerFamily(owner, "java/lang/invoke/StringConcatFactory")) {
+                return false;
+            }
+            if (JdkCallSupport.isPlatformThrowable(owner)) {
+                return false;
+            }
+            return true;
+        }
         if (owner.startsWith("jdk/jfr/")) {
             return true;
         }
