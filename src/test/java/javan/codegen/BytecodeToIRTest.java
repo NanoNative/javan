@@ -1600,8 +1600,8 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void rejectsUnsupportedStringDefaultConstructor() {
-        assertThatThrownBy(() -> lowerMain(method(
+    void lowersStringDefaultConstructorToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
             0x0008,
             "main",
             "()Ljava/lang/String;",
@@ -1611,10 +1611,44 @@ final class BytecodeToIRTest {
             plain(1, 89, "dup"),
             invokeSpecial(2, new MethodRef("java/lang/String", "<init>", "()V")),
             plain(3, 176, "areturn")
-        )))
-            .isInstanceOf(DiagnosticException.class)
-            .hasMessageContaining("error[JAVAN040]: bytecode is not implemented by native code generation")
-            .hasMessageContaining("invokespecial java/lang/String.<init>()V");
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectNull()),
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall("javan_string_from", List.of(IrExpression.stringLiteral("")))
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersStringCopyConstructorToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/String;)Ljava/lang/String;",
+            2,
+            1,
+            classInstruction(0, 187, "new", "java/lang/String"),
+            plain(1, 89, "dup"),
+            plain(2, 42, "aload_0"),
+            invokeSpecial(3, new MethodRef("java/lang/String", "<init>", "(Ljava/lang/String;)V")),
+            plain(4, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectNull()),
+            IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(IrExpression.objectLocal("arg0"))),
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall("javan_string_from", List.of(IrExpression.objectLocal("arg0")))
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
     }
 
     @Test

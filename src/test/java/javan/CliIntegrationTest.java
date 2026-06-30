@@ -513,6 +513,80 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void stringDefaultConstructorBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-default-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new String().length());
+                    System.out.println("[" + new String() + "]");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-default-constructor").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringCopyConstructorBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-copy-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String value = "javan";
+                    System.out.println(new String(value));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-copy-constructor").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringCopyConstructorNullFailsClearlyAtRuntime() throws Exception {
+        final Path project = project("string-copy-constructor-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String value = null;
+                    System.out.println(new String(value));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/string-copy-constructor-null").toString()));
+        assertThat(nativeRun.exitCode()).isEqualTo(1);
+        assertThat(nativeRun.stdout()).isEmpty();
+        assertThat(nativeRun.stderr()).contains("null object");
+    }
+
+    @Test
     void stringCharArrayConstructorBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("string-char-array-constructor");
         writeJava(project, "com.acme.Main", """

@@ -1983,6 +1983,22 @@ final class BytecodeToIRInvokeSupport {
         if (!"java/lang/String".equals(methodRef.owner()) || !"<init>".equals(methodRef.name())) {
             return false;
         }
+        if ("()V".equals(methodRef.descriptor())) {
+            instructions.add(IrInstruction.assignObject(
+                receiver.value(),
+                IrExpression.objectCall("javan_string_from", List.of(IrExpression.stringLiteral("")))
+            ));
+            return true;
+        }
+        if ("(Ljava/lang/String;)V".equals(methodRef.descriptor())) {
+            final IrExpression value = arguments.getFirst();
+            instructions.add(IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(value)));
+            instructions.add(IrInstruction.assignObject(
+                receiver.value(),
+                IrExpression.objectCall("javan_string_from", List.of(value))
+            ));
+            return true;
+        }
         if ("([C)V".equals(methodRef.descriptor())) {
             final IrExpression array = arguments.getFirst();
             instructions.add(IrInstruction.assignObject(

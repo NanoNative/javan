@@ -179,7 +179,7 @@ public final class JdkCallSupport {
         runtime("Duration.toMillis", "java/time/Duration", "toMillis", "()J"),
         runtime("PrintStream.print", "java/io/PrintStream", "print", "(Ljava/lang/String;)V", "(Ljava/lang/Object;)V", "([C)V", "(C)V", "(Z)V", "(I)V", "(J)V", "(F)V", "(D)V"),
         runtime("PrintStream.println", "java/io/PrintStream", "println", "()V", "(Ljava/lang/String;)V", "(Ljava/lang/Object;)V", "([C)V", "(I)V", "(J)V", "(F)V", "(D)V", "(Z)V", "(C)V"),
-        runtime("String.<init>", "java/lang/String", "<init>", "([C)V", "([CII)V"),
+        runtime("String.<init>", "java/lang/String", "<init>", "()V", "(Ljava/lang/String;)V", "([C)V", "([CII)V"),
         runtime("String.length", "java/lang/String", "length", "()I"),
         runtime("String.isEmpty", "java/lang/String", "isEmpty", "()Z"),
         runtime("String.charAt", "java/lang/String", "charAt", "(I)C"),
