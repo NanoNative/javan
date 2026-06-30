@@ -6521,6 +6521,59 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void stringBuilderSubSequenceBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-sub-sequence");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("javan native");
+                    final CharSequence value = builder.subSequence(0, 5);
+                    System.out.println(value);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-sub-sequence").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderCompareToBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-compare-to");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder left = new StringBuilder("abc");
+                    final StringBuilder equal = new StringBuilder("abc");
+                    final StringBuilder greater = new StringBuilder("abd");
+                    System.out.println(left.compareTo(equal));
+                    System.out.println(left.compareTo(greater));
+                    System.out.println(greater.compareTo(left));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-compare-to").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void stringBuilderIsEmptyBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("stringbuilder-is-empty");
         writeJava(project, "com.acme.Main", """

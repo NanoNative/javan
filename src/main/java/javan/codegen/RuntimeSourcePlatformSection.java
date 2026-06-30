@@ -278,6 +278,22 @@ final class RuntimeSourcePlatformSection {
             return javan_string_last_index_of_string_from(builder->values, (const char*) needle_value, from_index);
         }
 
+        int javan_stringbuilder_compare_to(void* builder_value, void* other_value) {
+            javan_string_builder* builder = javan_stringbuilder_checked(builder_value);
+            javan_string_builder* other = javan_stringbuilder_checked(other_value);
+            int left_length = builder->length;
+            int right_length = other->length;
+            int shared = left_length < right_length ? left_length : right_length;
+            for (int index = 0; index < shared; index++) {
+                int left = (unsigned char) builder->values[index];
+                int right = (unsigned char) other->values[index];
+                if (left != right) {
+                    return left - right;
+                }
+            }
+            return left_length - right_length;
+        }
+
         void javan_stringbuilder_set_length(void* builder_value, int length) {
             if (length < 0) {
                 javan_panic("negative string builder length");
