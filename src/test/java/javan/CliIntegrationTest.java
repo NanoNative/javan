@@ -7043,6 +7043,58 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void stringBuilderAppendCharArrayBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-append-char-array");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder();
+                    final char[] chars = new char[] {'j', 'a', 'v', 'a', 'n'};
+                    builder.append(chars);
+                    System.out.println(builder);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-append-char-array").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderAppendCharArrayRangeBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-append-char-array-range");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder();
+                    final char[] chars = new char[] {'j', 'a', 'v', 'a', 'n'};
+                    builder.append(chars, 1, 3);
+                    System.out.println(builder);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-append-char-array-range").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void stringBuilderIsEmptyBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("stringbuilder-is-empty");
         writeJava(project, "com.acme.Main", """

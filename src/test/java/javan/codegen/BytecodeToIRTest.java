@@ -10359,6 +10359,62 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersStringBuilderAppendCharArrayToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/StringBuilder;[C)V",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/lang/StringBuilder", "append", "([C)Ljava/lang/StringBuilder;")),
+            plain(3, 87, "pop"),
+            plain(4, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_stringbuilder_append_chars",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+                )
+            ),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
+    void lowersStringBuilderAppendCharArrayRangeToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/StringBuilder;[CII)V",
+            4,
+            4,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            plain(2, 28, "iload_2"),
+            plain(3, 29, "iload_3"),
+            invokeVirtual(4, new MethodRef("java/lang/StringBuilder", "append", "([CII)Ljava/lang/StringBuilder;")),
+            plain(5, 87, "pop"),
+            plain(6, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_stringbuilder_append_chars_range",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.intLocal("arg2"), IrExpression.intLocal("arg3"))
+                )
+            ),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
     void rejectsStringBuilderIsEmptyWithWrongDescriptor() {
         assertThatThrownBy(() -> lowerMain(method(
             0x0008,

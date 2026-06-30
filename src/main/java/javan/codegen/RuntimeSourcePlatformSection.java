@@ -143,6 +143,24 @@ final class RuntimeSourcePlatformSection {
             return builder;
         }
 
+        void* javan_stringbuilder_append_chars_range(void* builder_value, void* chars_value, int offset, int count) {
+            javan_string_builder* builder = javan_stringbuilder_checked(builder_value);
+            void* chars = chars_value;
+            void** javan_builder_append_chars_roots[] = {
+                (void**) &builder,
+                (void**) &chars
+            };
+            javan_root_frame_push(javan_builder_append_chars_roots, 2);
+            void* text = javan_string_from_chars(chars, offset, count);
+            javan_stringbuilder_append_bytes(builder, (const char*) text);
+            javan_root_frame_pop(javan_builder_append_chars_roots);
+            return builder_value;
+        }
+
+        void* javan_stringbuilder_append_chars(void* builder_value, void* chars_value) {
+            return javan_stringbuilder_append_chars_range(builder_value, chars_value, 0, javan_array_length(chars_value));
+        }
+
         void* javan_stringbuilder_append_object(void* builder_value, void* value) {
             return javan_stringbuilder_append_string(builder_value, value);
         }

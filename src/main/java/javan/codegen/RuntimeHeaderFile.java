@@ -402,6 +402,8 @@ final class RuntimeHeaderFile {
         void* javan_stringbuilder_new(void);
         void javan_stringbuilder_reserve(void* builder, int capacity);
         void* javan_stringbuilder_append_string(void* builder, void* value);
+        void* javan_stringbuilder_append_chars(void* builder, void* chars);
+        void* javan_stringbuilder_append_chars_range(void* builder, void* chars, int offset, int count);
         void* javan_stringbuilder_append_object(void* builder, void* value);
         void* javan_stringbuilder_append_boolean(void* builder, int value);
         void* javan_stringbuilder_append_char(void* builder, int value);

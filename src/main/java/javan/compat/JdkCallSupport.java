@@ -192,7 +192,7 @@ public final class JdkCallSupport {
         runtime("String.substring", "java/lang/String", "substring", "(I)Ljava/lang/String;"),
         runtime("String.substring", "java/lang/String", "substring", "(II)Ljava/lang/String;"),
         runtime("StringBuilder.<init>", "java/lang/StringBuilder", "<init>", "()V", "(I)V", "(Ljava/lang/String;)V"),
-        runtime("StringBuilder.append", "java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;"),
+        runtime("StringBuilder.append", "java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;", "([C)Ljava/lang/StringBuilder;", "([CII)Ljava/lang/StringBuilder;"),
         runtime("StringBuilder.append", "java/lang/StringBuilder", "append", "(Ljava/lang/Object;)Ljava/lang/StringBuilder;"),
         runtime("StringBuilder.append", "java/lang/StringBuilder", "append", "(Z)Ljava/lang/StringBuilder;"),
         runtime("StringBuilder.append", "java/lang/StringBuilder", "append", "(C)Ljava/lang/StringBuilder;"),
