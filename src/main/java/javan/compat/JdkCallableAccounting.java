@@ -238,6 +238,9 @@ final class JdkCallableAccounting {
         if (owner.startsWith("java/util/function/")) {
             return true;
         }
+        if (owner.startsWith("java/lang/module/")) {
+            return true;
+        }
         if (owner.startsWith("jdk/jfr/")) {
             return true;
         }

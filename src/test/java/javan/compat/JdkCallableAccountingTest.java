@@ -551,4 +551,28 @@ final class JdkCallableAccountingTest {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/function/Predicate", "test", "(Ljava/lang/Object;)Z")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
     }
+
+    @Test
+    void marksModuleDescriptorNameAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/module/ModuleDescriptor", "name", "()Ljava/lang/String;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksModuleFinderOfSystemAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/module/ModuleFinder", "ofSystem", "()Ljava/lang/module/ModuleFinder;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksModuleReferenceLocationAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/module/ModuleReference", "location", "()Ljava/util/Optional;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksConfigurationResolveAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/module/Configuration", "resolve", "(Ljava/lang/module/ModuleFinder;Ljava/lang/module/ModuleFinder;Ljava/util/Collection;)Ljava/lang/module/Configuration;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
 }
