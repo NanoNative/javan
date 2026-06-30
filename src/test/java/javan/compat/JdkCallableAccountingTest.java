@@ -787,6 +787,24 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksClassfileOfMethodAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/classfile/ClassFile", "of", "()Ljava/lang/classfile/ClassFile;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksOpcodeBytecodeAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/classfile/Opcode", "bytecode", "()I")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void keepsClassfileThrowableConstructorsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/classfile/constantpool/ConstantPoolException", "<init>", "()V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksFormatFormatObjectAsExplicitRejected() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/text/Format", "format", "(Ljava/lang/Object;)Ljava/lang/String;")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
