@@ -1927,6 +1927,48 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void socketInetAddressConstructorBuildsAndReadsFromLoopbackServer() throws Exception {
+        final int port = freeTcpPort();
+        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final CompletableFuture<Void> served = CompletableFuture.runAsync(() -> {
+                try (java.net.Socket socket = server.accept()) {
+                    socket.getOutputStream().write(65);
+                    socket.getOutputStream().flush();
+                } catch (final Exception exception) {
+                    throw new IllegalStateException(exception);
+                }
+            });
+            final Path project = project("socket-inet-address-constructor-read-byte");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.io.InputStream;
+                import java.net.InetAddress;
+                import java.net.Socket;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final Socket socket = new Socket(InetAddress.getLoopbackAddress(), %d);
+                        final InputStream in = socket.getInputStream();
+                        System.out.println(in.read());
+                        socket.close();
+                    }
+                }
+                """.formatted(port));
+
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            assertThat(process(project, List.of(project.resolve(".javan/bin/socket-inet-address-constructor-read-byte").toString())).stdout())
+                .isEqualTo("65\n");
+            served.get(5, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
     void inetSocketAddressGetPortBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("inet-socket-address-get-port");
         writeJava(project, "com.acme.Main", """

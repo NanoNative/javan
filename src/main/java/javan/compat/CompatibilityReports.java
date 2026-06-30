@@ -500,6 +500,7 @@ public final class CompatibilityReports {
             pass("stringbuilder-setlength-overflow-panic"),
             pass("network-address-runtime"),
             pass("network-tcp-client-socket"),
+            pass("network-tcp-client-socket-address"),
             pass("network-tcp-server-socket"),
             pass("network-tcp-socket-stream-io"),
             pass("network-http-client-get-string"),

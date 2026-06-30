@@ -6419,6 +6419,39 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersSocketInetAddressPortConstructorCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/InetAddress;I)Ljava/net/Socket;",
+            3,
+            2,
+            classInstruction(0, 187, "new", "java/net/Socket"),
+            plain(1, 89, "dup"),
+            plain(2, 42, "aload_0"),
+            plain(3, 27, "iload_1"),
+            invokeSpecial(4, new MethodRef("java/net/Socket", "<init>", "(Ljava/net/InetAddress;I)V")),
+            plain(5, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectNull()),
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_socket_connect_host",
+                    List.of(
+                        IrExpression.objectCall("javan_inet_address_get_host_address", List.of(IrExpression.objectLocal("arg0"))),
+                        IrExpression.intLocal("arg1")
+                    )
+                )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
     void lowersSocketCloseCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -6682,7 +6715,9 @@ final class BytecodeToIRTest {
     @Test
     void lowerInetAddressIntrinsicReturnsFalseForUnsupportedMethod() {
         final boolean lowered = BytecodeToIRInvokeSupport.lowerInetAddressIntrinsic(
-            new MethodRef("java/net/InetAddress", "getByName", "(Ljava/lang/String;)Ljava/net/InetAddress;"),
+            sinkClass(),
+            method(0x0008, "main", "()V", 0, 0, plain(0, 177, "return")),
+            new MethodRef("java/net/InetAddress", "getAllByName", "(Ljava/lang/String;)[Ljava/net/InetAddress;"),
             new ArrayList<>()
         );
 

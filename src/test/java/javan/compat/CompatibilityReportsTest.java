@@ -76,12 +76,12 @@ final class CompatibilityReportsTest {
         assertThat(summary).contains(
             "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 0, \"callables\": 1, \"totalCallables\": 5, \"leftCallables\": 4, \"coveragePercent\": \"20.0\"}",
             "\"exactJdkCallableAccounting\": {\"supportedCallables\": 1, \"explicitRejectedCallables\": 3, \"doneCallables\": 4, \"unknownCallables\": 1, \"totalCallables\": 5, \"donePercent\": \"80.0\"}",
-            "\"supportRows\": 108",
-            "\"passRows\": 108",
+            "\"supportRows\": 109",
+            "\"passRows\": 109",
             "\"scopedRows\": 0",
             "\"targetRows\": 0",
             "\"rejectedRows\": 0",
-            "\"accountedRows\": 108",
+            "\"accountedRows\": 109",
             "\"unaccountedRows\": 0"
         );
     }
@@ -122,6 +122,7 @@ final class CompatibilityReportsTest {
             "| `owned-buffer-realloc-validation` | pass |",
             "| `network-address-runtime` | pass |",
             "| `network-tcp-client-socket` | pass |",
+            "| `network-tcp-client-socket-address` | pass |",
             "| `network-tcp-server-socket` | pass |",
             "| `network-tcp-socket-stream-io` | pass |",
             "| `network-http-client-get-string` | pass |",
@@ -162,6 +163,7 @@ final class CompatibilityReportsTest {
             "\"feature\": \"library-c-result-wrapper-success\"",
             "\"feature\": \"network-address-runtime\"",
             "\"feature\": \"network-tcp-client-socket\"",
+            "\"feature\": \"network-tcp-client-socket-address\"",
             "\"feature\": \"network-tcp-server-socket\"",
             "\"feature\": \"network-tcp-socket-stream-io\"",
             "\"feature\": \"network-http-client-get-string\"",

@@ -102,6 +102,7 @@
     {"feature": "stringbuilder-setlength-overflow-panic", "jdk25": "pass"},
     {"feature": "network-address-runtime", "jdk25": "pass"},
     {"feature": "network-tcp-client-socket", "jdk25": "pass"},
+    {"feature": "network-tcp-client-socket-address", "jdk25": "pass"},
     {"feature": "network-tcp-server-socket", "jdk25": "pass"},
     {"feature": "network-tcp-socket-stream-io", "jdk25": "pass"},
     {"feature": "network-http-client-get-string", "jdk25": "pass"},

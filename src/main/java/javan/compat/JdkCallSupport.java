@@ -342,7 +342,7 @@ public final class JdkCallSupport {
         runtime("InetSocketAddress.getHostString", "java/net/InetSocketAddress", "getHostString", "()Ljava/lang/String;"),
         runtime("InetSocketAddress.getAddress", "java/net/InetSocketAddress", "getAddress", "()Ljava/net/InetAddress;"),
         runtime("InetSocketAddress.toString", "java/net/InetSocketAddress", "toString", "()Ljava/lang/String;"),
-        runtime("Socket.<init>", "java/net/Socket", "<init>", "(Ljava/lang/String;I)V"),
+        runtime("Socket.<init>", "java/net/Socket", "<init>", "(Ljava/lang/String;I)V", "(Ljava/net/InetAddress;I)V"),
         runtime("Socket.isConnected", "java/net/Socket", "isConnected", "()Z"),
         runtime("Socket.isClosed", "java/net/Socket", "isClosed", "()Z"),
         runtime("Socket.getPort", "java/net/Socket", "getPort", "()I"),

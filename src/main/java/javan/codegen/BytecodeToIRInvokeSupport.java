@@ -1574,7 +1574,7 @@ final class BytecodeToIRInvokeSupport {
             return lowerLockSupportStaticCall(classFile, method, methodRef, instructions, stack);
         }
         if ("java/net/InetAddress".equals(methodRef.owner())) {
-            return lowerInetAddressIntrinsic(methodRef, stack);
+            return lowerInetAddressIntrinsic(classFile, method, methodRef, stack);
         }
         return false;
     }
@@ -1819,6 +1819,8 @@ final class BytecodeToIRInvokeSupport {
         return false;
     }
     static boolean lowerInetAddressIntrinsic(
+        final ClassFile classFile,
+        final MethodInfo method,
         final MethodRef methodRef,
         final List<StackValue> stack
     ) {
@@ -2108,6 +2110,21 @@ final class BytecodeToIRInvokeSupport {
             instructions.add(IrInstruction.assignObject(
                 receiver.value(),
                 IrExpression.objectCall("javan_socket_connect_host", arguments)
+            ));
+            return true;
+        }
+        if ("java/net/Socket".equals(methodRef.owner())
+            && "<init>".equals(methodRef.name())
+            && "(Ljava/net/InetAddress;I)V".equals(methodRef.descriptor())) {
+            instructions.add(IrInstruction.assignObject(
+                receiver.value(),
+                IrExpression.objectCall(
+                    "javan_socket_connect_host",
+                    List.of(
+                        IrExpression.objectCall("javan_inet_address_get_host_address", List.of(arguments.getFirst())),
+                        arguments.get(1)
+                    )
+                )
             ));
             return true;
         }

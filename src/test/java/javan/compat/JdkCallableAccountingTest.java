@@ -959,4 +959,10 @@ final class JdkCallableAccountingTest {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/module/Configuration", "resolve", "(Ljava/lang/module/ModuleFinder;Ljava/lang/module/ModuleFinder;Ljava/util/Collection;)Ljava/lang/module/Configuration;")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
     }
+
+    @Test
+    void marksSocketInetAddressPortConstructorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/net/Socket", "<init>", "(Ljava/net/InetAddress;I)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
 }

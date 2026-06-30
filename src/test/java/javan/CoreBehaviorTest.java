@@ -519,6 +519,11 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void jdkCallSupportAcceptsSocketInetAddressPortConstructor() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/Socket", "<init>", "(Ljava/net/InetAddress;I)V"))).isTrue();
+    }
+
+    @Test
     void jdkCallSupportAcceptsServerSocketPortConstructor() {
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/ServerSocket", "<init>", "(I)V"))).isTrue();
     }
@@ -556,6 +561,16 @@ final class CoreBehaviorTest {
     void staticVerifierAcceptsSupportedSocketConstructorCall() {
         final List<Diagnostic> diagnostics = verifyInstruction(
             instruction(0, 183, "invokespecial", new MethodRef("java/net/Socket", "<init>", "(Ljava/lang/String;I)V")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsSupportedSocketInetAddressConstructorCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 183, "invokespecial", new MethodRef("java/net/Socket", "<init>", "(Ljava/net/InetAddress;I)V")),
             true
         );
 
