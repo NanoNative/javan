@@ -41,6 +41,42 @@ final class JdkCallableAccounting {
             }
             return false;
         }
+        if ("java/lang/String".equals(owner)) {
+            if ("matches".equals(methodName)) {
+                return "(Ljava/lang/String;)Z".equals(descriptor);
+            }
+            if ("replaceFirst".equals(methodName) || "replaceAll".equals(methodName)) {
+                return "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;".equals(descriptor);
+            }
+            if ("split".equals(methodName)) {
+                return "(Ljava/lang/String;I)[Ljava/lang/String;".equals(descriptor)
+                    || "(Ljava/lang/String;)[Ljava/lang/String;".equals(descriptor);
+            }
+            if ("splitWithDelimiters".equals(methodName)) {
+                return "(Ljava/lang/String;I)[Ljava/lang/String;".equals(descriptor);
+            }
+            if ("format".equals(methodName)) {
+                return "(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;".equals(descriptor)
+                    || "(Ljava/util/Locale;Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;".equals(descriptor);
+            }
+            if ("formatted".equals(methodName)) {
+                return "([Ljava/lang/Object;)Ljava/lang/String;".equals(descriptor);
+            }
+            if ("toLowerCase".equals(methodName) || "toUpperCase".equals(methodName)) {
+                return "()Ljava/lang/String;".equals(descriptor)
+                    || "(Ljava/util/Locale;)Ljava/lang/String;".equals(descriptor);
+            }
+            if ("strip".equals(methodName)
+                || "stripLeading".equals(methodName)
+                || "stripTrailing".equals(methodName)
+                || "isBlank".equals(methodName)
+                || "lines".equals(methodName)
+                || "stripIndent".equals(methodName)
+                || "translateEscapes".equals(methodName)) {
+                return descriptor.startsWith("()");
+            }
+            return "indent".equals(methodName) && "(I)Ljava/lang/String;".equals(descriptor);
+        }
         if (owner.startsWith("jdk/jfr/")) {
             return true;
         }
