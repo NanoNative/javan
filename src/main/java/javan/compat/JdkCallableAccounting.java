@@ -42,6 +42,18 @@ final class JdkCallableAccounting {
             return false;
         }
         if ("java/lang/String".equals(owner)) {
+            if ("<init>".equals(methodName)) {
+                return "(Ljava/lang/StringBuffer;)V".equals(descriptor)
+                    || "([III)V".equals(descriptor)
+                    || "([B)V".equals(descriptor)
+                    || "([BI)V".equals(descriptor)
+                    || "([BII)V".equals(descriptor)
+                    || "([BIII)V".equals(descriptor)
+                    || "([BIILjava/lang/String;)V".equals(descriptor)
+                    || "([BIILjava/nio/charset/Charset;)V".equals(descriptor)
+                    || "([BLjava/lang/String;)V".equals(descriptor)
+                    || "([BLjava/nio/charset/Charset;)V".equals(descriptor);
+            }
             if ("matches".equals(methodName)) {
                 return "(Ljava/lang/String;)Z".equals(descriptor);
             }
@@ -62,6 +74,21 @@ final class JdkCallableAccounting {
             if ("formatted".equals(methodName)) {
                 return "([Ljava/lang/Object;)Ljava/lang/String;".equals(descriptor);
             }
+            if ("codePointAt".equals(methodName) || "codePointBefore".equals(methodName)) {
+                return "(I)I".equals(descriptor);
+            }
+            if ("codePointCount".equals(methodName) || "offsetByCodePoints".equals(methodName)) {
+                return "(II)I".equals(descriptor);
+            }
+            if ("getChars".equals(methodName)) {
+                return "(II[CI)V".equals(descriptor);
+            }
+            if ("getBytes".equals(methodName)) {
+                return "(II[BI)V".equals(descriptor)
+                    || "(Ljava/lang/String;)[B".equals(descriptor)
+                    || "(Ljava/nio/charset/Charset;)[B".equals(descriptor)
+                    || "()[B".equals(descriptor);
+            }
             if ("toLowerCase".equals(methodName) || "toUpperCase".equals(methodName)) {
                 return "()Ljava/lang/String;".equals(descriptor)
                     || "(Ljava/util/Locale;)Ljava/lang/String;".equals(descriptor);
@@ -71,6 +98,9 @@ final class JdkCallableAccounting {
                 || "stripTrailing".equals(methodName)
                 || "isBlank".equals(methodName)
                 || "lines".equals(methodName)
+                || "chars".equals(methodName)
+                || "codePoints".equals(methodName)
+                || "toCharArray".equals(methodName)
                 || "stripIndent".equals(methodName)
                 || "translateEscapes".equals(methodName)) {
                 return descriptor.startsWith("()");
