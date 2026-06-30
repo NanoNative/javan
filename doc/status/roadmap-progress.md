@@ -25,14 +25,14 @@ Status words are exact. No colors, no mood lighting.
 | Measure | Current value | Meaning |
 | --- | ---: | --- |
 | Self-check reachable classes | 225 | Clean detached branch verification of `java -jar target/javan-2026.6.14.jar check target/classes --main javan.Main` on current branch Javan classes. |
-| Self-check reachable methods | 2,562 | Same current-branch self-check. |
+| Self-check reachable methods | 2,563 | Same current-branch self-check. |
 | Self-check diagnostics | 0 | Current Javan source shape is clean for reachable native self-build analysis. |
 | Scenario ledger done | 108/108 | Named support scenarios with explicit pass/reject status. |
 | Scenario ledger left | 0 | No named support scenario rows remain outside `pass`/`rejected`. |
 | Exact supported JDK callables | 1032/267886 (0.3%) | Lower-bound callable-member coverage on the scanned JDK 25 image for members that already match the exact native support registry on the current branch baseline. |
-| Exact explicit rejected JDK callables | 5398 | Deterministic callable-member rejects currently counted exactly from forbidden APIs, verifier-backed monitor/concurrency members, the deliberate `jdk.jfr.*` owner family, `sun.misc.Unsafe`, the exact `String` regex/formatter/text-normalization plus binary/charset/code-point family, the current exact `StringBuilder`, `StringBuffer`, plus `AbstractStringBuilder` char-sequence/string-buffer/code-point/stream/repeat family, and the internal `StringLatin1`, `StringUTF16`, `StringConcatHelper`, plus `StringCoding` owner families including their nested helper classes. |
-| Exact done JDK callables | 6430/267886 (2.4%) | Lower-bound supported-plus-explicitly-rejected callable-member accounting on the scanned JDK 25 image for the current branch baseline. |
-| Exact unknown JDK callables | 261456 | Callable members on the scanned JDK 25 image not yet counted as supported or explicitly rejected. |
+| Exact explicit rejected JDK callables | 5660 | Deterministic callable-member rejects currently counted exactly from forbidden APIs, verifier-backed monitor/concurrency members, the deliberate `jdk.jfr.*` owner family, `sun.misc.Unsafe`, the exact `String` regex/formatter/text-normalization plus binary/charset/code-point family, the current exact `StringBuilder`, `StringBuffer`, plus `AbstractStringBuilder` char-sequence/string-buffer/code-point/stream/repeat family, the internal `StringLatin1`, `StringUTF16`, `StringConcatHelper`, plus `StringCoding` owner families including their nested helper classes, and the internal `CharacterData*` owner family. |
+| Exact done JDK callables | 6692/267886 (2.4%) | Lower-bound supported-plus-explicitly-rejected callable-member accounting on the scanned JDK 25 image for the current branch baseline. |
+| Exact unknown JDK callables | 261194 | Callable members on the scanned JDK 25 image not yet counted as supported or explicitly rejected. |
 | Exact supported JDK callables left | 266854 | Callables on the scanned JDK 25 image that are not yet in the exact supported callable ledger. |
 | Flow-qualified rejected JDK call shapes | 0 | Separate diagnostic-shape ledger exists now; the current self-check profile has no such diagnostics. |
 | Full first-JDK release gate | 0.0% | Inventory and exact supported callable counts exist, but supported/rejected/unknown accounting for the first release-gated JDK is still incomplete. |
@@ -80,6 +80,7 @@ supported/rejected/unknown accounting is not complete yet.
 | M53: exact explicit rejection expansion v4 | Done | Added exact `StringBuffer` char-sequence/string-buffer/code-point/stream/repeat rejects, moving explicit rejects to `5128`, done to `6160`, unknown to `261726`. |
 | M54: exact explicit rejection expansion v5 | Done | Added exact `AbstractStringBuilder` bridge/code-point/stream/repeat rejects, moving explicit rejects to `5145`, done to `6177`, unknown to `261709`. |
 | M55: exact explicit rejection expansion v6 | Done | Added internal `StringLatin1`, `StringUTF16`, `StringConcatHelper`, plus `StringCoding` owner-family rejects including nested helper classes, moving explicit rejects to `5398`, done to `6430`, unknown to `261456`. |
+| M56: exact explicit rejection expansion v7 | Done | Added internal `CharacterData*` owner-family rejects, moving explicit rejects to `5660`, done to `6692`, unknown to `261194`. |
 
 ## Honest Targets Today
 

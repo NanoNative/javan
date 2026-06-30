@@ -431,4 +431,28 @@ final class JdkCallableAccountingTest {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/StringCoding", "countNonZeroAscii", "(Ljava/lang/String;)I")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
     }
+
+    @Test
+    void marksCharacterDataBaseAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/CharacterData", "of", "(I)Ljava/lang/CharacterData;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksCharacterDataLatin1AsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/CharacterDataLatin1", "toLowerCase", "(I)I")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksCharacterData00AsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/CharacterData00", "getType", "(I)I")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksCharacterDataUndefinedAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/CharacterDataUndefined", "isDigit", "(I)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
 }

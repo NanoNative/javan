@@ -222,6 +222,9 @@ final class JdkCallableAccounting {
         if (isInternalStringHelperOwner(owner)) {
             return true;
         }
+        if (isCharacterDataOwner(owner)) {
+            return true;
+        }
         if (owner.startsWith("jdk/jfr/")) {
             return true;
         }
@@ -242,6 +245,10 @@ final class JdkCallableAccounting {
 
     private static boolean isOwnerFamily(final String owner, final String family) {
         return family.equals(owner) || owner.startsWith(family + "$");
+    }
+
+    private static boolean isCharacterDataOwner(final String owner) {
+        return owner.equals("java/lang/CharacterData") || owner.startsWith("java/lang/CharacterData");
     }
 
     enum Status {
