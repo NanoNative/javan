@@ -805,6 +805,24 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksSecureRandomGetInstanceAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/security/SecureRandom", "getInstance", "(Ljava/lang/String;)Ljava/security/SecureRandom;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void keepsGeneralSecurityExceptionConstructorsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/security/GeneralSecurityException", "<init>", "()V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void keepsCertificateFactoryOutsideSecurityFamilyRejects() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/security/cert/CertificateFactory", "getInstance", "(Ljava/lang/String;)Ljava/security/cert/CertificateFactory;")))
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
+    }
+
+    @Test
     void marksFormatFormatObjectAsExplicitRejected() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/text/Format", "format", "(Ljava/lang/Object;)Ljava/lang/String;")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);

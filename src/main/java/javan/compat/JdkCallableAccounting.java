@@ -280,6 +280,12 @@ final class JdkCallableAccounting {
             }
             return true;
         }
+        if (owner.startsWith("java/security/") && !owner.startsWith("java/security/cert/")) {
+            if (JdkCallSupport.isPlatformThrowable(owner)) {
+                return false;
+            }
+            return true;
+        }
         if (owner.startsWith("jdk/jfr/")) {
             return true;
         }
