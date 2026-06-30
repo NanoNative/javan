@@ -371,6 +371,79 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void exceptionHandlerSkipsUnsupportedCatchAllFinallyShape() {
+        final MethodInfo main = methodWithHandlers(
+            0x0008,
+            "main",
+            "()V",
+            1,
+            1,
+            List.of(new CodeException(0, 1, 1, Optional.empty())),
+            plain(0, 1, "aconst_null"),
+            plain(1, 75, "astore_0"),
+            plain(2, 177, "return")
+        );
+
+        assertThat(BytecodeToIRControlFlowSupport.exceptionHandler(
+            classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(main)),
+            main,
+            plain(0, 191, "athrow"),
+            BytecodeToIR.StackValue.platformThrowable("java/lang/NullPointerException", IrExpression.stringLiteral("boom")),
+            0
+        )).isEmpty();
+    }
+
+    @Test
+    void exceptionHandlerPrefersTypedCatchAfterUnsupportedCatchAllFinallyShape() {
+        final MethodInfo main = methodWithHandlers(
+            0x0008,
+            "main",
+            "()V",
+            1,
+            1,
+            List.of(
+                new CodeException(0, 1, 1, Optional.empty()),
+                new CodeException(0, 1, 3, Optional.of("java/lang/NullPointerException"))
+            ),
+            plain(0, 1, "aconst_null"),
+            plain(1, 75, "astore_0"),
+            plain(2, 177, "return"),
+            plain(3, 177, "return")
+        );
+
+        assertThat(BytecodeToIRControlFlowSupport.exceptionHandler(
+            classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(main)),
+            main,
+            plain(0, 191, "athrow"),
+            BytecodeToIR.StackValue.platformThrowable("java/lang/NullPointerException", IrExpression.stringLiteral("boom")),
+            0
+        )).contains(3);
+    }
+
+    @Test
+    void exceptionHandlerReturnsEmptyWhenTypedCatchIsNotAssignable() {
+        final MethodInfo main = methodWithHandlers(
+            0x0008,
+            "main",
+            "()V",
+            1,
+            0,
+            List.of(new CodeException(0, 1, 2, Optional.of("java/lang/IllegalArgumentException"))),
+            plain(0, 1, "aconst_null"),
+            plain(1, 177, "return"),
+            plain(2, 177, "return")
+        );
+
+        assertThat(BytecodeToIRControlFlowSupport.exceptionHandler(
+            classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(main)),
+            main,
+            plain(0, 191, "athrow"),
+            BytecodeToIR.StackValue.platformThrowable("java/lang/NullPointerException", IrExpression.stringLiteral("boom")),
+            0
+        )).isEmpty();
+    }
+
+    @Test
     void supportedFinallyRethrowHandlerRejectsTypedCatch() {
         final CodeAttribute code = new CodeAttribute(
             1,
@@ -380,6 +453,42 @@ final class BytecodeToIRTest {
             List.of(new CodeException(0, 1, 1, Optional.of("java/lang/RuntimeException"))),
             List.of(),
             List.of(plain(0, 177, "return"), plain(1, 177, "return"))
+        );
+
+        assertThat(BytecodeToIRControlFlowSupport.supportedFinallyRethrowHandler(
+            code,
+            code.exceptionTable().getFirst()
+        )).isFalse();
+    }
+
+    @Test
+    void supportedFinallyRethrowHandlerRejectsReloadFromDifferentLocal() {
+        final CodeAttribute code = new CodeAttribute(
+            1,
+            2,
+            new byte[0],
+            0,
+            List.of(new CodeException(0, 1, 1, Optional.empty())),
+            List.of(),
+            List.of(plain(0, 177, "return"), plain(1, 75, "astore_0"), plain(2, 43, "aload_1"), plain(3, 191, "athrow"))
+        );
+
+        assertThat(BytecodeToIRControlFlowSupport.supportedFinallyRethrowHandler(
+            code,
+            code.exceptionTable().getFirst()
+        )).isFalse();
+    }
+
+    @Test
+    void supportedFinallyRethrowHandlerIgnoresReloadBeforeHandlerOffset() {
+        final CodeAttribute code = new CodeAttribute(
+            1,
+            1,
+            new byte[0],
+            0,
+            List.of(new CodeException(2, 3, 3, Optional.empty())),
+            List.of(),
+            List.of(plain(0, 42, "aload_0"), plain(1, 191, "athrow"), plain(2, 177, "return"), plain(3, 75, "astore_0"), plain(4, 177, "return"))
         );
 
         assertThat(BytecodeToIRControlFlowSupport.supportedFinallyRethrowHandler(
