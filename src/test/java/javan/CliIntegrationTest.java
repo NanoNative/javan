@@ -11521,7 +11521,7 @@ final class CliIntegrationTest {
             public final class SlowTask implements Runnable {
                 @Override
                 public void run() {
-                    final long until = System.nanoTime() + 150_000_000L;
+                    final long until = System.nanoTime() + 500_000_000L;
                     while (System.nanoTime() < until) {
                         // spin
                     }
@@ -11540,7 +11540,7 @@ final class CliIntegrationTest {
 
                 @Override
                 public void run() {
-                    final long until = System.nanoTime() + 25_000_000L;
+                    final long until = System.nanoTime() + 50_000_000L;
                     while (System.nanoTime() < until) {
                         // spin
                     }

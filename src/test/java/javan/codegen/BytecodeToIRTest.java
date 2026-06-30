@@ -1461,13 +1461,13 @@ final class BytecodeToIRTest {
             2,
             0,
             getStatic(0, new FieldRef("java/lang/System", "out", "Ljava/io/PrintStream;")),
-            plain(1, 5, "iconst_2"),
-            invokeVirtual(2, new MethodRef("java/io/PrintStream", "print", "(I)V")),
+            plain(1, 1, "aconst_null"),
+            invokeVirtual(2, new MethodRef("java/io/PrintStream", "print", "(Ljava/lang/Object;)V")),
             plain(3, 177, "return")
         )))
             .isInstanceOf(DiagnosticException.class)
             .hasMessageContaining("error[JAVAN040]: bytecode is not implemented by native code generation")
-            .hasMessageContaining("invokevirtual java/io/PrintStream.print(I)V");
+            .hasMessageContaining("invokevirtual java/io/PrintStream.print(Ljava/lang/Object;)V");
     }
 
     @Test
