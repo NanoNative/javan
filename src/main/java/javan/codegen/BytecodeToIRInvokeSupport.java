@@ -1306,6 +1306,51 @@ final class BytecodeToIRInvokeSupport {
             )));
             return true;
         }
+        if ("java/lang/String".equals(methodRef.owner())
+            && "valueOf".equals(methodRef.name())
+            && "(J)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_string_value_of_long",
+                List.of(popLong(classFile, method, stack))
+            )));
+            return true;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
+            && "valueOf".equals(methodRef.name())
+            && "(F)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_string_value_of_float",
+                List.of(popFloat(classFile, method, stack))
+            )));
+            return true;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
+            && "valueOf".equals(methodRef.name())
+            && "(D)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_string_value_of_double",
+                List.of(popDouble(classFile, method, stack))
+            )));
+            return true;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
+            && "valueOf".equals(methodRef.name())
+            && "(Z)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_string_value_of_bool",
+                List.of(popInt(classFile, method, stack))
+            )));
+            return true;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
+            && "valueOf".equals(methodRef.name())
+            && "(C)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_string_value_of_char",
+                List.of(popInt(classFile, method, stack))
+            )));
+            return true;
+        }
         if ("java/time/Duration".equals(methodRef.owner())) {
             return lowerDurationIntrinsic(classFile, method, methodRef, stack);
         }

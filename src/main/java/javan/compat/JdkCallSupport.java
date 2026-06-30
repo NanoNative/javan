@@ -154,7 +154,17 @@ public final class JdkCallSupport {
         intrinsic("Boolean.toString", "java/lang/Boolean", "toString", "(Z)Ljava/lang/String;"),
         runtime("Boolean.valueOf", "java/lang/Boolean", "valueOf", "(Z)Ljava/lang/Boolean;"),
         runtime("Boolean.booleanValue", "java/lang/Boolean", "booleanValue", "()Z"),
-        intrinsic("String.valueOf", "java/lang/String", "valueOf", "(I)Ljava/lang/String;"),
+        intrinsic(
+            "String.valueOf",
+            "java/lang/String",
+            "valueOf",
+            "(I)Ljava/lang/String;",
+            "(J)Ljava/lang/String;",
+            "(F)Ljava/lang/String;",
+            "(D)Ljava/lang/String;",
+            "(Z)Ljava/lang/String;",
+            "(C)Ljava/lang/String;"
+        ),
         runtime("Duration.ofMillis", "java/time/Duration", "ofMillis", "(J)Ljava/time/Duration;"),
         runtime("Duration.ofSeconds", "java/time/Duration", "ofSeconds", "(J)Ljava/time/Duration;"),
         runtime("Duration.toMillis", "java/time/Duration", "toMillis", "()J"),

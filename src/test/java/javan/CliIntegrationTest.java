@@ -45,7 +45,7 @@ final class CliIntegrationTest {
             classes.toString(),
             "javan.Main",
             "--version"
-        ));
+        ), Duration.ofSeconds(30));
 
         assertThat(run.exitCode()).isZero();
         assertThat(run.stdout()).isEqualTo("javan " + Version.number() + "\n");
@@ -299,6 +299,121 @@ final class CliIntegrationTest {
                 "Supported-direct reachable call sites: `0`",
                 "Unsupported reachable call sites: `0`"
             );
+    }
+
+    @Test
+    void stringValueOfLongBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-value-of-long");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(String.valueOf(7L));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-value-of-long").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringValueOfFloatBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-value-of-float");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(String.valueOf(1.5f));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-value-of-float").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringValueOfDoubleBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-value-of-double");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(String.valueOf(1.5d));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-value-of-double").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringValueOfBooleanBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-value-of-boolean");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(String.valueOf(true));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-value-of-boolean").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringValueOfCharBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-value-of-char");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(String.valueOf('A'));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-value-of-char").toString())).stdout()).isEqualTo(jvmOutput);
     }
 
     @Test
