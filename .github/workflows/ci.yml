@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - 'feature/**'
   workflow_dispatch:
 
 permissions:
@@ -69,25 +70,25 @@ jobs:
         run: |
           if ! mvn -q verify; then
             python3 - <<'PY'
-import pathlib
-import xml.etree.ElementTree as ET
+            import pathlib
+            import xml.etree.ElementTree as ET
 
-report = pathlib.Path("target/site/jacoco/jacoco.xml")
-if not report.exists():
-    print("JaCoCo report missing after failed verify.")
-else:
-    root = ET.parse(report).getroot()
-    bundle = {counter.attrib["type"]: counter.attrib for counter in root.findall("counter")}
-    for counter_type in ("BRANCH", "LINE"):
-        counter = bundle.get(counter_type)
-        if counter is None:
-            continue
-        missed = int(counter["missed"])
-        covered = int(counter["covered"])
-        total = missed + covered
-        ratio = covered / total if total else 1.0
-        print(f"JaCoCo {counter_type.lower()} bundle ratio: {covered}/{total} = {ratio:.6%}")
-PY
+            report = pathlib.Path("target/site/jacoco/jacoco.xml")
+            if not report.exists():
+                print("JaCoCo report missing after failed verify.")
+            else:
+                root = ET.parse(report).getroot()
+                bundle = {counter.attrib["type"]: counter.attrib for counter in root.findall("counter")}
+                for counter_type in ("BRANCH", "LINE"):
+                    counter = bundle.get(counter_type)
+                    if counter is None:
+                        continue
+                    missed = int(counter["missed"])
+                    covered = int(counter["covered"])
+                    total = missed + covered
+                    ratio = covered / total if total else 1.0
+                    print(f"JaCoCo {counter_type.lower()} bundle ratio: {covered}/{total} = {ratio:.6%}")
+            PY
             exit 1
           fi
 
