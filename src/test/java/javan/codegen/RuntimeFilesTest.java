@@ -52,6 +52,24 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void runtimePrintObjectValuePrintsNullForNullReference() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                javan_print_object_value(0);
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("null");
+    }
+
+    @Test
     void writeTracksRuntimeAllocationsAndRegistersShutdownCleanup() throws Exception {
         final Path runtime = new RuntimeFiles().write(tempDir);
 

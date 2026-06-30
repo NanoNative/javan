@@ -584,6 +584,35 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void printStreamPrintObjectBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("printstream-print-object");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Object left = "left";
+                    final Object none = null;
+                    System.out.print(left);
+                    System.out.print(":");
+                    System.out.print(none);
+                    System.out.println();
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/printstream-print-object").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("left:null\n");
+    }
+
+    @Test
     void stringBuilderAppendFloatBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("stringbuilder-append-float");
         writeJava(project, "com.acme.Main", """

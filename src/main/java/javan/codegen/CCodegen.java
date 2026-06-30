@@ -1749,10 +1749,10 @@ public final class CCodegen {
                 emitPrintCall(c, "javan_eprintln_object_value", "", instruction.expression().orElseThrow());
                 break;
             case PRINT_OBJECT:
-                emitPrintCall(c, "javan_print", "(const char*) ", instruction.expression().orElseThrow());
+                emitPrintCall(c, "javan_print_object_value", "", instruction.expression().orElseThrow());
                 break;
             case PRINT_ERROR_OBJECT:
-                emitPrintCall(c, "javan_eprint", "(const char*) ", instruction.expression().orElseThrow());
+                emitPrintCall(c, "javan_eprint_object_value", "", instruction.expression().orElseThrow());
                 break;
             case CALL_STATIC_VOID:
                 if (instruction.expression().isPresent()) {

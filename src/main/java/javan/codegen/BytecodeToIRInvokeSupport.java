@@ -695,6 +695,11 @@ final class BytecodeToIRInvokeSupport {
             emitPrintObject(classFile, method, instruction, instructions, stack, argument);
             return true;
         }
+        if ("print".equals(methodRef.name()) && "(Ljava/lang/Object;)V".equals(methodRef.descriptor())) {
+            final IrExpression argument = popPrintableObject(classFile, method, instruction, stack);
+            emitPrintObject(classFile, method, instruction, instructions, stack, argument);
+            return true;
+        }
         if ("print".equals(methodRef.name()) && "(C)V".equals(methodRef.descriptor())) {
             final IrExpression argument = IrExpression.objectCall("javan_string_value_of_char", List.of(popInt(classFile, method, stack)));
             emitPrintObject(classFile, method, instruction, instructions, stack, argument);
@@ -728,6 +733,10 @@ final class BytecodeToIRInvokeSupport {
         if ("println".equals(methodRef.name()) && "(Ljava/lang/String;)V".equals(methodRef.descriptor())) {
             final IrExpression argument = popObject(classFile, method, instruction, stack);
             emitPrintlnObject(classFile, method, instruction, instructions, stack, argument);
+            return true;
+        }
+        if ("println".equals(methodRef.name()) && "()V".equals(methodRef.descriptor())) {
+            emitPrintlnObject(classFile, method, instruction, instructions, stack, IrExpression.stringLiteral(""));
             return true;
         }
         if ("println".equals(methodRef.name()) && "(Ljava/lang/Object;)V".equals(methodRef.descriptor())) {
@@ -799,7 +808,7 @@ final class BytecodeToIRInvokeSupport {
             instructions.add(IrInstruction.printObject(argument));
             return;
         }
-        instructions.add(IrInstruction.callStaticVoid("javan_printstream_print", List.of(receiver.expression().orElseThrow(), argument)));
+        instructions.add(IrInstruction.callStaticVoid("javan_printstream_print_object", List.of(receiver.expression().orElseThrow(), argument)));
     }
     static void emitPrintlnObject(
         final ClassFile classFile,

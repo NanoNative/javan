@@ -1916,8 +1916,8 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void rejectsUnsupportedPrintStreamPrintDescriptor() {
-        assertThatThrownBy(() -> lowerMain(method(
+    void lowersSystemOutPrintObjectToPrintInstruction() {
+        final IrFunction function = lowerMain(method(
             0x0008,
             "main",
             "()V",
@@ -1927,10 +1927,92 @@ final class BytecodeToIRTest {
             plain(1, 1, "aconst_null"),
             invokeVirtual(2, new MethodRef("java/io/PrintStream", "print", "(Ljava/lang/Object;)V")),
             plain(3, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.printObject(IrExpression.objectNull()),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
+    void lowersSystemErrPrintObjectToErrorPrintInstruction() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()V",
+            2,
+            0,
+            getStatic(0, new FieldRef("java/lang/System", "err", "Ljava/io/PrintStream;")),
+            plain(1, 1, "aconst_null"),
+            invokeVirtual(2, new MethodRef("java/io/PrintStream", "print", "(Ljava/lang/Object;)V")),
+            plain(3, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.printErrorObject(IrExpression.objectNull()),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
+    void lowersObjectBackedPrintStreamPrintObjectCallToRuntimeHelper() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/io/PrintStream;Ljava/lang/Object;)V",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/io/PrintStream", "print", "(Ljava/lang/Object;)V")),
+            plain(3, 177, "return")
+        ));
+
+        assertThat(function.instructions()).contains(
+            IrInstruction.callStaticVoid(
+                "javan_printstream_print_object",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
+    void lowersSystemOutPrintlnWithoutArgumentsToEmptyLineInstruction() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()V",
+            1,
+            0,
+            getStatic(0, new FieldRef("java/lang/System", "out", "Ljava/io/PrintStream;")),
+            invokeVirtual(1, new MethodRef("java/io/PrintStream", "println", "()V")),
+            plain(2, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.printlnObject(IrExpression.stringLiteral("")),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
+    void rejectsUnsupportedPrintStreamPrintCharArrayDescriptor() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "()V",
+            2,
+            0,
+            getStatic(0, new FieldRef("java/lang/System", "out", "Ljava/io/PrintStream;")),
+            plain(1, 1, "aconst_null"),
+            invokeVirtual(2, new MethodRef("java/io/PrintStream", "print", "([C)V")),
+            plain(3, 177, "return")
         )))
             .isInstanceOf(DiagnosticException.class)
             .hasMessageContaining("error[JAVAN040]: bytecode is not implemented by native code generation")
-            .hasMessageContaining("invokevirtual java/io/PrintStream.print(Ljava/lang/Object;)V");
+            .hasMessageContaining("invokevirtual java/io/PrintStream.print([C)V");
     }
 
     @Test
@@ -1988,7 +2070,7 @@ final class BytecodeToIRTest {
 
         assertThat(function.instructions()).contains(
             IrInstruction.callStaticVoid(
-                "javan_printstream_print",
+                "javan_printstream_print_object",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
             ),
             IrInstruction.returnVoid()

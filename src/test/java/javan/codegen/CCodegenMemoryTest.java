@@ -968,7 +968,7 @@ final class CCodegenMemoryTest {
             "javan_eprintln_double(4.0);",
             "javan_eprintln_bool(1);",
             "javan_eprintln_object_value((void*) \"line\");",
-            "javan_eprint((const char*) (void*) \"part\");"
+            "javan_eprint_object_value((void*) \"part\");"
         );
     }
 

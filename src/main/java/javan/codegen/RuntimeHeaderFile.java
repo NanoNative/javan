@@ -33,7 +33,10 @@ final class RuntimeHeaderFile {
         void* javan_system_out(void);
         void* javan_system_err(void);
         void javan_printstream_print(void* stream, const char* value);
+        void javan_printstream_print_object(void* stream, void* value);
         void javan_printstream_println(void* stream, const char* value);
+        void javan_print_object_value(void* value);
+        void javan_eprint_object_value(void* value);
         void javan_println_object_value(void* value);
         void javan_eprintln_object_value(void* value);
         void javan_printstream_println_object(void* stream, void* value);
