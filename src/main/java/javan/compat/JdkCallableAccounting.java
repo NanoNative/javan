@@ -225,6 +225,10 @@ final class JdkCallableAccounting {
         if (isCharacterDataOwner(owner)) {
             return true;
         }
+        if ("java/lang/ConditionalSpecialCasing".equals(owner)
+            || "java/lang/String$CaseInsensitiveComparator".equals(owner)) {
+            return true;
+        }
         if (owner.startsWith("jdk/jfr/")) {
             return true;
         }

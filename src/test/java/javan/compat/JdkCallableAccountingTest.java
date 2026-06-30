@@ -455,4 +455,16 @@ final class JdkCallableAccountingTest {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/CharacterDataUndefined", "isDigit", "(I)Z")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
     }
+
+    @Test
+    void marksConditionalSpecialCasingAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/ConditionalSpecialCasing", "toLowerCaseEx", "(Ljava/lang/String;ILjava/util/Locale;)I")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksStringCaseInsensitiveComparatorAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/String$CaseInsensitiveComparator", "compare", "(Ljava/lang/String;Ljava/lang/String;)I")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
 }
