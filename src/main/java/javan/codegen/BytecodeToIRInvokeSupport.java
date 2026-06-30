@@ -380,6 +380,30 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if ("java/lang/String".equals(methodRef.owner())
+            && "toString".equals(methodRef.name())
+            && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
+            final IrExpression receiver = popObject(classFile, method, stack);
+            instructions.add(IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(receiver)));
+            stack.add(StackValue.objectExpression(receiver));
+            return;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
+            && "concat".equals(methodRef.name())
+            && "(Ljava/lang/String;)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            final IrExpression argument = popObject(classFile, method, stack);
+            final IrExpression receiver = popObject(classFile, method, stack);
+            instructions.add(IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(receiver)));
+            instructions.add(IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(argument)));
+            final String localName = "object" + localDeclarations.size();
+            localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
+            instructions.add(IrInstruction.assignObject(
+                localName,
+                IrExpression.stringConcat("\u0001\u0001", List.of(receiver, argument))
+            ));
+            stack.add(StackValue.objectExpression(IrExpression.objectLocal(localName)));
+            return;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
             && "repeat".equals(methodRef.name())
             && "(I)Ljava/lang/String;".equals(methodRef.descriptor())) {
             final IrExpression count = popInt(classFile, method, stack);

@@ -635,6 +635,108 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void stringToStringBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-to-string");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String value = "javan";
+                    System.out.println(value.toString());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-to-string").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringToStringNullFailsClearlyAtRuntime() throws Exception {
+        final Path project = project("string-to-string-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String value = null;
+                    System.out.println(value.toString());
+                }
+            }
+            """);
+
+        final CliRun build = run(tempDir, "build", project.toString());
+
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/string-to-string-null").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("[JAVAN-RUNTIME-PANIC]", "detail: null object");
+    }
+
+    @Test
+    void stringConcatBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-concat-method");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String left = "ja";
+                    final String right = "van";
+                    System.out.println(left.concat(right));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-concat-method").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringConcatNullArgumentFailsClearlyAtRuntime() throws Exception {
+        final Path project = project("string-concat-null-argument");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String left = "ja";
+                    final String right = null;
+                    System.out.println(left.concat(right));
+                }
+            }
+            """);
+
+        final CliRun build = run(tempDir, "build", project.toString());
+
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/string-concat-null-argument").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("[JAVAN-RUNTIME-PANIC]", "detail: null object");
+    }
+
+    @Test
     void stringCharArrayConstructorBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("string-char-array-constructor");
         writeJava(project, "com.acme.Main", """
