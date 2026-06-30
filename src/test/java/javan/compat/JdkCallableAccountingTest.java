@@ -497,4 +497,40 @@ final class JdkCallableAccountingTest {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/regex/Matcher", "find", "()Z")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
     }
+
+    @Test
+    void marksRegexAsciiAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/regex/ASCII", "isDigit", "(I)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksRegexCharPredicatesAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/regex/CharPredicates", "ASCII_DIGIT", "()Ljava/util/regex/Pattern$CharPredicate;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksRegexIntHashSetAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/regex/IntHashSet", "contains", "(I)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksRegexMatchResultAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/regex/MatchResult", "group", "()Ljava/lang/String;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksRegexPatternSyntaxExceptionAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/regex/PatternSyntaxException", "getPattern", "()Ljava/lang/String;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksRegexPrintPatternAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/regex/PrintPattern", "print", "(Ljava/lang/Object;)V")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
 }

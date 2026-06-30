@@ -232,8 +232,7 @@ final class JdkCallableAccounting {
         if ("java/lang/ConditionalSpecialCasing$Entry".equals(owner)) {
             return true;
         }
-        if (isOwnerFamily(owner, "java/util/regex/Pattern")
-            || isOwnerFamily(owner, "java/util/regex/Matcher")) {
+        if (owner.startsWith("java/util/regex/")) {
             return true;
         }
         if (owner.startsWith("jdk/jfr/")) {
