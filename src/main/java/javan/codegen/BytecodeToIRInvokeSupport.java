@@ -806,7 +806,7 @@ final class BytecodeToIRInvokeSupport {
             instructions.add(IrInstruction.printlnObject(argument));
             return;
         }
-        instructions.add(IrInstruction.callStaticVoid("javan_printstream_println", List.of(receiver.expression().orElseThrow(), argument)));
+        instructions.add(IrInstruction.callStaticVoid("javan_printstream_println_object", List.of(receiver.expression().orElseThrow(), argument)));
     }
     static void emitPrintlnInt(
         final ClassFile classFile,

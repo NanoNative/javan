@@ -34,6 +34,9 @@ final class RuntimeHeaderFile {
         void* javan_system_err(void);
         void javan_printstream_print(void* stream, const char* value);
         void javan_printstream_println(void* stream, const char* value);
+        void javan_println_object_value(void* value);
+        void javan_eprintln_object_value(void* value);
+        void javan_printstream_println_object(void* stream, void* value);
         void javan_printstream_println_int(void* stream, int value);
         void javan_printstream_println_long(void* stream, long long value);
         void javan_printstream_println_float(void* stream, float value);
@@ -387,6 +390,7 @@ final class RuntimeHeaderFile {
         void* javan_string_value_of_double(double value);
         void* javan_string_value_of_bool(int value);
         void* javan_string_value_of_char(int value);
+        void* javan_printable_object_string(void* value);
         void* javan_string_concat(const char* recipe, int argc, const char** values);
         char* javan_string_export(const char* value);
         void* javan_stringbuilder_new(void);
@@ -396,6 +400,8 @@ final class RuntimeHeaderFile {
         void* javan_stringbuilder_append_char(void* builder, int value);
         void* javan_stringbuilder_append_int(void* builder, int value);
         void* javan_stringbuilder_append_long(void* builder, long long value);
+        void* javan_stringbuilder_append_float(void* builder, float value);
+        void* javan_stringbuilder_append_double(void* builder, double value);
         void* javan_stringbuilder_to_string(void* builder);
         int javan_stringbuilder_length(void* builder);
         int javan_stringbuilder_is_empty(void* builder);

@@ -28,6 +28,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -312,12 +313,355 @@ final class BytecodeToIRTest {
 
         final IrFunction function = lowerMain(main);
 
+        assertThat(function.instructions()).hasSize(4);
+        assertThat(function.instructions().subList(0, 3)).containsExactly(
+            IrInstruction.jump("label_5"),
+            IrInstruction.label("label_5"),
+            IrInstruction.assignObject("local0", IrExpression.stringLiteral("boom"))
+        );
+        assertThat(function.instructions().get(3).op()).isEqualTo(IrInstruction.Op.PANIC);
+        assertThat(function.instructions().get(3).expression()).contains(IrExpression.objectLocal("local0"));
+    }
+
+    @Test
+    void exceptionHandlerReturnsEmptyOutsideProtectedRange() {
+        final MethodInfo main = methodWithHandlers(
+            0x0008,
+            "main",
+            "()V",
+            1,
+            0,
+            List.of(new CodeException(0, 1, 2, Optional.of("java/lang/NullPointerException"))),
+            plain(0, 1, "aconst_null"),
+            plain(1, 177, "return"),
+            plain(2, 177, "return")
+        );
+
+        assertThat(BytecodeToIRControlFlowSupport.exceptionHandler(
+            classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(main)),
+            main,
+            plain(2, 177, "return"),
+            BytecodeToIR.StackValue.platformThrowable("java/lang/NullPointerException", IrExpression.stringLiteral("boom")),
+            2
+        )).isEmpty();
+    }
+
+    @Test
+    void exceptionHandlerRejectsProtectedThrowWithoutKnownThrowableType() {
+        final MethodInfo main = methodWithHandlers(
+            0x0008,
+            "main",
+            "()V",
+            1,
+            0,
+            List.of(new CodeException(0, 1, 1, Optional.of("java/lang/NullPointerException"))),
+            plain(0, 1, "aconst_null"),
+            plain(1, 177, "return")
+        );
+
+        assertThatThrownBy(() -> BytecodeToIRControlFlowSupport.exceptionHandler(
+            classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(main)),
+            main,
+            plain(0, 191, "athrow"),
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectNull()),
+            0
+        )).isInstanceOfSatisfying(DiagnosticException.class, exception ->
+            assertThat(exception.diagnostic().code()).isEqualTo("JAVAN014")
+        );
+    }
+
+    @Test
+    void supportedFinallyRethrowHandlerRejectsTypedCatch() {
+        final CodeAttribute code = new CodeAttribute(
+            1,
+            1,
+            new byte[0],
+            0,
+            List.of(new CodeException(0, 1, 1, Optional.of("java/lang/RuntimeException"))),
+            List.of(),
+            List.of(plain(0, 177, "return"), plain(1, 177, "return"))
+        );
+
+        assertThat(BytecodeToIRControlFlowSupport.supportedFinallyRethrowHandler(
+            code,
+            code.exceptionTable().getFirst()
+        )).isFalse();
+    }
+
+    @Test
+    void supportedFinallyRethrowHandlerRejectsMissingHandlerInstruction() {
+        final CodeAttribute code = new CodeAttribute(
+            1,
+            1,
+            new byte[0],
+            0,
+            List.of(new CodeException(0, 1, 9, Optional.empty())),
+            List.of(),
+            List.of(plain(0, 177, "return"), plain(1, 177, "return"))
+        );
+
+        assertThat(BytecodeToIRControlFlowSupport.supportedFinallyRethrowHandler(
+            code,
+            code.exceptionTable().getFirst()
+        )).isFalse();
+    }
+
+    @Test
+    void supportedFinallyRethrowHandlerRejectsNonAstoreHandlerEntry() {
+        final CodeAttribute code = new CodeAttribute(
+            1,
+            1,
+            new byte[0],
+            0,
+            List.of(new CodeException(0, 1, 1, Optional.empty())),
+            List.of(),
+            List.of(plain(0, 177, "return"), plain(1, 3, "iconst_0"), plain(2, 191, "athrow"))
+        );
+
+        assertThat(BytecodeToIRControlFlowSupport.supportedFinallyRethrowHandler(
+            code,
+            code.exceptionTable().getFirst()
+        )).isFalse();
+    }
+
+    @Test
+    void supportedFinallyRethrowHandlerRejectsHandlerWithoutRethrowLoadPair() {
+        final CodeAttribute code = new CodeAttribute(
+            1,
+            1,
+            new byte[0],
+            0,
+            List.of(new CodeException(0, 1, 1, Optional.empty())),
+            List.of(),
+            List.of(plain(0, 177, "return"), plain(1, 75, "astore_0"), plain(2, 177, "return"))
+        );
+
+        assertThat(BytecodeToIRControlFlowSupport.supportedFinallyRethrowHandler(
+            code,
+            code.exceptionTable().getFirst()
+        )).isFalse();
+    }
+
+    @Test
+    void preservesThrowableTypeAcrossFinallyRethrowIntoOuterTypedCatch() {
+        final MethodInfo main = methodWithHandlers(
+            0x0008,
+            "main",
+            "()Ljava/lang/String;",
+            3,
+            2,
+            List.of(
+                new CodeException(0, 5, 5, Optional.empty()),
+                new CodeException(0, 8, 8, Optional.of("java/lang/NullPointerException"))
+            ),
+            classInstruction(0, 187, "new", "java/lang/NullPointerException"),
+            plain(1, 89, "dup"),
+            stringConstant(2, "boom"),
+            invokeSpecial(3, new MethodRef("java/lang/NullPointerException", "<init>", "(Ljava/lang/String;)V")),
+            plain(4, 191, "athrow"),
+            plain(5, 75, "astore_0"),
+            plain(6, 42, "aload_0"),
+            plain(7, 191, "athrow"),
+            plain(8, 76, "astore_1"),
+            plain(9, 43, "aload_1"),
+            invokeVirtual(10, new MethodRef("java/lang/NullPointerException", "getMessage", "()Ljava/lang/String;")),
+            plain(11, 176, "areturn")
+        );
+
+        final IrFunction function = lowerMain(main);
+
         assertThat(function.instructions()).containsExactly(
             IrInstruction.jump("label_5"),
             IrInstruction.label("label_5"),
             IrInstruction.assignObject("local0", IrExpression.stringLiteral("boom")),
-            IrInstruction.panic(IrExpression.objectLocal("local0"))
+            IrInstruction.jump("label_8"),
+            IrInstruction.label("label_8"),
+            IrInstruction.assignObject("local1_object_1", IrExpression.objectLocal("local0")),
+            IrInstruction.returnObject(IrExpression.objectLocal("local1_object_1"))
         );
+    }
+
+    @Test
+    void localObjectValueRestoresPlatformThrowableFromLocalMetadata() {
+        final Map<Integer, IrExpression> locals = new HashMap<>();
+        locals.put(0, IrExpression.objectLocal("local0"));
+        final Map<Integer, BytecodeToIR.StackKind> objectLocalKinds = new HashMap<>();
+        objectLocalKinds.put(0, BytecodeToIR.StackKind.OBJECT);
+        final Map<Integer, String> objectLocalThrowableTypes = new HashMap<>();
+        objectLocalThrowableTypes.put(0, "java/lang/NullPointerException");
+
+        final BytecodeToIR.StackValue value = BytecodeToIR.localObjectValue(
+            classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of()),
+            method(0x0008, "main", "()V", 1, 1, plain(0, 177, "return")),
+            locals,
+            objectLocalKinds,
+            objectLocalThrowableTypes,
+            0
+        );
+
+        assertThat(value.throwableType()).contains("java/lang/NullPointerException");
+        assertThat(value.expression()).contains(IrExpression.objectLocal("local0"));
+    }
+
+    @Test
+    void storeObjectClearsThrowableTypeWhenPlainObjectOverwritesThrowableLocal() {
+        final Map<Integer, IrExpression> locals = new HashMap<>();
+        final Map<Integer, BytecodeToIR.StackKind> objectLocalKinds = new HashMap<>();
+        final Map<Integer, String> objectLocalThrowableTypes = new HashMap<>();
+        objectLocalThrowableTypes.put(0, "java/lang/NullPointerException");
+        final Map<Integer, IrLocal> localDeclarations = new LinkedHashMap<>();
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>();
+        stack.add(BytecodeToIR.StackValue.objectExpression(IrExpression.objectNull()));
+
+        BytecodeToIR.storeObject(
+            classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of()),
+            method(0x0008, "main", "()V", 1, 1, plain(0, 177, "return")),
+            plain(0, 75, "astore_0"),
+            instructions,
+            stack,
+            locals,
+            objectLocalKinds,
+            objectLocalThrowableTypes,
+            localDeclarations,
+            0
+        );
+
+        assertThat(objectLocalThrowableTypes).containsEntry(0, null);
+        assertThat(BytecodeToIR.localObjectValue(
+            classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of()),
+            method(0x0008, "main", "()V", 1, 1, plain(0, 177, "return")),
+            locals,
+            objectLocalKinds,
+            objectLocalThrowableTypes,
+            0
+        ).throwableType()).isEmpty();
+    }
+
+    @Test
+    void storeObjectIgnoresEmptySyntheticSwitchMapHandlerStore() {
+        final MethodInfo clinit = method(0x0008, "<clinit>", "()V", 1, 0, plain(0, 177, "return"));
+        final ClassFile classFile = classFile(
+            "com/acme/Main$1",
+            "java/lang/Object",
+            0,
+            List.of(),
+            List.of(new FieldInfo(0x1008, "$SwitchMap$com$acme$Mode", "[I")),
+            List.of(clinit)
+        );
+        final List<IrInstruction> instructions = new ArrayList<>();
+
+        BytecodeToIR.storeObject(
+            classFile,
+            clinit,
+            plain(0, 75, "astore_0"),
+            instructions,
+            new ArrayList<>(),
+            new HashMap<>(),
+            new HashMap<>(),
+            new HashMap<>(),
+            new LinkedHashMap<>(),
+            0
+        );
+
+        assertThat(instructions).isEmpty();
+    }
+
+    @Test
+    void storeObjectRejectsEmptyNonSyntheticStore() {
+        assertThatThrownBy(() -> BytecodeToIR.storeObject(
+            classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of()),
+            method(0x0008, "main", "()V", 1, 0, plain(0, 177, "return")),
+            plain(0, 75, "astore_0"),
+            new ArrayList<>(),
+            new ArrayList<>(),
+            new HashMap<>(),
+            new HashMap<>(),
+            new HashMap<>(),
+            new LinkedHashMap<>(),
+            0
+        )).isInstanceOfSatisfying(DiagnosticException.class, exception ->
+            assertThat(exception.diagnostic().code()).isEqualTo("JAVAN049")
+        );
+    }
+
+    @Test
+    void storeObjectRejectsEmptySyntheticNonHandlerInstruction() {
+        final MethodInfo clinit = method(0x0008, "<clinit>", "()V", 1, 0, plain(0, 177, "return"));
+        final ClassFile classFile = classFile(
+            "com/acme/Main$1",
+            "java/lang/Object",
+            0,
+            List.of(),
+            List.of(new FieldInfo(0x1008, "$SwitchMap$com$acme$Mode", "[I")),
+            List.of(clinit)
+        );
+
+        assertThatThrownBy(() -> BytecodeToIR.storeObject(
+            classFile,
+            clinit,
+            plain(0, 3, "iconst_0"),
+            new ArrayList<>(),
+            new ArrayList<>(),
+            new HashMap<>(),
+            new HashMap<>(),
+            new HashMap<>(),
+            new LinkedHashMap<>(),
+            0
+        )).isInstanceOfSatisfying(DiagnosticException.class, exception ->
+            assertThat(exception.diagnostic().code()).isEqualTo("JAVAN049")
+        );
+    }
+
+    @Test
+    void popThrowableRejectsPrimitiveStackValue() {
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>();
+        stack.add(BytecodeToIR.StackValue.intExpression(IrExpression.intLiteral(1)));
+
+        assertThatThrownBy(() -> BytecodeToIRControlFlowSupport.popThrowable(
+            classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of()),
+            method(0x0008, "main", "()V", 1, 0, plain(0, 172, "ireturn")),
+            plain(0, 191, "athrow"),
+            stack
+        )).isInstanceOfSatisfying(DiagnosticException.class, exception ->
+            assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040")
+        );
+    }
+
+    @Test
+    void supportedFinallyRethrowHandlerRejectsWideAstoreWithoutOperands() {
+        final CodeAttribute code = new CodeAttribute(
+            1,
+            1,
+            new byte[0],
+            0,
+            List.of(new CodeException(0, 1, 1, Optional.empty())),
+            List.of(),
+            List.of(plain(0, 177, "return"), plain(1, 58, "astore"), plain(2, 191, "athrow"))
+        );
+
+        assertThat(BytecodeToIRControlFlowSupport.supportedFinallyRethrowHandler(
+            code,
+            code.exceptionTable().getFirst()
+        )).isFalse();
+    }
+
+    @Test
+    void supportedFinallyRethrowHandlerRejectsWideAloadWithoutOperands() {
+        final CodeAttribute code = new CodeAttribute(
+            1,
+            1,
+            new byte[0],
+            0,
+            List.of(new CodeException(0, 1, 1, Optional.empty())),
+            List.of(),
+            List.of(plain(0, 177, "return"), plain(1, 75, "astore_0"), plain(2, 25, "aload"), plain(3, 191, "athrow"))
+        );
+
+        assertThat(BytecodeToIRControlFlowSupport.supportedFinallyRethrowHandler(
+            code,
+            code.exceptionTable().getFirst()
+        )).isFalse();
     }
 
     @Test
@@ -1558,7 +1902,7 @@ final class BytecodeToIRTest {
 
         assertThat(function.instructions()).containsExactly(
             IrInstruction.callStaticVoid(
-                "javan_printstream_println",
+                "javan_printstream_println_object",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
             ),
             IrInstruction.returnVoid()
@@ -1581,7 +1925,7 @@ final class BytecodeToIRTest {
 
         assertThat(function.instructions()).containsExactly(
             IrInstruction.callStaticVoid(
-                "javan_printstream_println",
+                "javan_printstream_println_object",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
             ),
             IrInstruction.returnVoid()

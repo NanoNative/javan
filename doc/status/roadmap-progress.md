@@ -48,8 +48,8 @@ Release accounting rule: a JDK or feature area is not "done" until
 
 | Measure | Done | Total | % | Meaning |
 | --- | ---: | ---: | ---: | --- |
-| Scenario rows fully passing | 107 | 108 | 99.1% | Named deterministic support scenarios implemented and tested. |
-| Scenario rows implemented or scoped | 107 | 108 | 99.1% | Rows with working behavior or an explicit scoped subset. |
+| Scenario rows fully passing | 108 | 108 | 100.0% | Named deterministic support scenarios implemented and tested. |
+| Scenario rows implemented or scoped | 108 | 108 | 100.0% | Rows with working behavior or an explicit scoped subset. |
 | Roadmap rows fully done | 3 | 38 | 7.9% | Big product rows release-gated for their stated scope. |
 | Roadmap rows with implementation evidence | 25 | 38 | 65.8% | Rows marked `Done`, `Partial`, `In progress`, or `Blocked`. |
 | Remote release rows proven | 0 | 4 | 0.0% | Configured Linux/macOS package rows passed on remote CI. |

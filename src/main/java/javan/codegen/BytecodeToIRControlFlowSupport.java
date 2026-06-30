@@ -282,6 +282,7 @@ final class BytecodeToIRControlFlowSupport {
         final List<StackValue> stack,
         final Map<Integer, IrExpression> locals,
         final Map<Integer, StackKind> objectLocalKinds,
+        final Map<Integer, String> objectLocalThrowableTypes,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
         final List<Integer> skippedOffsets,
@@ -301,6 +302,7 @@ final class BytecodeToIRControlFlowSupport {
             stack,
             locals,
             objectLocalKinds,
+            objectLocalThrowableTypes,
             localDeclarations,
             dispatches,
             skippedOffsets,
@@ -343,6 +345,7 @@ final class BytecodeToIRControlFlowSupport {
             prefix,
             locals,
             objectLocalKinds,
+            objectLocalThrowableTypes,
             workingDeclarations,
             dispatches
         );
@@ -356,6 +359,7 @@ final class BytecodeToIRControlFlowSupport {
             prefix,
             locals,
             objectLocalKinds,
+            objectLocalThrowableTypes,
             workingDeclarations,
             dispatches
         );
@@ -403,6 +407,7 @@ final class BytecodeToIRControlFlowSupport {
         final List<StackValue> stack,
         final Map<Integer, IrExpression> locals,
         final Map<Integer, StackKind> objectLocalKinds,
+        final Map<Integer, String> objectLocalThrowableTypes,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
         final List<Integer> skippedOffsets,
@@ -443,6 +448,7 @@ final class BytecodeToIRControlFlowSupport {
         final Map<Integer, IrLocal> workingDeclarations = copyLocalDeclarations(localDeclarations);
         final Map<Integer, IrExpression> workingLocals = copyExpressionLocals(locals);
         final Map<Integer, StackKind> workingObjectLocalKinds = copyObjectLocalKinds(objectLocalKinds);
+        final Map<Integer, String> workingObjectLocalThrowableTypes = copyObjectLocalThrowableTypes(objectLocalThrowableTypes);
         final List<IrInstruction> mergedInstructions = new ArrayList<>();
         final List<StackValue> workingStack = new ArrayList<>(stack);
         List<StackValue> prefix = List.of();
@@ -469,6 +475,7 @@ final class BytecodeToIRControlFlowSupport {
                     new HashMap<>(),
                     workingLocals,
                     workingObjectLocalKinds,
+                    workingObjectLocalThrowableTypes,
                     workingDeclarations,
                     dispatches,
                     SourceLineIndex.empty()
@@ -492,6 +499,7 @@ final class BytecodeToIRControlFlowSupport {
             prefix,
             locals,
             objectLocalKinds,
+            objectLocalThrowableTypes,
             workingDeclarations,
             dispatches
         );
@@ -538,6 +546,7 @@ final class BytecodeToIRControlFlowSupport {
         final List<StackValue> stackPrefix,
         final Map<Integer, IrExpression> locals,
         final Map<Integer, StackKind> objectLocalKinds,
+        final Map<Integer, String> objectLocalThrowableTypes,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches
     ) {
@@ -545,6 +554,7 @@ final class BytecodeToIRControlFlowSupport {
         final List<StackValue> blockStack = new ArrayList<>(stackPrefix);
         final Map<Integer, IrExpression> blockLocals = copyExpressionLocals(locals);
         final Map<Integer, StackKind> blockObjectLocalKinds = copyObjectLocalKinds(objectLocalKinds);
+        final Map<Integer, String> blockObjectLocalThrowableTypes = copyObjectLocalThrowableTypes(objectLocalThrowableTypes);
         for (int index = startIndex; index < endIndex; index++) {
             final Instruction blockInstruction = bytecode.get(index);
             if (isControlTransfer(blockInstruction.opcode())) {
@@ -560,6 +570,7 @@ final class BytecodeToIRControlFlowSupport {
                 new HashMap<>(),
                 blockLocals,
                 blockObjectLocalKinds,
+                blockObjectLocalThrowableTypes,
                 localDeclarations,
                 dispatches,
                 SourceLineIndex.empty()
@@ -588,6 +599,7 @@ final class BytecodeToIRControlFlowSupport {
         final List<StackValue> stack,
         final Map<Integer, IrExpression> locals,
         final Map<Integer, StackKind> objectLocalKinds,
+        final Map<Integer, String> objectLocalThrowableTypes,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
         final List<Integer> skippedOffsets,
@@ -667,6 +679,7 @@ final class BytecodeToIRControlFlowSupport {
                 prefix,
                 locals,
                 objectLocalKinds,
+                objectLocalThrowableTypes,
                 workingDeclarations,
                 dispatches
             );
@@ -850,6 +863,18 @@ final class BytecodeToIRControlFlowSupport {
         int slot = 0;
         while (slot < 512) {
             final StackKind value = source.get(slot);
+            if (value != null) {
+                result.put(slot, value);
+            }
+            slot++;
+        }
+        return result;
+    }
+    static Map<Integer, String> copyObjectLocalThrowableTypes(final Map<Integer, String> source) {
+        final Map<Integer, String> result = new HashMap<>();
+        int slot = 0;
+        while (slot < 512) {
+            final String value = source.get(slot);
             if (value != null) {
                 result.put(slot, value);
             }

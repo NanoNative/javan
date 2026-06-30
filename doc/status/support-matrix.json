@@ -12,11 +12,11 @@
   },
   "counts": {
     "rows": 108,
-    "done": 107,
-    "left": 1,
-    "pass": 107,
+    "done": 108,
+    "left": 0,
+    "pass": 108,
     "scoped": 0,
-    "target": 1,
+    "target": 0,
     "rejected": 0
   },
   "features": [

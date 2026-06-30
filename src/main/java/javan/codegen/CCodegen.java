@@ -1743,10 +1743,10 @@ public final class CCodegen {
                 emitPrintCall(c, "javan_eprintln_bool", "", instruction.expression().orElseThrow());
                 break;
             case PRINTLN_OBJECT:
-                emitPrintCall(c, "javan_println", "(const char*) ", instruction.expression().orElseThrow());
+                emitPrintCall(c, "javan_println_object_value", "", instruction.expression().orElseThrow());
                 break;
             case PRINTLN_ERROR_OBJECT:
-                emitPrintCall(c, "javan_eprintln", "(const char*) ", instruction.expression().orElseThrow());
+                emitPrintCall(c, "javan_eprintln_object_value", "", instruction.expression().orElseThrow());
                 break;
             case PRINT_OBJECT:
                 emitPrintCall(c, "javan_print", "(const char*) ", instruction.expression().orElseThrow());

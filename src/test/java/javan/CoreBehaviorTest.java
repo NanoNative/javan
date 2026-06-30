@@ -4326,6 +4326,34 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void staticVerifierAcceptsTypedCatchWrappingFinallyRethrowHandler() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            classInstruction(0, 187, "new", "java/lang/IllegalStateException"),
+            instruction(3, 89, "dup"),
+            instruction(4, 18, "ldc"),
+            instruction(6, 183, "invokespecial", new MethodRef("java/lang/IllegalStateException", "<init>", "(Ljava/lang/String;)V")),
+            instruction(9, 191, "athrow"),
+            instruction(10, 76, "astore_1"),
+            instruction(11, 178, "getstatic", new FieldRef("java/lang/System", "out", "Ljava/io/PrintStream;")),
+            instruction(14, 18, "ldc"),
+            instruction(16, 182, "invokevirtual", new MethodRef("java/io/PrintStream", "println", "(Ljava/lang/String;)V")),
+            instruction(19, 43, "aload_1"),
+            instruction(20, 191, "athrow"),
+            instruction(21, 76, "astore_1"),
+            instruction(22, 178, "getstatic", new FieldRef("java/lang/System", "out", "Ljava/io/PrintStream;")),
+            instruction(25, 43, "aload_1"),
+            instruction(26, 182, "invokevirtual", new MethodRef("java/lang/IllegalStateException", "getMessage", "()Ljava/lang/String;")),
+            instruction(29, 182, "invokevirtual", new MethodRef("java/io/PrintStream", "println", "(Ljava/lang/String;)V")),
+            instruction(32, 177, "return")
+        ), List.of(
+            new CodeException(0, 11, 10, Optional.empty()),
+            new CodeException(0, 21, 21, Optional.of("java/lang/IllegalStateException"))
+        ));
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
     void staticVerifierAcceptsExplicitThrowRangeWithInstructionBeforeProtectedRange() {
         final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
             instruction(0, 0, "nop"),
@@ -8888,6 +8916,10 @@ final class CoreBehaviorTest {
         return verifyExceptionTable(Map.of(), instructions, exception);
     }
 
+    private static List<Diagnostic> verifyExceptionTable(final List<Instruction> instructions, final List<CodeException> exceptions) {
+        return verifyExceptionTable(Map.of(), instructions, exceptions);
+    }
+
     private static List<Diagnostic> verifyExceptionTable(final List<Instruction> instructions) {
         return verifyExceptionTable(instructions, new CodeException(0, instructions.size(), instructions.size(), Optional.of("java/lang/IllegalStateException")));
     }
@@ -8981,7 +9013,15 @@ final class CoreBehaviorTest {
         final List<Instruction> instructions,
         final CodeException exception
     ) {
-        final ClassFile classFile = exceptionClassFile("com/acme/Main", instructions, exception);
+        return verifyExceptionTable(extraClasses, instructions, List.of(exception));
+    }
+
+    private static List<Diagnostic> verifyExceptionTable(
+        final Map<String, ClassFile> extraClasses,
+        final List<Instruction> instructions,
+        final List<CodeException> exceptions
+    ) {
+        final ClassFile classFile = exceptionClassFile("com/acme/Main", instructions, exceptions);
         final Map<String, ClassFile> classes = new java.util.LinkedHashMap<>();
         classes.put(classFile.name(), classFile);
         classes.putAll(extraClasses);
@@ -8992,6 +9032,10 @@ final class CoreBehaviorTest {
     }
 
     private static ClassFile exceptionClassFile(final String className, final List<Instruction> instructions, final CodeException exception) {
+        return exceptionClassFile(className, instructions, List.of(exception));
+    }
+
+    private static ClassFile exceptionClassFile(final String className, final List<Instruction> instructions, final List<CodeException> exceptions) {
         final MethodInfo method = new MethodInfo(
             0,
             "main",
@@ -9000,8 +9044,8 @@ final class CoreBehaviorTest {
                 2,
                 1,
                 new byte[]{(byte) 191},
-                1,
-                List.of(exception),
+                exceptions.size(),
+                exceptions,
                 instructions
             ))
         );
@@ -9820,7 +9864,7 @@ final class CoreBehaviorTest {
             "message = javan_expr_tmp_0;",
             "((struct javan_class_com_acme_Message*) message)->field_text = (void*) \"hello\";",
             "javan_expr_tmp_0 = ((struct javan_class_com_acme_Message*) message)->field_text;",
-            "javan_println((const char*) javan_expr_tmp_0);",
+            "javan_println_object_value(javan_expr_tmp_0);",
             "void* javan_return_value = (void*) \"returned\";",
             "javan_generated_return_root = javan_return_value;",
             "return javan_return_value;"

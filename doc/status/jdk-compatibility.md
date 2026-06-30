@@ -51,12 +51,12 @@ Current support ledger for the active JDK 25 evidence set:
 | Measure | Count |
 | --- | ---: |
 | support rows | 108 |
-| pass rows | 107 |
+| pass rows | 108 |
 | scoped rows | 0 |
-| target rows | 1 |
+| target rows | 0 |
 | rejected rows | 0 |
-| accounted rows | 107 |
-| unaccounted rows | 1 |
+| accounted rows | 108 |
+| unaccounted rows | 0 |
 | exact supported JDK callable classes | 457 |
 | exact supported JDK constructors | 678 |
 | exact supported JDK methods | 304 |

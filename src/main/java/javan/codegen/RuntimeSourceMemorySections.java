@@ -1209,6 +1209,39 @@ final class RuntimeSourceMemorySections {
             }
         }
 
+        void* javan_printable_object_string(void* value) {
+            if (value == NULL) {
+                return (void*) "null";
+            }
+            javan_allocation_node* node = javan_find_allocation(value, NULL);
+            if (node == NULL) {
+                return value;
+            }
+            if (node->runtime_kind == JAVAN_RUNTIME_KIND_STRING) {
+                return value;
+            }
+            if (node->runtime_kind == JAVAN_RUNTIME_KIND_STRING_BUILDER) {
+                return javan_stringbuilder_to_string(value);
+            }
+            if (node->runtime_kind == JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_BUILDER) {
+                return javan_virtual_thread_builder_to_string(value);
+            }
+            if (node->runtime_kind == JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_FACTORY) {
+                return javan_virtual_thread_factory_to_string(value);
+            }
+            if (node->runtime_kind == JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_EXECUTOR) {
+                return javan_virtual_thread_executor_to_string(value);
+            }
+            if (node->runtime_kind == JAVAN_RUNTIME_KIND_CLASS) {
+                return javan_runtime_class_get_name(value);
+            }
+            if (node->runtime_kind == JAVAN_RUNTIME_KIND_INET_SOCKET_ADDRESS) {
+                return javan_inet_socket_address_to_string(value);
+            }
+            javan_panic("unsupported printable object");
+            return (void*) "unsupported printable object";
+        }
+
         void javan_validate_heap_metadata(void) {
             javan_runtime_lock_enter();
             unsigned long live_allocations = 0;

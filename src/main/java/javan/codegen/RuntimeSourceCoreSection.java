@@ -554,6 +554,22 @@ final class RuntimeSourceCoreSection {
             javan_println(value);
         }
 
+        void javan_println_object_value(void* value) {
+            javan_println((const char*) javan_printable_object_string(value));
+        }
+
+        void javan_eprintln_object_value(void* value) {
+            javan_eprintln((const char*) javan_printable_object_string(value));
+        }
+
+        void javan_printstream_println_object(void* stream, void* value) {
+            if (javan_printstream_is_err(stream)) {
+                javan_eprintln_object_value(value);
+                return;
+            }
+            javan_println_object_value(value);
+        }
+
         void javan_printstream_println_int(void* stream, int value) {
             if (javan_printstream_is_err(stream)) {
                 javan_eprintln_int(value);
