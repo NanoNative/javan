@@ -1652,6 +1652,33 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersStringBuilderCopyConstructorToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/StringBuilder;)Ljava/lang/String;",
+            2,
+            1,
+            classInstruction(0, 187, "new", "java/lang/String"),
+            plain(1, 89, "dup"),
+            plain(2, 42, "aload_0"),
+            invokeSpecial(3, new MethodRef("java/lang/String", "<init>", "(Ljava/lang/StringBuilder;)V")),
+            plain(4, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectNull()),
+            IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(IrExpression.objectLocal("arg0"))),
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall("javan_stringbuilder_to_string", List.of(IrExpression.objectLocal("arg0")))
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
     void lowersStringCharArrayConstructorToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -11008,6 +11035,34 @@ final class BytecodeToIRTest {
             IrInstruction.assignObject(
                 "object0",
                 IrExpression.stringConcat("\u0001\u0001", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersStringSubSequenceToSubstringRangeRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/String;II)Ljava/lang/CharSequence;",
+            3,
+            3,
+            plain(0, 42, "aload_0"),
+            plain(1, 27, "iload_1"),
+            plain(2, 28, "iload_2"),
+            invokeVirtual(3, new MethodRef("java/lang/String", "subSequence", "(II)Ljava/lang/CharSequence;")),
+            plain(4, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_string_substring_range",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"), IrExpression.intLocal("arg2"))
+                )
             ),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );

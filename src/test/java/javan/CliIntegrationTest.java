@@ -786,6 +786,81 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void stringBuilderCopyConstructorBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-copy-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("javan");
+                    System.out.println(new String(builder));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-copy-constructor").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderCopyConstructorNullFailsClearlyAtRuntime() throws Exception {
+        final Path project = project("stringbuilder-copy-constructor-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = null;
+                    System.out.println(new String(builder));
+                }
+            }
+            """);
+
+        final CliRun build = run(tempDir, "build", project.toString());
+
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/stringbuilder-copy-constructor-null").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("[JAVAN-RUNTIME-PANIC]", "detail: null object");
+    }
+
+    @Test
+    void stringSubSequenceBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-sub-sequence");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String value = "javan";
+                    final CharSequence slice = value.subSequence(1, 4);
+                    System.out.println(slice);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-sub-sequence").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void printStreamPrintCharBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("printstream-print-char");
         writeJava(project, "com.acme.Main", """

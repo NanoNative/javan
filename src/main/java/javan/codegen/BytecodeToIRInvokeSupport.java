@@ -443,6 +443,16 @@ final class BytecodeToIRInvokeSupport {
             pushObjectCall(instructions, stack, localDeclarations, "javan_string_substring_range", List.of(receiver, begin, end));
             return;
         }
+        if ("java/lang/String".equals(methodRef.owner())
+            && "subSequence".equals(methodRef.name())
+            && "(II)Ljava/lang/CharSequence;".equals(methodRef.descriptor())) {
+            final IrExpression end = popInt(classFile, method, stack);
+            final IrExpression begin = popInt(classFile, method, stack);
+            final IrExpression receiver = popObject(classFile, method, stack);
+            rejectUnsupportedStringSemantic(classFile, method, instruction, receiver);
+            pushObjectCall(instructions, stack, localDeclarations, "javan_string_substring_range", List.of(receiver, begin, end));
+            return;
+        }
         if (lowerJdkWrapperInstanceCall(classFile, method, methodRef, stack)) {
             return;
         }
@@ -2029,6 +2039,15 @@ final class BytecodeToIRInvokeSupport {
             instructions.add(IrInstruction.assignObject(
                 receiver.value(),
                 IrExpression.objectCall("javan_string_from", List.of(value))
+            ));
+            return true;
+        }
+        if ("(Ljava/lang/StringBuilder;)V".equals(methodRef.descriptor())) {
+            final IrExpression value = arguments.getFirst();
+            instructions.add(IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(value)));
+            instructions.add(IrInstruction.assignObject(
+                receiver.value(),
+                IrExpression.objectCall("javan_stringbuilder_to_string", List.of(value))
             ));
             return true;
         }
