@@ -219,6 +219,9 @@ final class JdkCallableAccounting {
             }
             return "getChars".equals(methodName) && "(II[CI)V".equals(descriptor);
         }
+        if (isInternalStringHelperOwner(owner)) {
+            return true;
+        }
         if (owner.startsWith("jdk/jfr/")) {
             return true;
         }
@@ -228,6 +231,17 @@ final class JdkCallableAccounting {
         return "java/lang/InheritableThreadLocal".equals(owner)
             && "<init>".equals(methodName)
             && "()V".equals(descriptor);
+    }
+
+    private static boolean isInternalStringHelperOwner(final String owner) {
+        return isOwnerFamily(owner, "java/lang/StringLatin1")
+            || isOwnerFamily(owner, "java/lang/StringUTF16")
+            || isOwnerFamily(owner, "java/lang/StringConcatHelper")
+            || "java/lang/StringCoding".equals(owner);
+    }
+
+    private static boolean isOwnerFamily(final String owner, final String family) {
+        return family.equals(owner) || owner.startsWith(family + "$");
     }
 
     enum Status {

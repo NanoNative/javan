@@ -389,4 +389,46 @@ final class JdkCallableAccountingTest {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/AbstractStringBuilder", "getChars", "(II[CI)V")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
     }
+
+    @Test
+    void marksStringLatin1HelperAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/StringLatin1", "charAt", "([BI)C")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksStringLatin1NestedHelperAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/StringLatin1$CharsSpliterator", "<init>", "([BII)V")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksStringUtf16HelperAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/StringUTF16", "charAt", "([BI)C")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksStringUtf16NestedHelperAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/StringUTF16$CodePointsSpliterator", "<init>", "([BII)V")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksStringConcatHelperAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/StringConcatHelper", "simpleConcat", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/String;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksStringConcatHelperNestedClassAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/StringConcatHelper$Concat1", "<init>", "()V")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksStringCodingHelperAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/StringCoding", "countNonZeroAscii", "(Ljava/lang/String;)I")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
 }
