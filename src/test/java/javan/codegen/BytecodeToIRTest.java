@@ -186,6 +186,18 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void stackValueExpressionMapsPrintStreamSentinelToSystemOutCall() {
+        assertThat(BytecodeToIR.stackValueExpression(BytecodeToIR.StackValue.printStream()))
+            .isEqualTo(IrExpression.objectCall("javan_system_out", List.of()));
+    }
+
+    @Test
+    void stackValueExpressionMapsErrorPrintStreamSentinelToSystemErrCall() {
+        assertThat(BytecodeToIR.stackValueExpression(BytecodeToIR.StackValue.errorPrintStream()))
+            .isEqualTo(IrExpression.objectCall("javan_system_err", List.of()));
+    }
+
+    @Test
     void rejectsPlatformThrowableGetMessageWithWrongDescriptor() {
         assertThatThrownBy(() -> lowerMain(method(
             0x0008,
