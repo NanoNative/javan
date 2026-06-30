@@ -553,6 +553,30 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksStreamOfArrayAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/stream/Stream", "of", "([Ljava/lang/Object;)Ljava/util/stream/Stream;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksIntStreamRangeAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/stream/IntStream", "range", "(II)Ljava/util/stream/IntStream;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksBaseStreamIteratorAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/stream/BaseStream", "iterator", "()Ljava/util/Iterator;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksCollectorsToListAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/stream/Collectors", "toList", "()Ljava/util/stream/Collector;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
     void marksModuleDescriptorNameAsExplicitRejected() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/module/ModuleDescriptor", "name", "()Ljava/lang/String;")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
