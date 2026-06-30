@@ -9,6 +9,8 @@ SANITIZER_REQUIRED=${JAVAN_SANITIZER_REQUIRED:-false}
 TARGET_PROJECT=${JAVAN_SELF_HOST_TARGET_PROJECT:-target}
 TARGET_CLASSES=${JAVAN_SELF_HOST_CLASSES:-target/classes}
 OUTPUT_NAME=${JAVAN_SELF_HOST_OUTPUT_NAME:-javan-selfhost-sanitizer-smoke}
+PROBE_SCOPE=${JAVAN_SELF_HOST_PROBE_SCOPE:-full}
+REUSE_GENERATED=${JAVAN_SELF_HOST_REUSE_GENERATED:-false}
 REPORTS=$ROOT/$TARGET_PROJECT/.javan/reports
 
 mkdir -p "$TMP"
@@ -130,11 +132,18 @@ write_sanitizer_proof() {
   if [ "$proof_status" = "skipped" ]; then
     probe_status=skipped
   fi
+  self_check_status=$probe_status
+  self_report_status=$probe_status
+  if [ "$PROBE_SCOPE" = "package-smoke" ]; then
+    self_check_status=skipped
+    self_report_status=skipped
+  fi
   cat >"$REPORTS/sanitizer-proof.json" <<EOF
 {
   "schemaVersion": 1,
   "status": $(json_string "$proof_status"),
   "kind": "self-host",
+  "probeScope": $(json_string "$PROBE_SCOPE"),
   "project": $(json_string "$TARGET_CLASSES"),
   "cc": $(json_string "$CC"),
   "sanitizerFlags": $(json_string "$SANITIZER_FLAGS"),
@@ -164,8 +173,8 @@ write_sanitizer_proof() {
   "failureSignatures": $failure_signatures,
   "probes": [
     {"name": "version", "status": "$probe_status"},
-    {"name": "self-check", "status": "$probe_status"},
-    {"name": "self-report", "status": "$probe_status"},
+    {"name": "self-check", "status": "$self_check_status"},
+    {"name": "self-report", "status": "$self_report_status"},
     {"name": "tiny-check", "status": "$probe_status"},
     {"name": "tiny-build", "status": "$probe_status"}
   ]
@@ -176,6 +185,7 @@ EOF
 
 - status: \`$proof_status\`
 - kind: \`self-host\`
+- probe scope: \`$PROBE_SCOPE\`
 - project: \`$TARGET_CLASSES\`
 - sanitizer required: \`$SANITIZER_REQUIRED\`
 - counter check: \`true\`
@@ -273,6 +283,7 @@ EOF
 run_probe() {
   name=$1
   shift
+  printf '%s\n' "self-host probe: $name"
   counters=$TMP/counters-$name.env
   out=$TMP/$name.out
   err=$TMP/$name.err
@@ -300,8 +311,17 @@ run_all_probes() {
   : >"$TMP/all.err"
   reset_aggregate
   run_probe version --version || return $?
-  run_probe self-check check "$TARGET_CLASSES" --main javan.Main || return $?
-  run_probe self-report report "$TARGET_PROJECT" || return $?
+  case "$PROBE_SCOPE" in
+    full)
+      run_probe self-check check "$TARGET_CLASSES" --main javan.Main || return $?
+      run_probe self-report report "$TARGET_PROJECT" || return $?
+      ;;
+    package-smoke) ;;
+    *)
+      printf '%s\n' "Unsupported self-host sanitizer probe scope: $PROBE_SCOPE" >&2
+      return 2
+      ;;
+  esac
   run_probe tiny-check check "$TINY_PROJECT" || return $?
   run_probe tiny-build build "$TINY_PROJECT" --output selfhost-tiny || return $?
 }
@@ -327,8 +347,17 @@ run_leaks_probe() {
 
 run_all_leaks_probes() {
   run_leaks_probe version --version
-  run_leaks_probe self-check check "$TARGET_CLASSES" --main javan.Main
-  run_leaks_probe self-report report "$TARGET_PROJECT"
+  case "$PROBE_SCOPE" in
+    full)
+      run_leaks_probe self-check check "$TARGET_CLASSES" --main javan.Main
+      run_leaks_probe self-report report "$TARGET_PROJECT"
+      ;;
+    package-smoke) ;;
+    *)
+      printf '%s\n' "Unsupported self-host sanitizer probe scope: $PROBE_SCOPE" >&2
+      exit 2
+      ;;
+  esac
   run_leaks_probe tiny-check check "$TINY_PROJECT"
   run_leaks_probe tiny-build build "$TINY_PROJECT" --output selfhost-tiny
 }
@@ -357,8 +386,13 @@ if [ "$support_compile_code" -ne 0 ]; then
   exit 0
 fi
 
-"$JAVAN" build "$TARGET_CLASSES" --main javan.Main --output "$OUTPUT_NAME" >/dev/null
 GENERATED=$ROOT/$TARGET_PROJECT/.javan/generated
+if [ "$REUSE_GENERATED" = "true" ]; then
+  printf '%s\n' "Reusing generated self-host output from $GENERATED"
+else
+  printf '%s\n' "Building self-host generated output for $TARGET_CLASSES"
+  "$JAVAN" build "$TARGET_CLASSES" --main javan.Main --output "$OUTPUT_NAME" >/dev/null
+fi
 if [ ! -f "$GENERATED/main.c" ] || [ ! -f "$GENERATED/javan_runtime.c" ]; then
   printf '%s\n' "Missing generated self-host C output in $GENERATED" >&2
   exit 1

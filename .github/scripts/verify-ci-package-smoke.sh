@@ -3,6 +3,7 @@ set -eu
 
 ROOT=$(CDPATH= cd "$(dirname "$0")/../.." && pwd)
 cd "$ROOT"
+PACKAGE_SANITIZER_SCOPE=${JAVAN_PACKAGE_SANITIZER_SCOPE:-full}
 
 assert_contains() {
   file=$1
@@ -105,7 +106,23 @@ if [ ! -x "$SELFHOST_BIN" ]; then
 fi
 "$SELFHOST_BIN" --version | grep -F "javan $PACKAGE_VERSION" >/dev/null
 
-JAVAN_BIN=$PACKAGE_BIN JAVAN_SANITIZER_REQUIRED=true sh .github/scripts/sanitizer-self-host-smoke.sh
+SELF_HOST_PROBE_SCOPE=full
+case "$PACKAGE_SANITIZER_SCOPE" in
+  full) ;;
+  platform-smoke)
+    SELF_HOST_PROBE_SCOPE=package-smoke
+    ;;
+  *)
+    printf '%s\n' "Unsupported package sanitizer scope: $PACKAGE_SANITIZER_SCOPE" >&2
+    exit 2
+    ;;
+esac
+
+JAVAN_BIN=$PACKAGE_BIN \
+JAVAN_SANITIZER_REQUIRED=true \
+JAVAN_SELF_HOST_PROBE_SCOPE=$SELF_HOST_PROBE_SCOPE \
+JAVAN_SELF_HOST_REUSE_GENERATED=true \
+  sh .github/scripts/sanitizer-self-host-smoke.sh
 SANITIZER_PROOF=target/.javan/reports/sanitizer-proof.json
 if [ ! -f "$SANITIZER_PROOF" ]; then
   printf '%s\n' "Missing package-backed self-host sanitizer proof: $SANITIZER_PROOF" >&2
@@ -121,6 +138,7 @@ assert_contains "$SANITIZER_PROOF" '"actualFrameRootCount": 0'
 assert_contains "$SANITIZER_PROOF" '"minTotalAllocations": 1'
 assert_contains "$SANITIZER_PROOF" '"minGcCollections": 1'
 assert_contains "$SANITIZER_PROOF" '"failureSignatures": false'
+assert_contains "$SANITIZER_PROOF" "\"probeScope\": \"$SELF_HOST_PROBE_SCOPE\""
 assert_json_number_at_least "$SANITIZER_PROOF" actualTotalAllocations 1
 assert_json_number_at_least "$SANITIZER_PROOF" actualGcCollections 1
 

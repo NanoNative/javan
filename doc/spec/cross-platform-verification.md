@@ -214,6 +214,12 @@ Current CI stages in `.github/workflows/ci.yml`:
 5. sanitizer suite with required C/Rust/Go/Python binding proof
 6. extracted self-host package smoke with packaged `bin/javan`
 
+For existing reduced `platform-smoke` rows, the extracted package smoke still proves the
+packaged self-host sanitizer path, but it reuses the generated self-host C output from
+the immediately preceding packaged self-build and narrows the repeated probe set to
+`--version` plus the tiny build/check loop instead of rerunning the full packaged
+`check/report target/classes` cycle.
+
 Current release workflow stages:
 
 1. native self-host release gate

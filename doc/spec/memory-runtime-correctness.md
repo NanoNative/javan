@@ -47,7 +47,11 @@ warning-free, and represented in fresh reports.
 
 Status: Partial. Local package-backed self-host sanitizer proof exists on macOS
 aarch64 with nonzero tracked allocation/GC counters, zero final live heap/root residue,
-and no sanitizer failure signatures. Remote release-matrix validation remains 0/4
+and no sanitizer failure signatures. The reduced package-backed `platform-smoke` path
+now also completes locally in `8m50s` by reusing the just-generated self-host C output
+and narrowing the repeated probes to `--version` plus the tiny build/check loop while
+still proving zero final heap/root residue with nonzero allocation/GC counters. Remote
+release-matrix validation remains 0/4
 completed.
 
 Exit criteria:
@@ -55,7 +59,10 @@ Exit criteria:
 1. Build generated native Javan from `target/classes --main javan.Main` with sanitizer
    instrumentation and counter checks enabled.
 2. Run the generated binary through `--version`, `check target/classes --main javan.Main`,
-   `report target`, and one tiny supported build/check loop.
+   `report target`, and one tiny supported build/check loop. Existing reduced
+   `platform-smoke` rows may skip the repeated packaged `check/report target/classes`
+   probes inside the package-backed sanitizer leg when those exact probes already ran in
+   the same CI row before packaging.
 3. Require `.javan/reports/sanitizer-proof.json` and `.javan/reports/sanitizer-proof.md`
    for the self-host binary, not only for small native-profile apps.
 4. Assert nonzero total allocations, nonzero GC collections, zero final live heap

@@ -81,7 +81,10 @@ jobs:
           sh .github/scripts/sanitizer-suite.sh
 
       - name: Verify self-host package smoke
-        run: JAVAN_PACKAGE_TARGET='${{ matrix.target }}' sh .github/scripts/verify-ci-package-smoke.sh
+        run: >-
+          JAVAN_PACKAGE_TARGET='${{ matrix.target }}'
+          JAVAN_PACKAGE_SANITIZER_SCOPE='${{ matrix.sanitizer-scope }}'
+          sh .github/scripts/verify-ci-package-smoke.sh
 
   windows-runtime-smoke:
     name: windows-runtime-smoke
