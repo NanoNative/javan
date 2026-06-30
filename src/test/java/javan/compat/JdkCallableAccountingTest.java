@@ -727,6 +727,36 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksArenaOfAutoAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/foreign/Arena", "ofAuto", "()Ljava/lang/foreign/Arena;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksMemorySegmentByteSizeAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/foreign/MemorySegment", "byteSize", "()J")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksValueLayoutWithOrderAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/foreign/ValueLayout", "withOrder", "(Ljava/nio/ByteOrder;)Ljava/lang/foreign/ValueLayout;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksFunctionDescriptorOfVoidAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/foreign/FunctionDescriptor", "ofVoid", "([Ljava/lang/foreign/MemoryLayout;)Ljava/lang/foreign/FunctionDescriptor;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksSymbolLookupFindAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/foreign/SymbolLookup", "find", "(Ljava/lang/String;)Ljava/util/Optional;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
     void marksFormatFormatObjectAsExplicitRejected() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/text/Format", "format", "(Ljava/lang/Object;)Ljava/lang/String;")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
