@@ -208,6 +208,7 @@ final class RuntimeHeaderFile {
         int javan_string_starts_with_from(const char* left, const char* prefix, int from_index);
         int javan_string_ends_with(const char* left, const char* suffix);
         void* javan_string_replace_char(const char* value, int old_ch, int new_ch);
+        void* javan_string_repeat(const char* value, int count);
         void* javan_string_trim(const char* value);
         void* javan_string_substring(const char* value, int begin);
         void* javan_string_substring_range(const char* value, int begin, int end);

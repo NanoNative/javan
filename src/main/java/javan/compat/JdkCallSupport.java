@@ -187,6 +187,7 @@ public final class JdkCallSupport {
         runtime("String.startsWith", "java/lang/String", "startsWith", "(Ljava/lang/String;)Z", "(Ljava/lang/String;I)Z"),
         runtime("String.endsWith", "java/lang/String", "endsWith", "(Ljava/lang/String;)Z"),
         runtime("String.replace", "java/lang/String", "replace", "(CC)Ljava/lang/String;"),
+        runtime("String.repeat", "java/lang/String", "repeat", "(I)Ljava/lang/String;"),
         runtime("String.intern", "java/lang/String", "intern", "()Ljava/lang/String;"),
         runtime("String.trim", "java/lang/String", "trim", "()Ljava/lang/String;"),
         runtime("String.substring", "java/lang/String", "substring", "(I)Ljava/lang/String;"),

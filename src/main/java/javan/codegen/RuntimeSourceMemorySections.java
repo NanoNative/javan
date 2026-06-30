@@ -4336,6 +4336,38 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        void* javan_string_repeat(const char* value, int count) {
+            if (value == NULL) {
+                javan_panic("null string");
+            }
+            if (count < 0) {
+                javan_panic("negative string repeat count");
+            }
+            int length = javan_string_length(value);
+            if (count == 0 || length == 0) {
+                return javan_string_copy("");
+            }
+            if (count == 1) {
+                return javan_string_copy(value);
+            }
+            if (length > INT_MAX / count) {
+                javan_panic("string length overflow");
+            }
+            int repeated_length = length * count;
+            void* source_root = (void*) value;
+            void** javan_string_repeat_roots[] = {
+                (void**) &source_root
+            };
+            javan_root_frame_push(javan_string_repeat_roots, 1);
+            char* result = javan_string_alloc((unsigned long) repeated_length + 1UL);
+            for (int index = 0; index < count; index++) {
+                memcpy(result + (index * length), (const char*) source_root, (unsigned long) length);
+            }
+            result[repeated_length] = '\\0';
+            javan_root_frame_pop(javan_string_repeat_roots);
+            return result;
+        }
+
         void* javan_string_trim(const char* value) {
             if (value == NULL) {
                 javan_panic("null string");

@@ -7594,6 +7594,33 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersStringRepeatToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/String;I)Ljava/lang/String;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 27, "iload_1"),
+            invokeVirtual(2, new MethodRef("java/lang/String", "repeat", "(I)Ljava/lang/String;")),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_string_repeat",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"))
+                )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
     void rejectsUnsupportedStringReplaceSequenceDescriptor() {
         assertThatThrownBy(() -> lowerMain(method(
             0x0008,

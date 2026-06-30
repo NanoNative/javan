@@ -5920,6 +5920,78 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void stringRepeatBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-repeat");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("ja".repeat(3));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-repeat").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("jajaja\n");
+    }
+
+    @Test
+    void stringRepeatZeroBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-repeat-zero");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("javan".repeat(0).length());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-repeat-zero").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("0\n");
+    }
+
+    @Test
+    void stringRepeatNegativeFailsClearlyAtRuntime() throws Exception {
+        final Path project = project("string-repeat-negative");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("javan".repeat(-1));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/string-repeat-negative").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("negative string repeat count");
+    }
+
+    @Test
     void stringInternBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("string-intern");
         writeJava(project, "com.acme.Main", """
