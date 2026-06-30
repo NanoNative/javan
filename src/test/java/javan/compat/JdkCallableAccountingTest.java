@@ -871,6 +871,24 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksIntrospectorGetBeanInfoAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/beans/Introspector", "getBeanInfo", "(Ljava/lang/Class;)Ljava/beans/BeanInfo;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksPropertyChangeSupportConstructorAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/beans/PropertyChangeSupport", "<init>", "(Ljava/lang/Object;)V")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void keepsIntrospectionExceptionConstructorsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/beans/IntrospectionException", "<init>", "(Ljava/lang/String;)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksFormatFormatObjectAsExplicitRejected() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/text/Format", "format", "(Ljava/lang/Object;)Ljava/lang/String;")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
