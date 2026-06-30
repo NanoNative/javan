@@ -229,6 +229,9 @@ final class JdkCallableAccounting {
             || "java/lang/String$CaseInsensitiveComparator".equals(owner)) {
             return true;
         }
+        if ("java/lang/ConditionalSpecialCasing$Entry".equals(owner)) {
+            return true;
+        }
         if (owner.startsWith("jdk/jfr/")) {
             return true;
         }

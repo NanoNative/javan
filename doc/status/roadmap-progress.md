@@ -30,9 +30,9 @@ Status words are exact. No colors, no mood lighting.
 | Scenario ledger done | 108/108 | Named support scenarios with explicit pass/reject status. |
 | Scenario ledger left | 0 | No named support scenario rows remain outside `pass`/`rejected`. |
 | Exact supported JDK callables | 1032/267886 (0.3%) | Lower-bound callable-member coverage on the scanned JDK 25 image for members that already match the exact native support registry on the current branch baseline. |
-| Exact explicit rejected JDK callables | 5679 | Deterministic callable-member rejects currently counted exactly from forbidden APIs, verifier-backed monitor/concurrency members, the deliberate `jdk.jfr.*` owner family, `sun.misc.Unsafe`, the exact `String` regex/formatter/text-normalization plus binary/charset/code-point family, the current exact `StringBuilder`, `StringBuffer`, plus `AbstractStringBuilder` char-sequence/string-buffer/code-point/stream/repeat family, the internal `StringLatin1`, `StringUTF16`, `StringConcatHelper`, plus `StringCoding` owner families including their nested helper classes, the internal `CharacterData*` owner family, plus the internal `ConditionalSpecialCasing` and `String$CaseInsensitiveComparator` owners. |
-| Exact done JDK callables | 6711/267886 (2.5%) | Lower-bound supported-plus-explicitly-rejected callable-member accounting on the scanned JDK 25 image for the current branch baseline. |
-| Exact unknown JDK callables | 261175 | Callable members on the scanned JDK 25 image not yet counted as supported or explicitly rejected. |
+| Exact explicit rejected JDK callables | 5685 | Deterministic callable-member rejects currently counted exactly from forbidden APIs, verifier-backed monitor/concurrency members, the deliberate `jdk.jfr.*` owner family, `sun.misc.Unsafe`, the exact `String` regex/formatter/text-normalization plus binary/charset/code-point family, the current exact `StringBuilder`, `StringBuffer`, plus `AbstractStringBuilder` char-sequence/string-buffer/code-point/stream/repeat family, the internal `StringLatin1`, `StringUTF16`, `StringConcatHelper`, plus `StringCoding` owner families including their nested helper classes, the internal `CharacterData*` owner family, plus the internal `ConditionalSpecialCasing`, `ConditionalSpecialCasing$Entry`, and `String$CaseInsensitiveComparator` owners. |
+| Exact done JDK callables | 6717/267886 (2.5%) | Lower-bound supported-plus-explicitly-rejected callable-member accounting on the scanned JDK 25 image for the current branch baseline. |
+| Exact unknown JDK callables | 261169 | Callable members on the scanned JDK 25 image not yet counted as supported or explicitly rejected. |
 | Exact supported JDK callables left | 266854 | Callables on the scanned JDK 25 image that are not yet in the exact supported callable ledger. |
 | Flow-qualified rejected JDK call shapes | 0 | Separate diagnostic-shape ledger exists now; the current self-check profile has no such diagnostics. |
 | Full first-JDK release gate | 0.0% | Inventory and exact supported callable counts exist, but supported/rejected/unknown accounting for the first release-gated JDK is still incomplete. |
@@ -82,6 +82,7 @@ supported/rejected/unknown accounting is not complete yet.
 | M55: exact explicit rejection expansion v6 | Done | Added internal `StringLatin1`, `StringUTF16`, `StringConcatHelper`, plus `StringCoding` owner-family rejects including nested helper classes, moving explicit rejects to `5398`, done to `6430`, unknown to `261456`. |
 | M56: exact explicit rejection expansion v7 | Done | Added internal `CharacterData*` owner-family rejects, moving explicit rejects to `5660`, done to `6692`, unknown to `261194`. |
 | M57: exact explicit rejection expansion v8 | Done | Added internal `ConditionalSpecialCasing` and `String$CaseInsensitiveComparator` owner rejects, moving explicit rejects to `5679`, done to `6711`, unknown to `261175`. |
+| M58: exact explicit rejection expansion v9 | Done | Added internal `ConditionalSpecialCasing$Entry` owner rejects, moving explicit rejects to `5685`, done to `6717`, unknown to `261169`. |
 
 ## Honest Targets Today
 
