@@ -828,9 +828,8 @@ final class CliIntegrationTest {
 
     @Test
     void httpClientGetStringBuildsAndMatchesJvmOutput() throws Exception {
-        final int port = freeTcpPort();
         final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
-            new java.net.InetSocketAddress("127.0.0.1", port),
+            new java.net.InetSocketAddress("127.0.0.1", 0),
             0
         );
         server.createContext("/hello", exchange -> {
@@ -844,6 +843,7 @@ final class CliIntegrationTest {
         });
         server.start();
         try {
+            final int port = server.getAddress().getPort();
             final Path project = project("http-client-get-string");
             writeJava(project, "com.acme.Main", """
                 package com.acme;
@@ -879,9 +879,8 @@ final class CliIntegrationTest {
 
     @Test
     void httpClientPostStringAndReadByteArrayBuildsAndMatchesJvmOutput() throws Exception {
-        final int port = freeTcpPort();
         final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
-            new java.net.InetSocketAddress("127.0.0.1", port),
+            new java.net.InetSocketAddress("127.0.0.1", 0),
             0
         );
         server.createContext("/upload", exchange -> {
@@ -908,6 +907,7 @@ final class CliIntegrationTest {
         });
         server.start();
         try {
+            final int port = server.getAddress().getPort();
             final Path project = project("http-client-post-string-byte-array");
             writeJava(project, "com.acme.Main", """
                 package com.acme;
@@ -950,9 +950,8 @@ final class CliIntegrationTest {
 
     @Test
     void httpClientPutByteArrayAndReadByteArrayBuildsAndMatchesJvmOutput() throws Exception {
-        final int port = freeTcpPort();
         final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
-            new java.net.InetSocketAddress("127.0.0.1", port),
+            new java.net.InetSocketAddress("127.0.0.1", 0),
             0
         );
         server.createContext("/blob", exchange -> {
@@ -980,6 +979,7 @@ final class CliIntegrationTest {
         });
         server.start();
         try {
+            final int port = server.getAddress().getPort();
             final Path project = project("http-client-put-byte-array");
             writeJava(project, "com.acme.Main", """
                 package com.acme;
