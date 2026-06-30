@@ -304,6 +304,9 @@ final class JdkCallableAccounting {
             }
             return true;
         }
+        if (owner.startsWith("java/util/concurrent/locks/")) {
+            return true;
+        }
         if (owner.startsWith("jdk/jfr/")) {
             return true;
         }

@@ -889,6 +889,24 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksReentrantLockConstructorAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/locks/ReentrantLock", "<init>", "()V")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksConditionAwaitAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/locks/Condition", "await", "()V")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void keepsLockSupportParkSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/locks/LockSupport", "park", "()V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksFormatFormatObjectAsExplicitRejected() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/text/Format", "format", "(Ljava/lang/Object;)Ljava/lang/String;")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
