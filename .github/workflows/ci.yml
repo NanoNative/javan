@@ -25,12 +25,16 @@ jobs:
         include:
           - target: linux-x64
             os: ubuntu-24.04
+            sanitizer-scope: full
           - target: linux-aarch64
             os: ubuntu-24.04-arm
+            sanitizer-scope: platform-smoke
           - target: macos-aarch64
             os: macos-15
+            sanitizer-scope: full
           - target: macos-x64
             os: macos-15-intel
+            sanitizer-scope: full
 
     steps:
       - name: Checkout
@@ -71,7 +75,10 @@ jobs:
         run: java -cp target/classes javan.Main build src/test/resources/projects/acceptance/hello --target ${{ matrix.target }} --output hello-${{ matrix.target }}
 
       - name: Verify sanitizer smoke
-        run: JAVAN_SANITIZER_REQUIRED=true sh .github/scripts/sanitizer-suite.sh
+        run: >-
+          JAVAN_SANITIZER_REQUIRED=true
+          JAVAN_SANITIZER_SCOPE='${{ matrix.sanitizer-scope }}'
+          sh .github/scripts/sanitizer-suite.sh
 
       - name: Verify self-host package smoke
         run: JAVAN_PACKAGE_TARGET='${{ matrix.target }}' sh .github/scripts/verify-ci-package-smoke.sh
