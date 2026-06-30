@@ -158,12 +158,21 @@ public final class JdkCallSupport {
             "String.valueOf",
             "java/lang/String",
             "valueOf",
+            "([C)Ljava/lang/String;",
+            "([CII)Ljava/lang/String;",
             "(I)Ljava/lang/String;",
             "(J)Ljava/lang/String;",
             "(F)Ljava/lang/String;",
             "(D)Ljava/lang/String;",
             "(Z)Ljava/lang/String;",
             "(C)Ljava/lang/String;"
+        ),
+        intrinsic(
+            "String.copyValueOf",
+            "java/lang/String",
+            "copyValueOf",
+            "([C)Ljava/lang/String;",
+            "([CII)Ljava/lang/String;"
         ),
         runtime("Duration.ofMillis", "java/time/Duration", "ofMillis", "(J)Ljava/time/Duration;"),
         runtime("Duration.ofSeconds", "java/time/Duration", "ofSeconds", "(J)Ljava/time/Duration;"),

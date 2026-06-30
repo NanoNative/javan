@@ -1385,6 +1385,50 @@ final class BytecodeToIRInvokeSupport {
         }
         if ("java/lang/String".equals(methodRef.owner())
             && "valueOf".equals(methodRef.name())
+            && "([C)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            final IrExpression array = popObject(classFile, method, stack);
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_string_from_chars",
+                List.of(array, IrExpression.intLiteral(0), IrExpression.intCall("javan_array_length", List.of(array)))
+            )));
+            return true;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
+            && "valueOf".equals(methodRef.name())
+            && "([CII)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            final IrExpression count = popInt(classFile, method, stack);
+            final IrExpression offset = popInt(classFile, method, stack);
+            final IrExpression array = popObject(classFile, method, stack);
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_string_from_chars",
+                List.of(array, offset, count)
+            )));
+            return true;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
+            && "copyValueOf".equals(methodRef.name())
+            && "([C)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            final IrExpression array = popObject(classFile, method, stack);
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_string_from_chars",
+                List.of(array, IrExpression.intLiteral(0), IrExpression.intCall("javan_array_length", List.of(array)))
+            )));
+            return true;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
+            && "copyValueOf".equals(methodRef.name())
+            && "([CII)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            final IrExpression count = popInt(classFile, method, stack);
+            final IrExpression offset = popInt(classFile, method, stack);
+            final IrExpression array = popObject(classFile, method, stack);
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_string_from_chars",
+                List.of(array, offset, count)
+            )));
+            return true;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
+            && "valueOf".equals(methodRef.name())
             && "(I)Ljava/lang/String;".equals(methodRef.descriptor())) {
             stack.add(StackValue.objectExpression(IrExpression.objectCall(
                 "javan_string_value_of_int",

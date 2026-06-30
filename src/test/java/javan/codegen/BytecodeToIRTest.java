@@ -10871,6 +10871,77 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersStringValueOfCharArrayToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "([C)Ljava/lang/String;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeStatic(1, new MethodRef("java/lang/String", "valueOf", "([C)Ljava/lang/String;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_string_from_chars",
+                List.of(
+                    IrExpression.objectLocal("arg0"),
+                    IrExpression.intLiteral(0),
+                    IrExpression.intCall("javan_array_length", List.of(IrExpression.objectLocal("arg0")))
+                )
+            ))
+        );
+    }
+
+    @Test
+    void lowersStringValueOfCharArrayRangeToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "([CII)Ljava/lang/String;",
+            3,
+            3,
+            plain(0, 42, "aload_0"),
+            plain(1, 27, "iload_1"),
+            plain(2, 28, "iload_2"),
+            invokeStatic(3, new MethodRef("java/lang/String", "valueOf", "([CII)Ljava/lang/String;")),
+            plain(4, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_string_from_chars",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"), IrExpression.intLocal("arg2"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersStringCopyValueOfCharArrayRangeToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "([CII)Ljava/lang/String;",
+            3,
+            3,
+            plain(0, 42, "aload_0"),
+            plain(1, 27, "iload_1"),
+            plain(2, 28, "iload_2"),
+            invokeStatic(3, new MethodRef("java/lang/String", "copyValueOf", "([CII)Ljava/lang/String;")),
+            plain(4, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_string_from_chars",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"), IrExpression.intLocal("arg2"))
+            ))
+        );
+    }
+
+    @Test
     void lowersLongToStringToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,

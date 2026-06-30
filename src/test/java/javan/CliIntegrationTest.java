@@ -417,6 +417,102 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void stringValueOfCharArrayBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-value-of-char-array");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final char[] value = new char[] {'j', 'a', 'v', 'a', 'n'};
+                    System.out.println(String.valueOf(value));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-value-of-char-array").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringValueOfCharArrayRangeBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-value-of-char-array-range");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final char[] value = new char[] {'x', 'j', 'a', 'v', 'a', 'n', 'y'};
+                    System.out.println(String.valueOf(value, 1, 5));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-value-of-char-array-range").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringCopyValueOfCharArrayBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-copy-value-of-char-array");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final char[] value = new char[] {'j', 'a', 'v', 'a', 'n'};
+                    System.out.println(String.copyValueOf(value));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-copy-value-of-char-array").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringCopyValueOfCharArrayRangeBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-copy-value-of-char-array-range");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final char[] value = new char[] {'x', 'j', 'a', 'v', 'a', 'n', 'y'};
+                    System.out.println(String.copyValueOf(value, 1, 5));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-copy-value-of-char-array-range").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void printStreamPrintCharBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("printstream-print-char");
         writeJava(project, "com.acme.Main", """

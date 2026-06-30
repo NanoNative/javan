@@ -79,7 +79,8 @@ final class IntrinsicUsageReportsTest {
             new IntrinsicCallCount("Double.toString", 0),
             new IntrinsicCallCount("Double.longBitsToDouble", 0),
             new IntrinsicCallCount("Boolean.toString", 0),
-            new IntrinsicCallCount("String.valueOf", 1)
+            new IntrinsicCallCount("String.valueOf", 1),
+            new IntrinsicCallCount("String.copyValueOf", 0)
         );
         assertThat(report.runtimeCalls()).contains(
             new RuntimeJdkCallCount("List.getFirst", 1),
