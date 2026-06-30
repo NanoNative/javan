@@ -1618,6 +1618,70 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersStringCharArrayConstructorToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "([C)Ljava/lang/String;",
+            2,
+            1,
+            classInstruction(0, 187, "new", "java/lang/String"),
+            plain(1, 89, "dup"),
+            plain(2, 42, "aload_0"),
+            invokeSpecial(3, new MethodRef("java/lang/String", "<init>", "([C)V")),
+            plain(4, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectNull()),
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_string_from_chars",
+                    List.of(
+                        IrExpression.objectLocal("arg0"),
+                        IrExpression.intLiteral(0),
+                        IrExpression.intCall("javan_array_length", List.of(IrExpression.objectLocal("arg0")))
+                    )
+                )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersStringCharArrayRangeConstructorToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "([CII)Ljava/lang/String;",
+            4,
+            3,
+            classInstruction(0, 187, "new", "java/lang/String"),
+            plain(1, 89, "dup"),
+            plain(2, 42, "aload_0"),
+            plain(3, 27, "iload_1"),
+            plain(4, 28, "iload_2"),
+            invokeSpecial(5, new MethodRef("java/lang/String", "<init>", "([CII)V")),
+            plain(6, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectNull()),
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_string_from_chars",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"), IrExpression.intLocal("arg2"))
+                )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
     void lowersStringBuilderCapacityConstructorToReserveRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -2008,21 +2072,111 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void rejectsUnsupportedPrintStreamPrintCharArrayDescriptor() {
-        assertThatThrownBy(() -> lowerMain(method(
+    void lowersSystemOutPrintNumericAndBooleanOverloads() {
+        final IrFunction function = lowerMain(method(
             0x0008,
             "main",
             "()V",
-            2,
+            3,
             0,
             getStatic(0, new FieldRef("java/lang/System", "out", "Ljava/io/PrintStream;")),
-            plain(1, 1, "aconst_null"),
+            plain(1, 5, "iconst_2"),
+            invokeVirtual(2, new MethodRef("java/io/PrintStream", "print", "(I)V")),
+            getStatic(3, new FieldRef("java/lang/System", "out", "Ljava/io/PrintStream;")),
+            plain(4, 10, "lconst_1"),
+            invokeVirtual(5, new MethodRef("java/io/PrintStream", "print", "(J)V")),
+            getStatic(6, new FieldRef("java/lang/System", "out", "Ljava/io/PrintStream;")),
+            plain(7, 12, "fconst_1"),
+            invokeVirtual(8, new MethodRef("java/io/PrintStream", "print", "(F)V")),
+            getStatic(9, new FieldRef("java/lang/System", "out", "Ljava/io/PrintStream;")),
+            plain(10, 15, "dconst_1"),
+            invokeVirtual(11, new MethodRef("java/io/PrintStream", "print", "(D)V")),
+            getStatic(12, new FieldRef("java/lang/System", "out", "Ljava/io/PrintStream;")),
+            plain(13, 4, "iconst_1"),
+            invokeVirtual(14, new MethodRef("java/io/PrintStream", "print", "(Z)V")),
+            plain(15, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.printObject(IrExpression.objectCall("javan_string_value_of_int", List.of(IrExpression.intLiteral(2)))),
+            IrInstruction.printObject(IrExpression.objectCall("javan_string_value_of_long", List.of(IrExpression.longLiteral(1L)))),
+            IrInstruction.printObject(IrExpression.objectCall("javan_string_value_of_float", List.of(IrExpression.floatLiteral(1.0f)))),
+            IrInstruction.printObject(IrExpression.objectCall("javan_string_value_of_double", List.of(IrExpression.doubleLiteral(1.0)))),
+            IrInstruction.printObject(IrExpression.objectCall("javan_string_value_of_bool", List.of(IrExpression.intLiteral(1)))),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
+    void lowersSystemOutPrintCharArrayToStringConversion() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "([C)V",
+            2,
+            1,
+            getStatic(0, new FieldRef("java/lang/System", "out", "Ljava/io/PrintStream;")),
+            plain(1, 42, "aload_0"),
             invokeVirtual(2, new MethodRef("java/io/PrintStream", "print", "([C)V")),
+            plain(3, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.printObject(IrExpression.objectCall(
+                "javan_string_from_chars",
+                List.of(
+                    IrExpression.objectLocal("arg0"),
+                    IrExpression.intLiteral(0),
+                    IrExpression.intCall("javan_array_length", List.of(IrExpression.objectLocal("arg0")))
+                )
+            )),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
+    void lowersSystemOutPrintlnCharArrayToStringConversion() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "([C)V",
+            2,
+            1,
+            getStatic(0, new FieldRef("java/lang/System", "out", "Ljava/io/PrintStream;")),
+            plain(1, 42, "aload_0"),
+            invokeVirtual(2, new MethodRef("java/io/PrintStream", "println", "([C)V")),
+            plain(3, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.printlnObject(IrExpression.objectCall(
+                "javan_string_from_chars",
+                List.of(
+                    IrExpression.objectLocal("arg0"),
+                    IrExpression.intLiteral(0),
+                    IrExpression.intCall("javan_array_length", List.of(IrExpression.objectLocal("arg0")))
+                )
+            )),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
+    void rejectsUnsupportedPrintStreamPrintByteArrayDescriptor() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "([B)V",
+            2,
+            1,
+            getStatic(0, new FieldRef("java/lang/System", "out", "Ljava/io/PrintStream;")),
+            plain(1, 42, "aload_0"),
+            invokeVirtual(2, new MethodRef("java/io/PrintStream", "print", "([B)V")),
             plain(3, 177, "return")
         )))
             .isInstanceOf(DiagnosticException.class)
             .hasMessageContaining("error[JAVAN040]: bytecode is not implemented by native code generation")
-            .hasMessageContaining("invokevirtual java/io/PrintStream.print([C)V");
+            .hasMessageContaining("invokevirtual java/io/PrintStream.print([B)V");
     }
 
     @Test

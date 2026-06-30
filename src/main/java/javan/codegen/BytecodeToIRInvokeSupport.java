@@ -730,6 +730,21 @@ final class BytecodeToIRInvokeSupport {
             emitPrintObject(classFile, method, instruction, instructions, stack, argument);
             return true;
         }
+        if ("print".equals(methodRef.name()) && "([C)V".equals(methodRef.descriptor())) {
+            final IrExpression array = popObject(classFile, method, instruction, stack);
+            emitPrintObject(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                IrExpression.objectCall(
+                    "javan_string_from_chars",
+                    List.of(array, IrExpression.intLiteral(0), IrExpression.intCall("javan_array_length", List.of(array)))
+                )
+            );
+            return true;
+        }
         if ("print".equals(methodRef.name()) && "(C)V".equals(methodRef.descriptor())) {
             final IrExpression argument = IrExpression.objectCall("javan_string_value_of_char", List.of(popInt(classFile, method, stack)));
             emitPrintObject(classFile, method, instruction, instructions, stack, argument);
@@ -772,6 +787,21 @@ final class BytecodeToIRInvokeSupport {
         if ("println".equals(methodRef.name()) && "(Ljava/lang/Object;)V".equals(methodRef.descriptor())) {
             final IrExpression argument = popPrintableObject(classFile, method, instruction, stack);
             emitPrintlnObject(classFile, method, instruction, instructions, stack, argument);
+            return true;
+        }
+        if ("println".equals(methodRef.name()) && "([C)V".equals(methodRef.descriptor())) {
+            final IrExpression array = popObject(classFile, method, instruction, stack);
+            emitPrintlnObject(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                IrExpression.objectCall(
+                    "javan_string_from_chars",
+                    List.of(array, IrExpression.intLiteral(0), IrExpression.intCall("javan_array_length", List.of(array)))
+                )
+            );
             return true;
         }
         if ("println".equals(methodRef.name()) && "(I)V".equals(methodRef.descriptor())) {
@@ -1952,6 +1982,17 @@ final class BytecodeToIRInvokeSupport {
     ) {
         if (!"java/lang/String".equals(methodRef.owner()) || !"<init>".equals(methodRef.name())) {
             return false;
+        }
+        if ("([C)V".equals(methodRef.descriptor())) {
+            final IrExpression array = arguments.getFirst();
+            instructions.add(IrInstruction.assignObject(
+                receiver.value(),
+                IrExpression.objectCall(
+                    "javan_string_from_chars",
+                    List.of(array, IrExpression.intLiteral(0), IrExpression.intCall("javan_array_length", List.of(array)))
+                )
+            ));
+            return true;
         }
         if ("([CII)V".equals(methodRef.descriptor())) {
             instructions.add(IrInstruction.assignObject(

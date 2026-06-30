@@ -513,6 +513,55 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void stringCharArrayConstructorBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-char-array-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final char[] value = new char[] {'j', 'a', 'v', 'a', 'n'};
+                    System.out.println(new String(value));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-char-array-constructor").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringCharArrayConstructorNullFailsClearlyAtRuntime() throws Exception {
+        final Path project = project("string-char-array-constructor-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final char[] value = null;
+                    System.out.println(new String(value));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/string-char-array-constructor-null").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("[JAVAN-RUNTIME-PANIC]", "detail: null array");
+    }
+
+    @Test
     void printStreamPrintCharBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("printstream-print-char");
         writeJava(project, "com.acme.Main", """
@@ -537,6 +586,30 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void printStreamPrintCharArrayBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("printstream-print-char-array");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final char[] value = new char[] {'j', 'a', 'v', 'a', 'n'};
+                    System.out.print(value);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/printstream-print-char-array").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void printStreamPrintlnCharBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("printstream-println-char");
         writeJava(project, "com.acme.Main", """
@@ -557,6 +630,55 @@ final class CliIntegrationTest {
 
         assertThat(run.exitCode()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/printstream-println-char").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void printStreamPrintlnCharArrayBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("printstream-println-char-array");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final char[] value = new char[] {'j', 'a', 'v', 'a', 'n'};
+                    System.out.println(value);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/printstream-println-char-array").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void printStreamPrintCharArrayNullFailsClearlyAtRuntime() throws Exception {
+        final Path project = project("printstream-print-char-array-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final char[] value = null;
+                    System.out.print(value);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/printstream-print-char-array-null").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("[JAVAN-RUNTIME-PANIC]", "detail: null array");
     }
 
     @Test
