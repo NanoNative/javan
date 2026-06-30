@@ -2141,6 +2141,18 @@ final class BytecodeToIRInvokeSupport {
             pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_reverse", List.of(receiver));
             return true;
         }
+        if ("ensureCapacity".equals(name) && "(I)V".equals(descriptorText)) {
+            instructions.add(IrInstruction.callStaticVoid("javan_stringbuilder_ensure_capacity_public", List.of(receiver, arguments.getFirst())));
+            return true;
+        }
+        if ("trimToSize".equals(name) && "()V".equals(descriptorText)) {
+            instructions.add(IrInstruction.callStaticVoid("javan_stringbuilder_trim_to_size", List.of(receiver)));
+            return true;
+        }
+        if ("setCharAt".equals(name) && "(IC)V".equals(descriptorText)) {
+            instructions.add(IrInstruction.callStaticVoid("javan_stringbuilder_set_char_at", List.of(receiver, arguments.getFirst(), arguments.get(1))));
+            return true;
+        }
         if ("setLength".equals(name)) {
             instructions.add(IrInstruction.callStaticVoid("javan_stringbuilder_set_length", List.of(receiver, arguments.getFirst())));
             return true;

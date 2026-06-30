@@ -395,6 +395,51 @@ final class RuntimeSourcePlatformSection {
             return builder_value;
         }
 
+        void javan_stringbuilder_ensure_capacity_public(void* builder_value, int minimum_capacity) {
+            if (minimum_capacity <= 0) {
+                return;
+            }
+            javan_string_builder* builder = javan_stringbuilder_checked(builder_value);
+            void** javan_builder_ensure_capacity_roots[] = {
+                (void**) &builder
+            };
+            javan_root_frame_push(javan_builder_ensure_capacity_roots, 1);
+            javan_stringbuilder_ensure_capacity(builder, minimum_capacity);
+            javan_root_frame_pop(javan_builder_ensure_capacity_roots);
+        }
+
+        void javan_stringbuilder_trim_to_size(void* builder_value) {
+            javan_string_builder* builder = javan_stringbuilder_checked(builder_value);
+            int target_capacity = builder->length + 1;
+            if (target_capacity <= 0) {
+                target_capacity = 1;
+            }
+            if (builder->capacity == target_capacity) {
+                return;
+            }
+            void** javan_builder_trim_roots[] = {
+                (void**) &builder
+            };
+            javan_root_frame_push(javan_builder_trim_roots, 1);
+            char* next = (char*) javan_realloc_owned_buffer(builder->values, (unsigned long) target_capacity);
+            if (next == NULL) {
+                javan_panic("out of memory");
+            }
+            builder->values = next;
+            builder->capacity = target_capacity;
+            builder->values[builder->length] = '\\0';
+            javan_heap_maybe_validate();
+            javan_root_frame_pop(javan_builder_trim_roots);
+        }
+
+        void javan_stringbuilder_set_char_at(void* builder_value, int index, int value) {
+            javan_string_builder* builder = javan_stringbuilder_checked(builder_value);
+            if (index < 0 || index >= builder->length) {
+                javan_panic("string builder set char index out of bounds");
+            }
+            builder->values[index] = (char) value;
+        }
+
         void javan_stringbuilder_set_length(void* builder_value, int length) {
             if (length < 0) {
                 javan_panic("negative string builder length");
