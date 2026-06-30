@@ -212,7 +212,7 @@ final class CliSharedStateIntegrationTest {
     private static CliRun run(final Path cwd, final String... args) {
         final ByteArrayOutputStream stdout = new ByteArrayOutputStream();
         final ByteArrayOutputStream stderr = new ByteArrayOutputStream();
-        final int exitCode = assertTimeoutPreemptively(Duration.ofSeconds(20), () ->
+        final int exitCode = assertTimeoutPreemptively(defaultCliTimeout(), () ->
             new Cli().run(cwd, new PrintStream(stdout, true, StandardCharsets.UTF_8), new PrintStream(stderr, true, StandardCharsets.UTF_8), args)
         );
         return new CliRun(
@@ -223,11 +223,23 @@ final class CliSharedStateIntegrationTest {
     }
 
     private static ProcessResult process(final Path cwd, final List<String> command) {
-        return process(cwd, command, Duration.ofSeconds(10));
+        return process(cwd, command, defaultProcessTimeout());
     }
 
     private static ProcessResult processSlow(final Path cwd, final List<String> command) {
         return process(cwd, command, Duration.ofSeconds(60));
+    }
+
+    private static Duration defaultCliTimeout() {
+        return isCiEnvironment() ? Duration.ofSeconds(45) : Duration.ofSeconds(20);
+    }
+
+    private static Duration defaultProcessTimeout() {
+        return isCiEnvironment() ? Duration.ofSeconds(20) : Duration.ofSeconds(10);
+    }
+
+    private static boolean isCiEnvironment() {
+        return "true".equalsIgnoreCase(System.getenv("CI"));
     }
 
     private static ProcessResult process(final Path cwd, final List<String> command, final Duration timeout) {

@@ -1,14 +1,19 @@
 package javan.reporting;
 
+import javan.util.ProcessRunner;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.Isolated;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@Isolated
 final class RuntimeContractReportsTest {
     @TempDir
     private Path tempDir;
@@ -240,6 +245,71 @@ final class RuntimeContractReportsTest {
     }
 
     @Test
+    void writeReportsLinuxSharedLibraryParsesLddOutput() throws Exception {
+        final Path shared = tempDir.resolve(".javan/dist/libdemo.so");
+        Files.createDirectories(shared.getParent());
+        Files.writeString(shared, "fake shared library\n");
+        final String originalOs = System.getProperty("os.name");
+        System.setProperty("os.name", "Linux");
+        try {
+            final RuntimeContractReports.Report report = new RuntimeContractReports(new StubProcessRunner(Map.of(
+                "ldd", new ProcessRunner.Result(0, """
+                    linux-vdso.so.1 (0x0000)
+                    libssl.so.3 => /lib/libssl.so.3 (0x0000)
+                    /lib64/ld-linux-aarch64.so.1 (0x0000)
+                    """, ""),
+                "nm", new ProcessRunner.Result(0, "00000000 T main\n", "")
+            ))).write(
+                tempDir.resolve(".javan"),
+                "library",
+                List.of(shared),
+                List.of()
+            );
+
+            assertThat(report.artifacts().getFirst().systemLibraries()).containsExactly(
+                "linux-vdso.so.1",
+                "/lib/libssl.so.3",
+                "/lib64/ld-linux-aarch64.so.1"
+            );
+            assertThat(report.artifacts().getFirst().symbolTable()).isEqualTo("present");
+        } finally {
+            System.setProperty("os.name", originalOs);
+        }
+    }
+
+    @Test
+    void writeReportsMacSharedLibraryParsesOtoolOutput() throws Exception {
+        final Path shared = tempDir.resolve(".javan/dist/libdemo.dylib");
+        Files.createDirectories(shared.getParent());
+        Files.writeString(shared, "fake dylib\n");
+        final String originalOs = System.getProperty("os.name");
+        System.setProperty("os.name", "Mac OS X");
+        try {
+            final RuntimeContractReports.Report report = new RuntimeContractReports(new StubProcessRunner(Map.of(
+                "otool", new ProcessRunner.Result(0, """
+                    /tmp/libdemo.dylib:
+                    \t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1.0.0)
+                    \t/usr/lib/libobjc.A.dylib (compatibility version 1.0.0, current version 1.0.0)
+                    """, ""),
+                "nm", new ProcessRunner.Result(0, "", "")
+            ))).write(
+                tempDir.resolve(".javan"),
+                "library",
+                List.of(shared),
+                List.of()
+            );
+
+            assertThat(report.artifacts().getFirst().systemLibraries()).containsExactly(
+                "/usr/lib/libSystem.B.dylib",
+                "/usr/lib/libobjc.A.dylib"
+            );
+            assertThat(report.artifacts().getFirst().symbolTable()).isEqualTo("absent");
+        } finally {
+            System.setProperty("os.name", originalOs);
+        }
+    }
+
+    @Test
     void writeReportsInspectRealHostExecutableWhenAvailable() throws Exception {
         final Path javaHome = Path.of(System.getProperty("java.home"));
         final String executableName = System.getProperty("os.name", "").toLowerCase().contains("win") ? "java.exe" : "java";
@@ -262,5 +332,28 @@ final class RuntimeContractReportsTest {
             "\"artifactKind\": \"app\"",
             "\"path\": \"" + executable + "\""
         );
+    }
+
+    private static final class StubProcessRunner extends ProcessRunner {
+        private final Map<String, Result> results;
+
+        private StubProcessRunner(final Map<String, Result> results) {
+            this.results = results;
+        }
+
+        @Override
+        public Result run(final Path workingDirectory, final List<String> command) {
+            return results.getOrDefault(command.getFirst(), new Result(1, "", "missing"));
+        }
+
+        @Override
+        public Optional<String> firstAvailable(final List<String> executables) {
+            for (final String executable : executables) {
+                if (results.containsKey(executable)) {
+                    return Optional.of(executable);
+                }
+            }
+            return Optional.empty();
+        }
     }
 }

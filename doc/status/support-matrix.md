@@ -6,10 +6,12 @@ This matrix tracks named javan/JDK behavior scenarios. It is not a claim that ev
 
 | Measure | Count |
 | --- | ---: |
-| rows | 105 |
-| pass | 89 |
-| scoped | 14 |
-| target | 2 |
+| rows | 108 |
+| done (`pass` + `rejected`) | 108 |
+| left (`scoped` + `target`) | 0 |
+| pass | 108 |
+| scoped | 0 |
+| target | 0 |
 | rejected | 0 |
 
 Status mapping:
@@ -33,20 +35,22 @@ Status mapping:
 | `int-bitwise-and` | pass |
 | `long-basic` | pass |
 | `float-double` | pass |
-| `boxed-primitive-gc` | scoped |
+| `boxed-primitive-gc` | pass |
 | `boolean-basic` | pass |
 | `static-fields` | pass |
 | `string-concat` | pass |
 | `exception-panic` | pass |
-| `try-catch` | scoped |
-| `enum-basic` | scoped |
-| `enum-ordinal` | scoped |
-| `enum-values` | scoped |
-| `enum-switch` | scoped |
-| `interface-dispatch` | scoped |
-| `polymorphic-virtual` | scoped |
-| `interface-polymorphic` | scoped |
-| `string-intrinsics` | scoped |
+| `try-catch` | pass |
+| `try-finally` | pass |
+| `enum-basic` | pass |
+| `enum-ordinal` | pass |
+| `enum-values` | pass |
+| `enum-switch` | pass |
+| `enum-value-of` | pass |
+| `interface-dispatch` | pass |
+| `polymorphic-virtual` | pass |
+| `interface-polymorphic` | pass |
+| `string-intrinsics` | pass |
 | `non-ascii-string-semantic-rejection` | pass |
 | `operand-object-compare-temporary-root` | pass |
 | `operand-field-load-temporary-root` | pass |
@@ -84,7 +88,7 @@ Status mapping:
 | `library-python-ctypes-smoke` | pass |
 | `library-binding-ownership-smoke` | pass |
 | `library-retained-input-ownership` | pass |
-| `library-last-error-abi` | scoped |
+| `library-last-error-abi` | pass |
 | `library-c-result-wrapper-success` | pass |
 | `library-c-result-wrapper-error` | pass |
 | `library-c-result-wrapper-null-out` | pass |
@@ -97,12 +101,13 @@ Status mapping:
 | `library-negative-byte-array-rejection` | pass |
 | `library-structured-last-error-fields` | pass |
 | `deduplication-plan` | pass |
-| `hashmap-realloc-gc` | scoped |
-| `list-of-varargs-gc` | scoped |
-| `owned-buffer-realloc-validation` | scoped |
+| `hashmap-realloc-gc` | pass |
+| `list-of-varargs-gc` | pass |
+| `owned-buffer-realloc-validation` | pass |
 | `stringbuilder-setlength-overflow-panic` | pass |
 | `network-address-runtime` | pass |
 | `network-tcp-client-socket` | pass |
+| `network-tcp-client-socket-address` | pass |
 | `network-tcp-server-socket` | pass |
 | `network-tcp-socket-stream-io` | pass |
 | `network-http-client-get-string` | pass |
@@ -126,8 +131,9 @@ Status mapping:
 | `network-socket-rejection` | pass |
 | `network-http-rejection` | pass |
 | `network-runtime-feature-reporting` | pass |
-| `typemap-pair` | target |
-| `nano-metric` | target |
+| `typemap-pair` | pass |
+| `nano-metric` | pass |
+| `nano-duration` | pass |
 
 `pass` means covered by the current deterministic verification suite for the active JDK.
 `scoped` means a supported subset exists and unsupported shapes must be rejected clearly.

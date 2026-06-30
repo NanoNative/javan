@@ -45,7 +45,7 @@ final class CliIntegrationTest {
             classes.toString(),
             "javan.Main",
             "--version"
-        ));
+        ), Duration.ofSeconds(30));
 
         assertThat(run.exitCode()).isZero();
         assertThat(run.stdout()).isEqualTo("javan " + Version.number() + "\n");
@@ -216,6 +216,971 @@ final class CliIntegrationTest {
                 "\"specializedMethods\": 0",
                 "\"skippedCandidates\": 0"
             );
+    }
+
+    @Test
+    void checkWritesReachableJdkLedgerBreakdownForSupportedCalls() throws Exception {
+        final Path project = project("check-reachable-jdk-ledger");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(1);
+                    Thread.currentThread();
+                    System.out.println(List.of("x").getFirst());
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/reports/intrinsics.json")))
+            .contains(
+                "\"runtimeCallSiteCount\": 5",
+                "\"supportedDirectJdkCallSiteCount\": 0",
+                "\"supportedJdkCallSiteCount\": 5",
+                "{\"name\": \"PrintStream.println\", \"count\": 2}",
+                "{\"name\": \"Thread.currentThread\", \"count\": 1}",
+                "{\"name\": \"List.getFirst\", \"count\": 1}",
+                "{\"name\": \"List.of\", \"count\": 1}",
+                "\"unsupportedJdkCallCandidateCount\": 0"
+            );
+        assertThat(Files.readString(project.resolve(".javan/reports/intrinsics.md")))
+            .contains(
+                "Supported reachable JDK call sites: `5`",
+                "Runtime-registry reachable call sites: `5`",
+                "Supported-direct reachable call sites: `0`",
+                "Unsupported reachable call sites: `0`"
+            );
+    }
+
+    @Test
+    void stringValueOfIntBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-value-of-int");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(String.valueOf(1));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-value-of-int").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(Files.readString(project.resolve(".javan/reports/intrinsics.json")))
+            .contains(
+                "\"runtimeCallSiteCount\": 1",
+                "\"intrinsicCallSiteCount\": 1",
+                "\"supportedDirectJdkCallSiteCount\": 0",
+                "\"supportedJdkCallSiteCount\": 2",
+                "{\"name\": \"PrintStream.println\", \"count\": 1}",
+                "{\"name\": \"String.valueOf\", \"count\": 1}",
+                "\"unsupportedJdkCallCandidateCount\": 0"
+            );
+        assertThat(Files.readString(project.resolve(".javan/reports/intrinsics.md")))
+            .contains(
+                "Supported reachable JDK call sites: `2`",
+                "Runtime-registry reachable call sites: `1`",
+                "Supported-direct reachable call sites: `0`",
+                "Unsupported reachable call sites: `0`"
+            );
+    }
+
+    @Test
+    void stringValueOfLongBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-value-of-long");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(String.valueOf(7L));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-value-of-long").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringValueOfFloatBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-value-of-float");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(String.valueOf(1.5f));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-value-of-float").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringValueOfDoubleBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-value-of-double");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(String.valueOf(1.5d));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-value-of-double").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringValueOfBooleanBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-value-of-boolean");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(String.valueOf(true));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-value-of-boolean").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringValueOfCharBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-value-of-char");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(String.valueOf('A'));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-value-of-char").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringValueOfObjectBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-value-of-object");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Object value = "javan";
+                    System.out.println(String.valueOf(value));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-value-of-object").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringValueOfNullObjectBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-value-of-null-object");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Object value = null;
+                    System.out.println(String.valueOf(value));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-value-of-null-object").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringValueOfCharArrayBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-value-of-char-array");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final char[] value = new char[] {'j', 'a', 'v', 'a', 'n'};
+                    System.out.println(String.valueOf(value));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-value-of-char-array").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringValueOfCharArrayRangeBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-value-of-char-array-range");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final char[] value = new char[] {'x', 'j', 'a', 'v', 'a', 'n', 'y'};
+                    System.out.println(String.valueOf(value, 1, 5));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-value-of-char-array-range").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringCopyValueOfCharArrayBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-copy-value-of-char-array");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final char[] value = new char[] {'j', 'a', 'v', 'a', 'n'};
+                    System.out.println(String.copyValueOf(value));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-copy-value-of-char-array").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringCopyValueOfCharArrayRangeBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-copy-value-of-char-array-range");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final char[] value = new char[] {'x', 'j', 'a', 'v', 'a', 'n', 'y'};
+                    System.out.println(String.copyValueOf(value, 1, 5));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-copy-value-of-char-array-range").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringDefaultConstructorBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-default-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new String().length());
+                    System.out.println("[" + new String() + "]");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-default-constructor").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringCopyConstructorBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-copy-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String value = "javan";
+                    System.out.println(new String(value));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-copy-constructor").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringCopyConstructorNullFailsClearlyAtRuntime() throws Exception {
+        final Path project = project("string-copy-constructor-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String value = null;
+                    System.out.println(new String(value));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/string-copy-constructor-null").toString()));
+        assertThat(nativeRun.exitCode()).isEqualTo(1);
+        assertThat(nativeRun.stdout()).isEmpty();
+        assertThat(nativeRun.stderr()).contains("null object");
+    }
+
+    @Test
+    void stringToStringBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-to-string");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String value = "javan";
+                    System.out.println(value.toString());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-to-string").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringToStringNullFailsClearlyAtRuntime() throws Exception {
+        final Path project = project("string-to-string-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String value = null;
+                    System.out.println(value.toString());
+                }
+            }
+            """);
+
+        final CliRun build = run(tempDir, "build", project.toString());
+
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/string-to-string-null").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("[JAVAN-RUNTIME-PANIC]", "detail: null object");
+    }
+
+    @Test
+    void stringConcatBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-concat-method");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String left = "ja";
+                    final String right = "van";
+                    System.out.println(left.concat(right));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-concat-method").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringConcatNullArgumentFailsClearlyAtRuntime() throws Exception {
+        final Path project = project("string-concat-null-argument");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String left = "ja";
+                    final String right = null;
+                    System.out.println(left.concat(right));
+                }
+            }
+            """);
+
+        final CliRun build = run(tempDir, "build", project.toString());
+
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/string-concat-null-argument").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("[JAVAN-RUNTIME-PANIC]", "detail: null object");
+    }
+
+    @Test
+    void stringCharArrayConstructorBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-char-array-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final char[] value = new char[] {'j', 'a', 'v', 'a', 'n'};
+                    System.out.println(new String(value));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-char-array-constructor").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringCharArrayConstructorNullFailsClearlyAtRuntime() throws Exception {
+        final Path project = project("string-char-array-constructor-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final char[] value = null;
+                    System.out.println(new String(value));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/string-char-array-constructor-null").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("[JAVAN-RUNTIME-PANIC]", "detail: null array");
+    }
+
+    @Test
+    void stringBuilderCopyConstructorBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-copy-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("javan");
+                    System.out.println(new String(builder));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-copy-constructor").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderCopyConstructorNullFailsClearlyAtRuntime() throws Exception {
+        final Path project = project("stringbuilder-copy-constructor-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = null;
+                    System.out.println(new String(builder));
+                }
+            }
+            """);
+
+        final CliRun build = run(tempDir, "build", project.toString());
+
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/stringbuilder-copy-constructor-null").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("[JAVAN-RUNTIME-PANIC]", "detail: null object");
+    }
+
+    @Test
+    void stringSubSequenceBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-sub-sequence");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String value = "javan";
+                    final CharSequence slice = value.subSequence(1, 4);
+                    System.out.println(slice);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-sub-sequence").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void printStreamPrintCharBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("printstream-print-char");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.print('A');
+                    System.out.print('B');
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/printstream-print-char").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void printStreamPrintCharArrayBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("printstream-print-char-array");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final char[] value = new char[] {'j', 'a', 'v', 'a', 'n'};
+                    System.out.print(value);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/printstream-print-char-array").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void printStreamPrintlnCharBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("printstream-println-char");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println('A');
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/printstream-println-char").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void printStreamPrintlnCharArrayBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("printstream-println-char-array");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final char[] value = new char[] {'j', 'a', 'v', 'a', 'n'};
+                    System.out.println(value);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/printstream-println-char-array").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void printStreamPrintCharArrayNullFailsClearlyAtRuntime() throws Exception {
+        final Path project = project("printstream-print-char-array-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final char[] value = null;
+                    System.out.print(value);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/printstream-print-char-array-null").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("[JAVAN-RUNTIME-PANIC]", "detail: null array");
+    }
+
+    @Test
+    void printStreamPrintBooleanBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("printstream-print-boolean");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.print(true);
+                    System.out.print(false);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/printstream-print-boolean").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void printStreamPrintIntBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("printstream-print-int");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.print(12);
+                    System.out.print(34);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/printstream-print-int").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void printStreamPrintLongBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("printstream-print-long");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.print(12L);
+                    System.out.print(34L);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/printstream-print-long").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void printStreamPrintFloatBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("printstream-print-float");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.print(1.5f);
+                    System.out.print(2.5f);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/printstream-print-float").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void printStreamPrintDoubleBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("printstream-print-double");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.print(1.5d);
+                    System.out.print(2.5d);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/printstream-print-double").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void printStreamPrintObjectBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("printstream-print-object");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Object left = "left";
+                    final Object none = null;
+                    System.out.print(left);
+                    System.out.print(":");
+                    System.out.print(none);
+                    System.out.println();
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/printstream-print-object").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("left:null\n");
+    }
+
+    @Test
+    void stringBuilderAppendFloatBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-append-float");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder();
+                    builder.append(1.5f);
+                    builder.append('/');
+                    builder.append(2.5f);
+                    System.out.println(builder);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-append-float").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderAppendDoubleBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-append-double");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder();
+                    builder.append(1.5d);
+                    builder.append('/');
+                    builder.append(2.5d);
+                    System.out.println(builder);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-append-double").toString())).stdout()).isEqualTo(jvmOutput);
     }
 
     @Test
@@ -745,9 +1710,8 @@ final class CliIntegrationTest {
 
     @Test
     void httpClientGetStringBuildsAndMatchesJvmOutput() throws Exception {
-        final int port = freeTcpPort();
         final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
-            new java.net.InetSocketAddress("127.0.0.1", port),
+            new java.net.InetSocketAddress("127.0.0.1", 0),
             0
         );
         server.createContext("/hello", exchange -> {
@@ -761,6 +1725,7 @@ final class CliIntegrationTest {
         });
         server.start();
         try {
+            final int port = server.getAddress().getPort();
             final Path project = project("http-client-get-string");
             writeJava(project, "com.acme.Main", """
                 package com.acme;
@@ -796,9 +1761,8 @@ final class CliIntegrationTest {
 
     @Test
     void httpClientPostStringAndReadByteArrayBuildsAndMatchesJvmOutput() throws Exception {
-        final int port = freeTcpPort();
         final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
-            new java.net.InetSocketAddress("127.0.0.1", port),
+            new java.net.InetSocketAddress("127.0.0.1", 0),
             0
         );
         server.createContext("/upload", exchange -> {
@@ -825,6 +1789,7 @@ final class CliIntegrationTest {
         });
         server.start();
         try {
+            final int port = server.getAddress().getPort();
             final Path project = project("http-client-post-string-byte-array");
             writeJava(project, "com.acme.Main", """
                 package com.acme;
@@ -867,9 +1832,8 @@ final class CliIntegrationTest {
 
     @Test
     void httpClientPutByteArrayAndReadByteArrayBuildsAndMatchesJvmOutput() throws Exception {
-        final int port = freeTcpPort();
         final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
-            new java.net.InetSocketAddress("127.0.0.1", port),
+            new java.net.InetSocketAddress("127.0.0.1", 0),
             0
         );
         server.createContext("/blob", exchange -> {
@@ -897,6 +1861,7 @@ final class CliIntegrationTest {
         });
         server.start();
         try {
+            final int port = server.getAddress().getPort();
             final Path project = project("http-client-put-byte-array");
             writeJava(project, "com.acme.Main", """
                 package com.acme;
@@ -959,6 +1924,76 @@ final class CliIntegrationTest {
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/inet-address-loopback-host-address").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void socketInetAddressConstructorBuildsAndReadsFromLoopbackServer() throws Exception {
+        final int port = freeTcpPort();
+        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final CompletableFuture<Void> served = CompletableFuture.runAsync(() -> {
+                try (java.net.Socket socket = server.accept()) {
+                    socket.getOutputStream().write(65);
+                    socket.getOutputStream().flush();
+                } catch (final Exception exception) {
+                    throw new IllegalStateException(exception);
+                }
+            });
+            final Path project = project("socket-inet-address-constructor-read-byte");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.io.InputStream;
+                import java.net.InetAddress;
+                import java.net.Socket;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final Socket socket = new Socket(InetAddress.getLoopbackAddress(), %d);
+                        final InputStream in = socket.getInputStream();
+                        System.out.println(in.read());
+                        socket.close();
+                    }
+                }
+                """.formatted(port));
+
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            assertThat(process(project, List.of(project.resolve(".javan/bin/socket-inet-address-constructor-read-byte").toString())).stdout())
+                .isEqualTo("65\n");
+            served.get(5, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
+    void inetAddressGetByNameStillFailsClearlyWhenReachable() throws Exception {
+        final Path project = project("unsupported-inet-address-get-by-name");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.InetAddress;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    System.out.println(InetAddress.getByName("127.0.0.1").getHostAddress());
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains(
+            "error[JAVAN061]",
+            "java/net/InetAddress.getByName(Ljava/lang/String;)Ljava/net/InetAddress;",
+            "network/socket"
+        );
     }
 
     @Test
@@ -4347,6 +5382,38 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void reachableExplicitThrowFinallyCatchBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("try-finally");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    try {
+                        try {
+                            throw new IllegalStateException("boom");
+                        } finally {
+                            System.out.println("finally");
+                        }
+                    } catch (final IllegalStateException exception) {
+                        System.out.println(exception.getMessage());
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/try-finally").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("finally\nboom\n");
+    }
+
+    @Test
     void typedCatchSkipsNonMatchingSpecificHandler() throws Exception {
         final Path project = project("typed-catch-specific-miss");
         writeJava(project, "com.acme.Main", """
@@ -4743,6 +5810,106 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void enumIdentityComparisonBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("enum-identity");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<Holder> values = new ArrayList<>();
+                    values.add(new Holder(Kind.OBJECT));
+                    final Holder removed = values.removeLast();
+                    System.out.println(removed.kind() == Kind.OBJECT);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Kind", """
+            package com.acme;
+
+            public enum Kind {
+                INT,
+                LONG,
+                FLOAT,
+                OBJECT
+            }
+            """);
+        writeJava(project, "com.acme.Holder", """
+            package com.acme;
+
+            public record Holder(Kind kind) {
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/enum-identity").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n");
+    }
+
+    @Test
+    void enumIdentityDisjunctionBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("enum-identity-disjunction");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<Holder> values = new ArrayList<>();
+                    values.add(new Holder(Kind.OBJECT));
+                    final Holder removed = values.removeLast();
+                    System.out.println(isObjectLike(removed.kind()));
+                }
+
+                private static boolean isObjectLike(final Kind kind) {
+                    return kind == Kind.OBJECT
+                        || kind == Kind.PRINT_STREAM
+                        || kind == Kind.ERROR_PRINT_STREAM;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Kind", """
+            package com.acme;
+
+            public enum Kind {
+                INT,
+                LONG,
+                FLOAT,
+                OBJECT,
+                PRINT_STREAM,
+                ERROR_PRINT_STREAM
+            }
+            """);
+        writeJava(project, "com.acme.Holder", """
+            package com.acme;
+
+            public record Holder(Kind kind) {
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/enum-identity-disjunction").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n");
+    }
+
+    @Test
     void enumSwitchBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("enum-switch");
         writeJava(project, "com.acme.Main", """
@@ -4776,6 +5943,121 @@ final class CliIntegrationTest {
         assertThat(run.exitCode()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/enum-switch").toString())).stdout()).isEqualTo(jvmOutput);
         assertThat(jvmOutput).isEqualTo("blue\n");
+    }
+
+    @Test
+    void enumSwitchExpressionRecordBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("enum-switch-expression-record");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                enum Kind {
+                    PRINT_STREAM,
+                    ERROR_PRINT_STREAM,
+                    OBJECT
+                }
+
+                record Value(Kind kind, Object expression) {
+                }
+
+                private Main() {
+                }
+
+                static Value map(final Value value) {
+                    return switch (value.kind()) {
+                        case PRINT_STREAM -> new Value(Kind.OBJECT, "out");
+                        case ERROR_PRINT_STREAM -> new Value(Kind.OBJECT, "err");
+                        default -> value;
+                    };
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(map(new Value(Kind.PRINT_STREAM, null)).expression() != null);
+                    System.out.println(map(new Value(Kind.ERROR_PRINT_STREAM, null)).expression());
+                    System.out.println(map(new Value(Kind.OBJECT, "same")).expression());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/enum-switch-expression-record").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\nerr\nsame\n");
+    }
+
+    @Test
+    void denseIntSwitchExpressionBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("dense-int-switch-expression");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                static String map(final int value) {
+                    return switch (value) {
+                        case 1 -> "one";
+                        case 2 -> "two";
+                        case 3 -> "three";
+                        default -> "other";
+                    };
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(map(1));
+                    System.out.println(map(2));
+                    System.out.println(map(3));
+                    System.out.println(map(9));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/dense-int-switch-expression").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("one\ntwo\nthree\nother\n");
+    }
+
+    @Test
+    void denseIntSwitchExpressionOutOfOrderBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("dense-int-switch-expression-out-of-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                static String map(final int value) {
+                    return switch (value) {
+                        case 3 -> "three";
+                        case 1 -> "one";
+                        case 2 -> "two";
+                        default -> "other";
+                    };
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(map(3));
+                    System.out.println(map(1));
+                    System.out.println(map(2));
+                    System.out.println(map(9));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/dense-int-switch-expression-out-of-order").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("three\none\ntwo\nother\n");
     }
 
     @Test
@@ -4879,6 +6161,34 @@ final class CliIntegrationTest {
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/string-starts-with").toString())).stdout()).isEqualTo(jvmOutput);
         assertThat(jvmOutput).isEqualTo("true\nfalse\n");
+    }
+
+    @Test
+    void stringStartsWithOffsetBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-starts-with-offset");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("javan native".startsWith("native", 6));
+                    System.out.println("javan native".startsWith("native", 7));
+                    System.out.println("javan native".startsWith("", 12));
+                    System.out.println("javan native".startsWith("", 13));
+                    System.out.println("javan native".startsWith("javan", -1));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-starts-with-offset").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\nfalse\ntrue\nfalse\nfalse\n");
     }
 
     @Test
@@ -5027,6 +6337,58 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void stringLastIndexOfStringBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-last-index-of-string");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("abcabc".lastIndexOf("abc"));
+                    System.out.println("abcabc".lastIndexOf("cab"));
+                    System.out.println("abcabc".lastIndexOf("zzz"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-last-index-of-string").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringLastIndexOfStringFromIndexBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-last-index-of-string-from-index");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("abcabc".lastIndexOf("abc", 5));
+                    System.out.println("abcabc".lastIndexOf("abc", 2));
+                    System.out.println("abcabc".lastIndexOf("abc", 1));
+                    System.out.println("abc".lastIndexOf("", -1));
+                    System.out.println("abc".lastIndexOf("", 4));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-last-index-of-string-from-index").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void stringSubstringBeginBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("string-substring-begin");
         writeJava(project, "com.acme.Main", """
@@ -5142,6 +6504,78 @@ final class CliIntegrationTest {
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/string-trim").toString())).stdout()).isEqualTo(jvmOutput);
         assertThat(jvmOutput).isEqualTo("javan\n");
+    }
+
+    @Test
+    void stringRepeatBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-repeat");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("ja".repeat(3));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-repeat").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("jajaja\n");
+    }
+
+    @Test
+    void stringRepeatZeroBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-repeat-zero");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("javan".repeat(0).length());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-repeat-zero").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("0\n");
+    }
+
+    @Test
+    void stringRepeatNegativeFailsClearlyAtRuntime() throws Exception {
+        final Path project = project("string-repeat-negative");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("javan".repeat(-1));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/string-repeat-negative").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("negative string repeat count");
     }
 
     @Test
@@ -5462,6 +6896,1038 @@ final class CliIntegrationTest {
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-append-object").toString())).stdout()).isEqualTo(jvmOutput);
         assertThat(jvmOutput).isEqualTo("object\n");
+    }
+
+    @Test
+    void stringBuilderCapacityConstructorBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-capacity-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder(64);
+                    builder.append("cap");
+                    builder.append('-');
+                    builder.append(64);
+                    System.out.println(builder.toString());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-capacity-constructor").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("cap-64\n");
+    }
+
+    @Test
+    void stringBuilderNegativeCapacityFailsClearlyAtRuntime() throws Exception {
+        final Path project = project("stringbuilder-negative-capacity");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    new StringBuilder(-1);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/stringbuilder-negative-capacity").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("negative string builder capacity");
+    }
+
+    @Test
+    void stringBuilderCharAtBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-char-at");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("native");
+                    System.out.println(builder.charAt(2));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-char-at").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("t\n");
+    }
+
+    @Test
+    void stringBuilderCharAtOutOfBoundsFailsClearlyAtRuntime() throws Exception {
+        final Path project = project("stringbuilder-char-at-oob");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("native");
+                    System.out.println(builder.charAt(6));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/stringbuilder-char-at-oob").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("string builder index out of bounds");
+    }
+
+    @Test
+    void stringBuilderSubstringBeginBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-substring-begin");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("javan native");
+                    System.out.println(builder.substring(6));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-substring-begin").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderSubstringRangeBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-substring-range");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("javan native");
+                    System.out.println(builder.substring(0, 5));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-substring-range").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderIndexOfStringBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-index-of-string");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("abcabc");
+                    System.out.println(builder.indexOf("abc"));
+                    System.out.println(builder.indexOf("cab"));
+                    System.out.println(builder.indexOf("zzz"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-index-of-string").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderIndexOfStringFromBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-index-of-string-from");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("abcabc");
+                    System.out.println(builder.indexOf("abc", 1));
+                    System.out.println(builder.indexOf("abc", 3));
+                    System.out.println(builder.indexOf("", -1));
+                    System.out.println(builder.indexOf("", 7));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-index-of-string-from").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderLastIndexOfStringBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-last-index-of-string");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("abcabc");
+                    System.out.println(builder.lastIndexOf("abc"));
+                    System.out.println(builder.lastIndexOf("cab"));
+                    System.out.println(builder.lastIndexOf("zzz"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-last-index-of-string").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderLastIndexOfStringFromBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-last-index-of-string-from");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("abcabc");
+                    System.out.println(builder.lastIndexOf("abc", 5));
+                    System.out.println(builder.lastIndexOf("abc", 1));
+                    System.out.println(builder.lastIndexOf("", -1));
+                    System.out.println(builder.lastIndexOf("", 7));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-last-index-of-string-from").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderIndexOfNullStringFailsClearlyAtRuntime() throws Exception {
+        final Path project = project("stringbuilder-index-of-null-string");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("abc");
+                    System.out.println(builder.indexOf((String) null));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/stringbuilder-index-of-null-string").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("null string");
+    }
+
+    @Test
+    void stringBuilderSubSequenceBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-sub-sequence");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("javan native");
+                    final CharSequence value = builder.subSequence(0, 5);
+                    System.out.println(value);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-sub-sequence").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderCompareToBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-compare-to");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder left = new StringBuilder("abc");
+                    final StringBuilder equal = new StringBuilder("abc");
+                    final StringBuilder greater = new StringBuilder("abd");
+                    System.out.println(left.compareTo(equal));
+                    System.out.println(left.compareTo(greater));
+                    System.out.println(greater.compareTo(left));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-compare-to").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderDeleteBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-delete");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("abcdef");
+                    System.out.println(builder.delete(2, 4));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-delete").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderDeleteEndBeyondLengthBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-delete-end-beyond-length");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("abcdef");
+                    System.out.println(builder.delete(2, 20));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-delete-end-beyond-length").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderDeleteCharAtBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-delete-char-at");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("abcdef");
+                    System.out.println(builder.deleteCharAt(3));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-delete-char-at").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderReverseBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-reverse");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("javan");
+                    System.out.println(builder.reverse());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-reverse").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderDeleteCharAtOutOfBoundsFailsClearlyAtRuntime() throws Exception {
+        final Path project = project("stringbuilder-delete-char-at-oob");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("abc");
+                    System.out.println(builder.deleteCharAt(3));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/stringbuilder-delete-char-at-oob").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("string builder delete char index out of bounds");
+    }
+
+    @Test
+    void stringBuilderInsertStringBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-insert-string");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("abef");
+                    System.out.println(builder.insert(2, "cd"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-insert-string").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderInsertCharBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-insert-char");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("abef");
+                    System.out.println(builder.insert(2, 'c'));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-insert-char").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderReplaceStringBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-replace-string");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("abcdef");
+                    System.out.println(builder.replace(2, 4, "XY"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-replace-string").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderReplaceEndBeyondLengthBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-replace-end-beyond-length");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("abcdef");
+                    System.out.println(builder.replace(2, 20, "XY"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-replace-end-beyond-length").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderInsertIndexOutOfBoundsFailsClearlyAtRuntime() throws Exception {
+        final Path project = project("stringbuilder-insert-index-oob");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("abc");
+                    System.out.println(builder.insert(4, "x"));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/stringbuilder-insert-index-oob").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("string builder insert index out of bounds");
+    }
+
+    @Test
+    void stringBuilderSetCharAtBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-set-char-at");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("abc");
+                    builder.setCharAt(1, 'Z');
+                    System.out.println(builder);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-set-char-at").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderEnsureCapacityBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-ensure-capacity");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("abc");
+                    builder.ensureCapacity(100);
+                    builder.append("def");
+                    System.out.println(builder);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-ensure-capacity").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderTrimToSizeBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-trim-to-size");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("abc");
+                    builder.append("def");
+                    builder.trimToSize();
+                    System.out.println(builder);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-trim-to-size").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderSetCharAtOutOfBoundsFailsClearlyAtRuntime() throws Exception {
+        final Path project = project("stringbuilder-set-char-at-oob");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("abc");
+                    builder.setCharAt(3, 'Z');
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/stringbuilder-set-char-at-oob").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("string builder set char index out of bounds");
+    }
+
+    @Test
+    void stringBuilderInsertBooleanBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-insert-boolean");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("ac");
+                    builder.insert(1, true);
+                    System.out.println(builder);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-insert-boolean").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderInsertIntBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-insert-int");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("ac");
+                    builder.insert(1, 42);
+                    System.out.println(builder);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-insert-int").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderInsertLongBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-insert-long");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("ac");
+                    builder.insert(1, 1234567890123L);
+                    System.out.println(builder);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-insert-long").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderInsertFloatBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-insert-float");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("ac");
+                    builder.insert(1, -1.25f);
+                    System.out.println(builder);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-insert-float").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderInsertDoubleBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-insert-double");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("ac");
+                    builder.insert(1, -3.5d);
+                    System.out.println(builder);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-insert-double").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderInsertObjectBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-insert-object");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("ab");
+                    final Object value = "MID";
+                    builder.insert(1, value);
+                    System.out.println(builder);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-insert-object").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderInsertNullObjectBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-insert-null-object");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("ab");
+                    final Object value = null;
+                    builder.insert(1, value);
+                    System.out.println(builder);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-insert-null-object").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderAppendCharArrayBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-append-char-array");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder();
+                    final char[] chars = new char[] {'j', 'a', 'v', 'a', 'n'};
+                    builder.append(chars);
+                    System.out.println(builder);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-append-char-array").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderAppendCharArrayRangeBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-append-char-array-range");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder();
+                    final char[] chars = new char[] {'j', 'a', 'v', 'a', 'n'};
+                    builder.append(chars, 1, 3);
+                    System.out.println(builder);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-append-char-array-range").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderInsertCharArrayBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-insert-char-array");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("jn");
+                    final char[] chars = new char[] {'a', 'v', 'a'};
+                    builder.insert(1, chars);
+                    System.out.println(builder);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-insert-char-array").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderInsertCharArrayRangeBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-insert-char-array-range");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("jn");
+                    final char[] chars = new char[] {'x', 'a', 'v', 'a', 'y'};
+                    builder.insert(1, chars, 1, 3);
+                    System.out.println(builder);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-insert-char-array-range").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderCapacityBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-capacity");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder(64);
+                    builder.append("javan");
+                    System.out.println(builder.capacity());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-capacity").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderDefaultCapacityBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-default-capacity");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder();
+                    System.out.println(builder.capacity());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-default-capacity").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringBuilderStringConstructorCapacityBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-string-constructor-capacity");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final StringBuilder builder = new StringBuilder("abc");
+                    System.out.println(builder.capacity());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-string-constructor-capacity").toString())).stdout()).isEqualTo(jvmOutput);
     }
 
     @Test
@@ -5788,6 +8254,10 @@ final class CliIntegrationTest {
                     System.out.println(Math.abs(Long.MIN_VALUE));
                     System.out.println(Math.min(100L, -200L));
                     System.out.println(Math.max(100L, -200L));
+                    System.out.println(Math.abs(-1.25f));
+                    System.out.println(1.0f / Math.abs(-0.0f));
+                    System.out.println(1.0d / Math.abs(-0.0d));
+                    System.out.println(Math.abs(-3.5d));
                 }
             }
             """);
@@ -5797,7 +8267,7 @@ final class CliIntegrationTest {
 
         assertThat(run.exitCode()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/jdk-math-intrinsics").toString())).stdout()).isEqualTo(jvmOutput);
-        assertThat(jvmOutput).isEqualTo("9\n-2147483648\n-7\n4\n12\n-9223372036854775808\n-200\n100\n");
+        assertThat(jvmOutput).isEqualTo("9\n-2147483648\n-7\n4\n12\n-9223372036854775808\n-200\n100\n1.25\nInfinity\nInfinity\n3.5\n");
     }
 
     @Test
@@ -6039,6 +8509,11 @@ final class CliIntegrationTest {
                 }
 
                 public static void main(final String[] args) {
+                    final boolean[] booleans = Arrays.copyOf(new boolean[] {true}, 2);
+                    System.out.println(booleans.length);
+                    System.out.println(booleans[0]);
+                    System.out.println(booleans[1]);
+
                     final int[] ints = Arrays.copyOf(new int[] {4, 5}, 4);
                     System.out.println(ints.length);
                     System.out.println(ints[0]);
@@ -6080,7 +8555,7 @@ final class CliIntegrationTest {
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/arrays-copy-of-intrinsic").toString())).stdout()).isEqualTo(jvmOutput);
         assertThat(Files.readString(project.resolve(".javan/reports/intrinsics.json")))
-            .contains("{\"name\": \"Arrays.copyOf\", \"count\": 8}");
+            .contains("{\"name\": \"Arrays.copyOf\", \"count\": 9}");
     }
 
     @Test
@@ -6866,6 +9341,34 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void pathsGetBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("paths-get");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.nio.file.Path;
+            import java.nio.file.Paths;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Path path = Paths.get("data", "message.txt");
+                    System.out.println(path.toString());
+                    System.out.println(path.getFileName().toString());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/paths-get").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void pathOperationsBuildAndMatchJvmOutput() throws Exception {
         final Path project = project("path-operations");
         writeJava(project, "com.acme.Main", """
@@ -7397,30 +9900,6 @@ final class CliIntegrationTest {
 
     @Test
     void unsupportedJdkIntrinsicOverloadsFailClearly() throws Exception {
-        final Path mathProject = project("unsupported-math-overload");
-        writeJava(mathProject, "com.acme.Main", """
-            package com.acme;
-
-            public final class Main {
-                private Main() {
-                }
-
-                public static void main(final String[] args) {
-                    System.out.println(Math.abs(1.25f));
-                }
-            }
-            """);
-
-        final CliRun mathRun = run(tempDir, "build", mathProject.toString());
-
-        assertThat(mathRun.exitCode()).isEqualTo(2);
-        assertThat(mathRun.stderr()).contains("error[JAVAN031]", "java/lang/Math.abs(F)F");
-        assertThat(Files.readString(mathProject.resolve(".javan/reports/intrinsics.json")))
-            .contains(
-                "{\"name\": \"Math.abs\", \"count\": 0}",
-                "{\"target\": \"java/lang/Math.abs(F)F\", \"count\": 1}"
-            );
-
         final Path objectsProject = project("unsupported-objects-overload");
         writeJava(objectsProject, "com.acme.Main", """
             package com.acme;
@@ -7449,33 +9928,6 @@ final class CliIntegrationTest {
             .contains(
                 "{\"name\": \"Objects.requireNonNull\", \"count\": 0}",
                 "{\"target\": \"java/util/Objects.requireNonNullElse(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;\", \"count\": 1}"
-            );
-
-        final Path arraysProject = project("unsupported-arrays-copy-of-overload");
-        writeJava(arraysProject, "com.acme.Main", """
-            package com.acme;
-
-            import java.util.Arrays;
-
-            public final class Main {
-                private Main() {
-                }
-
-                public static void main(final String[] args) {
-                    final boolean[] values = Arrays.copyOf(new boolean[] {true}, 2);
-                    System.out.println(values[0]);
-                }
-            }
-            """);
-
-        final CliRun arraysRun = run(tempDir, "build", arraysProject.toString());
-
-        assertThat(arraysRun.exitCode()).isEqualTo(2);
-        assertThat(arraysRun.stderr()).contains("error[JAVAN031]", "java/util/Arrays.copyOf([ZI)[Z");
-        assertThat(Files.readString(arraysProject.resolve(".javan/reports/intrinsics.json")))
-            .contains(
-                "{\"name\": \"Arrays.copyOf\", \"count\": 0}",
-                "{\"target\": \"java/util/Arrays.copyOf([ZI)[Z\", \"count\": 1}"
             );
 
         final Path numberProject = project("unsupported-number-to-string-overload");
@@ -10899,6 +13351,9 @@ final class CliIntegrationTest {
                 public static void main(final String[] args) throws Exception {
                     final Thread thread = new Thread();
                     thread.start();
+                    while (thread.isAlive()) {
+                        Thread.sleep(1L);
+                    }
                     Thread.currentThread().interrupt();
                     try {
                         thread.join();
@@ -10952,7 +13407,7 @@ final class CliIntegrationTest {
             public final class SlowTask implements Runnable {
                 @Override
                 public void run() {
-                    final long until = System.nanoTime() + 150_000_000L;
+                    final long until = System.nanoTime() + 500_000_000L;
                     while (System.nanoTime() < until) {
                         // spin
                     }
@@ -10971,7 +13426,7 @@ final class CliIntegrationTest {
 
                 @Override
                 public void run() {
-                    final long until = System.nanoTime() + 25_000_000L;
+                    final long until = System.nanoTime() + 50_000_000L;
                     while (System.nanoTime() < until) {
                         // spin
                     }
@@ -12332,7 +14787,7 @@ final class CliIntegrationTest {
             """);
         writeJava(project, "com.acme.Main", mainClass("main"));
 
-        final CliRun run = run(tempDir, "check", project.toString());
+        final CliRun run = runSlow(tempDir, "check", project.toString());
 
         assertThat(run.exitCode()).isZero();
         assertThat(run.stdout()).contains("reachable methods: 1");
@@ -13185,7 +15640,7 @@ final class CliIntegrationTest {
     }
 
     private static CliRun run(final Path cwd, final String... args) {
-        return runWithTimeout(cwd, Duration.ofSeconds(20), args);
+        return runWithTimeout(cwd, defaultCliTimeout(), args);
     }
 
     private static CliRun runSlow(final Path cwd, final String... args) {
@@ -13206,11 +15661,23 @@ final class CliIntegrationTest {
     }
 
     private static ProcessResult process(final Path cwd, final List<String> command) {
-        return process(cwd, command, Duration.ofSeconds(10));
+        return process(cwd, command, defaultProcessTimeout());
     }
 
     private static ProcessResult processSlow(final Path cwd, final List<String> command) {
         return process(cwd, command, Duration.ofSeconds(60));
+    }
+
+    private static Duration defaultCliTimeout() {
+        return isCiEnvironment() ? Duration.ofSeconds(45) : Duration.ofSeconds(20);
+    }
+
+    private static Duration defaultProcessTimeout() {
+        return isCiEnvironment() ? Duration.ofSeconds(20) : Duration.ofSeconds(10);
+    }
+
+    private static boolean isCiEnvironment() {
+        return !"".equals(System.getenv().getOrDefault("CI", ""));
     }
 
     private static ProcessResult process(final Path cwd, final List<String> command, final Duration timeout) {

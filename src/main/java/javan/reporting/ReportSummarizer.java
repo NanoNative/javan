@@ -48,7 +48,12 @@ public final class ReportSummarizer {
     public Summary write(final Path target) throws IOException {
         final Path reportsDirectory = reportsDirectory(target);
         if (!Files.isDirectory(reportsDirectory)) {
-            throw new IllegalArgumentException("No .javan/reports directory at " + reportsDirectory.toString());
+            throw new IllegalArgumentException(
+                new StringBuilder()
+                    .append("No .javan/reports directory at ")
+                    .append(reportsDirectory)
+                    .toString()
+            );
         }
         final List<ReportSection> sections = sections(reportsDirectory);
         final String markdown = markdown(reportsDirectory, sections);
@@ -259,6 +264,11 @@ public final class ReportSummarizer {
         final List<Metric> result = new ArrayList<>();
         addArrayCount(result, value, "intrinsics");
         addArrayNumberSum(result, value, "intrinsics", "count", "intrinsicCallSites");
+        addArrayCount(result, value, "runtimeCalls");
+        addArrayNumberSum(result, value, "runtimeCalls", "count", "runtimeCallSites");
+        addArrayCount(result, value, "supportedDirectJdkCalls");
+        addNumber(result, value, "supportedDirectJdkCallSiteCount");
+        addNumber(result, value, "supportedJdkCallSiteCount");
         addNumber(result, value, "unsupportedJdkCallCandidateCount");
         addArrayCount(result, value, "unsupportedJdkCallCandidates");
         return List.copyOf(result);
@@ -466,10 +476,35 @@ public final class ReportSummarizer {
         addNumber(result, value, "javaFeatureVersion");
         addNumber(result, value, "projectClasses");
         addNumber(result, value, "jdkClasses");
+        addNestedNumber(result, value, "exactSupportedJdkCallables", "classes", "exactSupportedJdkCallableClasses");
+        addNestedNumber(result, value, "exactSupportedJdkCallables", "constructors", "exactSupportedJdkConstructors");
+        addNestedNumber(result, value, "exactSupportedJdkCallables", "methods", "exactSupportedJdkMethods");
+        addNestedNumber(result, value, "exactSupportedJdkCallables", "callables", "exactSupportedJdkCallables");
+        addNestedNumber(result, value, "exactSupportedJdkCallables", "totalCallables", "totalJdkCallables");
+        addNestedNumber(result, value, "exactSupportedJdkCallables", "leftCallables", "leftJdkCallables");
+        addNestedText(result, value, "exactSupportedJdkCallables", "coveragePercent", "exactSupportedJdkCallableCoveragePercent");
+        addNestedNumber(result, value, "exactJdkCallableAccounting", "supportedCallables", "accountedSupportedJdkCallables");
+        addNestedNumber(result, value, "exactJdkCallableAccounting", "explicitRejectedCallables", "accountedRejectedJdkCallables");
+        addNestedNumber(result, value, "exactJdkCallableAccounting", "doneCallables", "accountedDoneJdkCallables");
+        addNestedNumber(result, value, "exactJdkCallableAccounting", "unknownCallables", "unknownJdkCallables");
+        addNestedNumber(result, value, "exactJdkCallableAccounting", "totalCallables", "accountingTotalJdkCallables");
+        addNestedText(result, value, "exactJdkCallableAccounting", "donePercent", "accountedDoneJdkCallablePercent");
+        addNestedNumber(result, value, "flowQualifiedRejectedJdkCalls", "reachableCurrentThreadLifecycle", "flowQualifiedReachableCurrentThreadLifecycleRejects");
+        addNestedNumber(result, value, "flowQualifiedRejectedJdkCalls", "unreachableCurrentThreadLifecycle", "flowQualifiedUnreachableCurrentThreadLifecycleRejects");
+        addNestedNumber(result, value, "flowQualifiedRejectedJdkCalls", "reachableThreadBuilderReceiverShape", "flowQualifiedReachableThreadBuilderReceiverRejects");
+        addNestedNumber(result, value, "flowQualifiedRejectedJdkCalls", "unreachableThreadBuilderReceiverShape", "flowQualifiedUnreachableThreadBuilderReceiverRejects");
+        addNestedNumber(result, value, "flowQualifiedRejectedJdkCalls", "reachableVirtualThreadFactoryShape", "flowQualifiedReachableVirtualThreadFactoryRejects");
+        addNestedNumber(result, value, "flowQualifiedRejectedJdkCalls", "unreachableVirtualThreadFactoryShape", "flowQualifiedUnreachableVirtualThreadFactoryRejects");
+        addNestedNumber(result, value, "flowQualifiedRejectedJdkCalls", "reachableExecutorReceiverShape", "flowQualifiedReachableExecutorReceiverRejects");
+        addNestedNumber(result, value, "flowQualifiedRejectedJdkCalls", "unreachableExecutorReceiverShape", "flowQualifiedUnreachableExecutorReceiverRejects");
+        addNestedNumber(result, value, "flowQualifiedRejectedJdkCalls", "total", "flowQualifiedRejectedJdkCallShapes");
         addNumber(result, value, "supportRows");
         addNumber(result, value, "passRows");
         addNumber(result, value, "scopedRows");
         addNumber(result, value, "targetRows");
+        addNumber(result, value, "rejectedRows");
+        addNumber(result, value, "accountedRows");
+        addNumber(result, value, "unaccountedRows");
         addNumber(result, value, "diagnosticErrors");
         addNumber(result, value, "recognizedRejectedOpcodeUses");
         addNumber(result, value, "unknownFatalOpcodeUses");
@@ -647,6 +682,40 @@ public final class ReportSummarizer {
         }
     }
 
+    private static void addNestedNumber(
+        final List<Metric> result,
+        final String report,
+        final String objectName,
+        final String fieldName,
+        final String metricName
+    ) {
+        final Optional<String> body = objectBody(report, objectName);
+        if (body.isEmpty()) {
+            return;
+        }
+        final long value = numberField(body.orElseThrow(), fieldName);
+        if (value != NO_NUMBER) {
+            result.add(Metric.number(metricName, value));
+        }
+    }
+
+    private static void addNestedText(
+        final List<Metric> result,
+        final String report,
+        final String objectName,
+        final String fieldName,
+        final String metricName
+    ) {
+        final Optional<String> body = objectBody(report, objectName);
+        if (body.isEmpty()) {
+            return;
+        }
+        final Optional<String> value = stringField(body.orElseThrow(), fieldName);
+        if (value.isPresent()) {
+            result.add(Metric.text(metricName, value.orElseThrow()));
+        }
+    }
+
     private static Optional<String> stringField(final String report, final String name) {
         final int valueStart = fieldValueStart(report, name, 0);
         if (valueStart < 0 || valueStart >= report.length() || report.charAt(valueStart) != '"') {
@@ -769,6 +838,18 @@ public final class ReportSummarizer {
         return Optional.of(Strings2.slice(report, valueStart + 1, valueEnd));
     }
 
+    private static Optional<String> objectBody(final String report, final String name) {
+        final int valueStart = fieldValueStart(report, name, 0);
+        if (valueStart < 0 || valueStart >= report.length() || report.charAt(valueStart) != '{') {
+            return Optional.empty();
+        }
+        final int valueEnd = objectEnd(report, valueStart);
+        if (valueEnd < 0) {
+            return Optional.empty();
+        }
+        return Optional.of(Strings2.slice(report, valueStart + 1, valueEnd));
+    }
+
     private static Optional<String> stringArrayText(final String report, final String name) {
         final Optional<String> body = arrayBody(report, name);
         if (body.isEmpty()) {
@@ -829,6 +910,30 @@ public final class ReportSummarizer {
         return -1;
     }
 
+    private static int objectEnd(final String value, final int start) {
+        int depth = 0;
+        boolean quoted = false;
+        boolean escaped = false;
+        for (int index = start; index < value.length(); index++) {
+            final char ch = value.charAt(index);
+            if (escaped) {
+                escaped = false;
+            } else if (quoted && ch == '\\') {
+                escaped = true;
+            } else if (ch == '"') {
+                quoted = !quoted;
+            } else if (!quoted && ch == '{') {
+                depth++;
+            } else if (!quoted && ch == '}') {
+                depth--;
+                if (depth == 0) {
+                    return index;
+                }
+            }
+        }
+        return -1;
+    }
+
     private static long sumNumberFields(final String report, final String name) {
         long result = 0L;
         int offset = 0;
@@ -847,7 +952,7 @@ public final class ReportSummarizer {
     }
 
     private static int fieldValueStart(final String report, final String name, final int offset) {
-        final String field = "\"" + name + "\"";
+        final String field = new StringBuilder().append('"').append(name).append('"').toString();
         int search = offset;
         while (search < report.length()) {
             final int fieldStart = report.indexOf(field, search);

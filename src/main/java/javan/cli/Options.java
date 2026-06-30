@@ -254,13 +254,6 @@ public record Options(
         );
     }
 
-    private static String requiredValue(final String[] args, final int index, final String option) {
-        if (index >= args.length) {
-            throw new IllegalArgumentException("Missing value for " + option);
-        }
-        return args[index];
-    }
-
     private static ValueResult requiredValueResult(final String[] args, final int index, final String option) {
         if (index >= args.length) {
             return new ValueResult(false, "", "Missing value for " + option);
@@ -283,14 +276,6 @@ public record Options(
         return entries;
     }
 
-    private static List<BindingLanguage> parseBindings(final String value) {
-        final BindingResult result = parseBindingsResult(value);
-        if (!result.pass()) {
-            throw new IllegalArgumentException(result.error());
-        }
-        return result.bindings();
-    }
-
     private static BindingResult parseBindingsResult(final String value) {
         final List<BindingLanguage> entries = new ArrayList<>();
         int start = 0;
@@ -308,14 +293,6 @@ public record Options(
             }
         }
         return BindingResult.success(entries);
-    }
-
-    private static BuildKind parseBuildKind(final String value) {
-        final BuildKindResult result = parseBuildKindResult(value);
-        if (!result.pass()) {
-            throw new IllegalArgumentException(result.error());
-        }
-        return result.kind();
     }
 
     private static BuildKindResult parseBuildKindResult(final String value) {
@@ -336,14 +313,6 @@ public record Options(
             return BuildKindResult.success(BuildKind.SHAREDLIB, name);
         }
         return BuildKindResult.failure("Unsupported build kind: " + value);
-    }
-
-    private static String canonicalBuildKindName(final String value) {
-        final String result = canonicalBuildKindNameResult(value);
-        if (Strings2.isBlank(result)) {
-            throw new IllegalArgumentException("Unsupported build kind: " + value);
-        }
-        return result;
     }
 
     private static String canonicalBuildKindNameResult(final String value) {
@@ -375,22 +344,6 @@ public record Options(
         return "";
     }
 
-    private static Profile parseProfile(final String value) {
-        final Profile parsed = Profile.parse(value).orElse(null);
-        if (parsed == null) {
-            throw new IllegalArgumentException("Unsupported profile: " + value);
-        }
-        return parsed;
-    }
-
-    private static BindingLanguage parseBindingLanguage(final String value) {
-        final BindingLanguage parsed = BindingLanguage.parse(value).orElse(null);
-        if (parsed == null) {
-            throw new IllegalArgumentException("Unsupported binding language: " + value);
-        }
-        return parsed;
-    }
-
     private static List<BindingLanguage> distinctBindings(final List<BindingLanguage> bindings) {
         final List<BindingLanguage> distinct = new ArrayList<>();
         for (final BindingLanguage binding : bindings) {
@@ -399,14 +352,6 @@ public record Options(
             }
         }
         return List.copyOf(distinct);
-    }
-
-    private static List<LibraryFormat> libraryFormats(final String buildKindName, final List<LibraryFormat> requested) {
-        final FormatResult result = libraryFormatsResult(buildKindName, requested);
-        if (!result.pass()) {
-            throw new IllegalArgumentException(result.error());
-        }
-        return result.formats();
     }
 
     private static FormatResult libraryFormatsResult(final String buildKindName, final List<LibraryFormat> requested) {

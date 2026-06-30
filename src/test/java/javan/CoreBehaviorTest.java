@@ -519,6 +519,16 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void jdkCallSupportAcceptsSocketInetAddressPortConstructor() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/Socket", "<init>", "(Ljava/net/InetAddress;I)V"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportRejectsInetAddressGetByNameCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/InetAddress", "getByName", "(Ljava/lang/String;)Ljava/net/InetAddress;"))).isFalse();
+    }
+
+    @Test
     void jdkCallSupportAcceptsServerSocketPortConstructor() {
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/ServerSocket", "<init>", "(I)V"))).isTrue();
     }
@@ -560,6 +570,30 @@ final class CoreBehaviorTest {
         );
 
         assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsSupportedSocketInetAddressConstructorCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 183, "invokespecial", new MethodRef("java/net/Socket", "<init>", "(Ljava/net/InetAddress;I)V")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierRejectsReachableInetAddressGetByNameCallWithNetworkDiagnostic() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 184, "invokestatic", new MethodRef("java/net/InetAddress", "getByName", "(Ljava/lang/String;)Ljava/net/InetAddress;")),
+            true
+        );
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN061");
+        assertThat(diagnostics.getFirst().message()).isEqualTo("unsupported reachable network API");
+        assertThat(diagnostics.getFirst().subject()).isEqualTo("java/net/InetAddress.getByName(Ljava/lang/String;)Ljava/net/InetAddress;");
+        assertThat(diagnostics.getFirst().reason()).contains("network/socket");
     }
 
     @Test
@@ -675,15 +709,13 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void staticVerifierRejectsUnsupportedPathsGetCall() {
+    void staticVerifierAcceptsSupportedPathsGetCall() {
         final List<Diagnostic> diagnostics = verifyInstruction(
             instruction(0, 184, "invokestatic", new MethodRef("java/nio/file/Paths", "get", "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;")),
             true
         );
 
-        assertThat(diagnostics).hasSize(1);
-        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN031");
-        assertThat(diagnostics.getFirst().subject()).isEqualTo("java/nio/file/Paths.get(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;");
+        assertThat(diagnostics).isEmpty();
     }
 
     @Test
@@ -1266,6 +1298,40 @@ final class CoreBehaviorTest {
 
         assertThat(graph.diagnostics()).isEmpty();
         assertThat(graph.reachableMethods()).contains(new EntryPoint("com/acme/Base", "value", "()I"));
+    }
+
+    @Test
+    void reachabilitySkipsAbstractVirtualTargetWithoutCode() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo("main", "([Ljava/lang/String;)V", instruction(0, 182, "invokevirtual", new MethodRef("com/acme/Base", "value", "()I")))
+                ),
+                "com/acme/Base", classWithMethods(
+                    "com/acme/Base",
+                    "java/lang/Object",
+                    0x0400,
+                    List.of(),
+                    new MethodInfo(0x0401, "value", "()I", Optional.empty())
+                ),
+                "com/acme/Leaf", classWithMethods(
+                    "com/acme/Leaf",
+                    "com/acme/Base",
+                    0,
+                    List.of(),
+                    methodInfo("value", "()I")
+                )
+            ),
+            List.of(new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+        assertThat(graph.reachableMethods()).contains(new EntryPoint("com/acme/Leaf", "value", "()I"));
+        assertThat(graph.reachableMethods()).doesNotContain(new EntryPoint("com/acme/Base", "value", "()I"));
     }
 
     @Test
@@ -4257,7 +4323,6 @@ final class CoreBehaviorTest {
             new Instruction(2, 191, "athrow", new byte[0], Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty())
         );
         final List<List<Diagnostic>> rejected = List.of(
-            verifyExceptionTable(explicitThrow, new CodeException(0, 3, 3, Optional.empty())),
             verifyExceptionTable(explicitThrow, new CodeException(0, 3, 3, Optional.of("java/lang/String"))),
             verifyExceptionTable(List.of(
                 new Instruction(0, 183, "invokespecial", new byte[0], Optional.of(new MethodRef("java/lang/Object", "<init>", "()V")), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty()),
@@ -4273,6 +4338,53 @@ final class CoreBehaviorTest {
             assertThat(diagnostics).hasSize(1);
             assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN014");
         }
+    }
+
+    @Test
+    void staticVerifierAcceptsExplicitThrowRangeWithFinallyRethrowHandler() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            classInstruction(0, 187, "new", "java/lang/IllegalStateException"),
+            instruction(1, 89, "dup"),
+            instruction(2, 18, "ldc"),
+            instruction(3, 183, "invokespecial", new MethodRef("java/lang/IllegalStateException", "<init>", "(Ljava/lang/String;)V")),
+            instruction(4, 191, "athrow"),
+            instruction(5, 75, "astore_0"),
+            instruction(6, 178, "getstatic", new FieldRef("java/lang/System", "out", "Ljava/io/PrintStream;")),
+            instruction(7, 18, "ldc"),
+            instruction(8, 182, "invokevirtual", new MethodRef("java/io/PrintStream", "println", "(Ljava/lang/String;)V")),
+            instruction(9, 42, "aload_0"),
+            instruction(10, 191, "athrow")
+        ), new CodeException(0, 5, 5, Optional.empty()));
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsTypedCatchWrappingFinallyRethrowHandler() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            classInstruction(0, 187, "new", "java/lang/IllegalStateException"),
+            instruction(3, 89, "dup"),
+            instruction(4, 18, "ldc"),
+            instruction(6, 183, "invokespecial", new MethodRef("java/lang/IllegalStateException", "<init>", "(Ljava/lang/String;)V")),
+            instruction(9, 191, "athrow"),
+            instruction(10, 76, "astore_1"),
+            instruction(11, 178, "getstatic", new FieldRef("java/lang/System", "out", "Ljava/io/PrintStream;")),
+            instruction(14, 18, "ldc"),
+            instruction(16, 182, "invokevirtual", new MethodRef("java/io/PrintStream", "println", "(Ljava/lang/String;)V")),
+            instruction(19, 43, "aload_1"),
+            instruction(20, 191, "athrow"),
+            instruction(21, 76, "astore_1"),
+            instruction(22, 178, "getstatic", new FieldRef("java/lang/System", "out", "Ljava/io/PrintStream;")),
+            instruction(25, 43, "aload_1"),
+            instruction(26, 182, "invokevirtual", new MethodRef("java/lang/IllegalStateException", "getMessage", "()Ljava/lang/String;")),
+            instruction(29, 182, "invokevirtual", new MethodRef("java/io/PrintStream", "println", "(Ljava/lang/String;)V")),
+            instruction(32, 177, "return")
+        ), List.of(
+            new CodeException(0, 11, 10, Optional.empty()),
+            new CodeException(0, 21, 21, Optional.of("java/lang/IllegalStateException"))
+        ));
+
+        assertThat(diagnostics).isEmpty();
     }
 
     @Test
@@ -8838,6 +8950,10 @@ final class CoreBehaviorTest {
         return verifyExceptionTable(Map.of(), instructions, exception);
     }
 
+    private static List<Diagnostic> verifyExceptionTable(final List<Instruction> instructions, final List<CodeException> exceptions) {
+        return verifyExceptionTable(Map.of(), instructions, exceptions);
+    }
+
     private static List<Diagnostic> verifyExceptionTable(final List<Instruction> instructions) {
         return verifyExceptionTable(instructions, new CodeException(0, instructions.size(), instructions.size(), Optional.of("java/lang/IllegalStateException")));
     }
@@ -8931,7 +9047,15 @@ final class CoreBehaviorTest {
         final List<Instruction> instructions,
         final CodeException exception
     ) {
-        final ClassFile classFile = exceptionClassFile("com/acme/Main", instructions, exception);
+        return verifyExceptionTable(extraClasses, instructions, List.of(exception));
+    }
+
+    private static List<Diagnostic> verifyExceptionTable(
+        final Map<String, ClassFile> extraClasses,
+        final List<Instruction> instructions,
+        final List<CodeException> exceptions
+    ) {
+        final ClassFile classFile = exceptionClassFile("com/acme/Main", instructions, exceptions);
         final Map<String, ClassFile> classes = new java.util.LinkedHashMap<>();
         classes.put(classFile.name(), classFile);
         classes.putAll(extraClasses);
@@ -8942,6 +9066,10 @@ final class CoreBehaviorTest {
     }
 
     private static ClassFile exceptionClassFile(final String className, final List<Instruction> instructions, final CodeException exception) {
+        return exceptionClassFile(className, instructions, List.of(exception));
+    }
+
+    private static ClassFile exceptionClassFile(final String className, final List<Instruction> instructions, final List<CodeException> exceptions) {
         final MethodInfo method = new MethodInfo(
             0,
             "main",
@@ -8950,8 +9078,8 @@ final class CoreBehaviorTest {
                 2,
                 1,
                 new byte[]{(byte) 191},
-                1,
-                List.of(exception),
+                exceptions.size(),
+                exceptions,
                 instructions
             ))
         );
@@ -9770,7 +9898,7 @@ final class CoreBehaviorTest {
             "message = javan_expr_tmp_0;",
             "((struct javan_class_com_acme_Message*) message)->field_text = (void*) \"hello\";",
             "javan_expr_tmp_0 = ((struct javan_class_com_acme_Message*) message)->field_text;",
-            "javan_println((const char*) javan_expr_tmp_0);",
+            "javan_println_object_value(javan_expr_tmp_0);",
             "void* javan_return_value = (void*) \"returned\";",
             "javan_generated_return_root = javan_return_value;",
             "return javan_return_value;"

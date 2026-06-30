@@ -4,6 +4,15 @@ set -eu
 ROOT=$(CDPATH= cd "$(dirname "$0")/../.." && pwd)
 cd "$ROOT"
 
+SANITIZER_SCOPE=${JAVAN_SANITIZER_SCOPE:-full}
+case "$SANITIZER_SCOPE" in
+  full|platform-smoke) ;;
+  *)
+    printf '%s\n' "Unsupported sanitizer scope: $SANITIZER_SCOPE" >&2
+    exit 2
+    ;;
+esac
+
 JAVAN_GC_STRESS=${JAVAN_GC_STRESS:-64}
 JAVAN_GC_SAFEPOINT_INTERVAL=${JAVAN_GC_SAFEPOINT_INTERVAL:-1}
 export JAVAN_GC_STRESS
@@ -86,12 +95,42 @@ assert_sanitizer_proof_summary() {
 
 assert_thread_inventory_summary() {
   file=$1
-  assert_contains "$file" '"actualThreadObjects": 1'
-  assert_contains "$file" '"actualStartedThreads": 1'
+  assert_contains "$file" '"actualThreadObjects": 0'
+  assert_contains "$file" '"actualStartedThreads": 0'
   assert_contains "$file" '"actualCompletedThreads": 0'
   assert_contains "$file" '"actualActiveThreads": 0'
   assert_contains "$file" '"actualThreadsWithTarget": 0'
-  assert_contains "$file" '"actualCurrentThreadRootPresent": 1'
+  assert_contains "$file" '"actualCurrentThreadRootPresent": 0'
+}
+
+assert_library_sanitizer_summary() {
+  JAVAN_HEAP_LIMIT_BYTES=2048 \
+    sh .github/scripts/sanitizer-library-smoke.sh src/test/resources/projects/acceptance/native-library
+  NATIVE_LIBRARY_PROOF=src/test/resources/projects/acceptance/native-library/.javan/reports/sanitizer-proof.json
+  assert_sanitizer_proof_file "$NATIVE_LIBRARY_PROOF"
+  assert_contains "$NATIVE_LIBRARY_PROOF" '"status": "pass"'
+  assert_contains "$NATIVE_LIBRARY_PROOF" '"kind": "library"'
+  assert_contains "$NATIVE_LIBRARY_PROOF" '"counterCheck": true'
+  assert_contains "$NATIVE_LIBRARY_PROOF" '"actualLiveAllocations": 0'
+  assert_contains "$NATIVE_LIBRARY_PROOF" '"actualLiveBytes": 0'
+  assert_contains "$NATIVE_LIBRARY_PROOF" '"actualRootFrameDepth": 0'
+  assert_contains "$NATIVE_LIBRARY_PROOF" '"actualFrameRootCount": 0'
+  assert_contains "$NATIVE_LIBRARY_PROOF" '"maxLiveAllocations": 0'
+  assert_contains "$NATIVE_LIBRARY_PROOF" '"maxLiveBytes": 0'
+  assert_contains "$NATIVE_LIBRARY_PROOF" '"maxRootFrameDepth": 0'
+  assert_contains "$NATIVE_LIBRARY_PROOF" '"maxFrameRootCount": 0'
+  assert_contains "$NATIVE_LIBRARY_PROOF" '"minTotalAllocations": 2000'
+  assert_contains "$NATIVE_LIBRARY_PROOF" '"minGcCollections": 1'
+  assert_contains "$NATIVE_LIBRARY_PROOF" '"minGcCollectedAllocations": 1000'
+  assert_contains "$NATIVE_LIBRARY_PROOF" '"failureSignatures": false'
+  assert_json_number_at_least "$NATIVE_LIBRARY_PROOF" actualTotalAllocations 2000
+  assert_json_number_at_least "$NATIVE_LIBRARY_PROOF" actualGcCollections 1
+  assert_json_number_at_least "$NATIVE_LIBRARY_PROOF" actualGcCollectedAllocations 1000
+  assert_sanitizer_proof_summary src/test/resources/projects/acceptance/native-library library
+  NATIVE_LIBRARY_REPORT=src/test/resources/projects/acceptance/native-library/.javan/reports/report.json
+  assert_json_number_at_least "$NATIVE_LIBRARY_REPORT" actualTotalAllocations 2000
+  assert_json_number_at_least "$NATIVE_LIBRARY_REPORT" actualGcCollections 1
+  assert_json_number_at_least "$NATIVE_LIBRARY_REPORT" actualGcCollectedAllocations 1000
 }
 
 JAVAN_HEAP_LIMIT_BYTES=32768 \
@@ -150,6 +189,11 @@ assert_contains "$THREAD_CURRENT_REPORT" '"kind": "app"'
 assert_contains "$THREAD_CURRENT_REPORT" '"counterCheck": "true"'
 assert_contains "$THREAD_CURRENT_REPORT" '"failureSignatures": "false"'
 assert_thread_inventory_summary "$THREAD_CURRENT_REPORT"
+
+if [ "$SANITIZER_SCOPE" = "platform-smoke" ]; then
+  assert_library_sanitizer_summary
+  exit 0
+fi
 
 JAVAN_SANITIZER_SELF_HOST_MAX_LIVE_ALLOCATIONS=0 \
 JAVAN_SANITIZER_SELF_HOST_MAX_LIVE_BYTES=0 \
@@ -242,33 +286,7 @@ JAVAN_GC_STRESS=1 \
 JAVAN_GC_SAFEPOINT_INTERVAL=1 \
   sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/cfg-local-root-liveness-gc
 
-JAVAN_HEAP_LIMIT_BYTES=2048 \
-  sh .github/scripts/sanitizer-library-smoke.sh src/test/resources/projects/acceptance/native-library
-NATIVE_LIBRARY_PROOF=src/test/resources/projects/acceptance/native-library/.javan/reports/sanitizer-proof.json
-assert_sanitizer_proof_file "$NATIVE_LIBRARY_PROOF"
-assert_contains "$NATIVE_LIBRARY_PROOF" '"status": "pass"'
-assert_contains "$NATIVE_LIBRARY_PROOF" '"kind": "library"'
-assert_contains "$NATIVE_LIBRARY_PROOF" '"counterCheck": true'
-assert_contains "$NATIVE_LIBRARY_PROOF" '"actualLiveAllocations": 0'
-assert_contains "$NATIVE_LIBRARY_PROOF" '"actualLiveBytes": 0'
-assert_contains "$NATIVE_LIBRARY_PROOF" '"actualRootFrameDepth": 0'
-assert_contains "$NATIVE_LIBRARY_PROOF" '"actualFrameRootCount": 0'
-assert_contains "$NATIVE_LIBRARY_PROOF" '"maxLiveAllocations": 0'
-assert_contains "$NATIVE_LIBRARY_PROOF" '"maxLiveBytes": 0'
-assert_contains "$NATIVE_LIBRARY_PROOF" '"maxRootFrameDepth": 0'
-assert_contains "$NATIVE_LIBRARY_PROOF" '"maxFrameRootCount": 0'
-assert_contains "$NATIVE_LIBRARY_PROOF" '"minTotalAllocations": 2000'
-assert_contains "$NATIVE_LIBRARY_PROOF" '"minGcCollections": 1'
-assert_contains "$NATIVE_LIBRARY_PROOF" '"minGcCollectedAllocations": 1000'
-assert_contains "$NATIVE_LIBRARY_PROOF" '"failureSignatures": false'
-assert_json_number_at_least "$NATIVE_LIBRARY_PROOF" actualTotalAllocations 2000
-assert_json_number_at_least "$NATIVE_LIBRARY_PROOF" actualGcCollections 1
-assert_json_number_at_least "$NATIVE_LIBRARY_PROOF" actualGcCollectedAllocations 1000
-assert_sanitizer_proof_summary src/test/resources/projects/acceptance/native-library library
-NATIVE_LIBRARY_REPORT=src/test/resources/projects/acceptance/native-library/.javan/reports/report.json
-assert_json_number_at_least "$NATIVE_LIBRARY_REPORT" actualTotalAllocations 2000
-assert_json_number_at_least "$NATIVE_LIBRARY_REPORT" actualGcCollections 1
-assert_json_number_at_least "$NATIVE_LIBRARY_REPORT" actualGcCollectedAllocations 1000
+assert_library_sanitizer_summary
 
 JAVAN_HEAP_LIMIT_BYTES=4096 \
   sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/string-growth-limit

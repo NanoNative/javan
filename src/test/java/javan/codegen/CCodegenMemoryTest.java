@@ -115,12 +115,12 @@ final class CCodegenMemoryTest {
         final String generated = Files.readString(new CCodegen().generate(program, tempDir));
 
         assertThat(generated).contains(
-            "javan_println((const char*) tmp);",
+            "javan_println_object_value(tmp);",
             "\n    tmp = 0;\n",
             "javan_gc_safe_point();"
         );
         final int clear = generated.indexOf("\n    tmp = 0;\n");
-        assertThat(generated.indexOf("javan_println((const char*) tmp);")).isLessThan(clear);
+        assertThat(generated.indexOf("javan_println_object_value(tmp);")).isLessThan(clear);
         assertThat(clear).isLessThan(generated.indexOf("javan_gc_safe_point();", clear));
     }
 
@@ -149,8 +149,8 @@ final class CCodegenMemoryTest {
 
         final String generated = Files.readString(new CCodegen().generate(program, tempDir));
 
-        assertThat(generated).contains("javan_println((const char*) tmp);");
-        assertThat(generated).contains("again:\n    javan_gc_safe_point();\n    javan_println((const char*) tmp);");
+        assertThat(generated).contains("javan_println_object_value(tmp);");
+        assertThat(generated).contains("again:\n    javan_gc_safe_point();\n    javan_println_object_value(tmp);");
         assertThat(generated).doesNotContain("again:\n    tmp = 0;\n");
     }
 
@@ -180,13 +180,13 @@ final class CCodegenMemoryTest {
         final String generated = Files.readString(new CCodegen().generate(program, tempDir));
 
         assertThat(generated).contains(
-            "javan_println((const char*) tmp);",
+            "javan_println_object_value(tmp);",
             "\n    tmp = 0;\n",
             "javan_gc_safe_point();",
             "if (0) goto again;"
         );
         final int clear = generated.indexOf("\n    tmp = 0;\n");
-        assertThat(generated.indexOf("javan_println((const char*) tmp);")).isLessThan(clear);
+        assertThat(generated.indexOf("javan_println_object_value(tmp);")).isLessThan(clear);
         assertThat(clear).isLessThan(generated.indexOf("if (0) goto again;"));
     }
 
@@ -276,7 +276,7 @@ final class CCodegenMemoryTest {
 
         final String generated = Files.readString(new CCodegen().generate(program, tempDir));
 
-        assertThat(generated).contains("join:\n    javan_gc_safe_point();\n    javan_println((const char*) tmp);");
+        assertThat(generated).contains("join:\n    javan_gc_safe_point();\n    javan_println_object_value(tmp);");
     }
 
     @Test
@@ -826,12 +826,12 @@ final class CCodegenMemoryTest {
         assertThat(generated).contains(
             "javan_root_frame_push(javan_expr_roots, 1);",
             "javan_expr_tmp_0 = make_symbol();",
-            "javan_println((const char*) javan_expr_tmp_0);",
+            "javan_println_object_value(javan_expr_tmp_0);",
             "javan_root_frame_pop(javan_expr_roots);"
         );
         assertThat(generated.indexOf("javan_expr_tmp_0 = make_symbol();"))
-            .isLessThan(generated.indexOf("javan_println((const char*) javan_expr_tmp_0);"));
-        assertThat(generated.indexOf("javan_println((const char*) javan_expr_tmp_0);"))
+            .isLessThan(generated.indexOf("javan_println_object_value(javan_expr_tmp_0);"));
+        assertThat(generated.indexOf("javan_println_object_value(javan_expr_tmp_0);"))
             .isLessThan(generated.indexOf("javan_root_frame_pop(javan_expr_roots);"));
     }
 
@@ -967,8 +967,8 @@ final class CCodegenMemoryTest {
             "javan_eprintln_float(3.0);",
             "javan_eprintln_double(4.0);",
             "javan_eprintln_bool(1);",
-            "javan_eprintln((const char*) (void*) \"line\");",
-            "javan_eprint((const char*) (void*) \"part\");"
+            "javan_eprintln_object_value((void*) \"line\");",
+            "javan_eprint_object_value((void*) \"part\");"
         );
     }
 

@@ -11,6 +11,11 @@ import java.util.List;
  */
 public record IntrinsicUsageReport(
     List<IntrinsicCallCount> intrinsics,
+    List<RuntimeJdkCallCount> runtimeCalls,
+    int runtimeCallSiteCount,
+    List<SupportedDirectJdkCallCount> supportedDirectJdkCalls,
+    int supportedDirectJdkCallSiteCount,
+    int supportedJdkCallSiteCount,
     List<UnsupportedJdkCallCandidate> unsupportedJdkCallCandidates,
     int unsupportedJdkCallCandidateCount
 ) {

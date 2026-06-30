@@ -1743,16 +1743,16 @@ public final class CCodegen {
                 emitPrintCall(c, "javan_eprintln_bool", "", instruction.expression().orElseThrow());
                 break;
             case PRINTLN_OBJECT:
-                emitPrintCall(c, "javan_println", "(const char*) ", instruction.expression().orElseThrow());
+                emitPrintCall(c, "javan_println_object_value", "", instruction.expression().orElseThrow());
                 break;
             case PRINTLN_ERROR_OBJECT:
-                emitPrintCall(c, "javan_eprintln", "(const char*) ", instruction.expression().orElseThrow());
+                emitPrintCall(c, "javan_eprintln_object_value", "", instruction.expression().orElseThrow());
                 break;
             case PRINT_OBJECT:
-                emitPrintCall(c, "javan_print", "(const char*) ", instruction.expression().orElseThrow());
+                emitPrintCall(c, "javan_print_object_value", "", instruction.expression().orElseThrow());
                 break;
             case PRINT_ERROR_OBJECT:
-                emitPrintCall(c, "javan_eprint", "(const char*) ", instruction.expression().orElseThrow());
+                emitPrintCall(c, "javan_eprint_object_value", "", instruction.expression().orElseThrow());
                 break;
             case CALL_STATIC_VOID:
                 if (instruction.expression().isPresent()) {
@@ -2133,6 +2133,7 @@ public final class CCodegen {
     }
 
     private static void emitClassInitializers(final IrProgram program, final StringBuilder c) {
+        emitEnumConstantInitializers(program, c);
         final List<IrFunction> initializers = new java.util.ArrayList<>();
         for (final IrFunction function : program.functions()) {
             if ("<clinit>".equals(function.name())) {
@@ -2144,6 +2145,22 @@ public final class CCodegen {
                 .append(function.symbol())
                 .append("();")
                 .append(System.lineSeparator());
+        }
+    }
+
+    private static void emitEnumConstantInitializers(final IrProgram program, final StringBuilder c) {
+        for (final IrClass classInfo : program.classes()) {
+            if (classInfo.enumConstants().isEmpty()) {
+                continue;
+            }
+            for (final String constant : classInfo.enumConstants()) {
+                c.append("    ")
+                    .append(staticFieldSymbol(classInfo.jvmName(), constant))
+                    .append(" = javan_string_from(\"")
+                    .append(escapeCString(constant))
+                    .append("\");")
+                    .append(System.lineSeparator());
+            }
         }
     }
 

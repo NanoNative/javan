@@ -44,13 +44,14 @@ public final class NativeLinker {
      * @throws InterruptedException when interrupted while linking
      */
     public Path link(final Path root, final Path mainC, final Path runtimeC, final Path output) throws IOException, InterruptedException {
-        final String compiler = requiredExecutable(List.of("cc", "clang", "gcc"), "No C compiler found. Install cc, clang, or gcc.");
+        final String compiler = requiredExecutable(compilerCandidates(), "No C compiler found. Install gcc, clang, or cc.");
         Files.createDirectories(output.getParent());
         final List<String> command = new ArrayList<>();
         command.add(compiler);
         command.addAll(threadFlags());
         command.add(mainC.toString());
         command.add(runtimeC.toString());
+        command.addAll(platformLinkFlags());
         command.add("-o");
         command.add(output.toString());
         final ProcessRunner.Result result = processRunner.run(root, command);
@@ -73,7 +74,7 @@ public final class NativeLinker {
      */
     public Path linkSharedLibrary(final Path root, final Path mainC, final Path runtimeC, final Path output)
         throws IOException, InterruptedException {
-        final String compiler = requiredExecutable(List.of("cc", "clang", "gcc"), "No C compiler found. Install cc, clang, or gcc.");
+        final String compiler = requiredExecutable(compilerCandidates(), "No C compiler found. Install gcc, clang, or cc.");
         Files.createDirectories(output.getParent());
         final boolean mac = Strings2.toAsciiLowerCase(System.getProperty("os.name", "")).contains("mac");
         final List<String> command = new ArrayList<>();
@@ -87,6 +88,7 @@ public final class NativeLinker {
         command.add("-fPIC");
         command.add(mainC.toString());
         command.add(runtimeC.toString());
+        command.addAll(platformLinkFlags());
         command.add("-o");
         command.add(output.toString());
         final ProcessRunner.Result result = processRunner.run(root, command);
@@ -109,7 +111,7 @@ public final class NativeLinker {
      */
     public Path linkStaticLibrary(final Path root, final Path mainC, final Path runtimeC, final Path output)
         throws IOException, InterruptedException {
-        final String compiler = requiredExecutable(List.of("cc", "clang", "gcc"), "No C compiler found. Install cc, clang, or gcc.");
+        final String compiler = requiredExecutable(compilerCandidates(), "No C compiler found. Install gcc, clang, or cc.");
         final String archiver = requiredExecutable(List.of("ar"), "No archiver found. Install ar.");
         Files.createDirectories(output.getParent());
         final Path objects = output.getParent().resolve("objects");
@@ -155,6 +157,38 @@ public final class NativeLinker {
         return List.of("-pthread");
     }
 
+    private static List<String> platformLinkFlags() {
+        return platformLinkFlagsForOs(System.getProperty("os.name", ""));
+    }
+
+    static List<String> platformLinkFlagsForOs(final String osName) {
+        if (isWindowsHost(osName)) {
+            return List.of("-lws2_32");
+        }
+        return List.of();
+    }
+
+    private static List<String> compilerCandidates() {
+        return compilerCandidatesForOs(System.getProperty("os.name", ""), System.getenv("CC"));
+    }
+
+    static List<String> compilerCandidatesForOs(final String osName, final String configuredCompiler) {
+        final List<String> result = new ArrayList<>();
+        if (!Strings2.isBlank(configuredCompiler)) {
+            result.add(configuredCompiler.trim());
+        }
+        if (isWindowsHost(osName)) {
+            result.add("gcc");
+            result.add("clang");
+            result.add("cc");
+            return List.copyOf(result);
+        }
+        result.add("cc");
+        result.add("clang");
+        result.add("gcc");
+        return List.copyOf(result);
+    }
+
     private String requiredExecutable(final List<String> executables, final String message) throws IOException, InterruptedException {
         final Optional<String> pathExecutable = firstOnPath(executables);
         if (pathExecutable.isPresent()) {
@@ -168,8 +202,22 @@ public final class NativeLinker {
     }
 
     private static Optional<String> firstOnPath(final List<String> executables) {
+        return firstOnPathForOs(
+            executables,
+            System.getenv("PATH"),
+            System.getProperty("os.name", ""),
+            windowsExecutableExtensions()
+        );
+    }
+
+    static Optional<String> firstOnPathForOs(
+        final List<String> executables,
+        final String path,
+        final String osName,
+        final List<String> windowsExtensions
+    ) {
         for (final String executable : executables) {
-            final Optional<String> resolved = resolveOnPath(executable);
+            final Optional<String> resolved = resolveOnPath(executable, path, osName, windowsExtensions);
             if (resolved.isPresent()) {
                 return resolved;
             }
@@ -178,17 +226,26 @@ public final class NativeLinker {
     }
 
     private static Optional<String> resolveOnPath(final String executable) {
+        return resolveOnPath(
+            executable,
+            System.getenv("PATH"),
+            System.getProperty("os.name", ""),
+            windowsExecutableExtensions()
+        );
+    }
+
+    private static Optional<String> resolveOnPath(
+        final String executable,
+        final String path,
+        final String osName,
+        final List<String> windowsExtensions
+    ) {
         if (Strings2.isBlank(executable)) {
             return Optional.empty();
         }
         if (containsPathSeparator(executable)) {
-            final Path direct = Path.of(executable);
-            if (Files.isExecutable(direct)) {
-                return Optional.of(direct.toString());
-            }
-            return Optional.empty();
+            return resolveExecutablePathForOs(Path.of(executable), osName, windowsExtensions);
         }
-        final String path = System.getenv("PATH");
         if (Strings2.isBlank(path)) {
             return Optional.empty();
         }
@@ -200,14 +257,66 @@ public final class NativeLinker {
                 if (Strings2.isBlank(directory)) {
                     directory = ".";
                 }
-                final Path candidate = Path.of(directory).resolve(executable);
-                if (Files.isExecutable(candidate)) {
-                    return Optional.of(candidate.toString());
+                final Optional<String> resolved = resolveExecutablePathForOs(Path.of(directory).resolve(executable), osName, windowsExtensions);
+                if (resolved.isPresent()) {
+                    return resolved;
                 }
                 start = index + 1;
             }
         }
         return Optional.empty();
+    }
+
+    private static Optional<String> resolveExecutablePath(final Path candidate) {
+        return resolveExecutablePathForOs(candidate, System.getProperty("os.name", ""), windowsExecutableExtensions());
+    }
+
+    static Optional<String> resolveExecutablePathForOs(final Path candidate, final String osName, final List<String> windowsExtensions) {
+        if (Files.isExecutable(candidate)) {
+            return Optional.of(candidate.toString());
+        }
+        if (!isWindowsHost(osName) || hasExplicitExtension(candidate)) {
+            return Optional.empty();
+        }
+        for (final String extension : windowsExtensions) {
+            final Path extended = Path.of(candidate.toString() + extension);
+            if (Files.isExecutable(extended)) {
+                return Optional.of(extended.toString());
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static boolean hasExplicitExtension(final Path candidate) {
+        final Path fileName = candidate.getFileName();
+        if (fileName == null) {
+            return false;
+        }
+        final String name = fileName.toString();
+        final int index = name.lastIndexOf('.');
+        return index > 0 && index < name.length() - 1;
+    }
+
+    private static List<String> windowsExecutableExtensions() {
+        final String pathExt = System.getenv("PATHEXT");
+        if (Strings2.isBlank(pathExt)) {
+            return List.of(".exe", ".cmd", ".bat", ".com");
+        }
+        final List<String> result = new ArrayList<>();
+        int start = 0;
+        for (int index = 0; index <= pathExt.length(); index++) {
+            if (index == pathExt.length() || pathExt.charAt(index) == ';') {
+                final String extension = Strings2.slice(pathExt, start, index).trim();
+                if (!Strings2.isBlank(extension)) {
+                    result.add(extension.startsWith(".") ? extension : "." + extension);
+                }
+                start = index + 1;
+            }
+        }
+        if (result.isEmpty()) {
+            return List.of(".exe", ".cmd", ".bat", ".com");
+        }
+        return List.copyOf(result);
     }
 
     private static boolean containsPathSeparator(final String executable) {
@@ -226,5 +335,13 @@ public final class NativeLinker {
             return ':';
         }
         return separator.charAt(0);
+    }
+
+    private static boolean isWindowsHost() {
+        return isWindowsHost(System.getProperty("os.name", ""));
+    }
+
+    private static boolean isWindowsHost(final String osName) {
+        return Strings2.toAsciiLowerCase(osName).contains("win");
     }
 }

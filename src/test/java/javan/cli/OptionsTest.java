@@ -227,4 +227,99 @@ final class OptionsTest {
         assertThat(result.pass()).isTrue();
         assertThat(result.options().profile()).isEqualTo(Profile.CORE);
     }
+
+    @Test
+    void parseResultRejectsUnknownOption() {
+        final Options.ParseResult result = Options.parseResult(new String[]{"build", "--calm"});
+
+        assertThat(result.pass()).isFalse();
+        assertThat(result.error()).isEqualTo("Unknown option: --calm");
+    }
+
+    @Test
+    void parseResultTreatsDoubleDashAsPassthroughBoundary() {
+        final Options.ParseResult result = Options.parseResult(new String[]{"run", "demo", "--", "--verbose", "tail"});
+
+        assertThat(result.pass()).isTrue();
+        assertThat(result.options().target()).contains(Path.of("demo"));
+        assertThat(result.options().passthroughArgs()).containsExactly("--verbose", "tail");
+    }
+
+    @Test
+    void parseResultRejectsFormatWithoutLibraryBuild() {
+        final Options.ParseResult result = Options.parseResult(new String[]{"build", "--format", "static"});
+
+        assertThat(result.pass()).isFalse();
+        assertThat(result.error()).isEqualTo("--format requires --library or a library --kind");
+    }
+
+    @Test
+    void parseResultRejectsStaticLibWithSharedFormat() {
+        final Options.ParseResult result = Options.parseResult(new String[]{"build", "--kind", "staticlib", "--format", "shared"});
+
+        assertThat(result.pass()).isFalse();
+        assertThat(result.error()).isEqualTo("--kind staticlib only supports --format static");
+    }
+
+    @Test
+    void parseResultRejectsSharedLibWithStaticFormat() {
+        final Options.ParseResult result = Options.parseResult(new String[]{"build", "--kind", "sharedlib", "--format", "static"});
+
+        assertThat(result.pass()).isFalse();
+        assertThat(result.error()).isEqualTo("--kind sharedlib only supports --format shared");
+    }
+
+    @Test
+    void parseResultDefaultsFormatsForStaticLibraryKind() {
+        final Options.ParseResult result = Options.parseResult(new String[]{"build", "--kind", "staticlib"});
+
+        assertThat(result.pass()).isTrue();
+        assertThat(result.options().libraryFormats()).containsExactly(LibraryFormat.STATIC);
+    }
+
+    @Test
+    void parseResultDefaultsFormatsForSharedLibraryKind() {
+        final Options.ParseResult result = Options.parseResult(new String[]{"build", "--kind", "sharedlib"});
+
+        assertThat(result.pass()).isTrue();
+        assertThat(result.options().libraryFormats()).containsExactly(LibraryFormat.SHARED);
+    }
+
+    @Test
+    void parseResultCapturesExplicitBuildConfiguration() {
+        final Options.ParseResult result = Options.parseResult(new String[]{
+            "build",
+            "demo",
+            "--main",
+            "com.acme.Main",
+            "--classes",
+            "build/classes/java/main",
+            "--classpath",
+            "libs/a.jar" + File.pathSeparator + "libs/b.jar",
+            "--output",
+            "demo-bin",
+            "--library",
+            "--export",
+            "com.acme.Math.add(int,int):int",
+            "--bindings",
+            "c,rust",
+            "--release",
+            "--target",
+            "linux-aarch64"
+        });
+
+        assertThat(result.pass()).isTrue();
+        assertThat(result.options().target()).contains(Path.of("demo"));
+        assertThat(result.options().mainClass()).contains("com.acme.Main");
+        assertThat(result.options().classFolders()).containsExactly(Path.of("build/classes/java/main"));
+        assertThat(result.options().classpathEntries()).containsExactly(Path.of("libs/a.jar"), Path.of("libs/b.jar"));
+        assertThat(result.options().outputName()).contains("demo-bin");
+        assertThat(result.options().buildKind()).isEqualTo(BuildKind.LIBRARY);
+        assertThat(result.options().buildKindName()).isEqualTo("LIBRARY");
+        assertThat(result.options().libraryFormats()).containsExactly(LibraryFormat.STATIC, LibraryFormat.SHARED);
+        assertThat(result.options().exports()).containsExactly("com.acme.Math.add(int,int):int");
+        assertThat(result.options().bindings()).containsExactly(BindingLanguage.C, BindingLanguage.RUST);
+        assertThat(result.options().release()).isTrue();
+        assertThat(result.options().targetTriple()).contains("linux-aarch64");
+    }
 }
