@@ -577,6 +577,36 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksFormatFormatObjectAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/text/Format", "format", "(Ljava/lang/Object;)Ljava/lang/String;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksNumberFormatGetInstanceAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/text/NumberFormat", "getInstance", "()Ljava/text/NumberFormat;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksDecimalFormatPatternConstructorAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/text/DecimalFormat", "<init>", "(Ljava/lang/String;)V")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksDateFormatGetDateInstanceAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/text/DateFormat", "getDateInstance", "()Ljava/text/DateFormat;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksMessageFormatVarargsFormatAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/text/MessageFormat", "format", "(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
     void marksModuleDescriptorNameAsExplicitRejected() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/module/ModuleDescriptor", "name", "()Ljava/lang/String;")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
