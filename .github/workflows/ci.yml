@@ -153,4 +153,6 @@ jobs:
     permissions:
       contents: write
     uses: ./.github/workflows/release.yml
+    with:
+      release_enabled: true
     secrets: inherit
