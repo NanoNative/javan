@@ -1,13 +1,15 @@
 name: Release
 
 on:
-  workflow_run:
-    workflows:
-      - CI
-    types:
-      - completed
-    branches:
-      - main
+  workflow_call:
+    inputs:
+      tag:
+        required: false
+        type: string
+      dry_run:
+        required: false
+        default: false
+        type: boolean
   workflow_dispatch:
     inputs:
       tag:
@@ -24,7 +26,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.event.workflow_run.head_branch || github.ref_name || github.run_id }}
+  group: release-${{ github.ref_name || github.run_id }}
   cancel-in-progress: false
 
 jobs:
@@ -50,18 +52,8 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
             release=true
             dry_run="$INPUT_DRY_RUN"
-          elif [ "$GITHUB_EVENT_NAME" = "workflow_run" ]; then
-            workflow_run_branch=$(python3 -c 'import json, sys; data = json.load(open(sys.argv[1], encoding="utf-8")); print((data.get("workflow_run") or {}).get("head_branch", ""))' "$GITHUB_EVENT_PATH")
-            workflow_run_conclusion=$(python3 -c 'import json, sys; data = json.load(open(sys.argv[1], encoding="utf-8")); print((data.get("workflow_run") or {}).get("conclusion", ""))' "$GITHUB_EVENT_PATH")
-            workflow_run_event=$(python3 -c 'import json, sys; data = json.load(open(sys.argv[1], encoding="utf-8")); print((data.get("workflow_run") or {}).get("event", ""))' "$GITHUB_EVENT_PATH")
-            workflow_run_head_message=$(python3 -c 'import json, sys; data = json.load(open(sys.argv[1], encoding="utf-8")); print((((data.get("workflow_run") or {}).get("head_commit")) or {}).get("message", ""))' "$GITHUB_EVENT_PATH")
-
-            if [ "$workflow_run_branch" = "main" ] \
-              && [ "$workflow_run_conclusion" = "success" ] \
-              && [ "$workflow_run_event" = "push" ] \
-              && ! printf '%s\n' "$workflow_run_head_message" | grep -Eq '^chore: release '; then
-              release=true
-            fi
+          elif [ "$GITHUB_EVENT_NAME" = "workflow_call" ]; then
+            release=true
           fi
 
           tag=""
