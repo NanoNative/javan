@@ -1,7 +1,11 @@
 name: Release
 
 on:
-  push:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
     branches:
       - main
   workflow_dispatch:
@@ -20,7 +24,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.ref || github.run_id }}
+  group: release-${{ github.event.workflow_run.head_branch || github.ref_name || github.run_id }}
   cancel-in-progress: false
 
 jobs:
@@ -37,7 +41,6 @@ jobs:
         id: plan
         shell: sh
         env:
-          HEAD_MESSAGE: ${{ github.event.head_commit.message || '' }}
           INPUT_DRY_RUN: ${{ inputs.dry_run || 'false' }}
           INPUT_TAG: ${{ inputs.tag || '' }}
         run: |
@@ -47,10 +50,18 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
             release=true
             dry_run="$INPUT_DRY_RUN"
-          elif [ "$GITHUB_EVENT_NAME" = "push" ] \
-            && [ "$GITHUB_REF" = "refs/heads/main" ] \
-            && ! printf '%s\n' "$HEAD_MESSAGE" | grep -Eq '^chore: release '; then
-            release=true
+          elif [ "$GITHUB_EVENT_NAME" = "workflow_run" ]; then
+            workflow_run_branch=$(python3 -c 'import json, sys; data = json.load(open(sys.argv[1], encoding="utf-8")); print((data.get("workflow_run") or {}).get("head_branch", ""))' "$GITHUB_EVENT_PATH")
+            workflow_run_conclusion=$(python3 -c 'import json, sys; data = json.load(open(sys.argv[1], encoding="utf-8")); print((data.get("workflow_run") or {}).get("conclusion", ""))' "$GITHUB_EVENT_PATH")
+            workflow_run_event=$(python3 -c 'import json, sys; data = json.load(open(sys.argv[1], encoding="utf-8")); print((data.get("workflow_run") or {}).get("event", ""))' "$GITHUB_EVENT_PATH")
+            workflow_run_head_message=$(python3 -c 'import json, sys; data = json.load(open(sys.argv[1], encoding="utf-8")); print((((data.get("workflow_run") or {}).get("head_commit")) or {}).get("message", ""))' "$GITHUB_EVENT_PATH")
+
+            if [ "$workflow_run_branch" = "main" ] \
+              && [ "$workflow_run_conclusion" = "success" ] \
+              && [ "$workflow_run_event" = "push" ] \
+              && ! printf '%s\n' "$workflow_run_head_message" | grep -Eq '^chore: release '; then
+              release=true
+            fi
           fi
 
           tag=""
