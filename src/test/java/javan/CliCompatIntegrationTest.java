@@ -4,19 +4,18 @@ import javan.cli.Cli;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ResourceLock;
 
-import java.io.ByteArrayOutputStream;
-import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 
 @Execution(SAME_THREAD)
+@ResourceLock("native-cli-heavy")
 final class CliCompatIntegrationTest {
     @TempDir
     private Path tempDir;
@@ -144,16 +143,8 @@ final class CliCompatIntegrationTest {
     }
 
     private static CliRun runSlow(final Path cwd, final String... args) {
-        final ByteArrayOutputStream stdout = new ByteArrayOutputStream();
-        final ByteArrayOutputStream stderr = new ByteArrayOutputStream();
-        final int exitCode = assertTimeoutPreemptively(Duration.ofSeconds(180), () ->
-            new Cli().run(cwd, new PrintStream(stdout, true, StandardCharsets.UTF_8), new PrintStream(stderr, true, StandardCharsets.UTF_8), args)
-        );
-        return new CliRun(
-            exitCode,
-            stdout.toString(StandardCharsets.UTF_8),
-            stderr.toString(StandardCharsets.UTF_8)
-        );
+        final CliTestHarness.CliResult result = CliTestHarness.run(cwd, Duration.ofSeconds(360), args);
+        return new CliRun(result.exitCode(), result.stdout(), result.stderr());
     }
 
     private record CliRun(int exitCode, String stdout, String stderr) {

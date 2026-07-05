@@ -81,6 +81,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void mathAbsFloatIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Math",
+            "abs",
+            "(F)F"
+        ))).isTrue();
+    }
+
+    @Test
+    void mathAbsDoubleIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Math",
+            "abs",
+            "(D)D"
+        ))).isTrue();
+    }
+
+    @Test
     void executorCloseIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/concurrent/ExecutorService",
@@ -159,6 +177,33 @@ final class JdkCallSupportTest {
             "newThread",
             "(Ljava/lang/Runnable;)Ljava/lang/Thread;"
         ))).containsExactly("threads");
+    }
+
+    @Test
+    void stringValueOfIntIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/String",
+            "valueOf",
+            "(I)Ljava/lang/String;"
+        ))).isTrue();
+    }
+
+    @Test
+    void booleanArraysCopyOfIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Arrays",
+            "copyOf",
+            "([ZI)[Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void pathsGetRequiresFilesystemRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/nio/file/Paths",
+            "get",
+            "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;"
+        ))).containsExactly("filesystem");
     }
 
     @Test

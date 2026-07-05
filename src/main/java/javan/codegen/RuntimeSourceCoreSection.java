@@ -19,17 +19,19 @@ final class RuntimeSourceCoreSection {
         #include <ws2tcpip.h>
         #include <windows.h>
         #include <process.h>
+        #include <io.h>
+        #include <sys/time.h>
         #else
         #include <arpa/inet.h>
         #include <netinet/in.h>
         #include <pthread.h>
         #include <sys/socket.h>
+        #include <sys/wait.h>
+        #include <unistd.h>
         #endif
         #include <sys/stat.h>
         #include <sys/time.h>
-        #include <sys/wait.h>
         #include <time.h>
-        #include <unistd.h>
         #if defined(_MSC_VER)
         #define JAVAN_THREAD_LOCAL __declspec(thread)
         #else
@@ -39,6 +41,7 @@ final class RuntimeSourceCoreSection {
         static char* javan_string_alloc(unsigned long size);
         static void* javan_string_copy(const char* value);
         static int javan_socket_native_close(int fd);
+        static void javan_sleep_micros(unsigned long micros);
         static JAVAN_THREAD_LOCAL char javan_last_error_value[512];
         static JAVAN_THREAD_LOCAL char javan_last_error_code_value[64];
         static JAVAN_THREAD_LOCAL char javan_last_error_summary_value[128];
@@ -54,6 +57,21 @@ final class RuntimeSourceCoreSection {
         static JAVAN_THREAD_LOCAL int javan_last_error_set = 0;
         static JAVAN_THREAD_LOCAL jmp_buf* javan_panic_target = NULL;
         static JAVAN_THREAD_LOCAL JavanSourceContext* javan_source_context_top = NULL;
+
+        static void javan_sleep_micros(unsigned long micros) {
+            if (micros == 0UL) {
+                return;
+            }
+        #if defined(_WIN32)
+            DWORD millis = (DWORD) ((micros + 999UL) / 1000UL);
+            if (millis == 0U) {
+                millis = 1U;
+            }
+            Sleep(millis);
+        #else
+            usleep((useconds_t) micros);
+        #endif
+        }
 
         static void javan_copy_error_field(char* target, unsigned long target_size, const char* value) {
             if (target_size == 0) {
@@ -528,12 +546,44 @@ final class RuntimeSourceCoreSection {
             javan_print(value);
         }
 
+        void javan_print_object_value(void* value) {
+            javan_print((const char*) javan_printable_object_string(value));
+        }
+
+        void javan_eprint_object_value(void* value) {
+            javan_eprint((const char*) javan_printable_object_string(value));
+        }
+
+        void javan_printstream_print_object(void* stream, void* value) {
+            if (javan_printstream_is_err(stream)) {
+                javan_eprint_object_value(value);
+                return;
+            }
+            javan_print_object_value(value);
+        }
+
         void javan_printstream_println(void* stream, const char* value) {
             if (javan_printstream_is_err(stream)) {
                 javan_eprintln(value);
                 return;
             }
             javan_println(value);
+        }
+
+        void javan_println_object_value(void* value) {
+            javan_println((const char*) javan_printable_object_string(value));
+        }
+
+        void javan_eprintln_object_value(void* value) {
+            javan_eprintln((const char*) javan_printable_object_string(value));
+        }
+
+        void javan_printstream_println_object(void* stream, void* value) {
+            if (javan_printstream_is_err(stream)) {
+                javan_eprintln_object_value(value);
+                return;
+            }
+            javan_println_object_value(value);
         }
 
         void javan_printstream_println_int(void* stream, int value) {
@@ -588,6 +638,14 @@ final class RuntimeSourceCoreSection {
                 return value;
             }
             return value < 0 ? -value : value;
+        }
+
+        float javan_math_abs_float(float value) {
+            return fabsf(value);
+        }
+
+        double javan_math_abs_double(double value) {
+            return fabs(value);
         }
 
         int javan_math_min_int(int left, int right) {
@@ -670,7 +728,16 @@ final class RuntimeSourceCoreSection {
         }
 
         long long javan_system_nano_time(void) {
-        #if defined(CLOCK_MONOTONIC)
+        #if defined(_WIN32)
+            LARGE_INTEGER frequency;
+            LARGE_INTEGER counter;
+            if (QueryPerformanceFrequency(&frequency) != 0
+                && frequency.QuadPart > 0
+                && QueryPerformanceCounter(&counter) != 0) {
+                return (long long) ((((long double) counter.QuadPart) * 1000000000.0L) / (long double) frequency.QuadPart);
+            }
+            return (long long) GetTickCount64() * 1000000LL;
+        #elif defined(CLOCK_MONOTONIC)
             struct timespec now;
             if (clock_gettime(CLOCK_MONOTONIC, &now) == 0) {
                 return ((long long) now.tv_sec * 1000000000LL) + (long long) now.tv_nsec;

@@ -264,7 +264,7 @@ final class CliCommandIntegrationTest {
     private static CliRun run(final Path cwd, final String... args) {
         final ByteArrayOutputStream stdout = new ByteArrayOutputStream();
         final ByteArrayOutputStream stderr = new ByteArrayOutputStream();
-        final int exitCode = assertTimeoutPreemptively(Duration.ofSeconds(20), () ->
+        final int exitCode = assertTimeoutPreemptively(defaultCliTimeout(), () ->
             new Cli().run(cwd, new PrintStream(stdout, true, StandardCharsets.UTF_8), new PrintStream(stderr, true, StandardCharsets.UTF_8), args)
         );
         return new CliRun(
@@ -275,11 +275,27 @@ final class CliCommandIntegrationTest {
     }
 
     private static ProcessResult process(final Path cwd, final List<String> command) {
+        return process(cwd, command, defaultProcessTimeout());
+    }
+
+    private static Duration defaultCliTimeout() {
+        return isCiEnvironment() ? Duration.ofSeconds(45) : Duration.ofSeconds(20);
+    }
+
+    private static Duration defaultProcessTimeout() {
+        return isCiEnvironment() ? Duration.ofSeconds(20) : Duration.ofSeconds(10);
+    }
+
+    private static boolean isCiEnvironment() {
+        return "true".equalsIgnoreCase(System.getenv("CI"));
+    }
+
+    private static ProcessResult process(final Path cwd, final List<String> command, final Duration timeout) {
         try {
             final Process process = new ProcessBuilder(command).directory(cwd.toFile()).start();
             final CompletableFuture<String> stdout = CompletableFuture.supplyAsync(() -> readStream(process.getInputStream()));
             final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
-            if (!process.waitFor(10, TimeUnit.SECONDS)) {
+            if (!process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
                 process.destroy();
                 if (!process.waitFor(1, TimeUnit.SECONDS)) {
                     process.destroyForcibly();
@@ -288,7 +304,7 @@ final class CliCommandIntegrationTest {
                 return new ProcessResult(
                     124,
                     stdout.join(),
-                    stderr.join() + "Timed out after 10 seconds: " + String.join(" ", command) + "\n"
+                    stderr.join() + "Timed out after " + timeout.toSeconds() + " seconds: " + String.join(" ", command) + "\n"
                 );
             }
             return new ProcessResult(

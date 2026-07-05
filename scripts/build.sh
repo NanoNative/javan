@@ -6,7 +6,15 @@ cd "$ROOT"
 
 OUTPUT=${1:-dist/javan}
 
-mvn -q -DskipTests clean package
+REUSE_TARGET=${JAVAN_BUILD_REUSE_TARGET:-false}
+if [ "$REUSE_TARGET" = "true" ]; then
+  if [ ! -f target/classes/javan/Main.class ]; then
+    printf '%s\n' "Missing target/classes/javan/Main.class for JAVAN_BUILD_REUSE_TARGET=true." >&2
+    exit 1
+  fi
+else
+  mvn -q -DskipTests clean package
+fi
 mkdir -p "$(dirname -- "$OUTPUT")"
 VERSION=$(sed -n 's/.*<version>\(.*\)<\/version>.*/\1/p' pom.xml | head -n 1)
 JAR="target/javan-$VERSION.jar"

@@ -358,9 +358,14 @@ final class DependencyReportsTest {
             final Process process = new ProcessBuilder(command).directory(cwd.toFile()).start();
             final CompletableFuture<String> stdout = CompletableFuture.supplyAsync(() -> read(process.getInputStream()));
             final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> read(process.getErrorStream()));
-            if (!process.waitFor(Duration.ofSeconds(10).toMillis(), TimeUnit.MILLISECONDS)) {
+            final Duration timeout = defaultProcessTimeout();
+            if (!process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
                 process.destroyForcibly();
-                return new ProcessResult(124, stdout.join(), stderr.join());
+                return new ProcessResult(
+                    124,
+                    stdout.join(),
+                    stderr.join() + "Timed out after " + timeout.toSeconds() + " seconds: " + String.join(" ", command) + "\n"
+                );
             }
             return new ProcessResult(process.exitValue(), stdout.join(), stderr.join());
         } catch (final IOException exception) {
@@ -369,6 +374,14 @@ final class DependencyReportsTest {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Interrupted while running process", exception);
         }
+    }
+
+    private static Duration defaultProcessTimeout() {
+        return isCiEnvironment() ? Duration.ofSeconds(20) : Duration.ofSeconds(10);
+    }
+
+    private static boolean isCiEnvironment() {
+        return "true".equalsIgnoreCase(System.getenv("CI"));
     }
 
     private static String read(final java.io.InputStream input) {

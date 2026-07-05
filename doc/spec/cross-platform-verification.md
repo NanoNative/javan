@@ -189,7 +189,7 @@ Every test checks one assumption, scenario, or case.
 Good tests:
 
 - `Math.abs(int)` lowers and matches JVM output
-- `Math.abs(float)` fails as an unsupported overload
+- `Math.abs(float)` lowers and matches JVM output
 - `System.arraycopy` rejects primitive type mismatch
 - Maven wrapper is preferred over system Maven
 - missing configured JDK cache entry fails with a toolchain diagnostic
@@ -213,6 +213,12 @@ Current CI stages in `.github/workflows/ci.yml`:
 4. host-target native build check
 5. sanitizer suite with required C/Rust/Go/Python binding proof
 6. extracted self-host package smoke with packaged `bin/javan`
+
+For existing reduced `platform-smoke` rows, the extracted package smoke still proves the
+packaged self-host sanitizer path, but it reuses the generated self-host C output from
+the immediately preceding packaged self-build and narrows the repeated probe set to
+`--version` plus the tiny build/check loop instead of rerunning the full packaged
+`check/report target/classes` cycle.
 
 Current release workflow stages:
 

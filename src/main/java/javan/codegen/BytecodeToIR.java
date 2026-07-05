@@ -105,6 +105,7 @@ public final class BytecodeToIR {
         final List<StackValue> stack = new ArrayList<>();
         final Map<Integer, IrExpression> locals = new HashMap<>();
         final Map<Integer, StackKind> objectLocalKinds = new HashMap<>();
+        final Map<Integer, String> objectLocalThrowableTypes = new HashMap<>();
         final Map<Integer, IrLocal> localDeclarations = new LinkedHashMap<>();
         final Map<Integer, StackValue> pendingExceptionHandlerStacks = new HashMap<>();
         final CodeAttribute code = method.code().orElseThrow();
@@ -113,12 +114,10 @@ public final class BytecodeToIR {
         final List<Integer> handlerOffsets = exceptionHandlerOffsets(code);
         final List<Integer> branchTargets = branchTargets(code);
         final List<Integer> skippedOffsets = new ArrayList<>();
+        final List<Integer> replacementLabelOffsets = new ArrayList<>();
         BytecodeToIRMetadataSupport.bindParameters(method, descriptor, parameters, locals);
         for (int index = 0; index < bytecode.size(); index++) {
             final Instruction instruction = bytecode.get(index);
-            if (containsInt(branchTargets, instruction.offset())) {
-                instructions.add(IrInstruction.label(label(instruction.offset())));
-            }
             if (containsInt(handlerOffsets, instruction.offset())) {
                 final StackValue pendingException = pendingExceptionHandlerStacks.get(instruction.offset());
                 if (pendingException != null) {
@@ -127,6 +126,10 @@ public final class BytecodeToIR {
                 } else if (stack.isEmpty()) {
                     stack.add(StackValue.objectExpression(IrExpression.objectNull()));
                 }
+            }
+            if (containsInt(branchTargets, instruction.offset())
+                && !containsInt(replacementLabelOffsets, instruction.offset())) {
+                instructions.add(IrInstruction.label(label(instruction.offset())));
             }
             if (shouldSkipOffset(ignoredHandlerOffsets, skippedOffsets, instruction.offset())) {
                 continue;
@@ -148,9 +151,30 @@ public final class BytecodeToIR {
                 stack,
                 locals,
                 objectLocalKinds,
+                objectLocalThrowableTypes,
                 localDeclarations,
                 dispatches,
-                skippedOffsets
+                skippedOffsets,
+                replacementLabelOffsets
+            )) {
+                BytecodeToIRControlFlowSupport.annotateNewInstructions(instructions, instructionStart, sourceLocation);
+                continue;
+            }
+            if (BytecodeToIRControlFlowSupport.lowerSwitchValueSelection(
+                classes,
+                classFile,
+                method,
+                bytecode,
+                index,
+                instructions,
+                stack,
+                locals,
+                objectLocalKinds,
+                objectLocalThrowableTypes,
+                localDeclarations,
+                dispatches,
+                skippedOffsets,
+                replacementLabelOffsets
             )) {
                 BytecodeToIRControlFlowSupport.annotateNewInstructions(instructions, instructionStart, sourceLocation);
                 continue;
@@ -165,6 +189,7 @@ public final class BytecodeToIR {
                 pendingExceptionHandlerStacks,
                 locals,
                 objectLocalKinds,
+                objectLocalThrowableTypes,
                 localDeclarations,
                 dispatches,
                 sourceLines
@@ -202,6 +227,7 @@ public final class BytecodeToIR {
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final Map<Integer, IrExpression> locals,
         final Map<Integer, StackKind> objectLocalKinds,
+        final Map<Integer, String> objectLocalThrowableTypes,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
         final SourceLineIndex sourceLines
@@ -296,13 +322,13 @@ public final class BytecodeToIR {
                 stack.add(StackValue.doubleExpression(local(classFile, method, locals, instruction.opcode() - 38, IrType.DOUBLE)));
                 break;
             case 25:
-                stack.add(localObjectValue(classFile, method, locals, objectLocalKinds, unsigned(instruction.operands()[0])));
+                stack.add(localObjectValue(classFile, method, locals, objectLocalKinds, objectLocalThrowableTypes, unsigned(instruction.operands()[0])));
                 break;
             case 42:
             case 43:
             case 44:
             case 45:
-                stack.add(localObjectValue(classFile, method, locals, objectLocalKinds, instruction.opcode() - 42));
+                stack.add(localObjectValue(classFile, method, locals, objectLocalKinds, objectLocalThrowableTypes, instruction.opcode() - 42));
                 break;
             case 46:
                 loadIntArray(classFile, method, stack);
@@ -365,13 +391,13 @@ public final class BytecodeToIR {
                 storeDouble(classFile, method, instructions, stack, locals, localDeclarations, instruction.opcode() - 71);
                 break;
             case 58:
-                storeObject(classFile, method, instruction, instructions, stack, locals, objectLocalKinds, localDeclarations, unsigned(instruction.operands()[0]));
+                storeObject(classFile, method, instruction, instructions, stack, locals, objectLocalKinds, objectLocalThrowableTypes, localDeclarations, unsigned(instruction.operands()[0]));
                 break;
             case 75:
             case 76:
             case 77:
             case 78:
-                storeObject(classFile, method, instruction, instructions, stack, locals, objectLocalKinds, localDeclarations, instruction.opcode() - 75);
+                storeObject(classFile, method, instruction, instructions, stack, locals, objectLocalKinds, objectLocalThrowableTypes, localDeclarations, instruction.opcode() - 75);
                 break;
             case 79:
                 storeIntArray(classFile, method, instructions, stack);
@@ -947,6 +973,7 @@ public final class BytecodeToIR {
         final List<StackValue> stack,
         final Map<Integer, IrExpression> locals,
         final Map<Integer, StackKind> objectLocalKinds,
+        final Map<Integer, String> objectLocalThrowableTypes,
         final Map<Integer, IrLocal> localDeclarations,
         final int slot
     ) {
@@ -958,8 +985,13 @@ public final class BytecodeToIR {
         }
         final StackValue value = popObjectValue(classFile, method, instruction, stack);
         final IrExpression target = localOrCreate(locals, localDeclarations, slot, IrType.OBJECT);
-        instructions.add(IrInstruction.assignObject(target.value(), value.expression().orElseThrow()));
+        instructions.add(IrInstruction.assignObject(target.value(), stackValueExpression(value)));
         updateObjectLocalKind(objectLocalKinds, slot, value.kind());
+        if (value.throwableType().isPresent()) {
+            objectLocalThrowableTypes.put(slot, value.throwableType().orElseThrow());
+        } else {
+            objectLocalThrowableTypes.put(slot, null);
+        }
     }
 
     static void newObjectArray(
@@ -1296,7 +1328,7 @@ public final class BytecodeToIR {
         final Instruction instruction,
         final List<StackValue> stack
     ) {
-        return popObjectValue(classFile, method, instruction, stack).expression().orElseThrow();
+        return stackValueExpression(popObjectValue(classFile, method, instruction, stack));
     }
 
     static StackValue popObjectValue(
@@ -1310,11 +1342,13 @@ public final class BytecodeToIR {
         }
         final StackValue value = pop(stack);
         if (BytecodeToIRControlFlowSupport.isObjectLike(value.kind())) {
-            return switch (value.kind()) {
-                case PRINT_STREAM -> StackValue.objectExpression(IrExpression.objectCall("javan_system_out", List.of()));
-                case ERROR_PRINT_STREAM -> StackValue.objectExpression(IrExpression.objectCall("javan_system_err", List.of()));
-                default -> value;
-            };
+            if (value.kind() == StackKind.PRINT_STREAM) {
+                return StackValue.objectExpression(IrExpression.objectCall("javan_system_out", List.of()));
+            }
+            if (value.kind() == StackKind.ERROR_PRINT_STREAM) {
+                return StackValue.objectExpression(IrExpression.objectCall("javan_system_err", List.of()));
+            }
+            return value;
         }
         throw invalidStack(classFile, method, instruction, wrongStackTypeReason("object", value.kind()));
     }
@@ -1387,6 +1421,16 @@ public final class BytecodeToIR {
         return Strings2.toAsciiLowerCase(kind.name()).replace('_', ' ');
     }
 
+    static IrExpression stackValueExpression(final StackValue value) {
+        if (value.kind() == StackKind.PRINT_STREAM) {
+            return IrExpression.objectCall("javan_system_out", List.of());
+        }
+        if (value.kind() == StackKind.ERROR_PRINT_STREAM) {
+            return IrExpression.objectCall("javan_system_err", List.of());
+        }
+        return value.expression().orElseThrow();
+    }
+
     static Instruction firstInstruction(final MethodInfo method) {
         return method.code().orElseThrow().instructions().getFirst();
     }
@@ -1428,10 +1472,17 @@ public final class BytecodeToIR {
         final MethodInfo method,
         final Map<Integer, IrExpression> locals,
         final Map<Integer, StackKind> objectLocalKinds,
+        final Map<Integer, String> objectLocalThrowableTypes,
         final int slot
     ) {
         final IrExpression expression = local(classFile, method, locals, slot, IrType.OBJECT);
         final StackKind kind = objectLocalKinds.getOrDefault(slot, StackKind.OBJECT);
+        if (kind == StackKind.OBJECT) {
+            final String throwableType = objectLocalThrowableTypes.get(slot);
+            if (throwableType != null) {
+                return StackValue.platformThrowable(throwableType, expression);
+            }
+        }
         return BytecodeToIRControlFlowSupport.stackValue(kind, expression);
     }
 
@@ -2067,7 +2118,7 @@ public final class BytecodeToIR {
         final List<EntryPoint> result = new ArrayList<>();
         for (final ClassFile candidate : classes.values()) {
             if (!candidate.isInterface() && isSubtypeOf(classes, candidate.name(), methodRef.owner())) {
-                final Optional<EntryPoint> resolved = resolvedVirtualTarget(classes, candidate.name(), methodRef);
+                final Optional<EntryPoint> resolved = lowerableResolvedVirtualTarget(classes, candidate.name(), methodRef);
                 if (resolved.isPresent()) {
                     final EntryPoint entryPoint = resolved.orElseThrow();
                     if (!result.contains(entryPoint)) {
@@ -2093,6 +2144,27 @@ public final class BytecodeToIR {
             current = classFile.superName();
         }
         return Optional.empty();
+    }
+
+    private static Optional<EntryPoint> lowerableResolvedVirtualTarget(
+        final Map<String, ClassFile> classes,
+        final String receiver,
+        final MethodRef methodRef
+    ) {
+        final Optional<EntryPoint> resolved = resolvedVirtualTarget(classes, receiver, methodRef);
+        if (resolved.isEmpty()) {
+            return Optional.empty();
+        }
+        final EntryPoint entryPoint = resolved.orElseThrow();
+        final ClassFile owner = classes.get(entryPoint.className());
+        if (owner == null) {
+            return Optional.empty();
+        }
+        final Optional<MethodInfo> method = owner.method(entryPoint.methodName(), entryPoint.descriptor());
+        if (method.isEmpty() || method.orElseThrow().code().isEmpty()) {
+            return Optional.empty();
+        }
+        return resolved;
     }
 
     static List<Integer> assignableTypeIds(final Map<String, ClassFile> classes, final String target) {

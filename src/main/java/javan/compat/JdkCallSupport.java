@@ -57,7 +57,7 @@ public final class JdkCallSupport {
 
     private static final List<SupportedCall> SUPPORTED_CALLS = List.of(
         intrinsic("Objects.requireNonNull", "java/util/Objects", "requireNonNull", "(Ljava/lang/Object;)Ljava/lang/Object;", "(Ljava/lang/Object;Ljava/lang/String;)Ljava/lang/Object;"),
-        intrinsic("Math.abs", "java/lang/Math", "abs", "(I)I", "(J)J"),
+        intrinsic("Math.abs", "java/lang/Math", "abs", "(I)I", "(J)J", "(F)F", "(D)D"),
         intrinsic("Math.min", "java/lang/Math", "min", "(II)I", "(JJ)J"),
         intrinsic("Math.max", "java/lang/Math", "max", "(II)I", "(JJ)J"),
         intrinsic("Math.toIntExact", "java/lang/Math", "toIntExact", "(J)I"),
@@ -120,6 +120,7 @@ public final class JdkCallSupport {
             "Arrays.copyOf",
             "java/util/Arrays",
             "copyOf",
+            "([ZI)[Z",
             "([II)[I",
             "([JI)[J",
             "([BI)[B",
@@ -153,12 +154,33 @@ public final class JdkCallSupport {
         intrinsic("Boolean.toString", "java/lang/Boolean", "toString", "(Z)Ljava/lang/String;"),
         runtime("Boolean.valueOf", "java/lang/Boolean", "valueOf", "(Z)Ljava/lang/Boolean;"),
         runtime("Boolean.booleanValue", "java/lang/Boolean", "booleanValue", "()Z"),
+        intrinsic(
+            "String.valueOf",
+            "java/lang/String",
+            "valueOf",
+            "(Ljava/lang/Object;)Ljava/lang/String;",
+            "([C)Ljava/lang/String;",
+            "([CII)Ljava/lang/String;",
+            "(I)Ljava/lang/String;",
+            "(J)Ljava/lang/String;",
+            "(F)Ljava/lang/String;",
+            "(D)Ljava/lang/String;",
+            "(Z)Ljava/lang/String;",
+            "(C)Ljava/lang/String;"
+        ),
+        intrinsic(
+            "String.copyValueOf",
+            "java/lang/String",
+            "copyValueOf",
+            "([C)Ljava/lang/String;",
+            "([CII)Ljava/lang/String;"
+        ),
         runtime("Duration.ofMillis", "java/time/Duration", "ofMillis", "(J)Ljava/time/Duration;"),
         runtime("Duration.ofSeconds", "java/time/Duration", "ofSeconds", "(J)Ljava/time/Duration;"),
         runtime("Duration.toMillis", "java/time/Duration", "toMillis", "()J"),
-        runtime("PrintStream.print", "java/io/PrintStream", "print", "(Ljava/lang/String;)V"),
-        runtime("PrintStream.println", "java/io/PrintStream", "println", "(Ljava/lang/String;)V", "(Ljava/lang/Object;)V", "(I)V", "(J)V", "(F)V", "(D)V", "(Z)V"),
-        runtime("String.<init>", "java/lang/String", "<init>", "([CII)V"),
+        runtime("PrintStream.print", "java/io/PrintStream", "print", "(Ljava/lang/String;)V", "(Ljava/lang/Object;)V", "([C)V", "(C)V", "(Z)V", "(I)V", "(J)V", "(F)V", "(D)V"),
+        runtime("PrintStream.println", "java/io/PrintStream", "println", "()V", "(Ljava/lang/String;)V", "(Ljava/lang/Object;)V", "([C)V", "(I)V", "(J)V", "(F)V", "(D)V", "(Z)V", "(C)V"),
+        runtime("String.<init>", "java/lang/String", "<init>", "()V", "(Ljava/lang/String;)V", "(Ljava/lang/StringBuilder;)V", "([C)V", "([CII)V"),
         runtime("String.length", "java/lang/String", "length", "()I"),
         runtime("String.isEmpty", "java/lang/String", "isEmpty", "()Z"),
         runtime("String.charAt", "java/lang/String", "charAt", "(I)C"),
@@ -168,26 +190,49 @@ public final class JdkCallSupport {
         runtime("String.indexOf", "java/lang/String", "indexOf", "(Ljava/lang/String;I)I"),
         runtime("String.lastIndexOf", "java/lang/String", "lastIndexOf", "(I)I"),
         runtime("String.lastIndexOf", "java/lang/String", "lastIndexOf", "(II)I"),
+        runtime("String.lastIndexOf", "java/lang/String", "lastIndexOf", "(Ljava/lang/String;)I"),
+        runtime("String.lastIndexOf", "java/lang/String", "lastIndexOf", "(Ljava/lang/String;I)I"),
         runtime("String.equals", "java/lang/String", "equals", "(Ljava/lang/Object;)Z"),
         runtime("String.contains", "java/lang/String", "contains", "(Ljava/lang/CharSequence;)Z"),
-        runtime("String.startsWith", "java/lang/String", "startsWith", "(Ljava/lang/String;)Z"),
+        runtime("String.startsWith", "java/lang/String", "startsWith", "(Ljava/lang/String;)Z", "(Ljava/lang/String;I)Z"),
         runtime("String.endsWith", "java/lang/String", "endsWith", "(Ljava/lang/String;)Z"),
         runtime("String.replace", "java/lang/String", "replace", "(CC)Ljava/lang/String;"),
+        runtime("String.repeat", "java/lang/String", "repeat", "(I)Ljava/lang/String;"),
         runtime("String.intern", "java/lang/String", "intern", "()Ljava/lang/String;"),
+        runtime("String.toString", "java/lang/String", "toString", "()Ljava/lang/String;"),
+        runtime("String.concat", "java/lang/String", "concat", "(Ljava/lang/String;)Ljava/lang/String;"),
         runtime("String.trim", "java/lang/String", "trim", "()Ljava/lang/String;"),
         runtime("String.substring", "java/lang/String", "substring", "(I)Ljava/lang/String;"),
         runtime("String.substring", "java/lang/String", "substring", "(II)Ljava/lang/String;"),
-        runtime("StringBuilder.<init>", "java/lang/StringBuilder", "<init>", "()V", "(Ljava/lang/String;)V"),
-        runtime("StringBuilder.append", "java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;"),
+        runtime("String.subSequence", "java/lang/String", "subSequence", "(II)Ljava/lang/CharSequence;"),
+        runtime("StringBuilder.<init>", "java/lang/StringBuilder", "<init>", "()V", "(I)V", "(Ljava/lang/String;)V"),
+        runtime("StringBuilder.append", "java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;", "([C)Ljava/lang/StringBuilder;", "([CII)Ljava/lang/StringBuilder;"),
         runtime("StringBuilder.append", "java/lang/StringBuilder", "append", "(Ljava/lang/Object;)Ljava/lang/StringBuilder;"),
         runtime("StringBuilder.append", "java/lang/StringBuilder", "append", "(Z)Ljava/lang/StringBuilder;"),
         runtime("StringBuilder.append", "java/lang/StringBuilder", "append", "(C)Ljava/lang/StringBuilder;"),
         runtime("StringBuilder.append", "java/lang/StringBuilder", "append", "(I)Ljava/lang/StringBuilder;"),
         runtime("StringBuilder.append", "java/lang/StringBuilder", "append", "(J)Ljava/lang/StringBuilder;"),
+        runtime("StringBuilder.append", "java/lang/StringBuilder", "append", "(F)Ljava/lang/StringBuilder;"),
+        runtime("StringBuilder.append", "java/lang/StringBuilder", "append", "(D)Ljava/lang/StringBuilder;"),
         runtime("StringBuilder.toString", "java/lang/StringBuilder", "toString", "()Ljava/lang/String;"),
         runtime("StringBuilder.length", "java/lang/StringBuilder", "length", "()I"),
         runtime("StringBuilder.isEmpty", "java/lang/StringBuilder", "isEmpty", "()Z"),
+        runtime("StringBuilder.charAt", "java/lang/StringBuilder", "charAt", "(I)C"),
+        runtime("StringBuilder.substring", "java/lang/StringBuilder", "substring", "(I)Ljava/lang/String;", "(II)Ljava/lang/String;"),
+        runtime("StringBuilder.subSequence", "java/lang/StringBuilder", "subSequence", "(II)Ljava/lang/CharSequence;"),
+        runtime("StringBuilder.indexOf", "java/lang/StringBuilder", "indexOf", "(Ljava/lang/String;)I", "(Ljava/lang/String;I)I"),
+        runtime("StringBuilder.lastIndexOf", "java/lang/StringBuilder", "lastIndexOf", "(Ljava/lang/String;)I", "(Ljava/lang/String;I)I"),
+        runtime("StringBuilder.compareTo", "java/lang/StringBuilder", "compareTo", "(Ljava/lang/StringBuilder;)I"),
+        runtime("StringBuilder.delete", "java/lang/StringBuilder", "delete", "(II)Ljava/lang/StringBuilder;"),
+        runtime("StringBuilder.deleteCharAt", "java/lang/StringBuilder", "deleteCharAt", "(I)Ljava/lang/StringBuilder;"),
+        runtime("StringBuilder.insert", "java/lang/StringBuilder", "insert", "(ILjava/lang/String;)Ljava/lang/StringBuilder;", "(ILjava/lang/Object;)Ljava/lang/StringBuilder;", "(IZ)Ljava/lang/StringBuilder;", "(IC)Ljava/lang/StringBuilder;", "(II)Ljava/lang/StringBuilder;", "(IJ)Ljava/lang/StringBuilder;", "(IF)Ljava/lang/StringBuilder;", "(ID)Ljava/lang/StringBuilder;", "(I[C)Ljava/lang/StringBuilder;", "(I[CII)Ljava/lang/StringBuilder;"),
+        runtime("StringBuilder.replace", "java/lang/StringBuilder", "replace", "(IILjava/lang/String;)Ljava/lang/StringBuilder;"),
+        runtime("StringBuilder.reverse", "java/lang/StringBuilder", "reverse", "()Ljava/lang/StringBuilder;"),
+        runtime("StringBuilder.ensureCapacity", "java/lang/StringBuilder", "ensureCapacity", "(I)V"),
+        runtime("StringBuilder.trimToSize", "java/lang/StringBuilder", "trimToSize", "()V"),
+        runtime("StringBuilder.setCharAt", "java/lang/StringBuilder", "setCharAt", "(IC)V"),
         runtime("StringBuilder.setLength", "java/lang/StringBuilder", "setLength", "(I)V"),
+        runtime("StringBuilder.capacity", "java/lang/StringBuilder", "capacity", "()I"),
         runtime("ArrayList.<init>", "java/util/ArrayList", "<init>", "()V", "(I)V", "(Ljava/util/Collection;)V"),
         runtime("ArrayList.add", "java/util/ArrayList", "add", "(Ljava/lang/Object;)Z"),
         runtime("ArrayList.addAll", "java/util/ArrayList", "addAll", "(Ljava/util/Collection;)Z"),
@@ -259,6 +304,7 @@ public final class JdkCallSupport {
         runtime("LinkedHashMap.getOrDefault", "java/util/LinkedHashMap", "getOrDefault", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("TreeMap.getOrDefault", "java/util/TreeMap", "getOrDefault", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Path.of", "java/nio/file/Path", "of", "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;"),
+        runtime("Paths.get", "java/nio/file/Paths", "get", "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;"),
         runtime("Path.resolve", "java/nio/file/Path", "resolve", "(Ljava/lang/String;)Ljava/nio/file/Path;"),
         runtime("Path.resolve", "java/nio/file/Path", "resolve", "(Ljava/nio/file/Path;)Ljava/nio/file/Path;"),
         runtime("Path.toAbsolutePath", "java/nio/file/Path", "toAbsolutePath", "()Ljava/nio/file/Path;"),
@@ -296,7 +342,7 @@ public final class JdkCallSupport {
         runtime("InetSocketAddress.getHostString", "java/net/InetSocketAddress", "getHostString", "()Ljava/lang/String;"),
         runtime("InetSocketAddress.getAddress", "java/net/InetSocketAddress", "getAddress", "()Ljava/net/InetAddress;"),
         runtime("InetSocketAddress.toString", "java/net/InetSocketAddress", "toString", "()Ljava/lang/String;"),
-        runtime("Socket.<init>", "java/net/Socket", "<init>", "(Ljava/lang/String;I)V"),
+        runtime("Socket.<init>", "java/net/Socket", "<init>", "(Ljava/lang/String;I)V", "(Ljava/net/InetAddress;I)V"),
         runtime("Socket.isConnected", "java/net/Socket", "isConnected", "()Z"),
         runtime("Socket.isClosed", "java/net/Socket", "isClosed", "()Z"),
         runtime("Socket.getPort", "java/net/Socket", "getPort", "()I"),
@@ -407,6 +453,10 @@ public final class JdkCallSupport {
         }
         if ("java/nio/file/Path".equals(methodRef.owner())) {
             return isSupportedPathCall(methodRef.name(), methodRef.descriptor());
+        }
+        if ("java/nio/file/Paths".equals(methodRef.owner())) {
+            return "get".equals(methodRef.name())
+                && "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;".equals(methodRef.descriptor());
         }
         if ("java/nio/file/DirectoryStream".equals(methodRef.owner())) {
             return isSupportedDirectoryStreamCall(methodRef.name(), methodRef.descriptor());
@@ -617,6 +667,21 @@ public final class JdkCallSupport {
         final java.util.ArrayList<SupportedCall> result = new java.util.ArrayList<>();
         for (final SupportedCall call : SUPPORTED_CALLS) {
             if (call.kind() == Kind.INTRINSIC) {
+                result.add(call);
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    /**
+     * Lists exact supported runtime-registry calls in deterministic report order.
+     *
+     * @return runtime-registry calls
+     */
+    public static List<SupportedCall> runtimes() {
+        final java.util.ArrayList<SupportedCall> result = new java.util.ArrayList<>();
+        for (final SupportedCall call : SUPPORTED_CALLS) {
+            if (call.kind() == Kind.RUNTIME) {
                 result.add(call);
             }
         }
@@ -858,6 +923,9 @@ public final class JdkCallSupport {
 
     private static boolean isFileRuntimeOwner(final String owner) {
         if ("java/nio/file/Path".equals(owner)) {
+            return true;
+        }
+        if ("java/nio/file/Paths".equals(owner)) {
             return true;
         }
         if ("java/nio/file/Files".equals(owner)) {

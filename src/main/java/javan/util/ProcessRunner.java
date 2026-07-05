@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Runs child processes with captured output.
  */
-public final class ProcessRunner {
+public class ProcessRunner {
     private final long timeoutMillis;
 
     /**

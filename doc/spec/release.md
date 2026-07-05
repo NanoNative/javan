@@ -65,7 +65,11 @@ package smoke builds the native `javan` binary, packages it, extracts the archiv
 verifies package metadata, clears stale `target/.javan` state, runs packaged `bin/javan`
 against the showcase, runs packaged `bin/javan check` and `javan report` on Javan's own
 class files, uses the packaged binary to build a second native Javan smoke binary that
-must start with the same version, and runs package-backed self-host sanitizer proof. For
+must start with the same version, and runs package-backed self-host sanitizer proof. The
+package-backed sanitizer leg reuses the generated self-host C output from the immediately
+preceding packaged self-build, and existing `platform-smoke` rows keep the self-host
+proof but narrow its probes to `--version` plus the tiny build/check loop instead of
+rerunning the full packaged `check/report target/classes` cycle. For
 M13R, remote validation remains 0/4 completed until those rows pass with package-backed
 sanitizer proof.
 

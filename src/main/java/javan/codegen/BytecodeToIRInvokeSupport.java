@@ -102,11 +102,11 @@ final class BytecodeToIRInvokeSupport {
             }
         }
         if (isSupportedJdkEnumConstant(fieldRef)) {
-            stack.add(StackValue.objectExpression(IrExpression.stringLiteral(fieldRef.name())));
+            stack.add(StackValue.objectExpression(enumConstantExpression(classes, fieldRef)));
             return;
         }
         if (isEnumConstant(classes, fieldRef)) {
-            stack.add(StackValue.objectExpression(IrExpression.stringLiteral(fieldRef.name())));
+            stack.add(StackValue.objectExpression(enumConstantExpression(classes, fieldRef)));
             return;
         }
         final Optional<IrType> type = staticFieldType(classes, fieldRef);
@@ -306,6 +306,27 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if ("java/lang/String".equals(methodRef.owner())
+            && "lastIndexOf".equals(methodRef.name())
+            && "(Ljava/lang/String;)I".equals(methodRef.descriptor())) {
+            final IrExpression needle = popObject(classFile, method, stack);
+            final IrExpression receiver = popObject(classFile, method, stack);
+            rejectUnsupportedStringSemantic(classFile, method, instruction, receiver);
+            rejectUnsupportedStringSemantic(classFile, method, instruction, needle);
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_string_last_index_of_string", List.of(receiver, needle))));
+            return;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
+            && "lastIndexOf".equals(methodRef.name())
+            && "(Ljava/lang/String;I)I".equals(methodRef.descriptor())) {
+            final IrExpression fromIndex = popInt(classFile, method, stack);
+            final IrExpression needle = popObject(classFile, method, stack);
+            final IrExpression receiver = popObject(classFile, method, stack);
+            rejectUnsupportedStringSemantic(classFile, method, instruction, receiver);
+            rejectUnsupportedStringSemantic(classFile, method, instruction, needle);
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_string_last_index_of_string_from", List.of(receiver, needle, fromIndex))));
+            return;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
             && "equals".equals(methodRef.name())
             && "(Ljava/lang/Object;)Z".equals(methodRef.descriptor())) {
             final IrExpression argument = popObject(classFile, method, stack);
@@ -330,6 +351,18 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if ("java/lang/String".equals(methodRef.owner())
+            && "startsWith".equals(methodRef.name())
+            && "(Ljava/lang/String;I)Z".equals(methodRef.descriptor())) {
+            final IrExpression fromIndex = popInt(classFile, method, stack);
+            final IrExpression argument = popObject(classFile, method, stack);
+            final IrExpression receiver = popObject(classFile, method, stack);
+            stack.add(StackValue.intExpression(IrExpression.intCall(
+                "javan_string_starts_with_from",
+                List.of(receiver, argument, fromIndex)
+            )));
+            return;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
             && "endsWith".equals(methodRef.name())
             && "(Ljava/lang/String;)Z".equals(methodRef.descriptor())) {
             final IrExpression argument = popObject(classFile, method, stack);
@@ -344,6 +377,39 @@ final class BytecodeToIRInvokeSupport {
             final IrExpression oldCh = popInt(classFile, method, stack);
             final IrExpression receiver = popObject(classFile, method, stack);
             pushObjectCall(instructions, stack, localDeclarations, "javan_string_replace_char", List.of(receiver, oldCh, newCh));
+            return;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
+            && "toString".equals(methodRef.name())
+            && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
+            final IrExpression receiver = popObject(classFile, method, stack);
+            instructions.add(IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(receiver)));
+            stack.add(StackValue.objectExpression(receiver));
+            return;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
+            && "concat".equals(methodRef.name())
+            && "(Ljava/lang/String;)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            final IrExpression argument = popObject(classFile, method, stack);
+            final IrExpression receiver = popObject(classFile, method, stack);
+            instructions.add(IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(receiver)));
+            instructions.add(IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(argument)));
+            final String localName = "object" + localDeclarations.size();
+            localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
+            instructions.add(IrInstruction.assignObject(
+                localName,
+                IrExpression.stringConcat("\u0001\u0001", List.of(receiver, argument))
+            ));
+            stack.add(StackValue.objectExpression(IrExpression.objectLocal(localName)));
+            return;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
+            && "repeat".equals(methodRef.name())
+            && "(I)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            final IrExpression count = popInt(classFile, method, stack);
+            final IrExpression receiver = popObject(classFile, method, stack);
+            rejectUnsupportedStringSemantic(classFile, method, instruction, receiver);
+            pushObjectCall(instructions, stack, localDeclarations, "javan_string_repeat", List.of(receiver, count));
             return;
         }
         if ("java/lang/String".equals(methodRef.owner())
@@ -370,6 +436,16 @@ final class BytecodeToIRInvokeSupport {
         if ("java/lang/String".equals(methodRef.owner())
             && "substring".equals(methodRef.name())
             && "(II)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            final IrExpression end = popInt(classFile, method, stack);
+            final IrExpression begin = popInt(classFile, method, stack);
+            final IrExpression receiver = popObject(classFile, method, stack);
+            rejectUnsupportedStringSemantic(classFile, method, instruction, receiver);
+            pushObjectCall(instructions, stack, localDeclarations, "javan_string_substring_range", List.of(receiver, begin, end));
+            return;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
+            && "subSequence".equals(methodRef.name())
+            && "(II)Ljava/lang/CharSequence;".equals(methodRef.descriptor())) {
             final IrExpression end = popInt(classFile, method, stack);
             final IrExpression begin = popInt(classFile, method, stack);
             final IrExpression receiver = popObject(classFile, method, stack);
@@ -683,14 +759,83 @@ final class BytecodeToIRInvokeSupport {
             emitPrintObject(classFile, method, instruction, instructions, stack, argument);
             return true;
         }
+        if ("print".equals(methodRef.name()) && "(Ljava/lang/Object;)V".equals(methodRef.descriptor())) {
+            final IrExpression argument = popPrintableObject(classFile, method, instruction, stack);
+            emitPrintObject(classFile, method, instruction, instructions, stack, argument);
+            return true;
+        }
+        if ("print".equals(methodRef.name()) && "([C)V".equals(methodRef.descriptor())) {
+            final IrExpression array = popObject(classFile, method, instruction, stack);
+            emitPrintObject(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                IrExpression.objectCall(
+                    "javan_string_from_chars",
+                    List.of(array, IrExpression.intLiteral(0), IrExpression.intCall("javan_array_length", List.of(array)))
+                )
+            );
+            return true;
+        }
+        if ("print".equals(methodRef.name()) && "(C)V".equals(methodRef.descriptor())) {
+            final IrExpression argument = IrExpression.objectCall("javan_string_value_of_char", List.of(popInt(classFile, method, stack)));
+            emitPrintObject(classFile, method, instruction, instructions, stack, argument);
+            return true;
+        }
+        if ("print".equals(methodRef.name()) && "(Z)V".equals(methodRef.descriptor())) {
+            final IrExpression argument = IrExpression.objectCall("javan_string_value_of_bool", List.of(popInt(classFile, method, stack)));
+            emitPrintObject(classFile, method, instruction, instructions, stack, argument);
+            return true;
+        }
+        if ("print".equals(methodRef.name()) && "(I)V".equals(methodRef.descriptor())) {
+            final IrExpression argument = IrExpression.objectCall("javan_string_value_of_int", List.of(popInt(classFile, method, stack)));
+            emitPrintObject(classFile, method, instruction, instructions, stack, argument);
+            return true;
+        }
+        if ("print".equals(methodRef.name()) && "(J)V".equals(methodRef.descriptor())) {
+            final IrExpression argument = IrExpression.objectCall("javan_string_value_of_long", List.of(popLong(classFile, method, stack)));
+            emitPrintObject(classFile, method, instruction, instructions, stack, argument);
+            return true;
+        }
+        if ("print".equals(methodRef.name()) && "(F)V".equals(methodRef.descriptor())) {
+            final IrExpression argument = IrExpression.objectCall("javan_string_value_of_float", List.of(popFloat(classFile, method, stack)));
+            emitPrintObject(classFile, method, instruction, instructions, stack, argument);
+            return true;
+        }
+        if ("print".equals(methodRef.name()) && "(D)V".equals(methodRef.descriptor())) {
+            final IrExpression argument = IrExpression.objectCall("javan_string_value_of_double", List.of(popDouble(classFile, method, stack)));
+            emitPrintObject(classFile, method, instruction, instructions, stack, argument);
+            return true;
+        }
         if ("println".equals(methodRef.name()) && "(Ljava/lang/String;)V".equals(methodRef.descriptor())) {
             final IrExpression argument = popObject(classFile, method, instruction, stack);
             emitPrintlnObject(classFile, method, instruction, instructions, stack, argument);
             return true;
         }
+        if ("println".equals(methodRef.name()) && "()V".equals(methodRef.descriptor())) {
+            emitPrintlnObject(classFile, method, instruction, instructions, stack, IrExpression.stringLiteral(""));
+            return true;
+        }
         if ("println".equals(methodRef.name()) && "(Ljava/lang/Object;)V".equals(methodRef.descriptor())) {
             final IrExpression argument = popPrintableObject(classFile, method, instruction, stack);
             emitPrintlnObject(classFile, method, instruction, instructions, stack, argument);
+            return true;
+        }
+        if ("println".equals(methodRef.name()) && "([C)V".equals(methodRef.descriptor())) {
+            final IrExpression array = popObject(classFile, method, instruction, stack);
+            emitPrintlnObject(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                IrExpression.objectCall(
+                    "javan_string_from_chars",
+                    List.of(array, IrExpression.intLiteral(0), IrExpression.intCall("javan_array_length", List.of(array)))
+                )
+            );
             return true;
         }
         if ("println".equals(methodRef.name()) && "(I)V".equals(methodRef.descriptor())) {
@@ -716,6 +861,11 @@ final class BytecodeToIRInvokeSupport {
         if ("println".equals(methodRef.name()) && "(Z)V".equals(methodRef.descriptor())) {
             final IrExpression argument = popInt(classFile, method, instruction, stack);
             emitPrintlnBoolean(classFile, method, instruction, instructions, stack, argument);
+            return true;
+        }
+        if ("println".equals(methodRef.name()) && "(C)V".equals(methodRef.descriptor())) {
+            final IrExpression argument = IrExpression.objectCall("javan_string_value_of_char", List.of(popInt(classFile, method, stack)));
+            emitPrintlnObject(classFile, method, instruction, instructions, stack, argument);
             return true;
         }
         return false;
@@ -752,7 +902,7 @@ final class BytecodeToIRInvokeSupport {
             instructions.add(IrInstruction.printObject(argument));
             return;
         }
-        instructions.add(IrInstruction.callStaticVoid("javan_printstream_print", List.of(receiver.expression().orElseThrow(), argument)));
+        instructions.add(IrInstruction.callStaticVoid("javan_printstream_print_object", List.of(receiver.expression().orElseThrow(), argument)));
     }
     static void emitPrintlnObject(
         final ClassFile classFile,
@@ -771,7 +921,7 @@ final class BytecodeToIRInvokeSupport {
             instructions.add(IrInstruction.printlnObject(argument));
             return;
         }
-        instructions.add(IrInstruction.callStaticVoid("javan_printstream_println", List.of(receiver.expression().orElseThrow(), argument)));
+        instructions.add(IrInstruction.callStaticVoid("javan_printstream_println_object", List.of(receiver.expression().orElseThrow(), argument)));
     }
     static void emitPrintlnInt(
         final ClassFile classFile,
@@ -1039,8 +1189,14 @@ final class BytecodeToIRInvokeSupport {
         final List<StackValue> stack
     ) {
         final MethodRef methodRef = instruction.methodRef().orElseThrow();
+        if (isZeroArgNoopPlatformConstructor(methodRef)) {
+            popObject(classFile, method, stack);
+            return;
+        }
         final MethodDescriptor descriptor = MethodDescriptor.parse(methodRef.descriptor());
-        final List<IrExpression> arguments = new ArrayList<>(popArguments(classFile, method, stack, descriptor));
+        final List<IrExpression> arguments = descriptor.parameterTypes().isEmpty()
+            ? List.of()
+            : popArguments(classFile, method, stack, descriptor);
         final IrExpression receiver = popObject(classFile, method, stack);
         if (isPlatformThrowableStringConstructor(methodRef)) {
             updatePendingThrowableMessage(stack, arguments.getFirst());
@@ -1077,9 +1233,17 @@ final class BytecodeToIRInvokeSupport {
         if (!classes.containsKey(methodRef.owner())) {
             throw unsupported(classFile, method, instruction);
         }
-        arguments.addFirst(receiver);
+        final List<IrExpression> callArguments = new ArrayList<>(arguments);
+        callArguments.addFirst(receiver);
         final String symbol = symbol(new EntryPoint(methodRef.owner(), methodRef.name(), methodRef.descriptor()));
-        appendCallResult(instructions, stack, descriptor.returnType(), symbol, arguments);
+        appendCallResult(instructions, stack, descriptor.returnType(), symbol, callArguments);
+    }
+
+    private static boolean isZeroArgNoopPlatformConstructor(final MethodRef methodRef) {
+        if (!"<init>".equals(methodRef.name()) || !"()V".equals(methodRef.descriptor())) {
+            return false;
+        }
+        return "java/lang/Object".equals(methodRef.owner()) || "java/lang/Record".equals(methodRef.owner());
     }
     static void lowerStaticCall(
         final Map<String, ClassFile> classes,
@@ -1170,6 +1334,13 @@ final class BytecodeToIRInvokeSupport {
         final List<StackValue> stack
     ) {
         final IrExpression receiver = popObject(classFile, method, stack);
+        if (receiver.kind() == IrExpression.Kind.STATIC_FIELD_OBJECT) {
+            final Optional<Integer> ordinal = enumOrdinalForStaticField(receiver.value(), methodRef.owner(), classes);
+            if (ordinal.isPresent()) {
+                stack.add(StackValue.intExpression(IrExpression.intLiteral(ordinal.orElseThrow().intValue())));
+                return;
+            }
+        }
         if (receiver.kind() == IrExpression.Kind.STRING_LITERAL) {
             final Optional<Integer> ordinal = enumOrdinal(classes.get(methodRef.owner()), receiver.value());
             if (ordinal.isEmpty()) {
@@ -1204,11 +1375,39 @@ final class BytecodeToIRInvokeSupport {
             instructions.add(IrInstruction.assignArrayObject(
                 local,
                 IrExpression.intLiteral(index),
-                IrExpression.stringLiteral(constants.get(index))
+                IrExpression.objectStaticField(methodRef.owner(), constants.get(index))
             ));
         }
         stack.add(StackValue.objectExpression(local));
         return true;
+    }
+
+    private static IrExpression enumConstantExpression(final Map<String, ClassFile> classes, final FieldRef fieldRef) {
+        final ClassFile owner = classes.get(fieldRef.owner());
+        if (owner != null && owner.isEnum()) {
+            return IrExpression.objectStaticField(fieldRef.owner(), fieldRef.name());
+        }
+        return IrExpression.stringLiteral(fieldRef.name());
+    }
+
+    private static Optional<Integer> enumOrdinalForStaticField(
+        final String ownerField,
+        final String enumOwner,
+        final Map<String, ClassFile> classes
+    ) {
+        final int separator = ownerField.indexOf('#');
+        if (separator < 1 || separator == ownerField.length() - 1) {
+            return Optional.empty();
+        }
+        final String owner = ownerField.substring(0, separator);
+        if (!enumOwner.equals(owner)) {
+            return Optional.empty();
+        }
+        final ClassFile enumClass = classes.get(owner);
+        if (enumClass == null || !enumClass.isEnum()) {
+            return Optional.empty();
+        }
+        return enumOrdinal(enumClass, ownerField.substring(separator + 1));
     }
     static boolean lowerJdkStaticIntrinsic(
         final ClassFile classFile,
@@ -1248,6 +1447,113 @@ final class BytecodeToIRInvokeSupport {
         if ("java/lang/Boolean".equals(methodRef.owner())) {
             return lowerBooleanIntrinsic(classFile, method, methodRef, stack);
         }
+        if ("java/lang/String".equals(methodRef.owner())
+            && "valueOf".equals(methodRef.name())
+            && "(Ljava/lang/Object;)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_printable_object_string",
+                List.of(popPrintableObject(classFile, method, instruction, stack))
+            )));
+            return true;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
+            && "valueOf".equals(methodRef.name())
+            && "([C)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            final IrExpression array = popObject(classFile, method, stack);
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_string_from_chars",
+                List.of(array, IrExpression.intLiteral(0), IrExpression.intCall("javan_array_length", List.of(array)))
+            )));
+            return true;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
+            && "valueOf".equals(methodRef.name())
+            && "([CII)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            final IrExpression count = popInt(classFile, method, stack);
+            final IrExpression offset = popInt(classFile, method, stack);
+            final IrExpression array = popObject(classFile, method, stack);
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_string_from_chars",
+                List.of(array, offset, count)
+            )));
+            return true;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
+            && "copyValueOf".equals(methodRef.name())
+            && "([C)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            final IrExpression array = popObject(classFile, method, stack);
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_string_from_chars",
+                List.of(array, IrExpression.intLiteral(0), IrExpression.intCall("javan_array_length", List.of(array)))
+            )));
+            return true;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
+            && "copyValueOf".equals(methodRef.name())
+            && "([CII)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            final IrExpression count = popInt(classFile, method, stack);
+            final IrExpression offset = popInt(classFile, method, stack);
+            final IrExpression array = popObject(classFile, method, stack);
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_string_from_chars",
+                List.of(array, offset, count)
+            )));
+            return true;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
+            && "valueOf".equals(methodRef.name())
+            && "(I)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_string_value_of_int",
+                List.of(popInt(classFile, method, stack))
+            )));
+            return true;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
+            && "valueOf".equals(methodRef.name())
+            && "(J)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_string_value_of_long",
+                List.of(popLong(classFile, method, stack))
+            )));
+            return true;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
+            && "valueOf".equals(methodRef.name())
+            && "(F)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_string_value_of_float",
+                List.of(popFloat(classFile, method, stack))
+            )));
+            return true;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
+            && "valueOf".equals(methodRef.name())
+            && "(D)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_string_value_of_double",
+                List.of(popDouble(classFile, method, stack))
+            )));
+            return true;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
+            && "valueOf".equals(methodRef.name())
+            && "(Z)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_string_value_of_bool",
+                List.of(popInt(classFile, method, stack))
+            )));
+            return true;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
+            && "valueOf".equals(methodRef.name())
+            && "(C)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_string_value_of_char",
+                List.of(popInt(classFile, method, stack))
+            )));
+            return true;
+        }
         if ("java/time/Duration".equals(methodRef.owner())) {
             return lowerDurationIntrinsic(classFile, method, methodRef, stack);
         }
@@ -1268,7 +1574,7 @@ final class BytecodeToIRInvokeSupport {
             return lowerLockSupportStaticCall(classFile, method, methodRef, instructions, stack);
         }
         if ("java/net/InetAddress".equals(methodRef.owner())) {
-            return lowerInetAddressIntrinsic(methodRef, stack);
+            return lowerInetAddressIntrinsic(classFile, method, methodRef, stack);
         }
         return false;
     }
@@ -1284,6 +1590,14 @@ final class BytecodeToIRInvokeSupport {
         }
         if ("abs".equals(methodRef.name()) && "(J)J".equals(methodRef.descriptor())) {
             stack.add(StackValue.longExpression(IrExpression.longCall("javan_math_abs_long", List.of(popLong(classFile, method, stack)))));
+            return true;
+        }
+        if ("abs".equals(methodRef.name()) && "(F)F".equals(methodRef.descriptor())) {
+            stack.add(StackValue.floatExpression(IrExpression.floatCall("javan_math_abs_float", List.of(popFloat(classFile, method, stack)))));
+            return true;
+        }
+        if ("abs".equals(methodRef.name()) && "(D)D".equals(methodRef.descriptor())) {
+            stack.add(StackValue.doubleExpression(IrExpression.doubleCall("javan_math_abs_double", List.of(popDouble(classFile, method, stack)))));
             return true;
         }
         if ("min".equals(methodRef.name()) && "(II)I".equals(methodRef.descriptor())) {
@@ -1456,6 +1770,7 @@ final class BytecodeToIRInvokeSupport {
                 localDeclarations,
                 pendingExceptionHandlerStacks,
                 sourceLines,
+                true,
                 IrExpression.stringLiteral("sleep interrupted"),
                 "javan_thread_sleep_millis_interruptible",
                 List.of(popLong(classFile, method, stack))
@@ -1504,6 +1819,8 @@ final class BytecodeToIRInvokeSupport {
         return false;
     }
     static boolean lowerInetAddressIntrinsic(
+        final ClassFile classFile,
+        final MethodInfo method,
         final MethodRef methodRef,
         final List<StackValue> stack
     ) {
@@ -1607,6 +1924,9 @@ final class BytecodeToIRInvokeSupport {
         if ("([II)[I".equals(descriptor)) {
             return Optional.of("javan_arrays_copy_of_int");
         }
+        if ("([ZI)[Z".equals(descriptor)) {
+            return Optional.of("javan_arrays_copy_of_boolean");
+        }
         if ("([JI)[J".equals(descriptor)) {
             return Optional.of("javan_arrays_copy_of_long");
         }
@@ -1688,7 +2008,12 @@ final class BytecodeToIRInvokeSupport {
         if ("()V".equals(methodRef.descriptor())) {
             return true;
         }
+        if ("(I)V".equals(methodRef.descriptor())) {
+            instructions.add(IrInstruction.callStaticVoid("javan_stringbuilder_reserve", List.of(receiver, arguments.getFirst())));
+            return true;
+        }
         if ("(Ljava/lang/String;)V".equals(methodRef.descriptor())) {
+            instructions.add(IrInstruction.callStaticVoid("javan_stringbuilder_reserve_for_string", List.of(receiver, arguments.getFirst())));
             instructions.add(IrInstruction.callStaticVoid("javan_stringbuilder_append_string", List.of(receiver, arguments.getFirst())));
             return true;
         }
@@ -1702,6 +2027,42 @@ final class BytecodeToIRInvokeSupport {
     ) {
         if (!"java/lang/String".equals(methodRef.owner()) || !"<init>".equals(methodRef.name())) {
             return false;
+        }
+        if ("()V".equals(methodRef.descriptor())) {
+            instructions.add(IrInstruction.assignObject(
+                receiver.value(),
+                IrExpression.objectCall("javan_string_from", List.of(IrExpression.stringLiteral("")))
+            ));
+            return true;
+        }
+        if ("(Ljava/lang/String;)V".equals(methodRef.descriptor())) {
+            final IrExpression value = arguments.getFirst();
+            instructions.add(IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(value)));
+            instructions.add(IrInstruction.assignObject(
+                receiver.value(),
+                IrExpression.objectCall("javan_string_from", List.of(value))
+            ));
+            return true;
+        }
+        if ("(Ljava/lang/StringBuilder;)V".equals(methodRef.descriptor())) {
+            final IrExpression value = arguments.getFirst();
+            instructions.add(IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(value)));
+            instructions.add(IrInstruction.assignObject(
+                receiver.value(),
+                IrExpression.objectCall("javan_stringbuilder_to_string", List.of(value))
+            ));
+            return true;
+        }
+        if ("([C)V".equals(methodRef.descriptor())) {
+            final IrExpression array = arguments.getFirst();
+            instructions.add(IrInstruction.assignObject(
+                receiver.value(),
+                IrExpression.objectCall(
+                    "javan_string_from_chars",
+                    List.of(array, IrExpression.intLiteral(0), IrExpression.intCall("javan_array_length", List.of(array)))
+                )
+            ));
+            return true;
         }
         if ("([CII)V".equals(methodRef.descriptor())) {
             instructions.add(IrInstruction.assignObject(
@@ -1749,6 +2110,21 @@ final class BytecodeToIRInvokeSupport {
             instructions.add(IrInstruction.assignObject(
                 receiver.value(),
                 IrExpression.objectCall("javan_socket_connect_host", arguments)
+            ));
+            return true;
+        }
+        if ("java/net/Socket".equals(methodRef.owner())
+            && "<init>".equals(methodRef.name())
+            && "(Ljava/net/InetAddress;I)V".equals(methodRef.descriptor())) {
+            instructions.add(IrInstruction.assignObject(
+                receiver.value(),
+                IrExpression.objectCall(
+                    "javan_socket_connect_host",
+                    List.of(
+                        IrExpression.objectCall("javan_inet_address_get_host_address", List.of(arguments.getFirst())),
+                        arguments.get(1)
+                    )
+                )
             ));
             return true;
         }
@@ -1843,6 +2219,14 @@ final class BytecodeToIRInvokeSupport {
                 pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_append_string", List.of(receiver, arguments.getFirst()));
                 return true;
             }
+            if ("([C)Ljava/lang/StringBuilder;".equals(descriptorText)) {
+                pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_append_chars", List.of(receiver, arguments.getFirst()));
+                return true;
+            }
+            if ("([CII)Ljava/lang/StringBuilder;".equals(descriptorText)) {
+                pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_append_chars_range", List.of(receiver, arguments.getFirst(), arguments.get(1), arguments.get(2)));
+                return true;
+            }
             if ("(Ljava/lang/Object;)Ljava/lang/StringBuilder;".equals(descriptorText)) {
                 pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_append_object", List.of(receiver, arguments.getFirst()));
                 return true;
@@ -1863,6 +2247,14 @@ final class BytecodeToIRInvokeSupport {
                 pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_append_long", List.of(receiver, arguments.getFirst()));
                 return true;
             }
+            if ("(F)Ljava/lang/StringBuilder;".equals(descriptorText)) {
+                pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_append_float", List.of(receiver, arguments.getFirst()));
+                return true;
+            }
+            if ("(D)Ljava/lang/StringBuilder;".equals(descriptorText)) {
+                pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_append_double", List.of(receiver, arguments.getFirst()));
+                return true;
+            }
             return false;
         }
         if ("toString".equals(name)) {
@@ -1873,8 +2265,126 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.intExpression(IrExpression.intCall("javan_stringbuilder_length", List.of(receiver))));
             return true;
         }
+        if ("capacity".equals(name) && "()I".equals(descriptorText)) {
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_stringbuilder_capacity", List.of(receiver))));
+            return true;
+        }
         if ("isEmpty".equals(name)) {
             stack.add(StackValue.intExpression(IrExpression.intCall("javan_stringbuilder_is_empty", List.of(receiver))));
+            return true;
+        }
+        if ("charAt".equals(name) && "(I)C".equals(descriptorText)) {
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_stringbuilder_char_at", List.of(receiver, arguments.getFirst()))));
+            return true;
+        }
+        if ("substring".equals(name) && "(I)Ljava/lang/String;".equals(descriptorText)) {
+            pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_substring", List.of(receiver, arguments.getFirst()));
+            return true;
+        }
+        if ("substring".equals(name) && "(II)Ljava/lang/String;".equals(descriptorText)) {
+            pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_substring_range", List.of(receiver, arguments.getFirst(), arguments.get(1)));
+            return true;
+        }
+        if ("subSequence".equals(name) && "(II)Ljava/lang/CharSequence;".equals(descriptorText)) {
+            pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_substring_range", List.of(receiver, arguments.getFirst(), arguments.get(1)));
+            return true;
+        }
+        if ("indexOf".equals(name) && "(Ljava/lang/String;)I".equals(descriptorText)) {
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_stringbuilder_index_of_string", List.of(receiver, arguments.getFirst()))));
+            return true;
+        }
+        if ("indexOf".equals(name) && "(Ljava/lang/String;I)I".equals(descriptorText)) {
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_stringbuilder_index_of_string_from", List.of(receiver, arguments.getFirst(), arguments.get(1)))));
+            return true;
+        }
+        if ("lastIndexOf".equals(name) && "(Ljava/lang/String;)I".equals(descriptorText)) {
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_stringbuilder_last_index_of_string", List.of(receiver, arguments.getFirst()))));
+            return true;
+        }
+        if ("lastIndexOf".equals(name) && "(Ljava/lang/String;I)I".equals(descriptorText)) {
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_stringbuilder_last_index_of_string_from", List.of(receiver, arguments.getFirst(), arguments.get(1)))));
+            return true;
+        }
+        if ("compareTo".equals(name) && "(Ljava/lang/StringBuilder;)I".equals(descriptorText)) {
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_stringbuilder_compare_to", List.of(receiver, arguments.getFirst()))));
+            return true;
+        }
+        if ("delete".equals(name) && "(II)Ljava/lang/StringBuilder;".equals(descriptorText)) {
+            pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_delete", List.of(receiver, arguments.getFirst(), arguments.get(1)));
+            return true;
+        }
+        if ("deleteCharAt".equals(name) && "(I)Ljava/lang/StringBuilder;".equals(descriptorText)) {
+            pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_delete_char_at", List.of(receiver, arguments.getFirst()));
+            return true;
+        }
+        if ("insert".equals(name) && "(ILjava/lang/String;)Ljava/lang/StringBuilder;".equals(descriptorText)) {
+            pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_insert_string", List.of(receiver, arguments.getFirst(), arguments.get(1)));
+            return true;
+        }
+        if ("insert".equals(name) && "(ILjava/lang/Object;)Ljava/lang/StringBuilder;".equals(descriptorText)) {
+            pushObjectCall(
+                instructions,
+                stack,
+                localDeclarations,
+                "javan_stringbuilder_insert_string",
+                List.of(
+                    receiver,
+                    arguments.getFirst(),
+                    IrExpression.objectCall("javan_printable_object_string", List.of(arguments.get(1)))
+                )
+            );
+            return true;
+        }
+        if ("insert".equals(name) && "(IZ)Ljava/lang/StringBuilder;".equals(descriptorText)) {
+            pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_insert_boolean", List.of(receiver, arguments.getFirst(), arguments.get(1)));
+            return true;
+        }
+        if ("insert".equals(name) && "(IC)Ljava/lang/StringBuilder;".equals(descriptorText)) {
+            pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_insert_char", List.of(receiver, arguments.getFirst(), arguments.get(1)));
+            return true;
+        }
+        if ("insert".equals(name) && "(II)Ljava/lang/StringBuilder;".equals(descriptorText)) {
+            pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_insert_int", List.of(receiver, arguments.getFirst(), arguments.get(1)));
+            return true;
+        }
+        if ("insert".equals(name) && "(IJ)Ljava/lang/StringBuilder;".equals(descriptorText)) {
+            pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_insert_long", List.of(receiver, arguments.getFirst(), arguments.get(1)));
+            return true;
+        }
+        if ("insert".equals(name) && "(IF)Ljava/lang/StringBuilder;".equals(descriptorText)) {
+            pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_insert_float", List.of(receiver, arguments.getFirst(), arguments.get(1)));
+            return true;
+        }
+        if ("insert".equals(name) && "(ID)Ljava/lang/StringBuilder;".equals(descriptorText)) {
+            pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_insert_double", List.of(receiver, arguments.getFirst(), arguments.get(1)));
+            return true;
+        }
+        if ("insert".equals(name) && "(I[C)Ljava/lang/StringBuilder;".equals(descriptorText)) {
+            pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_insert_chars", List.of(receiver, arguments.getFirst(), arguments.get(1)));
+            return true;
+        }
+        if ("insert".equals(name) && "(I[CII)Ljava/lang/StringBuilder;".equals(descriptorText)) {
+            pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_insert_chars_range", List.of(receiver, arguments.getFirst(), arguments.get(1), arguments.get(2), arguments.get(3)));
+            return true;
+        }
+        if ("replace".equals(name) && "(IILjava/lang/String;)Ljava/lang/StringBuilder;".equals(descriptorText)) {
+            pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_replace_string", List.of(receiver, arguments.getFirst(), arguments.get(1), arguments.get(2)));
+            return true;
+        }
+        if ("reverse".equals(name) && "()Ljava/lang/StringBuilder;".equals(descriptorText)) {
+            pushObjectCall(instructions, stack, localDeclarations, "javan_stringbuilder_reverse", List.of(receiver));
+            return true;
+        }
+        if ("ensureCapacity".equals(name) && "(I)V".equals(descriptorText)) {
+            instructions.add(IrInstruction.callStaticVoid("javan_stringbuilder_ensure_capacity_public", List.of(receiver, arguments.getFirst())));
+            return true;
+        }
+        if ("trimToSize".equals(name) && "()V".equals(descriptorText)) {
+            instructions.add(IrInstruction.callStaticVoid("javan_stringbuilder_trim_to_size", List.of(receiver)));
+            return true;
+        }
+        if ("setCharAt".equals(name) && "(IC)V".equals(descriptorText)) {
+            instructions.add(IrInstruction.callStaticVoid("javan_stringbuilder_set_char_at", List.of(receiver, arguments.getFirst(), arguments.get(1))));
             return true;
         }
         if ("setLength".equals(name)) {
@@ -2198,24 +2708,27 @@ final class BytecodeToIRInvokeSupport {
         final Map<Integer, IrLocal> localDeclarations,
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final SourceLineIndex sourceLines,
+        final boolean precheckInterrupt,
         final IrExpression interruptedMessage,
         final String symbol,
         final List<IrExpression> arguments
     ) {
-        final int localIndex = localDeclarations.size();
-        final String interruptedLocalName = "int" + localIndex;
-        localDeclarations.put(Integer.MIN_VALUE + localIndex, new IrLocal(IrType.INT, interruptedLocalName));
-        instructions.add(IrInstruction.assignInt(
-            interruptedLocalName,
-            IrExpression.intCall("javan_thread_interrupted", List.of())
-        ));
-        final String continueLabel = "label_thread_wait_continue_" + instruction.offset() + "_" + localIndex;
-        final String interruptedLabel = "label_thread_wait_interrupted_" + instruction.offset() + "_" + localIndex;
-        instructions.add(IrInstruction.branchIf(
-            continueLabel,
-            IrExpression.intComparison("==", IrExpression.intLocal(interruptedLocalName), IrExpression.intLiteral(0))
-        ));
-        instructions.add(IrInstruction.jump(interruptedLabel));
+        final String continueLabel = "label_thread_wait_continue_" + instruction.offset() + "_" + localDeclarations.size();
+        final String interruptedLabel = "label_thread_wait_interrupted_" + instruction.offset() + "_" + localDeclarations.size();
+        if (precheckInterrupt) {
+            final int localIndex = localDeclarations.size();
+            final String interruptedLocalName = "int" + localIndex;
+            localDeclarations.put(Integer.MIN_VALUE + localIndex, new IrLocal(IrType.INT, interruptedLocalName));
+            instructions.add(IrInstruction.assignInt(
+                interruptedLocalName,
+                IrExpression.intCall("javan_thread_interrupted", List.of())
+            ));
+            instructions.add(IrInstruction.branchIf(
+                continueLabel,
+                IrExpression.intComparison("==", IrExpression.intLocal(interruptedLocalName), IrExpression.intLiteral(0))
+            ));
+            instructions.add(IrInstruction.jump(interruptedLabel));
+        }
         instructions.add(IrInstruction.label(continueLabel));
         final int interruptedResultLocalIndex = localDeclarations.size();
         final String interruptedResultLocalName = "int" + interruptedResultLocalIndex;
@@ -2323,6 +2836,13 @@ final class BytecodeToIRInvokeSupport {
         final List<StackValue> stack,
         final Map<Integer, IrLocal> localDeclarations
     ) {
+        if ("java/nio/file/Paths".equals(methodRef.owner())
+            && "get".equals(methodRef.name())
+            && "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;".equals(methodRef.descriptor())) {
+            final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_path_of", arguments)));
+            return true;
+        }
         if ("java/nio/file/Path".equals(methodRef.owner())
             && "of".equals(methodRef.name())
             && "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;".equals(methodRef.descriptor())) {
@@ -2466,6 +2986,7 @@ final class BytecodeToIRInvokeSupport {
                 localDeclarations,
                 pendingExceptionHandlerStacks,
                 sourceLines,
+                false,
                 IrExpression.objectNull(),
                 "javan_thread_join_interruptible",
                 List.of(receiver)
@@ -2807,16 +3328,6 @@ final class BytecodeToIRInvokeSupport {
         };
     }
 
-    private static int localStoreSlot(final Instruction instruction) {
-        return switch (instruction.opcode()) {
-            case 58 -> instruction.operands()[0] & 0xFF;
-            case 75 -> 0;
-            case 76 -> 1;
-            case 77 -> 2;
-            case 78 -> 3;
-            default -> -1;
-        };
-    }
     static Optional<EntryPoint> inferRunnableThreadTarget(
         final Map<String, ClassFile> classes,
         final List<Instruction> instructions,

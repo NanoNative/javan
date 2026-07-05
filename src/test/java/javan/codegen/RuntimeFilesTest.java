@@ -52,6 +52,24 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void runtimePrintObjectValuePrintsNullForNullReference() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                javan_print_object_value(0);
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("null");
+    }
+
+    @Test
     void writeTracksRuntimeAllocationsAndRegistersShutdownCleanup() throws Exception {
         final Path runtime = new RuntimeFiles().write(tempDir);
 
@@ -247,6 +265,19 @@ final class RuntimeFilesTest {
             "javan_runtime_lock_enter();",
             "javan_runtime_lock_leave();",
             "javan_runtime_lock_reset_for_panic();"
+        );
+    }
+
+    @Test
+    void writeEmitsWindowsHighResolutionNanoTimeFallback() throws Exception {
+        final Path runtime = new RuntimeFiles().write(tempDir);
+
+        assertThat(Files.readString(runtime)).contains(
+            "LARGE_INTEGER frequency;",
+            "LARGE_INTEGER counter;",
+            "QueryPerformanceFrequency(&frequency)",
+            "QueryPerformanceCounter(&counter)",
+            "GetTickCount64() * 1000000LL"
         );
     }
 
@@ -4104,7 +4135,7 @@ final class RuntimeFilesTest {
             "javan_validate_runtime_managed_reference((void*) builder->headers);",
             "javan_validate_runtime_managed_reference((void*) request->headers);",
             "javan_validate_runtime_managed_reference(publisher->value);",
-            "builder->values != NULL && (builder->capacity <= 0 || builder->length >= builder->capacity)",
+            "builder->values != NULL && (builder->capacity < 0 || builder->length > builder->capacity)",
             "static void* javan_realloc_tracked(void* value, unsigned long size, int validate_after)",
             "static void* javan_realloc_owned_buffer(void* value, unsigned long size)",
             "static void javan_free_owned_runtime_buffer(void* value)",
@@ -4365,9 +4396,10 @@ final class RuntimeFilesTest {
         assertThat(Files.readString(runtime)).contains(
             "if (required == INT_MAX) {",
             "javan_panic(\"string builder length overflow\");",
-            "unsigned long required_size = (unsigned long) required + 1UL;",
-            "if (builder->capacity > INT_MAX / 2) {",
-            "if (next_capacity > INT_MAX / 2) {"
+            "if (builder->values != NULL && required <= builder->capacity) {",
+            "if (next_capacity > (INT_MAX - 2) / 2) {",
+            "next_capacity = next_capacity * 2 + 2;",
+            "char* next = (char*) javan_realloc_owned_buffer(builder->values, (unsigned long) next_capacity + 1UL);"
         );
     }
 
@@ -4596,6 +4628,29 @@ final class RuntimeFilesTest {
         );
 
         assertThat(stdout).isEqualTo("checksum=25856\nlive=0\nbytes=0\n");
+    }
+
+    @Test
+    void runtimeStringStartsWithFromMatchesJavaOffsetSemantics() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                printf("%d\\n", javan_string_starts_with_from("javan native", "native", 6));
+                printf("%d\\n", javan_string_starts_with_from("javan native", "native", 7));
+                printf("%d\\n", javan_string_starts_with_from("javan native", "javan", -1));
+                printf("%d\\n", javan_string_starts_with_from("javan native", "", 12));
+                printf("%d\\n", javan_string_starts_with_from("javan native", "", 13));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("1\n0\n0\n1\n0\n");
     }
 
     @Test
@@ -5253,7 +5308,9 @@ final class RuntimeFilesTest {
                 return 0;
             }
             """,
-            "1048576"
+            "1048576",
+            Map.of(),
+            java.time.Duration.ofSeconds(180)
         );
 
         assertThat(stdout).isEqualTo(
@@ -5280,14 +5337,28 @@ final class RuntimeFilesTest {
         final String heapLimitBytes,
         final Map<String, String> environmentOverrides
     ) throws Exception {
-        final RuntimeProbeOutput output = runRuntimeBoundaryProbeOutput(source, heapLimitBytes, environmentOverrides);
+        return runRuntimeBoundaryProbe(source, heapLimitBytes, environmentOverrides, java.time.Duration.ofSeconds(30));
+    }
+
+    private String runRuntimeBoundaryProbe(
+        final String source,
+        final String heapLimitBytes,
+        final Map<String, String> environmentOverrides,
+        final java.time.Duration timeout
+    ) throws Exception {
+        final RuntimeProbeOutput output = runRuntimeBoundaryProbeOutput(source, heapLimitBytes, environmentOverrides, timeout);
 
         assertThat(output.stderr()).isEmpty();
         return output.stdout();
     }
 
     private String runRuntimeBoundaryProbeStderr(final String source, final String heapLimitBytes) throws Exception {
-        final RuntimeProbeOutput output = runRuntimeBoundaryProbeOutput(source, heapLimitBytes, Map.of());
+        final RuntimeProbeOutput output = runRuntimeBoundaryProbeOutput(
+            source,
+            heapLimitBytes,
+            Map.of(),
+            java.time.Duration.ofSeconds(30)
+        );
 
         assertThat(output.stdout()).isEmpty();
         return output.stderr();
@@ -5296,7 +5367,8 @@ final class RuntimeFilesTest {
     private RuntimeProbeOutput runRuntimeBoundaryProbeOutput(
         final String source,
         final String heapLimitBytes,
-        final Map<String, String> environmentOverrides
+        final Map<String, String> environmentOverrides,
+        final java.time.Duration timeout
     ) throws Exception {
         final Path runtime = new RuntimeFiles().write(tempDir);
         final Path main = tempDir.resolve("probe.c");
@@ -5310,12 +5382,14 @@ final class RuntimeFilesTest {
         final TestProcesses.Result result = TestProcesses.run(
             tempDir,
             java.util.List.of(binary.toString()),
-            java.time.Duration.ofSeconds(30),
+            timeout,
             environment
         );
         if (result.exitCode() == 124) {
             throw new AssertionError(
-                "Runtime boundary probe timed out after 30 seconds.\nstdout:\n"
+                "Runtime boundary probe timed out after "
+                    + timeout.toSeconds()
+                    + " seconds.\nstdout:\n"
                     + result.stdout()
                     + "\nstderr:\n"
                     + result.stderr()

@@ -467,6 +467,9 @@ public final class StaticVerifier {
         if (supportedInterruptedWaitHandler(code, handler)) {
             return true;
         }
+        if (supportedFinallyRethrowHandler(code, handler)) {
+            return true;
+        }
         if (handler.catchType().isEmpty()) {
             return false;
         }
@@ -484,7 +487,8 @@ public final class StaticVerifier {
             if (instruction.opcode() == 191) {
                 hasAthrow = 1;
             }
-            if (!supportedExplicitThrowRangeInstruction(instruction)) {
+            if (!supportedExplicitThrowRangeInstruction(instruction)
+                && !supportedProtectedFinallyRethrowInstruction(code, instruction)) {
                 return false;
             }
         }
@@ -549,6 +553,133 @@ public final class StaticVerifier {
             }
         }
         return hasWaitCall == 1;
+    }
+
+    private static boolean supportedFinallyRethrowHandler(final CodeAttribute code, final CodeException handler) {
+        if (handler.catchType().isPresent()) {
+            return false;
+        }
+        final Optional<Instruction> first = instructionAtOffset(code, handler.handlerPc());
+        if (first.isEmpty()) {
+            return false;
+        }
+        final int throwableLocal = astoreLocalIndex(first.orElseThrow());
+        if (throwableLocal < 0) {
+            return false;
+        }
+        int hasAthrow = 0;
+        for (final Instruction instruction : code.instructions()) {
+            if (instruction.offset() < handler.startPc()) {
+                continue;
+            }
+            if (instruction.offset() >= handler.endPc()) {
+                continue;
+            }
+            if (instruction.offset() == handler.handlerPc() && astoreLocalIndex(instruction) == throwableLocal) {
+                continue;
+            }
+            if (instruction.opcode() == 191) {
+                hasAthrow = 1;
+            }
+            if (!supportedExplicitThrowRangeInstruction(instruction)
+                && !supportedProtectedFinallyRethrowInstruction(code, handler, throwableLocal, instruction)) {
+                return false;
+            }
+        }
+        if (hasAthrow == 0) {
+            return false;
+        }
+        final List<Instruction> instructions = code.instructions();
+        int handlerIndex = -1;
+        for (int index = 0; index < instructions.size(); index++) {
+            if (instructions.get(index).offset() == handler.handlerPc()) {
+                handlerIndex = index;
+                break;
+            }
+        }
+        if (handlerIndex < 0) {
+            return false;
+        }
+        for (int index = handlerIndex + 1; index + 1 < instructions.size(); index++) {
+            final Instruction instruction = instructions.get(index);
+            if (aloadLocalIndex(instruction) == throwableLocal && instructions.get(index + 1).opcode() == 191) {
+                return true;
+            }
+            if (!supportedFinallyCleanupInstruction(instruction)) {
+                return false;
+            }
+        }
+        return false;
+    }
+
+    private static boolean supportedProtectedFinallyRethrowInstruction(
+        final CodeAttribute code,
+        final Instruction instruction
+    ) {
+        for (final CodeException handler : code.exceptionTable()) {
+            if (handler.catchType().isPresent() || !supportedFinallyRethrowHandler(code, handler)) {
+                continue;
+            }
+            final Optional<Instruction> first = instructionAtOffset(code, handler.handlerPc());
+            if (first.isEmpty()) {
+                continue;
+            }
+            final int throwableLocal = astoreLocalIndex(first.orElseThrow());
+            if (throwableLocal < 0) {
+                continue;
+            }
+            if (supportedProtectedFinallyRethrowInstruction(code, handler, throwableLocal, instruction)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean supportedProtectedFinallyRethrowInstruction(
+        final CodeAttribute code,
+        final CodeException handler,
+        final int throwableLocal,
+        final Instruction instruction
+    ) {
+        final Optional<Integer> rethrowOffset = finallyRethrowThrowOffset(code, handler, throwableLocal);
+        if (rethrowOffset.isEmpty()) {
+            return false;
+        }
+        if (instruction.offset() < handler.handlerPc() || instruction.offset() > rethrowOffset.orElseThrow()) {
+            return false;
+        }
+        if (astoreLocalIndex(instruction) == throwableLocal || aloadLocalIndex(instruction) == throwableLocal) {
+            return true;
+        }
+        if (instruction.opcode() == 191) {
+            return true;
+        }
+        return supportedFinallyCleanupInstruction(instruction);
+    }
+
+    private static Optional<Integer> finallyRethrowThrowOffset(
+        final CodeAttribute code,
+        final CodeException handler,
+        final int throwableLocal
+    ) {
+        final List<Instruction> instructions = code.instructions();
+        int handlerIndex = -1;
+        for (int index = 0; index < instructions.size(); index++) {
+            if (instructions.get(index).offset() == handler.handlerPc()) {
+                handlerIndex = index;
+                break;
+            }
+        }
+        if (handlerIndex < 0) {
+            return Optional.empty();
+        }
+        for (int index = handlerIndex + 1; index + 1 < instructions.size(); index++) {
+            final Instruction candidate = instructions.get(index);
+            if (aloadLocalIndex(candidate) == throwableLocal && instructions.get(index + 1).opcode() == 191) {
+                return Optional.of(instructions.get(index + 1).offset());
+            }
+        }
+        return Optional.empty();
     }
 
     private static boolean supportedEnumSwitchMapHandler(
@@ -927,6 +1058,30 @@ public final class StaticVerifier {
                     return true;
                 }
             }
+        }
+        return false;
+    }
+
+    private static boolean supportedFinallyCleanupInstruction(final Instruction instruction) {
+        if (instruction.opcode() == 178) {
+            final Optional<FieldRef> fieldRef = instruction.fieldRef();
+            if (fieldRef.isEmpty()) {
+                return false;
+            }
+            final FieldRef target = fieldRef.orElseThrow();
+            return "java/lang/System".equals(target.owner())
+                && "out".equals(target.name())
+                && "Ljava/io/PrintStream;".equals(target.descriptor());
+        }
+        if (instruction.opcode() == 18 || instruction.opcode() == 19 || instruction.opcode() == 20) {
+            return true;
+        }
+        if (instruction.opcode() == 182 || instruction.opcode() == 184) {
+            final Optional<MethodRef> methodRef = instruction.methodRef();
+            if (methodRef.isEmpty()) {
+                return false;
+            }
+            return JdkCallSupport.supportedCall(methodRef.orElseThrow()).isPresent();
         }
         return false;
     }

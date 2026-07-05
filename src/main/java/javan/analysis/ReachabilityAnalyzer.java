@@ -470,7 +470,7 @@ public final class ReachabilityAnalyzer {
             if (!isSubtypeOf(classes, candidate.name(), target.owner())) {
                 continue;
             }
-            final Optional<EntryPoint> resolved = resolvedVirtualTarget(classes, candidate.name(), target);
+            final Optional<EntryPoint> resolved = lowerableResolvedVirtualTarget(classes, candidate.name(), target);
             if (resolved.isPresent()) {
                 final EntryPoint entryPoint = resolved.orElseThrow();
                 if (!containsEntry(targets, entryPoint)) {

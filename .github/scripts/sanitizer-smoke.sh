@@ -297,6 +297,9 @@ int main(int argc, char** argv) {
     int code = javan_generated_main(argc, argv);
     javan_gc_collect();
     javan_validate_heap_metadata();
+    javan_thread_detach_current();
+    javan_gc_collect();
+    javan_validate_heap_metadata();
     javan_sanitizer_write_proof_counters();
     if (code != 0) {
         return code;
