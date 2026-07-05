@@ -5,6 +5,8 @@ import javan.cli.Version;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ResourceLock;
+import org.junit.jupiter.api.parallel.Resources;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -21,9 +23,11 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
-import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
+import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 
-@Execution(CONCURRENT)
+@Execution(SAME_THREAD)
+@ResourceLock("native-cli-heavy")
+@ResourceLock(Resources.SYSTEM_PROPERTIES)
 final class CliCommandIntegrationTest {
     @TempDir
     private Path tempDir;
