@@ -10,6 +10,10 @@ on:
         required: false
         default: false
         type: boolean
+      release_enabled:
+        required: false
+        default: false
+        type: boolean
   workflow_dispatch:
     inputs:
       tag:
@@ -44,6 +48,7 @@ jobs:
         shell: sh
         env:
           INPUT_DRY_RUN: ${{ inputs.dry_run || 'false' }}
+          INPUT_RELEASE_ENABLED: ${{ inputs.release_enabled || 'false' }}
           INPUT_TAG: ${{ inputs.tag || '' }}
         run: |
           release=false
@@ -52,7 +57,7 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
             release=true
             dry_run="$INPUT_DRY_RUN"
-          elif [ "$GITHUB_EVENT_NAME" = "workflow_call" ]; then
+          elif [ "$INPUT_RELEASE_ENABLED" = "true" ]; then
             release=true
           fi
 
