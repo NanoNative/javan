@@ -151,6 +151,9 @@ public final class ReachabilityAnalyzer {
         if (isJdkCall(target) || NetworkApiSupport.isNetworkCall(target)) {
             return;
         }
+        if (instruction.opcode() == 182 && isInheritedJdkVirtualCall(classes, target)) {
+            return;
+        }
         if (JavanNativeSubstitutions.isSubstitutedCall(target)) {
             return;
         }
@@ -366,16 +369,7 @@ public final class ReachabilityAnalyzer {
     }
 
     private static boolean isJdkCall(final MethodRef target) {
-        if (target.owner().startsWith("java/")) {
-            return true;
-        }
-        if (target.owner().startsWith("jdk/")) {
-            return true;
-        }
-        if (target.owner().startsWith("sun/")) {
-            return true;
-        }
-        return false;
+        return isJdkOwner(target.owner());
     }
 
     private static boolean isSupportedArrayClone(final MethodRef target) {
@@ -482,6 +476,28 @@ public final class ReachabilityAnalyzer {
             }
         }
         return List.copyOf(targets);
+    }
+
+    private static boolean isInheritedJdkVirtualCall(final Map<String, ClassFile> classes, final MethodRef target) {
+        String current = target.owner();
+        while (classes.containsKey(current)) {
+            final ClassFile classFile = classes.get(current);
+            if (classFile.method(target.name(), target.descriptor()).isPresent()) {
+                return false;
+            }
+            current = classFile.superName();
+        }
+        return current != null && isJdkOwner(current);
+    }
+
+    private static boolean isJdkOwner(final String owner) {
+        if (owner.startsWith("java/")) {
+            return true;
+        }
+        if (owner.startsWith("jdk/")) {
+            return true;
+        }
+        return owner.startsWith("sun/");
     }
 
     private static boolean enqueueRunnableThreadTargets(

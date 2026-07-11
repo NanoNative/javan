@@ -1323,6 +1323,38 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void reachabilityTreatsInheritedJdkVirtualCallOnConcreteOwnerAsJdkCall() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo(
+                        "main",
+                        "([Ljava/lang/String;)V",
+                        instruction(
+                            0,
+                            182,
+                            "invokevirtual",
+                            new MethodRef(
+                                "com/acme/Context",
+                                "computeIfAbsent",
+                                "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;"
+                            )
+                        )
+                    )
+                ),
+                "com/acme/Context", classWithMethods("com/acme/Context", "java/util/concurrent/ConcurrentHashMap", 0, List.of())
+            ),
+            List.of(new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+    }
+
+    @Test
     void reachabilitySkipsAbstractVirtualTargetWithoutCode() {
         final CallGraph graph = new ReachabilityAnalyzer().analyze(
             Map.of(

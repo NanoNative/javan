@@ -6947,7 +6947,7 @@ final class CliIntegrationTest {
     }
 
     @Test
-    void nanoHelloServiceRouteCurrentlyFailsAtContextComputeIfAbsentFunctionDispatch() throws Exception {
+    void nanoHelloServiceRouteCurrentlyFailsAtFunctionOrNullDispatch() throws Exception {
         final Path nanoArtifact = pinnedMavenArtifact("org.nanonative", "nano", "2025.11.3131219");
         final Path typeMapArtifact = pinnedMavenArtifact("berlin.yuna", "type-map", "2025.09.2660710");
         Assumptions.assumeTrue(Files.isRegularFile(nanoArtifact), "Pinned Nano artifact is not available in the local Maven cache");
@@ -6997,7 +6997,7 @@ final class CliIntegrationTest {
         assertThat(run.stderr()).contains(
             "error[JAVAN012]",
             "org/nanonative/nano/core/Nano",
-            "org/nanonative/nano/core/model/Context.computeIfAbsent(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;"
+            "berlin/yuna/typemap/model/FunctionOrNull.apply(Ljava/lang/Object;)Ljava/lang/Object;"
         );
     }
 
