@@ -6947,7 +6947,7 @@ final class CliIntegrationTest {
     }
 
     @Test
-    void nanoHelloServiceRouteCurrentlyFailsAtFunctionOrNullDispatch() throws Exception {
+    void nanoHelloServiceRouteReportsDeterministicBlockerSet() throws Exception {
         final Path nanoArtifact = pinnedMavenArtifact("org.nanonative", "nano", "2025.11.3131219");
         final Path typeMapArtifact = pinnedMavenArtifact("berlin.yuna", "type-map", "2025.09.2660710");
         Assumptions.assumeTrue(Files.isRegularFile(nanoArtifact), "Pinned Nano artifact is not available in the local Maven cache");
@@ -6994,10 +6994,13 @@ final class CliIntegrationTest {
         );
 
         assertThat(run.exitCode()).isEqualTo(2);
-        assertThat(run.stderr()).contains(
-            "error[JAVAN012]",
-            "org/nanonative/nano/core/Nano",
-            "berlin/yuna/typemap/model/FunctionOrNull.apply(Ljava/lang/Object;)Ljava/lang/Object;"
+        final String diagnostics = Files.readString(project.resolve(".javan/reports/diagnostics.md"));
+        assertThat(diagnostics).contains(
+            "berlin/yuna/typemap/model/FunctionOrNull.apply(Ljava/lang/Object;)Ljava/lang/Object;",
+            "error[JAVAN030] unsupported reachable bytecode",
+            "`invokedynamic`",
+            "error[JAVAN014] exception handlers are not supported",
+            "java/lang/Object.getClass()Ljava/lang/Class;"
         );
     }
 
