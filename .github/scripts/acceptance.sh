@@ -613,6 +613,14 @@ accepts_optional_nano_duration_probe() {
 
 cd "$ROOT"
 
+if [ "${JAVAN_ACCEPTANCE_ONLY:-}" = "real-probes" ]; then
+  accepts_optional_typemap_probe
+  accepts_optional_nano_probe
+  accepts_optional_nano_duration_probe
+  printf '%s\n' "Acceptance passed: $PASS_COUNT checks"
+  exit 0
+fi
+
 accepts_jvm_equivalent_app src/test/resources/projects/acceptance/hello
 accepts_runtime_contract_report src/test/resources/projects/acceptance/hello
 accepts_jvm_equivalent_app "$NATIVE_PROFILE_PROJECTS/primitive-int"
