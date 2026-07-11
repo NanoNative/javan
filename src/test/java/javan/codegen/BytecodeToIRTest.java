@@ -13517,6 +13517,98 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersStringDescribeConstableToOptionalOfReceiver() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/String;)Ljava/util/Optional;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/String", "describeConstable", "()Ljava/util/Optional;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_optional_of",
+                List.of(IrExpression.objectLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersStringResolveConstantDescStringReturnToReceiver() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/String;Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/String;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef(
+                "java/lang/String",
+                "resolveConstantDesc",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/String;"
+            )),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectLocal("arg0"))
+        );
+    }
+
+    @Test
+    void lowersStringResolveConstantDescObjectBridgeToReceiver() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/String;Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Object;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef(
+                "java/lang/String",
+                "resolveConstantDesc",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Object;"
+            )),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectLocal("arg0"))
+        );
+    }
+
+    @Test
+    void rejectsUnsupportedStringResolveConstantDescWithWrongReturnType() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/String;Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Class;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef(
+                "java/lang/String",
+                "resolveConstantDesc",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Class;"
+            )),
+            plain(3, 176, "areturn")
+        )))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo(
+                    "invokevirtual java/lang/String.resolveConstantDesc(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Class;"
+                );
+            });
+    }
+
+    @Test
     void lowersFilesCopyToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,

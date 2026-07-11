@@ -201,6 +201,14 @@ public final class JdkCallSupport {
         runtime("String.intern", "java/lang/String", "intern", "()Ljava/lang/String;"),
         runtime("String.toString", "java/lang/String", "toString", "()Ljava/lang/String;"),
         runtime("String.concat", "java/lang/String", "concat", "(Ljava/lang/String;)Ljava/lang/String;"),
+        runtime("String.describeConstable", "java/lang/String", "describeConstable", "()Ljava/util/Optional;"),
+        runtime(
+            "String.resolveConstantDesc",
+            "java/lang/String",
+            "resolveConstantDesc",
+            "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/String;",
+            "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Object;"
+        ),
         runtime("String.trim", "java/lang/String", "trim", "()Ljava/lang/String;"),
         runtime("String.substring", "java/lang/String", "substring", "(I)Ljava/lang/String;"),
         runtime("String.substring", "java/lang/String", "substring", "(II)Ljava/lang/String;"),

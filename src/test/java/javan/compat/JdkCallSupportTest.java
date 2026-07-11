@@ -189,6 +189,33 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void stringDescribeConstableIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/String",
+            "describeConstable",
+            "()Ljava/util/Optional;"
+        ))).isTrue();
+    }
+
+    @Test
+    void stringResolveConstantDescStringReturnIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/String",
+            "resolveConstantDesc",
+            "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/String;"
+        ))).isTrue();
+    }
+
+    @Test
+    void stringResolveConstantDescObjectBridgeIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/String",
+            "resolveConstantDesc",
+            "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
     void booleanArraysCopyOfIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Arrays",

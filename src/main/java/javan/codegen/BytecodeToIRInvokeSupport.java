@@ -419,6 +419,21 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if ("java/lang/String".equals(methodRef.owner())
+            && "describeConstable".equals(methodRef.name())
+            && "()Ljava/util/Optional;".equals(methodRef.descriptor())) {
+            final IrExpression receiver = popObject(classFile, method, stack);
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_optional_of", List.of(receiver))));
+            return;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
+            && "resolveConstantDesc".equals(methodRef.name())
+            && ("(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/String;".equals(methodRef.descriptor())
+            || "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Object;".equals(methodRef.descriptor()))) {
+            popObject(classFile, method, stack);
+            stack.add(StackValue.objectExpression(popObject(classFile, method, stack)));
+            return;
+        }
+        if ("java/lang/String".equals(methodRef.owner())
             && "trim".equals(methodRef.name())
             && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
             pushObjectCall(instructions, stack, localDeclarations, "javan_string_trim", List.of(popObject(classFile, method, stack)));
