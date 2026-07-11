@@ -47,7 +47,11 @@ import javan.verify.StaticVerifier;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.PrintStream;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -4187,6 +4191,152 @@ final class CoreBehaviorTest {
         assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
             assertThat(diagnostic.code()).isEqualTo("JAVAN175");
             assertThat(diagnostic.subject()).isEqualTo("Thread.currentThread().join()");
+        });
+    }
+
+    @Test
+    void staticVerifierRejectsReachableCurrentThreadAliasStart() {
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    1,
+                    6,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "currentThread", "()Ljava/lang/Thread;")),
+                        instructionOperands(1, 58, "astore", 5),
+                        instructionOperands(3, 25, "aload", 5),
+                        instruction(5, 182, "invokevirtual", new MethodRef("java/lang/Thread", "start", "()V")),
+                        instruction(6, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
+            assertThat(diagnostic.code()).isEqualTo("JAVAN075");
+            assertThat(diagnostic.subject()).isEqualTo("Thread.currentThread() alias on local 5 then start()");
+        });
+    }
+
+    @Test
+    void staticVerifierWarnsAboutUnreachableCurrentThreadAliasStartInApplicationCode() {
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    1,
+                    6,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "currentThread", "()Ljava/lang/Thread;")),
+                        instructionOperands(1, 58, "astore", 5),
+                        instructionOperands(3, 25, "aload", 5),
+                        instruction(5, 182, "invokevirtual", new MethodRef("java/lang/Thread", "start", "()V")),
+                        instruction(6, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(Map.of(main.name(), main), List.of());
+
+        assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
+            assertThat(diagnostic.code()).isEqualTo("JAVAN175");
+            assertThat(diagnostic.subject()).isEqualTo("Thread.currentThread() alias on local 5 then start()");
+        });
+    }
+
+    @Test
+    void staticVerifierRejectsReachableCurrentThreadAliasJoinWithoutExtraBlockingWaitDiagnostic() {
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    1,
+                    6,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "currentThread", "()Ljava/lang/Thread;")),
+                        instructionOperands(1, 58, "astore", 5),
+                        instructionOperands(3, 25, "aload", 5),
+                        instruction(5, 182, "invokevirtual", new MethodRef("java/lang/Thread", "join", "()V")),
+                        instruction(6, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
+            assertThat(diagnostic.code()).isEqualTo("JAVAN075");
+            assertThat(diagnostic.subject()).isEqualTo("Thread.currentThread() alias on local 5 then join()");
+        });
+    }
+
+    @Test
+    void staticVerifierWarnsAboutUnreachableCurrentThreadAliasJoinInApplicationCode() {
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    1,
+                    6,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "currentThread", "()Ljava/lang/Thread;")),
+                        instructionOperands(1, 58, "astore", 5),
+                        instructionOperands(3, 25, "aload", 5),
+                        instruction(5, 182, "invokevirtual", new MethodRef("java/lang/Thread", "join", "()V")),
+                        instruction(6, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(Map.of(main.name(), main), List.of());
+
+        assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
+            assertThat(diagnostic.code()).isEqualTo("JAVAN175");
+            assertThat(diagnostic.subject()).isEqualTo("Thread.currentThread() alias on local 5 then join()");
         });
     }
 
