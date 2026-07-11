@@ -1301,6 +1301,28 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void reachabilityResolvesInheritedVirtualTargetForConcreteExactOwner() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo("main", "([Ljava/lang/String;)V", instruction(0, 182, "invokevirtual", new MethodRef("com/acme/Child", "value", "()I")))
+                ),
+                "com/acme/Base", classWithMethods("com/acme/Base", "java/lang/Object", 0, List.of(), methodInfo("value", "()I")),
+                "com/acme/Child", classWithMethods("com/acme/Child", "com/acme/Base", 0, List.of())
+            ),
+            List.of(new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+        assertThat(graph.reachableMethods()).contains(new EntryPoint("com/acme/Base", "value", "()I"));
+        assertThat(graph.reachableMethods()).doesNotContain(new EntryPoint("com/acme/Child", "value", "()I"));
+    }
+
+    @Test
     void reachabilitySkipsAbstractVirtualTargetWithoutCode() {
         final CallGraph graph = new ReachabilityAnalyzer().analyze(
             Map.of(

@@ -7,7 +7,7 @@ Status summary:
 | TypeMap | Partial | `typemap-pair` builds natively against the pinned Maven artifact and is exercised by required CI acceptance plus focused CLI integration. | Broader TypeMap dependency graph and quieter unreachable-dependency diagnostics. |
 | Nano metrics helper | Partial | `nano-metric` builds natively against the pinned Maven artifact and is exercised by required CI acceptance plus focused CLI integration. | Broader Nano dependency graph and quieter unreachable-dependency diagnostics. |
 | Nano duration helper | Partial | `nano-duration` builds natively against the pinned Maven artifact and is exercised by required CI acceptance plus focused CLI integration. | Broader Nano helper surface and quieter unreachable-dependency diagnostics. |
-| Nano HTTP service | In progress | A stripped real Nano `/hello` service route without `DevConsoleService` now reproduces the first current blocker deterministically against pinned Nano + TypeMap artifacts: `error[JAVAN011]` on `Nano.subscribeEvent(...)->NanoBase` resolution before the HTTP runtime is reached. | Closed-world inherited/generic method resolution for the Nano event chain, then broader HTTP service runtime, resources, thread/blocking model, and dev-console/reflection exclusion. |
+| Nano HTTP service | In progress | A stripped real Nano `/hello` service route without `DevConsoleService` now gets past inherited `Nano.subscribeEvent(...)->NanoBase` resolution and reproduces the next current blocker deterministically against pinned Nano + TypeMap artifacts: `error[JAVAN012]` on `Context.computeIfAbsent(..., Function)`. | `java.util.function.Function` dispatch and the surrounding Nano event/context chain, then broader HTTP service runtime, resources, thread/blocking model, and dev-console/reflection exclusion. |
 
 Current compatibility probes:
 
@@ -28,7 +28,7 @@ Known blockers before broader TypeMap/Nano coverage:
 
 - only the current blocking TCP loopback socket slice is implemented
 - only raw loopback HTTP responder slices are verified so far (`GET` success, unmatched-route `404`, POST body handling, sequential two-connection lifetime, method-plus-path dispatch, multi-class route-handler dispatch, request-header matching, response-header emission, and a request/response object model over router and service classes); no higher-level native HTTP server API yet
-- stripped real Nano `/hello` service route currently stops earlier with `error[JAVAN011]` on `Nano.subscribeEvent(...)->NanoBase` resolution, so the first M11 gate is inherited/generic method resolution through the Nano event chain before HTTP runtime behavior can be claimed
+- stripped real Nano `/hello` service route now gets past inherited `Nano.subscribeEvent(...)->NanoBase` resolution and currently stops at `error[JAVAN012]` on `Context.computeIfAbsent(..., Function)`, so the next M11 gate is `java.util.function.Function` dispatch through the Nano event/context chain before HTTP runtime behavior can be claimed
 - no native HTTPS/TLS runtime yet
 - no certificate/trust-store model yet
 - no thread-root model for network service lifetimes yet
@@ -51,5 +51,5 @@ Next gates before claiming Nano support:
 3. done: report reachable `network`, `socket`, and `http` usage even while unsupported
 4. implement TCP loopback support with close/ownership and sanitizer proof
 5. done partially: implement plain HTTP client loopback support for GET/string, POST+headers/byte[], and PUT byte[], plus raw loopback responder slices over `ServerSocket`/`Socket` for `GET /hello -> 200 pong`, unmatched-route `404`, POST body handling via `Content-Length`, sequential two-connection lifetime, method-plus-path dispatch, multi-class route-handler dispatch, request-header matching, response-header emission, and a request/response object model over router and service classes
-6. in progress: stripped Nano `/hello` route without `DevConsoleService` now reproduces the first blocker deterministically; next clear it past `JAVAN011` inherited/generic method resolution and then through the HTTP runtime
+6. in progress: stripped Nano `/hello` route without `DevConsoleService` now reproduces the current blocker deterministically; inherited `Nano.subscribeEvent(...)->NanoBase` resolution is fixed locally, and the next gate is `JAVAN012` on `Context.computeIfAbsent(..., Function)` before the HTTP runtime
 7. add HTTPS/TLS/certificates after plain HTTP is stable
