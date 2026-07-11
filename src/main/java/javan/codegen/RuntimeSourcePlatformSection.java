@@ -725,7 +725,7 @@ final class RuntimeSourcePlatformSection {
             };
             javan_root_frame_push(javan_path_normalize_roots, 1);
             path = javan_path_checked(path_root);
-            const char** starts = malloc((length + 1) * sizeof(const char*));
+            unsigned long* starts = malloc((length + 1) * sizeof(unsigned long));
             unsigned long* lengths = malloc((length + 1) * sizeof(unsigned long));
             if (starts == NULL || lengths == NULL) {
                 free(starts);
@@ -751,16 +751,18 @@ final class RuntimeSourcePlatformSection {
                     continue;
                 }
                 if (segment_length == 2 && path[start] == '.' && path[start + 1] == '.') {
-                    if (count > 0 && !(lengths[count - 1] == 2 && starts[count - 1][0] == '.' && starts[count - 1][1] == '.')) {
+                    if (count > 0 && !(lengths[count - 1] == 2
+                        && path[starts[count - 1]] == '.'
+                        && path[starts[count - 1] + 1] == '.')) {
                         count--;
                     } else if (absolute == 0) {
-                        starts[count] = path + start;
+                        starts[count] = start;
                         lengths[count] = segment_length;
                         count++;
                     }
                     continue;
                 }
-                starts[count] = path + start;
+                starts[count] = start;
                 lengths[count] = segment_length;
                 count++;
             }
@@ -785,6 +787,7 @@ final class RuntimeSourcePlatformSection {
                 }
             }
             char* result = javan_string_alloc(out_length + 1);
+            path = javan_path_checked(path_root);
             unsigned long out = 0;
             if (absolute != 0) {
                 result[out] = '/';
@@ -795,7 +798,7 @@ final class RuntimeSourcePlatformSection {
                     result[out] = '/';
                     out++;
                 }
-                memcpy(result + out, starts[part], lengths[part]);
+                memcpy(result + out, path + starts[part], lengths[part]);
                 out += lengths[part];
             }
             result[out] = '\\0';

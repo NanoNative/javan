@@ -4447,6 +4447,22 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void writeStoresNormalizedPathSegmentsAsOffsetsAcrossAllocation() throws Exception {
+        final Path runtime = new RuntimeFiles().write(tempDir);
+
+        assertThat(Files.readString(runtime)).contains(
+            "unsigned long* starts = malloc((length + 1) * sizeof(unsigned long));",
+            "starts[count] = start;",
+            "path = javan_path_checked(path_root);",
+            "memcpy(result + out, path + starts[part], lengths[part]);"
+        ).doesNotContain(
+            "const char** starts = malloc((length + 1) * sizeof(const char*));",
+            "starts[count] = path + start;",
+            "memcpy(result + out, starts[part], lengths[part]);"
+        );
+    }
+
+    @Test
     void runtimePathNormalizeRootsSourceAcrossAllocation() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
@@ -4470,7 +4486,8 @@ final class RuntimeFilesTest {
                 return 0;
             }
             """,
-            "112"
+            "112",
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1")
         );
 
         assertThat(stdout).isEqualTo("/tmp/app\n");
