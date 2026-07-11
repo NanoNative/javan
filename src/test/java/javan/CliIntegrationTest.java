@@ -6144,6 +6144,35 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void stringConstableMethodsBuildAndMatchJvmOutput() throws Exception {
+        final Path project = project("string-constable-methods");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Throwable {
+                    final String value = "javan";
+                    System.out.println(value.describeConstable().orElseThrow());
+                    System.out.println(value.resolveConstantDesc(null));
+                    final Object widened = value.resolveConstantDesc(null);
+                    System.out.println(widened);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-constable-methods").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("javan\njavan\njavan\n");
+    }
+
+    @Test
     void stringStartsWithBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("string-starts-with");
         writeJava(project, "com.acme.Main", """
