@@ -6947,6 +6947,61 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void nanoHelloServiceRouteCurrentlyFailsAtSubscribeEventResolution() throws Exception {
+        final Path nanoArtifact = pinnedMavenArtifact("org.nanonative", "nano", "2025.11.3131219");
+        final Path typeMapArtifact = pinnedMavenArtifact("berlin.yuna", "type-map", "2025.09.2660710");
+        Assumptions.assumeTrue(Files.isRegularFile(nanoArtifact), "Pinned Nano artifact is not available in the local Maven cache");
+        Assumptions.assumeTrue(Files.isRegularFile(typeMapArtifact), "Pinned TypeMap artifact is not available in the local Maven cache");
+        final Path project = project("nano-hello-service");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import org.nanonative.nano.core.Nano;
+            import org.nanonative.nano.services.http.HttpServer;
+
+            import java.util.Map;
+
+            import static org.nanonative.nano.services.http.HttpServer.CONFIG_SERVICE_HTTP_PORT;
+            import static org.nanonative.nano.services.http.HttpServer.EVENT_HTTP_REQUEST;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Nano nano = new Nano(Map.of(
+                        CONFIG_SERVICE_HTTP_PORT, "8080"
+                    ), new HttpServer());
+
+                    nano.context(Main.class)
+                        .subscribeEvent(EVENT_HTTP_REQUEST, event -> event.payloadOpt()
+                            .filter(request -> request.isMethodGet())
+                            .filter(request -> request.pathMatch("/hello"))
+                            .ifPresent(request -> request.createCorsResponse()
+                                .statusCode(200)
+                                .body(Map.of("name", "world"))
+                                .respond(event)));
+                }
+            }
+            """);
+
+        final CliRun run = run(
+            tempDir,
+            "check",
+            project.toString(),
+            "--classpath",
+            nanoArtifact + java.io.File.pathSeparator + typeMapArtifact
+        );
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains(
+            "error[JAVAN011]",
+            "org/nanonative/nano/core/Nano",
+            "subscribeEvent(Lorg/nanonative/nano/helper/event/model/Channel;Ljava/util/function/Consumer;)Lorg/nanonative/nano/core/NanoBase;"
+        );
+    }
+
+    @Test
     void acceptanceRealProbesFailWhenRequiredArtifactsAreMissing() throws Exception {
         final Path repo = tempDir.resolve("empty-maven-repo");
         Files.createDirectories(repo);
