@@ -1275,6 +1275,41 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void reachabilityResolvesDirectDefaultInterfaceMethodWithoutConcreteImplementationClass() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo(
+                        "main",
+                        "([Ljava/lang/String;)V",
+                        instruction(0, 185, "invokeinterface", new MethodRef("com/acme/Functionish", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;"))
+                    )
+                ),
+                "com/acme/Functionish", classWithMethods(
+                    "com/acme/Functionish",
+                    "java/lang/Object",
+                    0x0200,
+                    List.of(),
+                    methodInfo(
+                        "apply",
+                        "(Ljava/lang/Object;)Ljava/lang/Object;",
+                        instruction(0, 25, "aload_0"),
+                        instruction(1, 176, "areturn")
+                    )
+                )
+            ),
+            List.of(new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+        assertThat(graph.reachableMethods()).contains(new EntryPoint("com/acme/Functionish", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;"));
+    }
+
+    @Test
     void reachabilityResolvesInterfaceCallToInheritedDefaultMethodOnConcreteImplementation() {
         final CallGraph graph = new ReachabilityAnalyzer().analyze(
             Map.of(
@@ -1344,6 +1379,38 @@ final class CoreBehaviorTest {
 
         assertThat(graph.diagnostics()).isEmpty();
         assertThat(graph.reachableMethods()).contains(new EntryPoint("com/acme/Base", "helper", "()V"));
+    }
+
+    @Test
+    void reachabilityTreatsInheritedJdkSpecialCallOnConcreteOwnerAsJdkCall() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo(
+                        "main",
+                        "([Ljava/lang/String;)V",
+                        instruction(
+                            0,
+                            183,
+                            "invokespecial",
+                            new MethodRef(
+                                "com/acme/Mapish",
+                                "put",
+                                "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"
+                            )
+                        )
+                    )
+                ),
+                "com/acme/Mapish", classWithMethods("com/acme/Mapish", "java/util/concurrent/ConcurrentHashMap", 0, List.of())
+            ),
+            List.of(new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
     }
 
     @Test

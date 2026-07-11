@@ -6996,13 +6996,19 @@ final class CliIntegrationTest {
         assertThat(run.exitCode()).isEqualTo(2);
         final String diagnostics = Files.readString(project.resolve(".javan/reports/diagnostics.md"));
         assertThat(diagnostics).contains(
-            "berlin/yuna/typemap/model/FunctionOrNull.apply(Ljava/lang/Object;)Ljava/lang/Object;",
+            "berlin/yuna/typemap/model/FunctionOrNull.applyWithException(Ljava/lang/Object;)Ljava/lang/Object;",
+            "org/nanonative/nano/helper/ExRunnable.run()V",
             "error[JAVAN030] unsupported reachable bytecode",
             "`invokedynamic`",
-            "error[JAVAN014] exception handlers are not supported",
+            "java/util/Map.computeIfAbsent(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;",
+            "java/util/Optional.filter(Ljava/util/function/Predicate;)Ljava/util/Optional;",
+            "java/util/Optional.ifPresent(Ljava/util/function/Consumer;)V",
+            "java/util/concurrent/ConcurrentHashMap.<init>()V",
             "java/lang/Object.getClass()Ljava/lang/Class;"
         );
         assertThat(diagnostics).doesNotContain(
+            "berlin/yuna/typemap/model/FunctionOrNull.apply(Ljava/lang/Object;)Ljava/lang/Object;",
+            "berlin/yuna/typemap/model/ConcurrentTypeMap.put(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
             "berlin/yuna/typemap/model/TypeMapI.asOpt(Ljava/lang/Class;[Ljava/lang/Object;)Lberlin/yuna/typemap/model/Type;",
             "berlin/yuna/typemap/model/TypeMapI.asStringOpt([Ljava/lang/Object;)Lberlin/yuna/typemap/model/Type;"
         );

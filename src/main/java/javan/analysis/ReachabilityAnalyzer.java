@@ -154,6 +154,9 @@ public final class ReachabilityAnalyzer {
         if (instruction.opcode() == 182 && isInheritedJdkVirtualCall(classes, target)) {
             return;
         }
+        if (instruction.opcode() == 183 && !"<init>".equals(target.name()) && isInheritedJdkVirtualCall(classes, target)) {
+            return;
+        }
         if (JavanNativeSubstitutions.isSubstitutedCall(target)) {
             return;
         }
@@ -444,6 +447,10 @@ public final class ReachabilityAnalyzer {
 
     private static List<EntryPoint> interfaceTargets(final Map<String, ClassFile> classes, final MethodRef target) {
         final List<EntryPoint> targets = new ArrayList<>();
+        final Optional<EntryPoint> defaultTarget = directDefaultInterfaceTarget(classes, target);
+        if (defaultTarget.isPresent()) {
+            targets.add(defaultTarget.orElseThrow());
+        }
         for (final ClassFile candidate : classes.values()) {
             if (candidate.isInterface()) {
                 continue;
@@ -460,6 +467,18 @@ public final class ReachabilityAnalyzer {
             }
         }
         return List.copyOf(targets);
+    }
+
+    private static Optional<EntryPoint> directDefaultInterfaceTarget(final Map<String, ClassFile> classes, final MethodRef target) {
+        final ClassFile owner = classes.get(target.owner());
+        if (owner == null || !owner.isInterface()) {
+            return Optional.empty();
+        }
+        final Optional<MethodInfo> method = owner.method(target.name(), target.descriptor());
+        if (method.isEmpty() || method.orElseThrow().code().isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(new EntryPoint(target.owner(), target.name(), target.descriptor()));
     }
 
     private static List<EntryPoint> virtualTargets(final Map<String, ClassFile> classes, final MethodRef target) {
