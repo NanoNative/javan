@@ -5,6 +5,7 @@ import javan.cli.Version;
 import javan.reporting.RuntimeFootprintReports;
 import javan.util.Files2;
 import javan.util.Json;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Execution;
@@ -5355,6 +5356,143 @@ final class CliIntegrationTest {
             "Why:",
             "detail: negative array length",
             "Fix:"
+        );
+    }
+
+    @Test
+    void typeMapPairProbeBuildsAgainstPinnedMavenArtifactAndMatchesJvmOutput() throws Exception {
+        final Path artifact = pinnedMavenArtifact("berlin.yuna", "type-map", "2025.06.1521025");
+        Assumptions.assumeTrue(Files.isRegularFile(artifact), "Pinned TypeMap artifact is not available in the local Maven cache");
+        final Path project = copyResourceProject("real-probes/typemap-pair", "typemap-pair");
+
+        final String jvmOutput = runJvm(project, "com.acme.Main", List.of(artifact));
+        final CliRun run = run(tempDir, "build", project.toString(), "--classpath", artifact.toString(), "--output", "typemap-pair");
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/typemap-pair").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("value\n");
+    }
+
+    @Test
+    void nanoMetricProbeBuildsAgainstPinnedMavenArtifactAndMatchesJvmOutput() throws Exception {
+        final Path artifact = pinnedMavenArtifact("org.nanonative", "nano", "2025.11.3131219");
+        Assumptions.assumeTrue(Files.isRegularFile(artifact), "Pinned Nano artifact is not available in the local Maven cache");
+        final Path project = copyResourceProject("real-probes/nano-metric", "nano-metric");
+
+        final String jvmOutput = runJvm(project, "com.acme.Main", List.of(artifact));
+        final CliRun run = run(tempDir, "build", project.toString(), "--classpath", artifact.toString(), "--output", "nano-metric");
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/nano-metric").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("requests\n");
+    }
+
+    @Test
+    void nanoDurationProbeBuildsAgainstPinnedMavenArtifactAndMatchesJvmOutput() throws Exception {
+        final Path artifact = pinnedMavenArtifact("org.nanonative", "nano", "2025.11.3131219");
+        Assumptions.assumeTrue(Files.isRegularFile(artifact), "Pinned Nano artifact is not available in the local Maven cache");
+        final Path project = copyResourceProject("real-probes/nano-duration", "nano-duration");
+
+        final String jvmOutput = runJvm(project, "com.acme.Main", List.of(artifact));
+        final CliRun run = run(tempDir, "build", project.toString(), "--classpath", artifact.toString(), "--output", "nano-duration");
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/nano-duration").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("1m 5s\n");
+    }
+
+    @Test
+    void acceptanceRealProbesFailWhenRequiredArtifactsAreMissing() throws Exception {
+        final Path repo = tempDir.resolve("empty-maven-repo");
+        Files.createDirectories(repo);
+        final Path wrapper = acceptanceWrapper();
+
+        final ProcessResult run = process(
+            tempDir,
+            List.of("sh", Path.of(".github/scripts/acceptance.sh").toAbsolutePath().normalize().toString()),
+            Duration.ofSeconds(20),
+            Map.of(
+                "JAVAN_BIN", wrapper.toString(),
+                "JAVAN_ACCEPTANCE_ONLY", "real-probes",
+                "JAVAN_REQUIRE_REAL_PROBES", "true",
+                "JAVAN_MAVEN_REPO", repo.toString()
+            )
+        );
+
+        assertThat(run.exitCode()).isEqualTo(1);
+        assertThat(run.stdout()).isEmpty();
+        assertThat(run.stderr()).contains("not ok - src/test/resources/projects/real-probes/typemap-pair missing TYPEMAP_JAR");
+    }
+
+    @Test
+    void acceptanceRealProbesHonorConfiguredMavenRepository() throws Exception {
+        final Path repo = tempDir.resolve("custom-maven-repo");
+        final Path typeMapJar = dependencyJar("fake-typemap", Map.of(
+            "berlin.yuna.typemap.model.Pair", """
+                package berlin.yuna.typemap.model;
+
+                public final class Pair<L, R> {
+                    private final L key;
+                    private final R value;
+
+                    public Pair(final L key, final R value) {
+                        this.key = key;
+                        this.value = value;
+                    }
+
+                    public L getKey() {
+                        return key;
+                    }
+
+                    public R getValue() {
+                        return value;
+                    }
+                }
+                """
+        ));
+        final Path nanoJar = dependencyJar("fake-nano", Map.of(
+            "org.nanonative.nano.services.metric.model.MetricUpdate", """
+                package org.nanonative.nano.services.metric.model;
+
+                public record MetricUpdate(Object timestamp, String name, Object value, Object tags) {
+                }
+                """,
+            "org.nanonative.nano.helper.NanoUtils", """
+                package org.nanonative.nano.helper;
+
+                public final class NanoUtils {
+                    private NanoUtils() {
+                    }
+
+                    public static String formatDuration(final long nanos) {
+                        return "1m 5s";
+                    }
+                }
+                """
+        ));
+        installMavenCoordinate(repo, "berlin.yuna", "type-map", "2025.06.1521025", typeMapJar);
+        installMavenCoordinate(repo, "org.nanonative", "nano", "2025.11.3131219", nanoJar);
+        final Path wrapper = acceptanceWrapper();
+
+        final ProcessResult run = process(
+            tempDir,
+            List.of("sh", Path.of(".github/scripts/acceptance.sh").toAbsolutePath().normalize().toString()),
+            Duration.ofSeconds(60),
+            Map.of(
+                "JAVAN_BIN", wrapper.toString(),
+                "JAVAN_ACCEPTANCE_ONLY", "real-probes",
+                "JAVAN_REQUIRE_REAL_PROBES", "true",
+                "JAVAN_MAVEN_REPO", repo.toString()
+            )
+        );
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stderr()).isEmpty();
+        assertThat(run.stdout()).contains(
+            "ok 1 - src/test/resources/projects/real-probes/typemap-pair native probe",
+            "ok 2 - src/test/resources/projects/real-probes/nano-metric native probe",
+            "ok 3 - src/test/resources/projects/real-probes/nano-duration native probe",
+            "Acceptance passed: 3 checks"
         );
     }
 
@@ -15614,6 +15752,36 @@ final class CliIntegrationTest {
         return file;
     }
 
+    private Path copyResourceProject(final String resourceName, final String projectName) throws Exception {
+        final Path source = Path.of("src/test/resources/projects").resolve(resourceName);
+        final Path target = tempDir.resolve(projectName);
+        try (var paths = Files.walk(source)) {
+            for (final Path path : paths.toList()) {
+                final Path relative = source.relativize(path);
+                final Path destination = target.resolve(relative.toString());
+                if (Files.isDirectory(path)) {
+                    Files.createDirectories(destination);
+                } else {
+                    Files.createDirectories(destination.getParent());
+                    Files.copy(path, destination);
+                }
+            }
+        }
+        return target;
+    }
+
+    private static Path pinnedMavenArtifact(final String groupId, final String artifactId, final String version) {
+        final String configuredRepository = System.getProperty("maven.repo.local",
+            System.getenv().getOrDefault("JAVAN_MAVEN_REPO",
+                System.getenv().getOrDefault("MAVEN_REPO_LOCAL",
+                    Path.of(System.getProperty("user.home")).resolve(".m2/repository").toString())));
+        return Path.of(configuredRepository)
+            .resolve(groupId.replace('.', '/'))
+            .resolve(artifactId)
+            .resolve(version)
+            .resolve(artifactId + "-" + version + ".jar");
+    }
+
     private static String pathForMod(final Path project, final Path dependency) {
         return project.toAbsolutePath().normalize().relativize(dependency.toAbsolutePath().normalize()).toString();
     }
@@ -15632,6 +15800,15 @@ final class CliIntegrationTest {
             .resolve(artifactId + "-" + version + ".jar");
         Files.createDirectories(target.getParent());
         Files.copy(jar, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    private Path acceptanceWrapper() throws Exception {
+        final Path wrapper = tempDir.resolve("javan-acceptance");
+        writeExecutableScript(wrapper, """
+            #!/bin/sh
+            exec java -cp "%s" javan.Main "$@"
+            """.formatted(Path.of("target/classes").toAbsolutePath().normalize()));
+        return wrapper;
     }
 
     private static void writeExecutableScript(final Path script, final String source) throws Exception {
@@ -15914,15 +16091,23 @@ final class CliIntegrationTest {
     }
 
     private Path dependencyJar(final String name, final String className, final String source) throws Exception {
+        return dependencyJar(name, Map.of(className, source));
+    }
+
+    private Path dependencyJar(final String name, final Map<String, String> sources) throws Exception {
         final Path root = tempDir.resolve(name + "-dependency");
         final Path sourceRoot = root.resolve("src");
         final Path classes = root.resolve("classes");
         final Path jar = root.resolve(name + ".jar");
-        final Path sourceFile = sourceRoot.resolve(className.replace('.', '/') + ".java");
-        Files.createDirectories(sourceFile.getParent());
         Files.createDirectories(classes);
-        Files.writeString(sourceFile, source, StandardCharsets.UTF_8);
-        assertThat(process(root, List.of("javac", "-d", classes.toString(), sourceFile.toString())).exitCode()).isZero();
+        final java.util.ArrayList<String> javac = new java.util.ArrayList<>(List.of("javac", "-d", classes.toString()));
+        for (final Map.Entry<String, String> entry : sources.entrySet()) {
+            final Path sourceFile = sourceRoot.resolve(entry.getKey().replace('.', '/') + ".java");
+            Files.createDirectories(sourceFile.getParent());
+            Files.writeString(sourceFile, entry.getValue(), StandardCharsets.UTF_8);
+            javac.add(sourceFile.toString());
+        }
+        assertThat(process(root, javac).exitCode()).isZero();
         assertThat(process(root, List.of("jar", "--create", "--file", jar.toString(), "-C", classes.toString(), ".")).exitCode()).isZero();
         return jar;
     }

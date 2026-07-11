@@ -1,6 +1,6 @@
 # Javan Roadmap Progress
 
-Last updated: 2026-06-30
+Last updated: 2026-07-11
 
 This page tracks verified progress toward a standalone native Javan release toolchain.
 "Done" means implemented, tested, and release-gated for the stated scope, not full Java
@@ -319,8 +319,8 @@ supported/rejected/unknown accounting is not complete yet.
 | Reflection | Dismissed | Arbitrary runtime reflection is rejected for native output. | Optional closed-world metadata reflection only when explicit and reported. |
 | Dynamic class loading | Dismissed | Arbitrary runtime class loading is incompatible with static native output. | None for first release; only explicit closed-world metadata may be revisited. |
 | JNI/native method loading | Dismissed | Javan native-library output is the supported interop path. | None for first release. |
-| TypeMap | Planned | Mini probe exists but matrix row is still `target`. | Real TypeMap native acceptance gate. |
-| Nano | Planned | Metric/duration probes exist but matrix row is still `target`. | Nano example app without dev console builds and runs native. |
+| TypeMap | Partial | `typemap-pair` now builds natively against the pinned Maven artifact and is exercised by required CI acceptance plus focused CLI integration. | Broader TypeMap dependency graph and quieter unreachable-dependency diagnostics. |
+| Nano | Partial | `nano-metric` and `nano-duration` now build natively against the pinned Maven artifact and are exercised by required CI acceptance plus focused CLI integration. | Nano example app without dev console builds and runs native. |
 
 ## Real App Readiness
 
@@ -441,7 +441,7 @@ smoke, negative test projects, jar output, and `javan report` under the rebuilt 
 | M3: self-host feature suite | Partial | Done locally: rebuilt native Javan covers native app probes, resource distribution, jar output, unified reports, native-library C ABI smoke, and negative test projects. Remote rows remain. |
 | M4: clean user commands | Partial | Default commands auto-detect project type, main class, output name, target, resources, and dependencies. Plugins remain planned. |
 | M5: release packaging gate | In progress | Release workflow runs native self-host checks before packaging; CI now runs Maven, acceptance, sanitizer, host-target native build, extracted package showcase/report proof, stale-report-resistant packaged self-check/report proof, package-built Javan jar proof, package-built native Javan smoke, package-backed self-host sanitizer proof, and one narrow Windows-host generated-runtime smoke. The package-backed sanitizer path now reuses the generated self-host C output and respects the existing `full` vs `platform-smoke` CI scope instead of rerunning the heaviest self-check loop on the reduced arm64 row. |
-| M6: real-probe gates | Done | TypeMap Pair, Nano MetricUpdate, and Nano duration now build natively against pinned real external artifacts with auto-discovered calm defaults, exact stdout verification, `diagnostics: 0`, and checksum-verified CI/release gates. |
+| M6: real-probe gates | Partial | TypeMap Pair, Nano MetricUpdate, and Nano duration now build natively against pinned published artifacts with exact stdout verification, focused CLI integration tests, and required CI acceptance. Remaining work is quieter unreachable-dependency diagnostics plus broader real-app coverage. |
 | M7: network rejection gates | Done | Unsupported socket and server-side HTTP shapes fail with stable diagnostics and runtime-module reports instead of silently lowering. |
 | M8: network reporting | Done | Reachable network code appears in runtime-feature and unified reports as `network`, `socket`, or `http` even before positive support lands. |
 | M9: TCP sockets | Partial | Native TCP client/server loopback probes and socket-derived stream I/O pass; broader hostnames, timeouts, and socket options remain. |
