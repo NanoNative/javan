@@ -74,8 +74,8 @@ final class CompatibilityReportsTest {
         final String summary = Files.readString(tempDir.resolve(".javan/reports/compatibility-summary.json"));
 
         assertThat(summary).contains(
-            "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 0, \"callables\": 1, \"totalCallables\": 5, \"leftCallables\": 4, \"coveragePercent\": \"20.0\"}",
-            "\"exactJdkCallableAccounting\": {\"supportedCallables\": 1, \"explicitRejectedCallables\": 3, \"doneCallables\": 4, \"unknownCallables\": 1, \"totalCallables\": 5, \"donePercent\": \"80.0\"}",
+            "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 5, \"leftCallables\": 3, \"coveragePercent\": \"40.0\"}",
+            "\"exactJdkCallableAccounting\": {\"supportedCallables\": 2, \"explicitRejectedCallables\": 3, \"doneCallables\": 5, \"unknownCallables\": 0, \"totalCallables\": 5, \"donePercent\": \"100.0\"}",
             "\"supportRows\": 109",
             "\"passRows\": 109",
             "\"scopedRows\": 0",
@@ -339,11 +339,11 @@ final class CompatibilityReportsTest {
         );
 
         assertThat(Files.readString(tempDir.resolve("doc/status/jdk-compatibility.md"))).contains(
-            "| exact supported JDK callables | 2 / 7 (28.5%) |",
+            "| exact supported JDK callables | 3 / 7 (42.8%) |",
             "| exact explicit rejected JDK callables | 4 |",
-            "| exact done JDK callables | 6 / 7 (85.7%) |",
-            "| exact unknown JDK callables | 1 |",
-            "| exact supported JDK callables left | 5 |"
+            "| exact done JDK callables | 7 / 7 (100.0%) |",
+            "| exact unknown JDK callables | 0 |",
+            "| exact supported JDK callables left | 4 |"
         );
     }
 

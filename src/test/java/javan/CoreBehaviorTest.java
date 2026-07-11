@@ -7,6 +7,7 @@ import javan.analysis.ReachabilityAnalyzer;
 import javan.build.BindingLanguage;
 import javan.build.BuildKind;
 import javan.build.LibraryFormat;
+import javan.classfile.BootstrapValue;
 import javan.classfile.ClassFile;
 import javan.classfile.CodeAttribute;
 import javan.classfile.CodeException;
@@ -439,15 +440,51 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void staticVerifierRejectsUnsupportedListStreamCall() {
+    void staticVerifierAcceptsSupportedListStreamCall() {
         final List<Diagnostic> diagnostics = verifyInstruction(
             instruction(0, 185, "invokeinterface", new MethodRef("java/util/List", "stream", "()Ljava/util/stream/Stream;")),
             true
         );
 
-        assertThat(diagnostics).hasSize(1);
-        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN031");
-        assertThat(diagnostics.getFirst().subject()).isEqualTo("java/util/List.stream()Ljava/util/stream/Stream;");
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsDirectCollectorsJoiningCollectChain() {
+        final List<Diagnostic> diagnostics = verifyInstructions(true,
+            instruction(0, 184, "invokestatic", new MethodRef(
+                "java/util/stream/Collectors",
+                "joining",
+                "(Ljava/lang/CharSequence;)Ljava/util/stream/Collector;"
+            )),
+            instruction(1, 185, "invokeinterface", new MethodRef(
+                "java/util/stream/Stream",
+                "collect",
+                "(Ljava/util/stream/Collector;)Ljava/lang/Object;"
+            ))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierRejectsAliasedCollectorsJoiningCollectChain() {
+        final List<Diagnostic> diagnostics = verifyInstructions(true,
+            instruction(0, 184, "invokestatic", new MethodRef(
+                "java/util/stream/Collectors",
+                "joining",
+                "(Ljava/lang/CharSequence;)Ljava/util/stream/Collector;"
+            )),
+            instructionOperands(1, 58, "astore", 1),
+            instructionOperands(2, 25, "aload", 1),
+            instruction(3, 185, "invokeinterface", new MethodRef(
+                "java/util/stream/Stream",
+                "collect",
+                "(Ljava/util/stream/Collector;)Ljava/lang/Object;"
+            ))
+        );
+
+        assertThat(diagnostics).extracting(Diagnostic::code).contains("JAVAN031");
     }
 
     @Test
@@ -826,9 +863,9 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void jdkCallSupportIgnoresUnsupportedRuntimeModuleCandidate() {
+    void jdkCallSupportClassifiesStreamRuntimeModule() {
         assertThat(JdkCallSupport.runtimeModules(new MethodRef("java/util/Collection", "stream", "()Ljava/util/stream/Stream;")))
-            .isEmpty();
+            .containsExactly("collections");
     }
 
     @Test
@@ -842,8 +879,8 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void jdkCallSupportRejectsUnknownCollectionCall() {
-        assertThat(JdkCallSupport.isSupported(new MethodRef("java/util/Collection", "stream", "()Ljava/util/stream/Stream;"))).isFalse();
+    void jdkCallSupportAcceptsCollectionStreamCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/util/Collection", "stream", "()Ljava/util/stream/Stream;"))).isTrue();
     }
 
     @Test
@@ -862,8 +899,8 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void jdkCallSupportRejectsUnknownMapCall() {
-        assertThat(JdkCallSupport.isSupported(new MethodRef("java/util/Map", "entrySet", "()Ljava/util/Set;"))).isFalse();
+    void jdkCallSupportAcceptsMapEntrySet() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/util/Map", "entrySet", "()Ljava/util/Set;"))).isTrue();
     }
 
     @Test
@@ -1539,6 +1576,124 @@ final class CoreBehaviorTest {
         );
 
         assertThat(graph.diagnostics()).isEmpty();
+    }
+
+    @Test
+    void reachabilityEnqueuesLambdaMetafactoryImplementationTarget() {
+        final Instruction dynamicInstruction = new Instruction(
+            0,
+            186,
+            "invokedynamic",
+            new byte[0],
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(new DynamicRef(
+                "run",
+                "()Ljava/lang/Runnable;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;",
+                List.of("()V", "com/acme/Main.lambda$main$0()V", "()V"),
+                List.of(
+                    new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "()V"),
+                    BootstrapValue.methodHandle(
+                        "com/acme/Main.lambda$main$0()V",
+                        new MethodRef("com/acme/Main", "lambda$main$0", "()V"),
+                        6
+                    ),
+                    new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "()V")
+                )
+            ))
+        );
+
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo("main", "([Ljava/lang/String;)V", dynamicInstruction),
+                    methodInfo("lambda$main$0", "()V")
+                )
+            ),
+            List.of(new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+        assertThat(graph.reachableMethods()).contains(new EntryPoint("com/acme/Main", "lambda$main$0", "()V"));
+        assertThat(graph.callEdges()).contains(new CallEdge(
+            new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"),
+            new EntryPoint("com/acme/Main", "lambda$main$0", "()V"),
+            CallEdge.Kind.CALL
+        ));
+    }
+
+    @Test
+    void reachabilityEnqueuesLambdaMetafactorySupplierBridgeTarget() {
+        final Instruction dynamicInstruction = new Instruction(
+            0,
+            186,
+            "invokedynamic",
+            new byte[0],
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(new DynamicRef(
+                "apply",
+                "()Ljava/util/function/Function;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;",
+                List.of("(Ljava/lang/Object;)Ljava/lang/Object;", "java/util/function/Supplier.get()Ljava/lang/Object;", "(Ljava/util/function/Supplier;)Ljava/lang/Object;"),
+                List.of(
+                    new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "(Ljava/lang/Object;)Ljava/lang/Object;"),
+                    BootstrapValue.methodHandle(
+                        "java/util/function/Supplier.get()Ljava/lang/Object;",
+                        new MethodRef("java/util/function/Supplier", "get", "()Ljava/lang/Object;"),
+                        9
+                    ),
+                    new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "(Ljava/util/function/Supplier;)Ljava/lang/Object;")
+                )
+            ))
+        );
+
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo("main", "([Ljava/lang/String;)V", dynamicInstruction)
+                ),
+                "com/acme/StringSupplier", classWithMethods(
+                    "com/acme/StringSupplier",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/util/function/Supplier"),
+                    methodInfo("get", "()Ljava/lang/Object;", instruction(0, 1, "aconst_null"), instruction(1, 176, "areturn"))
+                )
+            ),
+            List.of(new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+        assertThat(graph.reachableMethods()).contains(
+            new EntryPoint("com/acme/Main$$javan$lambda$main$apply$0", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;"),
+            new EntryPoint("com/acme/StringSupplier", "get", "()Ljava/lang/Object;")
+        );
     }
 
     @Test
@@ -4292,6 +4447,108 @@ final class CoreBehaviorTest {
         final List<Diagnostic> warnings = verifyInvokedynamic(rejected.getFirst(), false);
         assertThat(warnings).hasSize(1);
         assertThat(warnings.getFirst().code()).isEqualTo("JAVAN130");
+    }
+
+    @Test
+    void staticVerifierAcceptsExactLambdaMetafactoryWithApplicationImplementationTarget() {
+        final DynamicRef dynamicRef = new DynamicRef(
+            "run",
+            "(I)Ljava/lang/Runnable;",
+            "java/lang/invoke/LambdaMetafactory",
+            "metafactory",
+            "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;",
+            List.of("()V", "com/acme/Holder.lambda$0(I)V", "()V"),
+            List.of(
+                new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "()V"),
+                BootstrapValue.methodHandle(
+                    "com/acme/Holder.lambda$0(I)V",
+                    new MethodRef("com/acme/Holder", "lambda$0", "(I)V"),
+                    6
+                ),
+                new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "()V")
+            )
+        );
+
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            Map.of(
+                "com/acme/Holder", classWithMethods(
+                    "com/acme/Holder",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    new MethodInfo(0x0009, "lambda$0", "(I)V", Optional.empty())
+                )
+            ),
+            new Instruction(
+                0,
+                186,
+                "invokedynamic",
+                new byte[0],
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.of(dynamicRef)
+            ),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsLambdaMetafactorySupplierBridge() {
+        final DynamicRef dynamicRef = new DynamicRef(
+            "apply",
+            "()Ljava/util/function/Function;",
+            "java/lang/invoke/LambdaMetafactory",
+            "metafactory",
+            "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;",
+            List.of("(Ljava/lang/Object;)Ljava/lang/Object;", "java/util/function/Supplier.get()Ljava/lang/Object;", "(Ljava/util/function/Supplier;)Ljava/lang/Object;"),
+            List.of(
+                new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "(Ljava/lang/Object;)Ljava/lang/Object;"),
+                BootstrapValue.methodHandle(
+                    "java/util/function/Supplier.get()Ljava/lang/Object;",
+                    new MethodRef("java/util/function/Supplier", "get", "()Ljava/lang/Object;"),
+                    9
+                ),
+                new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "(Ljava/util/function/Supplier;)Ljava/lang/Object;")
+            )
+        );
+
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            Map.of(
+                "com/acme/StringSupplier", classWithMethods(
+                    "com/acme/StringSupplier",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/util/function/Supplier"),
+                    methodInfo("get", "()Ljava/lang/Object;", instruction(0, 1, "aconst_null"), instruction(1, 176, "areturn"))
+                )
+            ),
+            new Instruction(
+                0,
+                186,
+                "invokedynamic",
+                new byte[0],
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.of(dynamicRef)
+            ),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
     }
 
     @Test
@@ -9452,6 +9709,30 @@ final class CoreBehaviorTest {
         return verifyInstruction(Map.of(), instruction, reachable);
     }
 
+    private static List<Diagnostic> verifyInstructions(final boolean reachable, final Instruction... instructions) {
+        final MethodInfo method = new MethodInfo(
+            0,
+            "main",
+            "([Ljava/lang/String;)V",
+            Optional.of(new CodeAttribute(4, 2, new byte[0], 0, List.of(instructions)))
+        );
+        final ClassFile classFile = new ClassFile(
+            69,
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            List.of(),
+            List.of(method),
+            Path.of("Main.class"),
+            true
+        );
+        final List<EntryPoint> reachableMethods = reachable
+            ? List.of(new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"))
+            : List.of();
+        return new StaticVerifier().verify(Map.of(classFile.name(), classFile), reachableMethods);
+    }
+
     private static List<Diagnostic> verifyInstruction(
         final Map<String, ClassFile> extraClasses,
         final Instruction instruction,
@@ -9837,7 +10118,7 @@ final class CoreBehaviorTest {
             "(unsigned long) offsetof(struct javan_class_com_acme_Node, field_child),",
             "(unsigned long) offsetof(struct javan_class_com_acme_Node, field_items)",
             "static JavanTypeDescriptor javan_type_descriptors[] = {",
-            "{1, \"com/acme/Node\", 2, javan_type_fields_com_acme_Node}",
+            "{1, \"com.acme.Node\", 2, javan_type_fields_com_acme_Node}",
             "javan_register_type_descriptors(javan_type_descriptors, 1);",
             "javan_register_generated_type_descriptors();",
             "javan_gc_safe_point();"

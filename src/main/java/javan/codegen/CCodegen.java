@@ -7,6 +7,7 @@ import javan.classfile.MethodRef;
 import javan.ir.IrClass;
 import javan.ir.IrDispatch;
 import javan.ir.IrDispatchTarget;
+import javan.ir.IrExpression;
 import javan.ir.IrInstruction;
 import javan.ir.IrProgram;
 import javan.ir.IrSourceLocation;
@@ -209,7 +210,7 @@ public final class CCodegen {
                 c.append("    {")
                     .append(ids.get(classInfo.jvmName()).intValue())
                     .append(", \"")
-                    .append(escapeCString(classInfo.jvmName()))
+                    .append(escapeCString(displayClassName(classInfo.jvmName())))
                     .append("\", ")
                     .append(objectFields.size())
                     .append(", ");
@@ -1853,14 +1854,18 @@ public final class CCodegen {
                 break;
             case PANIC: {
                 final ExpressionPlan plan = new ExpressionPlan();
-                final String value = plan.expression(instruction.expression().orElseThrow());
+                final IrExpression panicExpression = instruction.expression().orElseThrow();
+                final String value = plan.expression(panicExpression);
+                final String detail = panicExpression.type() == javan.ir.IrType.OBJECT
+                    ? "javan_panic_detail_object(" + value + ")"
+                    : "(const char*) " + value;
                 final String indent = emitExpressionScopeStart(plan, c);
                 if (instruction.sourceLocation().isPresent()) {
-                    emitPanicAt(c, indent, value, instruction.sourceLocation().orElseThrow());
+                    emitPanicAt(c, indent, detail, instruction.sourceLocation().orElseThrow());
                 } else {
                     c.append(indent)
-                        .append("javan_panic((const char*) ")
-                        .append(value)
+                        .append("javan_panic(")
+                        .append(detail)
                         .append(");")
                         .append(System.lineSeparator());
                 }

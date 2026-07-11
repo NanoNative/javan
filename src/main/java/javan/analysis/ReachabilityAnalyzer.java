@@ -2,11 +2,14 @@ package javan.analysis;
 
 import javan.classfile.ClassFile;
 import javan.classfile.CodeAttribute;
+import javan.classfile.DynamicRef;
 import javan.classfile.FieldRef;
 import javan.classfile.Instruction;
+import javan.classfile.LambdaMetafactorySupport;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
 import javan.compat.NetworkApiSupport;
+import javan.compat.JdkCallSupport;
 import javan.compat.JavanNativeSubstitutions;
 import javan.verify.Diagnostic;
 
@@ -44,10 +47,13 @@ public final class ReachabilityAnalyzer {
         if (entries.isEmpty()) {
             throw new IllegalArgumentException("Reachability requires at least one entry point");
         }
+        final LambdaMetafactorySupport.Registry lambdaRegistry = LambdaMetafactorySupport.scan(classes);
+        final Map<String, ClassFile> expandedClasses = lambdaRegistry.expandedClasses(classes);
         final List<EntryPoint> reachable = new ArrayList<>();
         final List<Diagnostic> diagnostics = new ArrayList<>();
         final List<CallEdge> callEdges = new ArrayList<>();
         final List<EntryPoint> work = new ArrayList<>(entries);
+        final List<String> reachableLambdaOwners = new ArrayList<>();
         int workIndex = 0;
 
         while (true) {
@@ -58,7 +64,7 @@ public final class ReachabilityAnalyzer {
                     continue;
                 }
                 reachable.add(current);
-                final Optional<MethodInfo> method = method(classes, current);
+                final Optional<MethodInfo> method = method(expandedClasses, current);
                 if (method.isEmpty()) {
                     diagnostics.add(Diagnostic.error(
                         "JAVAN011",
@@ -71,19 +77,19 @@ public final class ReachabilityAnalyzer {
                     ));
                     continue;
                 }
-                if (isUnsupportedEnumSyntheticEntry(classes, current)) {
+                if (isUnsupportedEnumSyntheticEntry(expandedClasses, current)) {
                     diagnostics.add(unsupportedEnumValueOfDiagnostic(current, current.display()));
                     continue;
                 }
                 final Optional<CodeAttribute> code = method.orElseThrow().code();
                 if (code.isPresent()) {
                     for (final Instruction instruction : code.orElseThrow().instructions()) {
-                        enqueueClassInitializer(classes, instruction, work, current, callEdges);
-                        enqueueApplicationCall(classes, instruction, work, diagnostics, current, callEdges);
+                        enqueueClassInitializer(expandedClasses, instruction, work, current, callEdges);
+                        enqueueApplicationCall(expandedClasses, lambdaRegistry, reachableLambdaOwners, instruction, work, diagnostics, current, callEdges);
                     }
                 }
             }
-            if (!enqueueRunnableThreadTargets(classes, reachable, work, callEdges)) {
+            if (!enqueueRunnableThreadTargets(expandedClasses, reachable, work, callEdges)) {
                 break;
             }
         }
@@ -122,12 +128,15 @@ public final class ReachabilityAnalyzer {
 
     private static void enqueueApplicationCall(
         final Map<String, ClassFile> classes,
+        final LambdaMetafactorySupport.Registry lambdaRegistry,
+        final List<String> reachableLambdaOwners,
         final Instruction instruction,
         final List<EntryPoint> work,
         final List<Diagnostic> diagnostics,
         final EntryPoint current,
         final List<CallEdge> callEdges
     ) {
+        enqueueLambdaImplementation(classes, lambdaRegistry, reachableLambdaOwners, current, instruction, work, callEdges);
         final Optional<MethodRef> methodRef = instruction.methodRef();
         if (methodRef.isEmpty()) {
             return;
@@ -148,6 +157,24 @@ public final class ReachabilityAnalyzer {
             diagnostics.add(unsupportedEnumValueOfDiagnostic(current, target.display()));
             return;
         }
+        if (instruction.opcode() == 185 && JdkCallSupport.isSupportedClosedWorldDispatchCall(target)) {
+            final List<EntryPoint> targetMethods = interfaceTargets(classes, target, reachableLambdaOwners);
+            if (!targetMethods.isEmpty()) {
+                work.addAll(targetMethods);
+                addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
+                return;
+            }
+            diagnostics.add(Diagnostic.error(
+                "JAVAN012",
+                "unsupported reachable application method call",
+                current.className(),
+                current.methodName() + current.descriptor(),
+                target.display(),
+                "Closed-world interface dispatch requires at least one concrete implementation in the reachable application or dependency graph.",
+                "Add a concrete implementation, keep the call on the JVM, or reduce the reachable higher-order flow."
+            ));
+            return;
+        }
         if (isJdkCall(target) || NetworkApiSupport.isNetworkCall(target)) {
             return;
         }
@@ -161,7 +188,7 @@ public final class ReachabilityAnalyzer {
             return;
         }
         if (instruction.opcode() == 185) {
-            final List<EntryPoint> targetMethods = interfaceTargets(classes, target);
+            final List<EntryPoint> targetMethods = interfaceTargets(classes, target, reachableLambdaOwners);
             if (!targetMethods.isEmpty()) {
                 work.addAll(targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
@@ -239,6 +266,90 @@ public final class ReachabilityAnalyzer {
             "The current native profile could not resolve a closed-world dispatch target.",
             "Make sure at least one concrete application class implements the invoked method."
         ));
+    }
+
+    private static void enqueueLambdaImplementation(
+        final Map<String, ClassFile> classes,
+        final LambdaMetafactorySupport.Registry lambdaRegistry,
+        final List<String> reachableLambdaOwners,
+        final EntryPoint current,
+        final Instruction instruction,
+        final List<EntryPoint> work,
+        final List<CallEdge> callEdges
+    ) {
+        if (instruction.opcode() != 186) {
+            return;
+        }
+        final Optional<LambdaMetafactorySupport.LambdaClosurePlan> lambdaPlan = lambdaRegistry.planForSite(
+            current.className(),
+            current.methodName(),
+            current.descriptor(),
+            instruction.offset()
+        );
+        if (lambdaPlan.isEmpty()) {
+            return;
+        }
+        final LambdaMetafactorySupport.LambdaClosurePlan plan = lambdaPlan.orElseThrow();
+        if (!containsString(reachableLambdaOwners, plan.syntheticOwner())) {
+            reachableLambdaOwners.add(plan.syntheticOwner());
+        }
+        final EntryPoint wrapper = plan.wrapperEntryPoint();
+        work.add(wrapper);
+        addEdge(callEdges, current, wrapper, CallEdge.Kind.CALL);
+        final MethodRef target = plan.implementationTarget();
+        if (classes.containsKey(target.owner()) && !isJdkCall(target) && !NetworkApiSupport.isNetworkCall(target)) {
+            final EntryPoint callee = new EntryPoint(target.owner(), target.name(), target.descriptor());
+            work.add(callee);
+            addEdge(callEdges, current, callee, CallEdge.Kind.CALL);
+            return;
+        }
+        if (plan.implementationReferenceKind() == 9) {
+            enqueueLambdaBridgeInterfaceTargets(classes, current, target, work, callEdges);
+            return;
+        }
+        if (plan.implementationReferenceKind() == 5) {
+            enqueueLambdaBridgeVirtualTargets(classes, current, target, work, callEdges);
+        }
+    }
+
+    private static void enqueueLambdaBridgeInterfaceTargets(
+        final Map<String, ClassFile> classes,
+        final EntryPoint current,
+        final MethodRef target,
+        final List<EntryPoint> work,
+        final List<CallEdge> callEdges
+    ) {
+        for (final ClassFile candidate : classes.values()) {
+            if (candidate.isInterface() || !isAssignableTo(classes, candidate.name(), target.owner())) {
+                continue;
+            }
+            final Optional<EntryPoint> resolved = lowerableResolvedInterfaceTarget(classes, candidate.name(), target);
+            if (resolved.isPresent()) {
+                final EntryPoint callee = resolved.orElseThrow();
+                work.add(callee);
+                addEdge(callEdges, current, callee, CallEdge.Kind.CALL);
+            }
+        }
+    }
+
+    private static void enqueueLambdaBridgeVirtualTargets(
+        final Map<String, ClassFile> classes,
+        final EntryPoint current,
+        final MethodRef target,
+        final List<EntryPoint> work,
+        final List<CallEdge> callEdges
+    ) {
+        for (final ClassFile candidate : classes.values()) {
+            if (candidate.isInterface() || !isSubtypeOf(classes, candidate.name(), target.owner())) {
+                continue;
+            }
+            final Optional<EntryPoint> resolved = lowerableResolvedVirtualTarget(classes, candidate.name(), target);
+            if (resolved.isPresent()) {
+                final EntryPoint callee = resolved.orElseThrow();
+                work.add(callee);
+                addEdge(callEdges, current, callee, CallEdge.Kind.CALL);
+            }
+        }
     }
 
     private static void enqueueClassInitializer(
@@ -445,7 +556,11 @@ public final class ReachabilityAnalyzer {
             && "(Ljava/lang/Runnable;)V".equals(target.descriptor());
     }
 
-    private static List<EntryPoint> interfaceTargets(final Map<String, ClassFile> classes, final MethodRef target) {
+    private static List<EntryPoint> interfaceTargets(
+        final Map<String, ClassFile> classes,
+        final MethodRef target,
+        final List<String> reachableLambdaOwners
+    ) {
         final List<EntryPoint> targets = new ArrayList<>();
         final Optional<EntryPoint> defaultTarget = directDefaultInterfaceTarget(classes, target);
         if (defaultTarget.isPresent()) {
@@ -464,6 +579,23 @@ public final class ReachabilityAnalyzer {
                 if (!containsEntry(targets, entryPoint)) {
                     targets.add(entryPoint);
                 }
+            }
+        }
+        for (final String syntheticOwner : reachableLambdaOwners) {
+            final ClassFile syntheticClass = classes.get(syntheticOwner);
+            if (syntheticClass == null) {
+                continue;
+            }
+            if (!isAssignableTo(classes, syntheticOwner, target.owner())) {
+                continue;
+            }
+            final Optional<MethodInfo> syntheticMethod = syntheticClass.method(target.name(), target.descriptor());
+            if (syntheticMethod.isEmpty()) {
+                continue;
+            }
+            final EntryPoint entryPoint = new EntryPoint(syntheticOwner, target.name(), target.descriptor());
+            if (!containsEntry(targets, entryPoint)) {
+                targets.add(entryPoint);
             }
         }
         return List.copyOf(targets);
@@ -510,7 +642,10 @@ public final class ReachabilityAnalyzer {
             }
             current = classFile.superName();
         }
-        return current != null && isJdkOwner(current);
+        if (current == null || !isJdkOwner(current)) {
+            return false;
+        }
+        return !"java/lang/Object".equals(current);
     }
 
     private static boolean isJdkOwner(final String owner) {

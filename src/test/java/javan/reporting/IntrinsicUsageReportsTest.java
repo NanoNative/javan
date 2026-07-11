@@ -72,6 +72,7 @@ final class IntrinsicUsageReportsTest {
             new IntrinsicCallCount("System.exit", 0),
             new IntrinsicCallCount("Arrays.copyOf", 1),
             new IntrinsicCallCount("Arrays.copyOfRange", 0),
+            new IntrinsicCallCount("Arrays.stream", 0),
             new IntrinsicCallCount("Integer.toString", 1),
             new IntrinsicCallCount("Long.toString", 1),
             new IntrinsicCallCount("Float.toString", 0),

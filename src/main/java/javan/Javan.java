@@ -15,6 +15,7 @@ import javan.build.ResourceBundler;
 import javan.build.RuntimeFeatureSelection;
 import javan.classfile.ClassFile;
 import javan.classfile.ClassFileScanner;
+import javan.classfile.LambdaMetafactorySupport;
 import javan.cli.Options;
 import javan.codegen.BytecodeToIR;
 import javan.codegen.CCodegen;
@@ -138,15 +139,16 @@ public final class Javan {
         }
         final List<Diagnostic> diagnostics = new ArrayList<>(mainDetection.diagnostics());
         diagnostics.addAll(callGraph.diagnostics());
+        final Map<String, ClassFile> reportingClasses = LambdaMetafactorySupport.scan(classes, callGraph.reachableMethods()).expandedClasses(classes);
         if (mainDetection.pass()) {
             diagnostics.addAll(staticVerifier.verify(classes, callGraph.reachableMethods()));
         }
-        final DeduplicationPlanner.Plan deduplicationPlan = deduplicationPlanner.writePlan(layout.outputDirectory(), classes, callGraph);
+        final DeduplicationPlanner.Plan deduplicationPlan = deduplicationPlanner.writePlan(layout.outputDirectory(), reportingClasses, callGraph);
         diagnostics.addAll(runtimeFeatureSelection.write(layout.root(), layout.outputDirectory(), deduplicationPlan).diagnostics());
         reports.writeReachability(layout, callGraph);
-        dependencyReports.write(layout, classes, callGraph);
-        reports.writeDiagnostics(layout, diagnostics, classes, callGraph);
-        intrinsicUsageReports.write(layout.outputDirectory(), classes, callGraph);
+        dependencyReports.write(layout, reportingClasses, callGraph);
+        reports.writeDiagnostics(layout, diagnostics, reportingClasses, callGraph);
+        intrinsicUsageReports.write(layout.outputDirectory(), reportingClasses, callGraph);
         optimizationReports.writeScaffold(layout.outputDirectory());
         writeUnifiedReport(layout.outputDirectory());
         final List<Diagnostic> errors = errors(diagnostics);
@@ -382,9 +384,10 @@ public final class Javan {
         final CallGraph callGraph = reachabilityAnalyzer.analyze(classes, mainClass);
         final List<Diagnostic> diagnostics = new ArrayList<>(callGraph.diagnostics());
         diagnostics.addAll(staticVerifier.verify(classes, callGraph.reachableMethods()));
+        final Map<String, ClassFile> reportingClasses = LambdaMetafactorySupport.scan(classes, callGraph.reachableMethods()).expandedClasses(classes);
         reports.writeReachability(layout, callGraph);
-        dependencyReports.write(layout, classes, callGraph);
-        reports.writeDiagnostics(layout, diagnostics, classes, callGraph);
+        dependencyReports.write(layout, reportingClasses, callGraph);
+        reports.writeDiagnostics(layout, diagnostics, reportingClasses, callGraph);
         final List<ClassMetadata> projectMetadata = classMetadataScanner.scanLayout(layout);
         final List<ClassMetadata> jdkMetadata = classMetadataScanner.scanCurrentJdk(layout.outputDirectory());
         final CompatibilityResult result = compatibilityReports.write(

@@ -2,6 +2,7 @@ package javan.codegen;
 
 import javan.analysis.CallGraph;
 import javan.analysis.EntryPoint;
+import javan.classfile.BootstrapValue;
 import javan.classfile.ClassFile;
 import javan.classfile.CodeAttribute;
 import javan.classfile.CodeException;
@@ -20,6 +21,7 @@ import javan.ir.IrFunction;
 import javan.ir.IrInstruction;
 import javan.ir.IrLocal;
 import javan.ir.IrProgram;
+import javan.ir.IrSourceLocation;
 import javan.ir.IrType;
 import javan.verify.DiagnosticException;
 import org.junit.jupiter.api.Test;
@@ -150,9 +152,23 @@ final class BytecodeToIRTest {
         final IrFunction function = lowerMain(main);
 
         assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_throwable_new",
+                    List.of(IrExpression.stringLiteral("java/lang/NullPointerException"))
+                )
+            ),
+            IrInstruction.callStaticVoid(
+                "javan_throwable_set_message",
+                List.of(IrExpression.objectLocal("object0"), IrExpression.stringLiteral("boom"))
+            ),
             IrInstruction.jump("label_5"),
             IrInstruction.label("label_5"),
-            IrInstruction.returnObject(IrExpression.stringLiteral("boom"))
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_throwable_get_message",
+                List.of(IrExpression.objectLocal("object0"))
+            ))
         );
     }
 
@@ -179,10 +195,24 @@ final class BytecodeToIRTest {
         final IrFunction function = lowerMain(main);
 
         assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_throwable_new",
+                    List.of(IrExpression.stringLiteral("java/lang/NullPointerException"))
+                )
+            ),
+            IrInstruction.callStaticVoid(
+                "javan_throwable_set_message",
+                List.of(IrExpression.objectLocal("object0"), IrExpression.stringLiteral("boom"))
+            ),
             IrInstruction.jump("label_5"),
             IrInstruction.label("label_5"),
-            IrInstruction.assignObject("local0", IrExpression.stringLiteral("boom")),
-            IrInstruction.returnObject(IrExpression.objectLocal("local0"))
+            IrInstruction.assignObject("local0_object_1", IrExpression.objectLocal("object0")),
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_throwable_get_message",
+                List.of(IrExpression.objectLocal("local0_object_1"))
+            ))
         );
     }
 
@@ -255,13 +285,36 @@ final class BytecodeToIRTest {
 
         final IrFunction function = lowerMain(main);
 
-        assertThat(function.instructions().getFirst()).satisfies(instruction -> {
-            assertThat(instruction.op()).isEqualTo(IrInstruction.Op.PANIC);
-            assertThat(instruction.expression()).contains(IrExpression.stringLiteral("boom"));
-            assertThat(instruction.sourceLocation()).isPresent();
-            assertThat(instruction.sourceLocation().orElseThrow().bytecodeOffset()).isEqualTo(4);
-        });
-        assertThat(function.instructions().stream().anyMatch(instruction -> instruction.op() == IrInstruction.Op.JUMP)).isFalse();
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_throwable_new",
+                    List.of(IrExpression.stringLiteral("java/lang/NullPointerException"))
+                )
+            ),
+            IrInstruction.callStaticVoid(
+                "javan_throwable_set_message",
+                List.of(IrExpression.objectLocal("object0"), IrExpression.stringLiteral("boom"))
+            ),
+            IrInstruction.panic(
+                IrExpression.objectLocal("object0"),
+                new IrSourceLocation(
+                    "com/acme/Main",
+                    "main",
+                    "()Ljava/lang/String;",
+                    4,
+                    Optional.of("Main.java"),
+                    Optional.empty(),
+                    Optional.empty()
+                )
+            ),
+            IrInstruction.label("label_5"),
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_throwable_get_message",
+                List.of(IrExpression.objectNull())
+            ))
+        );
     }
 
     @Test
@@ -313,14 +366,34 @@ final class BytecodeToIRTest {
 
         final IrFunction function = lowerMain(main);
 
-        assertThat(function.instructions()).hasSize(4);
-        assertThat(function.instructions().subList(0, 3)).containsExactly(
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_throwable_new",
+                    List.of(IrExpression.stringLiteral("java/lang/NullPointerException"))
+                )
+            ),
+            IrInstruction.callStaticVoid(
+                "javan_throwable_set_message",
+                List.of(IrExpression.objectLocal("object0"), IrExpression.stringLiteral("boom"))
+            ),
             IrInstruction.jump("label_5"),
             IrInstruction.label("label_5"),
-            IrInstruction.assignObject("local0", IrExpression.stringLiteral("boom"))
+            IrInstruction.assignObject("local0_object_1", IrExpression.objectLocal("object0")),
+            IrInstruction.panic(
+                IrExpression.objectLocal("local0_object_1"),
+                new IrSourceLocation(
+                    "com/acme/Main",
+                    "main",
+                    "()Ljava/lang/String;",
+                    7,
+                    Optional.of("Main.java"),
+                    Optional.empty(),
+                    Optional.empty()
+                )
+            )
         );
-        assertThat(function.instructions().get(3).op()).isEqualTo(IrInstruction.Op.PANIC);
-        assertThat(function.instructions().get(3).expression()).contains(IrExpression.objectLocal("local0"));
     }
 
     @Test
@@ -580,13 +653,27 @@ final class BytecodeToIRTest {
         final IrFunction function = lowerMain(main);
 
         assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_throwable_new",
+                    List.of(IrExpression.stringLiteral("java/lang/NullPointerException"))
+                )
+            ),
+            IrInstruction.callStaticVoid(
+                "javan_throwable_set_message",
+                List.of(IrExpression.objectLocal("object0"), IrExpression.stringLiteral("boom"))
+            ),
             IrInstruction.jump("label_5"),
             IrInstruction.label("label_5"),
-            IrInstruction.assignObject("local0", IrExpression.stringLiteral("boom")),
+            IrInstruction.assignObject("local0_object_1", IrExpression.objectLocal("object0")),
             IrInstruction.jump("label_8"),
             IrInstruction.label("label_8"),
-            IrInstruction.assignObject("local1_object_1", IrExpression.objectLocal("local0")),
-            IrInstruction.returnObject(IrExpression.objectLocal("local1_object_1"))
+            IrInstruction.assignObject("local1_object_2", IrExpression.objectLocal("local0_object_1")),
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_throwable_get_message",
+                List.of(IrExpression.objectLocal("local1_object_2"))
+            ))
         );
     }
 
@@ -6298,8 +6385,20 @@ final class BytecodeToIRTest {
             IrInstruction.label("label_thread_wait_success_3_1"),
             IrInstruction.returnObject(IrExpression.stringLiteral("ok")),
             IrInstruction.label("label_6"),
-            IrInstruction.assignObject("local0_object_2", IrExpression.stringLiteral("sleep interrupted")),
-            IrInstruction.returnObject(IrExpression.objectLocal("local0_object_2"))
+            IrInstruction.assignObject(
+                "local0_object_2",
+                IrExpression.objectCall(
+                    "javan_throwable_new_with_message",
+                    List.of(
+                        IrExpression.stringLiteral("java/lang/InterruptedException"),
+                        IrExpression.stringLiteral("sleep interrupted")
+                    )
+                )
+            ),
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_throwable_get_message",
+                List.of(IrExpression.objectLocal("local0_object_2"))
+            ))
         );
     }
 
@@ -6339,8 +6438,20 @@ final class BytecodeToIRTest {
             IrInstruction.label("label_thread_wait_success_3_0"),
             IrInstruction.returnObject(IrExpression.stringLiteral("ok")),
             IrInstruction.label("label_6"),
-            IrInstruction.assignObject("local1_object_1", IrExpression.objectNull()),
-            IrInstruction.returnObject(IrExpression.objectLocal("local1_object_1"))
+            IrInstruction.assignObject(
+                "local1_object_1",
+                IrExpression.objectCall(
+                    "javan_throwable_new_with_message",
+                    List.of(
+                        IrExpression.stringLiteral("java/lang/InterruptedException"),
+                        IrExpression.objectNull()
+                    )
+                )
+            ),
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_throwable_get_message",
+                List.of(IrExpression.objectLocal("local1_object_1"))
+            ))
         );
     }
 
@@ -11977,6 +12088,77 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersObjectArraysStreamToFindFirst() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "([Ljava/lang/Object;)Ljava/util/Optional;",
+            2,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeStatic(1, new MethodRef("java/util/Arrays", "stream", "([Ljava/lang/Object;)Ljava/util/stream/Stream;")),
+            invokeInterface(2, new MethodRef("java/util/stream/Stream", "findFirst", "()Ljava/util/Optional;")),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall("javan_list_of_array", List.of(IrExpression.objectLocal("arg0")))
+            ),
+            IrInstruction.assignObject(
+                "object1",
+                IrExpression.objectCall("javan_list_iterator", List.of(IrExpression.objectLocal("object0")))
+            ),
+            IrInstruction.assignObject(
+                "object3",
+                IrExpression.objectCall("javan_optional_empty", List.of())
+            ),
+            IrInstruction.label("label_stream_find_first_next_2_4"),
+            IrInstruction.branchIf(
+                "label_stream_find_first_body_2_4",
+                IrExpression.intComparison(
+                    "!=",
+                    IrExpression.intCall("javan_iterator_has_next", List.of(IrExpression.objectLocal("object1"))),
+                    IrExpression.intLiteral(0)
+                )
+            ),
+            IrInstruction.jump("label_stream_find_first_done_2_4"),
+            IrInstruction.label("label_stream_find_first_body_2_4"),
+            IrInstruction.assignObject(
+                "object2",
+                IrExpression.objectCall("javan_iterator_next", List.of(IrExpression.objectLocal("object1")))
+            ),
+            IrInstruction.assignObject(
+                "object3",
+                IrExpression.objectCall("javan_optional_of_nullable", List.of(IrExpression.objectLocal("object2")))
+            ),
+            IrInstruction.jump("label_stream_find_first_done_2_4"),
+            IrInstruction.jump("label_stream_find_first_next_2_4"),
+            IrInstruction.label("label_stream_find_first_done_2_4"),
+            IrInstruction.returnObject(IrExpression.objectLocal("object3"))
+        );
+    }
+
+    @Test
+    void lowersLongToDoubleConversionToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(J)D",
+            2,
+            2,
+            plain(0, 30, "lload_0"),
+            plain(1, 138, "l2d"),
+            plain(2, 175, "dreturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnDouble(IrExpression.doubleCall("javan_l2d", List.of(IrExpression.longLocal("arg0"))))
+        );
+    }
+
+    @Test
     void lowersOptionalOfNullableToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -14095,6 +14277,17 @@ final class BytecodeToIRTest {
         final IrProgram program = lowerProgram("com/acme/SwitchMap$1", clinit, synthetic);
 
         assertThat(program.functions().getFirst().instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_throwable_new",
+                    List.of(IrExpression.stringLiteral("java/lang/NoSuchFieldError"))
+                )
+            ),
+            IrInstruction.callStaticVoid(
+                "javan_throwable_set_message",
+                List.of(IrExpression.objectLocal("object0"), IrExpression.objectNull())
+            ),
             IrInstruction.jump("label_4"),
             IrInstruction.label("label_4"),
             IrInstruction.returnVoid()
@@ -14164,6 +14357,17 @@ final class BytecodeToIRTest {
         final IrProgram program = lowerProgram("com/acme/SwitchMapHolder", clinit, switchMapHolder);
 
         assertThat(program.functions().getFirst().instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_throwable_new",
+                    List.of(IrExpression.stringLiteral("java/lang/NoSuchFieldError"))
+                )
+            ),
+            IrInstruction.callStaticVoid(
+                "javan_throwable_set_message",
+                List.of(IrExpression.objectLocal("object0"), IrExpression.objectNull())
+            ),
             IrInstruction.jump("label_4"),
             IrInstruction.label("label_4"),
             IrInstruction.returnVoid()
@@ -14190,14 +14394,36 @@ final class BytecodeToIRTest {
 
         final IrProgram program = lowerProgram("com/acme/SwitchMap$1", clinit, synthetic);
 
-        assertThat(program.functions().getFirst().locals()).containsExactly(new IrLocal(IrType.OBJECT, "local1"));
-        assertThat(program.functions().getFirst().instructions().getFirst()).satisfies(instruction -> {
-            assertThat(instruction.op()).isEqualTo(IrInstruction.Op.PANIC);
-            assertThat(instruction.expression()).contains(IrExpression.objectNull());
-        });
-        assertThat(program.functions().getFirst().instructions()).endsWith(
+        assertThat(program.functions().getFirst().locals()).containsExactly(
+            new IrLocal(IrType.OBJECT, "object0"),
+            new IrLocal(IrType.OBJECT, "local1_object_1")
+        );
+        assertThat(program.functions().getFirst().instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_throwable_new",
+                    List.of(IrExpression.stringLiteral("java/lang/NoSuchFieldError"))
+                )
+            ),
+            IrInstruction.callStaticVoid(
+                "javan_throwable_set_message",
+                List.of(IrExpression.objectLocal("object0"), IrExpression.objectNull())
+            ),
+            IrInstruction.panic(
+                IrExpression.objectLocal("object0"),
+                new IrSourceLocation(
+                    "com/acme/SwitchMap$1",
+                    "<clinit>",
+                    "()V",
+                    3,
+                    Optional.of("SwitchMap$1.java"),
+                    Optional.empty(),
+                    Optional.empty()
+                )
+            ),
             IrInstruction.label("label_4"),
-            IrInstruction.assignObject("local1", IrExpression.objectNull()),
+            IrInstruction.assignObject("local1_object_1", IrExpression.objectNull()),
             IrInstruction.returnVoid()
         );
     }
@@ -14277,6 +14503,121 @@ final class BytecodeToIRTest {
                 )
             ))
         );
+    }
+
+    @Test
+    void lowersExactLambdaMetafactoryClosureAllocation() {
+        final String syntheticOwner = "com/acme/Main$$javan$lambda$main$run$1";
+        final IrProgram program = lowerProgram(
+            method(
+                0x0008,
+                "main",
+                "(I)Ljava/lang/Runnable;",
+                1,
+                1,
+                plain(0, 26, "iload_0"),
+                invokeDynamic(1, new DynamicRef(
+                    "run",
+                    "(I)Ljava/lang/Runnable;",
+                    "java/lang/invoke/LambdaMetafactory",
+                    "metafactory",
+                    "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;",
+                    List.of("()V", "com/acme/Holder.lambda$0(I)V", "()V"),
+                    List.of(
+                        new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "()V"),
+                        BootstrapValue.methodHandle(
+                            "com/acme/Holder.lambda$0(I)V",
+                            new MethodRef("com/acme/Holder", "lambda$0", "(I)V"),
+                            6
+                        ),
+                        new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "()V")
+                    )
+                )),
+                plain(2, 176, "areturn")
+            ),
+            classFile(
+                "com/acme/Holder",
+                "java/lang/Object",
+                0,
+                List.of(),
+                List.of(),
+                List.of(new MethodInfo(0x0009, "lambda$0", "(I)V", Optional.empty()))
+            )
+        );
+
+        assertThat(program.classes()).anySatisfy(irClass -> {
+            assertThat(irClass.jvmName()).isEqualTo(syntheticOwner);
+            assertThat(irClass.fields()).containsExactly(new IrField(IrType.INT, "capture0", "field_capture0"));
+        });
+        assertThat(program.functions().getFirst().instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectAllocation(syntheticOwner)),
+            IrInstruction.assignFieldInt(syntheticOwner, "capture0", IrExpression.objectLocal("object0"), IrExpression.intLocal("arg0")),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersLambdaMetafactorySupplierBridgeClosureAllocationAndWrapper() {
+        final String syntheticOwner = "com/acme/Main$$javan$lambda$main$apply$1";
+        final IrProgram program = lowerProgram(
+            method(
+                0x0008,
+                "main",
+                "()Ljava/util/function/Function;",
+                0,
+                0,
+                invokeDynamic(1, new DynamicRef(
+                    "apply",
+                    "()Ljava/util/function/Function;",
+                    "java/lang/invoke/LambdaMetafactory",
+                    "metafactory",
+                    "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;",
+                    List.of("(Ljava/lang/Object;)Ljava/lang/Object;", "java/util/function/Supplier.get()Ljava/lang/Object;", "(Ljava/util/function/Supplier;)Ljava/lang/Object;"),
+                    List.of(
+                        new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "(Ljava/lang/Object;)Ljava/lang/Object;"),
+                        BootstrapValue.methodHandle(
+                            "java/util/function/Supplier.get()Ljava/lang/Object;",
+                            new MethodRef("java/util/function/Supplier", "get", "()Ljava/lang/Object;"),
+                            9
+                        ),
+                        new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "(Ljava/util/function/Supplier;)Ljava/lang/Object;")
+                    )
+                )),
+                plain(2, 176, "areturn")
+            ),
+            classFile(
+                "com/acme/StringSupplier",
+                "java/lang/Object",
+                0,
+                List.of("java/util/function/Supplier"),
+                List.of(),
+                List.of(method(
+                    0,
+                    "get",
+                    "()Ljava/lang/Object;",
+                    1,
+                    1,
+                    plain(0, 1, "aconst_null"),
+                    plain(1, 176, "areturn")
+                ))
+            )
+        );
+
+        assertThat(program.classes()).anySatisfy(irClass -> {
+            assertThat(irClass.jvmName()).isEqualTo(syntheticOwner);
+            assertThat(irClass.fields()).isEmpty();
+        });
+        assertThat(program.functions()).anySatisfy(function -> {
+            if (!function.owner().equals(syntheticOwner) || !function.name().equals("apply")) {
+                return;
+            }
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.returnObject(IrExpression.objectCall(
+                    symbol("com/acme/StringSupplier", "get", "()Ljava/lang/Object;"),
+                    List.of(IrExpression.objectLocal("arg0"))
+                ))
+            );
+        });
     }
 
     @Test
@@ -14740,8 +15081,19 @@ final class BytecodeToIRTest {
             classFile(className, "java/lang/Object", 0, List.of(), List.of(), List.of(syntheticEnumSwitchMapInitializer(opcode, mnemonic, operands)))
         );
 
-        assertThat(program.functions().getFirst().locals()).isEmpty();
+        assertThat(program.functions().getFirst().locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
         assertThat(program.functions().getFirst().instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_throwable_new",
+                    List.of(IrExpression.stringLiteral("java/lang/NoSuchFieldError"))
+                )
+            ),
+            IrInstruction.callStaticVoid(
+                "javan_throwable_set_message",
+                List.of(IrExpression.objectLocal("object0"), IrExpression.objectNull())
+            ),
             IrInstruction.jump("label_4"),
             IrInstruction.label("label_4"),
             IrInstruction.returnVoid()
@@ -14755,11 +15107,25 @@ final class BytecodeToIRTest {
             classFile(className, "java/lang/Object", 0, List.of(), List.of(), List.of(syntheticEnumSwitchMapInitializer(76, "astore_1")))
         );
 
-        assertThat(program.functions().getFirst().locals()).containsExactly(new IrLocal(IrType.OBJECT, "local1"));
+        assertThat(program.functions().getFirst().locals()).containsExactly(
+            new IrLocal(IrType.OBJECT, "object0"),
+            new IrLocal(IrType.OBJECT, "local1_object_1")
+        );
         assertThat(program.functions().getFirst().instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_throwable_new",
+                    List.of(IrExpression.stringLiteral("java/lang/NoSuchFieldError"))
+                )
+            ),
+            IrInstruction.callStaticVoid(
+                "javan_throwable_set_message",
+                List.of(IrExpression.objectLocal("object0"), IrExpression.objectNull())
+            ),
             IrInstruction.jump("label_4"),
             IrInstruction.label("label_4"),
-            IrInstruction.assignObject("local1", IrExpression.objectNull()),
+            IrInstruction.assignObject("local1_object_1", IrExpression.objectLocal("object0")),
             IrInstruction.returnVoid()
         );
     }

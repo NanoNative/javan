@@ -78,6 +78,7 @@ public final class JdkCallSupport {
         runtime("Thread.Builder.toString", "java/lang/Thread$Builder", "toString", "()Ljava/lang/String;"),
         runtime("Thread.Builder.hashCode", "java/lang/Thread$Builder", "hashCode", "()I"),
         runtime("Thread.Builder.equals", "java/lang/Thread$Builder", "equals", "(Ljava/lang/Object;)Z"),
+        runtime("Thread.Builder.getClass", "java/lang/Thread$Builder", "getClass", "()Ljava/lang/Class;"),
         runtime("Thread.Builder.OfVirtual.name", "java/lang/Thread$Builder$OfVirtual", "name", "(Ljava/lang/String;)Ljava/lang/Thread$Builder$OfVirtual;", "(Ljava/lang/String;J)Ljava/lang/Thread$Builder$OfVirtual;"),
         runtime("Thread.Builder.OfVirtual.factory", "java/lang/Thread$Builder$OfVirtual", "factory", "()Ljava/util/concurrent/ThreadFactory;"),
         runtime("Thread.Builder.OfVirtual.start", "java/lang/Thread$Builder$OfVirtual", "start", "(Ljava/lang/Runnable;)Ljava/lang/Thread;"),
@@ -85,12 +86,14 @@ public final class JdkCallSupport {
         runtime("Thread.Builder.OfVirtual.toString", "java/lang/Thread$Builder$OfVirtual", "toString", "()Ljava/lang/String;"),
         runtime("Thread.Builder.OfVirtual.hashCode", "java/lang/Thread$Builder$OfVirtual", "hashCode", "()I"),
         runtime("Thread.Builder.OfVirtual.equals", "java/lang/Thread$Builder$OfVirtual", "equals", "(Ljava/lang/Object;)Z"),
+        runtime("Thread.Builder.OfVirtual.getClass", "java/lang/Thread$Builder$OfVirtual", "getClass", "()Ljava/lang/Class;"),
         runtime("Executors.newVirtualThreadPerTaskExecutor", "java/util/concurrent/Executors", "newVirtualThreadPerTaskExecutor", "()Ljava/util/concurrent/ExecutorService;"),
         runtime("Executors.newThreadPerTaskExecutor", "java/util/concurrent/Executors", "newThreadPerTaskExecutor", "(Ljava/util/concurrent/ThreadFactory;)Ljava/util/concurrent/ExecutorService;"),
         runtime("ThreadFactory.newThread", "java/util/concurrent/ThreadFactory", "newThread", "(Ljava/lang/Runnable;)Ljava/lang/Thread;"),
         runtime("ThreadFactory.toString", "java/util/concurrent/ThreadFactory", "toString", "()Ljava/lang/String;"),
         runtime("ThreadFactory.hashCode", "java/util/concurrent/ThreadFactory", "hashCode", "()I"),
         runtime("ThreadFactory.equals", "java/util/concurrent/ThreadFactory", "equals", "(Ljava/lang/Object;)Z"),
+        runtime("ThreadFactory.getClass", "java/util/concurrent/ThreadFactory", "getClass", "()Ljava/lang/Class;"),
         runtime("Executor.execute", "java/util/concurrent/Executor", "execute", "(Ljava/lang/Runnable;)V"),
         runtime("ExecutorService.execute", "java/util/concurrent/ExecutorService", "execute", "(Ljava/lang/Runnable;)V"),
         runtime("ExecutorService.shutdown", "java/util/concurrent/ExecutorService", "shutdown", "()V"),
@@ -98,6 +101,7 @@ public final class JdkCallSupport {
         runtime("ExecutorService.toString", "java/util/concurrent/ExecutorService", "toString", "()Ljava/lang/String;"),
         runtime("ExecutorService.hashCode", "java/util/concurrent/ExecutorService", "hashCode", "()I"),
         runtime("ExecutorService.equals", "java/util/concurrent/ExecutorService", "equals", "(Ljava/lang/Object;)Z"),
+        runtime("ExecutorService.getClass", "java/util/concurrent/ExecutorService", "getClass", "()Ljava/lang/Class;"),
         runtime("Thread.currentThread", "java/lang/Thread", "currentThread", "()Ljava/lang/Thread;"),
         runtime("Thread.sleep", "java/lang/Thread", "sleep", "(J)V"),
         runtime("Thread.interrupted", "java/lang/Thread", "interrupted", "()Z"),
@@ -116,6 +120,20 @@ public final class JdkCallSupport {
         runtime("ThreadLocal.get", "java/lang/ThreadLocal", "get", "()Ljava/lang/Object;"),
         runtime("ThreadLocal.set", "java/lang/ThreadLocal", "set", "(Ljava/lang/Object;)V"),
         runtime("ThreadLocal.remove", "java/lang/ThreadLocal", "remove", "()V"),
+        runtime("AtomicBoolean.<init>", "java/util/concurrent/atomic/AtomicBoolean", "<init>", "()V", "(Z)V"),
+        runtime("AtomicBoolean.get", "java/util/concurrent/atomic/AtomicBoolean", "get", "()Z"),
+        runtime("AtomicBoolean.getPlain", "java/util/concurrent/atomic/AtomicBoolean", "getPlain", "()Z"),
+        runtime("AtomicBoolean.set", "java/util/concurrent/atomic/AtomicBoolean", "set", "(Z)V"),
+        runtime("AtomicBoolean.compareAndSet", "java/util/concurrent/atomic/AtomicBoolean", "compareAndSet", "(ZZ)Z"),
+        runtime("AtomicInteger.<init>", "java/util/concurrent/atomic/AtomicInteger", "<init>", "()V", "(I)V"),
+        runtime("AtomicInteger.get", "java/util/concurrent/atomic/AtomicInteger", "get", "()I"),
+        runtime("AtomicInteger.getAndIncrement", "java/util/concurrent/atomic/AtomicInteger", "getAndIncrement", "()I"),
+        runtime("AtomicInteger.incrementAndGet", "java/util/concurrent/atomic/AtomicInteger", "incrementAndGet", "()I"),
+        runtime("AtomicInteger.decrementAndGet", "java/util/concurrent/atomic/AtomicInteger", "decrementAndGet", "()I"),
+        runtime("Object.getClass", "java/lang/Object", "getClass", "()Ljava/lang/Class;"),
+        runtime("Class.getName", "java/lang/Class", "getName", "()Ljava/lang/String;"),
+        runtime("Class.getSimpleName", "java/lang/Class", "getSimpleName", "()Ljava/lang/String;"),
+        runtime("Class.isArray", "java/lang/Class", "isArray", "()Z"),
         intrinsic(
             "Arrays.copyOf",
             "java/util/Arrays",
@@ -137,6 +155,12 @@ public final class JdkCallSupport {
             "([BII)[B",
             "([Ljava/lang/Object;II)[Ljava/lang/Object;"
         ),
+        intrinsic(
+            "Arrays.stream",
+            "java/util/Arrays",
+            "stream",
+            "([Ljava/lang/Object;)Ljava/util/stream/Stream;"
+        ),
         intrinsic("Integer.toString", "java/lang/Integer", "toString", "(I)Ljava/lang/String;"),
         runtime("Integer.valueOf", "java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;"),
         runtime("Integer.intValue", "java/lang/Integer", "intValue", "()I"),
@@ -154,6 +178,8 @@ public final class JdkCallSupport {
         intrinsic("Boolean.toString", "java/lang/Boolean", "toString", "(Z)Ljava/lang/String;"),
         runtime("Boolean.valueOf", "java/lang/Boolean", "valueOf", "(Z)Ljava/lang/Boolean;"),
         runtime("Boolean.booleanValue", "java/lang/Boolean", "booleanValue", "()Z"),
+        runtime("Character.valueOf", "java/lang/Character", "valueOf", "(C)Ljava/lang/Character;"),
+        runtime("Character.charValue", "java/lang/Character", "charValue", "()C"),
         intrinsic(
             "String.valueOf",
             "java/lang/String",
@@ -193,6 +219,7 @@ public final class JdkCallSupport {
         runtime("String.lastIndexOf", "java/lang/String", "lastIndexOf", "(Ljava/lang/String;)I"),
         runtime("String.lastIndexOf", "java/lang/String", "lastIndexOf", "(Ljava/lang/String;I)I"),
         runtime("String.equals", "java/lang/String", "equals", "(Ljava/lang/Object;)Z"),
+        runtime("String.equalsIgnoreCase", "java/lang/String", "equalsIgnoreCase", "(Ljava/lang/String;)Z"),
         runtime("String.contains", "java/lang/String", "contains", "(Ljava/lang/CharSequence;)Z"),
         runtime("String.startsWith", "java/lang/String", "startsWith", "(Ljava/lang/String;)Z", "(Ljava/lang/String;I)Z"),
         runtime("String.endsWith", "java/lang/String", "endsWith", "(Ljava/lang/String;)Z"),
@@ -209,6 +236,7 @@ public final class JdkCallSupport {
             "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/String;",
             "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Object;"
         ),
+        runtime("String.toLowerCase", "java/lang/String", "toLowerCase", "()Ljava/lang/String;"),
         runtime("String.trim", "java/lang/String", "trim", "()Ljava/lang/String;"),
         runtime("String.substring", "java/lang/String", "substring", "(I)Ljava/lang/String;"),
         runtime("String.substring", "java/lang/String", "substring", "(II)Ljava/lang/String;"),
@@ -244,6 +272,10 @@ public final class JdkCallSupport {
         runtime("ArrayList.<init>", "java/util/ArrayList", "<init>", "()V", "(I)V", "(Ljava/util/Collection;)V"),
         runtime("ArrayList.add", "java/util/ArrayList", "add", "(Ljava/lang/Object;)Z"),
         runtime("ArrayList.addAll", "java/util/ArrayList", "addAll", "(Ljava/util/Collection;)Z"),
+        runtime("CopyOnWriteArrayList.<init>", "java/util/concurrent/CopyOnWriteArrayList", "<init>", "()V"),
+        runtime("CopyOnWriteArrayList.add", "java/util/concurrent/CopyOnWriteArrayList", "add", "(Ljava/lang/Object;)Z"),
+        runtime("CopyOnWriteArrayList.size", "java/util/concurrent/CopyOnWriteArrayList", "size", "()I"),
+        runtime("CopyOnWriteArrayList.get", "java/util/concurrent/CopyOnWriteArrayList", "get", "(I)Ljava/lang/Object;"),
         runtime("List.of", "java/util/List", "of", "()Ljava/util/List;"),
         runtime("List.of", "java/util/List", "of", "(Ljava/lang/Object;)Ljava/util/List;"),
         runtime("List.of", "java/util/List", "of", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;"),
@@ -265,6 +297,9 @@ public final class JdkCallSupport {
         runtime("List.isEmpty", "java/util/List", "isEmpty", "()Z"),
         runtime("List.contains", "java/util/List", "contains", "(Ljava/lang/Object;)Z"),
         runtime("Collection.contains", "java/util/Collection", "contains", "(Ljava/lang/Object;)Z"),
+        runtime("List.stream", "java/util/List", "stream", "()Ljava/util/stream/Stream;"),
+        runtime("Collection.stream", "java/util/Collection", "stream", "()Ljava/util/stream/Stream;"),
+        runtime("Set.stream", "java/util/Set", "stream", "()Ljava/util/stream/Stream;"),
         runtime("List.get", "java/util/List", "get", "(I)Ljava/lang/Object;"),
         runtime("List.getFirst", "java/util/List", "getFirst", "()Ljava/lang/Object;"),
         runtime("List.getLast", "java/util/List", "getLast", "()Ljava/lang/Object;"),
@@ -275,11 +310,21 @@ public final class JdkCallSupport {
         runtime("Collection.iterator", "java/util/Collection", "iterator", "()Ljava/util/Iterator;"),
         runtime("Iterator.hasNext", "java/util/Iterator", "hasNext", "()Z"),
         runtime("Iterator.next", "java/util/Iterator", "next", "()Ljava/lang/Object;"),
+        runtime("Stream.filter", "java/util/stream/Stream", "filter", "(Ljava/util/function/Predicate;)Ljava/util/stream/Stream;"),
+        runtime("Stream.map", "java/util/stream/Stream", "map", "(Ljava/util/function/Function;)Ljava/util/stream/Stream;"),
+        runtime("Stream.toList", "java/util/stream/Stream", "toList", "()Ljava/util/List;"),
+        runtime("Stream.findFirst", "java/util/stream/Stream", "findFirst", "()Ljava/util/Optional;"),
+        runtime("Stream.anyMatch", "java/util/stream/Stream", "anyMatch", "(Ljava/util/function/Predicate;)Z"),
+        runtime("Stream.noneMatch", "java/util/stream/Stream", "noneMatch", "(Ljava/util/function/Predicate;)Z"),
         runtime("HashMap.<init>", "java/util/HashMap", "<init>", "()V"),
         runtime("LinkedHashMap.<init>", "java/util/LinkedHashMap", "<init>", "()V"),
         runtime("TreeMap.<init>", "java/util/TreeMap", "<init>", "()V"),
         runtime("Map.copyOf", "java/util/Map", "copyOf", "(Ljava/util/Map;)Ljava/util/Map;"),
+        runtime("Map.of", "java/util/Map", "of", "()Ljava/util/Map;"),
+        runtime("Map.of", "java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;"),
         runtime("Map.get", "java/util/Map", "get", "(Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("Map.computeIfAbsent", "java/util/Map", "computeIfAbsent", "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;"),
+        runtime("Map.forEach", "java/util/Map", "forEach", "(Ljava/util/function/BiConsumer;)V"),
         runtime("HashMap.get", "java/util/HashMap", "get", "(Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("LinkedHashMap.get", "java/util/LinkedHashMap", "get", "(Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("TreeMap.get", "java/util/TreeMap", "get", "(Ljava/lang/Object;)Ljava/lang/Object;"),
@@ -304,10 +349,16 @@ public final class JdkCallSupport {
         runtime("HashMap.isEmpty", "java/util/HashMap", "isEmpty", "()Z"),
         runtime("LinkedHashMap.isEmpty", "java/util/LinkedHashMap", "isEmpty", "()Z"),
         runtime("TreeMap.isEmpty", "java/util/TreeMap", "isEmpty", "()Z"),
+        runtime("Map.entrySet", "java/util/Map", "entrySet", "()Ljava/util/Set;"),
+        runtime("HashMap.entrySet", "java/util/HashMap", "entrySet", "()Ljava/util/Set;"),
+        runtime("LinkedHashMap.entrySet", "java/util/LinkedHashMap", "entrySet", "()Ljava/util/Set;"),
+        runtime("TreeMap.entrySet", "java/util/TreeMap", "entrySet", "()Ljava/util/Set;"),
         runtime("Map.values", "java/util/Map", "values", "()Ljava/util/Collection;"),
         runtime("HashMap.values", "java/util/HashMap", "values", "()Ljava/util/Collection;"),
         runtime("LinkedHashMap.values", "java/util/LinkedHashMap", "values", "()Ljava/util/Collection;"),
         runtime("TreeMap.values", "java/util/TreeMap", "values", "()Ljava/util/Collection;"),
+        runtime("Map.Entry.getKey", "java/util/Map$Entry", "getKey", "()Ljava/lang/Object;"),
+        runtime("Map.Entry.getValue", "java/util/Map$Entry", "getValue", "()Ljava/lang/Object;"),
         runtime("HashMap.getOrDefault", "java/util/HashMap", "getOrDefault", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("LinkedHashMap.getOrDefault", "java/util/LinkedHashMap", "getOrDefault", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("TreeMap.getOrDefault", "java/util/TreeMap", "getOrDefault", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
@@ -393,7 +444,12 @@ public final class JdkCallSupport {
         runtime("Optional.isEmpty", "java/util/Optional", "isEmpty", "()Z"),
         runtime("Optional.get", "java/util/Optional", "get", "()Ljava/lang/Object;"),
         runtime("Optional.orElse", "java/util/Optional", "orElse", "(Ljava/lang/Object;)Ljava/lang/Object;"),
-        runtime("Optional.orElseThrow", "java/util/Optional", "orElseThrow", "()Ljava/lang/Object;")
+        runtime("Optional.orElseGet", "java/util/Optional", "orElseGet", "(Ljava/util/function/Supplier;)Ljava/lang/Object;"),
+        runtime("Optional.orElseThrow", "java/util/Optional", "orElseThrow", "()Ljava/lang/Object;"),
+        runtime("Optional.filter", "java/util/Optional", "filter", "(Ljava/util/function/Predicate;)Ljava/util/Optional;"),
+        runtime("Optional.ifPresent", "java/util/Optional", "ifPresent", "(Ljava/util/function/Consumer;)V"),
+        runtime("Optional.map", "java/util/Optional", "map", "(Ljava/util/function/Function;)Ljava/util/Optional;"),
+        runtime("Optional.ifPresentOrElse", "java/util/Optional", "ifPresentOrElse", "(Ljava/util/function/Consumer;Ljava/lang/Runnable;)V")
     );
 
     private JdkCallSupport() {
@@ -435,17 +491,30 @@ public final class JdkCallSupport {
     }
 
     private static boolean isDirectlySupported(final MethodRef methodRef) {
+        if (isSupportedClosedWorldDispatchCall(methodRef)) {
+            return true;
+        }
         if ("java/util/List".equals(methodRef.owner())) {
             return isSupportedListCall(methodRef.name(), methodRef.descriptor());
         }
         if ("java/util/ArrayList".equals(methodRef.owner())) {
             return isSupportedArrayListCall(methodRef.name(), methodRef.descriptor());
         }
+        if ("java/util/concurrent/CopyOnWriteArrayList".equals(methodRef.owner())) {
+            return isSupportedArrayListCall(methodRef.name(), methodRef.descriptor())
+                || isSupportedListCall(methodRef.name(), methodRef.descriptor());
+        }
         if ("java/util/Collection".equals(methodRef.owner())) {
             return isSupportedCollectionCall(methodRef.name(), methodRef.descriptor());
         }
+        if ("java/util/Set".equals(methodRef.owner())) {
+            return isSupportedSetCall(methodRef.name(), methodRef.descriptor());
+        }
         if ("java/util/Iterator".equals(methodRef.owner())) {
             return isSupportedIteratorCall(methodRef.name(), methodRef.descriptor());
+        }
+        if ("java/util/stream/Stream".equals(methodRef.owner())) {
+            return isSupportedStreamCall(methodRef.name(), methodRef.descriptor());
         }
         if ("java/util/Map".equals(methodRef.owner())) {
             return isSupportedMapCall(methodRef.name(), methodRef.descriptor());
@@ -459,6 +528,9 @@ public final class JdkCallSupport {
         if ("java/util/TreeMap".equals(methodRef.owner())) {
             return isSupportedHashMapCall(methodRef.name(), methodRef.descriptor());
         }
+        if ("java/util/Map$Entry".equals(methodRef.owner())) {
+            return isSupportedMapEntryCall(methodRef.name(), methodRef.descriptor());
+        }
         if ("java/nio/file/Path".equals(methodRef.owner())) {
             return isSupportedPathCall(methodRef.name(), methodRef.descriptor());
         }
@@ -468,6 +540,41 @@ public final class JdkCallSupport {
         }
         if ("java/nio/file/DirectoryStream".equals(methodRef.owner())) {
             return isSupportedDirectoryStreamCall(methodRef.name(), methodRef.descriptor());
+        }
+        return false;
+    }
+
+    /**
+     * Returns whether this JDK-owned single-abstract-method call can be lowered as closed-world
+     * interface dispatch instead of requiring a dedicated JDK runtime intrinsic.
+     *
+     * @param methodRef invoked JDK method
+     * @return {@code true} when javan may lower the call through concrete closed-world targets
+     */
+    public static boolean isSupportedClosedWorldDispatchCall(final MethodRef methodRef) {
+        final String owner = methodRef.owner();
+        final String name = methodRef.name();
+        final String descriptor = methodRef.descriptor();
+        if ("java/lang/Runnable".equals(owner)) {
+            return "run".equals(name) && "()V".equals(descriptor);
+        }
+        if ("java/util/function/Consumer".equals(owner)) {
+            return "accept".equals(name) && "(Ljava/lang/Object;)V".equals(descriptor);
+        }
+        if ("java/util/function/BiConsumer".equals(owner)) {
+            return "accept".equals(name) && "(Ljava/lang/Object;Ljava/lang/Object;)V".equals(descriptor);
+        }
+        if ("java/util/function/BooleanSupplier".equals(owner)) {
+            return "getAsBoolean".equals(name) && "()Z".equals(descriptor);
+        }
+        if ("java/util/function/Function".equals(owner)) {
+            return "apply".equals(name) && "(Ljava/lang/Object;)Ljava/lang/Object;".equals(descriptor);
+        }
+        if ("java/util/function/Predicate".equals(owner)) {
+            return "test".equals(name) && "(Ljava/lang/Object;)Z".equals(descriptor);
+        }
+        if ("java/util/function/Supplier".equals(owner)) {
+            return "get".equals(name) && "()Ljava/lang/Object;".equals(descriptor);
         }
         return false;
     }
@@ -547,8 +654,37 @@ public final class JdkCallSupport {
         if ("contains".equals(name)) {
             return "(Ljava/lang/Object;)Z".equals(descriptor);
         }
+        if ("stream".equals(name)) {
+            return "()Ljava/util/stream/Stream;".equals(descriptor);
+        }
         if ("iterator".equals(name)) {
             return "()Ljava/util/Iterator;".equals(descriptor);
+        }
+        return false;
+    }
+
+    private static boolean isSupportedSetCall(final String name, final String descriptor) {
+        if ("stream".equals(name)) {
+            return "()Ljava/util/stream/Stream;".equals(descriptor);
+        }
+        return false;
+    }
+
+    private static boolean isSupportedStreamCall(final String name, final String descriptor) {
+        if ("filter".equals(name)) {
+            return "(Ljava/util/function/Predicate;)Ljava/util/stream/Stream;".equals(descriptor);
+        }
+        if ("map".equals(name)) {
+            return "(Ljava/util/function/Function;)Ljava/util/stream/Stream;".equals(descriptor);
+        }
+        if ("toList".equals(name)) {
+            return "()Ljava/util/List;".equals(descriptor);
+        }
+        if ("findFirst".equals(name)) {
+            return "()Ljava/util/Optional;".equals(descriptor);
+        }
+        if ("anyMatch".equals(name) || "noneMatch".equals(name)) {
+            return "(Ljava/util/function/Predicate;)Z".equals(descriptor);
         }
         return false;
     }
@@ -567,8 +703,18 @@ public final class JdkCallSupport {
         if ("copyOf".equals(name)) {
             return "(Ljava/util/Map;)Ljava/util/Map;".equals(descriptor);
         }
+        if ("of".equals(name)) {
+            return "()Ljava/util/Map;".equals(descriptor)
+                || "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;".equals(descriptor);
+        }
         if ("get".equals(name)) {
             return "(Ljava/lang/Object;)Ljava/lang/Object;".equals(descriptor);
+        }
+        if ("computeIfAbsent".equals(name)) {
+            return "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;".equals(descriptor);
+        }
+        if ("forEach".equals(name)) {
+            return "(Ljava/util/function/BiConsumer;)V".equals(descriptor);
         }
         if ("getOrDefault".equals(name)) {
             return "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(descriptor);
@@ -590,6 +736,16 @@ public final class JdkCallSupport {
         }
         if ("values".equals(name)) {
             return "()Ljava/util/Collection;".equals(descriptor);
+        }
+        if ("entrySet".equals(name)) {
+            return "()Ljava/util/Set;".equals(descriptor);
+        }
+        return false;
+    }
+
+    private static boolean isSupportedMapEntryCall(final String name, final String descriptor) {
+        if ("getKey".equals(name) || "getValue".equals(name)) {
+            return "()Ljava/lang/Object;".equals(descriptor);
         }
         return false;
     }
@@ -755,6 +911,12 @@ public final class JdkCallSupport {
             return List.of("threads");
         }
         if ("java/lang/ThreadLocal".equals(owner)) {
+            return List.of("threads");
+        }
+        if ("java/util/concurrent/atomic/AtomicBoolean".equals(owner)) {
+            return List.of("threads");
+        }
+        if ("java/util/concurrent/atomic/AtomicInteger".equals(owner)) {
             return List.of("threads");
         }
         if ("java/util/concurrent/ThreadFactory".equals(owner)) {
@@ -949,7 +1111,19 @@ public final class JdkCallSupport {
         if ("java/util/ArrayList".equals(owner)) {
             return true;
         }
+        if ("java/util/concurrent/CopyOnWriteArrayList".equals(owner)) {
+            return true;
+        }
         if ("java/util/Collection".equals(owner)) {
+            return true;
+        }
+        if ("java/util/Set".equals(owner)) {
+            return true;
+        }
+        if ("java/util/Map$Entry".equals(owner)) {
+            return true;
+        }
+        if ("java/util/stream/Stream".equals(owner)) {
             return true;
         }
         if ("java/lang/Iterable".equals(owner)) {
@@ -1014,6 +1188,12 @@ public final class JdkCallSupport {
             return true;
         }
         if ("<init>".equals(methodRef.name()) && "(Ljava/lang/String;)V".equals(methodRef.descriptor())) {
+            return true;
+        }
+        if ("addSuppressed".equals(methodRef.name()) && "(Ljava/lang/Throwable;)V".equals(methodRef.descriptor())) {
+            return true;
+        }
+        if ("getSuppressed".equals(methodRef.name()) && "()[Ljava/lang/Throwable;".equals(methodRef.descriptor())) {
             return true;
         }
         if (!"getMessage".equals(methodRef.name())) {

@@ -1037,7 +1037,7 @@ final class CCodegenMemoryTest {
         final String generated = Files.readString(new CCodegen().generate(program, tempDir));
 
         assertThat(generated).contains(
-            "javan_panic((const char*) ((void*) 0));",
+            "javan_panic(javan_panic_detail_object(((void*) 0)));",
             "javan_root_frame_push(javan_expr_roots, 1);",
             "javan_expr_tmp_0 = javan_string_concat(\"\\001-\\001\", 2, (const char*[]){(const char*) (void*) \"left\", (const char*) (void*) \"right\"});",
             "javan_panic((const char*) javan_expr_tmp_0);",
@@ -1047,10 +1047,15 @@ final class CCodegenMemoryTest {
             "javan_panic((const char*) javan_expr_tmp_0);",
             "javan_panic((const char*) (node != ((void*) 0)));",
             "javan_expr_tmp_0 = javan_new_com_acme_Node();",
+            "javan_panic(javan_panic_detail_object(javan_expr_tmp_0));",
             "javan_expr_tmp_0 = javan_object_array_new(1);",
+            "javan_panic(javan_panic_detail_object(javan_expr_tmp_0));",
             "javan_expr_tmp_0 = javan_object_array_get(node, 0);",
+            "javan_panic(javan_panic_detail_object(javan_expr_tmp_0));",
             "javan_expr_tmp_0 = ((struct javan_class_com_acme_Node*) node)->field_next;",
+            "javan_panic(javan_panic_detail_object(javan_expr_tmp_0));",
             "javan_expr_tmp_0 = javan_static_com_acme_Node_field_next;",
+            "javan_panic(javan_panic_detail_object(javan_expr_tmp_0));",
             "javan_root_frame_pop(javan_expr_roots);"
         );
     }
@@ -1087,7 +1092,7 @@ final class CCodegenMemoryTest {
         assertThat(generated).contains(
             "javan_panic_at(\"JAVAN-RUNTIME-PANIC\", \"uncaught Java exception\", \"com.acme.Main\", \"main()V\", \"Main.java\", 9, 12, \"\",",
             "\"An exception reached the native boundary without a supported catch block.\"",
-            "\"Catch it in Java or let the application terminate intentionally.\", (const char*) (void*) \"boom\");"
+            "\"Catch it in Java or let the application terminate intentionally.\", (const char*) javan_panic_detail_object((void*) \"boom\"));"
         );
     }
 
@@ -1238,7 +1243,7 @@ final class CCodegenMemoryTest {
             "javan_expr_tmp_0 = make_symbol();",
             "javan_expr_tmp_1 = make_symbol();",
             "javan_expr_tmp_2 = javan_string_concat(\"\\001:\\001\", 2, (const char*[]){(const char*) javan_expr_tmp_0, (const char*) javan_expr_tmp_1});",
-            "javan_panic((const char*) javan_expr_tmp_2);",
+            "javan_panic(javan_panic_detail_object(javan_expr_tmp_2));",
             "javan_root_frame_pop(javan_expr_roots);"
         );
         assertThat(generated.indexOf("javan_expr_tmp_0 = make_symbol();"))
@@ -1246,7 +1251,7 @@ final class CCodegenMemoryTest {
         assertThat(generated.indexOf("javan_expr_tmp_1 = make_symbol();"))
             .isLessThan(generated.indexOf("javan_expr_tmp_2 = javan_string_concat"));
         assertThat(generated.indexOf("javan_expr_tmp_2 = javan_string_concat"))
-            .isLessThan(generated.indexOf("javan_panic((const char*) javan_expr_tmp_2);"));
+            .isLessThan(generated.indexOf("javan_panic(javan_panic_detail_object(javan_expr_tmp_2));"));
     }
 
     @Test

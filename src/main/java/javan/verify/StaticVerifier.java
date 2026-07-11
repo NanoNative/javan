@@ -2,13 +2,13 @@ package javan.verify;
 
 import javan.analysis.EntryPoint;
 import javan.analysis.VirtualThreadInvokePatterns;
-import javan.analysis.VirtualThreadInvokePatterns;
 import javan.classfile.ClassFile;
 import javan.classfile.CodeAttribute;
 import javan.classfile.CodeException;
 import javan.classfile.DynamicRef;
 import javan.classfile.FieldRef;
 import javan.classfile.Instruction;
+import javan.classfile.LambdaMetafactorySupport;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
 import javan.compat.BytecodeSupport;
@@ -37,11 +37,13 @@ public final class StaticVerifier {
      * @return diagnostics
      */
     public List<Diagnostic> verify(final Map<String, ClassFile> classes, final List<EntryPoint> reachable) {
+        final LambdaMetafactorySupport.Registry lambdaRegistry = LambdaMetafactorySupport.scan(classes, reachable);
+        final Map<String, ClassFile> expandedClasses = lambdaRegistry.expandedClasses(classes);
         final List<Diagnostic> diagnostics = new ArrayList<>();
-        for (final ClassFile classFile : classes.values()) {
+        for (final ClassFile classFile : expandedClasses.values()) {
             for (final MethodInfo method : classFile.methods()) {
                 final int isReachable = containsEntry(reachable, new EntryPoint(classFile.name(), method.name(), method.descriptor()));
-                diagnostics.addAll(verifyMethod(classes, classFile, method, isReachable));
+                diagnostics.addAll(verifyMethod(expandedClasses, lambdaRegistry, classFile, method, isReachable));
             }
         }
         return List.copyOf(diagnostics);
@@ -62,6 +64,7 @@ public final class StaticVerifier {
 
     private List<Diagnostic> verifyMethod(
         final Map<String, ClassFile> classes,
+        final LambdaMetafactorySupport.Registry lambdaRegistry,
         final ClassFile classFile,
         final MethodInfo method,
         final int reachable
@@ -121,6 +124,7 @@ public final class StaticVerifier {
                 final Instruction instruction = instructions.get(instructionIndex);
                 diagnostics.addAll(verifyInstruction(
                     classes,
+                    lambdaRegistry,
                     classFile,
                     method,
                     instructions,
@@ -299,6 +303,7 @@ public final class StaticVerifier {
 
     private List<Diagnostic> verifyInstruction(
         final Map<String, ClassFile> classes,
+        final LambdaMetafactorySupport.Registry lambdaRegistry,
         final ClassFile classFile,
         final MethodInfo method,
         final List<Instruction> instructions,
@@ -342,6 +347,8 @@ public final class StaticVerifier {
             } else if (unsupportedMonitorMethod == 0
                 && unsupportedConcurrencyApi == 0
                 && unsupportedJdkCall(target)
+                && !supportedExactCollectorsJoiningCall(instructions, instructionIndex)
+                && !supportedExactStreamCollectCall(instructions, instructionIndex)
                 && !ignoredGeneratedEnumValueOfCall(classFile, method, target, reachable)) {
                 diagnostics.add(jdkCallDiagnostic(classFile, method, target, reachable));
             }
@@ -349,9 +356,10 @@ public final class StaticVerifier {
         if (unsupportedNewArrayType(instruction)) {
             diagnostics.add(newArrayDiagnostic(classFile, method, instruction, reachable));
         }
-        if (unsupportedInvokedynamic(instruction) && !ignoredUnreachableRecordObjectMethod(classFile, method, instruction, reachable)) {
-            diagnostics.add(invokedynamicDiagnostic(classFile, method, instruction, reachable));
-        }
+                if (unsupportedInvokedynamic(lambdaRegistry, classFile, method, instruction)
+                    && !ignoredUnreachableRecordObjectMethod(classFile, method, instruction, reachable)) {
+                    diagnostics.add(invokedynamicDiagnostic(classFile, method, instruction, reachable));
+                }
         if (unsupportedStringConstant == 1 && unsupportedRuntimeStringSemanticCall(instruction)) {
             diagnostics.add(stringConstantDiagnostic(classFile, method, instruction, reachable));
         }
@@ -1265,6 +1273,9 @@ public final class StaticVerifier {
                     || supportsVirtualThreadExecutorFactoryFromRoot(classes, instructions, candidateIndex, instructionIndex)
                     || supportsVirtualThreadBuilderObservationFromRoot(classes, instructions, candidateIndex, instructionIndex)
                     || supportsVirtualThreadFactoryObservationFromRoot(classes, instructions, candidateIndex, instructionIndex)
+                    || supportsVirtualThreadBuilderClassObservationFromRoot(classes, instructions, candidateIndex, instructionIndex)
+                    || supportsVirtualThreadFactoryClassObservationFromRoot(classes, instructions, candidateIndex, instructionIndex)
+                    || supportsVirtualThreadExecutorClassObservationFromRoot(classes, instructions, candidateIndex, instructionIndex)
                     || supportsDiscardedVirtualThreadBuilderFromRoot(classes, instructions, candidateIndex, instructionIndex)
                     || supportsDiscardedVirtualThreadFactoryFromRoot(classes, instructions, candidateIndex, instructionIndex)) {
                     return true;
@@ -1280,6 +1291,9 @@ public final class StaticVerifier {
                     || supportsVirtualThreadExecutorFactoryFromRoot(classes, instructions, candidateIndex, instructionIndex)
                     || supportsVirtualThreadBuilderObservationFromRoot(classes, instructions, candidateIndex, instructionIndex)
                     || supportsVirtualThreadFactoryObservationFromRoot(classes, instructions, candidateIndex, instructionIndex)
+                    || supportsVirtualThreadBuilderClassObservationFromRoot(classes, instructions, candidateIndex, instructionIndex)
+                    || supportsVirtualThreadFactoryClassObservationFromRoot(classes, instructions, candidateIndex, instructionIndex)
+                    || supportsVirtualThreadExecutorClassObservationFromRoot(classes, instructions, candidateIndex, instructionIndex)
                     || supportsDiscardedVirtualThreadBuilderFromRoot(classes, instructions, candidateIndex, instructionIndex)
                     || supportsDiscardedVirtualThreadFactoryFromRoot(classes, instructions, candidateIndex, instructionIndex)) {
                     return true;
@@ -1292,6 +1306,8 @@ public final class StaticVerifier {
                 if (supportsVirtualThreadFactoryNewThreadFromRoot(classes, instructions, candidateIndex, instructionIndex)
                     || supportsVirtualThreadExecutorFactoryFromRoot(classes, instructions, candidateIndex, instructionIndex)
                     || supportsVirtualThreadFactoryObservationFromRoot(classes, instructions, candidateIndex, instructionIndex)
+                    || supportsVirtualThreadFactoryClassObservationFromRoot(classes, instructions, candidateIndex, instructionIndex)
+                    || supportsVirtualThreadExecutorClassObservationFromRoot(classes, instructions, candidateIndex, instructionIndex)
                     || supportsDiscardedVirtualThreadFactoryFromRoot(classes, instructions, candidateIndex, instructionIndex)) {
                     return true;
                 }
@@ -1312,6 +1328,12 @@ public final class StaticVerifier {
         }
         if (isVirtualThreadFactoryObservationMethod(methodRef)) {
             return supportedVirtualThreadFactoryObservationReceiver(classes, instructions, instructionIndex, -1, methodRef);
+        }
+        if (isObjectGetClassObservationMethod(methodRef)) {
+            return instructionIndex >= 1
+                && (supportedVirtualThreadBuilderProducer(classes, instructions, instructionIndex - 1, -1)
+                || supportedVirtualThreadFactoryProducer(classes, instructions, instructionIndex - 1, -1)
+                || supportedVirtualThreadExecutorProducer(classes, instructions, instructionIndex - 1));
         }
         return false;
     }
@@ -1336,6 +1358,10 @@ public final class StaticVerifier {
         }
         if (isVirtualThreadExecutorObservationMethod(methodRef)) {
             return supportedVirtualThreadExecutorObservationReceiver(classes, instructions, instructionIndex, methodRef);
+        }
+        if (isObjectGetClassObservationMethod(methodRef)) {
+            return instructionIndex >= 1
+                && supportedVirtualThreadExecutorProducer(classes, instructions, instructionIndex - 1);
         }
         return false;
     }
@@ -1368,6 +1394,51 @@ public final class StaticVerifier {
         return methodRef.isPresent()
             && isVirtualThreadFactoryObservationMethod(methodRef.orElseThrow())
             && supportedVirtualThreadFactoryObservationReceiver(classes, instructions, instructionIndex, rootProducerIndex, methodRef.orElseThrow());
+    }
+
+    private static boolean supportsVirtualThreadBuilderClassObservationFromRoot(
+        final Map<String, ClassFile> classes,
+        final List<Instruction> instructions,
+        final int instructionIndex,
+        final int rootProducerIndex
+    ) {
+        if (instructionIndex < 1 || instructionIndex >= instructions.size()) {
+            return false;
+        }
+        final Optional<MethodRef> methodRef = instructions.get(instructionIndex).methodRef();
+        return methodRef.isPresent()
+            && isObjectGetClassObservationMethod(methodRef.orElseThrow())
+            && supportedVirtualThreadBuilderProducer(classes, instructions, instructionIndex - 1, rootProducerIndex);
+    }
+
+    private static boolean supportsVirtualThreadFactoryClassObservationFromRoot(
+        final Map<String, ClassFile> classes,
+        final List<Instruction> instructions,
+        final int instructionIndex,
+        final int rootProducerIndex
+    ) {
+        if (instructionIndex < 1 || instructionIndex >= instructions.size()) {
+            return false;
+        }
+        final Optional<MethodRef> methodRef = instructions.get(instructionIndex).methodRef();
+        return methodRef.isPresent()
+            && isObjectGetClassObservationMethod(methodRef.orElseThrow())
+            && supportedVirtualThreadFactoryProducer(classes, instructions, instructionIndex - 1, rootProducerIndex);
+    }
+
+    private static boolean supportsVirtualThreadExecutorClassObservationFromRoot(
+        final Map<String, ClassFile> classes,
+        final List<Instruction> instructions,
+        final int instructionIndex,
+        final int rootProducerIndex
+    ) {
+        if (instructionIndex < 1 || instructionIndex >= instructions.size()) {
+            return false;
+        }
+        final Optional<MethodRef> methodRef = instructions.get(instructionIndex).methodRef();
+        return methodRef.isPresent()
+            && isObjectGetClassObservationMethod(methodRef.orElseThrow())
+            && supportedVirtualThreadExecutorProducer(classes, instructions, instructionIndex - 1);
     }
 
     private static boolean supportsVirtualThreadBuilderStart(
@@ -1959,6 +2030,16 @@ public final class StaticVerifier {
         return "equals".equals(methodRef.name()) && "(Ljava/lang/Object;)Z".equals(methodRef.descriptor());
     }
 
+    private static boolean isObjectGetClassObservationMethod(final MethodRef methodRef) {
+        if (!"getClass".equals(methodRef.name()) || !"()Ljava/lang/Class;".equals(methodRef.descriptor())) {
+            return false;
+        }
+        return "java/lang/Object".equals(methodRef.owner())
+            || isVirtualThreadBuilderOwner(methodRef.owner())
+            || "java/util/concurrent/ThreadFactory".equals(methodRef.owner())
+            || "java/util/concurrent/ExecutorService".equals(methodRef.owner());
+    }
+
     private static boolean isAssignableToRunnable(final Map<String, ClassFile> classes, final String owner) {
         return isAssignableTo(classes, owner, "java/lang/Runnable");
     }
@@ -2096,6 +2177,59 @@ public final class StaticVerifier {
         return true;
     }
 
+    private static boolean supportedExactCollectorsJoiningCall(final List<Instruction> instructions, final int instructionIndex) {
+        if (instructionIndex < 0 || instructionIndex >= instructions.size()) {
+            return false;
+        }
+        final Optional<MethodRef> methodRef = instructions.get(instructionIndex).methodRef();
+        if (methodRef.isEmpty() || !isSupportedCollectorsJoining(methodRef.orElseThrow())) {
+            return false;
+        }
+        if (instructionIndex + 1 >= instructions.size()) {
+            return false;
+        }
+        return isSupportedDirectStreamCollect(instructions.get(instructionIndex + 1));
+    }
+
+    private static boolean supportedExactStreamCollectCall(final List<Instruction> instructions, final int instructionIndex) {
+        if (instructionIndex < 0 || instructionIndex >= instructions.size()) {
+            return false;
+        }
+        if (!isSupportedDirectStreamCollect(instructions.get(instructionIndex))) {
+            return false;
+        }
+        if (instructionIndex == 0) {
+            return false;
+        }
+        final Optional<MethodRef> methodRef = instructions.get(instructionIndex - 1).methodRef();
+        return methodRef.isPresent() && isSupportedCollectorsJoining(methodRef.orElseThrow());
+    }
+
+    private static boolean isSupportedDirectStreamCollect(final Instruction instruction) {
+        final Optional<MethodRef> methodRef = instruction.methodRef();
+        if (instruction.opcode() != 185 || methodRef.isEmpty()) {
+            return false;
+        }
+        final MethodRef target = methodRef.orElseThrow();
+        return "java/util/stream/Stream".equals(target.owner())
+            && "collect".equals(target.name())
+            && "(Ljava/util/stream/Collector;)Ljava/lang/Object;".equals(target.descriptor());
+    }
+
+    private static boolean isSupportedCollectorsJoining(final MethodRef methodRef) {
+        if (!"java/util/stream/Collectors".equals(methodRef.owner()) || !"joining".equals(methodRef.name())) {
+            return false;
+        }
+        if ("()Ljava/util/stream/Collector;".equals(methodRef.descriptor())) {
+            return true;
+        }
+        if ("(Ljava/lang/CharSequence;)Ljava/util/stream/Collector;".equals(methodRef.descriptor())) {
+            return true;
+        }
+        return "(Ljava/lang/CharSequence;Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/util/stream/Collector;"
+            .equals(methodRef.descriptor());
+    }
+
     private static boolean ignoredGeneratedEnumValueOfCall(
         final ClassFile classFile,
         final MethodInfo method,
@@ -2223,7 +2357,10 @@ public final class StaticVerifier {
         if ("java/lang/Double".equals(target)) {
             return true;
         }
-        return "java/lang/Boolean".equals(target);
+        if ("java/lang/Boolean".equals(target)) {
+            return true;
+        }
+        return "java/lang/Character".equals(target);
     }
 
     private static boolean hasAssignableClass(final Map<String, ClassFile> classes, final String target) {
@@ -2289,13 +2426,21 @@ public final class StaticVerifier {
         return false;
     }
 
-    private static boolean unsupportedInvokedynamic(final Instruction instruction) {
+    private static boolean unsupportedInvokedynamic(
+        final LambdaMetafactorySupport.Registry lambdaRegistry,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction
+    ) {
         if (instruction.opcode() != 186) {
             return false;
         }
         final Optional<DynamicRef> dynamicRef = instruction.dynamicRef();
         if (dynamicRef.isEmpty()) {
             return true;
+        }
+        if (lambdaRegistry.planForSite(classFile.name(), method.name(), method.descriptor(), instruction.offset()).isPresent()) {
+            return false;
         }
         if (supportedStringConcat(dynamicRef.orElseThrow())) {
             return false;
@@ -2519,8 +2664,8 @@ public final class StaticVerifier {
         final Instruction instruction,
         final int reachable
     ) {
-        final String reason = "Only StringConcatFactory makeConcat and makeConcatWithConstants without secondary constants are implemented.";
-        final String fix = "Keep invokedynamic limited to javac string concatenation or wait for dynamic-call expansion.";
+        final String reason = "Only deterministic StringConcatFactory sites and exact LambdaMetafactory closure sites with direct implementation targets are implemented.";
+        final String fix = "Keep invokedynamic to supported string concatenation or exact closed-world lambdas, or wait for broader dynamic-call expansion.";
         if (reachable == 1) {
             return error(classFile, method, "JAVAN030", "unsupported reachable bytecode", instruction.mnemonic(), reason, fix);
         }

@@ -3,6 +3,7 @@ package javan.codegen;
 import javan.classfile.ClassFile;
 import javan.classfile.CodeAttribute;
 import javan.classfile.Instruction;
+import javan.classfile.LambdaMetafactorySupport;
 import javan.classfile.MethodInfo;
 import javan.compat.JdkCallSupport;
 import javan.ir.IrDispatch;
@@ -478,7 +479,8 @@ final class BytecodeToIRControlFlowSupport {
                     workingObjectLocalThrowableTypes,
                     workingDeclarations,
                     dispatches,
-                    SourceLineIndex.empty()
+                    SourceLineIndex.empty(),
+                    LambdaMetafactorySupport.scan(classes)
                 );
             }
         }
@@ -573,7 +575,8 @@ final class BytecodeToIRControlFlowSupport {
                 blockObjectLocalThrowableTypes,
                 localDeclarations,
                 dispatches,
-                SourceLineIndex.empty()
+                SourceLineIndex.empty(),
+                LambdaMetafactorySupport.scan(classes)
             );
         }
         return new BlockResult(List.copyOf(blockInstructions), List.copyOf(blockStack));

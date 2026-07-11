@@ -60,6 +60,9 @@ public final class DeduplicationPlanner {
         modules.add("core");
         for (final javan.analysis.EntryPoint entry : callGraph.reachableMethods()) {
             final ClassFile classFile = classes.get(entry.className());
+            if (classFile == null) {
+                continue;
+            }
             final Optional<javan.classfile.MethodInfo> method = classFile.method(entry.methodName(), entry.descriptor());
             if (method.isEmpty()) {
                 continue;

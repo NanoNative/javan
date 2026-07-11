@@ -59,6 +59,9 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_FACTORY 23
         #define JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_EXECUTOR 24
         #define JAVAN_RUNTIME_KIND_CLASS 25
+        #define JAVAN_RUNTIME_KIND_ATOMIC_BOOLEAN 26
+        #define JAVAN_RUNTIME_KIND_ATOMIC_INTEGER 27
+        #define JAVAN_RUNTIME_KIND_THROWABLE 28
 
         typedef struct {
             int magic;
@@ -105,6 +108,30 @@ final class RuntimeSourceMemorySections {
             int reserved1;
             void* value;
         } javan_optional;
+
+        typedef struct {
+            int magic;
+            int value;
+            int reserved0;
+            int reserved1;
+        } javan_atomic_boolean;
+
+        typedef struct {
+            int magic;
+            int value;
+            int reserved0;
+            int reserved1;
+        } javan_atomic_integer;
+
+        typedef struct {
+            int magic;
+            int reserved0;
+            int reserved1;
+            int reserved2;
+            const char* binary_name;
+            void* message;
+            javan_object_list* suppressed;
+        } javan_throwable_value;
 
         typedef struct {
             int magic;
@@ -252,6 +279,9 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_OBJECT_MAP_MAGIC 0x4a4d4150
         #define JAVAN_STRING_BUILDER_MAGIC 0x4a53424c
         #define JAVAN_OPTIONAL_MAGIC 0x4a4f5054
+        #define JAVAN_ATOMIC_BOOLEAN_MAGIC 0x4a415442
+        #define JAVAN_ATOMIC_INTEGER_MAGIC 0x4a415449
+        #define JAVAN_THROWABLE_MAGIC 0x4a545242
         #define JAVAN_INET_ADDRESS_MAGIC 0x4a494144
         #define JAVAN_INET_SOCKET_ADDRESS_MAGIC 0x4a495341
         #define JAVAN_SOCKET_MAGIC 0x4a534f43
@@ -316,6 +346,7 @@ final class RuntimeSourceMemorySections {
         static int javan_heap_stress_initialized = 0;
         static unsigned long javan_heap_stress_interval = 0;
         static unsigned long javan_heap_stress_ticks = 0;
+        static JavanTypeDescriptor* javan_type_descriptor_for(int type_id);
         static int javan_allocation_limit_initialized = 0;
         static unsigned long javan_max_allocation_bytes = 0;
         static unsigned long javan_heap_limit_bytes = 0;
@@ -350,6 +381,8 @@ final class RuntimeSourceMemorySections {
         static unsigned long javan_profile_executor_execute_calls_value = 0;
         static const char* javan_runtime_profile_json_path_value = NULL;
         static const char* javan_runtime_profile_md_path_value = NULL;
+        static javan_object_list* javan_list_new_with_capacity(int capacity, int immutable);
+        static void javan_list_append_raw(javan_object_list* list, void* value);
         #if defined(_WIN32)
         static CRITICAL_SECTION javan_runtime_lock_value;
         static INIT_ONCE javan_runtime_lock_once = INIT_ONCE_STATIC_INIT;
@@ -810,6 +843,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_TYPE_JAVA_LANG_FLOAT -1003
         #define JAVAN_TYPE_JAVA_LANG_DOUBLE -1004
         #define JAVAN_TYPE_JAVA_LANG_BOOLEAN -1005
+        #define JAVAN_TYPE_JAVA_LANG_CHARACTER -1010
         #define JAVAN_TYPE_JAVA_NIO_FILE_ATTRIBUTE_FILE_TIME -1006
         #define JAVAN_TYPE_JAVA_TIME_DURATION -1007
         #define JAVAN_TYPE_JAVA_LANG_THREAD -1008
@@ -834,6 +868,7 @@ final class RuntimeSourceMemorySections {
                 || type_id == JAVAN_TYPE_JAVA_LANG_FLOAT
                 || type_id == JAVAN_TYPE_JAVA_LANG_DOUBLE
                 || type_id == JAVAN_TYPE_JAVA_LANG_BOOLEAN
+                || type_id == JAVAN_TYPE_JAVA_LANG_CHARACTER
                 || type_id == JAVAN_TYPE_JAVA_NIO_FILE_ATTRIBUTE_FILE_TIME
                 || type_id == JAVAN_TYPE_JAVA_TIME_DURATION
                 || type_id == JAVAN_TYPE_JAVA_LANG_THREAD
@@ -873,11 +908,14 @@ final class RuntimeSourceMemorySections {
                 || runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_ITERATOR
                 || runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_MAP
                 || runtime_kind == JAVAN_RUNTIME_KIND_OPTIONAL
+                || runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_BOOLEAN
+                || runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_INTEGER
                 || runtime_kind == JAVAN_RUNTIME_KIND_STRING_BUILDER
                 || runtime_kind == JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_BUILDER
                 || runtime_kind == JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_FACTORY
                 || runtime_kind == JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_EXECUTOR
                 || runtime_kind == JAVAN_RUNTIME_KIND_CLASS
+                || runtime_kind == JAVAN_RUNTIME_KIND_THROWABLE
                 || runtime_kind == JAVAN_RUNTIME_KIND_OWNED_BUFFER
                 || runtime_kind == JAVAN_RUNTIME_KIND_INET_ADDRESS
                 || runtime_kind == JAVAN_RUNTIME_KIND_INET_SOCKET_ADDRESS
@@ -1089,6 +1127,23 @@ final class RuntimeSourceMemorySections {
                 if (state->magic != JAVAN_RUNTIME_CLASS_MAGIC || state->binary_name == NULL || state->binary_name[0] == '\\0') {
                     javan_panic("invalid runtime class metadata");
                 }
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_BOOLEAN) {
+                javan_atomic_boolean* state = (javan_atomic_boolean*) node->value;
+                if (state->magic != JAVAN_ATOMIC_BOOLEAN_MAGIC || (state->value != 0 && state->value != 1)) {
+                    javan_panic("invalid runtime atomic boolean metadata");
+                }
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_INTEGER) {
+                javan_atomic_integer* state = (javan_atomic_integer*) node->value;
+                if (state->magic != JAVAN_ATOMIC_INTEGER_MAGIC) {
+                    javan_panic("invalid runtime atomic integer metadata");
+                }
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_THROWABLE) {
+                javan_throwable_value* throwable = (javan_throwable_value*) node->value;
+                if (throwable->magic != JAVAN_THROWABLE_MAGIC || throwable->binary_name == NULL || throwable->binary_name[0] == '\\0') {
+                    javan_panic("invalid runtime throwable metadata");
+                }
+                javan_validate_runtime_managed_reference(throwable->message);
+                javan_validate_runtime_managed_reference((void*) throwable->suppressed);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_HTTP_REQUEST_BUILDER) {
                 javan_http_request_builder_value* builder = (javan_http_request_builder_value*) node->value;
                 if (builder->magic != JAVAN_HTTP_REQUEST_BUILDER_MAGIC || builder->uri == NULL || builder->headers == NULL) {
@@ -1235,6 +1290,9 @@ final class RuntimeSourceMemorySections {
             if (node->runtime_kind == JAVAN_RUNTIME_KIND_CLASS) {
                 return javan_runtime_class_get_name(value);
             }
+            if (node->runtime_kind == JAVAN_RUNTIME_KIND_THROWABLE) {
+                return javan_throwable_get_message(value);
+            }
             if (node->runtime_kind == JAVAN_RUNTIME_KIND_INET_SOCKET_ADDRESS) {
                 return javan_inet_socket_address_to_string(value);
             }
@@ -1288,7 +1346,10 @@ final class RuntimeSourceMemorySections {
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_BUILDER
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_FACTORY
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_EXECUTOR
-                    && node->runtime_kind != JAVAN_RUNTIME_KIND_CLASS) {
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_CLASS
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_ATOMIC_BOOLEAN
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_ATOMIC_INTEGER
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_THROWABLE) {
                     javan_panic("invalid runtime allocation kind");
                 }
                 javan_validate_runtime_container_references(node);
@@ -1885,6 +1946,10 @@ final class RuntimeSourceMemorySections {
         } javan_boxed_boolean;
 
         typedef struct {
+            int value;
+        } javan_boxed_character;
+
+        typedef struct {
             long long millis;
         } javan_file_time;
 
@@ -1993,6 +2058,144 @@ final class RuntimeSourceMemorySections {
             return state;
         }
 
+        static int javan_runtime_class_name_is_array(const char* binary_name) {
+            return binary_name != NULL && binary_name[0] == '[';
+        }
+
+        static const char* javan_runtime_class_simple_name_source(const char* binary_name) {
+            if (binary_name == NULL || binary_name[0] == '\\0') {
+                return "";
+            }
+            const char* simple = binary_name;
+            for (const char* cursor = binary_name; *cursor != '\\0'; cursor++) {
+                if (*cursor == '.' || *cursor == '$') {
+                    simple = cursor + 1;
+                }
+            }
+            return simple;
+        }
+
+        static const char* javan_runtime_array_binary_name(int kind) {
+            switch (kind) {
+                case JAVAN_ARRAY_KIND_OBJECT:
+                    return "[Ljava.lang.Object;";
+                case JAVAN_ARRAY_KIND_INT:
+                    return "[I";
+                case JAVAN_ARRAY_KIND_LONG:
+                    return "[J";
+                case JAVAN_ARRAY_KIND_FLOAT:
+                    return "[F";
+                case JAVAN_ARRAY_KIND_DOUBLE:
+                    return "[D";
+                case JAVAN_ARRAY_KIND_BYTE:
+                    return "[B";
+                case JAVAN_ARRAY_KIND_BOOLEAN:
+                    return "[Z";
+                case JAVAN_ARRAY_KIND_SHORT:
+                    return "[S";
+                case JAVAN_ARRAY_KIND_CHAR:
+                    return "[C";
+                default:
+                    return NULL;
+            }
+        }
+
+        static const char* javan_runtime_kind_binary_name(int runtime_kind) {
+            switch (runtime_kind) {
+                case JAVAN_RUNTIME_KIND_OBJECT_LIST:
+                    return "java.util.ArrayList";
+                case JAVAN_RUNTIME_KIND_OBJECT_ITERATOR:
+                    return "java.util.Iterator";
+                case JAVAN_RUNTIME_KIND_OBJECT_MAP:
+                    return "java.util.LinkedHashMap";
+                case JAVAN_RUNTIME_KIND_OPTIONAL:
+                    return "java.util.Optional";
+                case JAVAN_RUNTIME_KIND_STRING:
+                    return "java.lang.String";
+                case JAVAN_RUNTIME_KIND_PROCESS_RESULT:
+                    return "javan.ProcessResult";
+                case JAVAN_RUNTIME_KIND_STRING_BUILDER:
+                    return "java.lang.StringBuilder";
+                case JAVAN_RUNTIME_KIND_OWNED_BUFFER:
+                    return "javan.OwnedBuffer";
+                case JAVAN_RUNTIME_KIND_INET_ADDRESS:
+                    return "java.net.InetAddress";
+                case JAVAN_RUNTIME_KIND_INET_SOCKET_ADDRESS:
+                    return "java.net.InetSocketAddress";
+                case JAVAN_RUNTIME_KIND_SOCKET:
+                    return "java.net.Socket";
+                case JAVAN_RUNTIME_KIND_SERVER_SOCKET:
+                    return "java.net.ServerSocket";
+                case JAVAN_RUNTIME_KIND_SOCKET_INPUT_STREAM:
+                    return "java.io.InputStream";
+                case JAVAN_RUNTIME_KIND_SOCKET_OUTPUT_STREAM:
+                    return "java.io.OutputStream";
+                case JAVAN_RUNTIME_KIND_URI:
+                    return "java.net.URI";
+                case JAVAN_RUNTIME_KIND_HTTP_CLIENT:
+                    return "java.net.http.HttpClient";
+                case JAVAN_RUNTIME_KIND_HTTP_REQUEST_BUILDER:
+                    return "java.net.http.HttpRequest$Builder";
+                case JAVAN_RUNTIME_KIND_HTTP_REQUEST:
+                    return "java.net.http.HttpRequest";
+                case JAVAN_RUNTIME_KIND_HTTP_BODY_HANDLER:
+                    return "java.net.http.HttpResponse$BodyHandler";
+                case JAVAN_RUNTIME_KIND_HTTP_RESPONSE:
+                    return "java.net.http.HttpResponse";
+                case JAVAN_RUNTIME_KIND_HTTP_BODY_PUBLISHER:
+                    return "java.net.http.HttpRequest$BodyPublisher";
+                case JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_BUILDER:
+                    return "java.lang.ThreadBuilders$VirtualThreadBuilder";
+                case JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_FACTORY:
+                    return "java.lang.ThreadBuilders$VirtualThreadFactory";
+                case JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_EXECUTOR:
+                    return "java.util.concurrent.ThreadPerTaskExecutor";
+                case JAVAN_RUNTIME_KIND_CLASS:
+                    return "java.lang.Class";
+                case JAVAN_RUNTIME_KIND_ATOMIC_BOOLEAN:
+                    return "java.util.concurrent.atomic.AtomicBoolean";
+                case JAVAN_RUNTIME_KIND_ATOMIC_INTEGER:
+                    return "java.util.concurrent.atomic.AtomicInteger";
+                case JAVAN_RUNTIME_KIND_THROWABLE:
+                    return "java.lang.Throwable";
+                default:
+                    return NULL;
+            }
+        }
+
+        static javan_atomic_boolean* javan_atomic_boolean_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported atomic boolean");
+            }
+            javan_atomic_boolean* state = (javan_atomic_boolean*) value;
+            if (state->magic != JAVAN_ATOMIC_BOOLEAN_MAGIC || (state->value != 0 && state->value != 1)) {
+                javan_panic("unsupported atomic boolean");
+            }
+            return state;
+        }
+
+        static javan_atomic_integer* javan_atomic_integer_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported atomic integer");
+            }
+            javan_atomic_integer* state = (javan_atomic_integer*) value;
+            if (state->magic != JAVAN_ATOMIC_INTEGER_MAGIC) {
+                javan_panic("unsupported atomic integer");
+            }
+            return state;
+        }
+
+        static javan_throwable_value* javan_throwable_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("null Throwable");
+            }
+            javan_throwable_value* throwable = (javan_throwable_value*) value;
+            if (throwable->magic != JAVAN_THROWABLE_MAGIC || throwable->binary_name == NULL || throwable->binary_name[0] == '\\0') {
+                javan_panic("unsupported Throwable");
+            }
+            return throwable;
+        }
+
         static void* javan_virtual_thread_name_state_new(int runtime_kind, int magic) {
             javan_virtual_thread_name_state* state = (javan_virtual_thread_name_state*) javan_alloc(sizeof(javan_virtual_thread_name_state));
             state->magic = magic;
@@ -2018,6 +2221,184 @@ final class RuntimeSourceMemorySections {
             state->binary_name = binary_name;
             javan_update_runtime_allocation_kind((void*) state, JAVAN_RUNTIME_KIND_CLASS);
             return state;
+        }
+
+        void* javan_runtime_class_literal(void* binary_name) {
+            return javan_runtime_class_new((const char*) binary_name);
+        }
+
+        void* javan_throwable_new(const char* binary_name) {
+            if (binary_name == NULL || binary_name[0] == '\\0') {
+                javan_panic("invalid Throwable type");
+            }
+            javan_throwable_value* throwable = (javan_throwable_value*) javan_alloc(sizeof(javan_throwable_value));
+            throwable->magic = JAVAN_THROWABLE_MAGIC;
+            throwable->reserved0 = 0;
+            throwable->reserved1 = 0;
+            throwable->reserved2 = 0;
+            throwable->binary_name = binary_name;
+            throwable->message = NULL;
+            throwable->suppressed = NULL;
+            javan_update_runtime_allocation_kind((void*) throwable, JAVAN_RUNTIME_KIND_THROWABLE);
+            return (void*) throwable;
+        }
+
+        void* javan_throwable_new_with_message(const char* binary_name, void* message) {
+            void* throwable = javan_throwable_new(binary_name);
+            javan_throwable_set_message(throwable, message);
+            return throwable;
+        }
+
+        void javan_throwable_set_message(void* throwable_value, void* message) {
+            javan_throwable_checked(throwable_value)->message = message;
+        }
+
+        void* javan_throwable_get_message(void* throwable_value) {
+            return javan_throwable_checked(throwable_value)->message;
+        }
+
+        void javan_throwable_add_suppressed(void* throwable_value, void* suppressed_value) {
+            javan_throwable_value* throwable = javan_throwable_checked(throwable_value);
+            if (suppressed_value == NULL) {
+                javan_panic("Throwable.addSuppressed null");
+            }
+            if (suppressed_value == throwable_value) {
+                javan_panic("Throwable.addSuppressed self");
+            }
+            if (throwable->suppressed == NULL) {
+                void** javan_throwable_roots[] = {
+                    (void**) &throwable_value
+                };
+                javan_root_frame_push(javan_throwable_roots, 1);
+                throwable->suppressed = javan_list_new_with_capacity(1, 0);
+                javan_root_frame_pop(javan_throwable_roots);
+            }
+            javan_list_append_raw(throwable->suppressed, suppressed_value);
+        }
+
+        void* javan_throwable_get_suppressed(void* throwable_value) {
+            javan_throwable_value* throwable = javan_throwable_checked(throwable_value);
+            if (throwable->suppressed == NULL || throwable->suppressed->length == 0) {
+                return javan_object_array_new(0);
+            }
+            void* result = javan_object_array_new(throwable->suppressed->length);
+            for (int index = 0; index < throwable->suppressed->length; index++) {
+                javan_object_array_set(result, index, throwable->suppressed->values[index]);
+            }
+            return result;
+        }
+
+        const char* javan_panic_detail_object(void* value) {
+            if (value == NULL) {
+                return NULL;
+            }
+            javan_allocation_node* node = javan_find_allocation(value, NULL);
+            if (node == NULL) {
+                return NULL;
+            }
+            if (node->runtime_kind == JAVAN_RUNTIME_KIND_STRING) {
+                return (const char*) value;
+            }
+            if (node->runtime_kind == JAVAN_RUNTIME_KIND_THROWABLE) {
+                return (const char*) javan_throwable_checked(value)->message;
+            }
+            return NULL;
+        }
+
+        void* javan_atomic_boolean_new(void) {
+            javan_atomic_boolean* state = (javan_atomic_boolean*) javan_alloc(sizeof(javan_atomic_boolean));
+            state->magic = JAVAN_ATOMIC_BOOLEAN_MAGIC;
+            state->value = 0;
+            state->reserved0 = 0;
+            state->reserved1 = 0;
+            javan_update_runtime_allocation_kind((void*) state, JAVAN_RUNTIME_KIND_ATOMIC_BOOLEAN);
+            return state;
+        }
+
+        void javan_atomic_boolean_init(void* value, int initial_value) {
+            javan_runtime_lock_enter();
+            javan_atomic_boolean_checked(value)->value = initial_value == 0 ? 0 : 1;
+            javan_runtime_lock_leave();
+        }
+
+        int javan_atomic_boolean_get(void* value) {
+            javan_runtime_lock_enter();
+            int result = javan_atomic_boolean_checked(value)->value == 0 ? 0 : 1;
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        int javan_atomic_boolean_get_plain(void* value) {
+            return javan_atomic_boolean_get(value);
+        }
+
+        void javan_atomic_boolean_set(void* value, int next_value) {
+            javan_runtime_lock_enter();
+            javan_atomic_boolean_checked(value)->value = next_value == 0 ? 0 : 1;
+            javan_runtime_lock_leave();
+        }
+
+        int javan_atomic_boolean_compare_and_set(void* value, int expected_value, int next_value) {
+            javan_runtime_lock_enter();
+            javan_atomic_boolean* state = javan_atomic_boolean_checked(value);
+            int expected = expected_value == 0 ? 0 : 1;
+            if (state->value != expected) {
+                javan_runtime_lock_leave();
+                return 0;
+            }
+            state->value = next_value == 0 ? 0 : 1;
+            javan_runtime_lock_leave();
+            return 1;
+        }
+
+        void* javan_atomic_integer_new(void) {
+            javan_atomic_integer* state = (javan_atomic_integer*) javan_alloc(sizeof(javan_atomic_integer));
+            state->magic = JAVAN_ATOMIC_INTEGER_MAGIC;
+            state->value = 0;
+            state->reserved0 = 0;
+            state->reserved1 = 0;
+            javan_update_runtime_allocation_kind((void*) state, JAVAN_RUNTIME_KIND_ATOMIC_INTEGER);
+            return state;
+        }
+
+        void javan_atomic_integer_init(void* value, int initial_value) {
+            javan_runtime_lock_enter();
+            javan_atomic_integer_checked(value)->value = initial_value;
+            javan_runtime_lock_leave();
+        }
+
+        int javan_atomic_integer_get(void* value) {
+            javan_runtime_lock_enter();
+            int result = javan_atomic_integer_checked(value)->value;
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        int javan_atomic_integer_get_and_increment(void* value) {
+            javan_runtime_lock_enter();
+            javan_atomic_integer* state = javan_atomic_integer_checked(value);
+            int current = state->value;
+            state->value = (int) ((unsigned int) current + 1u);
+            javan_runtime_lock_leave();
+            return current;
+        }
+
+        int javan_atomic_integer_increment_and_get(void* value) {
+            javan_runtime_lock_enter();
+            javan_atomic_integer* state = javan_atomic_integer_checked(value);
+            state->value = (int) ((unsigned int) state->value + 1u);
+            int result = state->value;
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        int javan_atomic_integer_decrement_and_get(void* value) {
+            javan_runtime_lock_enter();
+            javan_atomic_integer* state = javan_atomic_integer_checked(value);
+            state->value = (int) ((unsigned int) state->value - 1u);
+            int result = state->value;
+            javan_runtime_lock_leave();
+            return result;
         }
 
         void* javan_virtual_thread_builder_new(void) {
@@ -2161,8 +2542,46 @@ final class RuntimeSourceMemorySections {
             return javan_runtime_class_new("java.util.concurrent.ThreadPerTaskExecutor");
         }
 
+        void* javan_object_get_class(void* value) {
+            if (value == NULL) {
+                javan_panic("Object.getClass on null");
+            }
+            const char* binary_name = NULL;
+            javan_runtime_lock_enter();
+            javan_allocation_node* node = javan_find_allocation(value, NULL);
+            if (node == NULL) {
+                binary_name = "java.lang.String";
+            } else if (node->kind == JAVAN_HEAP_KIND_ARRAY) {
+                binary_name = javan_runtime_array_binary_name(node->type_id);
+            } else if (node->kind == JAVAN_HEAP_KIND_OBJECT) {
+                JavanTypeDescriptor* descriptor = javan_type_descriptor_for(node->type_id);
+                if (descriptor != NULL) {
+                    binary_name = descriptor->name;
+                }
+            } else if (node->kind == JAVAN_HEAP_KIND_RUNTIME) {
+                binary_name = javan_runtime_kind_binary_name(node->runtime_kind);
+            }
+            javan_runtime_lock_leave();
+            if (binary_name == NULL) {
+                javan_panic("unsupported Object.getClass receiver");
+            }
+            return javan_runtime_class_new(binary_name);
+        }
+
         void* javan_runtime_class_get_name(void* value) {
             return javan_string_from(javan_runtime_class_checked(value)->binary_name);
+        }
+
+        void* javan_runtime_class_get_simple_name(void* value) {
+            const char* binary_name = javan_runtime_class_checked(value)->binary_name;
+            if (javan_runtime_class_name_is_array(binary_name) != 0) {
+                return javan_string_from(binary_name);
+            }
+            return javan_string_from(javan_runtime_class_simple_name_source(binary_name));
+        }
+
+        int javan_runtime_class_is_array(void* value) {
+            return javan_runtime_class_name_is_array(javan_runtime_class_checked(value)->binary_name);
         }
 
         """;
@@ -2325,6 +2744,13 @@ final class RuntimeSourceMemorySections {
             return object;
         }
 
+        void* javan_character_value_of(int value) {
+            javan_boxed_character* object = (javan_boxed_character*) javan_alloc(sizeof(javan_boxed_character));
+            object->value = value & 0xffff;
+            javan_register_object((void*) object, JAVAN_TYPE_JAVA_LANG_CHARACTER);
+            return object;
+        }
+
         static void javan_release_thread_native_state(javan_thread* thread) {
             if (thread == NULL) {
                 return;
@@ -2345,6 +2771,13 @@ final class RuntimeSourceMemorySections {
                 javan_panic("not an Integer");
             }
             return ((javan_boxed_int*) value)->value;
+        }
+
+        int javan_character_char_value(void* value) {
+            if (javan_registered_type_id(value) != JAVAN_TYPE_JAVA_LANG_CHARACTER) {
+                javan_panic("not a Character");
+            }
+            return ((javan_boxed_character*) value)->value;
         }
 
         void* javan_long_value_of(long long value) {
@@ -3420,6 +3853,12 @@ final class RuntimeSourceMemorySections {
                     javan_gc_mark_value(state->factory);
                     javan_gc_mark_value((void*) state->threads);
                 }
+            } else if (runtime_kind == JAVAN_RUNTIME_KIND_THROWABLE) {
+                javan_throwable_value* throwable = (javan_throwable_value*) value;
+                if (throwable != NULL && throwable->magic == JAVAN_THROWABLE_MAGIC) {
+                    javan_gc_mark_value(throwable->message);
+                    javan_gc_mark_value((void*) throwable->suppressed);
+                }
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_INET_ADDRESS) {
                 javan_inet_address* address = (javan_inet_address*) value;
                 if (address != NULL && address->magic == JAVAN_INET_ADDRESS_MAGIC) {
@@ -4269,6 +4708,33 @@ final class RuntimeSourceMemorySections {
             return strcmp(left, right) == 0;
         }
 
+        static unsigned char javan_ascii_to_lower(unsigned char value) {
+            if (value >= 'A' && value <= 'Z') {
+                return (unsigned char) (value + ('a' - 'A'));
+            }
+            return value;
+        }
+
+        int javan_string_equals_ignore_case(const char* left, const char* right) {
+            if (left == NULL) {
+                javan_panic("null string");
+            }
+            if (right == NULL) {
+                return 0;
+            }
+            unsigned long left_length = strlen(left);
+            unsigned long right_length = strlen(right);
+            if (left_length != right_length) {
+                return 0;
+            }
+            for (unsigned long index = 0; index < left_length; index++) {
+                if (javan_ascii_to_lower((unsigned char) left[index]) != javan_ascii_to_lower((unsigned char) right[index])) {
+                    return 0;
+                }
+            }
+            return 1;
+        }
+
         int javan_string_contains(const char* left, const char* right) {
             if (left == NULL || right == NULL) {
                 javan_panic("null string");
@@ -4368,6 +4834,25 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        void* javan_string_to_lower_case(const char* value) {
+            if (value == NULL) {
+                javan_panic("null string");
+            }
+            unsigned long length = strlen(value);
+            void* source_root = (void*) value;
+            void** javan_string_lower_roots[] = {
+                (void**) &source_root
+            };
+            javan_root_frame_push(javan_string_lower_roots, 1);
+            char* result = javan_string_alloc(length + 1);
+            for (unsigned long index = 0; index < length; index++) {
+                result[index] = (char) javan_ascii_to_lower((unsigned char) ((const char*) source_root)[index]);
+            }
+            result[length] = '\\0';
+            javan_root_frame_pop(javan_string_lower_roots);
+            return result;
+        }
+
         void* javan_string_trim(const char* value) {
             if (value == NULL) {
                 javan_panic("null string");
@@ -4450,6 +4935,9 @@ final class RuntimeSourceMemorySections {
             }
             if (left_type == right_type && left_type == JAVAN_TYPE_JAVA_LANG_BOOLEAN) {
                 return ((javan_boxed_boolean*) left)->value == ((javan_boxed_boolean*) right)->value;
+            }
+            if (left_type == right_type && left_type == JAVAN_TYPE_JAVA_LANG_CHARACTER) {
+                return ((javan_boxed_character*) left)->value == ((javan_boxed_character*) right)->value;
             }
             if (left_type != 0 || right_type != 0) {
                 return 0;
@@ -5005,6 +5493,28 @@ final class RuntimeSourceMemorySections {
 
         int javan_map_is_empty(void* value) {
             return javan_map_checked(value)->length == 0;
+        }
+
+        void* javan_map_entry_set(void* value) {
+            javan_object_map* map = javan_map_checked(value);
+            javan_object_list* list = NULL;
+            javan_object_array* entry = NULL;
+            void** javan_map_entry_set_roots[] = {
+                (void**) &map,
+                (void**) &list,
+                (void**) &entry
+            };
+            javan_root_frame_push(javan_map_entry_set_roots, 3);
+            list = javan_list_new_with_capacity(map->length, 1);
+            for (int index = 0; index < map->length; index++) {
+                entry = javan_object_array_new(2);
+                entry->values[0] = map->keys[index];
+                entry->values[1] = map->values[index];
+                javan_list_append_raw(list, entry);
+                entry = NULL;
+            }
+            javan_root_frame_pop(javan_map_entry_set_roots);
+            return list;
         }
 
         void* javan_map_values(void* value) {

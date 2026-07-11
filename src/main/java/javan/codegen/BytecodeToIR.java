@@ -8,6 +8,7 @@ import javan.classfile.DynamicRef;
 import javan.classfile.FieldRef;
 import javan.classfile.FieldInfo;
 import javan.classfile.Instruction;
+import javan.classfile.LambdaMetafactorySupport;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
 import javan.compat.JdkCallSupport;
@@ -44,6 +45,7 @@ public final class BytecodeToIR {
     static final int TYPE_JAVA_LANG_FLOAT = -1003;
     static final int TYPE_JAVA_LANG_DOUBLE = -1004;
     static final int TYPE_JAVA_LANG_BOOLEAN = -1005;
+    static final int TYPE_JAVA_LANG_CHARACTER = -1010;
 
     /**
      * Lowers reachable methods to IR.
@@ -69,10 +71,12 @@ public final class BytecodeToIR {
         final CallGraph callGraph,
         final SourceLineIndex sourceLines
     ) {
+        final LambdaMetafactorySupport.Registry lambdaRegistry = LambdaMetafactorySupport.scan(classes, callGraph.reachableMethods());
+        final Map<String, ClassFile> expandedClasses = lambdaRegistry.expandedClasses(classes);
         final List<IrFunction> functions = new ArrayList<>();
         final Map<String, IrDispatch> dispatches = new LinkedHashMap<>();
         final List<EntryPoint> reachableMethods = BytecodeToIRMetadataSupport.sortedEntryPoints(callGraph.reachableMethods());
-        final List<EntryPoint> runnableThreadTargets = BytecodeToIRInvokeSupport.runnableThreadTargets(classes, reachableMethods);
+        final List<EntryPoint> runnableThreadTargets = BytecodeToIRInvokeSupport.runnableThreadTargets(expandedClasses, reachableMethods);
         if (!runnableThreadTargets.isEmpty()) {
             final MethodRef runnableRun = BytecodeToIRInvokeSupport.runnableRunMethodRef();
             final String dispatchSymbol = dispatchSymbol(runnableRun);
@@ -86,17 +90,24 @@ public final class BytecodeToIR {
             );
         }
         for (final EntryPoint reachable : reachableMethods) {
-            functions.add(lowerFunction(classes, reachable, dispatches, sourceLines));
+            functions.add(lowerFunction(expandedClasses, reachable, dispatches, sourceLines, lambdaRegistry));
         }
-        return new IrProgram(BytecodeToIRMetadataSupport.lowerClasses(classes), List.copyOf(functions), List.copyOf(dispatches.values()), symbol(callGraph.entryPoint()));
+        return new IrProgram(BytecodeToIRMetadataSupport.lowerClasses(expandedClasses), List.copyOf(functions), List.copyOf(dispatches.values()), symbol(callGraph.entryPoint()));
     }
 
     static IrFunction lowerFunction(
         final Map<String, ClassFile> classes,
         final EntryPoint entryPoint,
         final Map<String, IrDispatch> dispatches,
-        final SourceLineIndex sourceLines
+        final SourceLineIndex sourceLines,
+        final LambdaMetafactorySupport.Registry lambdaRegistry
     ) {
+        final Optional<LambdaMetafactorySupport.LambdaClosurePlan> lambdaPlan = lambdaRegistry.planForSyntheticOwner(entryPoint.className());
+        if (lambdaPlan.isPresent()
+            && lambdaPlan.orElseThrow().methodName().equals(entryPoint.methodName())
+            && lambdaPlan.orElseThrow().methodDescriptor().equals(entryPoint.descriptor())) {
+            return lowerLambdaClosureFunction(classes, dispatches, lambdaPlan.orElseThrow());
+        }
         final ClassFile classFile = classes.get(entryPoint.className());
         final MethodInfo method = classFile.method(entryPoint.methodName(), entryPoint.descriptor()).orElseThrow();
         final MethodDescriptor descriptor = MethodDescriptor.parse(method.descriptor());
@@ -192,7 +203,8 @@ public final class BytecodeToIR {
                 objectLocalThrowableTypes,
                 localDeclarations,
                 dispatches,
-                sourceLines
+                sourceLines,
+                lambdaRegistry
             );
             BytecodeToIRControlFlowSupport.annotateNewInstructions(instructions, instructionStart, sourceLocation);
         }
@@ -206,6 +218,145 @@ public final class BytecodeToIR {
             List.copyOf(localDeclarations.values()),
             List.copyOf(instructions)
         );
+    }
+
+    private static IrFunction lowerLambdaClosureFunction(
+        final Map<String, ClassFile> classes,
+        final Map<String, IrDispatch> dispatches,
+        final LambdaMetafactorySupport.LambdaClosurePlan plan
+    ) {
+        final MethodDescriptor descriptor = MethodDescriptor.parse(plan.methodDescriptor());
+        final List<IrParameter> parameters = new ArrayList<>();
+        parameters.add(new IrParameter(IrType.OBJECT, "self"));
+        parameters.addAll(descriptor.parameters());
+
+        final List<IrExpression> arguments = new ArrayList<>();
+        int captureStart = 0;
+        int parameterStart = 0;
+        if (plan.implementationReferenceKind() == 5 || plan.implementationReferenceKind() == 9) {
+            if (plan.receiverBinding() == LambdaMetafactorySupport.ReceiverBinding.CAPTURE0) {
+                arguments.add(captureFieldExpression(plan.syntheticOwner(), "capture0", plan.captureDescriptors().getFirst(), IrExpression.objectLocal("self")));
+                captureStart = 1;
+            } else if (plan.receiverBinding() == LambdaMetafactorySupport.ReceiverBinding.FIRST_PARAMETER) {
+                arguments.add(parameterExpression(descriptor.parameterTypes().getFirst(), "arg0"));
+                parameterStart = 1;
+            }
+        }
+        for (int index = captureStart; index < plan.captureDescriptors().size(); index++) {
+            arguments.add(captureFieldExpression(
+                plan.syntheticOwner(),
+                "capture" + index,
+                plan.captureDescriptors().get(index),
+                IrExpression.objectLocal("self")
+            ));
+        }
+        for (int index = parameterStart; index < descriptor.parameterTypes().size(); index++) {
+            arguments.add(parameterExpression(descriptor.parameterTypes().get(index), "arg" + index));
+        }
+
+        final String targetSymbol = lambdaImplementationSymbol(classes, dispatches, plan);
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final IrType returnType = descriptor.returnType();
+        if (returnType == IrType.VOID) {
+            instructions.add(IrInstruction.callStaticVoid(targetSymbol, arguments));
+            instructions.add(IrInstruction.returnVoid());
+        } else if (returnType == IrType.INT) {
+            instructions.add(IrInstruction.returnInt(IrExpression.intCall(targetSymbol, arguments)));
+        } else if (returnType == IrType.LONG) {
+            instructions.add(IrInstruction.returnLong(IrExpression.longCall(targetSymbol, arguments)));
+        } else if (returnType == IrType.FLOAT) {
+            instructions.add(IrInstruction.returnFloat(IrExpression.floatCall(targetSymbol, arguments)));
+        } else if (returnType == IrType.DOUBLE) {
+            instructions.add(IrInstruction.returnDouble(IrExpression.doubleCall(targetSymbol, arguments)));
+        } else if (returnType == IrType.OBJECT) {
+            instructions.add(IrInstruction.returnObject(IrExpression.objectCall(targetSymbol, arguments)));
+        } else {
+            throw new IllegalStateException("unsupported lambda return type: " + returnType);
+        }
+        return new IrFunction(
+            plan.syntheticOwner(),
+            plan.methodName(),
+            plan.methodDescriptor(),
+            symbol(plan.wrapperEntryPoint()),
+            descriptor.returnType(),
+            List.copyOf(parameters),
+            List.of(),
+            List.copyOf(instructions)
+        );
+    }
+
+    private static String lambdaImplementationSymbol(
+        final Map<String, ClassFile> classes,
+        final Map<String, IrDispatch> dispatches,
+        final LambdaMetafactorySupport.LambdaClosurePlan plan
+    ) {
+        final MethodRef target = plan.implementationTarget();
+        if (classes.containsKey(target.owner())) {
+            return symbol(new EntryPoint(target.owner(), target.name(), target.descriptor()));
+        }
+        final List<EntryPoint> targets = plan.implementationReferenceKind() == 9
+            ? interfaceTargets(classes, target)
+            : virtualTargets(classes, target);
+        if (targets.isEmpty()) {
+            throw new IllegalStateException("No deterministic bridge targets for " + target.display());
+        }
+        if (targets.size() == 1) {
+            return symbol(targets.getFirst());
+        }
+        final String targetDispatchSymbol = dispatchSymbol(target);
+        dispatches.putIfAbsent(
+            targetDispatchSymbol,
+            BytecodeToIRInvokeSupport.dispatch(
+                targetDispatchSymbol,
+                MethodDescriptor.parse(target.descriptor()),
+                targets
+            )
+        );
+        return targetDispatchSymbol;
+    }
+
+    private static IrExpression captureFieldExpression(
+        final String owner,
+        final String fieldName,
+        final String descriptor,
+        final IrExpression self
+    ) {
+        final IrType fieldType = BytecodeToIRMetadataSupport.fieldType(descriptor).orElseThrow();
+        if (fieldType == IrType.INT) {
+            return IrExpression.intField(owner, fieldName, self);
+        }
+        if (fieldType == IrType.LONG) {
+            return IrExpression.longField(owner, fieldName, self);
+        }
+        if (fieldType == IrType.FLOAT) {
+            return IrExpression.floatField(owner, fieldName, self);
+        }
+        if (fieldType == IrType.DOUBLE) {
+            return IrExpression.doubleField(owner, fieldName, self);
+        }
+        if (fieldType == IrType.OBJECT) {
+            return IrExpression.objectField(owner, fieldName, self);
+        }
+        throw new IllegalStateException("void capture is invalid");
+    }
+
+    private static IrExpression parameterExpression(final IrType type, final String name) {
+        if (type == IrType.INT) {
+            return IrExpression.intLocal(name);
+        }
+        if (type == IrType.LONG) {
+            return IrExpression.longLocal(name);
+        }
+        if (type == IrType.FLOAT) {
+            return IrExpression.floatLocal(name);
+        }
+        if (type == IrType.DOUBLE) {
+            return IrExpression.doubleLocal(name);
+        }
+        if (type == IrType.OBJECT) {
+            return IrExpression.objectLocal(name);
+        }
+        throw new IllegalStateException("void parameter is invalid");
     }
 
 
@@ -230,7 +381,8 @@ public final class BytecodeToIR {
         final Map<Integer, String> objectLocalThrowableTypes,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
-        final SourceLineIndex sourceLines
+        final SourceLineIndex sourceLines,
+        final LambdaMetafactorySupport.Registry lambdaRegistry
     ) {
         switch (instruction.opcode()) {
             case 1:
@@ -542,6 +694,9 @@ public final class BytecodeToIR {
             case 136:
                 stack.add(StackValue.intExpression(IrExpression.intCall("javan_l2i", List.of(popLong(classFile, method, stack)))));
                 break;
+            case 138:
+                stack.add(StackValue.doubleExpression(IrExpression.doubleCall("javan_l2d", List.of(popLong(classFile, method, stack)))));
+                break;
             case 145:
                 intToByte(classFile, method, stack);
                 break;
@@ -650,7 +805,15 @@ public final class BytecodeToIR {
                 BytecodeToIRInvokeSupport.lowerInterfaceCall(classes, classFile, method, instruction, instructions, stack, localDeclarations, dispatches);
                 break;
             case 186:
-                BytecodeToIRInvokeSupport.lowerDynamicCall(classFile, method, instruction, stack);
+                BytecodeToIRInvokeSupport.lowerDynamicCall(
+                    lambdaRegistry,
+                    classFile,
+                    method,
+                    instruction,
+                    instructions,
+                    stack,
+                    localDeclarations
+                );
                 break;
             case 187:
                 BytecodeToIRInvokeSupport.newObject(classes, classFile, method, instruction, instructions, stack, localDeclarations);
@@ -2243,6 +2406,9 @@ public final class BytecodeToIR {
         if ("java/lang/Boolean".equals(target)) {
             return Optional.of(TYPE_JAVA_LANG_BOOLEAN);
         }
+        if ("java/lang/Character".equals(target)) {
+            return Optional.of(TYPE_JAVA_LANG_CHARACTER);
+        }
         return Optional.empty();
     }
 
@@ -2320,19 +2486,28 @@ public final class BytecodeToIR {
         return isKnownPlatformThrowable(methodRef.owner());
     }
 
-    static boolean isKnownPlatformThrowable(final String owner) {
-        return JdkCallSupport.isPlatformThrowable(owner);
+    static boolean isPlatformThrowableAddSuppressed(final MethodRef methodRef) {
+        if (!"addSuppressed".equals(methodRef.name())) {
+            return false;
+        }
+        if (!"(Ljava/lang/Throwable;)V".equals(methodRef.descriptor())) {
+            return false;
+        }
+        return isKnownPlatformThrowable(methodRef.owner());
     }
 
-    static void updatePendingThrowableMessage(final List<StackValue> stack, final IrExpression message) {
-        if (!stack.isEmpty()) {
-            final StackValue current = stack.getLast();
-            if (current.throwableType().isPresent()) {
-                stack.set(stack.size() - 1, StackValue.platformThrowable(current.throwableType().orElseThrow(), message));
-                return;
-            }
-            stack.set(stack.size() - 1, StackValue.objectExpression(message));
+    static boolean isPlatformThrowableGetSuppressed(final MethodRef methodRef) {
+        if (!"getSuppressed".equals(methodRef.name())) {
+            return false;
         }
+        if (!"()[Ljava/lang/Throwable;".equals(methodRef.descriptor())) {
+            return false;
+        }
+        return isKnownPlatformThrowable(methodRef.owner());
+    }
+
+    static boolean isKnownPlatformThrowable(final String owner) {
+        return JdkCallSupport.isPlatformThrowable(owner);
     }
 
     static DiagnosticException unsupportedTypedExceptionHandler(
@@ -2408,6 +2583,8 @@ public final class BytecodeToIR {
     }
 
     enum StackKind {
+        OBJECT_STREAM,
+        STREAM_COLLECTOR,
         VIRTUAL_THREAD_BUILDER,
         VIRTUAL_THREAD_FACTORY,
         VIRTUAL_THREAD_EXECUTOR,
@@ -2422,64 +2599,108 @@ public final class BytecodeToIR {
         OBJECT
     }
 
+    enum StreamOperationKind {
+        FILTER,
+        MAP
+    }
+
+    record StreamOperation(
+        StreamOperationKind kind,
+        IrExpression function,
+        MethodRef interfaceMethod
+    ) {
+    }
+
+    record StreamPlan(
+        IrExpression source,
+        List<StreamOperation> operations
+    ) {
+        StreamPlan append(final StreamOperation operation) {
+            final List<StreamOperation> next = new ArrayList<>(operations);
+            next.add(operation);
+            return new StreamPlan(source, List.copyOf(next));
+        }
+    }
+
+    record CollectorPlan(
+        IrExpression delimiter,
+        IrExpression prefix,
+        IrExpression suffix
+    ) {
+    }
+
     record BlockResult(List<IrInstruction> instructions, List<StackValue> stack) {
     }
 
-    record StackValue(StackKind kind, Optional<String> throwableType, Optional<IrExpression> expression) {
+    record StackValue(
+        StackKind kind,
+        Optional<String> throwableType,
+        Optional<IrExpression> expression,
+        Optional<StreamPlan> streamPlan,
+        Optional<CollectorPlan> collectorPlan
+    ) {
         static StackValue virtualThreadBuilder() {
-            return new StackValue(StackKind.VIRTUAL_THREAD_BUILDER, Optional.empty(), Optional.of(IrExpression.objectNull()));
+            return new StackValue(StackKind.VIRTUAL_THREAD_BUILDER, Optional.empty(), Optional.of(IrExpression.objectNull()), Optional.empty(), Optional.empty());
         }
 
         static StackValue virtualThreadBuilder(final IrExpression expression) {
-            return new StackValue(StackKind.VIRTUAL_THREAD_BUILDER, Optional.empty(), Optional.of(expression));
+            return new StackValue(StackKind.VIRTUAL_THREAD_BUILDER, Optional.empty(), Optional.of(expression), Optional.empty(), Optional.empty());
         }
 
         static StackValue virtualThreadFactory(final IrExpression expression) {
-            return new StackValue(StackKind.VIRTUAL_THREAD_FACTORY, Optional.empty(), Optional.of(expression));
+            return new StackValue(StackKind.VIRTUAL_THREAD_FACTORY, Optional.empty(), Optional.of(expression), Optional.empty(), Optional.empty());
         }
 
         static StackValue virtualThreadExecutor(final IrExpression expression) {
-            return new StackValue(StackKind.VIRTUAL_THREAD_EXECUTOR, Optional.empty(), Optional.of(expression));
+            return new StackValue(StackKind.VIRTUAL_THREAD_EXECUTOR, Optional.empty(), Optional.of(expression), Optional.empty(), Optional.empty());
+        }
+
+        static StackValue objectStream(final StreamPlan streamPlan) {
+            return new StackValue(StackKind.OBJECT_STREAM, Optional.empty(), Optional.empty(), Optional.of(streamPlan), Optional.empty());
+        }
+
+        static StackValue streamCollector(final CollectorPlan collectorPlan) {
+            return new StackValue(StackKind.STREAM_COLLECTOR, Optional.empty(), Optional.empty(), Optional.empty(), Optional.of(collectorPlan));
         }
 
         static StackValue printStream() {
-            return new StackValue(StackKind.PRINT_STREAM, Optional.empty(), Optional.empty());
+            return new StackValue(StackKind.PRINT_STREAM, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
         }
 
         static StackValue errorPrintStream() {
-            return new StackValue(StackKind.ERROR_PRINT_STREAM, Optional.empty(), Optional.empty());
+            return new StackValue(StackKind.ERROR_PRINT_STREAM, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
         }
 
         static StackValue socketInputStream(final IrExpression expression) {
-            return new StackValue(StackKind.SOCKET_INPUT_STREAM, Optional.empty(), Optional.of(expression));
+            return new StackValue(StackKind.SOCKET_INPUT_STREAM, Optional.empty(), Optional.of(expression), Optional.empty(), Optional.empty());
         }
 
         static StackValue socketOutputStream(final IrExpression expression) {
-            return new StackValue(StackKind.SOCKET_OUTPUT_STREAM, Optional.empty(), Optional.of(expression));
+            return new StackValue(StackKind.SOCKET_OUTPUT_STREAM, Optional.empty(), Optional.of(expression), Optional.empty(), Optional.empty());
         }
 
         static StackValue intExpression(final IrExpression expression) {
-            return new StackValue(StackKind.INT, Optional.empty(), Optional.of(expression));
+            return new StackValue(StackKind.INT, Optional.empty(), Optional.of(expression), Optional.empty(), Optional.empty());
         }
 
         static StackValue longExpression(final IrExpression expression) {
-            return new StackValue(StackKind.LONG, Optional.empty(), Optional.of(expression));
+            return new StackValue(StackKind.LONG, Optional.empty(), Optional.of(expression), Optional.empty(), Optional.empty());
         }
 
         static StackValue floatExpression(final IrExpression expression) {
-            return new StackValue(StackKind.FLOAT, Optional.empty(), Optional.of(expression));
+            return new StackValue(StackKind.FLOAT, Optional.empty(), Optional.of(expression), Optional.empty(), Optional.empty());
         }
 
         static StackValue doubleExpression(final IrExpression expression) {
-            return new StackValue(StackKind.DOUBLE, Optional.empty(), Optional.of(expression));
+            return new StackValue(StackKind.DOUBLE, Optional.empty(), Optional.of(expression), Optional.empty(), Optional.empty());
         }
 
         static StackValue objectExpression(final IrExpression expression) {
-            return new StackValue(StackKind.OBJECT, Optional.empty(), Optional.of(expression));
+            return new StackValue(StackKind.OBJECT, Optional.empty(), Optional.of(expression), Optional.empty(), Optional.empty());
         }
 
         static StackValue platformThrowable(final String throwableType, final IrExpression message) {
-            return new StackValue(StackKind.OBJECT, Optional.of(throwableType), Optional.of(message));
+            return new StackValue(StackKind.OBJECT, Optional.of(throwableType), Optional.of(message), Optional.empty(), Optional.empty());
         }
     }
 }

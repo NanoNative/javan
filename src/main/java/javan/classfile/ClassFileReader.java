@@ -332,6 +332,12 @@ public final class ClassFileReader {
         if (opcode == 187 || opcode == 189 || opcode == 192 || opcode == 193) {
             return Optional.of(constantPool.className(index16(operands, 0)));
         }
+        if (opcode == 18) {
+            return constantPool.classLiteralName(unsigned(operands[0]));
+        }
+        if (opcode == 19) {
+            return constantPool.classLiteralName(index16(operands, 0));
+        }
         return Optional.empty();
     }
 

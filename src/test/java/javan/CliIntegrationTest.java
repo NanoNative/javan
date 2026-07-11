@@ -6473,6 +6473,31 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void longToDoubleConversionBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("long-to-double-conversion");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    long value = 42L;
+                    double widened = value;
+                    System.out.println(widened);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/long-to-double-conversion").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void longFieldsConstructorAndGetterBuild() throws Exception {
         final Path project = project("long-field");
         writeJava(project, "com.acme.Main", """
@@ -6947,6 +6972,1185 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void optionalFilterLambdaBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-filter-lambda");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Optional.of("world").filter(value -> value.length() == 5).orElse("miss"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-filter-lambda").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("world\n");
+    }
+
+    @Test
+    void predicateInterfaceLambdaBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("predicate-interface-lambda");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Predicate;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Predicate<String> predicate = value -> value.length() == 5;
+                    System.out.println(predicate.test("world"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/predicate-interface-lambda").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n");
+    }
+
+    @Test
+    void optionalIfPresentLambdaBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-if-present-lambda");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    Optional.of("world").ifPresent(value -> System.out.println(value));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-if-present-lambda").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("world\n");
+    }
+
+    @Test
+    void consumerInterfaceLambdaBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("consumer-interface-lambda");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Consumer;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Consumer<String> consumer = value -> System.out.println(value);
+                    consumer.accept("world");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/consumer-interface-lambda").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("world\n");
+    }
+
+    @Test
+    void biConsumerInterfaceLambdaBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("biconsumer-interface-lambda");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.BiConsumer;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final BiConsumer<String, String> consumer = (left, right) -> System.out.println(left + right);
+                    consumer.accept("wo", "rld");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/biconsumer-interface-lambda").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("world\n");
+    }
+
+    @Test
+    void optionalMapLambdaBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-map-lambda");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Optional.of("world").map(value -> value + "!").orElse("miss"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-map-lambda").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("world!\n");
+    }
+
+    @Test
+    void functionInterfaceLambdaBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("function-interface-lambda");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Function<String, String> function = value -> value + "!";
+                    System.out.println(function.apply("world"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/function-interface-lambda").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("world!\n");
+    }
+
+    @Test
+    void optionalMapNullResultBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-map-null-result");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Optional.of("world").map(value -> (String) null).orElse("miss"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-map-null-result").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("miss\n");
+    }
+
+    @Test
+    void supplierInterfaceLambdaBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("supplier-interface-lambda");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Supplier;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Supplier<String> supplier = () -> "world";
+                    System.out.println(supplier.get());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/supplier-interface-lambda").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("world\n");
+    }
+
+    @Test
+    void booleanSupplierInterfaceLambdaBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("boolean-supplier-interface-lambda");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.BooleanSupplier;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final BooleanSupplier supplier = () -> true;
+                    System.out.println(supplier.getAsBoolean());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/boolean-supplier-interface-lambda").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n");
+    }
+
+    @Test
+    void listStreamFilterMapToListBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("list-stream-filter-map-to-list");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<String> result = List.of("a", "bb", "ccc").stream()
+                        .filter(value -> value.length() >= 2)
+                        .map(value -> value + "!")
+                        .toList();
+                    System.out.println(result.size());
+                    System.out.println(result.get(0));
+                    System.out.println(result.get(1));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/list-stream-filter-map-to-list").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("2\nbb!\nccc!\n");
+    }
+
+    @Test
+    void collectionStreamFilterFindFirstBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("collection-stream-filter-find-first");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.LinkedHashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, Integer> values = new LinkedHashMap<>();
+                    values.put("a", 1);
+                    values.put("bbb", 3);
+                    System.out.println(values.values().stream()
+                        .filter(value -> value >= 2)
+                        .findFirst()
+                        .orElse(-1)
+                        .intValue());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/collection-stream-filter-find-first").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("3\n");
+    }
+
+    @Test
+    void listStreamAnyMatchBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("list-stream-any-match");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(List.of("aa", "bbb", "cccc").stream().anyMatch(value -> value.length() == 3));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/list-stream-any-match").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n");
+    }
+
+    @Test
+    void listStreamNoneMatchBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("list-stream-none-match");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(List.of("aa", "bbb", "cccc").stream().noneMatch(value -> value.length() == 1));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/list-stream-none-match").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n");
+    }
+
+    @Test
+    void arraysStreamFindFirstBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("arrays-stream-find-first");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Arrays;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String[] values = new String[]{"aa", "bbb", "cccc"};
+                    System.out.println(Arrays.stream(values).findFirst().orElse("missing"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/arrays-stream-find-first").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("aa\n");
+    }
+
+    @Test
+    void streamCollectJoiningBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stream-collect-joining");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.List;
+            import java.util.stream.Collectors;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(List.of("aa", "bbb", "cccc").stream().collect(Collectors.joining()));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stream-collect-joining").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("aabbbcccc\n");
+    }
+
+    @Test
+    void streamCollectJoiningDelimiterBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stream-collect-joining-delimiter");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.List;
+            import java.util.stream.Collectors;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(List.of("aa", "bbb", "cccc").stream().collect(Collectors.joining("|")));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stream-collect-joining-delimiter").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("aa|bbb|cccc\n");
+    }
+
+    @Test
+    void streamCollectJoiningDelimiterPrefixSuffixBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stream-collect-joining-delimiter-prefix-suffix");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.List;
+            import java.util.stream.Collectors;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(List.of("aa", "bbb", "cccc").stream().collect(Collectors.joining("|", "[", "]")));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stream-collect-joining-delimiter-prefix-suffix").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("[aa|bbb|cccc]\n");
+    }
+
+    @Test
+    void mapEntrySetStreamFirstKeyBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-entry-set-stream-first-key");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.LinkedHashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, String> values = new LinkedHashMap<>();
+                    values.put("left", "one");
+                    values.put("right", "two");
+                    System.out.println(values.entrySet().stream().map(entry -> entry.getKey()).findFirst().orElse("missing"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-entry-set-stream-first-key").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("left\n");
+    }
+
+    @Test
+    void mapEntrySetStreamFirstValueBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-entry-set-stream-first-value");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.LinkedHashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, String> values = new LinkedHashMap<>();
+                    values.put("left", "one");
+                    values.put("right", "two");
+                    System.out.println(values.entrySet().stream().map(entry -> entry.getValue()).findFirst().orElse("missing"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-entry-set-stream-first-value").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("one\n");
+    }
+
+    @Test
+    void mapForEachBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-for-each");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.LinkedHashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, String> values = new LinkedHashMap<>();
+                    values.put("left", "one");
+                    values.put("right", "two");
+                    values.forEach((key, value) -> System.out.println(key + "=" + value));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-for-each").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("left=one\nright=two\n");
+    }
+
+    @Test
+    void throwableAddSuppressedBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("throwable-add-suppressed");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final RuntimeException primary = new RuntimeException("primary");
+                    primary.addSuppressed(new IllegalStateException("suppressed"));
+                    System.out.println(primary.getMessage());
+                    System.out.println(primary.getSuppressed().length);
+                    System.out.println(primary.getSuppressed()[0].getMessage());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/throwable-add-suppressed").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("primary\n1\nsuppressed\n");
+    }
+
+    @Test
+    void stringEqualsIgnoreCaseBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-equals-ignore-case");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("Nano".equalsIgnoreCase("nAnO"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-equals-ignore-case").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void stringToLowerCaseBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-to-lower-case");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("NaNo-123".toLowerCase());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-to-lower-case").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void boxedCharacterUnboxBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("boxed-character-unbox");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Character value = Character.valueOf('Q');
+                    System.out.println(value.charValue());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/boxed-character-unbox").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void boxedCharacterInstanceOfBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("boxed-character-instanceof");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Object value = Character.valueOf('Q');
+                    System.out.println(value instanceof Character);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/boxed-character-instanceof").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void tryWithResourcesSuppressedReportsExceptionHandlerBlocker() throws Exception {
+        final Path project = project("try-with-resources-suppressed");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                private static final class ClosingResource implements AutoCloseable {
+                    @Override
+                    public void close() {
+                        throw new IllegalStateException("close");
+                    }
+                }
+
+                public static void main(final String[] args) {
+                    try (ClosingResource ignored = new ClosingResource()) {
+                        throw new IllegalArgumentException("body");
+                    } catch (final RuntimeException exception) {
+                        System.out.println(exception.getMessage());
+                        System.out.println(exception.getSuppressed().length);
+                        System.out.println(exception.getSuppressed()[0].getMessage());
+                    }
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains("JAVAN014");
+        assertThat(run.stderr()).contains("3 handlers");
+    }
+
+    @Test
+    void optionalIfPresentOrElsePresentBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-if-present-or-else-present");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    Optional.of("world").ifPresentOrElse(
+                        value -> System.out.println(value),
+                        () -> System.out.println("miss")
+                    );
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-if-present-or-else-present").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("world\n");
+    }
+
+    @Test
+    void runnableInterfaceLambdaBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("runnable-interface-lambda");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Runnable runnable = () -> System.out.println("world");
+                    runnable.run();
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/runnable-interface-lambda").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("world\n");
+    }
+
+    @Test
+    void optionalIfPresentOrElseEmptyBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-if-present-or-else-empty");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    Optional.<String>empty().ifPresentOrElse(
+                        value -> System.out.println(value),
+                        () -> System.out.println("miss")
+                    );
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-if-present-or-else-empty").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("miss\n");
+    }
+
+    @Test
+    void optionalOrElseGetPresentBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-or-else-get-present");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Optional.of("world").orElseGet(() -> "miss"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-or-else-get-present").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("world\n");
+    }
+
+    @Test
+    void optionalOrElseGetEmptyBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-or-else-get-empty");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Optional.<String>empty().orElseGet(() -> "miss"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-or-else-get-empty").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("miss\n");
+    }
+
+    @Test
+    void atomicBooleanDefaultGetBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("atomic-boolean-default-get");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.atomic.AtomicBoolean;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new AtomicBoolean().get());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/atomic-boolean-default-get").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("false\n");
+    }
+
+    @Test
+    void atomicBooleanValueConstructorGetPlainBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("atomic-boolean-value-get-plain");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.atomic.AtomicBoolean;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new AtomicBoolean(true).getPlain());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/atomic-boolean-value-get-plain").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n");
+    }
+
+    @Test
+    void atomicBooleanSetBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("atomic-boolean-set");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.atomic.AtomicBoolean;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final AtomicBoolean value = new AtomicBoolean();
+                    value.set(true);
+                    System.out.println(value.get());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/atomic-boolean-set").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n");
+    }
+
+    @Test
+    void atomicBooleanCompareAndSetBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("atomic-boolean-compare-and-set");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.atomic.AtomicBoolean;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final AtomicBoolean value = new AtomicBoolean();
+                    System.out.println(value.compareAndSet(false, true));
+                    System.out.println(value.get());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/atomic-boolean-compare-and-set").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\ntrue\n");
+    }
+
+    @Test
+    void atomicIntegerValueConstructorGetBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("atomic-integer-value-get");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.atomic.AtomicInteger;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new AtomicInteger(41).get());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/atomic-integer-value-get").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("41\n");
+    }
+
+    @Test
+    void atomicIntegerGetAndIncrementBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("atomic-integer-get-and-increment");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.atomic.AtomicInteger;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final AtomicInteger value = new AtomicInteger();
+                    System.out.println(value.getAndIncrement());
+                    System.out.println(value.get());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/atomic-integer-get-and-increment").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("0\n1\n");
+    }
+
+    @Test
+    void atomicIntegerIncrementAndDecrementBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("atomic-integer-increment-and-decrement");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.atomic.AtomicInteger;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final AtomicInteger value = new AtomicInteger();
+                    System.out.println(value.incrementAndGet());
+                    System.out.println(value.decrementAndGet());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/atomic-integer-increment-and-decrement").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("1\n0\n");
+    }
+
+    @Test
+    void atomicIntegerUpdateAndGetFailsClearlyAtBuildTime() throws Exception {
+        final Path project = project("atomic-integer-update-and-get-reject");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.atomic.AtomicInteger;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final AtomicInteger value = new AtomicInteger();
+                    System.out.println(value.updateAndGet(current -> current + 1));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains("AtomicInteger.updateAndGet");
+        assertThat(run.stderr()).contains("unsupported reachable JDK call");
+    }
+
+    @Test
+    void copyOnWriteArrayListBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("copy-on-write-array-list");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.CopyOnWriteArrayList;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final CopyOnWriteArrayList<String> values = new CopyOnWriteArrayList<>();
+                    values.add("world");
+                    System.out.println(values.get(0));
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/copy-on-write-array-list").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("world\n1\n");
+    }
+
+    @Test
+    void mapComputeIfAbsentExistingBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-compute-if-absent-existing");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, String> values = new HashMap<>();
+                    values.put("hello", "world");
+                    System.out.println(values.computeIfAbsent("hello", key -> "miss"));
+                    System.out.println(values.get("hello"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-compute-if-absent-existing").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("world\nworld\n");
+    }
+
+    @Test
+    void mapComputeIfAbsentMissingBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-compute-if-absent-missing");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, String> values = new HashMap<>();
+                    System.out.println(values.computeIfAbsent("hello", key -> key + "-world"));
+                    System.out.println(values.get("hello"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-compute-if-absent-missing").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("hello-world\nhello-world\n");
+    }
+
+    @Test
     void nanoHelloServiceRouteReportsDeterministicBlockerSet() throws Exception {
         final Path nanoArtifact = pinnedMavenArtifact("org.nanonative", "nano", "2025.11.3131219");
         final Path typeMapArtifact = pinnedMavenArtifact("berlin.yuna", "type-map", "2025.09.2660710");
@@ -6996,17 +8200,29 @@ final class CliIntegrationTest {
         assertThat(run.exitCode()).isEqualTo(2);
         final String diagnostics = Files.readString(project.resolve(".javan/reports/diagnostics.md"));
         assertThat(diagnostics).contains(
-            "berlin/yuna/typemap/model/FunctionOrNull.applyWithException(Ljava/lang/Object;)Ljava/lang/Object;",
-            "org/nanonative/nano/helper/ExRunnable.run()V",
             "error[JAVAN030] unsupported reachable bytecode",
-            "`invokedynamic`",
-            "java/util/Map.computeIfAbsent(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;",
-            "java/util/Optional.filter(Ljava/util/function/Predicate;)Ljava/util/Optional;",
-            "java/util/Optional.ifPresent(Ljava/util/function/Consumer;)V",
-            "java/util/concurrent/ConcurrentHashMap.<init>()V",
-            "java/lang/Object.getClass()Ljava/lang/Class;"
+            "`invokedynamic`"
         );
         assertThat(diagnostics).doesNotContain(
+            "java/util/List.stream()Ljava/util/stream/Stream;",
+            "java/util/Collection.stream()Ljava/util/stream/Stream;"
+        );
+        assertThat(diagnostics).doesNotContain(
+            "berlin/yuna/typemap/model/FunctionOrNull.applyWithException(Ljava/lang/Object;)Ljava/lang/Object;",
+            "org/nanonative/nano/helper/ExRunnable.run()V",
+            "java/util/Optional.filter(Ljava/util/function/Predicate;)Ljava/util/Optional;",
+            "java/util/Optional.ifPresent(Ljava/util/function/Consumer;)V",
+            "java/util/Optional.map(Ljava/util/function/Function;)Ljava/util/Optional;",
+            "java/util/Optional.ifPresentOrElse(Ljava/util/function/Consumer;Ljava/lang/Runnable;)V",
+            "java/util/Optional.orElseGet(Ljava/util/function/Supplier;)Ljava/lang/Object;",
+            "java/util/function/Predicate.test(Ljava/lang/Object;)Z",
+            "java/util/function/Function.apply(Ljava/lang/Object;)Ljava/lang/Object;",
+            "java/util/function/Consumer.accept(Ljava/lang/Object;)V",
+            "java/util/function/BiConsumer.accept(Ljava/lang/Object;Ljava/lang/Object;)V",
+            "java/lang/Runnable.run()V",
+            "java/util/Map.of(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;",
+            "java/util/Map.computeIfAbsent(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;",
+            "java/util/concurrent/CopyOnWriteArrayList.<init>()V",
             "berlin/yuna/typemap/model/FunctionOrNull.apply(Ljava/lang/Object;)Ljava/lang/Object;",
             "berlin/yuna/typemap/model/ConcurrentTypeMap.put(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
             "berlin/yuna/typemap/model/TypeMapI.asOpt(Ljava/lang/Class;[Ljava/lang/Object;)Lberlin/yuna/typemap/model/Type;",
@@ -7019,6 +8235,8 @@ final class CliIntegrationTest {
         final Path repo = tempDir.resolve("empty-maven-repo");
         Files.createDirectories(repo);
         final Path wrapper = acceptanceWrapper();
+        final boolean hasTypeMapFallback = Files.isDirectory(Path.of(".").toAbsolutePath().normalize().resolve("../../TypeMap/target").normalize());
+        final boolean hasNanoClassesFallback = Files.isDirectory(Path.of(".").toAbsolutePath().normalize().resolve("../../nano/target/classes").normalize());
 
         final ProcessResult run = process(
             tempDir,
@@ -7033,8 +8251,16 @@ final class CliIntegrationTest {
         );
 
         assertThat(run.exitCode()).isEqualTo(1);
-        assertThat(run.stdout()).isEmpty();
-        assertThat(run.stderr()).contains("not ok - src/test/resources/projects/real-probes/typemap-pair missing TYPEMAP_JAR");
+        if (hasTypeMapFallback || hasNanoClassesFallback) {
+            assertThat(run.stdout()).contains(
+                "ok 1 - src/test/resources/projects/real-probes/typemap-pair native probe",
+                "ok 2 - src/test/resources/projects/real-probes/nano-metric native probe"
+            );
+            assertThat(run.stderr()).contains("not ok - src/test/resources/projects/real-probes/nano-duration missing NANO_JAR");
+        } else {
+            assertThat(run.stdout()).isEmpty();
+            assertThat(run.stderr()).contains("not ok - src/test/resources/projects/real-probes/typemap-pair missing TYPEMAP_JAR");
+        }
     }
 
     @Test
@@ -10922,6 +12148,59 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void mapOfEmptyBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-of-empty");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Map.of().isEmpty());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-of-empty").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n");
+    }
+
+    @Test
+    void mapOfSingleEntryBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-of-single-entry");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, String> values = Map.of("left", "right");
+                    System.out.println(values.get("left"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-of-single-entry").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("right\n");
+    }
+
+    @Test
     void arrayListIndexedAddBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("arraylist-indexed-add");
         writeJava(project, "com.acme.Main", """
@@ -14127,8 +15406,8 @@ final class CliIntegrationTest {
     }
 
     @Test
-    void virtualThreadBuilderGetClassStillFailsClearlyAtBuildTime() throws Exception {
-        final Path project = project("virtual-thread-builder-get-class-reject");
+    void virtualThreadBuilderGetClassNameBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-get-class-name");
         writeJava(project, "com.acme.Main", """
             package com.acme;
 
@@ -14143,11 +15422,84 @@ final class CliIntegrationTest {
             }
             """);
 
+        final String jvmOutput = runJvm(project, "com.acme.Main");
         final CliRun run = run(tempDir, "build", project.toString());
 
-        assertThat(run.exitCode()).isNotZero();
-        assertThat(run.stderr()).contains("Thread.ofVirtual()");
-        assertThat(run.stderr()).contains("unsupported reachable concurrency runtime API");
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-get-class-name").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void classLiteralGetSimpleNameBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("class-literal-get-simple-name");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Main.class.getSimpleName());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/class-literal-get-simple-name").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void objectGetClassNameBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("object-get-class-name");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new Main().getClass().getName());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/object-get-class-name").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void objectArrayGetClassIsArrayBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("object-array-get-class-is-array");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(args.getClass().isArray());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/object-array-get-class-is-array").toString())).stdout())
+            .isEqualTo(jvmOutput);
     }
 
     @Test

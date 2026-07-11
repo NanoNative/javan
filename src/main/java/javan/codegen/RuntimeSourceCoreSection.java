@@ -711,6 +711,10 @@ final class RuntimeSourceCoreSection {
             return (int) value;
         }
 
+        double javan_l2d(long long value) {
+            return (double) value;
+        }
+
         int javan_i2b(int value) {
             return (int) ((signed char) value);
         }

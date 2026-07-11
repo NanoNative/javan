@@ -39,6 +39,20 @@ public final class ConstantPool {
     }
 
     /**
+     * Resolves a class literal name when the index points at a class entry.
+     *
+     * @param index constant pool index
+     * @return JVM internal or descriptor-style class literal name when present
+     */
+    public Optional<String> classLiteralName(final int index) {
+        final Object entry = entries[index];
+        if (entry instanceof ClassEntry classEntry) {
+            return Optional.of(utf8(classEntry.nameIndex()));
+        }
+        return Optional.empty();
+    }
+
+    /**
      * Resolves a string literal.
      *
      * @param index constant pool index
@@ -145,20 +159,30 @@ public final class ConstantPool {
             return Optional.empty();
         }
         final MethodRef bootstrap = methodRef(handle.referenceIndex());
+        final List<BootstrapValue> bootstrapValues = bootstrapValues(bootstrapMethod.argumentIndexes());
         return Optional.of(new DynamicRef(
             utf8(nameAndType.nameIndex()),
             utf8(nameAndType.descriptorIndex()),
             bootstrap.owner(),
             bootstrap.name(),
             bootstrap.descriptor(),
-            bootstrapArguments(bootstrapMethod.argumentIndexes())
+            bootstrapArguments(bootstrapValues),
+            bootstrapValues
         ));
     }
 
-    private List<String> bootstrapArguments(final List<Integer> argumentIndexes) {
-        final java.util.ArrayList<String> result = new java.util.ArrayList<>();
+    private List<BootstrapValue> bootstrapValues(final List<Integer> argumentIndexes) {
+        final java.util.ArrayList<BootstrapValue> result = new java.util.ArrayList<>();
         for (final Integer argumentIndex : argumentIndexes) {
-            result.add(bootstrapArgument(argumentIndex.intValue()));
+            result.add(bootstrapValue(argumentIndex.intValue()));
+        }
+        return List.copyOf(result);
+    }
+
+    private List<String> bootstrapArguments(final List<BootstrapValue> bootstrapValues) {
+        final java.util.ArrayList<String> result = new java.util.ArrayList<>();
+        for (final BootstrapValue bootstrapValue : bootstrapValues) {
+            result.add(bootstrapValue.value());
         }
         return List.copyOf(result);
     }
@@ -254,36 +278,57 @@ public final class ConstantPool {
     public record RawEntry(int tag, Object value) {
     }
 
-    private String bootstrapArgument(final int index) {
+    private BootstrapValue bootstrapValue(final int index) {
         final Object entry = entries[index];
         if (entry instanceof StringEntry stringEntry) {
-            return utf8(stringEntry.stringIndex());
+            return new BootstrapValue(BootstrapValue.Kind.STRING, utf8(stringEntry.stringIndex()));
         }
         if (entry instanceof Utf8Entry utf8Entry) {
-            return utf8Entry.value();
+            return new BootstrapValue(BootstrapValue.Kind.UTF8, utf8Entry.value());
         }
         if (entry instanceof MethodTypeEntry methodType) {
-            return utf8(methodType.descriptorIndex());
+            return new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, utf8(methodType.descriptorIndex()));
+        }
+        if (entry instanceof MethodHandleEntry methodHandle) {
+            final Optional<MethodRef> methodRef = bootstrapHandleMethodRef(methodHandle.referenceIndex());
+            if (methodRef.isPresent()) {
+                return BootstrapValue.methodHandle(methodRef.orElseThrow().display(), methodRef.orElseThrow(), methodHandle.referenceKind());
+            }
+            return new BootstrapValue(BootstrapValue.Kind.METHOD_HANDLE, "");
         }
         if (entry instanceof RawEntry rawEntry) {
-            return rawValueString(rawEntry.value());
+            return rawBootstrapValue(rawEntry.value());
         }
-        return "";
+        return new BootstrapValue(BootstrapValue.Kind.UNKNOWN, "");
     }
 
-    private static String rawValueString(final Object value) {
+    private Optional<MethodRef> bootstrapHandleMethodRef(final int referenceIndex) {
+        if (referenceIndex <= 0 || referenceIndex >= entries.length) {
+            return Optional.empty();
+        }
+        final Object entry = entries[referenceIndex];
+        if (!(entry instanceof RefEntry ref)) {
+            return Optional.empty();
+        }
+        if (ref.tag() != 10 && ref.tag() != 11) {
+            return Optional.empty();
+        }
+        return Optional.of(methodRef(referenceIndex));
+    }
+
+    private static BootstrapValue rawBootstrapValue(final Object value) {
         if (value instanceof Integer integer) {
-            return Integer.toString(integer.intValue());
+            return new BootstrapValue(BootstrapValue.Kind.INTEGER, Integer.toString(integer.intValue()));
         }
         if (value instanceof Long longValue) {
-            return Long.toString(longValue.longValue());
+            return new BootstrapValue(BootstrapValue.Kind.LONG, Long.toString(longValue.longValue()));
         }
         if (value instanceof Float floatValue) {
-            return Float.toString(floatValue.floatValue());
+            return new BootstrapValue(BootstrapValue.Kind.FLOAT, Float.toString(floatValue.floatValue()));
         }
         if (value instanceof Double doubleValue) {
-            return Double.toString(doubleValue.doubleValue());
+            return new BootstrapValue(BootstrapValue.Kind.DOUBLE, Double.toString(doubleValue.doubleValue()));
         }
-        return "";
+        return new BootstrapValue(BootstrapValue.Kind.UNKNOWN, "");
     }
 }

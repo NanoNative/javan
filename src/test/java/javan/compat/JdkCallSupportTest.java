@@ -108,6 +108,42 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void objectGetClassIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Object",
+            "getClass",
+            "()Ljava/lang/Class;"
+        ))).isTrue();
+    }
+
+    @Test
+    void classGetNameIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Class",
+            "getName",
+            "()Ljava/lang/String;"
+        ))).isTrue();
+    }
+
+    @Test
+    void classGetSimpleNameIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Class",
+            "getSimpleName",
+            "()Ljava/lang/String;"
+        ))).isTrue();
+    }
+
+    @Test
+    void classIsArrayIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Class",
+            "isArray",
+            "()Z"
+        ))).isTrue();
+    }
+
+    @Test
     void executorExecuteRequiresThreadsRuntimeModule() {
         assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
             "java/util/concurrent/Executor",
@@ -189,6 +225,33 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void stringEqualsIgnoreCaseIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/String",
+            "equalsIgnoreCase",
+            "(Ljava/lang/String;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void stringToLowerCaseIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/String",
+            "toLowerCase",
+            "()Ljava/lang/String;"
+        ))).isTrue();
+    }
+
+    @Test
+    void characterValueOfIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Character",
+            "valueOf",
+            "(C)Ljava/lang/Character;"
+        ))).isTrue();
+    }
+
+    @Test
     void stringDescribeConstableIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/String",
@@ -221,6 +284,78 @@ final class JdkCallSupportTest {
             "java/util/Arrays",
             "copyOf",
             "([ZI)[Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void objectArraysStreamIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Arrays",
+            "stream",
+            "([Ljava/lang/Object;)Ljava/util/stream/Stream;"
+        ))).isTrue();
+    }
+
+    @Test
+    void setStreamIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Set",
+            "stream",
+            "()Ljava/util/stream/Stream;"
+        ))).isTrue();
+    }
+
+    @Test
+    void mapEntrySetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Map",
+            "entrySet",
+            "()Ljava/util/Set;"
+        ))).isTrue();
+    }
+
+    @Test
+    void mapEntryGetKeyIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Map$Entry",
+            "getKey",
+            "()Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void mapEntryGetValueIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Map$Entry",
+            "getValue",
+            "()Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void mapForEachIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Map",
+            "forEach",
+            "(Ljava/util/function/BiConsumer;)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void throwableAddSuppressedIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Throwable",
+            "addSuppressed",
+            "(Ljava/lang/Throwable;)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void throwableGetSuppressedIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Throwable",
+            "getSuppressed",
+            "()[Ljava/lang/Throwable;"
         ))).isTrue();
     }
 
