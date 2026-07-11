@@ -1690,6 +1690,1551 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void loopbackHttpHelloRouteBuildsAndServesDeterministicResponse() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("loopback-http-hello-route");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.io.InputStream;
+            import java.io.OutputStream;
+            import java.net.ServerSocket;
+            import java.net.Socket;
+
+            public final class Main {
+                private static final byte[] REQUEST_PREFIX = new byte[] {
+                    'G', 'E', 'T', ' ', '/', 'h', 'e', 'l', 'l', 'o', ' '
+                };
+                private static final byte[] RESPONSE_200 = new byte[] {
+                    'H','T','T','P','/','1','.','1',' ','2','0','0',' ','O','K','\\r','\\n',
+                    'C','o','n','t','e','n','t','-','L','e','n','g','t','h',':',' ','4','\\r','\\n',
+                    'C','o','n','n','e','c','t','i','o','n',':',' ','c','l','o','s','e','\\r','\\n',
+                    '\\r','\\n',
+                    'p','o','n','g'
+                };
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ServerSocket server = new ServerSocket(%d);
+                    final Socket accepted = server.accept();
+                    final InputStream in = accepted.getInputStream();
+                    final OutputStream out = accepted.getOutputStream();
+                    final byte[] request = new byte[1024];
+                    int length = 0;
+                    while (!headerComplete(request, length)) {
+                        final int read = in.read(request, length, request.length - length);
+                        if (read < 0) {
+                            break;
+                        }
+                        length += read;
+                    }
+                    if (!startsWith(request, length, REQUEST_PREFIX)) {
+                        throw new IllegalStateException("unexpected request");
+                    }
+                    out.write(RESPONSE_200);
+                    out.flush();
+                    accepted.close();
+                    server.close();
+                }
+
+                private static boolean startsWith(final byte[] value, final int length, final byte[] prefix) {
+                    if (length < prefix.length) {
+                        return false;
+                    }
+                    for (int index = 0; index < prefix.length; index++) {
+                        if (value[index] != prefix[index]) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+
+                private static boolean headerComplete(final byte[] value, final int length) {
+                    if (length < 4) {
+                        return false;
+                    }
+                    for (int index = 3; index < length; index++) {
+                        if (value[index - 3] == '\\r'
+                            && value[index - 2] == '\\n'
+                            && value[index - 1] == '\\r'
+                            && value[index] == '\\n') {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+            }
+            """.formatted(port));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Process process = new ProcessBuilder(project.resolve(".javan/bin/loopback-http-hello-route").toString())
+            .directory(project.toFile())
+            .start();
+        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
+        final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+        final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/hello"))
+            .GET()
+            .build();
+        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        java.net.http.HttpResponse<String> response = null;
+        while (System.nanoTime() < deadline) {
+            try {
+                response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+                break;
+            } catch (final java.net.ConnectException exception) {
+                Thread.sleep(25L);
+            }
+        }
+
+        assertThat(response).isNotNull();
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).isEqualTo("pong");
+        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
+        assertThat(process.exitValue()).isZero();
+        assertThat(readStream(process.getInputStream())).isEmpty();
+        assertThat(stderr.join()).isEmpty();
+    }
+
+    @Test
+    void loopbackHttpUnknownRouteBuildsAndServes404Response() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("loopback-http-unknown-route");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.io.InputStream;
+            import java.io.OutputStream;
+            import java.net.ServerSocket;
+            import java.net.Socket;
+
+            public final class Main {
+                private static final byte[] REQUEST_PREFIX = new byte[] {
+                    'G', 'E', 'T', ' ', '/', 'h', 'e', 'l', 'l', 'o', ' '
+                };
+                private static final byte[] RESPONSE_200 = new byte[] {
+                    'H','T','T','P','/','1','.','1',' ','2','0','0',' ','O','K','\\r','\\n',
+                    'C','o','n','t','e','n','t','-','L','e','n','g','t','h',':',' ','4','\\r','\\n',
+                    'C','o','n','n','e','c','t','i','o','n',':',' ','c','l','o','s','e','\\r','\\n',
+                    '\\r','\\n',
+                    'p','o','n','g'
+                };
+                private static final byte[] RESPONSE_404 = new byte[] {
+                    'H','T','T','P','/','1','.','1',' ','4','0','4',' ','N','o','t',' ','F','o','u','n','d','\\r','\\n',
+                    'C','o','n','t','e','n','t','-','L','e','n','g','t','h',':',' ','4','\\r','\\n',
+                    'C','o','n','n','e','c','t','i','o','n',':',' ','c','l','o','s','e','\\r','\\n',
+                    '\\r','\\n',
+                    'm','i','s','s'
+                };
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ServerSocket server = new ServerSocket(%d);
+                    final Socket accepted = server.accept();
+                    final InputStream in = accepted.getInputStream();
+                    final OutputStream out = accepted.getOutputStream();
+                    final byte[] request = new byte[1024];
+                    int length = 0;
+                    while (!headerComplete(request, length)) {
+                        final int read = in.read(request, length, request.length - length);
+                        if (read < 0) {
+                            break;
+                        }
+                        length += read;
+                    }
+                    if (startsWith(request, length, REQUEST_PREFIX)) {
+                        out.write(RESPONSE_200);
+                    } else {
+                        out.write(RESPONSE_404);
+                    }
+                    out.flush();
+                    accepted.close();
+                    server.close();
+                }
+
+                private static boolean startsWith(final byte[] value, final int length, final byte[] prefix) {
+                    if (length < prefix.length) {
+                        return false;
+                    }
+                    for (int index = 0; index < prefix.length; index++) {
+                        if (value[index] != prefix[index]) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+
+                private static boolean headerComplete(final byte[] value, final int length) {
+                    if (length < 4) {
+                        return false;
+                    }
+                    for (int index = 3; index < length; index++) {
+                        if (value[index - 3] == '\\r'
+                            && value[index - 2] == '\\n'
+                            && value[index - 1] == '\\r'
+                            && value[index] == '\\n') {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+            }
+            """.formatted(port));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Process process = new ProcessBuilder(project.resolve(".javan/bin/loopback-http-unknown-route").toString())
+            .directory(project.toFile())
+            .start();
+        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
+        final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+        final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/missing"))
+            .GET()
+            .build();
+        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        java.net.http.HttpResponse<String> response = null;
+        while (System.nanoTime() < deadline) {
+            try {
+                response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+                break;
+            } catch (final java.net.ConnectException exception) {
+                Thread.sleep(25L);
+            }
+        }
+
+        assertThat(response).isNotNull();
+        assertThat(response.statusCode()).isEqualTo(404);
+        assertThat(response.body()).isEqualTo("miss");
+        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
+        assertThat(process.exitValue()).isZero();
+        assertThat(readStream(process.getInputStream())).isEmpty();
+        assertThat(stderr.join()).isEmpty();
+    }
+
+    @Test
+    void loopbackHttpPostBodyBuildsAndServesCreatedResponse() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("loopback-http-post-body");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.io.InputStream;
+            import java.io.OutputStream;
+            import java.net.ServerSocket;
+            import java.net.Socket;
+
+            public final class Main {
+                private static final byte[] REQUEST_PREFIX = new byte[] {
+                    'P', 'O', 'S', 'T', ' ', '/', 'm', 'e', 't', 'r', 'i', 'c', ' '
+                };
+                private static final byte[] CONTENT_LENGTH_HEADER = new byte[] {
+                    'C', 'o', 'n', 't', 'e', 'n', 't', '-', 'L', 'e', 'n', 'g', 't', 'h', ':', ' '
+                };
+                private static final byte[] EXPECTED_BODY = new byte[] {
+                    'h', 'e', 'l', 'l', 'o'
+                };
+                private static final byte[] RESPONSE_201 = new byte[] {
+                    'H','T','T','P','/','1','.','1',' ','2','0','1',' ','C','r','e','a','t','e','d','\\r','\\n',
+                    'C','o','n','t','e','n','t','-','L','e','n','g','t','h',':',' ','5','\\r','\\n',
+                    'C','o','n','n','e','c','t','i','o','n',':',' ','c','l','o','s','e','\\r','\\n',
+                    '\\r','\\n',
+                    's','a','v','e','d'
+                };
+                private static final byte[] RESPONSE_400 = new byte[] {
+                    'H','T','T','P','/','1','.','1',' ','4','0','0',' ','B','a','d',' ','R','e','q','u','e','s','t','\\r','\\n',
+                    'C','o','n','t','e','n','t','-','L','e','n','g','t','h',':',' ','3','\\r','\\n',
+                    'C','o','n','n','e','c','t','i','o','n',':',' ','c','l','o','s','e','\\r','\\n',
+                    '\\r','\\n',
+                    'b','a','d'
+                };
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ServerSocket server = new ServerSocket(%d);
+                    final Socket accepted = server.accept();
+                    final InputStream in = accepted.getInputStream();
+                    final OutputStream out = accepted.getOutputStream();
+                    final byte[] request = new byte[1024];
+                    int length = 0;
+                    while (!headerComplete(request, length)) {
+                        final int read = in.read(request, length, request.length - length);
+                        if (read < 0) {
+                            break;
+                        }
+                        length += read;
+                    }
+                    final int headerEnd = headerEndIndex(request, length);
+                    final int bodyLength = contentLength(request, headerEnd);
+                    while (headerEnd >= 0 && bodyLength >= 0 && length < headerEnd + bodyLength) {
+                        final int read = in.read(request, length, request.length - length);
+                        if (read < 0) {
+                            break;
+                        }
+                        length += read;
+                    }
+                    if (startsWith(request, length, REQUEST_PREFIX)
+                        && bodyLength == EXPECTED_BODY.length
+                        && bodyEquals(request, headerEnd, EXPECTED_BODY)) {
+                        out.write(RESPONSE_201);
+                    } else {
+                        out.write(RESPONSE_400);
+                    }
+                    out.flush();
+                    accepted.close();
+                    server.close();
+                }
+
+                private static boolean startsWith(final byte[] value, final int length, final byte[] prefix) {
+                    if (length < prefix.length) {
+                        return false;
+                    }
+                    for (int index = 0; index < prefix.length; index++) {
+                        if (value[index] != prefix[index]) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+
+                private static boolean headerComplete(final byte[] value, final int length) {
+                    return headerEndIndex(value, length) >= 0;
+                }
+
+                private static int headerEndIndex(final byte[] value, final int length) {
+                    if (length < 4) {
+                        return -1;
+                    }
+                    for (int index = 3; index < length; index++) {
+                        if (value[index - 3] == '\\r'
+                            && value[index - 2] == '\\n'
+                            && value[index - 1] == '\\r'
+                            && value[index] == '\\n') {
+                            return index + 1;
+                        }
+                    }
+                    return -1;
+                }
+
+                private static int contentLength(final byte[] value, final int headerEnd) {
+                    if (headerEnd < 0) {
+                        return -1;
+                    }
+                    for (int index = 0; index + CONTENT_LENGTH_HEADER.length <= headerEnd; index++) {
+                        if (matchesAt(value, index, CONTENT_LENGTH_HEADER)) {
+                            int result = 0;
+                            int cursor = index + CONTENT_LENGTH_HEADER.length;
+                            while (cursor < headerEnd && value[cursor] >= '0' && value[cursor] <= '9') {
+                                result = result * 10 + (value[cursor] - '0');
+                                cursor++;
+                            }
+                            return result;
+                        }
+                    }
+                    return -1;
+                }
+
+                private static boolean matchesAt(final byte[] value, final int offset, final byte[] expected) {
+                    for (int index = 0; index < expected.length; index++) {
+                        if (value[offset + index] != expected[index]) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+
+                private static boolean bodyEquals(final byte[] value, final int offset, final byte[] expected) {
+                    if (offset < 0) {
+                        return false;
+                    }
+                    return matchesAt(value, offset, expected);
+                }
+            }
+            """.formatted(port));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Process process = new ProcessBuilder(project.resolve(".javan/bin/loopback-http-post-body").toString())
+            .directory(project.toFile())
+            .start();
+        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
+        final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+        final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/metric"))
+            .POST(java.net.http.HttpRequest.BodyPublishers.ofString("hello"))
+            .build();
+        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        java.net.http.HttpResponse<String> response = null;
+        while (System.nanoTime() < deadline) {
+            try {
+                response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+                break;
+            } catch (final java.net.ConnectException exception) {
+                Thread.sleep(25L);
+            }
+        }
+
+        assertThat(response).isNotNull();
+        assertThat(response.statusCode()).isEqualTo(201);
+        assertThat(response.body()).isEqualTo("saved");
+        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
+        assertThat(process.exitValue()).isZero();
+        assertThat(readStream(process.getInputStream())).isEmpty();
+        assertThat(stderr.join()).isEmpty();
+    }
+
+    @Test
+    void loopbackHttpSequentialRequestsBuildsAndServesTwoConnections() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("loopback-http-sequential-requests");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.io.InputStream;
+            import java.io.OutputStream;
+            import java.net.ServerSocket;
+            import java.net.Socket;
+
+            public final class Main {
+                private static final byte[] REQUEST_PREFIX = new byte[] {
+                    'G', 'E', 'T', ' ', '/', 'h', 'e', 'l', 'l', 'o', ' '
+                };
+                private static final byte[] RESPONSE_200 = new byte[] {
+                    'H','T','T','P','/','1','.','1',' ','2','0','0',' ','O','K','\\r','\\n',
+                    'C','o','n','t','e','n','t','-','L','e','n','g','t','h',':',' ','4','\\r','\\n',
+                    'C','o','n','n','e','c','t','i','o','n',':',' ','c','l','o','s','e','\\r','\\n',
+                    '\\r','\\n',
+                    'p','o','n','g'
+                };
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ServerSocket server = new ServerSocket(%d);
+                    for (int handled = 0; handled < 2; handled++) {
+                        final Socket accepted = server.accept();
+                        final InputStream in = accepted.getInputStream();
+                        final OutputStream out = accepted.getOutputStream();
+                        final byte[] request = new byte[1024];
+                        int length = 0;
+                        while (!headerComplete(request, length)) {
+                            final int read = in.read(request, length, request.length - length);
+                            if (read < 0) {
+                                break;
+                            }
+                            length += read;
+                        }
+                        if (!startsWith(request, length, REQUEST_PREFIX)) {
+                            throw new IllegalStateException("unexpected request");
+                        }
+                        out.write(RESPONSE_200);
+                        out.flush();
+                        accepted.close();
+                    }
+                    server.close();
+                }
+
+                private static boolean startsWith(final byte[] value, final int length, final byte[] prefix) {
+                    if (length < prefix.length) {
+                        return false;
+                    }
+                    for (int index = 0; index < prefix.length; index++) {
+                        if (value[index] != prefix[index]) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+
+                private static boolean headerComplete(final byte[] value, final int length) {
+                    if (length < 4) {
+                        return false;
+                    }
+                    for (int index = 3; index < length; index++) {
+                        if (value[index - 3] == '\\r'
+                            && value[index - 2] == '\\n'
+                            && value[index - 1] == '\\r'
+                            && value[index] == '\\n') {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+            }
+            """.formatted(port));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Process process = new ProcessBuilder(project.resolve(".javan/bin/loopback-http-sequential-requests").toString())
+            .directory(project.toFile())
+            .start();
+        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
+        final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+        final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/hello"))
+            .GET()
+            .build();
+        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        java.net.http.HttpResponse<String> first = null;
+        while (System.nanoTime() < deadline) {
+            try {
+                first = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+                break;
+            } catch (final java.net.ConnectException exception) {
+                Thread.sleep(25L);
+            }
+        }
+        assertThat(first).isNotNull();
+        assertThat(first.statusCode()).isEqualTo(200);
+        assertThat(first.body()).isEqualTo("pong");
+
+        final java.net.http.HttpResponse<String> second = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+        assertThat(second.statusCode()).isEqualTo(200);
+        assertThat(second.body()).isEqualTo("pong");
+        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
+        assertThat(process.exitValue()).isZero();
+        assertThat(readStream(process.getInputStream())).isEmpty();
+        assertThat(stderr.join()).isEmpty();
+    }
+
+    @Test
+    void loopbackHttpMethodAndPathDispatchBuildsAndServesDifferentRoutes() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("loopback-http-method-and-path-dispatch");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.io.InputStream;
+            import java.io.OutputStream;
+            import java.net.ServerSocket;
+            import java.net.Socket;
+
+            public final class Main {
+                private static final byte[] GET_HELLO_PREFIX = new byte[] {
+                    'G', 'E', 'T', ' ', '/', 'h', 'e', 'l', 'l', 'o', ' '
+                };
+                private static final byte[] POST_METRIC_PREFIX = new byte[] {
+                    'P', 'O', 'S', 'T', ' ', '/', 'm', 'e', 't', 'r', 'i', 'c', ' '
+                };
+                private static final byte[] CONTENT_LENGTH_HEADER = new byte[] {
+                    'C', 'o', 'n', 't', 'e', 'n', 't', '-', 'L', 'e', 'n', 'g', 't', 'h', ':', ' '
+                };
+                private static final byte[] EXPECTED_BODY = new byte[] {
+                    'h', 'e', 'l', 'l', 'o'
+                };
+                private static final byte[] RESPONSE_200 = new byte[] {
+                    'H','T','T','P','/','1','.','1',' ','2','0','0',' ','O','K','\\r','\\n',
+                    'C','o','n','t','e','n','t','-','L','e','n','g','t','h',':',' ','4','\\r','\\n',
+                    'C','o','n','n','e','c','t','i','o','n',':',' ','c','l','o','s','e','\\r','\\n',
+                    '\\r','\\n',
+                    'p','o','n','g'
+                };
+                private static final byte[] RESPONSE_201 = new byte[] {
+                    'H','T','T','P','/','1','.','1',' ','2','0','1',' ','C','r','e','a','t','e','d','\\r','\\n',
+                    'C','o','n','t','e','n','t','-','L','e','n','g','t','h',':',' ','5','\\r','\\n',
+                    'C','o','n','n','e','c','t','i','o','n',':',' ','c','l','o','s','e','\\r','\\n',
+                    '\\r','\\n',
+                    's','a','v','e','d'
+                };
+                private static final byte[] RESPONSE_404 = new byte[] {
+                    'H','T','T','P','/','1','.','1',' ','4','0','4',' ','N','o','t',' ','F','o','u','n','d','\\r','\\n',
+                    'C','o','n','t','e','n','t','-','L','e','n','g','t','h',':',' ','4','\\r','\\n',
+                    'C','o','n','n','e','c','t','i','o','n',':',' ','c','l','o','s','e','\\r','\\n',
+                    '\\r','\\n',
+                    'm','i','s','s'
+                };
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ServerSocket server = new ServerSocket(%d);
+                    for (int handled = 0; handled < 2; handled++) {
+                        final Socket accepted = server.accept();
+                        final InputStream in = accepted.getInputStream();
+                        final OutputStream out = accepted.getOutputStream();
+                        final byte[] request = new byte[1024];
+                        int length = 0;
+                        while (!headerComplete(request, length)) {
+                            final int read = in.read(request, length, request.length - length);
+                            if (read < 0) {
+                                break;
+                            }
+                            length += read;
+                        }
+                        final int headerEnd = headerEndIndex(request, length);
+                        final int bodyLength = contentLength(request, headerEnd);
+                        while (headerEnd >= 0 && bodyLength >= 0 && length < headerEnd + bodyLength) {
+                            final int read = in.read(request, length, request.length - length);
+                            if (read < 0) {
+                                break;
+                            }
+                            length += read;
+                        }
+                        if (startsWith(request, length, GET_HELLO_PREFIX)) {
+                            out.write(RESPONSE_200);
+                        } else if (startsWith(request, length, POST_METRIC_PREFIX)
+                            && bodyLength == EXPECTED_BODY.length
+                            && bodyEquals(request, headerEnd, EXPECTED_BODY)) {
+                            out.write(RESPONSE_201);
+                        } else {
+                            out.write(RESPONSE_404);
+                        }
+                        out.flush();
+                        accepted.close();
+                    }
+                    server.close();
+                }
+
+                private static boolean startsWith(final byte[] value, final int length, final byte[] prefix) {
+                    if (length < prefix.length) {
+                        return false;
+                    }
+                    for (int index = 0; index < prefix.length; index++) {
+                        if (value[index] != prefix[index]) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+
+                private static boolean headerComplete(final byte[] value, final int length) {
+                    return headerEndIndex(value, length) >= 0;
+                }
+
+                private static int headerEndIndex(final byte[] value, final int length) {
+                    if (length < 4) {
+                        return -1;
+                    }
+                    for (int index = 3; index < length; index++) {
+                        if (value[index - 3] == '\\r'
+                            && value[index - 2] == '\\n'
+                            && value[index - 1] == '\\r'
+                            && value[index] == '\\n') {
+                            return index + 1;
+                        }
+                    }
+                    return -1;
+                }
+
+                private static int contentLength(final byte[] value, final int headerEnd) {
+                    if (headerEnd < 0) {
+                        return -1;
+                    }
+                    for (int index = 0; index + CONTENT_LENGTH_HEADER.length <= headerEnd; index++) {
+                        if (matchesAt(value, index, CONTENT_LENGTH_HEADER)) {
+                            int result = 0;
+                            int cursor = index + CONTENT_LENGTH_HEADER.length;
+                            while (cursor < headerEnd && value[cursor] >= '0' && value[cursor] <= '9') {
+                                result = result * 10 + (value[cursor] - '0');
+                                cursor++;
+                            }
+                            return result;
+                        }
+                    }
+                    return -1;
+                }
+
+                private static boolean matchesAt(final byte[] value, final int offset, final byte[] expected) {
+                    for (int index = 0; index < expected.length; index++) {
+                        if (value[offset + index] != expected[index]) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+
+                private static boolean bodyEquals(final byte[] value, final int offset, final byte[] expected) {
+                    if (offset < 0) {
+                        return false;
+                    }
+                    return matchesAt(value, offset, expected);
+                }
+            }
+            """.formatted(port));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Process process = new ProcessBuilder(project.resolve(".javan/bin/loopback-http-method-and-path-dispatch").toString())
+            .directory(project.toFile())
+            .start();
+        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
+        final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+        final java.net.http.HttpRequest getRequest = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/hello"))
+            .GET()
+            .build();
+        final java.net.http.HttpRequest postRequest = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/metric"))
+            .POST(java.net.http.HttpRequest.BodyPublishers.ofString("hello"))
+            .build();
+        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        java.net.http.HttpResponse<String> first = null;
+        while (System.nanoTime() < deadline) {
+            try {
+                first = client.send(getRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
+                break;
+            } catch (final java.net.ConnectException exception) {
+                Thread.sleep(25L);
+            }
+        }
+        assertThat(first).isNotNull();
+        assertThat(first.statusCode()).isEqualTo(200);
+        assertThat(first.body()).isEqualTo("pong");
+
+        final java.net.http.HttpResponse<String> second = client.send(postRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
+        assertThat(second.statusCode()).isEqualTo(201);
+        assertThat(second.body()).isEqualTo("saved");
+        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
+        assertThat(process.exitValue()).isZero();
+        assertThat(readStream(process.getInputStream())).isEmpty();
+        assertThat(stderr.join()).isEmpty();
+    }
+
+    @Test
+    void loopbackHttpRouteHandlersBuildAndServeAcrossMultipleClasses() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("loopback-http-route-handlers");
+        writeJava(project, "com.acme.RouteHandler", """
+            package com.acme;
+
+            public interface RouteHandler {
+                boolean matches(byte[] request, int length, int headerEnd, int bodyLength);
+                byte[] response();
+            }
+            """);
+        writeJava(project, "com.acme.HttpSupport", """
+            package com.acme;
+
+            public final class HttpSupport {
+                static final byte[] GET_HELLO_PREFIX = new byte[] {
+                    'G', 'E', 'T', ' ', '/', 'h', 'e', 'l', 'l', 'o', ' '
+                };
+                static final byte[] POST_METRIC_PREFIX = new byte[] {
+                    'P', 'O', 'S', 'T', ' ', '/', 'm', 'e', 't', 'r', 'i', 'c', ' '
+                };
+                static final byte[] CONTENT_LENGTH_HEADER = new byte[] {
+                    'C', 'o', 'n', 't', 'e', 'n', 't', '-', 'L', 'e', 'n', 'g', 't', 'h', ':', ' '
+                };
+                static final byte[] EXPECTED_BODY = new byte[] {
+                    'h', 'e', 'l', 'l', 'o'
+                };
+                static final byte[] RESPONSE_200 = new byte[] {
+                    'H','T','T','P','/','1','.','1',' ','2','0','0',' ','O','K','\\r','\\n',
+                    'C','o','n','t','e','n','t','-','L','e','n','g','t','h',':',' ','4','\\r','\\n',
+                    'C','o','n','n','e','c','t','i','o','n',':',' ','c','l','o','s','e','\\r','\\n',
+                    '\\r','\\n',
+                    'p','o','n','g'
+                };
+                static final byte[] RESPONSE_201 = new byte[] {
+                    'H','T','T','P','/','1','.','1',' ','2','0','1',' ','C','r','e','a','t','e','d','\\r','\\n',
+                    'C','o','n','t','e','n','t','-','L','e','n','g','t','h',':',' ','5','\\r','\\n',
+                    'C','o','n','n','e','c','t','i','o','n',':',' ','c','l','o','s','e','\\r','\\n',
+                    '\\r','\\n',
+                    's','a','v','e','d'
+                };
+                static final byte[] RESPONSE_404 = new byte[] {
+                    'H','T','T','P','/','1','.','1',' ','4','0','4',' ','N','o','t',' ','F','o','u','n','d','\\r','\\n',
+                    'C','o','n','t','e','n','t','-','L','e','n','g','t','h',':',' ','4','\\r','\\n',
+                    'C','o','n','n','e','c','t','i','o','n',':',' ','c','l','o','s','e','\\r','\\n',
+                    '\\r','\\n',
+                    'm','i','s','s'
+                };
+
+                private HttpSupport() {
+                }
+
+                public static boolean startsWith(final byte[] value, final int length, final byte[] prefix) {
+                    if (length < prefix.length) {
+                        return false;
+                    }
+                    for (int index = 0; index < prefix.length; index++) {
+                        if (value[index] != prefix[index]) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+
+                public static boolean headerComplete(final byte[] value, final int length) {
+                    return headerEndIndex(value, length) >= 0;
+                }
+
+                public static int headerEndIndex(final byte[] value, final int length) {
+                    if (length < 4) {
+                        return -1;
+                    }
+                    for (int index = 3; index < length; index++) {
+                        if (value[index - 3] == '\\r'
+                            && value[index - 2] == '\\n'
+                            && value[index - 1] == '\\r'
+                            && value[index] == '\\n') {
+                            return index + 1;
+                        }
+                    }
+                    return -1;
+                }
+
+                public static int contentLength(final byte[] value, final int headerEnd) {
+                    if (headerEnd < 0) {
+                        return -1;
+                    }
+                    for (int index = 0; index + CONTENT_LENGTH_HEADER.length <= headerEnd; index++) {
+                        if (matchesAt(value, index, CONTENT_LENGTH_HEADER)) {
+                            int result = 0;
+                            int cursor = index + CONTENT_LENGTH_HEADER.length;
+                            while (cursor < headerEnd && value[cursor] >= '0' && value[cursor] <= '9') {
+                                result = result * 10 + (value[cursor] - '0');
+                                cursor++;
+                            }
+                            return result;
+                        }
+                    }
+                    return -1;
+                }
+
+                public static boolean bodyEquals(final byte[] value, final int offset, final byte[] expected) {
+                    if (offset < 0) {
+                        return false;
+                    }
+                    return matchesAt(value, offset, expected);
+                }
+
+                private static boolean matchesAt(final byte[] value, final int offset, final byte[] expected) {
+                    for (int index = 0; index < expected.length; index++) {
+                        if (value[offset + index] != expected[index]) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.HelloHandler", """
+            package com.acme;
+
+            public final class HelloHandler implements RouteHandler {
+                @Override
+                public boolean matches(final byte[] request, final int length, final int headerEnd, final int bodyLength) {
+                    return HttpSupport.startsWith(request, length, HttpSupport.GET_HELLO_PREFIX);
+                }
+
+                @Override
+                public byte[] response() {
+                    return HttpSupport.RESPONSE_200;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.MetricHandler", """
+            package com.acme;
+
+            public final class MetricHandler implements RouteHandler {
+                @Override
+                public boolean matches(final byte[] request, final int length, final int headerEnd, final int bodyLength) {
+                    return HttpSupport.startsWith(request, length, HttpSupport.POST_METRIC_PREFIX)
+                        && bodyLength == HttpSupport.EXPECTED_BODY.length
+                        && HttpSupport.bodyEquals(request, headerEnd, HttpSupport.EXPECTED_BODY);
+                }
+
+                @Override
+                public byte[] response() {
+                    return HttpSupport.RESPONSE_201;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.NotFoundHandler", """
+            package com.acme;
+
+            public final class NotFoundHandler implements RouteHandler {
+                @Override
+                public boolean matches(final byte[] request, final int length, final int headerEnd, final int bodyLength) {
+                    return true;
+                }
+
+                @Override
+                public byte[] response() {
+                    return HttpSupport.RESPONSE_404;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.io.InputStream;
+            import java.io.OutputStream;
+            import java.net.ServerSocket;
+            import java.net.Socket;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final RouteHandler[] handlers = new RouteHandler[] {
+                        new HelloHandler(),
+                        new MetricHandler(),
+                        new NotFoundHandler()
+                    };
+                    final ServerSocket server = new ServerSocket(%d);
+                    for (int handled = 0; handled < 2; handled++) {
+                        final Socket accepted = server.accept();
+                        final InputStream in = accepted.getInputStream();
+                        final OutputStream out = accepted.getOutputStream();
+                        final byte[] request = new byte[1024];
+                        int length = 0;
+                        while (!HttpSupport.headerComplete(request, length)) {
+                            final int read = in.read(request, length, request.length - length);
+                            if (read < 0) {
+                                break;
+                            }
+                            length += read;
+                        }
+                        final int headerEnd = HttpSupport.headerEndIndex(request, length);
+                        final int bodyLength = HttpSupport.contentLength(request, headerEnd);
+                        while (headerEnd >= 0 && bodyLength >= 0 && length < headerEnd + bodyLength) {
+                            final int read = in.read(request, length, request.length - length);
+                            if (read < 0) {
+                                break;
+                            }
+                            length += read;
+                        }
+                        final byte[] response = route(handlers, request, length, headerEnd, bodyLength);
+                        out.write(response);
+                        out.flush();
+                        accepted.close();
+                    }
+                    server.close();
+                }
+
+                private static byte[] route(
+                    final RouteHandler[] handlers,
+                    final byte[] request,
+                    final int length,
+                    final int headerEnd,
+                    final int bodyLength
+                ) {
+                    for (final RouteHandler handler : handlers) {
+                        if (handler.matches(request, length, headerEnd, bodyLength)) {
+                            return handler.response();
+                        }
+                    }
+                    throw new IllegalStateException("no handler");
+                }
+            }
+            """.formatted(port));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Process process = new ProcessBuilder(project.resolve(".javan/bin/loopback-http-route-handlers").toString())
+            .directory(project.toFile())
+            .start();
+        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
+        final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+        final java.net.http.HttpRequest getRequest = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/hello"))
+            .GET()
+            .build();
+        final java.net.http.HttpRequest postRequest = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/metric"))
+            .POST(java.net.http.HttpRequest.BodyPublishers.ofString("hello"))
+            .build();
+        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        java.net.http.HttpResponse<String> first = null;
+        while (System.nanoTime() < deadline) {
+            try {
+                first = client.send(getRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
+                break;
+            } catch (final java.net.ConnectException exception) {
+                Thread.sleep(25L);
+            }
+        }
+        assertThat(first).isNotNull();
+        assertThat(first.statusCode()).isEqualTo(200);
+        assertThat(first.body()).isEqualTo("pong");
+
+        final java.net.http.HttpResponse<String> second = client.send(postRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
+        assertThat(second.statusCode()).isEqualTo(201);
+        assertThat(second.body()).isEqualTo("saved");
+        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
+        assertThat(process.exitValue()).isZero();
+        assertThat(readStream(process.getInputStream())).isEmpty();
+        assertThat(stderr.join()).isEmpty();
+    }
+
+    @Test
+    void loopbackHttpRequestHeaderDispatchBuildsAndMatchesHeaderValue() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("loopback-http-request-header-dispatch");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.io.InputStream;
+            import java.io.OutputStream;
+            import java.net.ServerSocket;
+            import java.net.Socket;
+
+            public final class Main {
+                private static final byte[] REQUEST_PREFIX = new byte[] {
+                    'G', 'E', 'T', ' ', '/', 'h', 'e', 'a', 'd', 'e', 'r', ' '
+                };
+                private static final byte[] MODE_HEADER = new byte[] {
+                    'X', '-', 'M', 'o', 'd', 'e', ':', ' '
+                };
+                private static final byte[] STRICT_VALUE = new byte[] {
+                    's', 't', 'r', 'i', 'c', 't'
+                };
+                private static final byte[] RESPONSE_202 = new byte[] {
+                    'H','T','T','P','/','1','.','1',' ','2','0','2',' ','A','c','c','e','p','t','e','d','\\r','\\n',
+                    'C','o','n','t','e','n','t','-','L','e','n','g','t','h',':',' ','6','\\r','\\n',
+                    'C','o','n','n','e','c','t','i','o','n',':',' ','c','l','o','s','e','\\r','\\n',
+                    '\\r','\\n',
+                    's','t','r','i','c','t'
+                };
+                private static final byte[] RESPONSE_400 = new byte[] {
+                    'H','T','T','P','/','1','.','1',' ','4','0','0',' ','B','a','d',' ','R','e','q','u','e','s','t','\\r','\\n',
+                    'C','o','n','t','e','n','t','-','L','e','n','g','t','h',':',' ','3','\\r','\\n',
+                    'C','o','n','n','e','c','t','i','o','n',':',' ','c','l','o','s','e','\\r','\\n',
+                    '\\r','\\n',
+                    'b','a','d'
+                };
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ServerSocket server = new ServerSocket(%d);
+                    final Socket accepted = server.accept();
+                    final InputStream in = accepted.getInputStream();
+                    final OutputStream out = accepted.getOutputStream();
+                    final byte[] request = new byte[1024];
+                    int length = 0;
+                    while (!headerComplete(request, length)) {
+                        final int read = in.read(request, length, request.length - length);
+                        if (read < 0) {
+                            break;
+                        }
+                        length += read;
+                    }
+                    if (startsWith(request, length, REQUEST_PREFIX) && hasHeaderValue(request, length, MODE_HEADER, STRICT_VALUE)) {
+                        out.write(RESPONSE_202);
+                    } else {
+                        out.write(RESPONSE_400);
+                    }
+                    out.flush();
+                    accepted.close();
+                    server.close();
+                }
+
+                private static boolean startsWith(final byte[] value, final int length, final byte[] prefix) {
+                    if (length < prefix.length) {
+                        return false;
+                    }
+                    for (int index = 0; index < prefix.length; index++) {
+                        if (value[index] != prefix[index]) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+
+                private static boolean headerComplete(final byte[] value, final int length) {
+                    if (length < 4) {
+                        return false;
+                    }
+                    for (int index = 3; index < length; index++) {
+                        if (value[index - 3] == '\\r'
+                            && value[index - 2] == '\\n'
+                            && value[index - 1] == '\\r'
+                            && value[index] == '\\n') {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+
+                private static boolean hasHeaderValue(
+                    final byte[] value,
+                    final int length,
+                    final byte[] header,
+                    final byte[] expected
+                ) {
+                    for (int index = 0; index + header.length + expected.length <= length; index++) {
+                        if (matchesAt(value, index, header) && matchesAt(value, index + header.length, expected)) {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+
+                private static boolean matchesAt(final byte[] value, final int offset, final byte[] expected) {
+                    for (int index = 0; index < expected.length; index++) {
+                        if (value[offset + index] != expected[index]) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+            }
+            """.formatted(port));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Process process = new ProcessBuilder(project.resolve(".javan/bin/loopback-http-request-header-dispatch").toString())
+            .directory(project.toFile())
+            .start();
+        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
+        final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+        final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/header"))
+            .header("X-Mode", "strict")
+            .GET()
+            .build();
+        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        java.net.http.HttpResponse<String> response = null;
+        while (System.nanoTime() < deadline) {
+            try {
+                response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+                break;
+            } catch (final java.net.ConnectException exception) {
+                Thread.sleep(25L);
+            }
+        }
+        assertThat(response).isNotNull();
+        assertThat(response.statusCode()).isEqualTo(202);
+        assertThat(response.body()).isEqualTo("strict");
+        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
+        assertThat(process.exitValue()).isZero();
+        assertThat(readStream(process.getInputStream())).isEmpty();
+        assertThat(stderr.join()).isEmpty();
+    }
+
+    @Test
+    void loopbackHttpResponseHeaderBuildsAndClientObservesHeaderValue() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("loopback-http-response-header");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.io.InputStream;
+            import java.io.OutputStream;
+            import java.net.ServerSocket;
+            import java.net.Socket;
+
+            public final class Main {
+                private static final byte[] REQUEST_PREFIX = new byte[] {
+                    'G', 'E', 'T', ' ', '/', 'r', 'e', 's', 'p', 'o', 'n', 's', 'e', '-', 'h', 'e', 'a', 'd', 'e', 'r', ' '
+                };
+                private static final byte[] RESPONSE_200 = new byte[] {
+                    'H','T','T','P','/','1','.','1',' ','2','0','0',' ','O','K','\\r','\\n',
+                    'X','-','M','o','d','e',':',' ','s','t','r','i','c','t','\\r','\\n',
+                    'C','o','n','t','e','n','t','-','L','e','n','g','t','h',':',' ','4','\\r','\\n',
+                    'C','o','n','n','e','c','t','i','o','n',':',' ','c','l','o','s','e','\\r','\\n',
+                    '\\r','\\n',
+                    'p','o','n','g'
+                };
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ServerSocket server = new ServerSocket(%d);
+                    final Socket accepted = server.accept();
+                    final InputStream in = accepted.getInputStream();
+                    final OutputStream out = accepted.getOutputStream();
+                    final byte[] request = new byte[1024];
+                    int length = 0;
+                    while (!headerComplete(request, length)) {
+                        final int read = in.read(request, length, request.length - length);
+                        if (read < 0) {
+                            break;
+                        }
+                        length += read;
+                    }
+                    if (!startsWith(request, length, REQUEST_PREFIX)) {
+                        throw new IllegalStateException("unexpected request");
+                    }
+                    out.write(RESPONSE_200);
+                    out.flush();
+                    accepted.close();
+                    server.close();
+                }
+
+                private static boolean startsWith(final byte[] value, final int length, final byte[] prefix) {
+                    if (length < prefix.length) {
+                        return false;
+                    }
+                    for (int index = 0; index < prefix.length; index++) {
+                        if (value[index] != prefix[index]) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+
+                private static boolean headerComplete(final byte[] value, final int length) {
+                    if (length < 4) {
+                        return false;
+                    }
+                    for (int index = 3; index < length; index++) {
+                        if (value[index - 3] == '\\r'
+                            && value[index - 2] == '\\n'
+                            && value[index - 1] == '\\r'
+                            && value[index] == '\\n') {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+            }
+            """.formatted(port));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Process process = new ProcessBuilder(project.resolve(".javan/bin/loopback-http-response-header").toString())
+            .directory(project.toFile())
+            .start();
+        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
+        final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+        final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/response-header"))
+            .GET()
+            .build();
+        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        java.net.http.HttpResponse<String> response = null;
+        while (System.nanoTime() < deadline) {
+            try {
+                response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+                break;
+            } catch (final java.net.ConnectException exception) {
+                Thread.sleep(25L);
+            }
+        }
+        assertThat(response).isNotNull();
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).isEqualTo("pong");
+        assertThat(response.headers().firstValue("X-Mode")).contains("strict");
+        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
+        assertThat(process.exitValue()).isZero();
+        assertThat(readStream(process.getInputStream())).isEmpty();
+        assertThat(stderr.join()).isEmpty();
+    }
+
+    @Test
+    void loopbackHttpRequestResponseObjectsBuildAndServeAcrossServiceClasses() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("loopback-http-request-response-objects");
+        writeJava(project, "com.acme.RequestData", """
+            package com.acme;
+
+            public record RequestData(byte[] raw, int length, int headerEnd, int bodyLength) {
+            }
+            """);
+        writeJava(project, "com.acme.ResponseData", """
+            package com.acme;
+
+            public record ResponseData(byte[] bytes) {
+            }
+            """);
+        writeJava(project, "com.acme.Route", """
+            package com.acme;
+
+            public interface Route {
+                boolean matches(RequestData request);
+                ResponseData handle(RequestData request);
+            }
+            """);
+        writeJava(project, "com.acme.HttpSupport", """
+            package com.acme;
+
+            public final class HttpSupport {
+                static final byte[] GET_HELLO_PREFIX = new byte[] {
+                    'G', 'E', 'T', ' ', '/', 'h', 'e', 'l', 'l', 'o', ' '
+                };
+                static final byte[] POST_METRIC_PREFIX = new byte[] {
+                    'P', 'O', 'S', 'T', ' ', '/', 'm', 'e', 't', 'r', 'i', 'c', ' '
+                };
+                static final byte[] CONTENT_LENGTH_HEADER = new byte[] {
+                    'C', 'o', 'n', 't', 'e', 'n', 't', '-', 'L', 'e', 'n', 'g', 't', 'h', ':', ' '
+                };
+                static final byte[] EXPECTED_BODY = new byte[] {
+                    'h', 'e', 'l', 'l', 'o'
+                };
+                static final byte[] RESPONSE_200 = new byte[] {
+                    'H','T','T','P','/','1','.','1',' ','2','0','0',' ','O','K','\\r','\\n',
+                    'C','o','n','t','e','n','t','-','L','e','n','g','t','h',':',' ','4','\\r','\\n',
+                    'C','o','n','n','e','c','t','i','o','n',':',' ','c','l','o','s','e','\\r','\\n',
+                    '\\r','\\n',
+                    'p','o','n','g'
+                };
+                static final byte[] RESPONSE_201 = new byte[] {
+                    'H','T','T','P','/','1','.','1',' ','2','0','1',' ','C','r','e','a','t','e','d','\\r','\\n',
+                    'C','o','n','t','e','n','t','-','L','e','n','g','t','h',':',' ','5','\\r','\\n',
+                    'C','o','n','n','e','c','t','i','o','n',':',' ','c','l','o','s','e','\\r','\\n',
+                    '\\r','\\n',
+                    's','a','v','e','d'
+                };
+                static final byte[] RESPONSE_404 = new byte[] {
+                    'H','T','T','P','/','1','.','1',' ','4','0','4',' ','N','o','t',' ','F','o','u','n','d','\\r','\\n',
+                    'C','o','n','t','e','n','t','-','L','e','n','g','t','h',':',' ','4','\\r','\\n',
+                    'C','o','n','n','e','c','t','i','o','n',':',' ','c','l','o','s','e','\\r','\\n',
+                    '\\r','\\n',
+                    'm','i','s','s'
+                };
+
+                private HttpSupport() {
+                }
+
+                public static boolean headerComplete(final byte[] value, final int length) {
+                    return headerEndIndex(value, length) >= 0;
+                }
+
+                public static int headerEndIndex(final byte[] value, final int length) {
+                    if (length < 4) {
+                        return -1;
+                    }
+                    for (int index = 3; index < length; index++) {
+                        if (value[index - 3] == '\\r'
+                            && value[index - 2] == '\\n'
+                            && value[index - 1] == '\\r'
+                            && value[index] == '\\n') {
+                            return index + 1;
+                        }
+                    }
+                    return -1;
+                }
+
+                public static int contentLength(final byte[] value, final int headerEnd) {
+                    if (headerEnd < 0) {
+                        return -1;
+                    }
+                    for (int index = 0; index + CONTENT_LENGTH_HEADER.length <= headerEnd; index++) {
+                        if (matchesAt(value, index, CONTENT_LENGTH_HEADER)) {
+                            int result = 0;
+                            int cursor = index + CONTENT_LENGTH_HEADER.length;
+                            while (cursor < headerEnd && value[cursor] >= '0' && value[cursor] <= '9') {
+                                result = result * 10 + (value[cursor] - '0');
+                                cursor++;
+                            }
+                            return result;
+                        }
+                    }
+                    return -1;
+                }
+
+                public static boolean startsWith(final byte[] value, final int length, final byte[] prefix) {
+                    if (length < prefix.length) {
+                        return false;
+                    }
+                    for (int index = 0; index < prefix.length; index++) {
+                        if (value[index] != prefix[index]) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+
+                public static boolean bodyEquals(final byte[] value, final int offset, final byte[] expected) {
+                    if (offset < 0) {
+                        return false;
+                    }
+                    return matchesAt(value, offset, expected);
+                }
+
+                private static boolean matchesAt(final byte[] value, final int offset, final byte[] expected) {
+                    for (int index = 0; index < expected.length; index++) {
+                        if (value[offset + index] != expected[index]) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.HelloRoute", """
+            package com.acme;
+
+            public final class HelloRoute implements Route {
+                @Override
+                public boolean matches(final RequestData request) {
+                    return HttpSupport.startsWith(request.raw(), request.length(), HttpSupport.GET_HELLO_PREFIX);
+                }
+
+                @Override
+                public ResponseData handle(final RequestData request) {
+                    return new ResponseData(HttpSupport.RESPONSE_200);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.MetricRoute", """
+            package com.acme;
+
+            public final class MetricRoute implements Route {
+                @Override
+                public boolean matches(final RequestData request) {
+                    return HttpSupport.startsWith(request.raw(), request.length(), HttpSupport.POST_METRIC_PREFIX)
+                        && request.bodyLength() == HttpSupport.EXPECTED_BODY.length
+                        && HttpSupport.bodyEquals(request.raw(), request.headerEnd(), HttpSupport.EXPECTED_BODY);
+                }
+
+                @Override
+                public ResponseData handle(final RequestData request) {
+                    return new ResponseData(HttpSupport.RESPONSE_201);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.NotFoundRoute", """
+            package com.acme;
+
+            public final class NotFoundRoute implements Route {
+                @Override
+                public boolean matches(final RequestData request) {
+                    return true;
+                }
+
+                @Override
+                public ResponseData handle(final RequestData request) {
+                    return new ResponseData(HttpSupport.RESPONSE_404);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Router", """
+            package com.acme;
+
+            public final class Router {
+                private final Route[] routes;
+
+                public Router(final Route[] routes) {
+                    this.routes = routes;
+                }
+
+                public ResponseData route(final RequestData request) {
+                    for (final Route route : routes) {
+                        if (route.matches(request)) {
+                            return route.handle(request);
+                        }
+                    }
+                    throw new IllegalStateException("no route");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.HttpService", """
+            package com.acme;
+
+            import java.io.InputStream;
+            import java.io.OutputStream;
+            import java.net.ServerSocket;
+            import java.net.Socket;
+
+            public final class HttpService {
+                private final Router router;
+
+                public HttpService(final Router router) {
+                    this.router = router;
+                }
+
+                public void serve(final int port, final int connections) throws Exception {
+                    final ServerSocket server = new ServerSocket(port);
+                    for (int handled = 0; handled < connections; handled++) {
+                        final Socket accepted = server.accept();
+                        final InputStream in = accepted.getInputStream();
+                        final OutputStream out = accepted.getOutputStream();
+                        final byte[] request = new byte[1024];
+                        int length = 0;
+                        while (!HttpSupport.headerComplete(request, length)) {
+                            final int read = in.read(request, length, request.length - length);
+                            if (read < 0) {
+                                break;
+                            }
+                            length += read;
+                        }
+                        final int headerEnd = HttpSupport.headerEndIndex(request, length);
+                        final int bodyLength = HttpSupport.contentLength(request, headerEnd);
+                        while (headerEnd >= 0 && bodyLength >= 0 && length < headerEnd + bodyLength) {
+                            final int read = in.read(request, length, request.length - length);
+                            if (read < 0) {
+                                break;
+                            }
+                            length += read;
+                        }
+                        final RequestData requestData = new RequestData(request, length, headerEnd, bodyLength);
+                        final ResponseData response = router.route(requestData);
+                        out.write(response.bytes());
+                        out.flush();
+                        accepted.close();
+                    }
+                    server.close();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Router router = new Router(new Route[] {
+                        new HelloRoute(),
+                        new MetricRoute(),
+                        new NotFoundRoute()
+                    });
+                    new HttpService(router).serve(%d, 3);
+                }
+            }
+            """.formatted(port));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Process process = new ProcessBuilder(project.resolve(".javan/bin/loopback-http-request-response-objects").toString())
+            .directory(project.toFile())
+            .start();
+        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
+        final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+        final java.net.http.HttpRequest getRequest = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/hello"))
+            .GET()
+            .build();
+        final java.net.http.HttpRequest postRequest = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/metric"))
+            .POST(java.net.http.HttpRequest.BodyPublishers.ofString("hello"))
+            .build();
+        final java.net.http.HttpRequest missingRequest = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/missing"))
+            .GET()
+            .build();
+        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        java.net.http.HttpResponse<String> first = null;
+        while (System.nanoTime() < deadline) {
+            try {
+                first = client.send(getRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
+                break;
+            } catch (final java.net.ConnectException exception) {
+                Thread.sleep(25L);
+            }
+        }
+        assertThat(first).isNotNull();
+        assertThat(first.statusCode()).isEqualTo(200);
+        assertThat(first.body()).isEqualTo("pong");
+
+        final java.net.http.HttpResponse<String> second = client.send(postRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
+        assertThat(second.statusCode()).isEqualTo(201);
+        assertThat(second.body()).isEqualTo("saved");
+
+        final java.net.http.HttpResponse<String> third = client.send(missingRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
+        assertThat(third.statusCode()).isEqualTo(404);
+        assertThat(third.body()).isEqualTo("miss");
+        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
+        assertThat(process.exitValue()).isZero();
+        assertThat(readStream(process.getInputStream())).isEmpty();
+        assertThat(stderr.join()).isEmpty();
+    }
+
+    @Test
     void buildRejectsNonSocketInputStreamRead() throws Exception {
         final Path project = project("non-socket-input-stream-read");
         writeJava(project, "com.acme.Main", """

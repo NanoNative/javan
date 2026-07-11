@@ -7,7 +7,7 @@ Status summary:
 | TypeMap | Partial | `typemap-pair` builds natively against the pinned Maven artifact and is exercised by required CI acceptance plus focused CLI integration. | Broader TypeMap dependency graph and quieter unreachable-dependency diagnostics. |
 | Nano metrics helper | Partial | `nano-metric` builds natively against the pinned Maven artifact and is exercised by required CI acceptance plus focused CLI integration. | Broader Nano dependency graph and quieter unreachable-dependency diagnostics. |
 | Nano duration helper | Partial | `nano-duration` builds natively against the pinned Maven artifact and is exercised by required CI acceptance plus focused CLI integration. | Broader Nano helper surface and quieter unreachable-dependency diagnostics. |
-| Nano HTTP service | Planned | Nano-style `HttpServer` dependency now fails clearly with `JAVAN061` and reports `network/http`. | Positive sockets, HTTP runtime, resources, thread/blocking model, and dev-console/reflection exclusion. |
+| Nano HTTP service | Planned | Nano-style `HttpServer` dependency now fails clearly with `JAVAN061` and reports `network/http`. | Broader HTTP service runtime, resources, thread/blocking model, and dev-console/reflection exclusion. |
 
 Current compatibility probes:
 
@@ -27,7 +27,7 @@ These probes prove that the backend can consume real dependency bytecode for sim
 Known blockers before broader TypeMap/Nano coverage:
 
 - only the current blocking TCP loopback socket slice is implemented
-- no native HTTP server runtime yet
+- only raw loopback HTTP responder slices are verified so far (`GET` success, unmatched-route `404`, POST body handling, sequential two-connection lifetime, method-plus-path dispatch, multi-class route-handler dispatch, request-header matching, response-header emission, and a request/response object model over router and service classes); no higher-level native HTTP server API yet
 - no native HTTPS/TLS runtime yet
 - no certificate/trust-store model yet
 - no thread-root model for network service lifetimes yet
@@ -49,6 +49,6 @@ Next gates before claiming Nano support:
 2. done: add negative diagnostics for `Socket`, `ServerSocket`, `HttpClient`, and Nano-style `HttpServer`
 3. done: report reachable `network`, `socket`, and `http` usage even while unsupported
 4. implement TCP loopback support with close/ownership and sanitizer proof
-5. done partially: implement plain HTTP client loopback support for GET/string, POST+headers/byte[], and PUT byte[]
+5. done partially: implement plain HTTP client loopback support for GET/string, POST+headers/byte[], and PUT byte[], plus raw loopback responder slices over `ServerSocket`/`Socket` for `GET /hello -> 200 pong`, unmatched-route `404`, POST body handling via `Content-Length`, sequential two-connection lifetime, method-plus-path dispatch, multi-class route-handler dispatch, request-header matching, response-header emission, and a request/response object model over router and service classes
 6. run the Nano example without dev console/reflection-heavy paths as a native service
 7. add HTTPS/TLS/certificates after plain HTTP is stable
