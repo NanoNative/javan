@@ -547,11 +547,18 @@ accepts_native_library() {
 }
 
 accepts_optional_typemap_probe() {
+  if [ -z "${TYPEMAP_JAR:-}" ] && [ -f "$HOME/.m2/repository/berlin/yuna/type-map/2025.06.1521025/type-map-2025.06.1521025.jar" ]; then
+    TYPEMAP_JAR=$HOME/.m2/repository/berlin/yuna/type-map/2025.06.1521025/type-map-2025.06.1521025.jar
+    export TYPEMAP_JAR
+  fi
   if [ -z "${TYPEMAP_JAR:-}" ] && ls "$ROOT"/../../TypeMap/target/type-map-*.jar >/dev/null 2>&1; then
     TYPEMAP_JAR=$(find "$ROOT"/../../TypeMap/target -maxdepth 1 -name 'type-map-*.jar' | sort | tail -1)
     export TYPEMAP_JAR
   fi
   if [ -z "${TYPEMAP_JAR:-}" ]; then
+    if [ "${JAVAN_REQUIRE_REAL_PROBES:-}" = "true" ]; then
+      fail "src/test/resources/projects/real-probes/typemap-pair missing TYPEMAP_JAR"
+    fi
     pass "src/test/resources/projects/real-probes/typemap-pair skipped without TYPEMAP_JAR"
     return 0
   fi
@@ -562,12 +569,19 @@ accepts_optional_typemap_probe() {
 }
 
 accepts_optional_nano_probe() {
-  if [ -z "${NANO_CLASSES:-}" ] && [ -d "$ROOT/../../nano/target/classes" ]; then
+  if [ -z "${NANO_JAR:-}" ] && [ -f "$HOME/.m2/repository/org/nanonative/nano/2025.11.3131219/nano-2025.11.3131219.jar" ]; then
+    NANO_JAR=$HOME/.m2/repository/org/nanonative/nano/2025.11.3131219/nano-2025.11.3131219.jar
+    export NANO_JAR
+  fi
+  if [ -z "${NANO_JAR:-}" ] && [ -z "${NANO_CLASSES:-}" ] && [ -d "$ROOT/../../nano/target/classes" ]; then
     NANO_CLASSES=$ROOT/../../nano/target/classes
     export NANO_CLASSES
   fi
-  if [ -z "${NANO_CLASSES:-}" ]; then
-    pass "src/test/resources/projects/real-probes/nano-metric skipped without NANO_CLASSES"
+  if [ -z "${NANO_JAR:-}" ] && [ -z "${NANO_CLASSES:-}" ]; then
+    if [ "${JAVAN_REQUIRE_REAL_PROBES:-}" = "true" ]; then
+      fail "src/test/resources/projects/real-probes/nano-metric missing Nano dependency"
+    fi
+    pass "src/test/resources/projects/real-probes/nano-metric skipped without Nano dependency"
     return 0
   fi
   (cd "$ROOT/src/test/resources/projects/real-probes/nano-metric" && JAVAN="$JAVAN_BIN" ./build-example.sh) \
@@ -582,6 +596,9 @@ accepts_optional_nano_duration_probe() {
     export NANO_JAR
   fi
   if [ -z "${NANO_JAR:-}" ]; then
+    if [ "${JAVAN_REQUIRE_REAL_PROBES:-}" = "true" ]; then
+      fail "src/test/resources/projects/real-probes/nano-duration missing NANO_JAR"
+    fi
     pass "src/test/resources/projects/real-probes/nano-duration skipped without NANO_JAR"
     return 0
   fi

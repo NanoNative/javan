@@ -5,6 +5,7 @@ import javan.cli.Version;
 import javan.reporting.RuntimeFootprintReports;
 import javan.util.Files2;
 import javan.util.Json;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Execution;
@@ -5356,6 +5357,48 @@ final class CliIntegrationTest {
             "detail: negative array length",
             "Fix:"
         );
+    }
+
+    @Test
+    void typeMapPairProbeBuildsAgainstPinnedMavenArtifactAndMatchesJvmOutput() throws Exception {
+        final Path artifact = pinnedMavenArtifact("berlin.yuna", "type-map", "2025.06.1521025");
+        Assumptions.assumeTrue(Files.isRegularFile(artifact), "Pinned TypeMap artifact is not available in the local Maven cache");
+        final Path project = copyResourceProject("real-probes/typemap-pair", "typemap-pair");
+
+        final String jvmOutput = runJvm(project, "com.acme.Main", List.of(artifact));
+        final CliRun run = run(tempDir, "build", project.toString(), "--classpath", artifact.toString(), "--output", "typemap-pair");
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/typemap-pair").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("value\n");
+    }
+
+    @Test
+    void nanoMetricProbeBuildsAgainstPinnedMavenArtifactAndMatchesJvmOutput() throws Exception {
+        final Path artifact = pinnedMavenArtifact("org.nanonative", "nano", "2025.11.3131219");
+        Assumptions.assumeTrue(Files.isRegularFile(artifact), "Pinned Nano artifact is not available in the local Maven cache");
+        final Path project = copyResourceProject("real-probes/nano-metric", "nano-metric");
+
+        final String jvmOutput = runJvm(project, "com.acme.Main", List.of(artifact));
+        final CliRun run = run(tempDir, "build", project.toString(), "--classpath", artifact.toString(), "--output", "nano-metric");
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/nano-metric").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("requests\n");
+    }
+
+    @Test
+    void nanoDurationProbeBuildsAgainstPinnedMavenArtifactAndMatchesJvmOutput() throws Exception {
+        final Path artifact = pinnedMavenArtifact("org.nanonative", "nano", "2025.11.3131219");
+        Assumptions.assumeTrue(Files.isRegularFile(artifact), "Pinned Nano artifact is not available in the local Maven cache");
+        final Path project = copyResourceProject("real-probes/nano-duration", "nano-duration");
+
+        final String jvmOutput = runJvm(project, "com.acme.Main", List.of(artifact));
+        final CliRun run = run(tempDir, "build", project.toString(), "--classpath", artifact.toString(), "--output", "nano-duration");
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/nano-duration").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("1m 5s\n");
     }
 
     @Test
@@ -15612,6 +15655,33 @@ final class CliIntegrationTest {
         final Path file = project.resolve(filename);
         Files.writeString(file, source, StandardCharsets.UTF_8);
         return file;
+    }
+
+    private Path copyResourceProject(final String resourceName, final String projectName) throws Exception {
+        final Path source = Path.of("src/test/resources/projects").resolve(resourceName);
+        final Path target = tempDir.resolve(projectName);
+        try (var paths = Files.walk(source)) {
+            for (final Path path : paths.toList()) {
+                final Path relative = source.relativize(path);
+                final Path destination = target.resolve(relative.toString());
+                if (Files.isDirectory(path)) {
+                    Files.createDirectories(destination);
+                } else {
+                    Files.createDirectories(destination.getParent());
+                    Files.copy(path, destination);
+                }
+            }
+        }
+        return target;
+    }
+
+    private static Path pinnedMavenArtifact(final String groupId, final String artifactId, final String version) {
+        return Path.of(System.getProperty("user.home"))
+            .resolve(".m2/repository")
+            .resolve(groupId.replace('.', '/'))
+            .resolve(artifactId)
+            .resolve(version)
+            .resolve(artifactId + "-" + version + ".jar");
     }
 
     private static String pathForMod(final Path project, final Path dependency) {
