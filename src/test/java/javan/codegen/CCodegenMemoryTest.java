@@ -1178,6 +1178,41 @@ final class CCodegenMemoryTest {
     }
 
     @Test
+    void nonEntryVoidMethodPopsRootFrameBeforeReturn() throws Exception {
+        final IrProgram program = new IrProgram(
+            List.of(),
+            List.of(
+                mainWithInstruction(IrInstruction.callStaticVoid("touch_symbol", List.of(IrExpression.stringLiteral("value")))),
+                new IrFunction(
+                    "com/acme/Main",
+                    "touch",
+                    "(Ljava/lang/String;)V",
+                    "touch_symbol",
+                    IrType.VOID,
+                    List.of(new IrParameter(IrType.OBJECT, "arg0")),
+                    List.of(),
+                    List.of(IrInstruction.returnVoid())
+                )
+            ),
+            "main_symbol"
+        );
+
+        final String generated = Files.readString(new CCodegen().generate(program, tempDir));
+
+        assertThat(generated).contains(
+            "static void touch_symbol(void* arg0) {",
+            "void** javan_roots_touch_symbol[] = {",
+            "javan_root_frame_push(javan_roots_touch_symbol, 1);",
+            "javan_root_frame_pop(javan_roots_touch_symbol);",
+            "return;"
+        );
+        assertThat(generated.indexOf("javan_root_frame_push(javan_roots_touch_symbol, 1);"))
+            .isLessThan(generated.indexOf("javan_root_frame_pop(javan_roots_touch_symbol);"));
+        assertThat(generated.indexOf("javan_root_frame_pop(javan_roots_touch_symbol);"))
+            .isLessThan(generated.indexOf("return;", generated.indexOf("javan_root_frame_pop(javan_roots_touch_symbol);")));
+    }
+
+    @Test
     void emitsSourceContextClearForBothBranchOutcomes() throws Exception {
         final IrProgram program = new IrProgram(
             List.of(),

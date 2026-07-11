@@ -465,6 +465,7 @@ public final class CCodegen {
             c.append("    ").append(local.type().cName()).append(' ').append(local.name()).append(" = 0;").append(System.lineSeparator());
         }
         final List<String> rootNames = objectRootNames(function);
+        final int rootFrameCount = rootNames.size();
         final String rootFrameSymbol = rootFrameSymbol(function);
         final RootLivenessPlan rootLiveness = RootLivenessPlan.forFunction(function);
         emitRootFramePush(rootFrameSymbol, rootNames, c);
@@ -478,7 +479,7 @@ public final class CCodegen {
         }
         for (int index = 0; index < function.instructions().size(); index++) {
             final IrInstruction instruction = function.instructions().get(index);
-            emitInstruction(index, instruction, entry, rootFrameSymbol, !rootNames.isEmpty(), c);
+            emitInstruction(index, instruction, entry, rootFrameSymbol, rootFrameCount, c);
             if (hasStatementSafePoint(instruction)) {
                 rootLiveness.emitClearsAfter(index, c);
             }
@@ -486,7 +487,7 @@ public final class CCodegen {
         }
         if (entry) {
             c.append("    javan_wait_for_non_current_threads();").append(System.lineSeparator());
-            emitRootFramePop(rootFrameSymbol, !rootNames.isEmpty(), c);
+            emitRootFramePop(rootFrameSymbol, rootFrameCount, c);
             c.append("    return 0;").append(System.lineSeparator());
         }
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
@@ -1269,17 +1270,17 @@ public final class CCodegen {
             .append(System.lineSeparator());
     }
 
-    private static void emitRootFramePop(final String rootFrameSymbol, final boolean hasRootFrame, final StringBuilder c) {
-        emitRootFramePop(rootFrameSymbol, hasRootFrame, c, "    ");
+    private static void emitRootFramePop(final String rootFrameSymbol, final int rootFrameCount, final StringBuilder c) {
+        emitRootFramePop(rootFrameSymbol, rootFrameCount, c, "    ");
     }
 
     private static void emitRootFramePop(
         final String rootFrameSymbol,
-        final boolean hasRootFrame,
+        final int rootFrameCount,
         final StringBuilder c,
         final String indent
     ) {
-        if (hasRootFrame) {
+        if (rootFrameCount > 0) {
             c.append(indent).append("javan_root_frame_pop(").append(rootFrameSymbol).append(");").append(System.lineSeparator());
         }
     }
@@ -1726,13 +1727,18 @@ public final class CCodegen {
         final IrInstruction instruction,
         final boolean entry,
         final String rootFrameSymbol,
-        final boolean hasRootFrame,
+        final int rootFrameCount,
         final StringBuilder c
     ) {
         final boolean sourceContext = shouldEmitSourceContext(instruction);
-        final String sourceContextSymbol = sourceContext ? sourceContextSymbol(index) : "";
+        final String sourceContextName;
         if (sourceContext) {
-            emitSourceContextEnter(c, "    ", sourceContextSymbol, instruction.sourceLocation().orElseThrow());
+            sourceContextName = sourceContextSymbol(index);
+        } else {
+            sourceContextName = "";
+        }
+        if (sourceContext) {
+            emitSourceContextEnter(c, "    ", sourceContextName, instruction.sourceLocation().orElseThrow());
         }
         switch (instruction.op()) {
             case PRINTLN_LITERAL:
@@ -1878,7 +1884,7 @@ public final class CCodegen {
                     .append(System.lineSeparator());
                 break;
             case BRANCH_IF:
-                emitBranchIf(c, instruction.value().orElseThrow(), instruction.expression().orElseThrow(), sourceContextSymbol);
+                emitBranchIf(c, instruction.value().orElseThrow(), instruction.expression().orElseThrow(), sourceContextName);
                 break;
             case PANIC: {
                 final ExpressionPlan plan = new ExpressionPlan();
@@ -1902,23 +1908,24 @@ public final class CCodegen {
             }
             case RETURN_VOID:
                 if (sourceContext) {
-                    emitSourceContextClear(c, "    ", sourceContextSymbol);
+                    emitSourceContextClear(c, "    ", sourceContextName);
                 }
-                if (!entry) {
-                    emitRootFramePop(rootFrameSymbol, hasRootFrame, c);
-                    c.append("    return;").append(System.lineSeparator());
+                if (entry) {
+                    break;
                 }
+                emitRootFramePop(rootFrameSymbol, rootFrameCount, c);
+                c.append("    return;").append(System.lineSeparator());
                 break;
             case RETURN_INT:
             case RETURN_LONG:
             case RETURN_FLOAT:
             case RETURN_DOUBLE:
             case RETURN_OBJECT:
-                emitReturnValue(instruction.expression().orElseThrow(), rootFrameSymbol, hasRootFrame, sourceContextSymbol, c);
+                emitReturnValue(instruction.expression().orElseThrow(), rootFrameSymbol, rootFrameCount, sourceContextName, c);
                 break;
         }
         if (sourceContext && shouldClearSourceContextAfterInstruction(instruction)) {
-            emitSourceContextClear(c, "    ", sourceContextSymbol);
+            emitSourceContextClear(c, "    ", sourceContextName);
         }
     }
 
@@ -2023,17 +2030,17 @@ public final class CCodegen {
     private static void emitReturnValue(
         final javan.ir.IrExpression expression,
         final String rootFrameSymbol,
-        final boolean hasRootFrame,
+        final int rootFrameCount,
         final String sourceContextSymbol,
         final StringBuilder c
     ) {
         if (expression.type() == javan.ir.IrType.OBJECT) {
-            emitObjectReturnValue(expression, rootFrameSymbol, hasRootFrame, sourceContextSymbol, c);
+            emitObjectReturnValue(expression, rootFrameSymbol, rootFrameCount, sourceContextSymbol, c);
             return;
         }
         final ExpressionPlan plan = new ExpressionPlan();
         final String value = plan.expression(expression);
-        if (!hasRootFrame && plan.isEmpty() && sourceContextSymbol.length() == 0) {
+        if (rootFrameCount == 0 && plan.isEmpty() && sourceContextSymbol.length() == 0) {
             c.append("    return ")
                 .append(value)
                 .append(";")
@@ -2060,7 +2067,7 @@ public final class CCodegen {
         if (plan.hasRootFrame()) {
             c.append(indent).append("javan_root_frame_pop(javan_expr_roots);").append(System.lineSeparator());
         }
-        emitRootFramePop(rootFrameSymbol, hasRootFrame, c, indent);
+        emitRootFramePop(rootFrameSymbol, rootFrameCount, c, indent);
         c.append(indent).append("return javan_return_value;").append(System.lineSeparator());
         c.append("    }").append(System.lineSeparator());
     }
@@ -2068,7 +2075,7 @@ public final class CCodegen {
     private static void emitObjectReturnValue(
         final javan.ir.IrExpression expression,
         final String rootFrameSymbol,
-        final boolean hasRootFrame,
+        final int rootFrameCount,
         final String sourceContextSymbol,
         final StringBuilder c
     ) {
@@ -2094,7 +2101,7 @@ public final class CCodegen {
         if (plan.hasRootFrame()) {
             c.append(indent).append("javan_root_frame_pop(javan_expr_roots);").append(System.lineSeparator());
         }
-        emitRootFramePop(rootFrameSymbol, hasRootFrame, c, indent);
+        emitRootFramePop(rootFrameSymbol, rootFrameCount, c, indent);
         c.append(indent).append(returnRootSymbol()).append(" = 0;").append(System.lineSeparator());
         c.append(indent).append("return javan_return_value;").append(System.lineSeparator());
         c.append("    }").append(System.lineSeparator());
