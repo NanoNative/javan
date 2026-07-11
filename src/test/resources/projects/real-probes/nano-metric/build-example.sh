@@ -3,7 +3,8 @@ set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 JAVAN=${JAVAN:-"$ROOT/../../dist/javan"}
-NANO_JAR=${NANO_JAR:-"$HOME/.m2/repository/org/nanonative/nano/2025.11.3131219/nano-2025.11.3131219.jar"}
+MAVEN_REPO=${JAVAN_MAVEN_REPO:-${MAVEN_REPO_LOCAL:-$HOME/.m2/repository}}
+NANO_JAR=${NANO_JAR:-"$MAVEN_REPO/org/nanonative/nano/2025.11.3131219/nano-2025.11.3131219.jar"}
 NANO_CLASSPATH=${NANO_CLASSPATH:-}
 
 if [ -z "$NANO_CLASSPATH" ] && [ -f "$NANO_JAR" ]; then

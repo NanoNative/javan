@@ -3,7 +3,8 @@ set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 JAVAN=${JAVAN:-"$ROOT/../../dist/javan"}
-TYPEMAP_JAR=${TYPEMAP_JAR:-"$HOME/.m2/repository/berlin/yuna/type-map/2025.06.1521025/type-map-2025.06.1521025.jar"}
+MAVEN_REPO=${JAVAN_MAVEN_REPO:-${MAVEN_REPO_LOCAL:-$HOME/.m2/repository}}
+TYPEMAP_JAR=${TYPEMAP_JAR:-"$MAVEN_REPO/berlin/yuna/type-map/2025.06.1521025/type-map-2025.06.1521025.jar"}
 
 if [ ! -f "$TYPEMAP_JAR" ]; then
   TYPEMAP_TARGET=${TYPEMAP_TARGET:-"$ROOT/../../../TypeMap/target"}

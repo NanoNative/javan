@@ -547,8 +547,9 @@ accepts_native_library() {
 }
 
 accepts_optional_typemap_probe() {
-  if [ -z "${TYPEMAP_JAR:-}" ] && [ -f "$HOME/.m2/repository/berlin/yuna/type-map/2025.06.1521025/type-map-2025.06.1521025.jar" ]; then
-    TYPEMAP_JAR=$HOME/.m2/repository/berlin/yuna/type-map/2025.06.1521025/type-map-2025.06.1521025.jar
+  MAVEN_REPO=${JAVAN_MAVEN_REPO:-${MAVEN_REPO_LOCAL:-$HOME/.m2/repository}}
+  if [ -z "${TYPEMAP_JAR:-}" ] && [ -f "$MAVEN_REPO/berlin/yuna/type-map/2025.06.1521025/type-map-2025.06.1521025.jar" ]; then
+    TYPEMAP_JAR=$MAVEN_REPO/berlin/yuna/type-map/2025.06.1521025/type-map-2025.06.1521025.jar
     export TYPEMAP_JAR
   fi
   if [ -z "${TYPEMAP_JAR:-}" ] && ls "$ROOT"/../../TypeMap/target/type-map-*.jar >/dev/null 2>&1; then
@@ -569,8 +570,9 @@ accepts_optional_typemap_probe() {
 }
 
 accepts_optional_nano_probe() {
-  if [ -z "${NANO_JAR:-}" ] && [ -f "$HOME/.m2/repository/org/nanonative/nano/2025.11.3131219/nano-2025.11.3131219.jar" ]; then
-    NANO_JAR=$HOME/.m2/repository/org/nanonative/nano/2025.11.3131219/nano-2025.11.3131219.jar
+  MAVEN_REPO=${JAVAN_MAVEN_REPO:-${MAVEN_REPO_LOCAL:-$HOME/.m2/repository}}
+  if [ -z "${NANO_JAR:-}" ] && [ -f "$MAVEN_REPO/org/nanonative/nano/2025.11.3131219/nano-2025.11.3131219.jar" ]; then
+    NANO_JAR=$MAVEN_REPO/org/nanonative/nano/2025.11.3131219/nano-2025.11.3131219.jar
     export NANO_JAR
   fi
   if [ -z "${NANO_JAR:-}" ] && [ -z "${NANO_CLASSES:-}" ] && [ -d "$ROOT/../../nano/target/classes" ]; then
@@ -591,8 +593,9 @@ accepts_optional_nano_probe() {
 }
 
 accepts_optional_nano_duration_probe() {
-  if [ -z "${NANO_JAR:-}" ] && [ -f "$HOME/.m2/repository/org/nanonative/nano/2025.11.3131219/nano-2025.11.3131219.jar" ]; then
-    NANO_JAR=$HOME/.m2/repository/org/nanonative/nano/2025.11.3131219/nano-2025.11.3131219.jar
+  MAVEN_REPO=${JAVAN_MAVEN_REPO:-${MAVEN_REPO_LOCAL:-$HOME/.m2/repository}}
+  if [ -z "${NANO_JAR:-}" ] && [ -f "$MAVEN_REPO/org/nanonative/nano/2025.11.3131219/nano-2025.11.3131219.jar" ]; then
+    NANO_JAR=$MAVEN_REPO/org/nanonative/nano/2025.11.3131219/nano-2025.11.3131219.jar
     export NANO_JAR
   fi
   if [ -z "${NANO_JAR:-}" ]; then

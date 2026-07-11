@@ -15676,8 +15676,11 @@ final class CliIntegrationTest {
     }
 
     private static Path pinnedMavenArtifact(final String groupId, final String artifactId, final String version) {
-        return Path.of(System.getProperty("user.home"))
-            .resolve(".m2/repository")
+        final String configuredRepository = System.getProperty("maven.repo.local",
+            System.getenv().getOrDefault("JAVAN_MAVEN_REPO",
+                System.getenv().getOrDefault("MAVEN_REPO_LOCAL",
+                    Path.of(System.getProperty("user.home")).resolve(".m2/repository").toString())));
+        return Path.of(configuredRepository)
             .resolve(groupId.replace('.', '/'))
             .resolve(artifactId)
             .resolve(version)
