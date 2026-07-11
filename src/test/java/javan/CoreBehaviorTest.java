@@ -1239,6 +1239,94 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void reachabilityResolvesInterfaceCallToDefaultMethodOnConcreteImplementation() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo(
+                        "main",
+                        "([Ljava/lang/String;)V",
+                        instruction(0, 185, "invokeinterface", new MethodRef("com/acme/Handler", "handle", "()V"))
+                    )
+                ),
+                "com/acme/Handler", classWithMethods(
+                    "com/acme/Handler",
+                    "java/lang/Object",
+                    0x0200,
+                    List.of(),
+                    methodInfo("handle", "()V", instruction(0, 177, "return"))
+                ),
+                "com/acme/HandlerImpl", classWithMethods(
+                    "com/acme/HandlerImpl",
+                    "java/lang/Object",
+                    0,
+                    List.of("com/acme/Handler")
+                )
+            ),
+            List.of(new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+        assertThat(graph.reachableMethods()).contains(new EntryPoint("com/acme/Handler", "handle", "()V"));
+    }
+
+    @Test
+    void reachabilityResolvesInterfaceCallToInheritedDefaultMethodOnConcreteImplementation() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo(
+                        "main",
+                        "([Ljava/lang/String;)V",
+                        instruction(
+                            0,
+                            185,
+                            "invokeinterface",
+                            new MethodRef("com/acme/TypeMapI", "asOpt", "(Ljava/lang/Class;[Ljava/lang/Object;)Lcom/acme/Type;")
+                        )
+                    )
+                ),
+                "com/acme/TypeInfo", classWithMethods(
+                    "com/acme/TypeInfo",
+                    "java/lang/Object",
+                    0x0200,
+                    List.of(),
+                    methodInfo(
+                        "asOpt",
+                        "(Ljava/lang/Class;[Ljava/lang/Object;)Lcom/acme/Type;",
+                        instruction(0, 1, "aconst_null"),
+                        instruction(1, 176, "areturn")
+                    )
+                ),
+                "com/acme/TypeMapI", classWithMethods(
+                    "com/acme/TypeMapI",
+                    "java/lang/Object",
+                    0x0200,
+                    List.of("com/acme/TypeInfo")
+                ),
+                "com/acme/ConcurrentTypeMap", classWithMethods(
+                    "com/acme/ConcurrentTypeMap",
+                    "java/lang/Object",
+                    0,
+                    List.of("com/acme/TypeMapI")
+                )
+            ),
+            List.of(new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+        assertThat(graph.reachableMethods()).contains(new EntryPoint("com/acme/TypeInfo", "asOpt", "(Ljava/lang/Class;[Ljava/lang/Object;)Lcom/acme/Type;"));
+    }
+
+    @Test
     void reachabilityResolvesSpecialNonConstructorCall() {
         final CallGraph graph = new ReachabilityAnalyzer().analyze(
             Map.of(

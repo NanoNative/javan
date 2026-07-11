@@ -448,11 +448,15 @@ public final class ReachabilityAnalyzer {
             if (candidate.isInterface()) {
                 continue;
             }
-            if (!candidate.interfaces().contains(target.owner())) {
+            if (!isAssignableTo(classes, candidate.name(), target.owner())) {
                 continue;
             }
-            if (candidate.method(target.name(), target.descriptor()).isPresent()) {
-                targets.add(new EntryPoint(candidate.name(), target.name(), target.descriptor()));
+            final Optional<EntryPoint> resolved = lowerableResolvedInterfaceTarget(classes, candidate.name(), target);
+            if (resolved.isPresent()) {
+                final EntryPoint entryPoint = resolved.orElseThrow();
+                if (!containsEntry(targets, entryPoint)) {
+                    targets.add(entryPoint);
+                }
             }
         }
         return List.copyOf(targets);
@@ -988,6 +992,89 @@ public final class ReachabilityAnalyzer {
         return resolved;
     }
 
+    private static Optional<EntryPoint> lowerableResolvedInterfaceTarget(
+        final Map<String, ClassFile> classes,
+        final String receiver,
+        final MethodRef target
+    ) {
+        final Optional<EntryPoint> concreteTarget = lowerableResolvedVirtualTarget(classes, receiver, target);
+        if (concreteTarget.isPresent()) {
+            return concreteTarget;
+        }
+        for (final String interfaceName : implementedInterfaces(classes, receiver)) {
+            if (!isAssignableTo(classes, interfaceName, target.owner())) {
+                continue;
+            }
+            final Optional<EntryPoint> resolved = defaultInterfaceTarget(classes, interfaceName, target, new ArrayList<>());
+            if (resolved.isPresent()) {
+                return resolved;
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static List<String> implementedInterfaces(final Map<String, ClassFile> classes, final String receiver) {
+        final List<String> interfaces = new ArrayList<>();
+        String current = receiver;
+        while (current != null && !current.isEmpty()) {
+            final ClassFile classFile = classes.get(current);
+            if (classFile == null) {
+                break;
+            }
+            collectInterfaceNames(classes, classFile, interfaces, new ArrayList<>());
+            current = classFile.superName();
+        }
+        return List.copyOf(interfaces);
+    }
+
+    private static void collectInterfaceNames(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final List<String> interfaces,
+        final List<String> visited
+    ) {
+        for (final String interfaceName : classFile.interfaces()) {
+            if (containsString(visited, interfaceName)) {
+                continue;
+            }
+            visited.add(interfaceName);
+            if (!containsString(interfaces, interfaceName)) {
+                interfaces.add(interfaceName);
+            }
+            final ClassFile interfaceClass = classes.get(interfaceName);
+            if (interfaceClass != null) {
+                collectInterfaceNames(classes, interfaceClass, interfaces, visited);
+            }
+        }
+    }
+
+    private static Optional<EntryPoint> defaultInterfaceTarget(
+        final Map<String, ClassFile> classes,
+        final String interfaceName,
+        final MethodRef target,
+        final List<String> visited
+    ) {
+        if (containsString(visited, interfaceName)) {
+            return Optional.empty();
+        }
+        visited.add(interfaceName);
+        final ClassFile interfaceClass = classes.get(interfaceName);
+        if (interfaceClass == null || !interfaceClass.isInterface()) {
+            return Optional.empty();
+        }
+        final Optional<MethodInfo> method = interfaceClass.method(target.name(), target.descriptor());
+        if (method.isPresent() && method.orElseThrow().code().isPresent()) {
+            return Optional.of(new EntryPoint(interfaceName, target.name(), target.descriptor()));
+        }
+        for (final String parentInterface : interfaceClass.interfaces()) {
+            final Optional<EntryPoint> resolved = defaultInterfaceTarget(classes, parentInterface, target, visited);
+            if (resolved.isPresent()) {
+                return resolved;
+            }
+        }
+        return Optional.empty();
+    }
+
     private static boolean isSubtypeOf(final Map<String, ClassFile> classes, final String candidate, final String expectedSuper) {
         String current = candidate;
         while (classes.containsKey(current)) {
@@ -1038,6 +1125,15 @@ public final class ReachabilityAnalyzer {
             visited.add(interfaceName);
             final ClassFile interfaceClass = classes.get(interfaceName);
             if (interfaceClass != null && hasInterface(classes, interfaceClass, expected, visited)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean containsString(final List<String> values, final String target) {
+        for (final String value : values) {
+            if (value.equals(target)) {
                 return true;
             }
         }

@@ -7002,6 +7002,10 @@ final class CliIntegrationTest {
             "error[JAVAN014] exception handlers are not supported",
             "java/lang/Object.getClass()Ljava/lang/Class;"
         );
+        assertThat(diagnostics).doesNotContain(
+            "berlin/yuna/typemap/model/TypeMapI.asOpt(Ljava/lang/Class;[Ljava/lang/Object;)Lberlin/yuna/typemap/model/Type;",
+            "berlin/yuna/typemap/model/TypeMapI.asStringOpt([Ljava/lang/Object;)Lberlin/yuna/typemap/model/Type;"
+        );
     }
 
     @Test
