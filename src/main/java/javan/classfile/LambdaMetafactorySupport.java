@@ -455,7 +455,12 @@ public final class LambdaMetafactorySupport {
         if (concreteTarget.isPresent()) {
             return concreteTarget;
         }
+        final List<String> inspectedInterfaces = new ArrayList<>();
         for (final String interfaceName : implementedInterfaces(classes, receiver)) {
+            if (hasMoreSpecificInterface(classes, inspectedInterfaces, interfaceName)) {
+                continue;
+            }
+            inspectedInterfaces.add(interfaceName);
             if (!isAssignableTo(classes, interfaceName, target.owner())) {
                 continue;
             }
@@ -465,6 +470,19 @@ public final class LambdaMetafactorySupport {
             }
         }
         return Optional.empty();
+    }
+
+    private static boolean hasMoreSpecificInterface(
+        final Map<String, ClassFile> classes,
+        final List<String> inspectedInterfaces,
+        final String candidate
+    ) {
+        for (final String inspected : inspectedInterfaces) {
+            if (isAssignableTo(classes, inspected, candidate)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static List<String> implementedInterfaces(final Map<String, ClassFile> classes, final String receiver) {
@@ -517,8 +535,11 @@ public final class LambdaMetafactorySupport {
             return Optional.empty();
         }
         final Optional<MethodInfo> method = interfaceClass.method(target.name(), target.descriptor());
-        if (method.isPresent() && method.orElseThrow().code().isPresent()) {
-            return Optional.of(new EntryPoint(interfaceName, target.name(), target.descriptor()));
+        if (method.isPresent()) {
+            if (method.orElseThrow().code().isPresent()) {
+                return Optional.of(new EntryPoint(interfaceName, target.name(), target.descriptor()));
+            }
+            return Optional.empty();
         }
         for (final String parentInterface : interfaceClass.interfaces()) {
             final Optional<EntryPoint> resolved = defaultInterfaceTarget(classes, parentInterface, target, visited);

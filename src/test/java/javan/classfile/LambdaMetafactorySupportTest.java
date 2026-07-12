@@ -1285,6 +1285,33 @@ final class LambdaMetafactorySupportTest {
     }
 
     @Test
+    void lowerableResolvedInterfaceTargetRejectsAbstractChildRedeclarationOfParentDefault() throws Exception {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/ParentRunnable",
+            classWithMethods(
+                "com/acme/ParentRunnable",
+                "java/lang/Object",
+                0x0200,
+                List.of("java/lang/Runnable"),
+                method("run", "()V", plain(0, 177, "return"))
+            ),
+            "com/acme/ChildRunnable",
+            classWithMethods(
+                "com/acme/ChildRunnable",
+                "java/lang/Object",
+                0x0200,
+                List.of("com/acme/ParentRunnable"),
+                new MethodInfo(0, "run", "()V", Optional.empty())
+            ),
+            "com/acme/RunnableImpl",
+            classWithMethods("com/acme/RunnableImpl", "java/lang/Object", 0, List.of("com/acme/ChildRunnable"))
+        );
+
+        assertThat(lowerableResolvedInterfaceTarget(classes, "com/acme/RunnableImpl", new MethodRef("java/lang/Runnable", "run", "()V")))
+            .isEmpty();
+    }
+
+    @Test
     void lowerableResolvedInterfaceTargetSkipsUnassignableInterfaceBeforeMatch() throws Exception {
         final Map<String, ClassFile> classes = Map.of(
             "com/acme/Noise",
