@@ -9375,6 +9375,113 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersSupportedChronoFieldNanoOfSecondFieldToStringLiteral() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/lang/Object;",
+            1,
+            0,
+            getStatic(0, new FieldRef(
+                "java/time/temporal/ChronoField",
+                "NANO_OF_SECOND",
+                "Ljava/time/temporal/ChronoField;"
+            )),
+            plain(1, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.stringLiteral("NANO_OF_SECOND"))
+        );
+    }
+
+    @Test
+    void lowersLocaleRootFieldToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/util/Locale;",
+            1,
+            0,
+            getStatic(0, new FieldRef("java/util/Locale", "ROOT", "Ljava/util/Locale;")),
+            plain(1, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall("javan_locale_root", List.of()))
+        );
+    }
+
+    @Test
+    void lowersDateTimeFormatterBuilderFlexChainToRuntimeCalls() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/time/format/DateTimeFormatter;",
+            8,
+            0,
+            classInstruction(0, 187, "new", "java/time/format/DateTimeFormatterBuilder"),
+            plain(1, 89, "dup"),
+            invokeSpecial(2, new MethodRef("java/time/format/DateTimeFormatterBuilder", "<init>", "()V")),
+            invokeVirtual(3, new MethodRef("java/time/format/DateTimeFormatterBuilder", "parseCaseInsensitive", "()Ljava/time/format/DateTimeFormatterBuilder;")),
+            stringConstant(4, "yyyy-MM-dd"),
+            invokeVirtual(5, new MethodRef("java/time/format/DateTimeFormatterBuilder", "appendPattern", "(Ljava/lang/String;)Ljava/time/format/DateTimeFormatterBuilder;")),
+            invokeVirtual(6, new MethodRef("java/time/format/DateTimeFormatterBuilder", "optionalStart", "()Ljava/time/format/DateTimeFormatterBuilder;")),
+            getStatic(7, new FieldRef("java/time/temporal/ChronoField", "NANO_OF_SECOND", "Ljava/time/temporal/ChronoField;")),
+            plain(8, 4, "iconst_1"),
+            plainOperands(9, 16, "bipush", 9),
+            plain(10, 4, "iconst_1"),
+            invokeVirtual(11, new MethodRef("java/time/format/DateTimeFormatterBuilder", "appendFraction", "(Ljava/time/temporal/TemporalField;IIZ)Ljava/time/format/DateTimeFormatterBuilder;")),
+            invokeVirtual(12, new MethodRef("java/time/format/DateTimeFormatterBuilder", "optionalEnd", "()Ljava/time/format/DateTimeFormatterBuilder;")),
+            getStatic(13, new FieldRef("java/util/Locale", "ROOT", "Ljava/util/Locale;")),
+            invokeVirtual(14, new MethodRef("java/time/format/DateTimeFormatterBuilder", "toFormatter", "(Ljava/util/Locale;)Ljava/time/format/DateTimeFormatter;")),
+            plain(15, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_datetime_formatter_builder_new", List.of())),
+            IrInstruction.returnObject(
+                IrExpression.objectCall(
+                    "javan_datetime_formatter_builder_to_formatter",
+                    List.of(
+                        IrExpression.objectCall(
+                            "javan_datetime_formatter_builder_optional_end",
+                            List.of(
+                                IrExpression.objectCall(
+                                    "javan_datetime_formatter_builder_append_fraction",
+                                    List.of(
+                                        IrExpression.objectCall(
+                                            "javan_datetime_formatter_builder_optional_start",
+                                            List.of(
+                                                IrExpression.objectCall(
+                                                    "javan_datetime_formatter_builder_append_pattern",
+                                                    List.of(
+                                                        IrExpression.objectCall(
+                                                            "javan_datetime_formatter_builder_parse_case_insensitive",
+                                                            List.of(IrExpression.objectLocal("object0"))
+                                                        ),
+                                                        IrExpression.stringLiteral("yyyy-MM-dd")
+                                                    )
+                                                )
+                                            )
+                                        ),
+                                        IrExpression.stringLiteral("NANO_OF_SECOND"),
+                                        IrExpression.intLiteral(1),
+                                        IrExpression.intLiteral(9),
+                                        IrExpression.intLiteral(1)
+                                    )
+                                )
+                            )
+                        ),
+                        IrExpression.objectCall("javan_locale_root", List.of())
+                    )
+                )
+            )
+        );
+    }
+
+    @Test
     void lowersFilesExistsToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,

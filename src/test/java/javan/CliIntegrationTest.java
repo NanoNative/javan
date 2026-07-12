@@ -1447,6 +1447,32 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void buildRejectsReachableDisabledDateTimeFormatterBuilderTimeRuntimeModule() throws Exception {
+        assertBuildRejectsDisabledRuntimeModule("disabled-datetime-formatter-builder-time-build", "time", """
+            package com.acme;
+
+            import java.time.format.DateTimeFormatterBuilder;
+            import java.time.temporal.ChronoField;
+            import java.util.Locale;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new DateTimeFormatterBuilder()
+                        .parseCaseInsensitive()
+                        .appendPattern("yyyy-MM-dd")
+                        .optionalStart()
+                        .appendFraction(ChronoField.NANO_OF_SECOND, 1, 9, true)
+                        .optionalEnd()
+                        .toFormatter(Locale.ROOT) != null);
+                }
+            }
+            """);
+    }
+
+    @Test
     void buildRejectsReachableDisabledFileTimeTimeRuntimeModule() throws Exception {
         assertBuildRejectsDisabledRuntimeModule("disabled-file-time-build", "time", """
             package com.acme;
@@ -9758,6 +9784,39 @@ final class CliIntegrationTest {
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/duration-of-seconds").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void dateTimeFormatterBuilderFlexBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("datetime-formatter-builder-flex");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.time.format.DateTimeFormatterBuilder;
+            import java.time.temporal.ChronoField;
+            import java.util.Locale;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new DateTimeFormatterBuilder()
+                        .parseCaseInsensitive()
+                        .appendPattern("yyyy-MM-dd")
+                        .optionalStart()
+                        .appendFraction(ChronoField.NANO_OF_SECOND, 1, 9, true)
+                        .optionalEnd()
+                        .toFormatter(Locale.ROOT) != null);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/datetime-formatter-builder-flex").toString())).stdout()).isEqualTo(jvmOutput);
     }
 
     @Test

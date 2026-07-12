@@ -78,6 +78,12 @@ final class BytecodeToIRInvokeSupport {
         final List<StackValue> stack
     ) {
         final FieldRef fieldRef = instruction.fieldRef().orElseThrow();
+        if ("java/util/Locale".equals(fieldRef.owner())
+            && "ROOT".equals(fieldRef.name())
+            && "Ljava/util/Locale;".equals(fieldRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_locale_root", List.of())));
+            return;
+        }
         if ("java/lang/System".equals(fieldRef.owner())) {
             if ("out".equals(fieldRef.name()) && "Ljava/io/PrintStream;".equals(fieldRef.descriptor())) {
                 stack.add(StackValue.printStream());
@@ -1316,6 +1322,9 @@ final class BytecodeToIRInvokeSupport {
         if (lowerStringBuilderConstructor(methodRef, instructions, stack, arguments, receiver)) {
             return;
         }
+        if (lowerDateTimeFormatterBuilderConstructor(methodRef)) {
+            return;
+        }
         if (lowerJdkCollectionConstructorCall(methodRef, instructions, arguments, receiver)) {
             return;
         }
@@ -1896,6 +1905,13 @@ final class BytecodeToIRInvokeSupport {
         }
         return false;
     }
+
+    static boolean lowerDateTimeFormatterBuilderConstructor(final MethodRef methodRef) {
+        return "java/time/format/DateTimeFormatterBuilder".equals(methodRef.owner())
+            && "<init>".equals(methodRef.name())
+            && "()V".equals(methodRef.descriptor());
+    }
+
     static boolean lowerThreadStaticCall(
         final ClassFile classFile,
         final MethodInfo method,
@@ -4165,12 +4181,82 @@ final class BytecodeToIRInvokeSupport {
         final MethodRef methodRef,
         final List<StackValue> stack
     ) {
+        if ("java/time/format/DateTimeFormatterBuilder".equals(methodRef.owner())) {
+            return lowerDateTimeFormatterBuilderInstanceCall(classFile, method, instruction, methodRef, stack);
+        }
         if ("java/time/Duration".equals(methodRef.owner())
             && "toMillis".equals(methodRef.name())
             && "()J".equals(methodRef.descriptor())) {
             stack.add(StackValue.longExpression(IrExpression.longCall(
                 "javan_duration_to_millis",
                 List.of(popObjectForJdkCall(classFile, method, instruction, stack))
+            )));
+            return true;
+        }
+        return false;
+    }
+
+    static boolean lowerDateTimeFormatterBuilderInstanceCall(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final MethodRef methodRef,
+        final List<StackValue> stack
+    ) {
+        if ("parseCaseInsensitive".equals(methodRef.name())
+            && "()Ljava/time/format/DateTimeFormatterBuilder;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_datetime_formatter_builder_parse_case_insensitive",
+                List.of(popObjectForJdkCall(classFile, method, instruction, stack))
+            )));
+            return true;
+        }
+        if ("appendPattern".equals(methodRef.name())
+            && "(Ljava/lang/String;)Ljava/time/format/DateTimeFormatterBuilder;".equals(methodRef.descriptor())) {
+            final IrExpression pattern = popObjectForJdkCall(classFile, method, instruction, stack);
+            final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_datetime_formatter_builder_append_pattern",
+                List.of(receiver, pattern)
+            )));
+            return true;
+        }
+        if ("optionalStart".equals(methodRef.name())
+            && "()Ljava/time/format/DateTimeFormatterBuilder;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_datetime_formatter_builder_optional_start",
+                List.of(popObjectForJdkCall(classFile, method, instruction, stack))
+            )));
+            return true;
+        }
+        if ("appendFraction".equals(methodRef.name())
+            && "(Ljava/time/temporal/TemporalField;IIZ)Ljava/time/format/DateTimeFormatterBuilder;".equals(methodRef.descriptor())) {
+            final IrExpression decimalPoint = popInt(classFile, method, stack);
+            final IrExpression maxWidth = popInt(classFile, method, stack);
+            final IrExpression minWidth = popInt(classFile, method, stack);
+            final IrExpression field = popObjectForJdkCall(classFile, method, instruction, stack);
+            final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_datetime_formatter_builder_append_fraction",
+                List.of(receiver, field, minWidth, maxWidth, decimalPoint)
+            )));
+            return true;
+        }
+        if ("optionalEnd".equals(methodRef.name())
+            && "()Ljava/time/format/DateTimeFormatterBuilder;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_datetime_formatter_builder_optional_end",
+                List.of(popObjectForJdkCall(classFile, method, instruction, stack))
+            )));
+            return true;
+        }
+        if ("toFormatter".equals(methodRef.name())
+            && "(Ljava/util/Locale;)Ljava/time/format/DateTimeFormatter;".equals(methodRef.descriptor())) {
+            final IrExpression locale = popObjectForJdkCall(classFile, method, instruction, stack);
+            final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_datetime_formatter_builder_to_formatter",
+                List.of(receiver, locale)
             )));
             return true;
         }
@@ -5947,6 +6033,14 @@ final class BytecodeToIRInvokeSupport {
             localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
             final IrExpression local = IrExpression.objectLocal(localName);
             instructions.add(IrInstruction.assignObject(localName, IrExpression.objectCall("javan_atomic_integer_new", List.of())));
+            stack.add(StackValue.objectExpression(local));
+            return;
+        }
+        if ("java/time/format/DateTimeFormatterBuilder".equals(owner)) {
+            final String localName = "object" + localDeclarations.size();
+            localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
+            final IrExpression local = IrExpression.objectLocal(localName);
+            instructions.add(IrInstruction.assignObject(localName, IrExpression.objectCall("javan_datetime_formatter_builder_new", List.of())));
             stack.add(StackValue.objectExpression(local));
             return;
         }

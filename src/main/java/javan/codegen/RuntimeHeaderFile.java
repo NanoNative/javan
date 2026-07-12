@@ -367,6 +367,14 @@ final class RuntimeHeaderFile {
         void* javan_duration_of_millis(long long millis);
         void* javan_duration_of_seconds(long long seconds);
         long long javan_duration_to_millis(void* value);
+        void* javan_locale_root(void);
+        void* javan_datetime_formatter_builder_new(void);
+        void* javan_datetime_formatter_builder_parse_case_insensitive(void* value);
+        void* javan_datetime_formatter_builder_append_pattern(void* value, void* pattern);
+        void* javan_datetime_formatter_builder_optional_start(void* value);
+        void* javan_datetime_formatter_builder_append_fraction(void* value, void* field, int min_width, int max_width, int decimal_point);
+        void* javan_datetime_formatter_builder_optional_end(void* value);
+        void* javan_datetime_formatter_builder_to_formatter(void* value, void* locale);
         void* javan_thread_new(void);
         void* javan_thread_new_virtual(void);
         void* javan_virtual_thread_builder_new(void);

@@ -643,9 +643,15 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksDateTimeFormatterBuilderAppendPatternAsExplicitRejected() {
+    void marksDateTimeFormatterBuilderAppendPatternAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/time/format/DateTimeFormatterBuilder", "appendPattern", "(Ljava/lang/String;)Ljava/time/format/DateTimeFormatterBuilder;")))
-            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksDateTimeFormatterBuilderToFormatterAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/time/format/DateTimeFormatterBuilder", "toFormatter", "(Ljava/util/Locale;)Ljava/time/format/DateTimeFormatter;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
     @Test

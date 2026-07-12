@@ -204,6 +204,13 @@ public final class JdkCallSupport {
         runtime("Duration.ofMillis", "java/time/Duration", "ofMillis", "(J)Ljava/time/Duration;"),
         runtime("Duration.ofSeconds", "java/time/Duration", "ofSeconds", "(J)Ljava/time/Duration;"),
         runtime("Duration.toMillis", "java/time/Duration", "toMillis", "()J"),
+        runtime("DateTimeFormatterBuilder.<init>", "java/time/format/DateTimeFormatterBuilder", "<init>", "()V"),
+        runtime("DateTimeFormatterBuilder.parseCaseInsensitive", "java/time/format/DateTimeFormatterBuilder", "parseCaseInsensitive", "()Ljava/time/format/DateTimeFormatterBuilder;"),
+        runtime("DateTimeFormatterBuilder.appendPattern", "java/time/format/DateTimeFormatterBuilder", "appendPattern", "(Ljava/lang/String;)Ljava/time/format/DateTimeFormatterBuilder;"),
+        runtime("DateTimeFormatterBuilder.optionalStart", "java/time/format/DateTimeFormatterBuilder", "optionalStart", "()Ljava/time/format/DateTimeFormatterBuilder;"),
+        runtime("DateTimeFormatterBuilder.appendFraction", "java/time/format/DateTimeFormatterBuilder", "appendFraction", "(Ljava/time/temporal/TemporalField;IIZ)Ljava/time/format/DateTimeFormatterBuilder;"),
+        runtime("DateTimeFormatterBuilder.optionalEnd", "java/time/format/DateTimeFormatterBuilder", "optionalEnd", "()Ljava/time/format/DateTimeFormatterBuilder;"),
+        runtime("DateTimeFormatterBuilder.toFormatter", "java/time/format/DateTimeFormatterBuilder", "toFormatter", "(Ljava/util/Locale;)Ljava/time/format/DateTimeFormatter;"),
         runtime("PrintStream.print", "java/io/PrintStream", "print", "(Ljava/lang/String;)V", "(Ljava/lang/Object;)V", "([C)V", "(C)V", "(Z)V", "(I)V", "(J)V", "(F)V", "(D)V"),
         runtime("PrintStream.println", "java/io/PrintStream", "println", "()V", "(Ljava/lang/String;)V", "(Ljava/lang/Object;)V", "([C)V", "(I)V", "(J)V", "(F)V", "(D)V", "(Z)V", "(C)V"),
         runtime("String.<init>", "java/lang/String", "<init>", "()V", "(Ljava/lang/String;)V", "(Ljava/lang/StringBuilder;)V", "([C)V", "([CII)V"),
@@ -932,6 +939,12 @@ public final class JdkCallSupport {
             return List.of("managed-heap");
         }
         if ("java/time/Duration".equals(owner)) {
+            return List.of("time");
+        }
+        if ("java/time/format/DateTimeFormatterBuilder".equals(owner)) {
+            return List.of("time");
+        }
+        if ("java/time/format/DateTimeFormatter".equals(owner)) {
             return List.of("time");
         }
         if ("java/nio/file/attribute/FileTime".equals(owner)) {

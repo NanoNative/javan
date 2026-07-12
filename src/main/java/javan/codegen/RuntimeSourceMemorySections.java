@@ -62,6 +62,9 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_RUNTIME_KIND_ATOMIC_BOOLEAN 26
         #define JAVAN_RUNTIME_KIND_ATOMIC_INTEGER 27
         #define JAVAN_RUNTIME_KIND_THROWABLE 28
+        #define JAVAN_RUNTIME_KIND_LOCALE 29
+        #define JAVAN_RUNTIME_KIND_DATETIME_FORMATTER_BUILDER 30
+        #define JAVAN_RUNTIME_KIND_DATETIME_FORMATTER 31
 
         typedef struct {
             int magic;
@@ -274,6 +277,38 @@ final class RuntimeSourceMemorySections {
             void* body;
         } javan_http_response_value;
 
+        typedef struct {
+            int magic;
+            int kind;
+            int reserved0;
+            int reserved1;
+        } javan_locale_value;
+
+        typedef struct {
+            int magic;
+            int case_insensitive;
+            int optional_depth;
+            int optional_nano_fraction;
+            int fraction_min_width;
+            int fraction_max_width;
+            int fraction_decimal_point;
+            int reserved;
+            javan_object_list* patterns;
+        } javan_datetime_formatter_builder_value;
+
+        typedef struct {
+            int magic;
+            int case_insensitive;
+            int optional_nano_fraction;
+            int fraction_min_width;
+            int fraction_max_width;
+            int fraction_decimal_point;
+            int reserved0;
+            int reserved1;
+            javan_object_list* patterns;
+            void* locale;
+        } javan_datetime_formatter_value;
+
         #define JAVAN_OBJECT_LIST_MAGIC 0x4a4c5354
         #define JAVAN_OBJECT_ITERATOR_MAGIC 0x4a495452
         #define JAVAN_OBJECT_MAP_MAGIC 0x4a4d4150
@@ -299,6 +334,9 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_VIRTUAL_THREAD_FACTORY_MAGIC 0x4a565446
         #define JAVAN_VIRTUAL_THREAD_EXECUTOR_MAGIC 0x4a565445
         #define JAVAN_RUNTIME_CLASS_MAGIC 0x4a434c53
+        #define JAVAN_LOCALE_MAGIC 0x4a4c4f43
+        #define JAVAN_DATETIME_FORMATTER_BUILDER_MAGIC 0x4a445446
+        #define JAVAN_DATETIME_FORMATTER_MAGIC 0x4a44544d
         #define JAVAN_HTTP_METHOD_GET 1
         #define JAVAN_HTTP_METHOD_POST 2
         #define JAVAN_HTTP_METHOD_PUT 3
@@ -346,6 +384,7 @@ final class RuntimeSourceMemorySections {
         static int javan_heap_stress_initialized = 0;
         static unsigned long javan_heap_stress_interval = 0;
         static unsigned long javan_heap_stress_ticks = 0;
+        static void* javan_locale_root_value = NULL;
         static JavanTypeDescriptor* javan_type_descriptor_for(int type_id);
         static int javan_allocation_limit_initialized = 0;
         static unsigned long javan_max_allocation_bytes = 0;
@@ -383,6 +422,7 @@ final class RuntimeSourceMemorySections {
         static const char* javan_runtime_profile_md_path_value = NULL;
         static javan_object_list* javan_list_new_with_capacity(int capacity, int immutable);
         static void javan_list_append_raw(javan_object_list* list, void* value);
+        void* javan_printable_object_string(void* value);
         #if defined(_WIN32)
         static CRITICAL_SECTION javan_runtime_lock_value;
         static INIT_ONCE javan_runtime_lock_once = INIT_ONCE_STATIC_INIT;
@@ -929,7 +969,10 @@ final class RuntimeSourceMemorySections {
                 || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_REQUEST
                 || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_BODY_PUBLISHER
                 || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_BODY_HANDLER
-                || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_RESPONSE;
+                || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_RESPONSE
+                || runtime_kind == JAVAN_RUNTIME_KIND_LOCALE
+                || runtime_kind == JAVAN_RUNTIME_KIND_DATETIME_FORMATTER_BUILDER
+                || runtime_kind == JAVAN_RUNTIME_KIND_DATETIME_FORMATTER;
             javan_heap_maybe_validate();
             javan_runtime_lock_leave();
         }
@@ -1144,6 +1187,30 @@ final class RuntimeSourceMemorySections {
                 }
                 javan_validate_runtime_managed_reference(throwable->message);
                 javan_validate_runtime_managed_reference((void*) throwable->suppressed);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_LOCALE) {
+                javan_locale_value* locale = (javan_locale_value*) node->value;
+                if (locale->magic != JAVAN_LOCALE_MAGIC || locale->kind != 1) {
+                    javan_panic("invalid runtime locale metadata");
+                }
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_DATETIME_FORMATTER_BUILDER) {
+                javan_datetime_formatter_builder_value* builder = (javan_datetime_formatter_builder_value*) node->value;
+                if (builder->magic != JAVAN_DATETIME_FORMATTER_BUILDER_MAGIC
+                    || builder->patterns == NULL
+                    || builder->optional_depth < 0
+                    || (builder->optional_nano_fraction != 0 && builder->optional_nano_fraction != 1)) {
+                    javan_panic("invalid runtime datetime formatter builder metadata");
+                }
+                javan_validate_runtime_managed_reference((void*) builder->patterns);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_DATETIME_FORMATTER) {
+                javan_datetime_formatter_value* formatter = (javan_datetime_formatter_value*) node->value;
+                if (formatter->magic != JAVAN_DATETIME_FORMATTER_MAGIC
+                    || formatter->patterns == NULL
+                    || formatter->locale == NULL
+                    || (formatter->optional_nano_fraction != 0 && formatter->optional_nano_fraction != 1)) {
+                    javan_panic("invalid runtime datetime formatter metadata");
+                }
+                javan_validate_runtime_managed_reference((void*) formatter->patterns);
+                javan_validate_runtime_managed_reference(formatter->locale);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_HTTP_REQUEST_BUILDER) {
                 javan_http_request_builder_value* builder = (javan_http_request_builder_value*) node->value;
                 if (builder->magic != JAVAN_HTTP_REQUEST_BUILDER_MAGIC || builder->uri == NULL || builder->headers == NULL) {
@@ -1261,6 +1328,27 @@ final class RuntimeSourceMemorySections {
                 if (response->magic != JAVAN_HTTP_RESPONSE_MAGIC || response->status_code < 0 || response->body == NULL) {
                     javan_panic("invalid runtime http response metadata");
                 }
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_LOCALE) {
+                javan_locale_value* locale = (javan_locale_value*) node->value;
+                if (locale->magic != JAVAN_LOCALE_MAGIC || locale->kind != 1) {
+                    javan_panic("invalid runtime locale metadata");
+                }
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_DATETIME_FORMATTER_BUILDER) {
+                javan_datetime_formatter_builder_value* builder = (javan_datetime_formatter_builder_value*) node->value;
+                if (builder->magic != JAVAN_DATETIME_FORMATTER_BUILDER_MAGIC
+                    || builder->patterns == NULL
+                    || builder->optional_depth < 0
+                    || (builder->optional_nano_fraction != 0 && builder->optional_nano_fraction != 1)) {
+                    javan_panic("invalid runtime datetime formatter builder metadata");
+                }
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_DATETIME_FORMATTER) {
+                javan_datetime_formatter_value* formatter = (javan_datetime_formatter_value*) node->value;
+                if (formatter->magic != JAVAN_DATETIME_FORMATTER_MAGIC
+                    || formatter->patterns == NULL
+                    || formatter->locale == NULL
+                    || (formatter->optional_nano_fraction != 0 && formatter->optional_nano_fraction != 1)) {
+                    javan_panic("invalid runtime datetime formatter metadata");
+                }
             }
         }
 
@@ -1343,6 +1431,9 @@ final class RuntimeSourceMemorySections {
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_HTTP_BODY_PUBLISHER
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_HTTP_BODY_HANDLER
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_HTTP_RESPONSE
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_LOCALE
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_DATETIME_FORMATTER_BUILDER
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_DATETIME_FORMATTER
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_BUILDER
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_FACTORY
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_EXECUTOR
@@ -2058,6 +2149,28 @@ final class RuntimeSourceMemorySections {
             return state;
         }
 
+        static javan_locale_value* javan_locale_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported locale");
+            }
+            javan_locale_value* locale = (javan_locale_value*) value;
+            if (locale->magic != JAVAN_LOCALE_MAGIC || locale->kind != 1) {
+                javan_panic("unsupported locale");
+            }
+            return locale;
+        }
+
+        static javan_datetime_formatter_builder_value* javan_datetime_formatter_builder_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported datetime formatter builder");
+            }
+            javan_datetime_formatter_builder_value* builder = (javan_datetime_formatter_builder_value*) value;
+            if (builder->magic != JAVAN_DATETIME_FORMATTER_BUILDER_MAGIC || builder->patterns == NULL || builder->optional_depth < 0) {
+                javan_panic("unsupported datetime formatter builder");
+            }
+            return builder;
+        }
+
         static int javan_runtime_class_name_is_array(const char* binary_name) {
             return binary_name != NULL && binary_name[0] == '[';
         }
@@ -2144,6 +2257,12 @@ final class RuntimeSourceMemorySections {
                     return "java.net.http.HttpResponse";
                 case JAVAN_RUNTIME_KIND_HTTP_BODY_PUBLISHER:
                     return "java.net.http.HttpRequest$BodyPublisher";
+                case JAVAN_RUNTIME_KIND_LOCALE:
+                    return "java.util.Locale";
+                case JAVAN_RUNTIME_KIND_DATETIME_FORMATTER_BUILDER:
+                    return "java.time.format.DateTimeFormatterBuilder";
+                case JAVAN_RUNTIME_KIND_DATETIME_FORMATTER:
+                    return "java.time.format.DateTimeFormatter";
                 case JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_BUILDER:
                     return "java.lang.ThreadBuilders$VirtualThreadBuilder";
                 case JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_FACTORY:
@@ -2898,6 +3017,164 @@ final class RuntimeSourceMemorySections {
                 javan_panic("duration toMillis overflow");
             }
             return (duration->seconds * 1000LL) + ((long long) duration->nanos / 1000000LL);
+        }
+
+        void* javan_locale_root(void) {
+            if (javan_locale_root_value != NULL) {
+                return javan_locale_root_value;
+            }
+            javan_locale_value* locale = (javan_locale_value*) javan_alloc(sizeof(javan_locale_value));
+            locale->magic = JAVAN_LOCALE_MAGIC;
+            locale->kind = 1;
+            locale->reserved0 = 0;
+            locale->reserved1 = 0;
+            javan_update_runtime_allocation_kind((void*) locale, JAVAN_RUNTIME_KIND_LOCALE);
+            javan_locale_root_value = (void*) locale;
+            return javan_locale_root_value;
+        }
+
+        void* javan_datetime_formatter_builder_new(void) {
+            void* patterns_value = NULL;
+            void** roots[] = {
+                (void**) &patterns_value
+            };
+            javan_root_frame_push(roots, 1);
+            patterns_value = javan_list_new_with_capacity(0, 0);
+            javan_datetime_formatter_builder_value* builder =
+                (javan_datetime_formatter_builder_value*) javan_alloc(sizeof(javan_datetime_formatter_builder_value));
+            builder->magic = JAVAN_DATETIME_FORMATTER_BUILDER_MAGIC;
+            builder->case_insensitive = 0;
+            builder->optional_depth = 0;
+            builder->optional_nano_fraction = 0;
+            builder->fraction_min_width = 0;
+            builder->fraction_max_width = 0;
+            builder->fraction_decimal_point = 0;
+            builder->reserved = 0;
+            builder->patterns = (javan_object_list*) patterns_value;
+            javan_update_runtime_allocation_kind((void*) builder, JAVAN_RUNTIME_KIND_DATETIME_FORMATTER_BUILDER);
+            javan_root_frame_pop(roots);
+            return (void*) builder;
+        }
+
+        static int javan_datetime_formatter_is_nano_of_second(void* field) {
+            if (field == NULL) {
+                return 0;
+            }
+            if (javan_registered_type_id(field) < 0) {
+                return 0;
+            }
+            const char* name = (const char*) javan_printable_object_string(field);
+            if (name == NULL) {
+                return 0;
+            }
+            return strcmp(name, "NANO_OF_SECOND") == 0;
+        }
+
+        void* javan_datetime_formatter_builder_parse_case_insensitive(void* value) {
+            javan_datetime_formatter_builder_value* builder = javan_datetime_formatter_builder_checked(value);
+            builder->case_insensitive = 1;
+            return value;
+        }
+
+        void* javan_datetime_formatter_builder_append_pattern(void* value, void* pattern) {
+            void* builder_root = value;
+            void* pattern_root = pattern;
+            void** roots[] = {
+                (void**) &builder_root,
+                (void**) &pattern_root
+            };
+            javan_root_frame_push(roots, 2);
+            javan_datetime_formatter_builder_value* builder =
+                javan_datetime_formatter_builder_checked(builder_root);
+            if (pattern_root == NULL) {
+                javan_root_frame_pop(roots);
+                javan_panic("DateTimeFormatterBuilder.appendPattern null");
+            }
+            javan_list_append_raw(builder->patterns, pattern_root);
+            javan_root_frame_pop(roots);
+            return builder_root;
+        }
+
+        void* javan_datetime_formatter_builder_optional_start(void* value) {
+            javan_datetime_formatter_builder_value* builder = javan_datetime_formatter_builder_checked(value);
+            builder->optional_depth++;
+            return value;
+        }
+
+        void* javan_datetime_formatter_builder_append_fraction(
+            void* value,
+            void* field,
+            int min_width,
+            int max_width,
+            int decimal_point
+        ) {
+            javan_datetime_formatter_builder_value* builder = javan_datetime_formatter_builder_checked(value);
+            if (javan_datetime_formatter_is_nano_of_second(field) == 0) {
+                javan_panic("unsupported TemporalField for appendFraction");
+            }
+            if (min_width < 0 || max_width < min_width) {
+                javan_panic("invalid appendFraction width");
+            }
+            builder->optional_nano_fraction = 1;
+            builder->fraction_min_width = min_width;
+            builder->fraction_max_width = max_width;
+            builder->fraction_decimal_point = decimal_point == 0 ? 0 : 1;
+            return value;
+        }
+
+        void* javan_datetime_formatter_builder_optional_end(void* value) {
+            javan_datetime_formatter_builder_value* builder = javan_datetime_formatter_builder_checked(value);
+            if (builder->optional_depth <= 0) {
+                javan_panic("DateTimeFormatterBuilder.optionalEnd without optionalStart");
+            }
+            builder->optional_depth--;
+            return value;
+        }
+
+        static javan_object_list* javan_datetime_formatter_copy_patterns(javan_object_list* source) {
+            if (source == NULL || source->magic != JAVAN_OBJECT_LIST_MAGIC) {
+                javan_panic("invalid datetime formatter pattern list");
+            }
+            javan_object_list* copy = javan_list_new_with_capacity(source->length, 0);
+            for (int index = 0; index < source->length; index++) {
+                javan_list_append_raw(copy, source->values[index]);
+            }
+            return copy;
+        }
+
+        void* javan_datetime_formatter_builder_to_formatter(void* value, void* locale) {
+            void* builder_root = value;
+            void* locale_root = locale;
+            void* patterns_root = NULL;
+            void** roots[] = {
+                (void**) &builder_root,
+                (void**) &locale_root,
+                (void**) &patterns_root
+            };
+            javan_root_frame_push(roots, 3);
+            javan_datetime_formatter_builder_value* builder =
+                javan_datetime_formatter_builder_checked(builder_root);
+            javan_locale_checked(locale_root);
+            if (builder->optional_depth != 0) {
+                javan_root_frame_pop(roots);
+                javan_panic("DateTimeFormatterBuilder.toFormatter with unclosed optional section");
+            }
+            patterns_root = (void*) javan_datetime_formatter_copy_patterns(builder->patterns);
+            javan_datetime_formatter_value* formatter =
+                (javan_datetime_formatter_value*) javan_alloc(sizeof(javan_datetime_formatter_value));
+            formatter->magic = JAVAN_DATETIME_FORMATTER_MAGIC;
+            formatter->case_insensitive = builder->case_insensitive;
+            formatter->optional_nano_fraction = builder->optional_nano_fraction;
+            formatter->fraction_min_width = builder->fraction_min_width;
+            formatter->fraction_max_width = builder->fraction_max_width;
+            formatter->fraction_decimal_point = builder->fraction_decimal_point;
+            formatter->reserved0 = 0;
+            formatter->reserved1 = 0;
+            formatter->patterns = (javan_object_list*) patterns_root;
+            formatter->locale = locale_root;
+            javan_update_runtime_allocation_kind((void*) formatter, JAVAN_RUNTIME_KIND_DATETIME_FORMATTER);
+            javan_root_frame_pop(roots);
+            return (void*) formatter;
         }
 
         static unsigned long javan_count_threads(int started, int completed, int require_target, int exclude_current) {
@@ -3859,6 +4136,17 @@ final class RuntimeSourceMemorySections {
                     javan_gc_mark_value(throwable->message);
                     javan_gc_mark_value((void*) throwable->suppressed);
                 }
+            } else if (runtime_kind == JAVAN_RUNTIME_KIND_DATETIME_FORMATTER_BUILDER) {
+                javan_datetime_formatter_builder_value* builder = (javan_datetime_formatter_builder_value*) value;
+                if (builder != NULL && builder->magic == JAVAN_DATETIME_FORMATTER_BUILDER_MAGIC) {
+                    javan_gc_mark_value((void*) builder->patterns);
+                }
+            } else if (runtime_kind == JAVAN_RUNTIME_KIND_DATETIME_FORMATTER) {
+                javan_datetime_formatter_value* formatter = (javan_datetime_formatter_value*) value;
+                if (formatter != NULL && formatter->magic == JAVAN_DATETIME_FORMATTER_MAGIC) {
+                    javan_gc_mark_value((void*) formatter->patterns);
+                    javan_gc_mark_value(formatter->locale);
+                }
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_INET_ADDRESS) {
                 javan_inet_address* address = (javan_inet_address*) value;
                 if (address != NULL && address->magic == JAVAN_INET_ADDRESS_MAGIC) {
@@ -4007,6 +4295,7 @@ final class RuntimeSourceMemorySections {
         }
 
         static void javan_gc_mark_runtime_object_references(void) {
+            javan_gc_mark_value(javan_locale_root_value);
             javan_allocation_node* node = javan_allocations;
             while (node != NULL) {
                 if (node->kind == JAVAN_HEAP_KIND_RUNTIME && node->mark != 0) {

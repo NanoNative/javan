@@ -243,6 +243,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void dateTimeFormatterBuilderAppendPatternIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/time/format/DateTimeFormatterBuilder",
+            "appendPattern",
+            "(Ljava/lang/String;)Ljava/time/format/DateTimeFormatterBuilder;"
+        ))).isTrue();
+    }
+
+    @Test
+    void dateTimeFormatterBuilderToFormatterRequiresTimeRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/time/format/DateTimeFormatterBuilder",
+            "toFormatter",
+            "(Ljava/util/Locale;)Ljava/time/format/DateTimeFormatter;"
+        ))).containsExactly("time");
+    }
+
+    @Test
     void characterValueOfIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/Character",

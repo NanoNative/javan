@@ -2151,7 +2151,10 @@ public final class BytecodeToIR {
         if (isStandardCopyReplaceExisting(fieldRef)) {
             return true;
         }
-        return isLinkOptionNoFollowLinks(fieldRef);
+        if (isLinkOptionNoFollowLinks(fieldRef)) {
+            return true;
+        }
+        return isChronoFieldNanoOfSecond(fieldRef);
     }
 
     static boolean isStandardCopyReplaceExisting(final FieldRef fieldRef) {
@@ -2172,6 +2175,16 @@ public final class BytecodeToIR {
             return false;
         }
         return "Ljava/nio/file/LinkOption;".equals(fieldRef.descriptor());
+    }
+
+    static boolean isChronoFieldNanoOfSecond(final FieldRef fieldRef) {
+        if (!"java/time/temporal/ChronoField".equals(fieldRef.owner())) {
+            return false;
+        }
+        if (!"NANO_OF_SECOND".equals(fieldRef.name())) {
+            return false;
+        }
+        return "Ljava/time/temporal/ChronoField;".equals(fieldRef.descriptor());
     }
 
     static boolean isEnumIntrinsic(final Map<String, ClassFile> classes, final MethodRef methodRef) {
