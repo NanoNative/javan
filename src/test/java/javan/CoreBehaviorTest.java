@@ -1601,6 +1601,75 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void reachabilityEnqueuesConcreteConsumerForSupportedJdkListForEach() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo(
+                        "main",
+                        "([Ljava/lang/String;)V",
+                        instruction(
+                            0,
+                            182,
+                            "invokevirtual",
+                            new MethodRef("java/util/List", "forEach", "(Ljava/util/function/Consumer;)V")
+                        )
+                    )
+                ),
+                "com/acme/LinePrinter", classWithMethods(
+                    "com/acme/LinePrinter",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/util/function/Consumer"),
+                    methodInfo(
+                        "accept",
+                        "(Ljava/lang/Object;)V",
+                        instruction(0, 177, "return")
+                    )
+                )
+            ),
+            List.of(new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+        assertThat(graph.reachableMethods()).contains(new EntryPoint("com/acme/LinePrinter", "accept", "(Ljava/lang/Object;)V"));
+    }
+
+    @Test
+    void reachabilityRejectsSupportedJdkListForEachWithoutClosedWorldConsumerTarget() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo(
+                        "main",
+                        "([Ljava/lang/String;)V",
+                        instruction(
+                            0,
+                            182,
+                            "invokevirtual",
+                            new MethodRef("java/util/List", "forEach", "(Ljava/util/function/Consumer;)V")
+                        )
+                    )
+                )
+            ),
+            List.of(new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"))
+        );
+
+        assertThat(graph.diagnostics()).singleElement().satisfies(diagnostic -> {
+            assertThat(diagnostic.code()).isEqualTo("JAVAN012");
+            assertThat(diagnostic.subject()).isEqualTo("java/util/function/Consumer.accept(Ljava/lang/Object;)V");
+        });
+    }
+
+    @Test
     void reachabilityTreatsInheritedJdkPutOnConcreteOwnerAsJdkCall() {
         final CallGraph graph = new ReachabilityAnalyzer().analyze(
             Map.of(

@@ -13744,6 +13744,74 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersCollectionsEmptyListToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/util/List;",
+            0,
+            0,
+            invokeStatic(0, new MethodRef("java/util/Collections", "emptyList", "()Ljava/util/List;")),
+            plain(1, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall("javan_list_of", List.of(IrExpression.intLiteral(0))))
+        );
+    }
+
+    @Test
+    void lowersListRemoveObjectToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/List;Ljava/lang/Object;)I",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/util/List", "remove", "(Ljava/lang/Object;)Z")),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignInt(
+                "int0",
+                IrExpression.intCall("javan_list_remove", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
+            ),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
+        );
+    }
+
+    @Test
+    void lowersListForEachToIteratorLoop() {
+        final IrFunction function = lowerProgram(
+            method(
+                0x0008,
+                "main",
+                "(Ljava/util/List;Ljava/util/function/Consumer;)V",
+                2,
+                2,
+                plain(0, 42, "aload_0"),
+                plain(1, 43, "aload_1"),
+                invokeVirtual(2, new MethodRef("java/util/List", "forEach", "(Ljava/util/function/Consumer;)V")),
+                plain(3, 177, "return")
+            ),
+            interfaceType("java/util/function/Consumer", "accept", "(Ljava/lang/Object;)V"),
+            implementationType("com/acme/LinePrinter", "java/util/function/Consumer", "accept", "(Ljava/lang/Object;)V")
+        ).functions().getFirst();
+
+        assertThat(function.instructions()).contains(IrInstruction.callStaticVoid(
+            "javan_objects_require_non_null",
+            List.of(IrExpression.objectLocal("arg1"))
+        ));
+        assertThat(function.instructions()).contains(IrInstruction.assignObject(
+            "object1",
+            IrExpression.objectCall("javan_list_iterator", List.of(IrExpression.objectLocal("arg0")))
+        ));
+    }
+
+    @Test
     void lowersHashMapPutIfAbsentToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,

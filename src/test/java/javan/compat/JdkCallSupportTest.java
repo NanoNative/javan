@@ -144,6 +144,67 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void collectionsEmptyListIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Collections",
+            "emptyList",
+            "()Ljava/util/List;"
+        ))).isTrue();
+    }
+
+    @Test
+    void listRemoveObjectIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/List",
+            "remove",
+            "(Ljava/lang/Object;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void listForEachIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/List",
+            "forEach",
+            "(Ljava/util/function/Consumer;)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void listForEachExposesClosedWorldConsumerDispatchTarget() {
+        assertThat(JdkCallSupport.closedWorldHigherOrderDispatchTargets(new javan.classfile.MethodRef(
+            "java/util/List",
+            "forEach",
+            "(Ljava/util/function/Consumer;)V"
+        ))).containsExactly(new javan.classfile.MethodRef(
+            "java/util/function/Consumer",
+            "accept",
+            "(Ljava/lang/Object;)V"
+        ));
+    }
+
+    @Test
+    void optionalIfPresentOrElseExposesBothClosedWorldDispatchTargets() {
+        assertThat(JdkCallSupport.closedWorldHigherOrderDispatchTargets(new javan.classfile.MethodRef(
+            "java/util/Optional",
+            "ifPresentOrElse",
+            "(Ljava/util/function/Consumer;Ljava/lang/Runnable;)V"
+        ))).containsExactly(
+            new javan.classfile.MethodRef("java/util/function/Consumer", "accept", "(Ljava/lang/Object;)V"),
+            new javan.classfile.MethodRef("java/lang/Runnable", "run", "()V")
+        );
+    }
+
+    @Test
+    void ordinarySupportedJdkCallHasNoClosedWorldHigherOrderDispatchTargets() {
+        assertThat(JdkCallSupport.closedWorldHigherOrderDispatchTargets(new javan.classfile.MethodRef(
+            "java/util/List",
+            "size",
+            "()I"
+        ))).isEmpty();
+    }
+
+    @Test
     void executorExecuteRequiresThreadsRuntimeModule() {
         assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
             "java/util/concurrent/Executor",

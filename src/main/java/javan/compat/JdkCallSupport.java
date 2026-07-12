@@ -284,6 +284,7 @@ public final class JdkCallSupport {
         runtime("CopyOnWriteArrayList.add", "java/util/concurrent/CopyOnWriteArrayList", "add", "(Ljava/lang/Object;)Z"),
         runtime("CopyOnWriteArrayList.size", "java/util/concurrent/CopyOnWriteArrayList", "size", "()I"),
         runtime("CopyOnWriteArrayList.get", "java/util/concurrent/CopyOnWriteArrayList", "get", "(I)Ljava/lang/Object;"),
+        runtime("Collections.emptyList", "java/util/Collections", "emptyList", "()Ljava/util/List;"),
         runtime("List.of", "java/util/List", "of", "()Ljava/util/List;"),
         runtime("List.of", "java/util/List", "of", "(Ljava/lang/Object;)Ljava/util/List;"),
         runtime("List.of", "java/util/List", "of", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;"),
@@ -312,9 +313,11 @@ public final class JdkCallSupport {
         runtime("List.get", "java/util/List", "get", "(I)Ljava/lang/Object;"),
         runtime("List.getFirst", "java/util/List", "getFirst", "()Ljava/lang/Object;"),
         runtime("List.getLast", "java/util/List", "getLast", "()Ljava/lang/Object;"),
+        runtime("List.remove", "java/util/List", "remove", "(Ljava/lang/Object;)Z"),
         runtime("List.removeLast", "java/util/List", "removeLast", "()Ljava/lang/Object;"),
         runtime("List.set", "java/util/List", "set", "(ILjava/lang/Object;)Ljava/lang/Object;"),
         runtime("List.addFirst", "java/util/List", "addFirst", "(Ljava/lang/Object;)V"),
+        runtime("List.forEach", "java/util/List", "forEach", "(Ljava/util/function/Consumer;)V"),
         runtime("List.iterator", "java/util/List", "iterator", "()Ljava/util/Iterator;"),
         runtime("Collection.iterator", "java/util/Collection", "iterator", "()Ljava/util/Iterator;"),
         runtime("Iterator.hasNext", "java/util/Iterator", "hasNext", "()Z"),
@@ -513,6 +516,10 @@ public final class JdkCallSupport {
             return isSupportedArrayListCall(methodRef.name(), methodRef.descriptor())
                 || isSupportedListCall(methodRef.name(), methodRef.descriptor());
         }
+        if ("java/util/Collections".equals(methodRef.owner())) {
+            return "emptyList".equals(methodRef.name())
+                && "()Ljava/util/List;".equals(methodRef.descriptor());
+        }
         if ("java/util/Collection".equals(methodRef.owner())) {
             return isSupportedCollectionCall(methodRef.name(), methodRef.descriptor());
         }
@@ -588,6 +595,69 @@ public final class JdkCallSupport {
         return false;
     }
 
+    /**
+     * Returns callback interface methods that a supported JDK higher-order call lowers through
+     * closed-world dispatch.
+     *
+     * @param methodRef supported JDK call
+     * @return callback interface methods lowered through closed-world dispatch
+     */
+    public static List<MethodRef> closedWorldHigherOrderDispatchTargets(final MethodRef methodRef) {
+        final String owner = methodRef.owner();
+        final String name = methodRef.name();
+        final String descriptor = methodRef.descriptor();
+        if ("java/util/List".equals(owner)
+            && "forEach".equals(name)
+            && "(Ljava/util/function/Consumer;)V".equals(descriptor)) {
+            return List.of(new MethodRef("java/util/function/Consumer", "accept", "(Ljava/lang/Object;)V"));
+        }
+        if ("java/util/Map".equals(owner)
+            && "computeIfAbsent".equals(name)
+            && "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;".equals(descriptor)) {
+            return List.of(new MethodRef("java/util/function/Function", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;"));
+        }
+        if ("java/util/Map".equals(owner)
+            && "forEach".equals(name)
+            && "(Ljava/util/function/BiConsumer;)V".equals(descriptor)) {
+            return List.of(new MethodRef("java/util/function/BiConsumer", "accept", "(Ljava/lang/Object;Ljava/lang/Object;)V"));
+        }
+        if ("java/util/stream/Stream".equals(owner)) {
+            if ("filter".equals(name) && "(Ljava/util/function/Predicate;)Ljava/util/stream/Stream;".equals(descriptor)) {
+                return List.of(new MethodRef("java/util/function/Predicate", "test", "(Ljava/lang/Object;)Z"));
+            }
+            if ("map".equals(name) && "(Ljava/util/function/Function;)Ljava/util/stream/Stream;".equals(descriptor)) {
+                return List.of(new MethodRef("java/util/function/Function", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;"));
+            }
+            if ("anyMatch".equals(name) && "(Ljava/util/function/Predicate;)Z".equals(descriptor)) {
+                return List.of(new MethodRef("java/util/function/Predicate", "test", "(Ljava/lang/Object;)Z"));
+            }
+            if ("noneMatch".equals(name) && "(Ljava/util/function/Predicate;)Z".equals(descriptor)) {
+                return List.of(new MethodRef("java/util/function/Predicate", "test", "(Ljava/lang/Object;)Z"));
+            }
+        }
+        if ("java/util/Optional".equals(owner)) {
+            if ("orElseGet".equals(name) && "(Ljava/util/function/Supplier;)Ljava/lang/Object;".equals(descriptor)) {
+                return List.of(new MethodRef("java/util/function/Supplier", "get", "()Ljava/lang/Object;"));
+            }
+            if ("filter".equals(name) && "(Ljava/util/function/Predicate;)Ljava/util/Optional;".equals(descriptor)) {
+                return List.of(new MethodRef("java/util/function/Predicate", "test", "(Ljava/lang/Object;)Z"));
+            }
+            if ("ifPresent".equals(name) && "(Ljava/util/function/Consumer;)V".equals(descriptor)) {
+                return List.of(new MethodRef("java/util/function/Consumer", "accept", "(Ljava/lang/Object;)V"));
+            }
+            if ("map".equals(name) && "(Ljava/util/function/Function;)Ljava/util/Optional;".equals(descriptor)) {
+                return List.of(new MethodRef("java/util/function/Function", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;"));
+            }
+            if ("ifPresentOrElse".equals(name) && "(Ljava/util/function/Consumer;Ljava/lang/Runnable;)V".equals(descriptor)) {
+                return List.of(
+                    new MethodRef("java/util/function/Consumer", "accept", "(Ljava/lang/Object;)V"),
+                    new MethodRef("java/lang/Runnable", "run", "()V")
+                );
+            }
+        }
+        return List.of();
+    }
+
     private static boolean isSupportedListCall(final String name, final String descriptor) {
         if ("of".equals(name)) {
             return descriptor.endsWith(")Ljava/util/List;");
@@ -622,6 +692,9 @@ public final class JdkCallSupport {
         if ("getLast".equals(name)) {
             return "()Ljava/lang/Object;".equals(descriptor);
         }
+        if ("remove".equals(name)) {
+            return "(Ljava/lang/Object;)Z".equals(descriptor);
+        }
         if ("removeLast".equals(name)) {
             return "()Ljava/lang/Object;".equals(descriptor);
         }
@@ -630,6 +703,9 @@ public final class JdkCallSupport {
         }
         if ("addFirst".equals(name)) {
             return "(Ljava/lang/Object;)V".equals(descriptor);
+        }
+        if ("forEach".equals(name)) {
+            return "(Ljava/util/function/Consumer;)V".equals(descriptor);
         }
         if ("iterator".equals(name)) {
             return "()Ljava/util/Iterator;".equals(descriptor);

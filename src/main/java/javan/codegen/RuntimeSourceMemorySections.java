@@ -5563,6 +5563,24 @@ final class RuntimeSourceMemorySections {
             return list->values[list->length - 1];
         }
 
+        int javan_list_remove(void* value, void* element) {
+            javan_object_list* list = javan_list_checked(value);
+            javan_list_mutable_checked(list);
+            for (int index = 0; index < list->length; index++) {
+                if (javan_object_equals(list->values[index], element) == 0) {
+                    continue;
+                }
+                for (int cursor = index + 1; cursor < list->length; cursor++) {
+                    list->values[cursor - 1] = list->values[cursor];
+                }
+                list->length--;
+                list->values[list->length] = NULL;
+                list->mod_count++;
+                return 1;
+            }
+            return 0;
+        }
+
         void* javan_list_iterator(void* value) {
             javan_object_list* list = javan_list_checked(value);
             void** javan_list_iterator_roots[] = {

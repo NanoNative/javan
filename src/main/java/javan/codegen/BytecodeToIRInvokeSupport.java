@@ -3004,6 +3004,13 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_hashset_new", List.of())));
             return true;
         }
+        if ("java/util/Collections".equals(owner)) {
+            if (!"emptyList".equals(name) || !"()Ljava/util/List;".equals(descriptor)) {
+                return false;
+            }
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_of", List.of(IrExpression.intLiteral(0)))));
+            return true;
+        }
         if (!"java/util/List".equals(owner)) {
             return false;
         }
@@ -3441,6 +3448,43 @@ final class BytecodeToIRInvokeSupport {
             }
             if ("getLast()Ljava/lang/Object;".equals(signature)) {
                 stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_get_last", List.of(receiver))));
+                return true;
+            }
+            if ("remove(Ljava/lang/Object;)Z".equals(signature)) {
+                pushIntCall(instructions, stack, localDeclarations, "javan_list_remove", List.of(receiver, arguments.getFirst()));
+                return true;
+            }
+            if ("forEach(Ljava/util/function/Consumer;)V".equals(signature)) {
+                final IrExpression consumer = arguments.getFirst();
+                instructions.add(IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(consumer)));
+                final String consumerLocal = declareLocal(localDeclarations, IrType.OBJECT);
+                final String iteratorLocal = declareLocal(localDeclarations, IrType.OBJECT);
+                final String valueLocal = declareLocal(localDeclarations, IrType.OBJECT);
+                final String nextLabel = "label_list_for_each_next_" + instruction.offset() + "_" + localDeclarations.size();
+                final String bodyLabel = "label_list_for_each_body_" + instruction.offset() + "_" + localDeclarations.size();
+                final String doneLabel = "label_list_for_each_done_" + instruction.offset() + "_" + localDeclarations.size();
+                instructions.add(IrInstruction.assignObject(consumerLocal, consumer));
+                instructions.add(IrInstruction.assignObject(iteratorLocal, IrExpression.objectCall("javan_list_iterator", List.of(receiver))));
+                instructions.add(IrInstruction.label(nextLabel));
+                instructions.add(IrInstruction.branchIf(
+                    bodyLabel,
+                    IrExpression.intComparison("!=", IrExpression.intCall("javan_iterator_has_next", List.of(IrExpression.objectLocal(iteratorLocal))), IrExpression.intLiteral(0))
+                ));
+                instructions.add(IrInstruction.jump(doneLabel));
+                instructions.add(IrInstruction.label(bodyLabel));
+                instructions.add(IrInstruction.assignObject(valueLocal, IrExpression.objectCall("javan_iterator_next", List.of(IrExpression.objectLocal(iteratorLocal)))));
+                appendInterfaceVoidCall(
+                    classes,
+                    classFile,
+                    method,
+                    instruction,
+                    dispatches,
+                    new MethodRef("java/util/function/Consumer", "accept", "(Ljava/lang/Object;)V"),
+                    List.of(IrExpression.objectLocal(consumerLocal), IrExpression.objectLocal(valueLocal)),
+                    instructions
+                );
+                instructions.add(IrInstruction.jump(nextLabel));
+                instructions.add(IrInstruction.label(doneLabel));
                 return true;
             }
         }

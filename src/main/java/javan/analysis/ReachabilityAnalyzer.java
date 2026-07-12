@@ -176,6 +176,11 @@ public final class ReachabilityAnalyzer {
             ));
             return;
         }
+        final List<MethodRef> higherOrderTargets = JdkCallSupport.closedWorldHigherOrderDispatchTargets(target);
+        if (!higherOrderTargets.isEmpty()) {
+            enqueueSupportedHigherOrderJdkTargets(classes, reachableLambdaOwners, work, diagnostics, current, callEdges, target, higherOrderTargets);
+            return;
+        }
         if (isJdkCall(target) || NetworkApiSupport.isNetworkCall(target)) {
             return;
         }
@@ -634,6 +639,35 @@ public final class ReachabilityAnalyzer {
             return Optional.empty();
         }
         return Optional.of(new EntryPoint(target.owner(), target.name(), target.descriptor()));
+    }
+
+    private static void enqueueSupportedHigherOrderJdkTargets(
+        final Map<String, ClassFile> classes,
+        final List<String> reachableLambdaOwners,
+        final List<EntryPoint> work,
+        final List<Diagnostic> diagnostics,
+        final EntryPoint current,
+        final List<CallEdge> callEdges,
+        final MethodRef jdkCall,
+        final List<MethodRef> callbackTargets
+    ) {
+        for (final MethodRef callbackTarget : callbackTargets) {
+            final List<EntryPoint> targetMethods = interfaceTargets(classes, callbackTarget, reachableLambdaOwners);
+            if (!targetMethods.isEmpty()) {
+                work.addAll(targetMethods);
+                addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
+                continue;
+            }
+            diagnostics.add(Diagnostic.error(
+                "JAVAN012",
+                "unsupported reachable application method call",
+                current.className(),
+                current.methodName() + current.descriptor(),
+                callbackTarget.display(),
+                "This supported JDK higher-order call lowers through closed-world callback dispatch and requires at least one concrete callback implementation in the reachable application or dependency graph.",
+                "Add a concrete callback implementation, keep " + jdkCall.display() + " on the JVM, or reduce the reachable higher-order flow."
+            ));
+        }
     }
 
     private static List<EntryPoint> virtualTargets(final Map<String, ClassFile> classes, final MethodRef target) {

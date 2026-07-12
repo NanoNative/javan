@@ -238,6 +238,7 @@ final class RuntimeHeaderFile {
         void* javan_list_get(void* list, int index);
         void* javan_list_get_first(void* list);
         void* javan_list_get_last(void* list);
+        int javan_list_remove(void* list, void* value);
         void* javan_list_iterator(void* list);
         void* javan_hashset_new(void);
         int javan_set_add(void* set, void* value);

@@ -8525,6 +8525,109 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void collectionsEmptyListBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("collections-empty-list");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Collections;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Collections.emptyList().isEmpty());
+                    System.out.println(Collections.emptyList().size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/collections-empty-list").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n0\n");
+    }
+
+    @Test
+    void listRemoveObjectBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("list-remove-object");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<String> values = new ArrayList<>();
+                    values.add("a");
+                    values.add("b");
+                    values.add("a");
+                    System.out.println(values.remove("a"));
+                    System.out.println(values.size());
+                    System.out.println(values.get(0));
+                    System.out.println(values.remove("z"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/list-remove-object").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n2\nb\nfalse\n");
+    }
+
+    @Test
+    void listForEachBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("list-for-each");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<String> values = new ArrayList<>();
+                    values.add("x");
+                    values.add("y");
+                    values.forEach(new LinePrinter());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.LinePrinter", """
+            package com.acme;
+
+            import java.util.function.Consumer;
+
+            public final class LinePrinter implements Consumer<String> {
+                @Override
+                public void accept(final String value) {
+                    System.out.println(value);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/list-for-each").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("x\ny\n");
+    }
+
+    @Test
     void inheritedDefaultVirtualMethodsBuildAndMatchJvmOutput() throws Exception {
         final Path project = project("inherited-default-virtual-methods");
         writeJava(project, "com.acme.TypeInfo", """
@@ -8626,6 +8729,7 @@ final class CliIntegrationTest {
             "`invokedynamic`"
         );
         assertThat(diagnostics).doesNotContain(
+            "java/util/Collections.emptyList()Ljava/util/List;",
             "java/util/List.stream()Ljava/util/stream/Stream;",
             "java/util/Collection.stream()Ljava/util/stream/Stream;"
         );
@@ -8648,6 +8752,8 @@ final class CliIntegrationTest {
             "java/util/Map.clear()V",
             "java/util/Map.computeIfAbsent(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;",
             "java/util/Map.remove(Ljava/lang/Object;)Ljava/lang/Object;",
+            "java/util/List.remove(Ljava/lang/Object;)Z",
+            "java/util/List.forEach(Ljava/util/function/Consumer;)V",
             "java/util/concurrent/ConcurrentHashMap.newKeySet()Ljava/util/concurrent/ConcurrentHashMap$KeySetView;",
             "java/util/concurrent/CopyOnWriteArrayList.<init>()V",
             "java/util/Set.add(Ljava/lang/Object;)Z",
