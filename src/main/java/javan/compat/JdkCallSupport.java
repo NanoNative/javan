@@ -164,6 +164,7 @@ public final class JdkCallSupport {
         intrinsic("Integer.toString", "java/lang/Integer", "toString", "(I)Ljava/lang/String;"),
         runtime("Integer.valueOf", "java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;"),
         runtime("Integer.intValue", "java/lang/Integer", "intValue", "()I"),
+        runtime("Number.intValue", "java/lang/Number", "intValue", "()I"),
         intrinsic("Long.toString", "java/lang/Long", "toString", "(J)Ljava/lang/String;"),
         runtime("Long.valueOf", "java/lang/Long", "valueOf", "(J)Ljava/lang/Long;"),
         runtime("Long.longValue", "java/lang/Long", "longValue", "()J"),

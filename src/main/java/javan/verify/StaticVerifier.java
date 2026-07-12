@@ -2707,6 +2707,9 @@ public final class StaticVerifier {
     }
 
     private static boolean isSupportedWrapperTarget(final String target) {
+        if ("java/lang/Number".equals(target)) {
+            return true;
+        }
         if ("java/lang/Integer".equals(target)) {
             return true;
         }

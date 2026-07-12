@@ -48,11 +48,20 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         final Optional<Integer> wrapperTypeId = platformWrapperTypeId(target);
+        final List<Integer> wrapperSuperTypeIds = platformWrapperSuperTypeIds(target);
         final List<IrExpression> arguments = new ArrayList<>();
         arguments.add(value);
         if (wrapperTypeId.isPresent()) {
             arguments.add(IrExpression.intLiteral(1));
             arguments.add(IrExpression.intLiteral(wrapperTypeId.orElseThrow()));
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_object_type_in", arguments)));
+            return;
+        }
+        if (!wrapperSuperTypeIds.isEmpty()) {
+            arguments.add(IrExpression.intLiteral(wrapperSuperTypeIds.size()));
+            for (final int typeId : wrapperSuperTypeIds) {
+                arguments.add(IrExpression.intLiteral(typeId));
+            }
             stack.add(StackValue.intExpression(IrExpression.intCall("javan_object_type_in", arguments)));
             return;
         }
@@ -1263,6 +1272,10 @@ final class BytecodeToIRInvokeSupport {
         }
         if ("java/lang/Character".equals(methodRef.owner()) && "charValue".equals(methodRef.name()) && "()C".equals(methodRef.descriptor())) {
             stack.add(StackValue.intExpression(IrExpression.intCall("javan_character_char_value", List.of(popObject(classFile, method, stack)))));
+            return true;
+        }
+        if ("java/lang/Number".equals(methodRef.owner()) && "intValue".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_number_int_value", List.of(popObject(classFile, method, stack)))));
             return true;
         }
         return false;

@@ -7678,6 +7678,87 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void boxedIntegerInstanceOfNumberBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("boxed-integer-instanceof-number");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Object value = Integer.valueOf(7);
+                    System.out.println(value instanceof Number);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/boxed-integer-instanceof-number").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n");
+    }
+
+    @Test
+    void boxedCharacterInstanceOfNumberBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("boxed-character-instanceof-number");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Object value = Character.valueOf('Q');
+                    System.out.println(value instanceof Number);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/boxed-character-instanceof-number").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("false\n");
+    }
+
+    @Test
+    void numberIntValueBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("number-int-value");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                private static int toInt(final Number value) {
+                    return value.intValue();
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(toInt(Integer.valueOf(7)));
+                    System.out.println(toInt(Long.valueOf(9L)));
+                    System.out.println(toInt(Float.valueOf(3.75f)));
+                    System.out.println(toInt(Double.valueOf(-2.5d)));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/number-int-value").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("7\n9\n3\n-2\n");
+    }
+
+    @Test
     void tryWithResourcesSuppressedBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("try-with-resources-suppressed");
         writeJava(project, "com.acme.Main", """

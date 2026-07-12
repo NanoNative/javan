@@ -354,6 +354,7 @@ final class RuntimeHeaderFile {
         int javan_character_char_value(void* value);
         void* javan_integer_value_of(int value);
         int javan_integer_int_value(void* value);
+        int javan_number_int_value(void* value);
         void* javan_long_value_of(long long value);
         long long javan_long_long_value(void* value);
         void* javan_float_value_of(float value);

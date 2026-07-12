@@ -2542,6 +2542,18 @@ public final class BytecodeToIR {
         return Optional.empty();
     }
 
+    static List<Integer> platformWrapperSuperTypeIds(final String target) {
+        if ("java/lang/Number".equals(target)) {
+            return List.of(
+                TYPE_JAVA_LANG_INTEGER,
+                TYPE_JAVA_LANG_LONG,
+                TYPE_JAVA_LANG_FLOAT,
+                TYPE_JAVA_LANG_DOUBLE
+            );
+        }
+        return List.of();
+    }
+
     static boolean isSubtypeOf(final Map<String, ClassFile> classes, final String candidate, final String expectedSuper) {
         String current = candidate;
         while (classes.containsKey(current)) {

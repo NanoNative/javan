@@ -2909,6 +2909,24 @@ final class RuntimeSourceMemorySections {
             return ((javan_boxed_int*) value)->value;
         }
 
+        int javan_number_int_value(void* value) {
+            int type_id = javan_registered_type_id(value);
+            if (type_id == JAVAN_TYPE_JAVA_LANG_INTEGER) {
+                return ((javan_boxed_int*) value)->value;
+            }
+            if (type_id == JAVAN_TYPE_JAVA_LANG_LONG) {
+                return (int) ((javan_boxed_long*) value)->value;
+            }
+            if (type_id == JAVAN_TYPE_JAVA_LANG_FLOAT) {
+                return (int) ((javan_boxed_float*) value)->value;
+            }
+            if (type_id == JAVAN_TYPE_JAVA_LANG_DOUBLE) {
+                return (int) ((javan_boxed_double*) value)->value;
+            }
+            javan_panic("not a supported Number");
+            return 0;
+        }
+
         int javan_character_char_value(void* value) {
             if (javan_registered_type_id(value) != JAVAN_TYPE_JAVA_LANG_CHARACTER) {
                 javan_panic("not a Character");
