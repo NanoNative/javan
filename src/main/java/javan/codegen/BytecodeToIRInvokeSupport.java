@@ -4342,7 +4342,10 @@ final class BytecodeToIRInvokeSupport {
         if ("java/util/LinkedHashMap".equals(owner)) {
             return true;
         }
-        return "java/util/TreeMap".equals(owner);
+        if ("java/util/TreeMap".equals(owner)) {
+            return true;
+        }
+        return "java/util/concurrent/ConcurrentHashMap".equals(owner);
     }
     static boolean lowerJdkFileStaticCall(
         final ClassFile classFile,

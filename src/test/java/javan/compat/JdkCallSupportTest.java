@@ -412,6 +412,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void concurrentHashMapDefaultConstructorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/ConcurrentHashMap",
+            "<init>",
+            "()V"
+        ))).isTrue();
+    }
+
+    @Test
+    void concurrentHashMapGetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/ConcurrentHashMap",
+            "get",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
     void setAddIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Set",

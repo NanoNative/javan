@@ -310,6 +310,7 @@ public final class JdkCallSupport {
         runtime("Collection.stream", "java/util/Collection", "stream", "()Ljava/util/stream/Stream;"),
         runtime("Set.stream", "java/util/Set", "stream", "()Ljava/util/stream/Stream;"),
         runtime("ConcurrentHashMap.newKeySet", "java/util/concurrent/ConcurrentHashMap", "newKeySet", "()Ljava/util/concurrent/ConcurrentHashMap$KeySetView;"),
+        runtime("ConcurrentHashMap.<init>", "java/util/concurrent/ConcurrentHashMap", "<init>", "()V"),
         runtime("List.get", "java/util/List", "get", "(I)Ljava/lang/Object;"),
         runtime("List.getFirst", "java/util/List", "getFirst", "()Ljava/lang/Object;"),
         runtime("List.getLast", "java/util/List", "getLast", "()Ljava/lang/Object;"),
@@ -341,40 +342,49 @@ public final class JdkCallSupport {
         runtime("HashMap.get", "java/util/HashMap", "get", "(Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("LinkedHashMap.get", "java/util/LinkedHashMap", "get", "(Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("TreeMap.get", "java/util/TreeMap", "get", "(Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("ConcurrentHashMap.get", "java/util/concurrent/ConcurrentHashMap", "get", "(Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Map.getOrDefault", "java/util/Map", "getOrDefault", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Map.put", "java/util/Map", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Map.putIfAbsent", "java/util/Map", "putIfAbsent", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("HashMap.put", "java/util/HashMap", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("LinkedHashMap.put", "java/util/LinkedHashMap", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("TreeMap.put", "java/util/TreeMap", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("ConcurrentHashMap.put", "java/util/concurrent/ConcurrentHashMap", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("HashMap.putIfAbsent", "java/util/HashMap", "putIfAbsent", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("LinkedHashMap.putIfAbsent", "java/util/LinkedHashMap", "putIfAbsent", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("TreeMap.putIfAbsent", "java/util/TreeMap", "putIfAbsent", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("ConcurrentHashMap.putIfAbsent", "java/util/concurrent/ConcurrentHashMap", "putIfAbsent", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Map.containsKey", "java/util/Map", "containsKey", "(Ljava/lang/Object;)Z"),
         runtime("HashMap.containsKey", "java/util/HashMap", "containsKey", "(Ljava/lang/Object;)Z"),
         runtime("LinkedHashMap.containsKey", "java/util/LinkedHashMap", "containsKey", "(Ljava/lang/Object;)Z"),
         runtime("TreeMap.containsKey", "java/util/TreeMap", "containsKey", "(Ljava/lang/Object;)Z"),
+        runtime("ConcurrentHashMap.containsKey", "java/util/concurrent/ConcurrentHashMap", "containsKey", "(Ljava/lang/Object;)Z"),
         runtime("Map.size", "java/util/Map", "size", "()I"),
         runtime("HashMap.size", "java/util/HashMap", "size", "()I"),
         runtime("LinkedHashMap.size", "java/util/LinkedHashMap", "size", "()I"),
         runtime("TreeMap.size", "java/util/TreeMap", "size", "()I"),
+        runtime("ConcurrentHashMap.size", "java/util/concurrent/ConcurrentHashMap", "size", "()I"),
         runtime("Map.isEmpty", "java/util/Map", "isEmpty", "()Z"),
         runtime("HashMap.isEmpty", "java/util/HashMap", "isEmpty", "()Z"),
         runtime("LinkedHashMap.isEmpty", "java/util/LinkedHashMap", "isEmpty", "()Z"),
         runtime("TreeMap.isEmpty", "java/util/TreeMap", "isEmpty", "()Z"),
+        runtime("ConcurrentHashMap.isEmpty", "java/util/concurrent/ConcurrentHashMap", "isEmpty", "()Z"),
         runtime("Map.entrySet", "java/util/Map", "entrySet", "()Ljava/util/Set;"),
         runtime("HashMap.entrySet", "java/util/HashMap", "entrySet", "()Ljava/util/Set;"),
         runtime("LinkedHashMap.entrySet", "java/util/LinkedHashMap", "entrySet", "()Ljava/util/Set;"),
         runtime("TreeMap.entrySet", "java/util/TreeMap", "entrySet", "()Ljava/util/Set;"),
+        runtime("ConcurrentHashMap.entrySet", "java/util/concurrent/ConcurrentHashMap", "entrySet", "()Ljava/util/Set;"),
         runtime("Map.values", "java/util/Map", "values", "()Ljava/util/Collection;"),
         runtime("HashMap.values", "java/util/HashMap", "values", "()Ljava/util/Collection;"),
         runtime("LinkedHashMap.values", "java/util/LinkedHashMap", "values", "()Ljava/util/Collection;"),
         runtime("TreeMap.values", "java/util/TreeMap", "values", "()Ljava/util/Collection;"),
+        runtime("ConcurrentHashMap.values", "java/util/concurrent/ConcurrentHashMap", "values", "()Ljava/util/Collection;"),
         runtime("Map.Entry.getKey", "java/util/Map$Entry", "getKey", "()Ljava/lang/Object;"),
         runtime("Map.Entry.getValue", "java/util/Map$Entry", "getValue", "()Ljava/lang/Object;"),
         runtime("HashMap.getOrDefault", "java/util/HashMap", "getOrDefault", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("LinkedHashMap.getOrDefault", "java/util/LinkedHashMap", "getOrDefault", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("TreeMap.getOrDefault", "java/util/TreeMap", "getOrDefault", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("ConcurrentHashMap.getOrDefault", "java/util/concurrent/ConcurrentHashMap", "getOrDefault", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Path.of", "java/nio/file/Path", "of", "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;"),
         runtime("Paths.get", "java/nio/file/Paths", "get", "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;"),
         runtime("Path.resolve", "java/nio/file/Path", "resolve", "(Ljava/lang/String;)Ljava/nio/file/Path;"),
@@ -544,6 +554,10 @@ public final class JdkCallSupport {
         }
         if ("java/util/TreeMap".equals(methodRef.owner())) {
             return isSupportedHashMapCall(methodRef.name(), methodRef.descriptor());
+        }
+        if ("java/util/concurrent/ConcurrentHashMap".equals(methodRef.owner())) {
+            return isSupportedHashMapCall(methodRef.name(), methodRef.descriptor())
+                || isSupportedConcurrentHashMapCall(methodRef.name(), methodRef.descriptor());
         }
         if ("java/util/Map$Entry".equals(methodRef.owner())) {
             return isSupportedMapEntryCall(methodRef.name(), methodRef.descriptor());
@@ -887,6 +901,28 @@ public final class JdkCallSupport {
         }
         if ("clear".equals(name)) {
             return "()V".equals(descriptor);
+        }
+        return false;
+    }
+
+    private static boolean isSupportedConcurrentHashMapCall(final String name, final String descriptor) {
+        if ("containsKey".equals(name)) {
+            return "(Ljava/lang/Object;)Z".equals(descriptor);
+        }
+        if ("size".equals(name)) {
+            return "()I".equals(descriptor);
+        }
+        if ("isEmpty".equals(name)) {
+            return "()Z".equals(descriptor);
+        }
+        if ("entrySet".equals(name)) {
+            return "()Ljava/util/Set;".equals(descriptor);
+        }
+        if ("values".equals(name)) {
+            return "()Ljava/util/Collection;".equals(descriptor);
+        }
+        if ("getOrDefault".equals(name)) {
+            return "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(descriptor);
         }
         return false;
     }
@@ -1273,7 +1309,10 @@ public final class JdkCallSupport {
         if ("java/util/LinkedHashMap".equals(owner)) {
             return true;
         }
-        return "java/util/TreeMap".equals(owner);
+        if ("java/util/TreeMap".equals(owner)) {
+            return true;
+        }
+        return "java/util/concurrent/ConcurrentHashMap".equals(owner);
     }
 
     private static boolean isSetRuntimeOwner(final String owner) {

@@ -8374,6 +8374,37 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void concurrentHashMapPutGetBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("concurrent-hash-map-put-get");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.ConcurrentHashMap;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final ConcurrentHashMap<String, String> values = new ConcurrentHashMap<>();
+                    System.out.println(values.isEmpty());
+                    System.out.println(values.put("hello", "world"));
+                    System.out.println(values.get("hello"));
+                    System.out.println(values.containsKey("hello"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/concurrent-hash-map-put-get").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\nnull\nworld\ntrue\n");
+    }
+
+    @Test
     void mapComputeIfAbsentExistingBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("map-compute-if-absent-existing");
         writeJava(project, "com.acme.Main", """
@@ -8796,6 +8827,7 @@ final class CliIntegrationTest {
             "java/util/Map.remove(Ljava/lang/Object;)Ljava/lang/Object;",
             "java/util/List.remove(Ljava/lang/Object;)Z",
             "java/util/List.forEach(Ljava/util/function/Consumer;)V",
+            "java/util/concurrent/ConcurrentHashMap.<init>()V",
             "java/util/concurrent/ConcurrentHashMap.newKeySet()Ljava/util/concurrent/ConcurrentHashMap$KeySetView;",
             "java/util/concurrent/CopyOnWriteArrayList.<init>()V",
             "java/util/Set.add(Ljava/lang/Object;)Z",

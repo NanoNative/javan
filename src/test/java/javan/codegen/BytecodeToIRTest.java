@@ -12976,6 +12976,71 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersConcurrentHashMapDefaultConstructorToRuntimeAllocation() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/util/concurrent/ConcurrentHashMap;",
+            2,
+            0,
+            classInstruction(0, 187, "new", "java/util/concurrent/ConcurrentHashMap"),
+            plain(1, 89, "dup"),
+            invokeSpecial(2, new MethodRef("java/util/concurrent/ConcurrentHashMap", "<init>", "()V")),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_hashmap_new", List.of())),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersConcurrentHashMapPutGetToRuntimeCalls() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/lang/Object;",
+            4,
+            0,
+            classInstruction(0, 187, "new", "java/util/concurrent/ConcurrentHashMap"),
+            plain(1, 89, "dup"),
+            invokeSpecial(2, new MethodRef("java/util/concurrent/ConcurrentHashMap", "<init>", "()V")),
+            plain(3, 89, "dup"),
+            stringConstant(4, "k"),
+            stringConstant(5, "v"),
+            invokeVirtual(6, new MethodRef("java/util/concurrent/ConcurrentHashMap", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")),
+            plain(7, 87, "pop"),
+            stringConstant(8, "k"),
+            invokeVirtual(9, new MethodRef("java/util/concurrent/ConcurrentHashMap", "get", "(Ljava/lang/Object;)Ljava/lang/Object;")),
+            plain(10, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(
+            new IrLocal(IrType.OBJECT, "object0"),
+            new IrLocal(IrType.OBJECT, "object1"),
+            new IrLocal(IrType.OBJECT, "object2")
+        );
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_hashmap_new", List.of())),
+            IrInstruction.assignObject("object1", IrExpression.objectCall(
+                "javan_map_put",
+                List.of(
+                    IrExpression.objectLocal("object0"),
+                    IrExpression.stringLiteral("k"),
+                    IrExpression.stringLiteral("v")
+                )
+            )),
+            IrInstruction.assignObject("object2", IrExpression.objectCall(
+                "javan_map_get",
+                List.of(IrExpression.objectLocal("object0"), IrExpression.stringLiteral("k"))
+            )),
+            IrInstruction.returnObject(IrExpression.objectLocal("object2"))
+        );
+    }
+
+    @Test
     void rejectsMapCopyOfWithWrongDescriptor() {
         assertThatThrownBy(() -> lowerMain(method(
             0x0008,
