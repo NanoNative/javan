@@ -231,20 +231,34 @@ final class ClassMetadataScannerTest {
 
     @Test
     void javaHomeFallsBackToEnvironmentWhenSystemPropertyIsBlank() throws Exception {
-        final Method method = ClassMetadataScanner.class.getDeclaredMethod("javaHome");
-        method.setAccessible(true);
-        final String previous = System.getProperty("java.home");
-        try {
-            System.setProperty("java.home", "   ");
-            final String value = (String) method.invoke(null);
-            assertThat(value).isEqualTo(System.getenv("JAVA_HOME"));
-        } finally {
-            if (previous == null) {
-                System.clearProperty("java.home");
-            } else {
-                System.setProperty("java.home", previous);
-            }
-        }
+        assertThat(ClassMetadataScanner.javaHomeForValues("   ", System.getenv("JAVA_HOME")))
+            .isEqualTo(System.getenv("JAVA_HOME"));
+    }
+
+    @Test
+    void javaHomeFallsBackToEnvironmentWhenSystemPropertyIsNull() throws Exception {
+        assertThat(ClassMetadataScanner.javaHomeForValues(null, System.getenv("JAVA_HOME")))
+            .isEqualTo(System.getenv("JAVA_HOME"));
+    }
+
+    @Test
+    void javaHomePrefersSystemPropertyWhenPresent() throws Exception {
+        assertThat(ClassMetadataScanner.javaHomeForValues("/tmp/jdk", "/env/jdk"))
+            .isEqualTo("/tmp/jdk");
+    }
+
+    @Test
+    void javaHomeRejectsMissingPropertyAndEnvironment() {
+        assertThatThrownBy(() -> ClassMetadataScanner.javaHomeForValues(null, "   "))
+            .isInstanceOf(IOException.class)
+            .hasMessage("Unable to locate Java home: java.home and JAVA_HOME are both unset");
+    }
+
+    @Test
+    void javaHomeRejectsBlankPropertyAndNullEnvironment() {
+        assertThatThrownBy(() -> ClassMetadataScanner.javaHomeForValues("   ", null))
+            .isInstanceOf(IOException.class)
+            .hasMessage("Unable to locate Java home: java.home and JAVA_HOME are both unset");
     }
 
     @Test
@@ -255,6 +269,19 @@ final class ClassMetadataScannerTest {
         final String cacheName = (String) method.invoke(null, Path.of("/"));
 
         assertThat(cacheName).startsWith("archive-");
+    }
+
+    @Test
+    void scanCurrentJdkFailsWhenModulesImageExistsWithoutJimageBinary() {
+        final Path fakeHome = tempDir.resolve("missing-jimage-binary");
+        final Path modulesImage = fakeHome.resolve("lib/modules");
+        assertThatThrownBy(() -> {
+            Files.createDirectories(modulesImage.getParent());
+            Files.writeString(modulesImage, "synthetic");
+            withJavaHome(fakeHome, () -> new ClassMetadataScanner().scanCurrentJdk(tempDir.resolve("out-missing-jimage")));
+        })
+            .isInstanceOf(IOException.class)
+            .hasMessageContaining("Unable to locate runtime JDK inventory source");
     }
 
     @Test

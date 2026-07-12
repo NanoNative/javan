@@ -3,8 +3,13 @@ package javan.reporting;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -1042,9 +1047,357 @@ final class ReportSummarizerTest {
         assertThat(Files.readString(summary.jsonPath())).isEqualTo(summary.json());
     }
 
+    @Test
+    void reportsDirectoryFallsBackForRootPathWithoutFileName() throws Exception {
+        final Path resolved = invokeReportsDirectory(Path.of("/"));
+
+        assertThat(resolved).isEqualTo(Path.of("/.javan/reports"));
+    }
+
+    @Test
+    void reportsDirectoryRejectsPlainReportsPathAtFilesystemRootShape() throws Exception {
+        final Path resolved = invokeReportsDirectory(Path.of("/reports"));
+
+        assertThat(resolved).isEqualTo(Path.of("/reports/.javan/reports"));
+    }
+
+    @Test
+    void reportsDirectoryRejectsRelativeReportsPathOutsideJavan() throws Exception {
+        final Path resolved = invokeReportsDirectory(Path.of("reports"));
+
+        assertThat(resolved).isEqualTo(Path.of("reports/.javan/reports").toAbsolutePath().normalize());
+    }
+
+    @Test
+    void metricsReturnsEmptyForUnknownFamily() throws Exception {
+        assertThat(invokeMetrics(reportsDirectory(), "unknown-family")).isEmpty();
+    }
+
+    @Test
+    void addNestedNumberSkipsMissingObjectBody() throws Exception {
+        final List<Object> metrics = new ArrayList<>();
+
+        invokeAddNestedNumber(metrics, "{\"other\":{}}", "threading", "count", "count");
+
+        assertThat(metrics).isEmpty();
+    }
+
+    @Test
+    void addNestedNumberSkipsMissingNestedField() throws Exception {
+        final List<Object> metrics = new ArrayList<>();
+
+        invokeAddNestedNumber(metrics, "{\"threading\":{\"other\":1}}", "threading", "count", "count");
+
+        assertThat(metrics).isEmpty();
+    }
+
+    @Test
+    void addNestedTextSkipsMissingNestedField() throws Exception {
+        final List<Object> metrics = new ArrayList<>();
+
+        invokeAddNestedText(metrics, "{\"threading\":{\"other\":\"x\"}}", "threading", "name", "name");
+
+        assertThat(metrics).isEmpty();
+    }
+
+    @Test
+    void addNestedTextAddsMetricWhenNestedTextExists() throws Exception {
+        final List<Object> metrics = new ArrayList<>();
+
+        invokeAddNestedText(metrics, "{\"threading\":{\"name\":\"carrier\"}}", "threading", "name", "name");
+
+        assertThat(metrics).hasSize(1);
+        assertThat(metrics.getFirst().toString()).contains("name");
+    }
+
+    @Test
+    void addNestedTextSkipsMissingObjectBody() throws Exception {
+        final List<Object> metrics = new ArrayList<>();
+
+        invokeAddNestedText(metrics, "{\"other\":{}}", "threading", "name", "name");
+
+        assertThat(metrics).isEmpty();
+    }
+
+    @Test
+    void stringFieldReturnsEmptyForNonQuotedValue() throws Exception {
+        assertThat(invokeStringField("{\"name\":42}", "name")).isEmpty();
+    }
+
+    @Test
+    void stringFieldReturnsEmptyWhenFieldIsMissing() throws Exception {
+        assertThat(invokeStringField("{\"other\":\"x\"}", "name")).isEmpty();
+    }
+
+    @Test
+    void stringFieldReturnsEmptyWhenValueIsMissing() throws Exception {
+        assertThat(invokeStringField("{\"name\":}", "name")).isEmpty();
+    }
+
+    @Test
+    void booleanFieldReturnsEmptyForUnsupportedLiteral() throws Exception {
+        assertThat(invokeBooleanField("{\"enabled\":truthy}", "enabled")).isEmpty();
+    }
+
+    @Test
+    void booleanFieldReturnsEmptyWhenFieldIsMissing() throws Exception {
+        assertThat(invokeBooleanField("{\"other\":true}", "enabled")).isEmpty();
+    }
+
+    @Test
+    void booleanFieldReturnsEmptyWhenValueIsMissing() throws Exception {
+        assertThat(invokeBooleanField("{\"enabled\":}", "enabled")).isEmpty();
+    }
+
+    @Test
+    void matchesAtRejectsOutOfBoundsStart() throws Exception {
+        assertThat(invokeMatchesAt("true", 2, "true")).isFalse();
+    }
+
+    @Test
+    void matchesAtRejectsNegativeStart() throws Exception {
+        assertThat(invokeMatchesAt("true", -1, "tr")).isFalse();
+    }
+
+    @Test
+    void numberAtReturnsNoNumberWhenStartIsOutOfBounds() throws Exception {
+        assertThat(invokeNumberAt("42", 2)).isEqualTo(noNumberSentinel());
+    }
+
+    @Test
+    void arrayBodyReturnsEmptyForUnclosedArray() throws Exception {
+        assertThat(invokeArrayBody("{\"items\":[1,2}", "items")).isEmpty();
+    }
+
+    @Test
+    void objectBodyReturnsEmptyForUnclosedObject() throws Exception {
+        assertThat(invokeObjectBody("{\"nested\":{\"a\":1", "nested")).isEmpty();
+    }
+
+    @Test
+    void objectBodyReturnsBodyWhenQuotedBraceAppearsInsideString() throws Exception {
+        assertThat(invokeObjectBody("{\"nested\":{\"text\":\"}\",\"value\":1}}", "nested"))
+            .contains("\"text\":\"}\",\"value\":1");
+    }
+
+    @Test
+    void objectBodyReturnsEmptyWhenFieldIsNotObject() throws Exception {
+        assertThat(invokeObjectBody("{\"nested\":true}", "nested")).isEmpty();
+    }
+
+    @Test
+    void stringArrayTextReturnsEmptyWhenArrayIsMissing() throws Exception {
+        assertThat(invokeStringArrayText("{\"items\":true}", "items")).isEmpty();
+    }
+
+    @Test
+    void stringArrayTextKeepsEscapedCharactersInsideItems() throws Exception {
+        assertThat(invokeStringArrayText("{\"items\":[\"a\\\\\\\"b\",\"c\\\\d\"]}", "items"))
+            .contains("a\\\"b, c\\d");
+    }
+
+    @Test
+    void stringArrayTextPreservesEmptyStringItems() throws Exception {
+        assertThat(invokeStringArrayText("{\"items\":[\"\"]}", "items")).contains("");
+    }
+
+    @Test
+    void objectEndIgnoresQuotedBraces() throws Exception {
+        assertThat(invokeObjectEnd("{\"text\":\"}\",\"value\":1}", 0)).isEqualTo(21);
+    }
+
+    @Test
+    void objectEndTraversesNestedObjectsBeforeReturning() throws Exception {
+        assertThat(invokeObjectEnd("{\"outer\":{\"inner\":{}}}", 0)).isEqualTo(21);
+    }
+
+    @Test
+    void objectEndIgnoresEscapedQuotesInsideStrings() throws Exception {
+        assertThat(invokeObjectEnd("{\"text\":\"\\\\\\\"\",\"value\":1}", 0)).isEqualTo(24);
+    }
+
+    @Test
+    void sumNumberFieldsSkipsBrokenValuesAndKeepsLaterNumbers() throws Exception {
+        assertThat(invokeSumNumberFields("{\"count\":oops,\"count\":2,\"count\":3}", "count")).isEqualTo(5L);
+    }
+
+    @Test
+    void sumNumberFieldsReturnsZeroWhenFieldIsMissing() throws Exception {
+        assertThat(invokeSumNumberFields("{\"other\":1}", "count")).isZero();
+    }
+
+    @Test
+    void sumNumberFieldsReturnsZeroForEmptyReport() throws Exception {
+        assertThat(invokeSumNumberFields("", "count")).isZero();
+    }
+
+    @Test
+    void fieldValueStartReturnsMinusOneWhenFieldIsMissing() throws Exception {
+        assertThat(invokeFieldValueStart("{\"other\":1}", "count", 0)).isEqualTo(-1);
+    }
+
+    @Test
+    void fieldValueStartReturnsMinusOneWhenOffsetStartsAtEnd() throws Exception {
+        assertThat(invokeFieldValueStart("{\"count\":1}", "count", 11)).isEqualTo(-1);
+    }
+
+    @Test
+    void trimCarriageReturnLeavesPlainLineEndUnchanged() throws Exception {
+        assertThat(invokeTrimCarriageReturn("line", 4)).isEqualTo(4);
+    }
+
+    @Test
+    void trimCarriageReturnRemovesTrailingCarriageReturn() throws Exception {
+        assertThat(invokeTrimCarriageReturn("line\r", 5)).isEqualTo(4);
+    }
+
+    @Test
+    void skipWhitespaceReturnsLengthWhenStartingAtEnd() throws Exception {
+        assertThat(invokeSkipWhitespace("value", 5)).isEqualTo(5);
+    }
+
+    @Test
+    void skipWhitespaceStopsAtFirstVisibleCharacter() throws Exception {
+        assertThat(invokeSkipWhitespace(" \n\tvalue", 0)).isEqualTo(3);
+    }
+
     private Path reportsDirectory() throws Exception {
         final Path reports = tempDir.resolve(".javan/reports");
         Files.createDirectories(reports);
         return reports;
+    }
+
+    private static Path invokeReportsDirectory(final Path target) throws Exception {
+        final Method method = ReportSummarizer.class.getDeclaredMethod("reportsDirectory", Path.class);
+        method.setAccessible(true);
+        return (Path) method.invoke(null, target);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Object> invokeMetrics(final Path reportsDirectory, final String name) throws Exception {
+        final Method method = ReportSummarizer.class.getDeclaredMethod("metrics", Path.class, String.class);
+        method.setAccessible(true);
+        return (List<Object>) method.invoke(null, reportsDirectory, name);
+    }
+
+    private static void invokeAddNestedNumber(
+        final List<Object> result,
+        final String report,
+        final String objectName,
+        final String fieldName,
+        final String metricName
+    ) throws Exception {
+        final Method method = ReportSummarizer.class.getDeclaredMethod(
+            "addNestedNumber",
+            List.class,
+            String.class,
+            String.class,
+            String.class,
+            String.class
+        );
+        method.setAccessible(true);
+        method.invoke(null, result, report, objectName, fieldName, metricName);
+    }
+
+    private static void invokeAddNestedText(
+        final List<Object> result,
+        final String report,
+        final String objectName,
+        final String fieldName,
+        final String metricName
+    ) throws Exception {
+        final Method method = ReportSummarizer.class.getDeclaredMethod(
+            "addNestedText",
+            List.class,
+            String.class,
+            String.class,
+            String.class,
+            String.class
+        );
+        method.setAccessible(true);
+        method.invoke(null, result, report, objectName, fieldName, metricName);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Optional<String> invokeStringField(final String report, final String name) throws Exception {
+        final Method method = ReportSummarizer.class.getDeclaredMethod("stringField", String.class, String.class);
+        method.setAccessible(true);
+        return (Optional<String>) method.invoke(null, report, name);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Optional<String> invokeBooleanField(final String report, final String name) throws Exception {
+        final Method method = ReportSummarizer.class.getDeclaredMethod("booleanField", String.class, String.class);
+        method.setAccessible(true);
+        return (Optional<String>) method.invoke(null, report, name);
+    }
+
+    private static boolean invokeMatchesAt(final String value, final int start, final String expected) throws Exception {
+        final Method method = ReportSummarizer.class.getDeclaredMethod("matchesAt", String.class, int.class, String.class);
+        method.setAccessible(true);
+        return (boolean) method.invoke(null, value, start, expected);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Optional<String> invokeArrayBody(final String report, final String name) throws Exception {
+        final Method method = ReportSummarizer.class.getDeclaredMethod("arrayBody", String.class, String.class);
+        method.setAccessible(true);
+        return (Optional<String>) method.invoke(null, report, name);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Optional<String> invokeObjectBody(final String report, final String name) throws Exception {
+        final Method method = ReportSummarizer.class.getDeclaredMethod("objectBody", String.class, String.class);
+        method.setAccessible(true);
+        return (Optional<String>) method.invoke(null, report, name);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Optional<String> invokeStringArrayText(final String report, final String name) throws Exception {
+        final Method method = ReportSummarizer.class.getDeclaredMethod("stringArrayText", String.class, String.class);
+        method.setAccessible(true);
+        return (Optional<String>) method.invoke(null, report, name);
+    }
+
+    private static int invokeObjectEnd(final String value, final int start) throws Exception {
+        final Method method = ReportSummarizer.class.getDeclaredMethod("objectEnd", String.class, int.class);
+        method.setAccessible(true);
+        return (int) method.invoke(null, value, start);
+    }
+
+    private static long invokeSumNumberFields(final String report, final String name) throws Exception {
+        final Method method = ReportSummarizer.class.getDeclaredMethod("sumNumberFields", String.class, String.class);
+        method.setAccessible(true);
+        return (long) method.invoke(null, report, name);
+    }
+
+    private static long invokeNumberAt(final String value, final int start) throws Exception {
+        final Method method = ReportSummarizer.class.getDeclaredMethod("numberAt", String.class, int.class);
+        method.setAccessible(true);
+        return (long) method.invoke(null, value, start);
+    }
+
+    private static int invokeFieldValueStart(final String report, final String name, final int offset) throws Exception {
+        final Method method = ReportSummarizer.class.getDeclaredMethod("fieldValueStart", String.class, String.class, int.class);
+        method.setAccessible(true);
+        return (int) method.invoke(null, report, name, offset);
+    }
+
+    private static int invokeTrimCarriageReturn(final String value, final int end) throws Exception {
+        final Method method = ReportSummarizer.class.getDeclaredMethod("trimCarriageReturn", String.class, int.class);
+        method.setAccessible(true);
+        return (int) method.invoke(null, value, end);
+    }
+
+    private static int invokeSkipWhitespace(final String value, final int start) throws Exception {
+        final Method method = ReportSummarizer.class.getDeclaredMethod("skipWhitespace", String.class, int.class);
+        method.setAccessible(true);
+        return (int) method.invoke(null, value, start);
+    }
+
+    private static long noNumberSentinel() throws Exception {
+        final var field = ReportSummarizer.class.getDeclaredField("NO_NUMBER");
+        field.setAccessible(true);
+        return field.getLong(null);
     }
 }

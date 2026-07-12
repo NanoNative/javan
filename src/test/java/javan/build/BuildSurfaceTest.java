@@ -9,8 +9,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Isolated;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -271,6 +274,25 @@ final class BuildSurfaceTest {
     }
 
     @Test
+    void exportResolverRejectsNativeMethodsWithoutBytecodeAttribute() {
+        final ClassFile api = new ClassFile(
+            69,
+            "com/acme/Api",
+            "java/lang/Object",
+            0,
+            List.of(),
+            List.of(),
+            List.of(new MethodInfo(0x0108, "touch", "()V", Optional.empty())),
+            Path.of("Api.class"),
+            true
+        );
+
+        assertThatThrownBy(() -> new ExportResolver().resolve(Map.of(api.name(), api), tempDir, List.of("com.acme.Api.touch")))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Unsupported export com.acme.Api.touch()V: method must have Java bytecode");
+    }
+
+    @Test
     void exportResolverReadsConfigMethodsAndDeduplicatesCliEntries() throws Exception {
         final ClassFile api = classFile("com/acme/Api", method(0x0008, "touch", "()V"), method(0x0008, "ping", "()V"));
         Files.writeString(tempDir.resolve("javan.toml"), """
@@ -430,6 +452,274 @@ final class BuildSurfaceTest {
         assertThatThrownBy(() -> new ExportResolver().resolve(Map.of(api.name(), api), tempDir, List.of("com.acme.Api.<init>")))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessage("Export method not found: com.acme.Api.<init>");
+    }
+
+    @Test
+    void exportResolverContainsEntryMatchesOnlyExactEntryPoint() throws Exception {
+        assertThat(invokeContainsEntry(
+            List.of(new EntryPoint("com/acme/Api", "touch", "()V")),
+            new EntryPoint("com/acme/Api", "touch", "()V")
+        )).isTrue();
+    }
+
+    @Test
+    void exportResolverContainsEntryRejectsDescriptorMismatch() throws Exception {
+        assertThat(invokeContainsEntry(
+            List.of(new EntryPoint("com/acme/Api", "touch", "()V")),
+            new EntryPoint("com/acme/Api", "touch", "(I)V")
+        )).isFalse();
+    }
+
+    @Test
+    void exportResolverContainsEntryRejectsClassMismatch() throws Exception {
+        assertThat(invokeContainsEntry(
+            List.of(new EntryPoint("com/acme/Api", "touch", "()V")),
+            new EntryPoint("com/acme/Other", "touch", "()V")
+        )).isFalse();
+    }
+
+    @Test
+    void exportResolverMethodsArrayStartReturnsMinusOneWhenTokenIsMissing() throws Exception {
+        assertThat(invokeMethodsArrayStart("exports = []")).isEqualTo(-1);
+    }
+
+    @Test
+    void exportResolverMethodsArrayStartReturnsMinusOneForEmptyText() throws Exception {
+        assertThat(invokeMethodsArrayStart("")).isEqualTo(-1);
+    }
+
+    @Test
+    void exportResolverMethodsArrayStartSkipsNonArrayAssignmentAndFindsLaterArray() throws Exception {
+        assertThat(invokeMethodsArrayStart("""
+            methods = value
+            methods = ["com.acme.Api.touch"]
+            """)).isGreaterThanOrEqualTo(0);
+    }
+
+    @Test
+    void exportResolverMethodsArrayStartRejectsAssignmentWithoutBracket() throws Exception {
+        assertThat(invokeMethodsArrayStart("methods = value")).isEqualTo(-1);
+    }
+
+    @Test
+    void exportResolverMethodsArrayStartRejectsAssignmentWithoutValue() throws Exception {
+        assertThat(invokeMethodsArrayStart("methods =")).isEqualTo(-1);
+    }
+
+    @Test
+    void exportResolverMethodsArrayStartRejectsTrailingTokenWithoutAssignment() throws Exception {
+        assertThat(invokeMethodsArrayStart("methods")).isEqualTo(-1);
+    }
+
+    @Test
+    void exportResolverMethodsArrayStartContinuesAfterMethodsWithoutEquals() throws Exception {
+        assertThat(invokeMethodsArrayStart("""
+            methods value
+            methods = ["com.acme.Api.touch"]
+            """)).isGreaterThanOrEqualTo(0);
+    }
+
+    @Test
+    void exportResolverSkipWhitespaceStopsOnFirstNonWhitespaceCharacter() throws Exception {
+        assertThat(invokeSkipWhitespace(" \t\r\nvalue", 0)).isEqualTo(4);
+    }
+
+    @Test
+    void exportResolverSkipWhitespaceReturnsLengthForAllWhitespaceInput() throws Exception {
+        assertThat(invokeSkipWhitespace(" \t\r\n", 0)).isEqualTo(4);
+    }
+
+    @Test
+    void exportResolverCollectQuotedSkipsPlainTextAndCollectsQuotedValues() throws Exception {
+        final List<String> result = new ArrayList<>();
+        final String text = "ignored, \"one\", two, \"three\"";
+
+        invokeCollectQuoted(text, 0, text.length(), result);
+
+        assertThat(result).containsExactly("one", "three");
+    }
+
+    @Test
+    void exportResolverCollectQuotedRejectsMissingClosingQuote() {
+        assertThatThrownBy(() -> invokeCollectQuoted("\"broken", 0, "\"broken".length(), new ArrayList<>()))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Invalid quoted export in javan.toml");
+    }
+
+    @Test
+    void exportResolverCollectQuotedRejectsClosingQuotePastScanEnd() {
+        assertThatThrownBy(() -> invokeCollectQuoted("\"broken\"", 0, 3, new ArrayList<>()))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Invalid quoted export in javan.toml");
+    }
+
+    @Test
+    void exportResolverParseTypeSupportsVoidOnlyForReturnPosition() throws Exception {
+        assertThat(invokeParseType("void", true)).isEqualTo(AbiType.VOID);
+        assertThatThrownBy(() -> invokeParseType("void", false))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Unsupported export parameter type: void");
+    }
+
+    @Test
+    void exportResolverParseTypeSupportsPrimitiveStringAndByteArrayVariants() throws Exception {
+        assertThat(invokeParseType("boolean", false)).isEqualTo(AbiType.INT);
+        assertThat(invokeParseType("long", false)).isEqualTo(AbiType.LONG);
+        assertThat(invokeParseType("float", false)).isEqualTo(AbiType.FLOAT);
+        assertThat(invokeParseType("double", false)).isEqualTo(AbiType.DOUBLE);
+        assertThat(invokeParseType("String", false)).isEqualTo(AbiType.STRING);
+        assertThat(invokeParseType("java.lang.String", false)).isEqualTo(AbiType.STRING);
+        assertThat(invokeParseType("byte[]", false)).isEqualTo(AbiType.BYTE_ARRAY);
+    }
+
+    @Test
+    void exportResolverDescriptorEncodesByteArrayAbiType() throws Exception {
+        assertThat(invokeDescriptor(AbiType.BYTE_ARRAY)).isEqualTo("[B");
+    }
+
+    @Test
+    void exportResolverParseTypesReturnsEmptyForBlankInput() throws Exception {
+        assertThat(invokeParseTypes("   ")).isEmpty();
+    }
+
+    @Test
+    void exportResolverParseTypesTrimsWhitespaceAroundCommaSeparatedValues() throws Exception {
+        assertThat(invokeParseTypes(" int, java.lang.String , byte[] "))
+            .containsExactly(AbiType.INT, AbiType.STRING, AbiType.BYTE_ARRAY);
+    }
+
+    @Test
+    void exportResolverResolvesShortDeclarationWithByteArrayDescriptor() throws Exception {
+        final ClassFile api = classFile("com/acme/Bytes", method(0x0008, "send", "([B)V"));
+
+        final ExportedMethod export = new ExportResolver()
+            .resolve(Map.of(api.name(), api), tempDir, List.of("com.acme.Bytes.send"))
+            .getFirst();
+
+        assertThat(export.parameterTypes()).containsExactly(AbiType.BYTE_ARRAY);
+    }
+
+    @Test
+    void exportResolverResolvesShortDeclarationWithByteDescriptor() throws Exception {
+        final ClassFile api = classFile("com/acme/Numbers", method(0x0008, "one", "(B)I"));
+
+        final ExportedMethod export = new ExportResolver()
+            .resolve(Map.of(api.name(), api), tempDir, List.of("com.acme.Numbers.one"))
+            .getFirst();
+
+        assertThat(export.parameterTypes()).containsExactly(AbiType.INT);
+    }
+
+    @Test
+    void exportResolverResolvesShortDeclarationWithCharDescriptor() throws Exception {
+        final ClassFile api = classFile("com/acme/Numbers", method(0x0008, "one", "(C)I"));
+
+        final ExportedMethod export = new ExportResolver()
+            .resolve(Map.of(api.name(), api), tempDir, List.of("com.acme.Numbers.one"))
+            .getFirst();
+
+        assertThat(export.parameterTypes()).containsExactly(AbiType.INT);
+    }
+
+    @Test
+    void exportResolverResolvesShortDeclarationWithShortDescriptor() throws Exception {
+        final ClassFile api = classFile("com/acme/Numbers", method(0x0008, "one", "(S)I"));
+
+        final ExportedMethod export = new ExportResolver()
+            .resolve(Map.of(api.name(), api), tempDir, List.of("com.acme.Numbers.one"))
+            .getFirst();
+
+        assertThat(export.parameterTypes()).containsExactly(AbiType.INT);
+    }
+
+    @Test
+    void exportResolverResolvesShortDeclarationWithBooleanDescriptor() throws Exception {
+        final ClassFile api = classFile("com/acme/Numbers", method(0x0008, "one", "(Z)I"));
+
+        final ExportedMethod export = new ExportResolver()
+            .resolve(Map.of(api.name(), api), tempDir, List.of("com.acme.Numbers.one"))
+            .getFirst();
+
+        assertThat(export.parameterTypes()).containsExactly(AbiType.INT);
+    }
+
+    @Test
+    void exportResolverRejectsExplicitDeclarationWithMissingOwnerBeforeMethod() {
+        assertThatThrownBy(() -> new ExportResolver().resolve(Map.of(), tempDir, List.of(".touch():void")))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Invalid export declaration: .touch():void");
+    }
+
+    @Test
+    void exportResolverRejectsShortDeclarationWithObjectArrayDescriptor() {
+        final ClassFile objectArray = classFile("com/acme/Bytes", method(0x0008, "read", "()[Ljava/lang/Object;"));
+
+        assertThatThrownBy(() -> new ExportResolver().resolve(Map.of(objectArray.name(), objectArray), tempDir, List.of("com.acme.Bytes.read")))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Unsupported export array descriptor: ()[Ljava/lang/Object;");
+    }
+
+    @Test
+    void exportResolverRejectsShortDeclarationWithMissingOwner() {
+        assertThatThrownBy(() -> new ExportResolver().resolve(Map.of(), tempDir, List.of(".touch")))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Export must look like com.acme.Type.method or com.acme.Type.method(int):int");
+    }
+
+    @Test
+    void exportResolverRejectsExplicitDeclarationWithoutColonAfterCloseParen() {
+        assertThatThrownBy(() -> new ExportResolver().resolve(Map.of(), tempDir, List.of("com.acme.Api.touch(int)int")))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Invalid export declaration: com.acme.Api.touch(int)int");
+    }
+
+    @Test
+    void exportResolverRejectsExplicitDeclarationWithoutClosingParen() {
+        assertThatThrownBy(() -> new ExportResolver().resolve(Map.of(), tempDir, List.of("com.acme.Api.touch(int:int")))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Invalid export declaration: com.acme.Api.touch(int:int");
+    }
+
+    @Test
+    void exportResolverRejectsExplicitDeclarationWithClosingParenBeforeOpenParen() {
+        assertThatThrownBy(() -> new ExportResolver().resolve(Map.of(), tempDir, List.of("com.acme.Api.touch)int(:int")))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Invalid export declaration: com.acme.Api.touch)int(:int");
+    }
+
+    @Test
+    void exportResolverReadDescriptorTypeReadsByteArrayDescriptor() throws Exception {
+        final DescriptorRead read = invokeReadDescriptorType("([B)V", 1);
+
+        assertThat(read.type()).isEqualTo(AbiType.BYTE_ARRAY);
+        assertThat(read.nextIndex()).isEqualTo(3);
+    }
+
+    @Test
+    void exportResolverReadDescriptorTypeRejectsNonByteArrayDescriptor() {
+        assertThatThrownBy(() -> invokeReadDescriptorType("([I)V", 1))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Unsupported export array descriptor: ([I)V");
+    }
+
+    @Test
+    void exportResolverReadDescriptorTypeRejectsTruncatedArrayDescriptor() {
+        assertThatThrownBy(() -> invokeReadDescriptorType("[", 0))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Unsupported export array descriptor: [");
+    }
+
+    @Test
+    void exportResolverReadDescriptorTypeRejectsUnknownPrimitiveTag() {
+        assertThatThrownBy(() -> invokeReadDescriptorType("Q", 0))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Unsupported export descriptor: Q");
+    }
+
+    @Test
+    void exportResolverDescriptorRejectsNullAbiType() {
+        assertThatThrownBy(() -> invokeDescriptor(null))
+            .isInstanceOf(NullPointerException.class);
     }
 
     @Test
@@ -962,11 +1252,102 @@ final class BuildSurfaceTest {
         return new MethodInfo(accessFlags, name, descriptor, Optional.of(new CodeAttribute(0, 0, new byte[0], 0, List.of())));
     }
 
+    private static boolean invokeContainsEntry(final List<EntryPoint> entries, final EntryPoint target) throws Exception {
+        final Method method = ExportResolver.class.getDeclaredMethod("containsEntry", List.class, EntryPoint.class);
+        method.setAccessible(true);
+        return (Boolean) method.invoke(null, entries, target);
+    }
+
+    private static int invokeMethodsArrayStart(final String text) throws Exception {
+        final Method method = ExportResolver.class.getDeclaredMethod("methodsArrayStart", String.class);
+        method.setAccessible(true);
+        return (Integer) method.invoke(null, text);
+    }
+
+    private static int invokeSkipWhitespace(final String text, final int start) throws Exception {
+        final Method method = ExportResolver.class.getDeclaredMethod("skipWhitespace", String.class, int.class);
+        method.setAccessible(true);
+        return (Integer) method.invoke(null, text, start);
+    }
+
+    private static void invokeCollectQuoted(
+        final String text,
+        final int start,
+        final int end,
+        final List<String> result
+    ) throws Exception {
+        final Method method = ExportResolver.class.getDeclaredMethod("collectQuoted", String.class, int.class, int.class, List.class);
+        method.setAccessible(true);
+        try {
+            method.invoke(null, text, start, end, result);
+        } catch (final InvocationTargetException exception) {
+            if (exception.getCause() instanceof Exception cause) {
+                throw cause;
+            }
+            throw exception;
+        }
+    }
+
+    private static AbiType invokeParseType(final String value, final boolean returnPosition) throws Exception {
+        final Method method = ExportResolver.class.getDeclaredMethod("parseType", String.class, boolean.class);
+        method.setAccessible(true);
+        try {
+            return (AbiType) method.invoke(null, value, returnPosition);
+        } catch (final InvocationTargetException exception) {
+            if (exception.getCause() instanceof Exception cause) {
+                throw cause;
+            }
+            throw exception;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<AbiType> invokeParseTypes(final String value) throws Exception {
+        final Method method = ExportResolver.class.getDeclaredMethod("parseTypes", String.class);
+        method.setAccessible(true);
+        return (List<AbiType>) method.invoke(null, value);
+    }
+
+    private static String invokeDescriptor(final AbiType type) throws Exception {
+        final Method method = ExportResolver.class.getDeclaredMethod("descriptor", AbiType.class);
+        method.setAccessible(true);
+        try {
+            return (String) method.invoke(null, type);
+        } catch (final InvocationTargetException exception) {
+            if (exception.getCause() instanceof Exception cause) {
+                throw cause;
+            }
+            throw exception;
+        }
+    }
+
+    private static DescriptorRead invokeReadDescriptorType(final String descriptor, final int index) throws Exception {
+        final Method method = ExportResolver.class.getDeclaredMethod("readDescriptorType", String.class, int.class);
+        method.setAccessible(true);
+        final Object read;
+        try {
+            read = method.invoke(null, descriptor, index);
+        } catch (final InvocationTargetException exception) {
+            if (exception.getCause() instanceof Exception cause) {
+                throw cause;
+            }
+            throw exception;
+        }
+        final Method type = read.getClass().getDeclaredMethod("type");
+        final Method nextIndex = read.getClass().getDeclaredMethod("nextIndex");
+        type.setAccessible(true);
+        nextIndex.setAccessible(true);
+        return new DescriptorRead((AbiType) type.invoke(read), (Integer) nextIndex.invoke(read));
+    }
+
     private static void restoreOsName(final String value) {
         if (value == null) {
             System.clearProperty("os.name");
             return;
         }
         System.setProperty("os.name", value);
+    }
+
+    private record DescriptorRead(AbiType type, int nextIndex) {
     }
 }

@@ -116,11 +116,13 @@ public final class ClassMetadataScanner {
     }
 
     private static String javaHome() throws IOException {
-        final String property = System.getProperty("java.home");
+        return javaHomeForValues(System.getProperty("java.home"), System.getenv("JAVA_HOME"));
+    }
+
+    static String javaHomeForValues(final String property, final String environment) throws IOException {
         if (property != null && !Strings2.isBlank(property)) {
             return property;
         }
-        final String environment = System.getenv("JAVA_HOME");
         if (environment != null && !Strings2.isBlank(environment)) {
             return environment;
         }

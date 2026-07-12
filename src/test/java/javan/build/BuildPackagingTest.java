@@ -9,6 +9,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.jar.JarFile;
@@ -69,6 +70,28 @@ final class BuildPackagingTest {
                 assertThat(throwable.getCause()).isInstanceOf(java.io.IOException.class);
                 assertThat(throwable.getCause()).hasMessage("Resource path escapes output directory: ../escape.txt");
             });
+    }
+
+    @Test
+    void resourceBundlerInsertSortedPlacesLaterPathAfterExistingEntries() throws Exception {
+        final List<ResourceBundler.ResourceFile> resources = new ArrayList<>();
+        resources.add(new ResourceBundler.ResourceFile("alpha.txt", tempDir.resolve("a"), 1));
+        resources.add(new ResourceBundler.ResourceFile("omega.txt", tempDir.resolve("o"), 1));
+
+        invokeInsertSorted(resources, new ResourceBundler.ResourceFile("middle.txt", tempDir.resolve("m"), 1));
+
+        assertThat(resources).extracting(ResourceBundler.ResourceFile::path)
+            .containsExactly("alpha.txt", "middle.txt", "omega.txt");
+    }
+
+    @Test
+    void libraryBuildReportsContainsMatchesExistingValue() throws Exception {
+        assertThat(invokeLibraryBuildReportsContains(List.of("com/acme/Main"), "com/acme/Main")).isTrue();
+    }
+
+    @Test
+    void libraryBuildReportsContainsRejectsMissingValue() throws Exception {
+        assertThat(invokeLibraryBuildReportsContains(List.of("com/acme/Main"), "com/acme/Other")).isFalse();
     }
 
     @Test
@@ -189,5 +212,20 @@ final class BuildPackagingTest {
             "demo",
             List.of()
         );
+    }
+
+    private static void invokeInsertSorted(
+        final List<ResourceBundler.ResourceFile> resources,
+        final ResourceBundler.ResourceFile resource
+    ) throws Exception {
+        final Method method = ResourceBundler.class.getDeclaredMethod("insertSorted", List.class, ResourceBundler.ResourceFile.class);
+        method.setAccessible(true);
+        method.invoke(null, resources, resource);
+    }
+
+    private static boolean invokeLibraryBuildReportsContains(final List<String> values, final String target) throws Exception {
+        final Method method = LibraryBuildReports.class.getDeclaredMethod("contains", List.class, String.class);
+        method.setAccessible(true);
+        return (boolean) method.invoke(null, values, target);
     }
 }
