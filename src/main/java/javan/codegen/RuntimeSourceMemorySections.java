@@ -2369,7 +2369,24 @@ final class RuntimeSourceMemorySections {
         }
 
         void javan_throwable_set_message(void* throwable_value, void* message) {
-            javan_throwable_checked(throwable_value)->message = message;
+            void* throwable_root = throwable_value;
+            void* message_root = message;
+            void* copied_message = NULL;
+            void** javan_throwable_message_roots[] = {
+                (void**) &throwable_root,
+                (void**) &message_root,
+                (void**) &copied_message
+            };
+            javan_root_frame_push(javan_throwable_message_roots, 3);
+            javan_throwable_value* throwable = javan_throwable_checked(throwable_root);
+            if (message_root == NULL) {
+                throwable->message = NULL;
+                javan_root_frame_pop(javan_throwable_message_roots);
+                return;
+            }
+            copied_message = javan_string_from((const char*) message_root);
+            throwable->message = copied_message;
+            javan_root_frame_pop(javan_throwable_message_roots);
         }
 
         void* javan_throwable_get_message(void* throwable_value) {

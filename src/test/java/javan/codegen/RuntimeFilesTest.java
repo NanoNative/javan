@@ -70,6 +70,46 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void runtimeThrowableMessageLiteralSurvivesGcStress() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+
+            int main(void) {
+                void* throwable = 0;
+                javan_register_static_roots(0, 0);
+                void** roots[] = {
+                    (void**) &throwable
+                };
+                javan_root_frame_push(roots, 1);
+                throwable = javan_throwable_new("java/lang/IllegalStateException");
+                javan_throwable_set_message(throwable, (void*) "boom7");
+                for (int index = 0; index < 40; index++) {
+                    void* values = 0;
+                    void** loop_roots[] = {
+                        (void**) &throwable,
+                        (void**) &values
+                    };
+                    javan_root_frame_push(loop_roots, 2);
+                    values = javan_int_array_new(128);
+                    javan_int_array_set(values, 0, index);
+                    values = 0;
+                    javan_root_frame_pop(loop_roots);
+                    javan_gc_safe_point();
+                }
+                javan_println_int(javan_string_length((const char*) javan_throwable_get_message(throwable)));
+                javan_root_frame_pop(roots);
+                return 0;
+            }
+            """,
+            "4096",
+            Map.of("JAVAN_GC_SAFEPOINT_INTERVAL", "1")
+        );
+
+        assertThat(stdout).isEqualTo("5\n");
+    }
+
+    @Test
     void writeTracksRuntimeAllocationsAndRegistersShutdownCleanup() throws Exception {
         final Path runtime = new RuntimeFiles().write(tempDir);
 

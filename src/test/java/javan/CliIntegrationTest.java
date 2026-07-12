@@ -8655,6 +8655,30 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void caughtExceptionMessageSurvivesGcStressUnderHeapPressure() throws Exception {
+        final Path project = copyResourceProject(
+            "native-profile/exception-catch-heap-pressure",
+            "exception-catch-heap-pressure"
+        );
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(
+            project,
+            List.of(project.resolve(".javan/bin/exception-catch-heap-pressure").toString()),
+            Duration.ofSeconds(10),
+            Map.of(
+                "JAVAN_HEAP_LIMIT_BYTES", "4096",
+                "JAVAN_GC_STRESS", "1",
+                "JAVAN_GC_SAFEPOINT_INTERVAL", "1"
+            )
+        ).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("5\n");
+    }
+
+    @Test
     void defaultConstructedUncaughtExceptionPanicIsDeterministic() throws Exception {
         final Path project = project("exception-default-panic");
         writeJava(project, "com.acme.Main", """

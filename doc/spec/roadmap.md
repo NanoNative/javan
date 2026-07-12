@@ -72,7 +72,7 @@ Implemented details:
 - compiler-emitted `Enum.<init>(String,int)` supported as a no-op superclass constructor
 - enum `ordinal()`, `values()`, and javac enum switch-map lowering
 - unreachable javac-generated enum `valueOf(String)` boilerplate is recognized without
-  claiming support, while reachable enum `valueOf(String)` is rejected explicitly
+  forcing extra reachability, and reachable user-enum `valueOf(String)` lowers natively
 - monomorphic interface dispatch
 - closed-world virtual dispatch tables
 - closed-world polymorphic interface dispatch tables
