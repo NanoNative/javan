@@ -8628,6 +8628,47 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void streamForEachBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stream-for-each");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    List.of("aa", "bbb", "cccc")
+                        .stream()
+                        .filter(value -> value.length() > 2)
+                        .forEach(new LinePrinter());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.LinePrinter", """
+            package com.acme;
+
+            import java.util.function.Consumer;
+
+            public final class LinePrinter implements Consumer<String> {
+                @Override
+                public void accept(final String value) {
+                    System.out.println(value);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stream-for-each").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("bbb\ncccc\n");
+    }
+
+    @Test
     void inheritedDefaultVirtualMethodsBuildAndMatchJvmOutput() throws Exception {
         final Path project = project("inherited-default-virtual-methods");
         writeJava(project, "com.acme.TypeInfo", """
@@ -8731,7 +8772,8 @@ final class CliIntegrationTest {
         assertThat(diagnostics).doesNotContain(
             "java/util/Collections.emptyList()Ljava/util/List;",
             "java/util/List.stream()Ljava/util/stream/Stream;",
-            "java/util/Collection.stream()Ljava/util/stream/Stream;"
+            "java/util/Collection.stream()Ljava/util/stream/Stream;",
+            "java/util/stream/Stream.forEach(Ljava/util/function/Consumer;)V"
         );
         assertThat(diagnostics).doesNotContain(
             "berlin/yuna/typemap/model/FunctionOrNull.applyWithException(Ljava/lang/Object;)Ljava/lang/Object;",

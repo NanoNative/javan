@@ -205,6 +205,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void streamForEachIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/stream/Stream",
+            "forEach",
+            "(Ljava/util/function/Consumer;)V"
+        ))).isTrue();
+    }
+
+    @Test
     void executorExecuteRequiresThreadsRuntimeModule() {
         assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
             "java/util/concurrent/Executor",

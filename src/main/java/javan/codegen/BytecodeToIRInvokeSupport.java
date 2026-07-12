@@ -3122,6 +3122,24 @@ final class BytecodeToIRInvokeSupport {
             return true;
         }
         if ("java/util/stream/Stream".equals(methodRef.owner())
+            && "forEach".equals(methodRef.name())
+            && "(Ljava/util/function/Consumer;)V".equals(methodRef.descriptor())) {
+            final IrExpression consumer = popObject(classFile, method, instruction, stack);
+            final StreamPlan streamPlan = popObjectStream(classFile, method, instruction, stack);
+            materializeReferenceStreamForEach(
+                classes,
+                classFile,
+                method,
+                instruction,
+                dispatches,
+                streamPlan,
+                consumer,
+                instructions,
+                localDeclarations
+            );
+            return true;
+        }
+        if ("java/util/stream/Stream".equals(methodRef.owner())
             && "collect".equals(methodRef.name())
             && "(Ljava/util/stream/Collector;)Ljava/lang/Object;".equals(methodRef.descriptor())) {
             final CollectorPlan collectorPlan = popStreamCollector(classFile, method, instruction, stack);
@@ -3910,6 +3928,65 @@ final class BytecodeToIRInvokeSupport {
             IrExpression.objectCall("javan_stringbuilder_to_string", List.of(IrExpression.objectLocal(builderLocal)))
         ));
         stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
+    }
+
+    private static void materializeReferenceStreamForEach(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final Map<String, IrDispatch> dispatches,
+        final StreamPlan streamPlan,
+        final IrExpression consumer,
+        final List<IrInstruction> instructions,
+        final Map<Integer, IrLocal> localDeclarations
+    ) {
+        instructions.add(IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(consumer)));
+        final String sourceLocal = declareLocal(localDeclarations, IrType.OBJECT);
+        instructions.add(IrInstruction.assignObject(sourceLocal, streamPlan.source()));
+        final List<BoundStreamOperation> operations = bindStreamOperations(streamPlan.operations(), instructions, localDeclarations);
+        final String consumerLocal = declareLocal(localDeclarations, IrType.OBJECT);
+        final String iteratorLocal = declareLocal(localDeclarations, IrType.OBJECT);
+        final String candidateLocal = declareLocal(localDeclarations, IrType.OBJECT);
+        final String nextLabel = "label_stream_for_each_next_" + instruction.offset() + "_" + localDeclarations.size();
+        final String bodyLabel = "label_stream_for_each_body_" + instruction.offset() + "_" + localDeclarations.size();
+        final String doneLabel = "label_stream_for_each_done_" + instruction.offset() + "_" + localDeclarations.size();
+        instructions.add(IrInstruction.assignObject(consumerLocal, consumer));
+        instructions.add(IrInstruction.assignObject(iteratorLocal, IrExpression.objectCall("javan_list_iterator", List.of(IrExpression.objectLocal(sourceLocal)))));
+        instructions.add(IrInstruction.label(nextLabel));
+        instructions.add(IrInstruction.branchIf(
+            bodyLabel,
+            IrExpression.intComparison("!=", IrExpression.intCall("javan_iterator_has_next", List.of(IrExpression.objectLocal(iteratorLocal))), IrExpression.intLiteral(0))
+        ));
+        instructions.add(IrInstruction.jump(doneLabel));
+        instructions.add(IrInstruction.label(bodyLabel));
+        instructions.add(IrInstruction.assignObject(candidateLocal, IrExpression.objectCall("javan_iterator_next", List.of(IrExpression.objectLocal(iteratorLocal)))));
+        final Optional<IrExpression> current = applyReferenceStreamOperations(
+            classes,
+            classFile,
+            method,
+            instruction,
+            dispatches,
+            operations,
+            instructions,
+            localDeclarations,
+            IrExpression.objectLocal(candidateLocal),
+            nextLabel
+        );
+        if (current.isPresent()) {
+            appendInterfaceVoidCall(
+                classes,
+                classFile,
+                method,
+                instruction,
+                dispatches,
+                new MethodRef("java/util/function/Consumer", "accept", "(Ljava/lang/Object;)V"),
+                List.of(IrExpression.objectLocal(consumerLocal), current.orElseThrow()),
+                instructions
+            );
+        }
+        instructions.add(IrInstruction.jump(nextLabel));
+        instructions.add(IrInstruction.label(doneLabel));
     }
 
     private static void materializeReferenceStreamMatch(

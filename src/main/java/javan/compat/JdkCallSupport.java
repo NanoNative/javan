@@ -324,6 +324,7 @@ public final class JdkCallSupport {
         runtime("Iterator.next", "java/util/Iterator", "next", "()Ljava/lang/Object;"),
         runtime("Stream.filter", "java/util/stream/Stream", "filter", "(Ljava/util/function/Predicate;)Ljava/util/stream/Stream;"),
         runtime("Stream.map", "java/util/stream/Stream", "map", "(Ljava/util/function/Function;)Ljava/util/stream/Stream;"),
+        runtime("Stream.forEach", "java/util/stream/Stream", "forEach", "(Ljava/util/function/Consumer;)V"),
         runtime("Stream.toList", "java/util/stream/Stream", "toList", "()Ljava/util/List;"),
         runtime("Stream.findFirst", "java/util/stream/Stream", "findFirst", "()Ljava/util/Optional;"),
         runtime("Stream.anyMatch", "java/util/stream/Stream", "anyMatch", "(Ljava/util/function/Predicate;)Z"),
@@ -622,6 +623,9 @@ public final class JdkCallSupport {
             return List.of(new MethodRef("java/util/function/BiConsumer", "accept", "(Ljava/lang/Object;Ljava/lang/Object;)V"));
         }
         if ("java/util/stream/Stream".equals(owner)) {
+            if ("forEach".equals(name) && "(Ljava/util/function/Consumer;)V".equals(descriptor)) {
+                return List.of(new MethodRef("java/util/function/Consumer", "accept", "(Ljava/lang/Object;)V"));
+            }
             if ("filter".equals(name) && "(Ljava/util/function/Predicate;)Ljava/util/stream/Stream;".equals(descriptor)) {
                 return List.of(new MethodRef("java/util/function/Predicate", "test", "(Ljava/lang/Object;)Z"));
             }
@@ -777,6 +781,9 @@ public final class JdkCallSupport {
     }
 
     private static boolean isSupportedStreamCall(final String name, final String descriptor) {
+        if ("forEach".equals(name)) {
+            return "(Ljava/util/function/Consumer;)V".equals(descriptor);
+        }
         if ("filter".equals(name)) {
             return "(Ljava/util/function/Predicate;)Ljava/util/stream/Stream;".equals(descriptor);
         }

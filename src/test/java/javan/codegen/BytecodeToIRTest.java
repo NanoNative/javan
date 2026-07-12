@@ -13812,6 +13812,35 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersStreamForEachToIteratorLoop() {
+        final IrFunction function = lowerProgram(
+            method(
+                0x0008,
+                "main",
+                "(Ljava/util/List;Ljava/util/function/Consumer;)V",
+                2,
+                2,
+                plain(0, 42, "aload_0"),
+                invokeInterface(1, new MethodRef("java/util/List", "stream", "()Ljava/util/stream/Stream;")),
+                plain(2, 43, "aload_1"),
+                invokeInterface(3, new MethodRef("java/util/stream/Stream", "forEach", "(Ljava/util/function/Consumer;)V")),
+                plain(4, 177, "return")
+            ),
+            interfaceType("java/util/function/Consumer", "accept", "(Ljava/lang/Object;)V"),
+            implementationType("com/acme/LinePrinter", "java/util/function/Consumer", "accept", "(Ljava/lang/Object;)V")
+        ).functions().getFirst();
+
+        assertThat(function.instructions()).contains(IrInstruction.callStaticVoid(
+            "javan_objects_require_non_null",
+            List.of(IrExpression.objectLocal("arg1"))
+        ));
+        assertThat(function.instructions()).contains(IrInstruction.assignObject(
+            "object2",
+            IrExpression.objectCall("javan_list_iterator", List.of(IrExpression.objectLocal("object0")))
+        ));
+    }
+
+    @Test
     void lowersHashMapPutIfAbsentToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
