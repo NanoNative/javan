@@ -1274,6 +1274,25 @@ final class LambdaMetafactorySupportTest {
     }
 
     @Test
+    void lowerableResolvedInvokeVirtualTargetResolvesInheritedDefaultMethodOnConcreteOwner() throws Exception {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/TypeInfo",
+            classWithMethods(
+                "com/acme/TypeInfo",
+                "java/lang/Object",
+                0x0200,
+                List.of(),
+                method("isPresent", "([Ljava/lang/Object;)Z", plain(0, 4, "iconst_1"), plain(1, 172, "ireturn"))
+            ),
+            "com/acme/Type",
+            classWithMethods("com/acme/Type", "java/lang/Object", 0, List.of("com/acme/TypeInfo"))
+        );
+
+        assertThat(lowerableResolvedInvokeVirtualTarget(classes, "com/acme/Type", new MethodRef("com/acme/Type", "isPresent", "([Ljava/lang/Object;)Z")))
+            .contains(new EntryPoint("com/acme/TypeInfo", "isPresent", "([Ljava/lang/Object;)Z"));
+    }
+
+    @Test
     void lowerableResolvedInterfaceTargetResolvesParentDefaultMethod() throws Exception {
         final Map<String, ClassFile> classes = Map.of(
             "com/acme/ParentRunnable",
@@ -1792,6 +1811,22 @@ final class LambdaMetafactorySupportTest {
     ) throws Exception {
         final Method method = LambdaMetafactorySupport.class.getDeclaredMethod(
             "lowerableResolvedVirtualTarget",
+            Map.class,
+            String.class,
+            MethodRef.class
+        );
+        method.setAccessible(true);
+        return (Optional<EntryPoint>) method.invoke(null, classes, receiver, target);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Optional<EntryPoint> lowerableResolvedInvokeVirtualTarget(
+        final Map<String, ClassFile> classes,
+        final String receiver,
+        final MethodRef target
+    ) throws Exception {
+        final Method method = LambdaMetafactorySupport.class.getDeclaredMethod(
+            "lowerableResolvedInvokeVirtualTarget",
             Map.class,
             String.class,
             MethodRef.class

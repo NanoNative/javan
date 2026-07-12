@@ -2281,7 +2281,7 @@ public final class BytecodeToIR {
         final List<EntryPoint> result = new ArrayList<>();
         for (final ClassFile candidate : classes.values()) {
             if (!candidate.isInterface() && isSubtypeOf(classes, candidate.name(), methodRef.owner())) {
-                final Optional<EntryPoint> resolved = lowerableResolvedVirtualTarget(classes, candidate.name(), methodRef);
+                final Optional<EntryPoint> resolved = lowerableResolvedInvokeVirtualTarget(classes, candidate.name(), methodRef);
                 if (resolved.isPresent()) {
                     final EntryPoint entryPoint = resolved.orElseThrow();
                     if (!result.contains(entryPoint)) {
@@ -2318,7 +2318,36 @@ public final class BytecodeToIR {
         if (resolved.isEmpty()) {
             return Optional.empty();
         }
-        final EntryPoint entryPoint = resolved.orElseThrow();
+        return lowerableMethodTarget(classes, resolved.orElseThrow());
+    }
+
+    static Optional<EntryPoint> lowerableResolvedInvokeVirtualTarget(
+        final Map<String, ClassFile> classes,
+        final String receiver,
+        final MethodRef methodRef
+    ) {
+        final Optional<EntryPoint> resolved = resolvedVirtualTarget(classes, receiver, methodRef);
+        if (resolved.isPresent()) {
+            return lowerableMethodTarget(classes, resolved.orElseThrow());
+        }
+        final List<String> inspectedInterfaces = new ArrayList<>();
+        for (final String interfaceName : implementedInterfaces(classes, receiver)) {
+            if (hasMoreSpecificInterface(classes, inspectedInterfaces, interfaceName)) {
+                continue;
+            }
+            inspectedInterfaces.add(interfaceName);
+            final Optional<EntryPoint> interfaceDefault = defaultInterfaceTarget(classes, interfaceName, methodRef, new ArrayList<>());
+            if (interfaceDefault.isPresent()) {
+                return interfaceDefault;
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<EntryPoint> lowerableMethodTarget(
+        final Map<String, ClassFile> classes,
+        final EntryPoint entryPoint
+    ) {
         final ClassFile owner = classes.get(entryPoint.className());
         if (owner == null) {
             return Optional.empty();
@@ -2327,7 +2356,85 @@ public final class BytecodeToIR {
         if (method.isEmpty() || method.orElseThrow().code().isEmpty()) {
             return Optional.empty();
         }
-        return resolved;
+        return Optional.of(entryPoint);
+    }
+
+    private static List<String> implementedInterfaces(final Map<String, ClassFile> classes, final String receiver) {
+        final List<String> interfaces = new ArrayList<>();
+        String current = receiver;
+        while (current != null && !current.isEmpty()) {
+            final ClassFile classFile = classes.get(current);
+            if (classFile == null) {
+                break;
+            }
+            collectInterfaceNames(classes, classFile, interfaces, new ArrayList<>());
+            current = classFile.superName();
+        }
+        return List.copyOf(interfaces);
+    }
+
+    private static void collectInterfaceNames(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final List<String> interfaces,
+        final List<String> visited
+    ) {
+        for (final String interfaceName : classFile.interfaces()) {
+            if (visited.contains(interfaceName)) {
+                continue;
+            }
+            visited.add(interfaceName);
+            if (!interfaces.contains(interfaceName)) {
+                interfaces.add(interfaceName);
+            }
+            final ClassFile interfaceClass = classes.get(interfaceName);
+            if (interfaceClass != null) {
+                collectInterfaceNames(classes, interfaceClass, interfaces, visited);
+            }
+        }
+    }
+
+    private static boolean hasMoreSpecificInterface(
+        final Map<String, ClassFile> classes,
+        final List<String> inspectedInterfaces,
+        final String candidate
+    ) {
+        for (final String inspected : inspectedInterfaces) {
+            if (isAssignableTo(classes, inspected, candidate)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static Optional<EntryPoint> defaultInterfaceTarget(
+        final Map<String, ClassFile> classes,
+        final String interfaceName,
+        final MethodRef target,
+        final List<String> visited
+    ) {
+        if (visited.contains(interfaceName)) {
+            return Optional.empty();
+        }
+        visited.add(interfaceName);
+        final ClassFile interfaceClass = classes.get(interfaceName);
+        if (interfaceClass == null || !interfaceClass.isInterface()) {
+            return Optional.empty();
+        }
+        final Optional<MethodInfo> method = interfaceClass.method(target.name(), target.descriptor());
+        if (method.isPresent()) {
+            if (method.orElseThrow().code().isEmpty()) {
+                return Optional.empty();
+            }
+            return Optional.of(new EntryPoint(interfaceName, target.name(), target.descriptor()));
+        }
+        for (final String parentInterface : interfaceClass.interfaces()) {
+            final Optional<EntryPoint> resolved = defaultInterfaceTarget(classes, parentInterface, target, visited);
+            if (resolved.isPresent()) {
+                return resolved;
+            }
+        }
+        return Optional.empty();
     }
 
     static List<Integer> assignableTypeIds(final Map<String, ClassFile> classes, final String target) {

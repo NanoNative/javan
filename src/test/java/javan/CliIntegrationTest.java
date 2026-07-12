@@ -8151,6 +8151,54 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void inheritedDefaultVirtualMethodsBuildAndMatchJvmOutput() throws Exception {
+        final Path project = project("inherited-default-virtual-methods");
+        writeJava(project, "com.acme.TypeInfo", """
+            package com.acme;
+
+            import java.util.function.Supplier;
+
+            public interface TypeInfo {
+                default boolean isPresent(final Object... path) {
+                    return true;
+                }
+
+                default String or(final Supplier<String> supplier, final Object... path) {
+                    return supplier.get();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Type", """
+            package com.acme;
+
+            public final class Type implements TypeInfo {
+            }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Type type = new Type();
+                    System.out.println(type.isPresent());
+                    System.out.println(type.or(() -> "ok"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(run.stderr()).doesNotContain("JAVAN012");
+        assertThat(process(project, List.of(project.resolve(".javan/bin/inherited-default-virtual-methods").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\nok\n");
+    }
+
+    @Test
     void nanoHelloServiceRouteReportsDeterministicBlockerSet() throws Exception {
         final Path nanoArtifact = pinnedMavenArtifact("org.nanonative", "nano", "2025.11.3131219");
         final Path typeMapArtifact = pinnedMavenArtifact("berlin.yuna", "type-map", "2025.09.2660710");
@@ -8210,6 +8258,8 @@ final class CliIntegrationTest {
         assertThat(diagnostics).doesNotContain(
             "berlin/yuna/typemap/model/FunctionOrNull.applyWithException(Ljava/lang/Object;)Ljava/lang/Object;",
             "org/nanonative/nano/helper/ExRunnable.run()V",
+            "berlin/yuna/typemap/model/Type.isPresent([Ljava/lang/Object;)Z",
+            "berlin/yuna/typemap/model/Type.or(Ljava/util/function/Supplier;[Ljava/lang/Object;)Lberlin/yuna/typemap/model/Type;",
             "java/util/Optional.filter(Ljava/util/function/Predicate;)Ljava/util/Optional;",
             "java/util/Optional.ifPresent(Ljava/util/function/Consumer;)V",
             "java/util/Optional.map(Ljava/util/function/Function;)Ljava/util/Optional;",

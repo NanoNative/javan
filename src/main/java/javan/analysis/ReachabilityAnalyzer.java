@@ -241,7 +241,7 @@ public final class ReachabilityAnalyzer {
             return;
         }
         if (instruction.opcode() == 182 && isConcreteExactCallTarget(classes, target.owner())) {
-            final Optional<EntryPoint> resolved = lowerableResolvedVirtualTarget(classes, target.owner(), target);
+            final Optional<EntryPoint> resolved = lowerableResolvedInvokeVirtualTarget(classes, target.owner(), target);
             if (resolved.isPresent()) {
                 final EntryPoint callee = resolved.orElseThrow();
                 work.add(callee);
@@ -343,7 +343,7 @@ public final class ReachabilityAnalyzer {
             if (candidate.isInterface() || !isSubtypeOf(classes, candidate.name(), target.owner())) {
                 continue;
             }
-            final Optional<EntryPoint> resolved = lowerableResolvedVirtualTarget(classes, candidate.name(), target);
+                final Optional<EntryPoint> resolved = lowerableResolvedInvokeVirtualTarget(classes, candidate.name(), target);
             if (resolved.isPresent()) {
                 final EntryPoint callee = resolved.orElseThrow();
                 work.add(callee);
@@ -1139,11 +1139,41 @@ public final class ReachabilityAnalyzer {
         if (resolved.isEmpty()) {
             return Optional.empty();
         }
-        final Optional<MethodInfo> method = method(classes, resolved.orElseThrow());
+        return lowerableMethodTarget(classes, resolved.orElseThrow());
+    }
+
+    private static Optional<EntryPoint> lowerableResolvedInvokeVirtualTarget(
+        final Map<String, ClassFile> classes,
+        final String receiver,
+        final MethodRef target
+    ) {
+        final Optional<EntryPoint> resolved = resolvedVirtualTarget(classes, receiver, target);
+        if (resolved.isPresent()) {
+            return lowerableMethodTarget(classes, resolved.orElseThrow());
+        }
+        final List<String> inspectedInterfaces = new ArrayList<>();
+        for (final String interfaceName : implementedInterfaces(classes, receiver)) {
+            if (hasMoreSpecificInterface(classes, inspectedInterfaces, interfaceName)) {
+                continue;
+            }
+            inspectedInterfaces.add(interfaceName);
+            final Optional<EntryPoint> interfaceDefault = defaultInterfaceTarget(classes, interfaceName, target, new ArrayList<>());
+            if (interfaceDefault.isPresent()) {
+                return interfaceDefault;
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<EntryPoint> lowerableMethodTarget(
+        final Map<String, ClassFile> classes,
+        final EntryPoint entryPoint
+    ) {
+        final Optional<MethodInfo> method = method(classes, entryPoint);
         if (method.isEmpty() || method.orElseThrow().code().isEmpty()) {
             return Optional.empty();
         }
-        return resolved;
+        return Optional.of(entryPoint);
     }
 
     private static Optional<EntryPoint> lowerableResolvedInterfaceTarget(
@@ -1155,7 +1185,12 @@ public final class ReachabilityAnalyzer {
         if (concreteTarget.isPresent()) {
             return concreteTarget;
         }
+        final List<String> inspectedInterfaces = new ArrayList<>();
         for (final String interfaceName : implementedInterfaces(classes, receiver)) {
+            if (hasMoreSpecificInterface(classes, inspectedInterfaces, interfaceName)) {
+                continue;
+            }
+            inspectedInterfaces.add(interfaceName);
             if (!isAssignableTo(classes, interfaceName, target.owner())) {
                 continue;
             }
@@ -1165,6 +1200,19 @@ public final class ReachabilityAnalyzer {
             }
         }
         return Optional.empty();
+    }
+
+    private static boolean hasMoreSpecificInterface(
+        final Map<String, ClassFile> classes,
+        final List<String> inspectedInterfaces,
+        final String candidate
+    ) {
+        for (final String inspected : inspectedInterfaces) {
+            if (isAssignableTo(classes, inspected, candidate)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static List<String> implementedInterfaces(final Map<String, ClassFile> classes, final String receiver) {
@@ -1217,7 +1265,10 @@ public final class ReachabilityAnalyzer {
             return Optional.empty();
         }
         final Optional<MethodInfo> method = interfaceClass.method(target.name(), target.descriptor());
-        if (method.isPresent() && method.orElseThrow().code().isPresent()) {
+        if (method.isPresent()) {
+            if (method.orElseThrow().code().isEmpty()) {
+                return Optional.empty();
+            }
             return Optional.of(new EntryPoint(interfaceName, target.name(), target.descriptor()));
         }
         for (final String parentInterface : interfaceClass.interfaces()) {

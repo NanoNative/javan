@@ -1399,6 +1399,52 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void reachabilityResolvesVirtualCallToInheritedDefaultMethodOnConcreteOwner() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo(
+                        "main",
+                        "([Ljava/lang/String;)V",
+                        instruction(
+                            0,
+                            182,
+                            "invokevirtual",
+                            new MethodRef("com/acme/Type", "isPresent", "([Ljava/lang/Object;)Z")
+                        )
+                    )
+                ),
+                "com/acme/TypeInfo", classWithMethods(
+                    "com/acme/TypeInfo",
+                    "java/lang/Object",
+                    0x0200,
+                    List.of(),
+                    methodInfo(
+                        "isPresent",
+                        "([Ljava/lang/Object;)Z",
+                        instruction(0, 4, "iconst_1"),
+                        instruction(1, 172, "ireturn")
+                    )
+                ),
+                "com/acme/Type", classWithMethods(
+                    "com/acme/Type",
+                    "java/lang/Object",
+                    0,
+                    List.of("com/acme/TypeInfo")
+                )
+            ),
+            List.of(new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+        assertThat(graph.reachableMethods()).contains(new EntryPoint("com/acme/TypeInfo", "isPresent", "([Ljava/lang/Object;)Z"));
+    }
+
+    @Test
     void reachabilityResolvesSpecialNonConstructorCall() {
         final CallGraph graph = new ReachabilityAnalyzer().analyze(
             Map.of(

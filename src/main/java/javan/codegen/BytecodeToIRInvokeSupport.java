@@ -1319,12 +1319,13 @@ final class BytecodeToIRInvokeSupport {
         if (lowerJdkCollectionConstructorCall(methodRef, instructions, arguments, receiver)) {
             return;
         }
-        if (!classes.containsKey(methodRef.owner())) {
+        final Optional<EntryPoint> resolved = BytecodeToIR.lowerableResolvedInvokeVirtualTarget(classes, methodRef.owner(), methodRef);
+        if (resolved.isEmpty()) {
             throw unsupported(classFile, method, instruction);
         }
         final List<IrExpression> callArguments = new ArrayList<>(arguments);
         callArguments.addFirst(receiver);
-        final String symbol = symbol(new EntryPoint(methodRef.owner(), methodRef.name(), methodRef.descriptor()));
+        final String symbol = symbol(resolved.orElseThrow());
         appendCallResult(instructions, stack, descriptor.returnType(), symbol, callArguments);
     }
 

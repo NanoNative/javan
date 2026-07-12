@@ -260,7 +260,7 @@ public final class LambdaMetafactorySupport {
             }
             if (referenceKind == REF_INVOKE_VIRTUAL
                 && isSubtypeOf(classes, candidate.name(), target.owner())
-                && lowerableResolvedVirtualTarget(classes, candidate.name(), target).isPresent()) {
+                && lowerableResolvedInvokeVirtualTarget(classes, candidate.name(), target).isPresent()) {
                 return true;
             }
         }
@@ -434,7 +434,36 @@ public final class LambdaMetafactorySupport {
         if (resolved.isEmpty()) {
             return Optional.empty();
         }
-        final EntryPoint entryPoint = resolved.orElseThrow();
+        return lowerableMethodTarget(classes, resolved.orElseThrow());
+    }
+
+    private static Optional<EntryPoint> lowerableResolvedInvokeVirtualTarget(
+        final Map<String, ClassFile> classes,
+        final String receiver,
+        final MethodRef target
+    ) {
+        final Optional<EntryPoint> resolved = resolvedVirtualTarget(classes, receiver, target);
+        if (resolved.isPresent()) {
+            return lowerableMethodTarget(classes, resolved.orElseThrow());
+        }
+        final List<String> inspectedInterfaces = new ArrayList<>();
+        for (final String interfaceName : implementedInterfaces(classes, receiver)) {
+            if (hasMoreSpecificInterface(classes, inspectedInterfaces, interfaceName)) {
+                continue;
+            }
+            inspectedInterfaces.add(interfaceName);
+            final Optional<EntryPoint> interfaceDefault = defaultInterfaceTarget(classes, interfaceName, target, new ArrayList<>());
+            if (interfaceDefault.isPresent()) {
+                return interfaceDefault;
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<EntryPoint> lowerableMethodTarget(
+        final Map<String, ClassFile> classes,
+        final EntryPoint entryPoint
+    ) {
         final ClassFile owner = classes.get(entryPoint.className());
         if (owner == null) {
             return Optional.empty();
@@ -443,7 +472,7 @@ public final class LambdaMetafactorySupport {
         if (method.isEmpty() || method.orElseThrow().code().isEmpty()) {
             return Optional.empty();
         }
-        return resolved;
+        return Optional.of(entryPoint);
     }
 
     private static Optional<EntryPoint> lowerableResolvedInterfaceTarget(
