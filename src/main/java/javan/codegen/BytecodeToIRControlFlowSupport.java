@@ -35,6 +35,19 @@ final class BytecodeToIRControlFlowSupport {
         final SourceLineIndex sourceLines
     ) {
         final StackValue thrownValue = popThrowable(classFile, method, instruction, stack);
+        lowerThrownValue(classFile, method, instruction, instructions, stack, pendingExceptionHandlerStacks, sourceLines, thrownValue);
+    }
+
+    static void lowerThrownValue(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines,
+        final StackValue thrownValue
+    ) {
         final IrExpression thrown = thrownValue.expression().orElseThrow();
         final Optional<Integer> handler = exceptionHandler(classFile, method, instruction, thrownValue, instruction.offset());
         if (handler.isPresent()) {
@@ -43,7 +56,7 @@ final class BytecodeToIRControlFlowSupport {
                 throw unsupportedTypedExceptionHandler(classFile, method, instruction);
             }
             pendingExceptionHandlerStacks.put(handlerOffset, thrownValue);
-            instructions.add(IrInstruction.jump(label(handler.orElseThrow())));
+            instructions.add(IrInstruction.jump(label(handlerOffset)));
             clearStack(stack);
             return;
         }

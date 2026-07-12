@@ -7678,7 +7678,7 @@ final class CliIntegrationTest {
     }
 
     @Test
-    void tryWithResourcesSuppressedReportsExceptionHandlerBlocker() throws Exception {
+    void tryWithResourcesSuppressedBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("try-with-resources-suppressed");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -7706,11 +7706,12 @@ final class CliIntegrationTest {
             }
             """);
 
+        final String jvmOutput = runJvm(project, "com.acme.Main");
         final CliRun run = run(tempDir, "build", project.toString());
 
-        assertThat(run.exitCode()).isEqualTo(2);
-        assertThat(run.stderr()).contains("JAVAN014");
-        assertThat(run.stderr()).contains("3 handlers");
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/try-with-resources-suppressed").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("body\n1\nclose\n");
     }
 
     @Test

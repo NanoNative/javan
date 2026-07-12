@@ -1,5 +1,6 @@
 package javan.codegen;
 
+import javan.analysis.ExplicitThrowSummarySupport;
 import javan.analysis.VirtualThreadInvokePatterns;
 import javan.analysis.EntryPoint;
 import javan.classfile.ClassFile;
@@ -588,7 +589,7 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if (isConcreteExactCallTarget(classes, methodRef.owner())) {
-            lowerInstanceCall(classes, classFile, method, instruction, instructions, stack);
+            lowerInstanceCall(classes, classFile, method, instruction, instructions, stack, localDeclarations, pendingExceptionHandlerStacks, sourceLines);
             return;
         }
         final List<EntryPoint> targets = virtualTargets(classes, methodRef);
@@ -1272,7 +1273,10 @@ final class BytecodeToIRInvokeSupport {
         final MethodInfo method,
         final Instruction instruction,
         final List<IrInstruction> instructions,
-        final List<StackValue> stack
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
     ) {
         final MethodRef methodRef = instruction.methodRef().orElseThrow();
         if (isZeroArgNoopPlatformConstructor(methodRef)) {
@@ -1332,11 +1336,28 @@ final class BytecodeToIRInvokeSupport {
         if (resolved.isEmpty()) {
             throw unsupported(classFile, method, instruction);
         }
+        final Optional<ExplicitThrowSummarySupport.DirectPlatformThrow> directThrow =
+            ExplicitThrowSummarySupport.directPlatformThrow(classes, resolved.orElseThrow());
+        if (directThrow.isPresent()) {
+            routeDirectPlatformThrow(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                pendingExceptionHandlerStacks,
+                sourceLines,
+                directThrow.orElseThrow(),
+                localDeclarations
+            );
+            return;
+        }
         final List<IrExpression> callArguments = new ArrayList<>(arguments);
         callArguments.addFirst(receiver);
         final String symbol = symbol(resolved.orElseThrow());
         appendCallResult(instructions, stack, descriptor.returnType(), symbol, callArguments);
     }
+
 
     private static boolean isZeroArgNoopPlatformConstructor(final MethodRef methodRef) {
         if (!"<init>".equals(methodRef.name()) || !"()V".equals(methodRef.descriptor())) {
@@ -4063,6 +4084,39 @@ final class BytecodeToIRInvokeSupport {
             BytecodeToIRControlFlowSupport.sourceLocation(classFile, method, instruction, sourceLines)
         ));
         BytecodeToIRControlFlowSupport.clearStack(stack);
+    }
+
+    private static void routeDirectPlatformThrow(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines,
+        final ExplicitThrowSummarySupport.DirectPlatformThrow summary,
+        final Map<Integer, IrLocal> localDeclarations
+    ) {
+        final String localName = "object" + localDeclarations.size();
+        localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
+        final IrExpression local = IrExpression.objectLocal(localName);
+        final IrExpression allocation = summary.message().isPresent()
+            ? IrExpression.objectCall(
+                "javan_throwable_new_with_message",
+                List.of(IrExpression.stringLiteral(summary.throwableType()), IrExpression.stringLiteral(summary.message().orElseThrow()))
+            )
+            : IrExpression.objectCall("javan_throwable_new", List.of(IrExpression.stringLiteral(summary.throwableType())));
+        instructions.add(IrInstruction.assignObject(localName, allocation));
+        BytecodeToIRControlFlowSupport.lowerThrownValue(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            pendingExceptionHandlerStacks,
+            sourceLines,
+            StackValue.platformThrowable(summary.throwableType(), local)
+        );
     }
     static boolean isJdkCollectionOwner(final String owner) {
         if (isJdkListOrCollection(owner)) {

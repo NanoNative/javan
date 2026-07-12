@@ -1,6 +1,7 @@
 package javan.verify;
 
 import javan.analysis.EntryPoint;
+import javan.analysis.ExplicitThrowSummarySupport;
 import javan.analysis.VirtualThreadInvokePatterns;
 import javan.classfile.ClassFile;
 import javan.classfile.CodeAttribute;
@@ -457,12 +458,142 @@ public final class StaticVerifier {
         if (code.exceptionTableLength() == 0) {
             return false;
         }
+        if (supportedTryWithResourcesSuppressedCluster(classes, code)) {
+            return false;
+        }
         for (final CodeException handler : code.exceptionTable()) {
             if (!supportedExceptionHandler(classes, code, handler)) {
                 return true;
             }
         }
         return false;
+    }
+
+    private static boolean supportedTryWithResourcesSuppressedCluster(
+        final Map<String, ClassFile> classes,
+        final CodeAttribute code
+    ) {
+        if (code.exceptionTable().size() != 3) {
+            return false;
+        }
+        final CodeException primaryHandler = code.exceptionTable().get(0);
+        final CodeException closeHandler = code.exceptionTable().get(1);
+        final CodeException outerHandler = code.exceptionTable().get(2);
+        if (!"java/lang/Throwable".equals(primaryHandler.catchType().orElse(null))) {
+            return false;
+        }
+        if (!"java/lang/Throwable".equals(closeHandler.catchType().orElse(null))) {
+            return false;
+        }
+        if (outerHandler.catchType().isEmpty() || !isPlatformThrowable(outerHandler.catchType().orElseThrow())) {
+            return false;
+        }
+        if (!rangeIsExplicitThrow(code, primaryHandler.startPc(), primaryHandler.endPc())) {
+            return false;
+        }
+        if (!rangeIsExactLeafThrowInvoke(classes, code, closeHandler.startPc(), closeHandler.endPc(), "java/lang/Throwable")) {
+            return false;
+        }
+        final Optional<Instruction> primaryEntry = instructionAtOffset(code, primaryHandler.handlerPc());
+        final Optional<Instruction> closeEntry = instructionAtOffset(code, closeHandler.handlerPc());
+        if (primaryEntry.isEmpty() || closeEntry.isEmpty()) {
+            return false;
+        }
+        final int primaryLocal = astoreLocalIndex(primaryEntry.orElseThrow());
+        final int closeLocal = astoreLocalIndex(closeEntry.orElseThrow());
+        if (primaryLocal < 0 || closeLocal < 0) {
+            return false;
+        }
+        return handlerAddsSuppressedAndRethrowsPrimary(code, closeHandler.handlerPc(), primaryLocal, closeLocal);
+    }
+
+    private static boolean rangeIsExplicitThrow(
+        final CodeAttribute code,
+        final int startPc,
+        final int endPc
+    ) {
+        int hasAthrow = 0;
+        for (final Instruction instruction : code.instructions()) {
+            if (instruction.offset() < startPc || instruction.offset() >= endPc) {
+                continue;
+            }
+            if (instruction.opcode() == 191) {
+                hasAthrow = 1;
+            }
+            if (!supportedExplicitThrowRangeInstruction(instruction)) {
+                return false;
+            }
+        }
+        return hasAthrow == 1;
+    }
+
+    private static boolean rangeIsExactLeafThrowInvoke(
+        final Map<String, ClassFile> classes,
+        final CodeAttribute code,
+        final int startPc,
+        final int endPc,
+        final String catchType
+    ) {
+        int hasLeafThrowInvoke = 0;
+        final List<Instruction> instructions = code.instructions();
+        for (int index = 0; index < instructions.size(); index++) {
+            final Instruction instruction = instructions.get(index);
+            if (instruction.offset() < startPc || instruction.offset() >= endPc) {
+                continue;
+            }
+            if (supportedExactLeafThrowInvoke(classes, instruction, catchType)) {
+                hasLeafThrowInvoke = 1;
+            }
+            if (!supportedExactLeafThrowSequenceInstruction(classes, instructions, index, catchType)
+                && !supportedExactHandlerFlowInstruction(instruction)) {
+                return false;
+            }
+        }
+        return hasLeafThrowInvoke == 1;
+    }
+
+    private static boolean handlerAddsSuppressedAndRethrowsPrimary(
+        final CodeAttribute code,
+        final int handlerPc,
+        final int primaryLocal,
+        final int closeLocal
+    ) {
+        final List<Instruction> instructions = code.instructions();
+        int handlerIndex = -1;
+        for (int index = 0; index < instructions.size(); index++) {
+            if (instructions.get(index).offset() == handlerPc) {
+                handlerIndex = index;
+                break;
+            }
+        }
+        if (handlerIndex < 0) {
+            return false;
+        }
+        int hasAddSuppressed = 0;
+        for (int index = handlerIndex + 1; index < instructions.size(); index++) {
+            if (index + 2 < instructions.size()
+                && aloadLocalIndex(instructions.get(index)) == primaryLocal
+                && aloadLocalIndex(instructions.get(index + 1)) == closeLocal
+                && invokesThrowableAddSuppressed(instructions.get(index + 2))) {
+                hasAddSuppressed = 1;
+            }
+            if (index + 1 < instructions.size()
+                && aloadLocalIndex(instructions.get(index)) == primaryLocal
+                && instructions.get(index + 1).opcode() == 191) {
+                return hasAddSuppressed == 1;
+            }
+        }
+        return false;
+    }
+
+    private static boolean invokesThrowableAddSuppressed(final Instruction instruction) {
+        if (instruction.opcode() != 182 || instruction.methodRef().isEmpty()) {
+            return false;
+        }
+        final MethodRef methodRef = instruction.methodRef().orElseThrow();
+        return "java/lang/Throwable".equals(methodRef.owner())
+            && "addSuppressed".equals(methodRef.name())
+            && "(Ljava/lang/Throwable;)V".equals(methodRef.descriptor());
     }
 
     private static boolean supportedExceptionHandler(final Map<String, ClassFile> classes, final CodeAttribute code, final CodeException handler) {
@@ -485,7 +616,9 @@ public final class StaticVerifier {
             return false;
         }
         int hasAthrow = 0;
-        for (final Instruction instruction : code.instructions()) {
+        final List<Instruction> instructions = code.instructions();
+        for (int index = 0; index < instructions.size(); index++) {
+            final Instruction instruction = instructions.get(index);
             if (instruction.offset() < handler.startPc()) {
                 continue;
             }
@@ -495,7 +628,13 @@ public final class StaticVerifier {
             if (instruction.opcode() == 191) {
                 hasAthrow = 1;
             }
+            if (supportedExactLeafThrowInvoke(classes, instruction, handler.catchType().orElseThrow())) {
+                hasAthrow = 1;
+            }
             if (!supportedExplicitThrowRangeInstruction(instruction)
+                && !supportedExactLeafThrowSequenceInstruction(classes, instructions, index, handler.catchType().orElseThrow())
+                && !supportedExactNoopInvokeSetupInstruction(classes, instructions, index)
+                && !supportedExactHandlerFlowInstruction(instruction)
                 && !supportedProtectedFinallyRethrowInstruction(code, instruction)) {
                 return false;
             }
@@ -504,6 +643,112 @@ public final class StaticVerifier {
             return true;
         }
         return false;
+    }
+
+    private static boolean supportedExactLeafThrowInvoke(
+        final Map<String, ClassFile> classes,
+        final Instruction instruction,
+        final String catchType
+    ) {
+        final Optional<EntryPoint> target = exactInvokedEntryPoint(classes, instruction);
+        if (target.isEmpty()) {
+            return false;
+        }
+        final Optional<ExplicitThrowSummarySupport.DirectPlatformThrow> summary =
+            ExplicitThrowSummarySupport.directPlatformThrow(classes, target.orElseThrow());
+        if (summary.isEmpty()) {
+            return false;
+        }
+        return JdkCallSupport.isPlatformThrowableAssignable(summary.orElseThrow().throwableType(), catchType);
+    }
+
+    private static boolean supportedExactLeafThrowSequenceInstruction(
+        final Map<String, ClassFile> classes,
+        final List<Instruction> instructions,
+        final int index,
+        final String catchType
+    ) {
+        final Instruction instruction = instructions.get(index);
+        if (supportedExactLeafThrowInvoke(classes, instruction, catchType)) {
+            return true;
+        }
+        if (!isAload(instruction.opcode())) {
+            return false;
+        }
+        if (index + 1 >= instructions.size()) {
+            return false;
+        }
+        return supportedExactLeafThrowInvoke(classes, instructions.get(index + 1), catchType);
+    }
+
+    private static boolean supportedExactNoopInvokeSetupInstruction(
+        final Map<String, ClassFile> classes,
+        final List<Instruction> instructions,
+        final int index
+    ) {
+        final Instruction instruction = instructions.get(index);
+        if (instruction.opcode() == 183) {
+            final Optional<EntryPoint> target = exactInvokedEntryPoint(classes, instruction);
+            if (target.isEmpty()) {
+                return false;
+            }
+            return ExplicitThrowSummarySupport.trivialNoop(classes, target.orElseThrow());
+        }
+        if (!isAload(instruction.opcode()) && !isAstore(instruction.opcode())) {
+            return false;
+        }
+        if (index + 1 >= instructions.size()) {
+            return false;
+        }
+        final Instruction next = instructions.get(index + 1);
+        if (next.opcode() == 183) {
+            final Optional<EntryPoint> target = exactInvokedEntryPoint(classes, next);
+            if (target.isEmpty()) {
+                return false;
+            }
+            return ExplicitThrowSummarySupport.trivialNoop(classes, target.orElseThrow());
+        }
+        return supportedExactLeafThrowInvoke(classes, next, "java/lang/Throwable");
+    }
+
+    private static boolean supportedExactHandlerFlowInstruction(final Instruction instruction) {
+        if (isAload(instruction.opcode()) || isAstore(instruction.opcode())) {
+            return true;
+        }
+        return instruction.opcode() == 167;
+    }
+
+    private static Optional<EntryPoint> exactInvokedEntryPoint(
+        final Map<String, ClassFile> classes,
+        final Instruction instruction
+    ) {
+        final Optional<MethodRef> methodRef = instruction.methodRef();
+        if (methodRef.isEmpty()) {
+            return Optional.empty();
+        }
+        final MethodRef target = methodRef.orElseThrow();
+        if (instruction.opcode() == 184) {
+            if (!classes.containsKey(target.owner())) {
+                return Optional.empty();
+            }
+            return Optional.of(new EntryPoint(target.owner(), target.name(), target.descriptor()));
+        }
+        if (instruction.opcode() != 182 && instruction.opcode() != 183) {
+            return Optional.empty();
+        }
+        String current = target.owner();
+        while (classes.containsKey(current)) {
+            final ClassFile owner = classes.get(current);
+            if (owner.method(target.name(), target.descriptor()).isPresent()) {
+                final MethodInfo method = owner.method(target.name(), target.descriptor()).orElseThrow();
+                if (method.code().isPresent()) {
+                    return Optional.of(new EntryPoint(current, target.name(), target.descriptor()));
+                }
+                return Optional.empty();
+            }
+            current = owner.superName();
+        }
+        return Optional.empty();
     }
 
     private static boolean supportedSynchronizedMonitorHandler(final CodeAttribute code, final CodeException handler) {
