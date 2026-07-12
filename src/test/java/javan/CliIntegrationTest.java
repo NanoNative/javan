@@ -7715,6 +7715,46 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void sharedTypedHandlerReturningNullBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("shared-typed-handler-returning-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                private static String parse(final boolean left, final int value) {
+                    try {
+                        if (left) {
+                            throw new IllegalArgumentException("left");
+                        }
+                        if (value >= 0 && value < 1) {
+                            return "ok";
+                        }
+                        return null;
+                    } catch (final IllegalArgumentException exception) {
+                        return null;
+                    }
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(parse(true, 0));
+                    System.out.println(parse(false, 0));
+                    System.out.println(parse(false, 2));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/shared-typed-handler-returning-null").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("null\nok\nnull\n");
+    }
+
+    @Test
     void optionalIfPresentOrElsePresentBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("optional-if-present-or-else-present");
         writeJava(project, "com.acme.Main", """

@@ -461,12 +461,129 @@ public final class StaticVerifier {
         if (supportedTryWithResourcesSuppressedCluster(classes, code)) {
             return false;
         }
+        if (supportedSharedTypedNullReturnCluster(classes, code)) {
+            return false;
+        }
         for (final CodeException handler : code.exceptionTable()) {
             if (!supportedExceptionHandler(classes, code, handler)) {
                 return true;
             }
         }
         return false;
+    }
+
+    private static boolean supportedSharedTypedNullReturnCluster(
+        final Map<String, ClassFile> classes,
+        final CodeAttribute code
+    ) {
+        if (code.exceptionTable().size() < 2) {
+            return false;
+        }
+        final CodeException first = code.exceptionTable().getFirst();
+        if (first.catchType().isEmpty() || !isPlatformThrowable(first.catchType().orElseThrow())) {
+            return false;
+        }
+        final String catchType = first.catchType().orElseThrow();
+        final int handlerPc = first.handlerPc();
+        if (!isSharedTypedNullReturnHandlerBody(code, handlerPc)) {
+            return false;
+        }
+        int hasThrowableProducer = 0;
+        for (final CodeException handler : code.exceptionTable()) {
+            if (!catchType.equals(handler.catchType().orElse(null))) {
+                return false;
+            }
+            if (handler.handlerPc() != handlerPc) {
+                return false;
+            }
+            final int rangeState = sharedTypedNullReturnRangeState(classes, code, handler, catchType);
+            if (rangeState < 0) {
+                return false;
+            }
+            if (rangeState == 1) {
+                hasThrowableProducer = 1;
+            }
+        }
+        return hasThrowableProducer == 1;
+    }
+
+    private static boolean isSharedTypedNullReturnHandlerBody(
+        final CodeAttribute code,
+        final int handlerPc
+    ) {
+        final Optional<Instruction> first = instructionAtOffset(code, handlerPc);
+        if (first.isEmpty() || astoreLocalIndex(first.orElseThrow()) < 0) {
+            return false;
+        }
+        final Optional<Instruction> second = instructionAtOffset(code, nextInstructionOffset(first.orElseThrow()));
+        if (second.isEmpty() || second.orElseThrow().opcode() != 1) {
+            return false;
+        }
+        final Optional<Instruction> third = instructionAtOffset(code, nextInstructionOffset(second.orElseThrow()));
+        if (third.isEmpty()) {
+            return false;
+        }
+        return third.orElseThrow().opcode() == 176;
+    }
+
+    private static int sharedTypedNullReturnRangeState(
+        final Map<String, ClassFile> classes,
+        final CodeAttribute code,
+        final CodeException handler,
+        final String catchType
+    ) {
+        int hasThrowableProducer = 0;
+        final List<Instruction> instructions = code.instructions();
+        for (int index = 0; index < instructions.size(); index++) {
+            final Instruction instruction = instructions.get(index);
+            if (instruction.offset() < handler.startPc()) {
+                continue;
+            }
+            if (instruction.offset() >= handler.endPc()) {
+                continue;
+            }
+            if (instruction.opcode() == 191 || supportedExactLeafThrowInvoke(classes, instruction, catchType)) {
+                hasThrowableProducer = 1;
+            }
+            if (!supportedExplicitThrowRangeInstruction(instruction)
+                && !supportedExactLeafThrowSequenceInstruction(classes, instructions, index, catchType)
+                && !supportedSharedTypedNullReturnProtectedInstruction(instruction)) {
+                return -1;
+            }
+        }
+        return hasThrowableProducer;
+    }
+
+    private static boolean supportedSharedTypedNullReturnProtectedInstruction(final Instruction instruction) {
+        final int opcode = instruction.opcode();
+        if (opcode == 1) {
+            return true;
+        }
+        if (opcode >= 2 && opcode <= 8) {
+            return true;
+        }
+        if (opcode == 16 || opcode == 17) {
+            return true;
+        }
+        if (opcode == 21 || (opcode >= 26 && opcode <= 29)) {
+            return true;
+        }
+        if (opcode == 54 || (opcode >= 59 && opcode <= 62)) {
+            return true;
+        }
+        if (isAload(opcode) || isAstore(opcode)) {
+            return true;
+        }
+        if (opcode >= 153 && opcode <= 166) {
+            return true;
+        }
+        if (opcode == 176 || opcode == 177) {
+            return true;
+        }
+        if (opcode == 190 || opcode == 192 || opcode == 193) {
+            return true;
+        }
+        return opcode == 50;
     }
 
     private static boolean supportedTryWithResourcesSuppressedCluster(
