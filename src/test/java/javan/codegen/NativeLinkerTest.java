@@ -39,6 +39,24 @@ final class NativeLinkerTest {
     }
 
     @Test
+    void windowsExecutableExtensionsFallbackToDefaultsWhenPathExtIsBlank() {
+        assertThat(NativeLinker.windowsExecutableExtensionsForValue("  "))
+            .containsExactly(".exe", ".cmd", ".bat", ".com");
+    }
+
+    @Test
+    void windowsExecutableExtensionsNormalizesConfiguredEntries() {
+        assertThat(NativeLinker.windowsExecutableExtensionsForValue("EXE;.cmd; bat ; ;.COM"))
+            .containsExactly(".EXE", ".cmd", ".bat", ".COM");
+    }
+
+    @Test
+    void windowsExecutableExtensionsFallbackWhenConfiguredEntriesAreAllBlank() {
+        assertThat(NativeLinker.windowsExecutableExtensionsForValue(" ;  ; "))
+            .containsExactly(".exe", ".cmd", ".bat", ".com");
+    }
+
+    @Test
     void windowsHostResolvesExeSuffixFromPathEntry() throws Exception {
         final Path compiler = Files.createFile(tempDir.resolve("gcc.exe"));
         assertThat(compiler.toFile().setExecutable(true)).isTrue();

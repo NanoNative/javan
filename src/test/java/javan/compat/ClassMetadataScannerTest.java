@@ -10,6 +10,7 @@ import javax.tools.JavaCompiler;
 import javax.tools.ToolProvider;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
@@ -127,6 +128,133 @@ final class ClassMetadataScannerTest {
         assertThatThrownBy(() -> withJavaHome(fakeHome, () -> new ClassMetadataScanner().scanCurrentJdk(tempDir.resolve("out-missing"))))
             .isInstanceOf(IOException.class)
             .hasMessageContaining("Unable to locate runtime JDK inventory source");
+    }
+
+    @Test
+    void scanLayoutIgnoresPlainClasspathFilesThatAreNotJarOrDirectory() throws Exception {
+        final Path root = tempDir.resolve("plain-classpath-layout");
+        final Path appClasses = root.resolve("app-classes");
+        final Path plainFile = root.resolve("libs/readme.txt");
+        compileClass(appClasses, "com.acme.Main");
+        Files.createDirectories(plainFile.getParent());
+        Files.writeString(plainFile, "plain");
+        final ProjectLayout layout = new ProjectLayout(
+            root,
+            appClasses,
+            InputKind.CLASSES_DIRECTORY,
+            BuildTool.CLASSES,
+            List.of(),
+            List.of(),
+            List.of(appClasses),
+            List.of(plainFile),
+            root.resolve("target"),
+            "demo",
+            List.of()
+        );
+
+        final List<ClassMetadata> metadata = new ClassMetadataScanner().scanLayout(layout);
+
+        assertThat(metadata).extracting(ClassMetadata::name).containsExactly("com/acme/Main");
+    }
+
+    @Test
+    void scanCurrentJdkSkipsNonJmodEntries() throws Exception {
+        final Path fakeHome = tempDir.resolve("fake-jdk-extra-files");
+        final Path classes = tempDir.resolve("jdk-extra-classes");
+        compileClass(classes, "jdkfake.ModuleClass");
+        final Path jmods = fakeHome.resolve("jmods");
+        final Path archiveRoot = tempDir.resolve("jmod-extra-content");
+        Files.createDirectories(archiveRoot.resolve("classes/jdkfake"));
+        Files.copy(classes.resolve("jdkfake/ModuleClass.class"), archiveRoot.resolve("classes/jdkfake/ModuleClass.class"));
+        writeArchive(jmods.resolve("java.base.jmod"), archiveRoot);
+        Files.writeString(jmods.resolve("README.txt"), "ignore");
+
+        final List<ClassMetadata> metadata = withJavaHome(fakeHome, () ->
+            new ClassMetadataScanner().scanCurrentJdk(tempDir.resolve("out-extra-jmods"))
+        );
+
+        assertThat(metadata).singleElement().extracting(ClassMetadata::moduleName).isEqualTo("java.base");
+    }
+
+    @Test
+    void scanCurrentJdkFailsWhenSyntheticJimageExtractionFails() throws Exception {
+        final Path fakeHome = tempDir.resolve("fake-jdk-jimage-fail");
+        final Path modulesImage = fakeHome.resolve("lib/modules");
+        final Path jimage = fakeHome.resolve("bin/jimage");
+        Files.createDirectories(modulesImage.getParent());
+        Files.writeString(modulesImage, "synthetic");
+        writeExecutableScript(
+            jimage,
+            """
+                #!/bin/sh
+                exit 7
+                """
+        );
+
+        assertThatThrownBy(() -> withJavaHome(fakeHome, () ->
+            new ClassMetadataScanner().scanCurrentJdk(tempDir.resolve("out-jimage-fail"))
+        ))
+            .isInstanceOf(IOException.class)
+            .hasMessageContaining("Unable to extract runtime image")
+            .hasMessageContaining("lib/modules");
+    }
+
+    @Test
+    void scanCurrentJdkSkipsNonDirectoryJimageEntries() throws Exception {
+        final Path fakeHome = tempDir.resolve("fake-jdk-jimage-mixed");
+        final Path modulesImage = fakeHome.resolve("lib/modules");
+        final Path jimage = fakeHome.resolve("bin/jimage");
+        final Path classes = tempDir.resolve("jimage-mixed-classes");
+        compileClass(classes, "imgfake.ImageClass");
+        final Path classFile = classes.resolve("imgfake/ImageClass.class");
+        Files.createDirectories(modulesImage.getParent());
+        Files.writeString(modulesImage, "synthetic");
+        writeExecutableScript(
+            jimage,
+            """
+                #!/bin/sh
+                set -eu
+                dest="$3"
+                mkdir -p "$dest/fake.module/imgfake"
+                cp "%s" "$dest/fake.module/imgfake/ImageClass.class"
+                printf 'ignore' > "$dest/README.txt"
+                """
+                .formatted(classFile.toAbsolutePath())
+        );
+
+        final List<ClassMetadata> metadata = withJavaHome(fakeHome, () ->
+            new ClassMetadataScanner().scanCurrentJdk(tempDir.resolve("out-jimage-mixed"))
+        );
+
+        assertThat(metadata).singleElement().extracting(ClassMetadata::name).isEqualTo("imgfake/ImageClass");
+    }
+
+    @Test
+    void javaHomeFallsBackToEnvironmentWhenSystemPropertyIsBlank() throws Exception {
+        final Method method = ClassMetadataScanner.class.getDeclaredMethod("javaHome");
+        method.setAccessible(true);
+        final String previous = System.getProperty("java.home");
+        try {
+            System.setProperty("java.home", "   ");
+            final String value = (String) method.invoke(null);
+            assertThat(value).isEqualTo(System.getenv("JAVA_HOME"));
+        } finally {
+            if (previous == null) {
+                System.clearProperty("java.home");
+            } else {
+                System.setProperty("java.home", previous);
+            }
+        }
+    }
+
+    @Test
+    void cacheNameFallsBackToArchiveBaseWhenPathHasNoFileName() throws Exception {
+        final Method method = ClassMetadataScanner.class.getDeclaredMethod("cacheName", Path.class);
+        method.setAccessible(true);
+
+        final String cacheName = (String) method.invoke(null, Path.of("/"));
+
+        assertThat(cacheName).startsWith("archive-");
     }
 
     @Test

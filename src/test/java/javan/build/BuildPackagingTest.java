@@ -6,6 +6,7 @@ import javan.detect.ProjectLayout;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -13,6 +14,7 @@ import java.util.Optional;
 import java.util.jar.JarFile;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 final class BuildPackagingTest {
     @TempDir
@@ -38,6 +40,35 @@ final class BuildPackagingTest {
         assertThat(Files.readString(layout.outputDirectory().resolve("dist/resources/banner.txt"))).isEqualTo("banner");
         assertThat(Files.readString(layout.outputDirectory().resolve("reports/resources.json"))).contains("\"resourceCount\": 2");
         assertThat(Files.readString(layout.outputDirectory().resolve("reports/resources.md"))).contains("| `banner.txt` |");
+    }
+
+    @Test
+    void resourceBundlerSkipsMissingClassFoldersAndWritesEmptyReports() throws Exception {
+        final Path missing = tempDir.resolve("missing");
+        final ProjectLayout layout = layout(tempDir, tempDir.resolve(".javan"), missing);
+
+        final List<ResourceBundler.ResourceFile> resources = new ResourceBundler().bundle(layout);
+
+        assertThat(resources).isEmpty();
+        assertThat(Files.readString(layout.outputDirectory().resolve("reports/resources.json"))).contains("\"resourceCount\": 0");
+        assertThat(Files.readString(layout.outputDirectory().resolve("reports/resources.md"))).contains("Resource files copied: 0");
+    }
+
+    @Test
+    void resourceBundlerRejectsEscapingOutputPaths() throws Exception {
+        final Method method = ResourceBundler.class.getDeclaredMethod("copy", List.class, Path.class);
+        method.setAccessible(true);
+        final Path source = Files.writeString(tempDir.resolve("payload.txt"), "payload");
+
+        assertThatThrownBy(() -> method.invoke(
+            null,
+            List.of(new ResourceBundler.ResourceFile("../escape.txt", source, Files.size(source))),
+            tempDir.resolve(".javan/resources")
+        ))
+            .satisfies(throwable -> {
+                assertThat(throwable.getCause()).isInstanceOf(java.io.IOException.class);
+                assertThat(throwable.getCause()).hasMessage("Resource path escapes output directory: ../escape.txt");
+            });
     }
 
     @Test

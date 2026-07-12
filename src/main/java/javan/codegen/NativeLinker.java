@@ -298,7 +298,10 @@ public final class NativeLinker {
     }
 
     private static List<String> windowsExecutableExtensions() {
-        final String pathExt = System.getenv("PATHEXT");
+        return windowsExecutableExtensionsForValue(System.getenv("PATHEXT"));
+    }
+
+    static List<String> windowsExecutableExtensionsForValue(final String pathExt) {
         if (Strings2.isBlank(pathExt)) {
             return List.of(".exe", ".cmd", ".bat", ".com");
         }
