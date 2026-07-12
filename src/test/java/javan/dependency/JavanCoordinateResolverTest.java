@@ -71,6 +71,16 @@ final class JavanCoordinateResolverTest {
     }
 
     @Test
+    void resolveMapsWhitespaceCoordinateWithSingleGroupArtifactSeparator() throws Exception {
+        final Path repository = tempDir.resolve("repo");
+        final JavanDependency dependency = new JavanDependency("main", "org.example:demo 2.0.0", "coordinate", Optional.empty(), 4);
+
+        final JavanDependency resolved = new JavanCoordinateResolver(List.of(repository)).resolve(dependency);
+
+        assertThat(resolved.path()).contains(repository.resolve("org/example/demo/2.0.0/demo-2.0.0.jar").toAbsolutePath().normalize());
+    }
+
+    @Test
     void resolveMapsTabSeparatedCoordinateToLocalJarPath() throws Exception {
         final Path repository = tempDir.resolve("repo");
         final JavanDependency dependency = new JavanDependency("main", "com.acme:math\t1.2.3", "coordinate", Optional.empty(), 4);
@@ -251,6 +261,16 @@ final class JavanCoordinateResolverTest {
             .isInstanceOf(java.io.IOException.class)
             .hasMessageContaining("Invalid javan.mod coordinate")
             .hasMessageContaining("com.acme::1.2.3");
+    }
+
+    @Test
+    void resolveRejectsCoordinateWithBlankVersionSegment() {
+        final JavanDependency dependency = new JavanDependency("main", "com.acme:math:   ", "coordinate", Optional.empty(), 4);
+
+        assertThatThrownBy(() -> new JavanCoordinateResolver(List.of(tempDir)).resolve(dependency))
+            .isInstanceOf(java.io.IOException.class)
+            .hasMessageContaining("Invalid javan.mod coordinate")
+            .hasMessageContaining("com.acme:math:");
     }
 
     @Test
