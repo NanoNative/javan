@@ -423,6 +423,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void mapRemoveIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Map",
+            "remove",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void mapClearIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Map",
+            "clear",
+            "()V"
+        ))).isTrue();
+    }
+
+    @Test
     void throwableAddSuppressedIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/Throwable",

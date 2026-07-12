@@ -8433,6 +8433,98 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void mapRemoveExistingBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-remove-existing");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, String> values = new HashMap<>();
+                    values.put("hello", "world");
+                    System.out.println(values.remove("hello"));
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-remove-existing").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("world\n0\n");
+    }
+
+    @Test
+    void mapRemoveMissingBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-remove-missing");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, String> values = new HashMap<>();
+                    values.put("hello", "world");
+                    System.out.println(values.remove("missing") == null);
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-remove-missing").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n1\n");
+    }
+
+    @Test
+    void mapClearBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-clear");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, String> values = new HashMap<>();
+                    values.put("hello", "world");
+                    values.put("later", "again");
+                    values.clear();
+                    System.out.println(values.size());
+                    System.out.println(values.isEmpty());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-clear").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("0\ntrue\n");
+    }
+
+    @Test
     void inheritedDefaultVirtualMethodsBuildAndMatchJvmOutput() throws Exception {
         final Path project = project("inherited-default-virtual-methods");
         writeJava(project, "com.acme.TypeInfo", """
@@ -8553,7 +8645,9 @@ final class CliIntegrationTest {
             "java/util/function/BiConsumer.accept(Ljava/lang/Object;Ljava/lang/Object;)V",
             "java/lang/Runnable.run()V",
             "java/util/Map.of(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;",
+            "java/util/Map.clear()V",
             "java/util/Map.computeIfAbsent(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;",
+            "java/util/Map.remove(Ljava/lang/Object;)Ljava/lang/Object;",
             "java/util/concurrent/ConcurrentHashMap.newKeySet()Ljava/util/concurrent/ConcurrentHashMap$KeySetView;",
             "java/util/concurrent/CopyOnWriteArrayList.<init>()V",
             "java/util/Set.add(Ljava/lang/Object;)Z",
