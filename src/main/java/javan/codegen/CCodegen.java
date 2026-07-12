@@ -75,6 +75,7 @@ public final class CCodegen {
         c.append(System.lineSeparator());
         emitAllocators(program, c);
         emitEnumOrdinalHelpers(program, c);
+        emitEnumValueOfHelpers(program, c);
         emitThreadHelpers(program, c);
         for (final IrDispatch dispatch : program.dispatches()) {
             emitDispatch(program, dispatch, c);
@@ -139,6 +140,7 @@ public final class CCodegen {
         c.append(System.lineSeparator());
         emitAllocators(program, c);
         emitEnumOrdinalHelpers(program, c);
+        emitEnumValueOfHelpers(program, c);
         emitThreadHelpers(program, c);
         for (final IrDispatch dispatch : program.dispatches()) {
             emitDispatch(program, dispatch, c);
@@ -374,6 +376,32 @@ public final class CCodegen {
             }
             c.append("    javan_panic(\"invalid enum constant\");").append(System.lineSeparator());
             c.append("    return -1;").append(System.lineSeparator());
+            c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+        }
+    }
+
+    private static void emitEnumValueOfHelpers(final IrProgram program, final StringBuilder c) {
+        for (final IrClass classInfo : program.classes()) {
+            if (classInfo.enumConstants().isEmpty()) {
+                continue;
+            }
+            c.append("static void* ")
+                .append(enumValueOfSymbol(classInfo.jvmName()))
+                .append("(void* value) {")
+                .append(System.lineSeparator());
+            c.append("    if (value == 0) {").append(System.lineSeparator());
+            c.append("        javan_panic(\"null enum name\");").append(System.lineSeparator());
+            c.append("    }").append(System.lineSeparator());
+            for (final String constant : classInfo.enumConstants()) {
+                c.append("    if (javan_string_equals((const char*) value, ")
+                    .append(staticFieldSymbol(classInfo.jvmName(), constant))
+                    .append(")) { return ")
+                    .append(staticFieldSymbol(classInfo.jvmName(), constant))
+                    .append("; }")
+                    .append(System.lineSeparator());
+            }
+            c.append("    javan_panic(\"invalid enum constant\");").append(System.lineSeparator());
+            c.append("    return 0;").append(System.lineSeparator());
             c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
         }
     }
@@ -2215,6 +2243,10 @@ public final class CCodegen {
 
     private static String enumOrdinalSymbol(final String className) {
         return "javan_enum_ordinal_" + sanitize(className);
+    }
+
+    private static String enumValueOfSymbol(final String className) {
+        return "javan_enum_value_of_" + sanitize(className);
     }
 
     private static void emitPanicAt(

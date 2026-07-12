@@ -8771,7 +8771,7 @@ final class CliIntegrationTest {
     }
 
     @Test
-    void enumValueOfFailsDuringCheck() throws Exception {
+    void enumValueOfBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("enum-value-of");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -8794,10 +8794,44 @@ final class CliIntegrationTest {
             }
             """);
 
-        final CliRun run = run(tempDir, "check", project.toString());
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
 
-        assertThat(run.exitCode()).isEqualTo(2);
-        assertThat(run.stderr()).contains("error[JAVAN015]", "Enum.valueOf");
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/enum-value-of").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("RED\n");
+    }
+
+    @Test
+    void enumValueOfInvalidConstantFailsAtRuntime() throws Exception {
+        final Path project = project("enum-value-of-invalid");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Color.valueOf("GREEN").name());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Color", """
+            package com.acme;
+
+            public enum Color {
+                RED,
+                BLUE
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/enum-value-of-invalid").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("[JAVAN-RUNTIME-PANIC]", "invalid enum constant");
     }
 
     @Test

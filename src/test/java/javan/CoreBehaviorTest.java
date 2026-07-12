@@ -1039,7 +1039,7 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void reachabilityRejectsDirectEnumValueOfEntry() {
+    void reachabilityAcceptsDirectEnumValueOfEntry() {
         final CallGraph graph = new ReachabilityAnalyzer().analyze(
             Map.of(
                 "com/acme/Color", classWithMethods(
@@ -1053,12 +1053,11 @@ final class CoreBehaviorTest {
             List.of(new EntryPoint("com/acme/Color", "valueOf", "(Ljava/lang/String;)Lcom/acme/Color;"))
         );
 
-        assertThat(graph.diagnostics()).hasSize(1);
-        assertThat(graph.diagnostics().getFirst().code()).isEqualTo("JAVAN015");
+        assertThat(graph.diagnostics()).isEmpty();
     }
 
     @Test
-    void reachabilityRejectsReachableEnumValueOf() {
+    void reachabilityAcceptsReachableEnumValueOf() {
         final CallGraph graph = new ReachabilityAnalyzer().analyze(
             Map.of(
                 "com/acme/Main", classWithMethods(
@@ -1073,9 +1072,7 @@ final class CoreBehaviorTest {
             List.of(new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"))
         );
 
-        assertThat(graph.diagnostics()).hasSize(1);
-        assertThat(graph.diagnostics().getFirst().code()).isEqualTo("JAVAN015");
-        assertThat(graph.diagnostics().getFirst().subject()).isEqualTo("com/acme/Color.valueOf(Ljava/lang/String;)Lcom/acme/Color;");
+        assertThat(graph.diagnostics()).isEmpty();
     }
 
     @Test

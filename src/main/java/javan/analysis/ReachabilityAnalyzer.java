@@ -77,7 +77,8 @@ public final class ReachabilityAnalyzer {
                     ));
                     continue;
                 }
-                if (isUnsupportedEnumSyntheticEntry(expandedClasses, current)) {
+                if (isUnsupportedEnumSyntheticEntry(expandedClasses, current)
+                    && !isSupportedEnumSyntheticEntry(expandedClasses, current)) {
                     diagnostics.add(unsupportedEnumValueOfDiagnostic(current, current.display()));
                     continue;
                 }
@@ -453,6 +454,24 @@ public final class ReachabilityAnalyzer {
         return ("(Ljava/lang/String;)L" + entry.className() + ";").equals(entry.descriptor());
     }
 
+    private static boolean isSupportedEnumSyntheticEntry(final Map<String, ClassFile> classes, final EntryPoint entry) {
+        final ClassFile owner = classes.get(entry.className());
+        if (owner == null || !owner.isEnum()) {
+            return false;
+        }
+        if ("ordinal".equals(entry.methodName()) && "()I".equals(entry.descriptor())) {
+            return true;
+        }
+        if ("valueOf".equals(entry.methodName())
+            && ("(Ljava/lang/String;)L" + entry.className() + ";").equals(entry.descriptor())) {
+            return true;
+        }
+        if (!"values".equals(entry.methodName())) {
+            return false;
+        }
+        return entry.descriptor().equals("()[L" + entry.className() + ";");
+    }
+
     private static Diagnostic unsupportedEnumValueOfDiagnostic(final EntryPoint current, final String subject) {
         return Diagnostic.error(
             "JAVAN015",
@@ -471,6 +490,10 @@ public final class ReachabilityAnalyzer {
             return false;
         }
         if ("ordinal".equals(target.name()) && "()I".equals(target.descriptor())) {
+            return true;
+        }
+        if ("valueOf".equals(target.name())
+            && ("(Ljava/lang/String;)L" + target.owner() + ";").equals(target.descriptor())) {
             return true;
         }
         if (!"values".equals(target.name())) {

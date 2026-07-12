@@ -57,14 +57,14 @@ Current support ledger for the active JDK 25 evidence set:
 | rejected rows | 0 |
 | accounted rows | 109 |
 | unaccounted rows | 0 |
-| exact supported JDK callable classes | 457 |
-| exact supported JDK constructors | 684 |
-| exact supported JDK methods | 349 |
-| exact supported JDK callables | 1033 / 267886 (0.3%) |
-| exact explicit rejected JDK callables | 21215 |
-| exact done JDK callables | 22248 / 267886 (8.3%) |
-| exact unknown JDK callables | 245638 |
-| exact supported JDK callables left | 266853 |
+| exact supported JDK callable classes | 472 |
+| exact supported JDK constructors | 691 |
+| exact supported JDK methods | 419 |
+| exact supported JDK callables | 1110 / 267886 (0.4%) |
+| exact explicit rejected JDK callables | 21183 |
+| exact done JDK callables | 22293 / 267886 (8.3%) |
+| exact unknown JDK callables | 245593 |
+| exact supported JDK callables left | 266776 |
 | flow-qualified reachable current-thread lifecycle rejects | 0 |
 | flow-qualified unreachable current-thread lifecycle rejects | 0 |
 | flow-qualified reachable thread-builder receiver-shape rejects | 0 |
@@ -84,38 +84,6 @@ leftovers must be 0
 ```
 
 The exact supported and done JDK callable counts above are lower-bound progress signals.
-The current explicit rejected callable set now includes deterministic forbidden APIs plus
-exact verifier-backed monitor/concurrency rejects such as `Object.wait/notify`,
-unsupported `Executors` single/cached pool factories, `InheritableThreadLocal.<init>()`,
-the deliberate `jdk.jfr.*` owner family, `sun.misc.Unsafe`, the exact `String`
-regex/formatter/text-normalization plus binary/charset/code-point family, the
-current `StringBuilder`, `StringBuffer`, plus `AbstractStringBuilder`
-char-sequence/string-buffer/code-point/stream/repeat family, and the internal
-`StringLatin1`, `StringUTF16`, `StringConcatHelper`, plus `StringCoding`
-owner families including their nested helper classes, and the internal
-`CharacterData*` owner family, plus the internal
-`ConditionalSpecialCasing`, `ConditionalSpecialCasing$Entry`, and
-`String$CaseInsensitiveComparator` owners, plus the
-full `java.util.regex.*` owner namespace, plus the
-full `java.util.function.*` owner namespace, plus the
-full `java.lang.module.*` owner namespace, plus the
-full `java.util.stream.*` owner namespace, plus the
-full `java.text.*` owner namespace, plus the
-full `java.util.zip.*` owner namespace, plus the
-full `java.time.format.*` owner namespace, plus the
-full `java.math.*` owner namespace, plus the
-full `java.nio.charset.*` owner namespace, plus the
-full `java.util.concurrent.atomic.*` owner namespace, plus the
-full `java.lang.foreign.*` owner namespace, plus the
-full `java.lang.invoke.*` owner namespace except the
-`StringConcatFactory*` bootstrap carve-out and invoke-package platform-throwable owners, plus the
-full `java.lang.classfile.*` owner namespace except platform-throwable owners, plus the
-full `java.security.*` owner namespace except `java.security.cert.*` and platform-throwable owners, plus the
-full `java.time.chrono.*` owner namespace, plus the
-full `java.security.cert.*` owner namespace except platform-throwable owners, plus the
-full `java.util.logging.*` owner namespace, plus the
-full `java.beans.*` owner namespace except platform-throwable owners, plus the
-full `java.util.concurrent.locks.*` owner namespace.
 Flow-qualified rejected JDK call shapes above are diagnostic-shape accounting only.
 They are tracked separately because they depend on receiver or call-flow facts rather than raw member inventory.
 Unknown callables still include everything not yet counted as supported or explicitly rejected,
@@ -123,7 +91,3 @@ so this is not a full JDK completion claim.
 
 Compatibility reports are generated under `.javan/reports`, `.javan/jdk-inventory`, and `.javan/bytecode-patterns`.
 New opcodes, constant-pool tags, attributes, and bootstrap patterns must be classified before native code generation accepts them.
-
-Current full-first-JDK progress remains `0.0%` for the strict release gate because
-explicit rejected callable-member coverage is still incomplete and unknown callables are
-not zero.

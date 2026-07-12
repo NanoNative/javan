@@ -1356,6 +1356,9 @@ final class BytecodeToIRInvokeSupport {
         final SourceLineIndex sourceLines
     ) {
         final MethodRef methodRef = instruction.methodRef().orElseThrow();
+        if (lowerEnumValueOf(classes, classFile, method, methodRef, stack)) {
+            return;
+        }
         if (lowerEnumValues(classes, classFile, method, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
@@ -1402,6 +1405,26 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         appendCallResult(instructions, stack, descriptor.returnType(), symbol, arguments);
+    }
+
+    static boolean lowerEnumValueOf(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final MethodRef methodRef,
+        final List<StackValue> stack
+    ) {
+        final ClassFile enumClass = classes.get(methodRef.owner());
+        if (enumClass == null || !enumClass.isEnum()) {
+            return false;
+        }
+        if (!"valueOf".equals(methodRef.name())
+            || !methodRef.descriptor().equals("(Ljava/lang/String;)L" + methodRef.owner() + ";")) {
+            return false;
+        }
+        final IrExpression name = popObject(classFile, method, stack);
+        stack.add(StackValue.objectExpression(IrExpression.objectCall(enumValueOfSymbol(methodRef.owner()), List.of(name))));
+        return true;
     }
 
     private static boolean lowerExecutorsStaticCall(
@@ -1507,6 +1530,10 @@ final class BytecodeToIRInvokeSupport {
             return Optional.empty();
         }
         return enumOrdinal(enumClass, ownerField.substring(separator + 1));
+    }
+
+    static String enumValueOfSymbol(final String owner) {
+        return "javan_enum_value_of_" + sanitize(owner);
     }
     static boolean lowerJdkStaticIntrinsic(
         final ClassFile classFile,

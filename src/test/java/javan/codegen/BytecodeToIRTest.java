@@ -7170,6 +7170,68 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowerEnumValueOfReturnsFalseForMatchingNameWrongDescriptor() {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Mode",
+            classFile(
+                "com/acme/Mode",
+                "java/lang/Enum",
+                0x4000,
+                List.of(),
+                List.of(),
+                List.of()
+            )
+        );
+
+        final boolean lowered = BytecodeToIRInvokeSupport.lowerEnumValueOf(
+            classes,
+            sinkClass(),
+            method(0x0008, "main", "()V", 1, 0, plain(0, 177, "return")),
+            new MethodRef("com/acme/Mode", "valueOf", "(I)Lcom/acme/Mode;"),
+            new ArrayList<>(List.of(BytecodeToIR.StackValue.objectExpression(IrExpression.stringLiteral("FAST"))))
+        );
+
+        assertThat(lowered).isFalse();
+    }
+
+    @Test
+    void lowersEnumValueOfToGeneratedHelperCall() {
+        final ClassFile color = classFile(
+            "com/acme/Color",
+            "java/lang/Enum",
+            0x4000,
+            List.of(),
+            List.of(
+                new FieldInfo(0x4008, "RED", "Lcom/acme/Color;"),
+                new FieldInfo(0x4008, "BLUE", "Lcom/acme/Color;")
+            ),
+            List.of()
+        );
+
+        final IrFunction function = lower(
+            method(
+                0x0008,
+                "main",
+                "()Ljava/lang/String;",
+                1,
+                0,
+                stringConstant(0, "BLUE"),
+                invokeStatic(1, new MethodRef("com/acme/Color", "valueOf", "(Ljava/lang/String;)Lcom/acme/Color;")),
+                invokeVirtual(2, new MethodRef("com/acme/Color", "name", "()Ljava/lang/String;")),
+                plain(3, 176, "areturn")
+            ),
+            color
+        );
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_enum_value_of_com_acme_Color",
+                List.of(IrExpression.stringLiteral("BLUE"))
+            ))
+        );
+    }
+
+    @Test
     void lowersMultipleTargetInterfaceIntReturnToDispatchCall() {
         final MethodInfo main = method(
             0x0008,
