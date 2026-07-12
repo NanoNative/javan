@@ -270,6 +270,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void numberIntValueIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Number",
+            "intValue",
+            "()I"
+        ))).isTrue();
+    }
+
+    @Test
     void stringDescribeConstableIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/String",
@@ -378,6 +387,33 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void throwableAddSuppressedWrongDescriptorIsNotSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Throwable",
+            "addSuppressed",
+            "()V"
+        ))).isFalse();
+    }
+
+    @Test
+    void throwableGetSuppressedWrongDescriptorIsNotSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Throwable",
+            "getSuppressed",
+            "()Ljava/lang/Throwable;"
+        ))).isFalse();
+    }
+
+    @Test
+    void throwableGetMessageWrongDescriptorIsNotSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Throwable",
+            "getMessage",
+            "()Ljava/lang/Object;"
+        ))).isFalse();
+    }
+
+    @Test
     void pathsGetRequiresFilesystemRuntimeModule() {
         assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
             "java/nio/file/Paths",
@@ -408,5 +444,131 @@ final class JdkCallSupportTest {
     void applicationThrowableIsNotPlatformAssignable() {
         assertThat(JdkCallSupport.isPlatformThrowableAssignable("com/acme/ProblemException", "java/lang/Exception"))
             .isFalse();
+    }
+
+    @Test
+    void closedWorldDispatchRejectsRunnableWrongName() {
+        assertThat(JdkCallSupport.isSupportedClosedWorldDispatchCall(new javan.classfile.MethodRef(
+            "java/lang/Runnable",
+            "start",
+            "()V"
+        ))).isFalse();
+    }
+
+    @Test
+    void closedWorldDispatchRejectsRunnableWrongDescriptor() {
+        assertThat(JdkCallSupport.isSupportedClosedWorldDispatchCall(new javan.classfile.MethodRef(
+            "java/lang/Runnable",
+            "run",
+            "()Z"
+        ))).isFalse();
+    }
+
+    @Test
+    void closedWorldDispatchRejectsConsumerWrongDescriptor() {
+        assertThat(JdkCallSupport.isSupportedClosedWorldDispatchCall(new javan.classfile.MethodRef(
+            "java/util/function/Consumer",
+            "accept",
+            "()V"
+        ))).isFalse();
+    }
+
+    @Test
+    void closedWorldDispatchRejectsConsumerWrongName() {
+        assertThat(JdkCallSupport.isSupportedClosedWorldDispatchCall(new javan.classfile.MethodRef(
+            "java/util/function/Consumer",
+            "consume",
+            "(Ljava/lang/Object;)V"
+        ))).isFalse();
+    }
+
+    @Test
+    void closedWorldDispatchRejectsBiConsumerWrongDescriptor() {
+        assertThat(JdkCallSupport.isSupportedClosedWorldDispatchCall(new javan.classfile.MethodRef(
+            "java/util/function/BiConsumer",
+            "accept",
+            "(Ljava/lang/Object;)V"
+        ))).isFalse();
+    }
+
+    @Test
+    void closedWorldDispatchRejectsBiConsumerWrongName() {
+        assertThat(JdkCallSupport.isSupportedClosedWorldDispatchCall(new javan.classfile.MethodRef(
+            "java/util/function/BiConsumer",
+            "consume",
+            "(Ljava/lang/Object;Ljava/lang/Object;)V"
+        ))).isFalse();
+    }
+
+    @Test
+    void closedWorldDispatchRejectsBooleanSupplierWrongName() {
+        assertThat(JdkCallSupport.isSupportedClosedWorldDispatchCall(new javan.classfile.MethodRef(
+            "java/util/function/BooleanSupplier",
+            "get",
+            "()Z"
+        ))).isFalse();
+    }
+
+    @Test
+    void closedWorldDispatchRejectsBooleanSupplierWrongDescriptor() {
+        assertThat(JdkCallSupport.isSupportedClosedWorldDispatchCall(new javan.classfile.MethodRef(
+            "java/util/function/BooleanSupplier",
+            "getAsBoolean",
+            "()Ljava/lang/Boolean;"
+        ))).isFalse();
+    }
+
+    @Test
+    void closedWorldDispatchRejectsFunctionWrongDescriptor() {
+        assertThat(JdkCallSupport.isSupportedClosedWorldDispatchCall(new javan.classfile.MethodRef(
+            "java/util/function/Function",
+            "apply",
+            "()Ljava/lang/Object;"
+        ))).isFalse();
+    }
+
+    @Test
+    void closedWorldDispatchRejectsFunctionWrongName() {
+        assertThat(JdkCallSupport.isSupportedClosedWorldDispatchCall(new javan.classfile.MethodRef(
+            "java/util/function/Function",
+            "map",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
+        ))).isFalse();
+    }
+
+    @Test
+    void closedWorldDispatchRejectsPredicateWrongDescriptor() {
+        assertThat(JdkCallSupport.isSupportedClosedWorldDispatchCall(new javan.classfile.MethodRef(
+            "java/util/function/Predicate",
+            "test",
+            "()Z"
+        ))).isFalse();
+    }
+
+    @Test
+    void closedWorldDispatchRejectsPredicateWrongName() {
+        assertThat(JdkCallSupport.isSupportedClosedWorldDispatchCall(new javan.classfile.MethodRef(
+            "java/util/function/Predicate",
+            "matches",
+            "(Ljava/lang/Object;)Z"
+        ))).isFalse();
+    }
+
+    @Test
+    void closedWorldDispatchRejectsSupplierWrongName() {
+        assertThat(JdkCallSupport.isSupportedClosedWorldDispatchCall(new javan.classfile.MethodRef(
+            "java/util/function/Supplier",
+            "supply",
+            "()Ljava/lang/Object;"
+        ))).isFalse();
+    }
+
+    @Test
+    void closedWorldDispatchRejectsSupplierWrongDescriptor() {
+        assertThat(JdkCallSupport.isSupportedClosedWorldDispatchCall(new javan.classfile.MethodRef(
+            "java/util/function/Supplier",
+            "get",
+            "()Ljava/lang/String;"
+        ))).isFalse();
     }
 }

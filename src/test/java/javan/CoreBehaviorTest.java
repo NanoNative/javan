@@ -1206,6 +1206,13 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void staticVerifierAcceptsReachableInstanceofNumberTarget() {
+        final List<Diagnostic> diagnostics = verifyInstanceOf(Map.of(), "java/lang/Number", true);
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
     void staticVerifierIgnoresInstanceofWithoutClassMetadata() {
         final List<Diagnostic> diagnostics = verifyInstruction(instruction(0, 193, "instanceof"), true);
 

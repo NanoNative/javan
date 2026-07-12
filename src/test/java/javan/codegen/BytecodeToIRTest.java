@@ -2880,6 +2880,34 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersInstanceOfNumberWrapperSuperTypeToTypeIntrinsic() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Object;)I",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            classInstruction(1, 193, "instanceof", "java/lang/Number"),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_object_type_in",
+                List.of(
+                    IrExpression.objectLocal("arg0"),
+                    IrExpression.intLiteral(4),
+                    IrExpression.intLiteral(-1001),
+                    IrExpression.intLiteral(-1002),
+                    IrExpression.intLiteral(-1003),
+                    IrExpression.intLiteral(-1004)
+                )
+            ))
+        );
+    }
+
+    @Test
     void lowersInstanceOfBooleanWrapperToTypeIntrinsic() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -8240,6 +8268,99 @@ final class BytecodeToIRTest {
                 List.of(IrExpression.objectLocal("arg0"))
             ))
         );
+    }
+
+    @Test
+    void lowersNumberIntValueToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Number;)I",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/Number", "intValue", "()I")),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_number_int_value",
+                List.of(IrExpression.objectLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
+    void rejectsMalformedCharacterCharValueDescriptor() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Character;)I",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/Character", "charValue", "()I")),
+            plain(2, 172, "ireturn")
+        )))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("invokevirtual java/lang/Character.charValue()I");
+            });
+    }
+
+    @Test
+    void rejectsCharacterWrongWrapperMethodName() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Character;)I",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/Character", "intValue", "()C")),
+            plain(2, 172, "ireturn")
+        )))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("invokevirtual java/lang/Character.intValue()C");
+            });
+    }
+
+    @Test
+    void rejectsMalformedNumberIntValueDescriptor() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Number;)J",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/Number", "intValue", "()J")),
+            plain(2, 173, "lreturn")
+        )))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("invokevirtual java/lang/Number.intValue()J");
+            });
+    }
+
+    @Test
+    void rejectsNumberWrongWrapperMethodName() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Number;)I",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/Number", "longValue", "()I")),
+            plain(2, 172, "ireturn")
+        )))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("invokevirtual java/lang/Number.longValue()I");
+            });
     }
 
     @Test
