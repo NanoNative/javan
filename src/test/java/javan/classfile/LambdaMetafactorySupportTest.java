@@ -38,6 +38,77 @@ final class LambdaMetafactorySupportTest {
     }
 
     @Test
+    void scanSkipsMethodsWithoutCodeAttribute() {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                new MethodInfo(0, "main", "([Ljava/lang/String;)V", Optional.empty())
+            )
+        );
+
+        assertThat(LambdaMetafactorySupport.scan(classes).bySite()).isEmpty();
+    }
+
+    @Test
+    void scanSkipsInstructionsThatAreNotInvokeDynamic() {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                method("main", "([Ljava/lang/String;)V", plain(0, 177, "return")),
+                method("lambda$main$0", "()V")
+            )
+        );
+
+        assertThat(LambdaMetafactorySupport.scan(classes).bySite()).isEmpty();
+    }
+
+    @Test
+    void scanSkipsInvokeDynamicInstructionWithoutDynamicReference() {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                method("main", "([Ljava/lang/String;)V", plain(0, 186, "invokedynamic"))
+            )
+        );
+
+        assertThat(LambdaMetafactorySupport.scan(classes).bySite()).isEmpty();
+    }
+
+    @Test
+    void scanRespectsExactScopedMethodMatch() {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                method("main", "([Ljava/lang/String;)V", invokeDynamic(7, runnableLambda("com/acme/Main", "lambda$main$0", "()V", 6))),
+                method("lambda$main$0", "()V")
+            )
+        );
+
+        final LambdaMetafactorySupport.Registry registry = LambdaMetafactorySupport.scan(
+            classes,
+            List.of(new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"))
+        );
+
+        assertThat(registry.planForSite("com/acme/Main", "main", "([Ljava/lang/String;)V", 7)).isPresent();
+    }
+
+    @Test
     void scanCreatesPlanForStaticImplementationTarget() {
         final Map<String, ClassFile> classes = Map.of(
             "com/acme/Main",
@@ -920,6 +991,11 @@ final class LambdaMetafactorySupportTest {
     }
 
     @Test
+    void supportedFunctionalBridgeTargetAcceptsRunnableBridgeTarget() throws Exception {
+        assertThat(supportedFunctionalBridgeTarget(new MethodRef("java/lang/Runnable", "run", "()V"))).isTrue();
+    }
+
+    @Test
     void supportedFunctionalBridgeTargetRejectsRunnableWithWrongName() throws Exception {
         assertThat(supportedFunctionalBridgeTarget(new MethodRef("java/lang/Runnable", "call", "()V"))).isFalse();
     }
@@ -1155,6 +1231,16 @@ final class LambdaMetafactorySupportTest {
     }
 
     @Test
+    void parameterDescriptorsRejectDescriptorWithoutClosingParen() throws Exception {
+        assertThat(parameterDescriptors("(I")).isEmpty();
+    }
+
+    @Test
+    void skipArrayDescriptorRejectsArrayWithUnknownLeafTag() throws Exception {
+        assertThat(skipArrayDescriptor("[Q", 0)).isEqualTo(-1);
+    }
+
+    @Test
     void lowerableResolvedVirtualTargetRejectsAbstractMethodBody() throws Exception {
         final Map<String, ClassFile> classes = Map.of(
             "com/acme/RunnableImpl",
@@ -1233,6 +1319,22 @@ final class LambdaMetafactorySupportTest {
     }
 
     @Test
+    void lowerableBridgeTargetsExistResolvesInterfaceImplementation() throws Exception {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/SupplierImpl",
+            classWithMethods(
+                "com/acme/SupplierImpl",
+                "java/lang/Object",
+                0,
+                List.of("java/util/function/Supplier"),
+                method("get", "()Ljava/lang/Object;", plain(0, 1, "aconst_null"), plain(1, 176, "areturn"))
+            )
+        );
+
+        assertThat(lowerableBridgeTargetsExist(classes, new MethodRef("java/util/function/Supplier", "get", "()Ljava/lang/Object;"), 9)).isTrue();
+    }
+
+    @Test
     void isSubtypeOfTraversesSuperclassChain() throws Exception {
         final Map<String, ClassFile> classes = Map.of(
             "com/acme/Leaf",
@@ -1263,6 +1365,11 @@ final class LambdaMetafactorySupportTest {
     @Test
     void implementedInterfacesReturnsEmptyWhenReceiverDefinitionIsMissing() throws Exception {
         assertThat(implementedInterfaces(Map.of(), "com/acme/Missing")).isEmpty();
+    }
+
+    @Test
+    void implementedInterfacesReturnsEmptyWhenReceiverNameIsEmpty() throws Exception {
+        assertThat(implementedInterfaces(Map.of(), "")).isEmpty();
     }
 
     @Test
@@ -1323,6 +1430,11 @@ final class LambdaMetafactorySupportTest {
 
         assertThat(isAssignableTo(Map.of(), "com/acme/Missing", "com/acme/Missing")).isTrue();
         assertThat(isAssignableTo(cyclic, "com/acme/A", "java/lang/Runnable")).isFalse();
+    }
+
+    @Test
+    void isAssignableToReturnsFalseWhenCandidateNameIsEmpty() throws Exception {
+        assertThat(isAssignableTo(Map.of(), "", "java/lang/Runnable")).isFalse();
     }
 
     @Test
