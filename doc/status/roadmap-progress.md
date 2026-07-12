@@ -74,6 +74,7 @@ supported/rejected/unknown accounting is not complete yet.
 
 | Milestone | Status | Verified result |
 | --- | --- | --- |
+| M92: integration child-process harness consolidation | Done | Replaced the remaining raw interactive child-process blocks in `CliIntegrationTest`, `CliCommandIntegrationTest`, and `CliSharedStateIntegrationTest` with the shared `TestProcesses` harness, made `TestProcesses` timeouts interruptible instead of blocking in `Process.waitFor(timeout)`, and restored green local `mvn verify` evidence (`2778` tests, `0` failures, `0` errors). |
 | M50: exact explicit rejection expansion v1 | Done | Added exact `String` regex/formatter/text-normalization rejects. |
 | M51: exact explicit rejection expansion v2 | Done | Added exact `String` binary/charset/code-point rejects, moving explicit rejects to `5078`, done to `6110`, unknown to `261776`. |
 | M52: exact explicit rejection expansion v3 | Done | Added exact `StringBuilder` char-sequence/string-buffer/code-point/stream/repeat rejects, moving explicit rejects to `5102`, done to `6134`, unknown to `261752`. |

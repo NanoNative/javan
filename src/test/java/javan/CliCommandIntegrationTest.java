@@ -295,33 +295,8 @@ final class CliCommandIntegrationTest {
     }
 
     private static ProcessResult process(final Path cwd, final List<String> command, final Duration timeout) {
-        try {
-            final Process process = new ProcessBuilder(command).directory(cwd.toFile()).start();
-            final CompletableFuture<String> stdout = CompletableFuture.supplyAsync(() -> readStream(process.getInputStream()));
-            final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
-            if (!process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
-                process.destroy();
-                if (!process.waitFor(1, TimeUnit.SECONDS)) {
-                    process.destroyForcibly();
-                    process.waitFor(1, TimeUnit.SECONDS);
-                }
-                return new ProcessResult(
-                    124,
-                    stdout.join(),
-                    stderr.join() + "Timed out after " + timeout.toSeconds() + " seconds: " + String.join(" ", command) + "\n"
-                );
-            }
-            return new ProcessResult(
-                process.exitValue(),
-                stdout.join(),
-                stderr.join()
-            );
-        } catch (final IOException exception) {
-            throw new UncheckedIOException(exception);
-        } catch (final InterruptedException exception) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("Interrupted while running process: " + String.join(" ", command), exception);
-        }
+        final TestProcesses.Result result = TestProcesses.run(cwd, command, timeout);
+        return new ProcessResult(result.exitCode(), result.stdout(), result.stderr());
     }
 
     private static String readStream(final InputStream stream) {

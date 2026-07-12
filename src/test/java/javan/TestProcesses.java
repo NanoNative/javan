@@ -80,7 +80,7 @@ public final class TestProcesses {
 
         public Result await(final Duration timeout) {
             try {
-                if (!process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
+                if (!waitForExit(timeout)) {
                     terminate();
                     return new Result(
                         124,
@@ -100,6 +100,7 @@ public final class TestProcesses {
                     stderr.await(Duration.ofSeconds(1))
                 );
             } catch (final InterruptedException exception) {
+                terminateBestEffort();
                 Thread.currentThread().interrupt();
                 throw new IllegalStateException("Interrupted while running process: " + commandText, exception);
             }
@@ -136,6 +137,26 @@ public final class TestProcesses {
                     throw new IllegalStateException("Timed out while terminating process tree: " + commandText);
                 }
             }
+            closeChildStreams();
+        }
+
+        private boolean waitForExit(final Duration timeout) throws InterruptedException {
+            final long deadline = System.nanoTime() + timeout.toNanos();
+            while (process.isAlive()) {
+                final long remainingNanos = deadline - System.nanoTime();
+                if (remainingNanos <= 0L) {
+                    return false;
+                }
+                final long sleepMillis = Math.max(1L, Math.min(20L, TimeUnit.NANOSECONDS.toMillis(remainingNanos)));
+                Thread.sleep(sleepMillis);
+            }
+            return true;
+        }
+
+        private void terminateBestEffort() {
+            final List<ProcessHandle> tree = processTree();
+            destroyTree(tree, false);
+            destroyTree(tree, true);
             closeChildStreams();
         }
 

@@ -1579,16 +1579,13 @@ final class CliIntegrationTest {
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        final Process process = new ProcessBuilder(project.resolve(".javan/bin/server-socket-accept").toString())
-            .directory(project.toFile())
-            .start();
-        final CompletableFuture<String> stdout = CompletableFuture.supplyAsync(() -> readStream(process.getInputStream()));
-        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
-        connectLoopback(port);
-        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
-        assertThat(process.exitValue()).isZero();
-        assertThat(stdout.join()).isEqualTo(port + "\ntrue\n127.0.0.1\ntrue\n");
-        assertThat(stderr.join()).isEmpty();
+        try (TestProcesses.RunningProcess process = TestProcesses.start(project, List.of(project.resolve(".javan/bin/server-socket-accept").toString()))) {
+            connectLoopback(port);
+            final TestProcesses.Result result = process.await(Duration.ofSeconds(10));
+            assertThat(result.exitCode()).isZero();
+            assertThat(result.stdout()).isEqualTo(port + "\ntrue\n127.0.0.1\ntrue\n");
+            assertThat(result.stderr()).isEmpty();
+        }
     }
 
     @Test
@@ -1703,16 +1700,13 @@ final class CliIntegrationTest {
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        final Process process = new ProcessBuilder(project.resolve(".javan/bin/accepted-socket-input-stream-read-byte").toString())
-            .directory(project.toFile())
-            .start();
-        final CompletableFuture<String> stdout = CompletableFuture.supplyAsync(() -> readStream(process.getInputStream()));
-        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
-        writeLoopbackBytes(port, new byte[] {90});
-        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
-        assertThat(process.exitValue()).isZero();
-        assertThat(stdout.join()).isEqualTo("90\n");
-        assertThat(stderr.join()).isEmpty();
+        try (TestProcesses.RunningProcess process = TestProcesses.start(project, List.of(project.resolve(".javan/bin/accepted-socket-input-stream-read-byte").toString()))) {
+            writeLoopbackBytes(port, new byte[] {90});
+            final TestProcesses.Result result = process.await(Duration.ofSeconds(10));
+            assertThat(result.exitCode()).isZero();
+            assertThat(result.stdout()).isEqualTo("90\n");
+            assertThat(result.stderr()).isEmpty();
+        }
     }
 
     @Test
@@ -1797,32 +1791,30 @@ final class CliIntegrationTest {
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        final Process process = new ProcessBuilder(project.resolve(".javan/bin/loopback-http-hello-route").toString())
-            .directory(project.toFile())
-            .start();
-        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
-        final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
-        final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/hello"))
-            .GET()
-            .build();
-        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        java.net.http.HttpResponse<String> response = null;
-        while (System.nanoTime() < deadline) {
-            try {
-                response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
-                break;
-            } catch (final java.net.ConnectException exception) {
-                Thread.sleep(25L);
+        try (TestProcesses.RunningProcess process = TestProcesses.start(project, List.of(project.resolve(".javan/bin/loopback-http-hello-route").toString()))) {
+            final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+            final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/hello"))
+                .GET()
+                .build();
+            final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+            java.net.http.HttpResponse<String> response = null;
+            while (System.nanoTime() < deadline) {
+                try {
+                    response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+                    break;
+                } catch (final java.net.ConnectException exception) {
+                    Thread.sleep(25L);
+                }
             }
-        }
 
-        assertThat(response).isNotNull();
-        assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(response.body()).isEqualTo("pong");
-        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
-        assertThat(process.exitValue()).isZero();
-        assertThat(readStream(process.getInputStream())).isEmpty();
-        assertThat(stderr.join()).isEmpty();
+            assertThat(response).isNotNull();
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.body()).isEqualTo("pong");
+            final TestProcesses.Result result = process.await(Duration.ofSeconds(10));
+            assertThat(result.exitCode()).isZero();
+            assertThat(result.stdout()).isEmpty();
+            assertThat(result.stderr()).isEmpty();
+        }
     }
 
     @Test
@@ -1915,32 +1907,30 @@ final class CliIntegrationTest {
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        final Process process = new ProcessBuilder(project.resolve(".javan/bin/loopback-http-unknown-route").toString())
-            .directory(project.toFile())
-            .start();
-        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
-        final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
-        final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/missing"))
-            .GET()
-            .build();
-        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        java.net.http.HttpResponse<String> response = null;
-        while (System.nanoTime() < deadline) {
-            try {
-                response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
-                break;
-            } catch (final java.net.ConnectException exception) {
-                Thread.sleep(25L);
+        try (TestProcesses.RunningProcess process = TestProcesses.start(project, List.of(project.resolve(".javan/bin/loopback-http-unknown-route").toString()))) {
+            final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+            final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/missing"))
+                .GET()
+                .build();
+            final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+            java.net.http.HttpResponse<String> response = null;
+            while (System.nanoTime() < deadline) {
+                try {
+                    response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+                    break;
+                } catch (final java.net.ConnectException exception) {
+                    Thread.sleep(25L);
+                }
             }
-        }
 
-        assertThat(response).isNotNull();
-        assertThat(response.statusCode()).isEqualTo(404);
-        assertThat(response.body()).isEqualTo("miss");
-        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
-        assertThat(process.exitValue()).isZero();
-        assertThat(readStream(process.getInputStream())).isEmpty();
-        assertThat(stderr.join()).isEmpty();
+            assertThat(response).isNotNull();
+            assertThat(response.statusCode()).isEqualTo(404);
+            assertThat(response.body()).isEqualTo("miss");
+            final TestProcesses.Result result = process.await(Duration.ofSeconds(10));
+            assertThat(result.exitCode()).isZero();
+            assertThat(result.stdout()).isEmpty();
+            assertThat(result.stderr()).isEmpty();
+        }
     }
 
     @Test
@@ -2088,32 +2078,30 @@ final class CliIntegrationTest {
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        final Process process = new ProcessBuilder(project.resolve(".javan/bin/loopback-http-post-body").toString())
-            .directory(project.toFile())
-            .start();
-        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
-        final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
-        final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/metric"))
-            .POST(java.net.http.HttpRequest.BodyPublishers.ofString("hello"))
-            .build();
-        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        java.net.http.HttpResponse<String> response = null;
-        while (System.nanoTime() < deadline) {
-            try {
-                response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
-                break;
-            } catch (final java.net.ConnectException exception) {
-                Thread.sleep(25L);
+        try (TestProcesses.RunningProcess process = TestProcesses.start(project, List.of(project.resolve(".javan/bin/loopback-http-post-body").toString()))) {
+            final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+            final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/metric"))
+                .POST(java.net.http.HttpRequest.BodyPublishers.ofString("hello"))
+                .build();
+            final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+            java.net.http.HttpResponse<String> response = null;
+            while (System.nanoTime() < deadline) {
+                try {
+                    response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+                    break;
+                } catch (final java.net.ConnectException exception) {
+                    Thread.sleep(25L);
+                }
             }
-        }
 
-        assertThat(response).isNotNull();
-        assertThat(response.statusCode()).isEqualTo(201);
-        assertThat(response.body()).isEqualTo("saved");
-        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
-        assertThat(process.exitValue()).isZero();
-        assertThat(readStream(process.getInputStream())).isEmpty();
-        assertThat(stderr.join()).isEmpty();
+            assertThat(response).isNotNull();
+            assertThat(response.statusCode()).isEqualTo(201);
+            assertThat(response.body()).isEqualTo("saved");
+            final TestProcesses.Result result = process.await(Duration.ofSeconds(10));
+            assertThat(result.exitCode()).isZero();
+            assertThat(result.stdout()).isEmpty();
+            assertThat(result.stderr()).isEmpty();
+        }
     }
 
     @Test
@@ -2200,35 +2188,33 @@ final class CliIntegrationTest {
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        final Process process = new ProcessBuilder(project.resolve(".javan/bin/loopback-http-sequential-requests").toString())
-            .directory(project.toFile())
-            .start();
-        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
-        final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
-        final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/hello"))
-            .GET()
-            .build();
-        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        java.net.http.HttpResponse<String> first = null;
-        while (System.nanoTime() < deadline) {
-            try {
-                first = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
-                break;
-            } catch (final java.net.ConnectException exception) {
-                Thread.sleep(25L);
+        try (TestProcesses.RunningProcess process = TestProcesses.start(project, List.of(project.resolve(".javan/bin/loopback-http-sequential-requests").toString()))) {
+            final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+            final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/hello"))
+                .GET()
+                .build();
+            final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+            java.net.http.HttpResponse<String> first = null;
+            while (System.nanoTime() < deadline) {
+                try {
+                    first = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+                    break;
+                } catch (final java.net.ConnectException exception) {
+                    Thread.sleep(25L);
+                }
             }
-        }
-        assertThat(first).isNotNull();
-        assertThat(first.statusCode()).isEqualTo(200);
-        assertThat(first.body()).isEqualTo("pong");
+            assertThat(first).isNotNull();
+            assertThat(first.statusCode()).isEqualTo(200);
+            assertThat(first.body()).isEqualTo("pong");
 
-        final java.net.http.HttpResponse<String> second = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
-        assertThat(second.statusCode()).isEqualTo(200);
-        assertThat(second.body()).isEqualTo("pong");
-        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
-        assertThat(process.exitValue()).isZero();
-        assertThat(readStream(process.getInputStream())).isEmpty();
-        assertThat(stderr.join()).isEmpty();
+            final java.net.http.HttpResponse<String> second = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+            assertThat(second.statusCode()).isEqualTo(200);
+            assertThat(second.body()).isEqualTo("pong");
+            final TestProcesses.Result result = process.await(Duration.ofSeconds(10));
+            assertThat(result.exitCode()).isZero();
+            assertThat(result.stdout()).isEmpty();
+            assertThat(result.stderr()).isEmpty();
+        }
     }
 
     @Test
@@ -2390,38 +2376,36 @@ final class CliIntegrationTest {
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        final Process process = new ProcessBuilder(project.resolve(".javan/bin/loopback-http-method-and-path-dispatch").toString())
-            .directory(project.toFile())
-            .start();
-        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
-        final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
-        final java.net.http.HttpRequest getRequest = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/hello"))
-            .GET()
-            .build();
-        final java.net.http.HttpRequest postRequest = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/metric"))
-            .POST(java.net.http.HttpRequest.BodyPublishers.ofString("hello"))
-            .build();
-        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        java.net.http.HttpResponse<String> first = null;
-        while (System.nanoTime() < deadline) {
-            try {
-                first = client.send(getRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
-                break;
-            } catch (final java.net.ConnectException exception) {
-                Thread.sleep(25L);
+        try (TestProcesses.RunningProcess process = TestProcesses.start(project, List.of(project.resolve(".javan/bin/loopback-http-method-and-path-dispatch").toString()))) {
+            final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+            final java.net.http.HttpRequest getRequest = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/hello"))
+                .GET()
+                .build();
+            final java.net.http.HttpRequest postRequest = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/metric"))
+                .POST(java.net.http.HttpRequest.BodyPublishers.ofString("hello"))
+                .build();
+            final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+            java.net.http.HttpResponse<String> first = null;
+            while (System.nanoTime() < deadline) {
+                try {
+                    first = client.send(getRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
+                    break;
+                } catch (final java.net.ConnectException exception) {
+                    Thread.sleep(25L);
+                }
             }
-        }
-        assertThat(first).isNotNull();
-        assertThat(first.statusCode()).isEqualTo(200);
-        assertThat(first.body()).isEqualTo("pong");
+            assertThat(first).isNotNull();
+            assertThat(first.statusCode()).isEqualTo(200);
+            assertThat(first.body()).isEqualTo("pong");
 
-        final java.net.http.HttpResponse<String> second = client.send(postRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
-        assertThat(second.statusCode()).isEqualTo(201);
-        assertThat(second.body()).isEqualTo("saved");
-        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
-        assertThat(process.exitValue()).isZero();
-        assertThat(readStream(process.getInputStream())).isEmpty();
-        assertThat(stderr.join()).isEmpty();
+            final java.net.http.HttpResponse<String> second = client.send(postRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
+            assertThat(second.statusCode()).isEqualTo(201);
+            assertThat(second.body()).isEqualTo("saved");
+            final TestProcesses.Result result = process.await(Duration.ofSeconds(10));
+            assertThat(result.exitCode()).isZero();
+            assertThat(result.stdout()).isEmpty();
+            assertThat(result.stderr()).isEmpty();
+        }
     }
 
     @Test
@@ -2659,38 +2643,36 @@ final class CliIntegrationTest {
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        final Process process = new ProcessBuilder(project.resolve(".javan/bin/loopback-http-route-handlers").toString())
-            .directory(project.toFile())
-            .start();
-        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
-        final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
-        final java.net.http.HttpRequest getRequest = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/hello"))
-            .GET()
-            .build();
-        final java.net.http.HttpRequest postRequest = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/metric"))
-            .POST(java.net.http.HttpRequest.BodyPublishers.ofString("hello"))
-            .build();
-        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        java.net.http.HttpResponse<String> first = null;
-        while (System.nanoTime() < deadline) {
-            try {
-                first = client.send(getRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
-                break;
-            } catch (final java.net.ConnectException exception) {
-                Thread.sleep(25L);
+        try (TestProcesses.RunningProcess process = TestProcesses.start(project, List.of(project.resolve(".javan/bin/loopback-http-route-handlers").toString()))) {
+            final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+            final java.net.http.HttpRequest getRequest = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/hello"))
+                .GET()
+                .build();
+            final java.net.http.HttpRequest postRequest = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/metric"))
+                .POST(java.net.http.HttpRequest.BodyPublishers.ofString("hello"))
+                .build();
+            final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+            java.net.http.HttpResponse<String> first = null;
+            while (System.nanoTime() < deadline) {
+                try {
+                    first = client.send(getRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
+                    break;
+                } catch (final java.net.ConnectException exception) {
+                    Thread.sleep(25L);
+                }
             }
-        }
-        assertThat(first).isNotNull();
-        assertThat(first.statusCode()).isEqualTo(200);
-        assertThat(first.body()).isEqualTo("pong");
+            assertThat(first).isNotNull();
+            assertThat(first.statusCode()).isEqualTo(200);
+            assertThat(first.body()).isEqualTo("pong");
 
-        final java.net.http.HttpResponse<String> second = client.send(postRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
-        assertThat(second.statusCode()).isEqualTo(201);
-        assertThat(second.body()).isEqualTo("saved");
-        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
-        assertThat(process.exitValue()).isZero();
-        assertThat(readStream(process.getInputStream())).isEmpty();
-        assertThat(stderr.join()).isEmpty();
+            final java.net.http.HttpResponse<String> second = client.send(postRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
+            assertThat(second.statusCode()).isEqualTo(201);
+            assertThat(second.body()).isEqualTo("saved");
+            final TestProcesses.Result result = process.await(Duration.ofSeconds(10));
+            assertThat(result.exitCode()).isZero();
+            assertThat(result.stdout()).isEmpty();
+            assertThat(result.stderr()).isEmpty();
+        }
     }
 
     @Test
@@ -2812,32 +2794,30 @@ final class CliIntegrationTest {
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        final Process process = new ProcessBuilder(project.resolve(".javan/bin/loopback-http-request-header-dispatch").toString())
-            .directory(project.toFile())
-            .start();
-        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
-        final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
-        final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/header"))
-            .header("X-Mode", "strict")
-            .GET()
-            .build();
-        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        java.net.http.HttpResponse<String> response = null;
-        while (System.nanoTime() < deadline) {
-            try {
-                response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
-                break;
-            } catch (final java.net.ConnectException exception) {
-                Thread.sleep(25L);
+        try (TestProcesses.RunningProcess process = TestProcesses.start(project, List.of(project.resolve(".javan/bin/loopback-http-request-header-dispatch").toString()))) {
+            final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+            final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/header"))
+                .header("X-Mode", "strict")
+                .GET()
+                .build();
+            final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+            java.net.http.HttpResponse<String> response = null;
+            while (System.nanoTime() < deadline) {
+                try {
+                    response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+                    break;
+                } catch (final java.net.ConnectException exception) {
+                    Thread.sleep(25L);
+                }
             }
+            assertThat(response).isNotNull();
+            assertThat(response.statusCode()).isEqualTo(202);
+            assertThat(response.body()).isEqualTo("strict");
+            final TestProcesses.Result result = process.await(Duration.ofSeconds(10));
+            assertThat(result.exitCode()).isZero();
+            assertThat(result.stdout()).isEmpty();
+            assertThat(result.stderr()).isEmpty();
         }
-        assertThat(response).isNotNull();
-        assertThat(response.statusCode()).isEqualTo(202);
-        assertThat(response.body()).isEqualTo("strict");
-        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
-        assertThat(process.exitValue()).isZero();
-        assertThat(readStream(process.getInputStream())).isEmpty();
-        assertThat(stderr.join()).isEmpty();
     }
 
     @Test
@@ -2923,32 +2903,30 @@ final class CliIntegrationTest {
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        final Process process = new ProcessBuilder(project.resolve(".javan/bin/loopback-http-response-header").toString())
-            .directory(project.toFile())
-            .start();
-        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
-        final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
-        final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/response-header"))
-            .GET()
-            .build();
-        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        java.net.http.HttpResponse<String> response = null;
-        while (System.nanoTime() < deadline) {
-            try {
-                response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
-                break;
-            } catch (final java.net.ConnectException exception) {
-                Thread.sleep(25L);
+        try (TestProcesses.RunningProcess process = TestProcesses.start(project, List.of(project.resolve(".javan/bin/loopback-http-response-header").toString()))) {
+            final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+            final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/response-header"))
+                .GET()
+                .build();
+            final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+            java.net.http.HttpResponse<String> response = null;
+            while (System.nanoTime() < deadline) {
+                try {
+                    response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+                    break;
+                } catch (final java.net.ConnectException exception) {
+                    Thread.sleep(25L);
+                }
             }
+            assertThat(response).isNotNull();
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.body()).isEqualTo("pong");
+            assertThat(response.headers().firstValue("X-Mode")).contains("strict");
+            final TestProcesses.Result result = process.await(Duration.ofSeconds(10));
+            assertThat(result.exitCode()).isZero();
+            assertThat(result.stdout()).isEmpty();
+            assertThat(result.stderr()).isEmpty();
         }
-        assertThat(response).isNotNull();
-        assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(response.body()).isEqualTo("pong");
-        assertThat(response.headers().firstValue("X-Mode")).contains("strict");
-        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
-        assertThat(process.exitValue()).isZero();
-        assertThat(readStream(process.getInputStream())).isEmpty();
-        assertThat(stderr.join()).isEmpty();
     }
 
     @Test
@@ -3219,45 +3197,43 @@ final class CliIntegrationTest {
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        final Process process = new ProcessBuilder(project.resolve(".javan/bin/loopback-http-request-response-objects").toString())
-            .directory(project.toFile())
-            .start();
-        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
-        final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
-        final java.net.http.HttpRequest getRequest = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/hello"))
-            .GET()
-            .build();
-        final java.net.http.HttpRequest postRequest = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/metric"))
-            .POST(java.net.http.HttpRequest.BodyPublishers.ofString("hello"))
-            .build();
-        final java.net.http.HttpRequest missingRequest = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/missing"))
-            .GET()
-            .build();
-        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        java.net.http.HttpResponse<String> first = null;
-        while (System.nanoTime() < deadline) {
-            try {
-                first = client.send(getRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
-                break;
-            } catch (final java.net.ConnectException exception) {
-                Thread.sleep(25L);
+        try (TestProcesses.RunningProcess process = TestProcesses.start(project, List.of(project.resolve(".javan/bin/loopback-http-request-response-objects").toString()))) {
+            final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+            final java.net.http.HttpRequest getRequest = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/hello"))
+                .GET()
+                .build();
+            final java.net.http.HttpRequest postRequest = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/metric"))
+                .POST(java.net.http.HttpRequest.BodyPublishers.ofString("hello"))
+                .build();
+            final java.net.http.HttpRequest missingRequest = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://127.0.0.1:" + port + "/missing"))
+                .GET()
+                .build();
+            final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+            java.net.http.HttpResponse<String> first = null;
+            while (System.nanoTime() < deadline) {
+                try {
+                    first = client.send(getRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
+                    break;
+                } catch (final java.net.ConnectException exception) {
+                    Thread.sleep(25L);
+                }
             }
+            assertThat(first).isNotNull();
+            assertThat(first.statusCode()).isEqualTo(200);
+            assertThat(first.body()).isEqualTo("pong");
+
+            final java.net.http.HttpResponse<String> second = client.send(postRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
+            assertThat(second.statusCode()).isEqualTo(201);
+            assertThat(second.body()).isEqualTo("saved");
+
+            final java.net.http.HttpResponse<String> third = client.send(missingRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
+            assertThat(third.statusCode()).isEqualTo(404);
+            assertThat(third.body()).isEqualTo("miss");
+            final TestProcesses.Result result = process.await(Duration.ofSeconds(10));
+            assertThat(result.exitCode()).isZero();
+            assertThat(result.stdout()).isEmpty();
+            assertThat(result.stderr()).isEmpty();
         }
-        assertThat(first).isNotNull();
-        assertThat(first.statusCode()).isEqualTo(200);
-        assertThat(first.body()).isEqualTo("pong");
-
-        final java.net.http.HttpResponse<String> second = client.send(postRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
-        assertThat(second.statusCode()).isEqualTo(201);
-        assertThat(second.body()).isEqualTo("saved");
-
-        final java.net.http.HttpResponse<String> third = client.send(missingRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
-        assertThat(third.statusCode()).isEqualTo(404);
-        assertThat(third.body()).isEqualTo("miss");
-        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
-        assertThat(process.exitValue()).isZero();
-        assertThat(readStream(process.getInputStream())).isEmpty();
-        assertThat(stderr.join()).isEmpty();
     }
 
     @Test
@@ -19028,36 +19004,9 @@ final class CliIntegrationTest {
     }
 
     private static ProcessResult process(final Path cwd, final List<String> command, final Duration timeout, final Map<String, String> environment) {
-        try {
-            final List<String> actualCommand = childCoverageCommand(command);
-            final ProcessBuilder builder = new ProcessBuilder(actualCommand).directory(cwd.toFile());
-            builder.environment().putAll(environment);
-            final Process process = builder.start();
-            final CompletableFuture<String> stdout = CompletableFuture.supplyAsync(() -> readStream(process.getInputStream()));
-            final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
-            if (!process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
-                process.destroy();
-                if (!process.waitFor(1, TimeUnit.SECONDS)) {
-                    process.destroyForcibly();
-                    process.waitFor(1, TimeUnit.SECONDS);
-                }
-                return new ProcessResult(
-                    124,
-                    stdout.join(),
-                    stderr.join() + "Timed out after " + timeout.toSeconds() + " seconds: " + String.join(" ", actualCommand) + "\n"
-                );
-            }
-            return new ProcessResult(
-                process.exitValue(),
-                stdout.join(),
-                stderr.join()
-            );
-        } catch (final IOException exception) {
-            throw new UncheckedIOException(exception);
-        } catch (final InterruptedException exception) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("Interrupted while running process: " + String.join(" ", command), exception);
-        }
+        final List<String> actualCommand = childCoverageCommand(command);
+        final TestProcesses.Result result = TestProcesses.run(cwd, actualCommand, timeout, environment);
+        return new ProcessResult(result.exitCode(), result.stdout(), result.stderr());
     }
 
     private static List<String> childCoverageCommand(final List<String> command) {
