@@ -991,6 +991,11 @@ final class LambdaMetafactorySupportTest {
     }
 
     @Test
+    void supportedFunctionalBridgeTargetRejectsConsumerWithWrongName() throws Exception {
+        assertThat(supportedFunctionalBridgeTarget(new MethodRef("java/util/function/Consumer", "consume", "(Ljava/lang/Object;)V"))).isFalse();
+    }
+
+    @Test
     void supportedFunctionalBridgeTargetAcceptsRunnableBridgeTarget() throws Exception {
         assertThat(supportedFunctionalBridgeTarget(new MethodRef("java/lang/Runnable", "run", "()V"))).isTrue();
     }
@@ -1231,6 +1236,11 @@ final class LambdaMetafactorySupportTest {
     }
 
     @Test
+    void returnObjectOwnerRejectsDescriptorWithoutReturnToken() throws Exception {
+        assertThat(returnObjectOwner("()")).isEmpty();
+    }
+
+    @Test
     void parameterDescriptorsRejectDescriptorWithoutClosingParen() throws Exception {
         assertThat(parameterDescriptors("(I")).isEmpty();
     }
@@ -1359,6 +1369,15 @@ final class LambdaMetafactorySupportTest {
         );
 
         assertThat(lowerableBridgeTargetsExist(classes, new MethodRef("java/util/function/Supplier", "get", "()Ljava/lang/Object;"), 9)).isTrue();
+    }
+
+    @Test
+    void supportedBridgeTargetRejectsUnsupportedFunctionalOwnerWithoutSearchingLowerableTargets() throws Exception {
+        assertThat(supportedBridgeTarget(
+            Map.of(),
+            new MethodRef("com/acme/Unknown", "run", "()V"),
+            6
+        )).isFalse();
     }
 
     @Test
@@ -1869,6 +1888,21 @@ final class LambdaMetafactorySupportTest {
         );
         method.setAccessible(true);
         return (Boolean) method.invoke(null, classes, target, referenceKind);
+    }
+
+    private static boolean supportedBridgeTarget(
+        final Map<String, ClassFile> classes,
+        final MethodRef implementationTarget,
+        final int referenceKind
+    ) throws Exception {
+        final Method method = LambdaMetafactorySupport.class.getDeclaredMethod(
+            "supportedBridgeTarget",
+            Map.class,
+            MethodRef.class,
+            int.class
+        );
+        method.setAccessible(true);
+        return (Boolean) method.invoke(null, classes, implementationTarget, referenceKind);
     }
 
     @SuppressWarnings("unchecked")

@@ -136,6 +136,34 @@ final class BuildInvokerPlainTest {
     }
 
     @Test
+    void ensureClassesReturnsJarBuildToolLayoutsEvenWhenInputIsNotJarFile() throws Exception {
+        final Path root = tempDir.resolve("jar-project");
+        final Path output = root.resolve(".javan");
+        final Path classpathJar = root.resolve("libs/app.jar");
+        Files.createDirectories(classpathJar.getParent());
+        Files.writeString(classpathJar, "jar");
+
+        final ProjectLayout jarLayout = new BuildInvoker().ensureClasses(
+            new ProjectLayout(
+                root,
+                root,
+                InputKind.PROJECT_DIRECTORY,
+                BuildTool.JAR,
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(classpathJar),
+                output,
+                "demo",
+                List.of()
+            ),
+            options(root)
+        );
+
+        assertThat(jarLayout.classpathEntries()).contains(classpathJar.toAbsolutePath().normalize());
+    }
+
+    @Test
     void ensureClassesRejectsUnsupportedNullBuildTool() {
         final Path root = tempDir.resolve("project");
 

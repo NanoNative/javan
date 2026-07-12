@@ -237,6 +237,20 @@ final class ConstantPoolTest {
     }
 
     @Test
+    void dynamicRefRejectsBootstrapMethodHandleIndexThatDoesNotPointAtHandleEntry() {
+        final ConstantPool pool = new ConstantPool(new Object[]{
+            null,
+            new ConstantPool.DynamicEntry(18, 0, 2),
+            new ConstantPool.NameAndTypeEntry(3, 4),
+            new ConstantPool.Utf8Entry("dyn"),
+            new ConstantPool.Utf8Entry("()V"),
+            new ConstantPool.RawEntry(3, Integer.valueOf(7))
+        });
+
+        assertThat(pool.dynamicRef(1, List.of(new BootstrapMethod(5, List.of())))).isEmpty();
+    }
+
+    @Test
     void dynamicRefRejectsEntriesThatAreNotDynamicConstants() {
         final ConstantPool pool = new ConstantPool(new Object[]{
             null,
