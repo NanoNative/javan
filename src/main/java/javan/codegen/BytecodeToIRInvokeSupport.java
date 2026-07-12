@@ -1720,8 +1720,13 @@ final class BytecodeToIRInvokeSupport {
             )));
             return true;
         }
-        if ("java/time/Duration".equals(methodRef.owner())) {
-            return lowerDurationIntrinsic(classFile, method, methodRef, stack);
+        if ("java/time/Duration".equals(methodRef.owner())
+            || "java/time/ZoneId".equals(methodRef.owner())
+            || "java/time/Instant".equals(methodRef.owner())
+            || "java/time/LocalDate".equals(methodRef.owner())
+            || "java/time/LocalDateTime".equals(methodRef.owner())
+            || "java/util/Date".equals(methodRef.owner())) {
+            return lowerTimeStaticIntrinsic(classFile, method, instruction, methodRef, stack);
         }
         if ("java/lang/Thread".equals(methodRef.owner())) {
             return lowerThreadStaticCall(
@@ -1962,6 +1967,59 @@ final class BytecodeToIRInvokeSupport {
         }
         if ("ofSeconds".equals(methodRef.name()) && "(J)Ljava/time/Duration;".equals(methodRef.descriptor())) {
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_duration_of_seconds", List.of(popLong(classFile, method, stack)))));
+            return true;
+        }
+        return false;
+    }
+
+    static boolean lowerTimeStaticIntrinsic(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final MethodRef methodRef,
+        final List<StackValue> stack
+    ) {
+        if ("java/time/Duration".equals(methodRef.owner())) {
+            return lowerDurationIntrinsic(classFile, method, methodRef, stack);
+        }
+        if ("java/time/ZoneId".equals(methodRef.owner())
+            && "systemDefault".equals(methodRef.name())
+            && "()Ljava/time/ZoneId;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_zone_id_system_default", List.of())));
+            return true;
+        }
+        if ("java/time/Instant".equals(methodRef.owner())) {
+            if ("ofEpochMilli".equals(methodRef.name()) && "(J)Ljava/time/Instant;".equals(methodRef.descriptor())) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_instant_of_epoch_millis", List.of(popLong(classFile, method, stack)))));
+                return true;
+            }
+            if ("now".equals(methodRef.name()) && "()Ljava/time/Instant;".equals(methodRef.descriptor())) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_instant_now", List.of())));
+                return true;
+            }
+            return false;
+        }
+        if ("java/time/LocalDate".equals(methodRef.owner())
+            && "ofEpochDay".equals(methodRef.name())
+            && "(J)Ljava/time/LocalDate;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_local_date_of_epoch_day", List.of(popLong(classFile, method, stack)))));
+            return true;
+        }
+        if ("java/time/LocalDateTime".equals(methodRef.owner())
+            && "ofInstant".equals(methodRef.name())
+            && "(Ljava/time/Instant;Ljava/time/ZoneId;)Ljava/time/LocalDateTime;".equals(methodRef.descriptor())) {
+            final IrExpression zone = popObjectForJdkCall(classFile, method, instruction, stack);
+            final IrExpression instant = popObjectForJdkCall(classFile, method, instruction, stack);
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_local_date_time_of_instant", List.of(instant, zone))));
+            return true;
+        }
+        if ("java/util/Date".equals(methodRef.owner())
+            && "from".equals(methodRef.name())
+            && "(Ljava/time/Instant;)Ljava/util/Date;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_date_from_instant",
+                List.of(popObjectForJdkCall(classFile, method, instruction, stack))
+            )));
             return true;
         }
         return false;
@@ -4454,6 +4512,110 @@ final class BytecodeToIRInvokeSupport {
                 List.of(popObjectForJdkCall(classFile, method, instruction, stack))
             )));
             return true;
+        }
+        if ("java/time/Instant".equals(methodRef.owner())) {
+            if ("toEpochMilli".equals(methodRef.name()) && "()J".equals(methodRef.descriptor())) {
+                stack.add(StackValue.longExpression(IrExpression.longCall(
+                    "javan_instant_to_epoch_millis",
+                    List.of(popObjectForJdkCall(classFile, method, instruction, stack))
+                )));
+                return true;
+            }
+            if ("atZone".equals(methodRef.name()) && "(Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;".equals(methodRef.descriptor())) {
+                final IrExpression zone = popObjectForJdkCall(classFile, method, instruction, stack);
+                final IrExpression instant = popObjectForJdkCall(classFile, method, instruction, stack);
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_instant_at_zone", List.of(instant, zone))));
+                return true;
+            }
+        }
+        if ("java/util/Date".equals(methodRef.owner())) {
+            if ("toInstant".equals(methodRef.name()) && "()Ljava/time/Instant;".equals(methodRef.descriptor())) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                    "javan_date_to_instant",
+                    List.of(popObjectForJdkCall(classFile, method, instruction, stack))
+                )));
+                return true;
+            }
+            if ("getTime".equals(methodRef.name()) && "()J".equals(methodRef.descriptor())) {
+                stack.add(StackValue.longExpression(IrExpression.longCall(
+                    "javan_date_get_time",
+                    List.of(popObjectForJdkCall(classFile, method, instruction, stack))
+                )));
+                return true;
+            }
+        }
+        if ("java/time/LocalDate".equals(methodRef.owner())) {
+            if ("atStartOfDay".equals(methodRef.name()) && "()Ljava/time/LocalDateTime;".equals(methodRef.descriptor())) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                    "javan_local_date_at_start_of_day",
+                    List.of(popObjectForJdkCall(classFile, method, instruction, stack))
+                )));
+                return true;
+            }
+            if ("atStartOfDay".equals(methodRef.name()) && "(Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;".equals(methodRef.descriptor())) {
+                final IrExpression zone = popObjectForJdkCall(classFile, method, instruction, stack);
+                final IrExpression localDate = popObjectForJdkCall(classFile, method, instruction, stack);
+                stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                    "javan_local_date_at_start_of_day_zone",
+                    List.of(localDate, zone)
+                )));
+                return true;
+            }
+        }
+        if ("java/time/LocalDateTime".equals(methodRef.owner())) {
+            if ("atZone".equals(methodRef.name()) && "(Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;".equals(methodRef.descriptor())) {
+                final IrExpression zone = popObjectForJdkCall(classFile, method, instruction, stack);
+                final IrExpression localDateTime = popObjectForJdkCall(classFile, method, instruction, stack);
+                stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                    "javan_local_date_time_at_zone",
+                    List.of(localDateTime, zone)
+                )));
+                return true;
+            }
+            if ("toLocalDate".equals(methodRef.name()) && "()Ljava/time/LocalDate;".equals(methodRef.descriptor())) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                    "javan_local_date_time_to_local_date",
+                    List.of(popObjectForJdkCall(classFile, method, instruction, stack))
+                )));
+                return true;
+            }
+            if ("toLocalTime".equals(methodRef.name()) && "()Ljava/time/LocalTime;".equals(methodRef.descriptor())) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                    "javan_local_date_time_to_local_time",
+                    List.of(popObjectForJdkCall(classFile, method, instruction, stack))
+                )));
+                return true;
+            }
+        }
+        if ("java/time/ZonedDateTime".equals(methodRef.owner())) {
+            if ("toInstant".equals(methodRef.name()) && "()Ljava/time/Instant;".equals(methodRef.descriptor())) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                    "javan_zoned_date_time_to_instant",
+                    List.of(popObjectForJdkCall(classFile, method, instruction, stack))
+                )));
+                return true;
+            }
+            if ("toLocalDate".equals(methodRef.name()) && "()Ljava/time/LocalDate;".equals(methodRef.descriptor())) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                    "javan_zoned_date_time_to_local_date",
+                    List.of(popObjectForJdkCall(classFile, method, instruction, stack))
+                )));
+                return true;
+            }
+            if ("toLocalTime".equals(methodRef.name()) && "()Ljava/time/LocalTime;".equals(methodRef.descriptor())) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                    "javan_zoned_date_time_to_local_time",
+                    List.of(popObjectForJdkCall(classFile, method, instruction, stack))
+                )));
+                return true;
+            }
+            if ("toLocalDateTime".equals(methodRef.name()) && "()Ljava/time/LocalDateTime;".equals(methodRef.descriptor())) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                    "javan_zoned_date_time_to_local_date_time",
+                    List.of(popObjectForJdkCall(classFile, method, instruction, stack))
+                )));
+                return true;
+            }
         }
         return false;
     }

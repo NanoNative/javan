@@ -331,6 +331,33 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void zoneIdSystemDefaultIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/time/ZoneId",
+            "systemDefault",
+            "()Ljava/time/ZoneId;"
+        ))).isTrue();
+    }
+
+    @Test
+    void instantAtZoneRequiresTimeRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/time/Instant",
+            "atZone",
+            "(Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;"
+        ))).containsExactly("time");
+    }
+
+    @Test
+    void dateFromInstantIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Date",
+            "from",
+            "(Ljava/time/Instant;)Ljava/util/Date;"
+        ))).isTrue();
+    }
+
+    @Test
     void characterValueOfIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/Character",

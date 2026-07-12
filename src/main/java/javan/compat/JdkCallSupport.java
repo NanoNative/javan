@@ -205,6 +205,24 @@ public final class JdkCallSupport {
         runtime("Duration.ofMillis", "java/time/Duration", "ofMillis", "(J)Ljava/time/Duration;"),
         runtime("Duration.ofSeconds", "java/time/Duration", "ofSeconds", "(J)Ljava/time/Duration;"),
         runtime("Duration.toMillis", "java/time/Duration", "toMillis", "()J"),
+        runtime("ZoneId.systemDefault", "java/time/ZoneId", "systemDefault", "()Ljava/time/ZoneId;"),
+        runtime("Instant.now", "java/time/Instant", "now", "()Ljava/time/Instant;"),
+        runtime("Instant.ofEpochMilli", "java/time/Instant", "ofEpochMilli", "(J)Ljava/time/Instant;"),
+        runtime("Instant.toEpochMilli", "java/time/Instant", "toEpochMilli", "()J"),
+        runtime("Instant.atZone", "java/time/Instant", "atZone", "(Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;"),
+        runtime("LocalDate.ofEpochDay", "java/time/LocalDate", "ofEpochDay", "(J)Ljava/time/LocalDate;"),
+        runtime("LocalDate.atStartOfDay", "java/time/LocalDate", "atStartOfDay", "()Ljava/time/LocalDateTime;", "(Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;"),
+        runtime("LocalDateTime.ofInstant", "java/time/LocalDateTime", "ofInstant", "(Ljava/time/Instant;Ljava/time/ZoneId;)Ljava/time/LocalDateTime;"),
+        runtime("LocalDateTime.atZone", "java/time/LocalDateTime", "atZone", "(Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;"),
+        runtime("LocalDateTime.toLocalDate", "java/time/LocalDateTime", "toLocalDate", "()Ljava/time/LocalDate;"),
+        runtime("LocalDateTime.toLocalTime", "java/time/LocalDateTime", "toLocalTime", "()Ljava/time/LocalTime;"),
+        runtime("ZonedDateTime.toInstant", "java/time/ZonedDateTime", "toInstant", "()Ljava/time/Instant;"),
+        runtime("ZonedDateTime.toLocalDate", "java/time/ZonedDateTime", "toLocalDate", "()Ljava/time/LocalDate;"),
+        runtime("ZonedDateTime.toLocalTime", "java/time/ZonedDateTime", "toLocalTime", "()Ljava/time/LocalTime;"),
+        runtime("ZonedDateTime.toLocalDateTime", "java/time/ZonedDateTime", "toLocalDateTime", "()Ljava/time/LocalDateTime;"),
+        runtime("Date.from", "java/util/Date", "from", "(Ljava/time/Instant;)Ljava/util/Date;"),
+        runtime("Date.toInstant", "java/util/Date", "toInstant", "()Ljava/time/Instant;"),
+        runtime("Date.getTime", "java/util/Date", "getTime", "()J"),
         runtime("DateTimeFormatterBuilder.<init>", "java/time/format/DateTimeFormatterBuilder", "<init>", "()V"),
         runtime("DateTimeFormatterBuilder.parseCaseInsensitive", "java/time/format/DateTimeFormatterBuilder", "parseCaseInsensitive", "()Ljava/time/format/DateTimeFormatterBuilder;"),
         runtime("DateTimeFormatterBuilder.appendPattern", "java/time/format/DateTimeFormatterBuilder", "appendPattern", "(Ljava/lang/String;)Ljava/time/format/DateTimeFormatterBuilder;"),
@@ -1093,6 +1111,15 @@ public final class JdkCallSupport {
             return List.of("managed-heap");
         }
         if ("java/time/Duration".equals(owner)) {
+            return List.of("time");
+        }
+        if ("java/time/ZoneId".equals(owner)
+            || "java/time/Instant".equals(owner)
+            || "java/time/LocalDate".equals(owner)
+            || "java/time/LocalTime".equals(owner)
+            || "java/time/LocalDateTime".equals(owner)
+            || "java/time/ZonedDateTime".equals(owner)
+            || "java/util/Date".equals(owner)) {
             return List.of("time");
         }
         if ("java/time/format/DateTimeFormatterBuilder".equals(owner)) {

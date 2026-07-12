@@ -65,6 +65,13 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_RUNTIME_KIND_LOCALE 29
         #define JAVAN_RUNTIME_KIND_DATETIME_FORMATTER_BUILDER 30
         #define JAVAN_RUNTIME_KIND_DATETIME_FORMATTER 31
+        #define JAVAN_RUNTIME_KIND_ZONE_ID 32
+        #define JAVAN_RUNTIME_KIND_INSTANT 33
+        #define JAVAN_RUNTIME_KIND_DATE 34
+        #define JAVAN_RUNTIME_KIND_LOCAL_DATE 35
+        #define JAVAN_RUNTIME_KIND_LOCAL_TIME 36
+        #define JAVAN_RUNTIME_KIND_LOCAL_DATE_TIME 37
+        #define JAVAN_RUNTIME_KIND_ZONED_DATE_TIME 38
 
         typedef struct {
             int magic;
@@ -286,6 +293,63 @@ final class RuntimeSourceMemorySections {
 
         typedef struct {
             int magic;
+            int kind;
+            int reserved0;
+            int reserved1;
+        } javan_zone_id_value;
+
+        typedef struct {
+            int magic;
+            int reserved0;
+            int reserved1;
+            int reserved2;
+            long long epoch_millis;
+        } javan_instant_value;
+
+        typedef struct {
+            int magic;
+            int reserved0;
+            int reserved1;
+            int reserved2;
+            long long epoch_millis;
+        } javan_date_value;
+
+        typedef struct {
+            int magic;
+            int year;
+            int month;
+            int day;
+        } javan_local_date_value;
+
+        typedef struct {
+            int magic;
+            int hour;
+            int minute;
+            int second;
+            int millis;
+        } javan_local_time_value;
+
+        typedef struct {
+            int magic;
+            int year;
+            int month;
+            int day;
+            int hour;
+            int minute;
+            int second;
+            int millis;
+        } javan_local_date_time_value;
+
+        typedef struct {
+            int magic;
+            int zone_kind;
+            int reserved0;
+            int reserved1;
+            long long epoch_millis;
+        } javan_zoned_date_time_value;
+
+        typedef struct {
+            int magic;
             int case_insensitive;
             int optional_depth;
             int optional_nano_fraction;
@@ -337,6 +401,14 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_LOCALE_MAGIC 0x4a4c4f43
         #define JAVAN_DATETIME_FORMATTER_BUILDER_MAGIC 0x4a445446
         #define JAVAN_DATETIME_FORMATTER_MAGIC 0x4a44544d
+        #define JAVAN_ZONE_ID_MAGIC 0x4a5a4f4e
+        #define JAVAN_INSTANT_MAGIC 0x4a494e53
+        #define JAVAN_DATE_MAGIC 0x4a444154
+        #define JAVAN_LOCAL_DATE_MAGIC 0x4a4c4441
+        #define JAVAN_LOCAL_TIME_MAGIC 0x4a4c544d
+        #define JAVAN_LOCAL_DATE_TIME_MAGIC 0x4a4c4454
+        #define JAVAN_ZONED_DATE_TIME_MAGIC 0x4a5a4454
+        #define JAVAN_ZONE_KIND_SYSTEM_DEFAULT 1
         #define JAVAN_HTTP_METHOD_GET 1
         #define JAVAN_HTTP_METHOD_POST 2
         #define JAVAN_HTTP_METHOD_PUT 3
@@ -422,6 +494,14 @@ final class RuntimeSourceMemorySections {
         static const char* javan_runtime_profile_md_path_value = NULL;
         static javan_object_list* javan_list_new_with_capacity(int capacity, int immutable);
         static void javan_list_append_raw(javan_object_list* list, void* value);
+        static javan_locale_value* javan_locale_checked(void* value);
+        static javan_zone_id_value* javan_zone_id_checked(void* value);
+        static javan_instant_value* javan_instant_checked(void* value);
+        static javan_date_value* javan_date_checked(void* value);
+        static javan_local_date_value* javan_local_date_checked(void* value);
+        static javan_local_time_value* javan_local_time_checked(void* value);
+        static javan_local_date_time_value* javan_local_date_time_checked(void* value);
+        static javan_zoned_date_time_value* javan_zoned_date_time_checked(void* value);
         void* javan_printable_object_string(void* value);
         #if defined(_WIN32)
         static CRITICAL_SECTION javan_runtime_lock_value;
@@ -972,7 +1052,14 @@ final class RuntimeSourceMemorySections {
                 || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_RESPONSE
                 || runtime_kind == JAVAN_RUNTIME_KIND_LOCALE
                 || runtime_kind == JAVAN_RUNTIME_KIND_DATETIME_FORMATTER_BUILDER
-                || runtime_kind == JAVAN_RUNTIME_KIND_DATETIME_FORMATTER;
+                || runtime_kind == JAVAN_RUNTIME_KIND_DATETIME_FORMATTER
+                || runtime_kind == JAVAN_RUNTIME_KIND_ZONE_ID
+                || runtime_kind == JAVAN_RUNTIME_KIND_INSTANT
+                || runtime_kind == JAVAN_RUNTIME_KIND_DATE
+                || runtime_kind == JAVAN_RUNTIME_KIND_LOCAL_DATE
+                || runtime_kind == JAVAN_RUNTIME_KIND_LOCAL_TIME
+                || runtime_kind == JAVAN_RUNTIME_KIND_LOCAL_DATE_TIME
+                || runtime_kind == JAVAN_RUNTIME_KIND_ZONED_DATE_TIME;
             javan_heap_maybe_validate();
             javan_runtime_lock_leave();
         }
@@ -1104,6 +1191,9 @@ final class RuntimeSourceMemorySections {
                 javan_panic("invalid runtime owned buffer reference");
             }
         }
+        """;
+
+    private static final String SOURCE_HEAP_VALIDATION = """
 
         static void javan_validate_runtime_managed_reference(void* value) {
             if (value == NULL) {
@@ -1211,6 +1301,20 @@ final class RuntimeSourceMemorySections {
                 }
                 javan_validate_runtime_managed_reference((void*) formatter->patterns);
                 javan_validate_runtime_managed_reference(formatter->locale);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_ZONE_ID) {
+                javan_zone_id_checked(node->value);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_INSTANT) {
+                javan_instant_checked(node->value);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_DATE) {
+                javan_date_checked(node->value);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_LOCAL_DATE) {
+                javan_local_date_checked(node->value);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_LOCAL_TIME) {
+                javan_local_time_checked(node->value);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_LOCAL_DATE_TIME) {
+                javan_local_date_time_checked(node->value);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_ZONED_DATE_TIME) {
+                javan_zoned_date_time_checked(node->value);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_HTTP_REQUEST_BUILDER) {
                 javan_http_request_builder_value* builder = (javan_http_request_builder_value*) node->value;
                 if (builder->magic != JAVAN_HTTP_REQUEST_BUILDER_MAGIC || builder->uri == NULL || builder->headers == NULL) {
@@ -1349,6 +1453,20 @@ final class RuntimeSourceMemorySections {
                     || (formatter->optional_nano_fraction != 0 && formatter->optional_nano_fraction != 1)) {
                     javan_panic("invalid runtime datetime formatter metadata");
                 }
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_ZONE_ID) {
+                javan_zone_id_checked(node->value);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_INSTANT) {
+                javan_instant_checked(node->value);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_DATE) {
+                javan_date_checked(node->value);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_LOCAL_DATE) {
+                javan_local_date_checked(node->value);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_LOCAL_TIME) {
+                javan_local_time_checked(node->value);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_LOCAL_DATE_TIME) {
+                javan_local_date_time_checked(node->value);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_ZONED_DATE_TIME) {
+                javan_zoned_date_time_checked(node->value);
             }
         }
 
@@ -1434,6 +1552,13 @@ final class RuntimeSourceMemorySections {
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_LOCALE
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_DATETIME_FORMATTER_BUILDER
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_DATETIME_FORMATTER
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_ZONE_ID
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_INSTANT
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_DATE
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_LOCAL_DATE
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_LOCAL_TIME
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_LOCAL_DATE_TIME
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_ZONED_DATE_TIME
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_BUILDER
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_FACTORY
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_EXECUTOR
@@ -2160,6 +2285,83 @@ final class RuntimeSourceMemorySections {
             return locale;
         }
 
+        static javan_zone_id_value* javan_zone_id_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported zone id");
+            }
+            javan_zone_id_value* zone = (javan_zone_id_value*) value;
+            if (zone->magic != JAVAN_ZONE_ID_MAGIC || zone->kind != JAVAN_ZONE_KIND_SYSTEM_DEFAULT) {
+                javan_panic("unsupported zone id");
+            }
+            return zone;
+        }
+
+        static javan_instant_value* javan_instant_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported instant");
+            }
+            javan_instant_value* instant = (javan_instant_value*) value;
+            if (instant->magic != JAVAN_INSTANT_MAGIC) {
+                javan_panic("unsupported instant");
+            }
+            return instant;
+        }
+
+        static javan_date_value* javan_date_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported date");
+            }
+            javan_date_value* date = (javan_date_value*) value;
+            if (date->magic != JAVAN_DATE_MAGIC) {
+                javan_panic("unsupported date");
+            }
+            return date;
+        }
+
+        static javan_local_date_value* javan_local_date_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported local date");
+            }
+            javan_local_date_value* date = (javan_local_date_value*) value;
+            if (date->magic != JAVAN_LOCAL_DATE_MAGIC) {
+                javan_panic("unsupported local date");
+            }
+            return date;
+        }
+
+        static javan_local_time_value* javan_local_time_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported local time");
+            }
+            javan_local_time_value* time = (javan_local_time_value*) value;
+            if (time->magic != JAVAN_LOCAL_TIME_MAGIC) {
+                javan_panic("unsupported local time");
+            }
+            return time;
+        }
+
+        static javan_local_date_time_value* javan_local_date_time_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported local date time");
+            }
+            javan_local_date_time_value* date_time = (javan_local_date_time_value*) value;
+            if (date_time->magic != JAVAN_LOCAL_DATE_TIME_MAGIC) {
+                javan_panic("unsupported local date time");
+            }
+            return date_time;
+        }
+
+        static javan_zoned_date_time_value* javan_zoned_date_time_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported zoned date time");
+            }
+            javan_zoned_date_time_value* date_time = (javan_zoned_date_time_value*) value;
+            if (date_time->magic != JAVAN_ZONED_DATE_TIME_MAGIC || date_time->zone_kind != JAVAN_ZONE_KIND_SYSTEM_DEFAULT) {
+                javan_panic("unsupported zoned date time");
+            }
+            return date_time;
+        }
+
         static javan_datetime_formatter_builder_value* javan_datetime_formatter_builder_checked(void* value) {
             if (value == NULL) {
                 javan_panic("unsupported datetime formatter builder");
@@ -2263,6 +2465,20 @@ final class RuntimeSourceMemorySections {
                     return "java.time.format.DateTimeFormatterBuilder";
                 case JAVAN_RUNTIME_KIND_DATETIME_FORMATTER:
                     return "java.time.format.DateTimeFormatter";
+                case JAVAN_RUNTIME_KIND_ZONE_ID:
+                    return "java.time.ZoneId";
+                case JAVAN_RUNTIME_KIND_INSTANT:
+                    return "java.time.Instant";
+                case JAVAN_RUNTIME_KIND_DATE:
+                    return "java.util.Date";
+                case JAVAN_RUNTIME_KIND_LOCAL_DATE:
+                    return "java.time.LocalDate";
+                case JAVAN_RUNTIME_KIND_LOCAL_TIME:
+                    return "java.time.LocalTime";
+                case JAVAN_RUNTIME_KIND_LOCAL_DATE_TIME:
+                    return "java.time.LocalDateTime";
+                case JAVAN_RUNTIME_KIND_ZONED_DATE_TIME:
+                    return "java.time.ZonedDateTime";
                 case JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_BUILDER:
                     return "java.lang.ThreadBuilders$VirtualThreadBuilder";
                 case JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_FACTORY:
@@ -3053,6 +3269,352 @@ final class RuntimeSourceMemorySections {
             }
             return (duration->seconds * 1000LL) + ((long long) duration->nanos / 1000000LL);
         }
+        """;
+
+    private static final String SOURCE_HEAP_ALLOC_TIME = """
+
+        static int javan_epoch_seconds_and_millis(long long epoch_millis, time_t* epoch_seconds, int* millis_part) {
+            if (epoch_seconds == NULL || millis_part == NULL) {
+                return 0;
+            }
+            long long seconds = epoch_millis / 1000LL;
+            int millis = (int) (epoch_millis % 1000LL);
+            if (millis < 0) {
+                millis += 1000;
+                seconds -= 1;
+            }
+            *epoch_seconds = (time_t) seconds;
+            *millis_part = millis;
+            return ((long long) *epoch_seconds) == seconds;
+        }
+
+        static int javan_localtime_portable(time_t value, struct tm* result) {
+            #if defined(_WIN32)
+            return localtime_s(result, &value) == 0;
+            #else
+            return localtime_r(&value, result) != NULL;
+            #endif
+        }
+
+        static int javan_gmtime_portable(time_t value, struct tm* result) {
+            #if defined(_WIN32)
+            return gmtime_s(result, &value) == 0;
+            #else
+            return gmtime_r(&value, result) != NULL;
+            #endif
+        }
+
+        static void* javan_zone_id_new_system_default(void) {
+            javan_zone_id_value* zone = (javan_zone_id_value*) javan_alloc(sizeof(javan_zone_id_value));
+            zone->magic = JAVAN_ZONE_ID_MAGIC;
+            zone->kind = JAVAN_ZONE_KIND_SYSTEM_DEFAULT;
+            zone->reserved0 = 0;
+            zone->reserved1 = 0;
+            javan_update_runtime_allocation_kind((void*) zone, JAVAN_RUNTIME_KIND_ZONE_ID);
+            return (void*) zone;
+        }
+
+        static void* javan_instant_new(long long epoch_millis) {
+            javan_instant_value* instant = (javan_instant_value*) javan_alloc(sizeof(javan_instant_value));
+            instant->magic = JAVAN_INSTANT_MAGIC;
+            instant->reserved0 = 0;
+            instant->reserved1 = 0;
+            instant->reserved2 = 0;
+            instant->epoch_millis = epoch_millis;
+            javan_update_runtime_allocation_kind((void*) instant, JAVAN_RUNTIME_KIND_INSTANT);
+            return (void*) instant;
+        }
+
+        static void* javan_date_new(long long epoch_millis) {
+            javan_date_value* date = (javan_date_value*) javan_alloc(sizeof(javan_date_value));
+            date->magic = JAVAN_DATE_MAGIC;
+            date->reserved0 = 0;
+            date->reserved1 = 0;
+            date->reserved2 = 0;
+            date->epoch_millis = epoch_millis;
+            javan_update_runtime_allocation_kind((void*) date, JAVAN_RUNTIME_KIND_DATE);
+            return (void*) date;
+        }
+
+        static void* javan_local_date_new(int year, int month, int day) {
+            javan_local_date_value* date = (javan_local_date_value*) javan_alloc(sizeof(javan_local_date_value));
+            date->magic = JAVAN_LOCAL_DATE_MAGIC;
+            date->year = year;
+            date->month = month;
+            date->day = day;
+            javan_update_runtime_allocation_kind((void*) date, JAVAN_RUNTIME_KIND_LOCAL_DATE);
+            return (void*) date;
+        }
+
+        static void* javan_local_time_new(int hour, int minute, int second, int millis) {
+            javan_local_time_value* time = (javan_local_time_value*) javan_alloc(sizeof(javan_local_time_value));
+            time->magic = JAVAN_LOCAL_TIME_MAGIC;
+            time->hour = hour;
+            time->minute = minute;
+            time->second = second;
+            time->millis = millis;
+            javan_update_runtime_allocation_kind((void*) time, JAVAN_RUNTIME_KIND_LOCAL_TIME);
+            return (void*) time;
+        }
+
+        static void* javan_local_date_time_new(int year, int month, int day, int hour, int minute, int second, int millis) {
+            javan_local_date_time_value* date_time = (javan_local_date_time_value*) javan_alloc(sizeof(javan_local_date_time_value));
+            date_time->magic = JAVAN_LOCAL_DATE_TIME_MAGIC;
+            date_time->year = year;
+            date_time->month = month;
+            date_time->day = day;
+            date_time->hour = hour;
+            date_time->minute = minute;
+            date_time->second = second;
+            date_time->millis = millis;
+            javan_update_runtime_allocation_kind((void*) date_time, JAVAN_RUNTIME_KIND_LOCAL_DATE_TIME);
+            return (void*) date_time;
+        }
+
+        static void* javan_zoned_date_time_new(long long epoch_millis) {
+            javan_zoned_date_time_value* date_time = (javan_zoned_date_time_value*) javan_alloc(sizeof(javan_zoned_date_time_value));
+            date_time->magic = JAVAN_ZONED_DATE_TIME_MAGIC;
+            date_time->zone_kind = JAVAN_ZONE_KIND_SYSTEM_DEFAULT;
+            date_time->reserved0 = 0;
+            date_time->reserved1 = 0;
+            date_time->epoch_millis = epoch_millis;
+            javan_update_runtime_allocation_kind((void*) date_time, JAVAN_RUNTIME_KIND_ZONED_DATE_TIME);
+            return (void*) date_time;
+        }
+
+        static void javan_components_from_epoch_millis_local(
+            long long epoch_millis,
+            int* year,
+            int* month,
+            int* day,
+            int* hour,
+            int* minute,
+            int* second,
+            int* millis
+        ) {
+            time_t epoch_seconds = 0;
+            int millis_part = 0;
+            struct tm calendar;
+            if (javan_epoch_seconds_and_millis(epoch_millis, &epoch_seconds, &millis_part) == 0
+                || javan_localtime_portable(epoch_seconds, &calendar) == 0) {
+                javan_panic("time conversion failed");
+            }
+            *year = calendar.tm_year + 1900;
+            *month = calendar.tm_mon + 1;
+            *day = calendar.tm_mday;
+            *hour = calendar.tm_hour;
+            *minute = calendar.tm_min;
+            *second = calendar.tm_sec;
+            *millis = millis_part;
+        }
+
+        static long long javan_epoch_millis_from_local_components(
+            int year,
+            int month,
+            int day,
+            int hour,
+            int minute,
+            int second,
+            int millis
+        ) {
+            struct tm calendar;
+            memset(&calendar, 0, sizeof(calendar));
+            calendar.tm_year = year - 1900;
+            calendar.tm_mon = month - 1;
+            calendar.tm_mday = day;
+            calendar.tm_hour = hour;
+            calendar.tm_min = minute;
+            calendar.tm_sec = second;
+            calendar.tm_isdst = -1;
+            time_t epoch_seconds = mktime(&calendar);
+            if (epoch_seconds == (time_t) -1) {
+                javan_panic("time conversion failed");
+            }
+            return ((long long) epoch_seconds * 1000LL) + millis;
+        }
+
+        void* javan_zone_id_system_default(void) {
+            return javan_zone_id_new_system_default();
+        }
+
+        void* javan_instant_now(void) {
+            return javan_instant_new(javan_system_current_time_millis());
+        }
+
+        void* javan_instant_of_epoch_millis(long long millis) {
+            return javan_instant_new(millis);
+        }
+
+        long long javan_instant_to_epoch_millis(void* value) {
+            return javan_instant_checked(value)->epoch_millis;
+        }
+
+        void* javan_instant_at_zone(void* instant, void* zone) {
+            javan_zone_id_checked(zone);
+            return javan_zoned_date_time_new(javan_instant_checked(instant)->epoch_millis);
+        }
+
+        void* javan_local_date_of_epoch_day(long long epoch_day) {
+            if (epoch_day > LLONG_MAX / 86400LL || epoch_day < LLONG_MIN / 86400LL) {
+                javan_panic("epoch day overflow");
+            }
+            time_t epoch_seconds = (time_t) (epoch_day * 86400LL);
+            if (((long long) epoch_seconds) != epoch_day * 86400LL) {
+                javan_panic("epoch day overflow");
+            }
+            struct tm calendar;
+            if (javan_gmtime_portable(epoch_seconds, &calendar) == 0) {
+                javan_panic("time conversion failed");
+            }
+            return javan_local_date_new(calendar.tm_year + 1900, calendar.tm_mon + 1, calendar.tm_mday);
+        }
+
+        void* javan_local_date_at_start_of_day(void* value) {
+            javan_local_date_value* date = javan_local_date_checked(value);
+            return javan_local_date_time_new(date->year, date->month, date->day, 0, 0, 0, 0);
+        }
+
+        void* javan_local_date_at_start_of_day_zone(void* value, void* zone) {
+            javan_local_date_value* date = javan_local_date_checked(value);
+            javan_zone_id_checked(zone);
+            return javan_zoned_date_time_new(javan_epoch_millis_from_local_components(
+                date->year,
+                date->month,
+                date->day,
+                0,
+                0,
+                0,
+                0
+            ));
+        }
+
+        void* javan_local_date_time_of_instant(void* instant, void* zone) {
+            javan_zone_id_checked(zone);
+            int year = 0;
+            int month = 0;
+            int day = 0;
+            int hour = 0;
+            int minute = 0;
+            int second = 0;
+            int millis = 0;
+            javan_components_from_epoch_millis_local(
+                javan_instant_checked(instant)->epoch_millis,
+                &year,
+                &month,
+                &day,
+                &hour,
+                &minute,
+                &second,
+                &millis
+            );
+            return javan_local_date_time_new(year, month, day, hour, minute, second, millis);
+        }
+
+        void* javan_local_date_time_at_zone(void* value, void* zone) {
+            javan_local_date_time_value* date_time = javan_local_date_time_checked(value);
+            javan_zone_id_checked(zone);
+            return javan_zoned_date_time_new(javan_epoch_millis_from_local_components(
+                date_time->year,
+                date_time->month,
+                date_time->day,
+                date_time->hour,
+                date_time->minute,
+                date_time->second,
+                date_time->millis
+            ));
+        }
+
+        void* javan_local_date_time_to_local_date(void* value) {
+            javan_local_date_time_value* date_time = javan_local_date_time_checked(value);
+            return javan_local_date_new(date_time->year, date_time->month, date_time->day);
+        }
+
+        void* javan_local_date_time_to_local_time(void* value) {
+            javan_local_date_time_value* date_time = javan_local_date_time_checked(value);
+            return javan_local_time_new(date_time->hour, date_time->minute, date_time->second, date_time->millis);
+        }
+
+        void* javan_zoned_date_time_to_instant(void* value) {
+            return javan_instant_new(javan_zoned_date_time_checked(value)->epoch_millis);
+        }
+
+        void* javan_zoned_date_time_to_local_date(void* value) {
+            int year = 0;
+            int month = 0;
+            int day = 0;
+            int hour = 0;
+            int minute = 0;
+            int second = 0;
+            int millis = 0;
+            javan_components_from_epoch_millis_local(
+                javan_zoned_date_time_checked(value)->epoch_millis,
+                &year,
+                &month,
+                &day,
+                &hour,
+                &minute,
+                &second,
+                &millis
+            );
+            return javan_local_date_new(year, month, day);
+        }
+
+        void* javan_zoned_date_time_to_local_time(void* value) {
+            int year = 0;
+            int month = 0;
+            int day = 0;
+            int hour = 0;
+            int minute = 0;
+            int second = 0;
+            int millis = 0;
+            javan_components_from_epoch_millis_local(
+                javan_zoned_date_time_checked(value)->epoch_millis,
+                &year,
+                &month,
+                &day,
+                &hour,
+                &minute,
+                &second,
+                &millis
+            );
+            return javan_local_time_new(hour, minute, second, millis);
+        }
+
+        void* javan_zoned_date_time_to_local_date_time(void* value) {
+            int year = 0;
+            int month = 0;
+            int day = 0;
+            int hour = 0;
+            int minute = 0;
+            int second = 0;
+            int millis = 0;
+            javan_components_from_epoch_millis_local(
+                javan_zoned_date_time_checked(value)->epoch_millis,
+                &year,
+                &month,
+                &day,
+                &hour,
+                &minute,
+                &second,
+                &millis
+            );
+            return javan_local_date_time_new(year, month, day, hour, minute, second, millis);
+        }
+
+        void* javan_date_from_instant(void* instant) {
+            return javan_date_new(javan_instant_checked(instant)->epoch_millis);
+        }
+
+        void* javan_date_to_instant(void* value) {
+            return javan_instant_new(javan_date_checked(value)->epoch_millis);
+        }
+
+        long long javan_date_get_time(void* value) {
+            return javan_date_checked(value)->epoch_millis;
+        }
+        """;
+
+    private static final String SOURCE_HEAP_ALLOC_TAIL_CONT = """
 
         void* javan_locale_root(void) {
             if (javan_locale_root_value != NULL) {
@@ -6140,13 +6702,17 @@ final class RuntimeSourceMemorySections {
     }
 
     static String heap() {
-        return SOURCE_HEAP;
+        String result = SOURCE_HEAP;
+        result = result + SOURCE_HEAP_VALIDATION;
+        return result;
     }
 
     static String heapAlloc() {
         String result = SOURCE_HEAP_ALLOC_HEAD;
         result = result + SOURCE_HEAP_ALLOC_EXECUTOR;
         result = result + SOURCE_HEAP_ALLOC_TAIL;
+        result = result + SOURCE_HEAP_ALLOC_TIME;
+        result = result + SOURCE_HEAP_ALLOC_TAIL_CONT;
         return result;
     }
 

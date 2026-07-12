@@ -10413,6 +10413,114 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void instantOfEpochMilliToEpochMilliBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("instant-of-epoch-milli");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.time.Instant;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Instant.ofEpochMilli(1234L).toEpochMilli());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/instant-of-epoch-milli").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void dateFromInstantRoundTripBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("date-from-instant-round-trip");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.time.Instant;
+            import java.util.Date;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Date.from(Instant.ofEpochMilli(5678L)).toInstant().toEpochMilli());
+                    System.out.println(Date.from(Instant.ofEpochMilli(5678L)).getTime());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/date-from-instant-round-trip").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void localDateAtStartOfDayZoneBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("local-date-at-start-of-day-zone");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.time.LocalDate;
+            import java.time.ZoneId;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(LocalDate.ofEpochDay(0L).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/local-date-at-start-of-day-zone").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void localDateTimeOfInstantAtZoneRoundTripBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("local-date-time-of-instant-at-zone");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.time.Instant;
+            import java.time.LocalDateTime;
+            import java.time.ZoneId;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(LocalDateTime.ofInstant(
+                        Instant.ofEpochMilli(987654321L),
+                        ZoneId.systemDefault()
+                    ).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/local-date-time-of-instant-at-zone").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void fileSeparatorCharBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("file-separator-char");
         writeJava(project, "com.acme.Main", """

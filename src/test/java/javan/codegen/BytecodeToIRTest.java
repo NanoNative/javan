@@ -14912,6 +14912,146 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersZoneIdSystemDefaultToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/time/ZoneId;",
+            0,
+            0,
+            invokeStatic(0, new MethodRef("java/time/ZoneId", "systemDefault", "()Ljava/time/ZoneId;")),
+            plain(1, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall("javan_zone_id_system_default", List.of()))
+        );
+    }
+
+    @Test
+    void lowersInstantOfEpochMilliToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(J)Ljava/time/Instant;",
+            2,
+            2,
+            plain(0, 30, "lload_0"),
+            invokeStatic(1, new MethodRef("java/time/Instant", "ofEpochMilli", "(J)Ljava/time/Instant;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall("javan_instant_of_epoch_millis", List.of(IrExpression.longLocal("arg0"))))
+        );
+    }
+
+    @Test
+    void lowersInstantAtZoneToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/time/Instant;Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/time/Instant", "atZone", "(Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;")),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_instant_at_zone",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersDateFromInstantToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/time/Instant;)Ljava/util/Date;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeStatic(1, new MethodRef("java/util/Date", "from", "(Ljava/time/Instant;)Ljava/util/Date;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall("javan_date_from_instant", List.of(IrExpression.objectLocal("arg0"))))
+        );
+    }
+
+    @Test
+    void lowersLocalDateAtStartOfDayZoneToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/time/LocalDate;Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/time/LocalDate", "atStartOfDay", "(Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;")),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_local_date_at_start_of_day_zone",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersLocalDateTimeAtZoneToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/time/LocalDateTime;Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/time/LocalDateTime", "atZone", "(Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;")),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_local_date_time_at_zone",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersZonedDateTimeToLocalDateTimeToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/time/ZonedDateTime;)Ljava/time/LocalDateTime;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/time/ZonedDateTime", "toLocalDateTime", "()Ljava/time/LocalDateTime;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_zoned_date_time_to_local_date_time",
+                List.of(IrExpression.objectLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
     void ignoresSyntheticEnumSwitchMapHandlerForDollarOneClass() {
         final MethodInfo clinit = methodWithHandlers(
             0x0008,

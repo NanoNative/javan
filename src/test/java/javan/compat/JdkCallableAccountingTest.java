@@ -655,6 +655,18 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksInstantOfEpochMilliAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/time/Instant", "ofEpochMilli", "(J)Ljava/time/Instant;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksDateFromInstantAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Date", "from", "(Ljava/time/Instant;)Ljava/util/Date;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksDateTimeParseExceptionConstructorAsExplicitRejected() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/time/format/DateTimeParseException", "<init>", "(Ljava/lang/String;Ljava/lang/CharSequence;I)V")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
