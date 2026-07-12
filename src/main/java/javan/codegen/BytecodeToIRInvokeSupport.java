@@ -2997,6 +2997,13 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_copy_of", arguments)));
             return true;
         }
+        if ("java/util/concurrent/ConcurrentHashMap".equals(owner)) {
+            if (!"newKeySet".equals(name) || !"()Ljava/util/concurrent/ConcurrentHashMap$KeySetView;".equals(descriptor)) {
+                return false;
+            }
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_hashset_new", List.of())));
+            return true;
+        }
         if (!"java/util/List".equals(owner)) {
             return false;
         }
@@ -3375,6 +3382,29 @@ final class BytecodeToIRInvokeSupport {
             }
             if ("iterator()Ljava/util/Iterator;".equals(signature)) {
                 stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_iterator", List.of(receiver))));
+                return true;
+            }
+        }
+        if (isJdkSetOwner(methodRef.owner())) {
+            if ("add(Ljava/lang/Object;)Z".equals(signature)) {
+                pushIntCall(instructions, stack, localDeclarations, "javan_set_add", List.of(receiver, arguments.getFirst()));
+                return true;
+            }
+            if ("remove(Ljava/lang/Object;)Z".equals(signature)) {
+                pushIntCall(instructions, stack, localDeclarations, "javan_set_remove", List.of(receiver, arguments.getFirst()));
+                return true;
+            }
+            if ("size()I".equals(signature)) {
+                stack.add(StackValue.intExpression(IrExpression.intCall("javan_list_size", List.of(receiver))));
+                return true;
+            }
+            if ("isEmpty()Z".equals(signature)) {
+                stack.add(StackValue.intExpression(IrExpression.intCall("javan_list_is_empty", List.of(receiver))));
+                return true;
+            }
+            if ("toArray(Ljava/util/function/IntFunction;)[Ljava/lang/Object;".equals(signature)) {
+                instructions.add(IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(arguments.getFirst())));
+                pushObjectCall(instructions, stack, localDeclarations, "javan_set_to_array", List.of(receiver));
                 return true;
             }
         }
@@ -4159,10 +4189,16 @@ final class BytecodeToIRInvokeSupport {
         if (isJdkListClass(owner)) {
             return true;
         }
-        if ("java/util/Set".equals(owner)) {
+        if (isJdkSetOwner(owner)) {
             return true;
         }
         return "java/util/Collection".equals(owner);
+    }
+    static boolean isJdkSetOwner(final String owner) {
+        if ("java/util/Set".equals(owner)) {
+            return true;
+        }
+        return "java/util/concurrent/ConcurrentHashMap$KeySetView".equals(owner);
     }
     static boolean isJdkMapOwner(final String owner) {
         if ("java/util/Map".equals(owner)) {

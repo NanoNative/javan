@@ -333,6 +333,60 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void concurrentHashMapNewKeySetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/ConcurrentHashMap",
+            "newKeySet",
+            "()Ljava/util/concurrent/ConcurrentHashMap$KeySetView;"
+        ))).isTrue();
+    }
+
+    @Test
+    void setAddIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Set",
+            "add",
+            "(Ljava/lang/Object;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void setRemoveIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Set",
+            "remove",
+            "(Ljava/lang/Object;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void setSizeIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Set",
+            "size",
+            "()I"
+        ))).isTrue();
+    }
+
+    @Test
+    void setToArrayIntFunctionIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Set",
+            "toArray",
+            "(Ljava/util/function/IntFunction;)[Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void keySetViewAddIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/ConcurrentHashMap$KeySetView",
+            "add",
+            "(Ljava/lang/Object;)Z"
+        ))).isTrue();
+    }
+
+    @Test
     void mapEntrySetIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Map",

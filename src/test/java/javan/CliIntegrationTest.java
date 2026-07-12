@@ -8216,6 +8216,164 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void concurrentHashMapNewKeySetDeduplicatesBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("concurrent-hash-map-new-key-set-deduplicates");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Set;
+            import java.util.concurrent.ConcurrentHashMap;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Set<String> values = ConcurrentHashMap.newKeySet();
+                    values.add("hello");
+                    values.add("hello");
+                    values.add("world");
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/concurrent-hash-map-new-key-set-deduplicates").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("2\n");
+    }
+
+    @Test
+    void concurrentHashMapNewKeySetRemoveBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("concurrent-hash-map-new-key-set-remove");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Set;
+            import java.util.concurrent.ConcurrentHashMap;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Set<String> values = ConcurrentHashMap.newKeySet();
+                    values.add("hello");
+                    values.add("world");
+                    System.out.println(values.remove("hello"));
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/concurrent-hash-map-new-key-set-remove").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n1\n");
+    }
+
+    @Test
+    void concurrentHashMapNewKeySetToArrayBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("concurrent-hash-map-new-key-set-to-array");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Set;
+            import java.util.concurrent.ConcurrentHashMap;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Set<String> values = ConcurrentHashMap.newKeySet();
+                    values.add("solo");
+                    final Object[] array = values.toArray(String[]::new);
+                    System.out.println(array.length);
+                    System.out.println(array[0]);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/concurrent-hash-map-new-key-set-to-array").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("1\nsolo\n");
+    }
+
+    @Test
+    void concurrentHashMapNewKeySetVarBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("concurrent-hash-map-new-key-set-var");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.ConcurrentHashMap;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final var values = ConcurrentHashMap.<String>newKeySet();
+                    values.add("hello");
+                    values.add("hello");
+                    values.add("world");
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/concurrent-hash-map-new-key-set-var").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("2\n");
+    }
+
+    @Test
+    void concurrentHashMapNewKeySetVarToArrayBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("concurrent-hash-map-new-key-set-var-to-array");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.ConcurrentHashMap;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final var values = ConcurrentHashMap.<String>newKeySet();
+                    values.add("solo");
+                    final Object[] array = values.toArray(String[]::new);
+                    System.out.println(array.length);
+                    System.out.println(array[0]);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/concurrent-hash-map-new-key-set-var-to-array").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("1\nsolo\n");
+    }
+
+    @Test
     void mapComputeIfAbsentExistingBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("map-compute-if-absent-existing");
         writeJava(project, "com.acme.Main", """
@@ -8396,7 +8554,12 @@ final class CliIntegrationTest {
             "java/lang/Runnable.run()V",
             "java/util/Map.of(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;",
             "java/util/Map.computeIfAbsent(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;",
+            "java/util/concurrent/ConcurrentHashMap.newKeySet()Ljava/util/concurrent/ConcurrentHashMap$KeySetView;",
             "java/util/concurrent/CopyOnWriteArrayList.<init>()V",
+            "java/util/Set.add(Ljava/lang/Object;)Z",
+            "java/util/Set.remove(Ljava/lang/Object;)Z",
+            "java/util/Set.size()I",
+            "java/util/Set.toArray(Ljava/util/function/IntFunction;)[Ljava/lang/Object;",
             "berlin/yuna/typemap/model/FunctionOrNull.apply(Ljava/lang/Object;)Ljava/lang/Object;",
             "berlin/yuna/typemap/model/ConcurrentTypeMap.put(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
             "berlin/yuna/typemap/model/TypeMapI.asOpt(Ljava/lang/Class;[Ljava/lang/Object;)Lberlin/yuna/typemap/model/Type;",

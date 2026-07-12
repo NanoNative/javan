@@ -5580,6 +5580,57 @@ final class RuntimeSourceMemorySections {
             return iterator;
         }
 
+        void* javan_hashset_new(void) {
+            return javan_list_new_with_capacity(0, 0);
+        }
+
+        int javan_set_add(void* value, void* element) {
+            javan_object_list* list = javan_list_checked(value);
+            javan_list_mutable_checked(list);
+            for (int index = 0; index < list->length; index++) {
+                if (javan_object_equals(list->values[index], element) != 0) {
+                    return 0;
+                }
+            }
+            javan_list_append_raw(list, element);
+            list->mod_count++;
+            return 1;
+        }
+
+        int javan_set_remove(void* value, void* element) {
+            javan_object_list* list = javan_list_checked(value);
+            javan_list_mutable_checked(list);
+            for (int index = 0; index < list->length; index++) {
+                if (javan_object_equals(list->values[index], element) == 0) {
+                    continue;
+                }
+                for (int cursor = index + 1; cursor < list->length; cursor++) {
+                    list->values[cursor - 1] = list->values[cursor];
+                }
+                list->length--;
+                list->values[list->length] = NULL;
+                list->mod_count++;
+                return 1;
+            }
+            return 0;
+        }
+
+        void* javan_set_to_array(void* value) {
+            javan_object_list* list = javan_list_checked(value);
+            javan_object_array* result = NULL;
+            void** javan_set_to_array_roots[] = {
+                (void**) &list,
+                (void**) &result
+            };
+            javan_root_frame_push(javan_set_to_array_roots, 2);
+            result = (javan_object_array*) javan_object_array_new(list->length);
+            for (int index = 0; index < list->length; index++) {
+                result->values[index] = list->values[index];
+            }
+            javan_root_frame_pop(javan_set_to_array_roots);
+            return result;
+        }
+
         int javan_iterator_has_next(void* value) {
             javan_object_iterator* iterator = javan_iterator_checked(value);
             return iterator->index < iterator->list->length;

@@ -308,6 +308,7 @@ public final class JdkCallSupport {
         runtime("List.stream", "java/util/List", "stream", "()Ljava/util/stream/Stream;"),
         runtime("Collection.stream", "java/util/Collection", "stream", "()Ljava/util/stream/Stream;"),
         runtime("Set.stream", "java/util/Set", "stream", "()Ljava/util/stream/Stream;"),
+        runtime("ConcurrentHashMap.newKeySet", "java/util/concurrent/ConcurrentHashMap", "newKeySet", "()Ljava/util/concurrent/ConcurrentHashMap$KeySetView;"),
         runtime("List.get", "java/util/List", "get", "(I)Ljava/lang/Object;"),
         runtime("List.getFirst", "java/util/List", "getFirst", "()Ljava/lang/Object;"),
         runtime("List.getLast", "java/util/List", "getLast", "()Ljava/lang/Object;"),
@@ -515,7 +516,7 @@ public final class JdkCallSupport {
         if ("java/util/Collection".equals(methodRef.owner())) {
             return isSupportedCollectionCall(methodRef.name(), methodRef.descriptor());
         }
-        if ("java/util/Set".equals(methodRef.owner())) {
+        if (isSetRuntimeOwner(methodRef.owner())) {
             return isSupportedSetCall(methodRef.name(), methodRef.descriptor());
         }
         if ("java/util/Iterator".equals(methodRef.owner())) {
@@ -672,6 +673,27 @@ public final class JdkCallSupport {
     }
 
     private static boolean isSupportedSetCall(final String name, final String descriptor) {
+        if ("add".equals(name)) {
+            return "(Ljava/lang/Object;)Z".equals(descriptor);
+        }
+        if ("remove".equals(name)) {
+            return "(Ljava/lang/Object;)Z".equals(descriptor);
+        }
+        if ("size".equals(name)) {
+            return "()I".equals(descriptor);
+        }
+        if ("isEmpty".equals(name)) {
+            return "()Z".equals(descriptor);
+        }
+        if ("contains".equals(name)) {
+            return "(Ljava/lang/Object;)Z".equals(descriptor);
+        }
+        if ("iterator".equals(name)) {
+            return "()Ljava/util/Iterator;".equals(descriptor);
+        }
+        if ("toArray".equals(name)) {
+            return "(Ljava/util/function/IntFunction;)[Ljava/lang/Object;".equals(descriptor);
+        }
         if ("stream".equals(name)) {
             return "()Ljava/util/stream/Stream;".equals(descriptor);
         }
@@ -1131,7 +1153,7 @@ public final class JdkCallSupport {
         if ("java/util/Collection".equals(owner)) {
             return true;
         }
-        if ("java/util/Set".equals(owner)) {
+        if (isSetRuntimeOwner(owner)) {
             return true;
         }
         if ("java/util/Map$Entry".equals(owner)) {
@@ -1157,6 +1179,13 @@ public final class JdkCallSupport {
             return true;
         }
         return "java/util/TreeMap".equals(owner);
+    }
+
+    private static boolean isSetRuntimeOwner(final String owner) {
+        if ("java/util/Set".equals(owner)) {
+            return true;
+        }
+        return "java/util/concurrent/ConcurrentHashMap$KeySetView".equals(owner);
     }
 
     private static boolean endsWithAscii(final String value, final String suffix) {
