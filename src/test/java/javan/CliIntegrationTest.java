@@ -12940,6 +12940,102 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void runtimeAddShutdownHookBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("runtime-add-shutdown-hook");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    Runtime.getRuntime().addShutdownHook(new Thread(() -> System.out.println("hook")));
+                    System.out.println("main");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/runtime-add-shutdown-hook").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("main\nhook\n");
+    }
+
+    @Test
+    void runtimeRemoveShutdownHookBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("runtime-remove-shutdown-hook");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Thread hook = new Thread(() -> System.out.println("hook"));
+                    Runtime.getRuntime().addShutdownHook(hook);
+                    System.out.println(Runtime.getRuntime().removeShutdownHook(hook));
+                    System.out.println("main");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/runtime-remove-shutdown-hook").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\nmain\n");
+    }
+
+    @Test
+    void runtimeExitBuildsRunsShutdownHooksAndReturnsStatusCode() throws Exception {
+        final Path project = project("runtime-exit");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Runtime runtime = Runtime.getRuntime();
+                    runtime.addShutdownHook(new Thread(() -> System.out.println("hook")));
+                    runtime.exit(7);
+                }
+            }
+            """);
+
+        final Path classes = project.resolve("jvm-classes");
+        Files.createDirectories(classes);
+        assertThat(process(project, List.of(
+            "javac",
+            "-d",
+            classes.toString(),
+            project.resolve("src/main/java/com/acme/Main.java").toString()
+        )).exitCode()).isZero();
+        final ProcessResult jvmRun = process(project, List.of(
+            "java",
+            "-cp",
+            classes.toString(),
+            "com.acme.Main"
+        ));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/runtime-exit").toString()));
+
+        assertThat(jvmRun.exitCode()).isEqualTo(7);
+        assertThat(jvmRun.stdout()).isEqualTo("hook\n");
+        assertThat(nativeRun.exitCode()).isEqualTo(7);
+        assertThat(nativeRun.stdout()).isEqualTo(jvmRun.stdout());
+    }
+
+    @Test
     void objectsRequireNonNullIntrinsicBuildsAndChecksNull() throws Exception {
         final Path project = project("objects-require-non-null");
         writeJava(project, "com.acme.Main", """

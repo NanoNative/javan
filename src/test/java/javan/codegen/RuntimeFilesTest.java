@@ -5382,6 +5382,162 @@ final class RuntimeFilesTest {
         );
     }
 
+    @Test
+    void runtimeShutdownHookRegistrationAndRemovalUseManagedRuntimeState() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* runtime = javan_runtime_get_runtime();
+                void* hook = javan_thread_new();
+                javan_runtime_add_shutdown_hook(runtime, hook);
+                printf("removed=%d\\n", javan_runtime_remove_shutdown_hook(runtime, hook));
+                printf("removed-again=%d\\n", javan_runtime_remove_shutdown_hook(runtime, hook));
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("removed=1\nremoved-again=0\n");
+    }
+
+    @Test
+    void runtimeShutdownHookDuplicateRegistrationFailsClearly() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <setjmp.h>
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* runtime = javan_runtime_get_runtime();
+                void* hook = javan_thread_new();
+                jmp_buf target;
+                javan_panic_set_target(&target);
+                if (setjmp(target) != 0) {
+                    printf("%s\\n", javan_last_error());
+                    return 0;
+                }
+                javan_runtime_add_shutdown_hook(runtime, hook);
+                javan_runtime_add_shutdown_hook(runtime, hook);
+                return 2;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("Hook previously registered\n");
+    }
+
+    @Test
+    void runtimeShutdownHookRejectsStartedThreadClearly() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <setjmp.h>
+            #include <stdio.h>
+
+            void javan_thread_run_target(void* target) {
+                (void) target;
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* runtime = javan_runtime_get_runtime();
+                void* hook = javan_thread_new();
+                javan_thread_start(hook);
+                javan_thread_join(hook);
+                jmp_buf target;
+                javan_panic_set_target(&target);
+                if (setjmp(target) != 0) {
+                    printf("%s\\n", javan_last_error());
+                    return 0;
+                }
+                javan_runtime_add_shutdown_hook(runtime, hook);
+                return 2;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("Hook already started\n");
+    }
+
+    @Test
+    void runtimeExitWaitsOnlyForRegisteredShutdownHooks() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+            #include <string.h>
+
+            void javan_thread_run_target(void* target) {
+                if (strcmp((const char*) target, "worker") == 0) {
+                    javan_thread_park();
+                    return;
+                }
+                printf("hook=%s\\n", (const char*) target);
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* runtime = javan_runtime_get_runtime();
+                void* worker = javan_thread_new();
+                void* hook = javan_thread_new();
+                javan_thread_set_target(worker, "worker");
+                javan_thread_set_target(hook, "alpha");
+                javan_runtime_add_shutdown_hook(runtime, hook);
+                javan_thread_start(worker);
+                javan_thread_sleep_millis(20LL);
+                printf("before-exit\\n");
+                javan_runtime_exit(runtime, 0);
+                return 2;
+            }
+            """,
+            "4096",
+            Map.of(),
+            java.time.Duration.ofSeconds(2)
+        );
+
+        assertThat(stdout).isEqualTo("before-exit\nhook=alpha\n");
+    }
+
+    @Test
+    void runtimeExitRunsRegisteredShutdownHooks() throws Exception {
+        final RuntimeProbeOutput output = runRuntimeBoundaryProbeOutput(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            void javan_thread_run_target(void* target) {
+                printf("hook=%s\\n", (const char*) target);
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* runtime = javan_runtime_get_runtime();
+                void* hook = javan_thread_new();
+                javan_thread_set_target(hook, "alpha");
+                javan_runtime_add_shutdown_hook(runtime, hook);
+                printf("before-exit\\n");
+                javan_runtime_exit(runtime, 0);
+                return 2;
+            }
+            """,
+            "4096",
+            Map.of(),
+            java.time.Duration.ofSeconds(30)
+        );
+
+        assertThat(output.stderr()).isEmpty();
+        assertThat(output.stdout()).isEqualTo("before-exit\nhook=alpha\n");
+    }
+
     private record RuntimeProbeOutput(String stdout, String stderr) {
     }
 

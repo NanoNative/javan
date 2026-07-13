@@ -1023,7 +1023,8 @@ public final class ReachabilityAnalyzer {
                 final Optional<MethodRef> methodRef = instruction.methodRef();
                 if (methodRef.isPresent() && (isThreadStart(methodRef.orElseThrow())
                     || isVirtualThreadStart(methodRef.orElseThrow())
-                    || isVirtualThreadBuilderStart(methodRef.orElseThrow()))) {
+                    || isVirtualThreadBuilderStart(methodRef.orElseThrow())
+                    || isRuntimeAddShutdownHook(methodRef.orElseThrow()))) {
                     if (!containsEntry(result, reachableMethod)) {
                         result.add(reachableMethod);
                     }
@@ -1111,12 +1112,19 @@ public final class ReachabilityAnalyzer {
                 final Optional<MethodRef> methodRef = instruction.methodRef();
                 if (methodRef.isPresent() && (isThreadStart(methodRef.orElseThrow())
                     || isVirtualThreadStart(methodRef.orElseThrow())
-                    || isVirtualThreadBuilderStart(methodRef.orElseThrow()))) {
+                    || isVirtualThreadBuilderStart(methodRef.orElseThrow())
+                    || isRuntimeAddShutdownHook(methodRef.orElseThrow()))) {
                     return true;
                 }
             }
         }
         return false;
+    }
+
+    private static boolean isRuntimeAddShutdownHook(final MethodRef methodRef) {
+        return "java/lang/Runtime".equals(methodRef.owner())
+            && "addShutdownHook".equals(methodRef.name())
+            && "(Ljava/lang/Thread;)V".equals(methodRef.descriptor());
     }
 
     private static Optional<EntryPoint> inferRunnableThreadTarget(

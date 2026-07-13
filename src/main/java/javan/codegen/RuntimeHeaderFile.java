@@ -90,6 +90,9 @@ final class RuntimeHeaderFile {
         long long javan_runtime_free_memory(void* value);
         long long javan_runtime_max_memory(void* value);
         int javan_runtime_available_processors(void* value);
+        void javan_runtime_add_shutdown_hook(void* runtime_value, void* hook_value);
+        int javan_runtime_remove_shutdown_hook(void* runtime_value, void* hook_value);
+        void javan_runtime_exit(void* runtime_value, int status);
         void* javan_management_thread_mxbean(void);
         int javan_thread_mxbean_get_thread_count(void* value);
         void* javan_management_runtime_mxbean(void);

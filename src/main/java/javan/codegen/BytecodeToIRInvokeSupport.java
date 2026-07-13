@@ -4858,6 +4858,24 @@ final class BytecodeToIRInvokeSupport {
     ) {
         final String owner = methodRef.owner();
         if ("java/lang/Runtime".equals(owner)) {
+            if ("addShutdownHook".equals(methodRef.name()) && "(Ljava/lang/Thread;)V".equals(methodRef.descriptor())) {
+                final IrExpression hook = popObject(classFile, method, stack);
+                final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+                instructions.add(IrInstruction.callStaticVoid("javan_runtime_add_shutdown_hook", List.of(receiver, hook)));
+                return true;
+            }
+            if ("removeShutdownHook".equals(methodRef.name()) && "(Ljava/lang/Thread;)Z".equals(methodRef.descriptor())) {
+                final IrExpression hook = popObject(classFile, method, stack);
+                final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+                pushIntCall(instructions, stack, localDeclarations, "javan_runtime_remove_shutdown_hook", List.of(receiver, hook));
+                return true;
+            }
+            if ("exit".equals(methodRef.name()) && "(I)V".equals(methodRef.descriptor())) {
+                final IrExpression status = popInt(classFile, method, stack);
+                final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+                instructions.add(IrInstruction.callStaticVoid("javan_runtime_exit", List.of(receiver, status)));
+                return true;
+            }
             final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
             if ("totalMemory".equals(methodRef.name()) && "()J".equals(methodRef.descriptor())) {
                 pushLongCall(instructions, stack, localDeclarations, "javan_runtime_total_memory", List.of(receiver));
@@ -5255,13 +5273,43 @@ final class BytecodeToIRInvokeSupport {
                 }
             }
         }
+        for (final EntryPoint reachableRunnableTarget : reachableRunnableThreadTargets(classes, reachableMethods)) {
+            if (!result.contains(reachableRunnableTarget)) {
+                result.add(reachableRunnableTarget);
+            }
+        }
         if (!sawRunnableThreadConstruction) {
-            return List.of();
+            return List.copyOf(result);
         }
         if (!unknownRunnableTarget && !result.isEmpty()) {
             return List.copyOf(result);
         }
-        return allRunnableThreadTargets(classes);
+        final List<EntryPoint> allTargets = new ArrayList<>(allRunnableThreadTargets(classes));
+        for (final EntryPoint reachableRunnableTarget : result) {
+            if (!allTargets.contains(reachableRunnableTarget)) {
+                allTargets.add(reachableRunnableTarget);
+            }
+        }
+        return List.copyOf(allTargets);
+    }
+
+    private static List<EntryPoint> reachableRunnableThreadTargets(
+        final Map<String, ClassFile> classes,
+        final List<EntryPoint> reachableMethods
+    ) {
+        final List<EntryPoint> result = new ArrayList<>();
+        for (final EntryPoint reachable : reachableMethods) {
+            if (!RUNNABLE_RUN.name().equals(reachable.methodName())
+                || !RUNNABLE_RUN.descriptor().equals(reachable.descriptor())
+                || !isAssignableTo(classes, reachable.className(), RUNNABLE_RUN.owner())
+                || isAssignableTo(classes, reachable.className(), "java/lang/Thread")) {
+                continue;
+            }
+            if (!result.contains(reachable)) {
+                result.add(reachable);
+            }
+        }
+        return List.copyOf(result);
     }
     static boolean containsReachableThreadStart(final Map<String, ClassFile> classes, final List<EntryPoint> reachableMethods) {
         for (final EntryPoint reachable : reachableMethods) {
@@ -5278,12 +5326,19 @@ final class BytecodeToIRInvokeSupport {
                 if (methodRef.isPresent() && (isThreadStart(methodRef.orElseThrow())
                     || isVirtualThreadStart(methodRef.orElseThrow())
                     || isVirtualThreadBuilderStart(methodRef.orElseThrow())
+                    || isRuntimeAddShutdownHook(methodRef.orElseThrow())
                     || VirtualThreadInvokePatterns.isExecutorExecute(methodRef.orElseThrow()))) {
                     return true;
                 }
             }
         }
         return false;
+    }
+
+    private static boolean isRuntimeAddShutdownHook(final MethodRef methodRef) {
+        return "java/lang/Runtime".equals(methodRef.owner())
+            && "addShutdownHook".equals(methodRef.name())
+            && "(Ljava/lang/Thread;)V".equals(methodRef.descriptor());
     }
     static boolean isThreadStart(final MethodRef methodRef) {
         return "java/lang/Thread".equals(methodRef.owner())

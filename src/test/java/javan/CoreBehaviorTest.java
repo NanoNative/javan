@@ -2082,6 +2082,46 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void reachabilityRecordsShutdownHookTaskEdge() {
+        final EntryPoint main = new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V");
+        final EntryPoint run = new EntryPoint("com/acme/Task", "run", "()V");
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo(
+                        "main",
+                        "([Ljava/lang/String;)V",
+                        classInstruction(0, 187, "new", "java/lang/Thread"),
+                        instruction(1, 89, "dup"),
+                        classInstruction(2, 187, "new", "com/acme/Task"),
+                        instruction(3, 89, "dup"),
+                        instruction(4, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        instruction(5, 183, "invokespecial", new MethodRef("java/lang/Thread", "<init>", "(Ljava/lang/Runnable;)V")),
+                        instruction(6, 182, "invokevirtual", new MethodRef("java/lang/Runtime", "addShutdownHook", "(Ljava/lang/Thread;)V")),
+                        instruction(7, 177, "return")
+                    )
+                ),
+                "com/acme/Task", classWithMethods(
+                    "com/acme/Task",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/lang/Runnable"),
+                    methodInfo("<init>", "()V"),
+                    methodInfo("run", "()V")
+                )
+            ),
+            List.of(main)
+        );
+
+        assertThat(graph.reachableMethods()).contains(run);
+        assertThat(graph.callEdges()).contains(new CallEdge(main, run, CallEdge.Kind.THREAD_START_TASK));
+    }
+
+    @Test
     void reachabilityRecordsThreadOfVirtualBuilderStartTaskEdge() {
         final EntryPoint main = new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V");
         final EntryPoint run = new EntryPoint("com/acme/Task", "run", "()V");
@@ -3564,6 +3604,58 @@ final class CoreBehaviorTest {
         );
 
         assertThat(graph.callEdges()).contains(new CallEdge(main, run, CallEdge.Kind.THREAD_START_TASK));
+    }
+
+    @Test
+    void reachabilityFallsBackToRunnableTargetsForUnknownShutdownHookThreadTarget() {
+        final EntryPoint main = new EntryPoint("com/acme/Main", "main", "()V");
+        final EntryPoint taskARun = new EntryPoint("com/acme/TaskA", "run", "()V");
+        final EntryPoint taskBRun = new EntryPoint("com/acme/TaskB", "run", "()V");
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo(
+                        "main",
+                        "()V",
+                        classInstruction(0, 187, "new", "java/lang/Thread"),
+                        instruction(1, 89, "dup"),
+                        classInstruction(2, 187, "new", "com/acme/TaskA"),
+                        instruction(3, 89, "dup"),
+                        instruction(4, 183, "invokespecial", new MethodRef("com/acme/TaskB", "<init>", "()V")),
+                        instruction(5, 183, "invokespecial", new MethodRef("java/lang/Thread", "<init>", "(Ljava/lang/Runnable;)V")),
+                        instruction(6, 182, "invokevirtual", new MethodRef("java/lang/Runtime", "addShutdownHook", "(Ljava/lang/Thread;)V")),
+                        instruction(7, 177, "return")
+                    )
+                ),
+                "com/acme/TaskA", classWithMethods(
+                    "com/acme/TaskA",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/lang/Runnable"),
+                    methodInfo("<init>", "()V"),
+                    methodInfo("run", "()V")
+                ),
+                "com/acme/TaskB", classWithMethods(
+                    "com/acme/TaskB",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/lang/Runnable"),
+                    methodInfo("<init>", "()V"),
+                    methodInfo("run", "()V")
+                )
+            ),
+            List.of(main)
+        );
+
+        assertThat(graph.reachableMethods()).contains(taskARun, taskBRun);
+        assertThat(graph.callEdges()).contains(
+            new CallEdge(main, taskARun, CallEdge.Kind.THREAD_START_TASK),
+            new CallEdge(main, taskBRun, CallEdge.Kind.THREAD_START_TASK)
+        );
     }
 
     @Test

@@ -79,6 +79,9 @@ public final class JdkCallSupport {
         runtime("Runtime.freeMemory", "java/lang/Runtime", "freeMemory", "()J"),
         runtime("Runtime.maxMemory", "java/lang/Runtime", "maxMemory", "()J"),
         runtime("Runtime.availableProcessors", "java/lang/Runtime", "availableProcessors", "()I"),
+        runtime("Runtime.addShutdownHook", "java/lang/Runtime", "addShutdownHook", "(Ljava/lang/Thread;)V"),
+        runtime("Runtime.removeShutdownHook", "java/lang/Runtime", "removeShutdownHook", "(Ljava/lang/Thread;)Z"),
+        runtime("Runtime.exit", "java/lang/Runtime", "exit", "(I)V"),
         runtime("ManagementFactory.getThreadMXBean", "java/lang/management/ManagementFactory", "getThreadMXBean", "()Ljava/lang/management/ThreadMXBean;"),
         runtime("ThreadMXBean.getThreadCount", "java/lang/management/ThreadMXBean", "getThreadCount", "()I"),
         runtime("ManagementFactory.getRuntimeMXBean", "java/lang/management/ManagementFactory", "getRuntimeMXBean", "()Ljava/lang/management/RuntimeMXBean;"),
@@ -1121,6 +1124,12 @@ public final class JdkCallSupport {
             return List.of("math");
         }
         if ("java/lang/Runtime".equals(owner)) {
+            if ("addShutdownHook".equals(name) || "removeShutdownHook".equals(name)) {
+                return List.of("management", "threads");
+            }
+            if ("exit".equals(name)) {
+                return List.of("management", "process", "threads");
+            }
             return List.of("management");
         }
         if ("java/lang/management/ManagementFactory".equals(owner)) {

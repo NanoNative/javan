@@ -216,6 +216,56 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void runtimeAddShutdownHookIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Runtime",
+            "addShutdownHook",
+            "(Ljava/lang/Thread;)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void runtimeRemoveShutdownHookIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Runtime",
+            "removeShutdownHook",
+            "(Ljava/lang/Thread;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void runtimeExitIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Runtime",
+            "exit",
+            "(I)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void runtimeShutdownHookCallsRequireManagementAndThreadsRuntimeModules() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/lang/Runtime",
+            "addShutdownHook",
+            "(Ljava/lang/Thread;)V"
+        ))).containsExactly("management", "threads");
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/lang/Runtime",
+            "removeShutdownHook",
+            "(Ljava/lang/Thread;)Z"
+        ))).containsExactly("management", "threads");
+    }
+
+    @Test
+    void runtimeExitRequiresManagementProcessAndThreadsRuntimeModules() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/lang/Runtime",
+            "exit",
+            "(I)V"
+        ))).containsExactly("management", "process", "threads");
+    }
+
+    @Test
     void managementFactoryGetThreadMxBeanIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/management/ManagementFactory",

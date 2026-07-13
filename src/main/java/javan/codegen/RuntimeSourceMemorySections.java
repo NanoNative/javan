@@ -194,9 +194,10 @@ final class RuntimeSourceMemorySections {
 
         typedef struct {
             int magic;
+            int shutdown_hook_runner_registered;
+            int shutdown_hook_running;
             int reserved0;
-            int reserved1;
-            int reserved2;
+            javan_object_list* shutdown_hooks;
         } javan_runtime_value;
 
         typedef struct {
@@ -569,6 +570,7 @@ final class RuntimeSourceMemorySections {
         static javan_local_date_time_value* javan_local_date_time_checked(void* value);
         static javan_zoned_date_time_value* javan_zoned_date_time_checked(void* value);
         static const char* javan_runtime_kind_binary_name(int runtime_kind);
+        static void javan_runtime_run_shutdown_hooks(void);
         void* javan_printable_object_string(void* value);
         #if defined(_WIN32)
         static CRITICAL_SECTION javan_runtime_lock_value;
@@ -2061,6 +2063,8 @@ final class RuntimeSourceMemorySections {
         void* javan_hashmap_new(void);
         void* javan_map_remove(void* value, void* key);
         static javan_thread* javan_current_thread_object(void);
+        static javan_thread* javan_require_thread(void* value);
+        static int javan_thread_has_live_lifecycle(javan_thread* thread);
 
         void javan_free(void* value) {
             javan_runtime_lock_enter();
@@ -3898,9 +3902,10 @@ final class RuntimeSourceMemorySections {
             }
             javan_runtime_value* runtime = (javan_runtime_value*) javan_alloc(sizeof(javan_runtime_value));
             runtime->magic = JAVAN_RUNTIME_MAGIC;
+            runtime->shutdown_hook_runner_registered = 0;
+            runtime->shutdown_hook_running = 0;
             runtime->reserved0 = 0;
-            runtime->reserved1 = 0;
-            runtime->reserved2 = 0;
+            runtime->shutdown_hooks = NULL;
             javan_update_runtime_allocation_kind((void*) runtime, JAVAN_RUNTIME_KIND_RUNTIME);
             javan_runtime_root_value = (void*) runtime;
             return javan_runtime_root_value;
@@ -3932,6 +3937,124 @@ final class RuntimeSourceMemorySections {
         int javan_runtime_available_processors(void* value) {
             javan_runtime_checked(value);
             return javan_management_available_processors_native();
+        }
+
+        static void javan_runtime_run_shutdown_hooks(void) {
+            if (javan_runtime_root_value == NULL) {
+                return;
+            }
+            javan_runtime_lock_enter();
+            javan_runtime_value* runtime = javan_runtime_checked(javan_runtime_root_value);
+            if (runtime->shutdown_hook_running != 0) {
+                javan_runtime_lock_leave();
+                return;
+            }
+            runtime->shutdown_hook_running = 1;
+            javan_object_list* hooks = runtime->shutdown_hooks;
+            javan_runtime_lock_leave();
+            if (hooks == NULL) {
+                return;
+            }
+            for (int index = 0; index < hooks->length; index++) {
+                void* hook_value = hooks->values[index];
+                if (hook_value == NULL) {
+                    continue;
+                }
+                javan_thread* hook = javan_require_thread(hook_value);
+                if (hook->started == 0) {
+                    javan_thread_start(hook_value);
+                }
+            }
+            for (int index = 0; index < hooks->length; index++) {
+                void* hook_value = hooks->values[index];
+                if (hook_value == NULL) {
+                    continue;
+                }
+                javan_thread* hook = javan_require_thread(hook_value);
+                if (hook != javan_current_thread_object() && javan_thread_has_live_lifecycle(hook) != 0) {
+                    javan_thread_join(hook_value);
+                }
+            }
+        }
+
+        void javan_runtime_add_shutdown_hook(void* runtime_value, void* hook_value) {
+            void* runtime_root = runtime_value;
+            void* hook_root = hook_value;
+            void** roots[] = {
+                (void**) &runtime_root,
+                (void**) &hook_root
+            };
+            javan_root_frame_push(roots, 2);
+            javan_runtime_lock_enter();
+            javan_runtime_value* runtime = javan_runtime_checked(runtime_root);
+            javan_thread* hook = javan_require_thread(hook_root);
+            if (runtime->shutdown_hook_running != 0) {
+                javan_runtime_lock_leave();
+                javan_root_frame_pop(roots);
+                javan_panic("shutdown already in progress");
+            }
+            if (hook == javan_current_thread_object() || hook->started != 0) {
+                javan_runtime_lock_leave();
+                javan_root_frame_pop(roots);
+                javan_panic("Hook already started");
+            }
+            if (runtime->shutdown_hooks == NULL) {
+                runtime->shutdown_hooks = javan_list_new_with_capacity(4, 0);
+            }
+            for (int index = 0; index < runtime->shutdown_hooks->length; index++) {
+                if (runtime->shutdown_hooks->values[index] == hook_root) {
+                    javan_runtime_lock_leave();
+                    javan_root_frame_pop(roots);
+                    javan_panic("Hook previously registered");
+                }
+            }
+            javan_list_append_raw(runtime->shutdown_hooks, hook_root);
+            runtime->shutdown_hooks->mod_count++;
+            if (runtime->shutdown_hook_runner_registered == 0) {
+                if (atexit(javan_runtime_run_shutdown_hooks) != 0) {
+                    javan_runtime_lock_leave();
+                    javan_root_frame_pop(roots);
+                    javan_panic("unable to register shutdown hook runner");
+                }
+                runtime->shutdown_hook_runner_registered = 1;
+            }
+            javan_runtime_lock_leave();
+            javan_root_frame_pop(roots);
+        }
+
+        int javan_runtime_remove_shutdown_hook(void* runtime_value, void* hook_value) {
+            javan_runtime_lock_enter();
+            javan_runtime_value* runtime = javan_runtime_checked(runtime_value);
+            javan_require_thread(hook_value);
+            if (runtime->shutdown_hook_running != 0) {
+                javan_runtime_lock_leave();
+                javan_panic("shutdown already in progress");
+            }
+            if (runtime->shutdown_hooks == NULL) {
+                javan_runtime_lock_leave();
+                return 0;
+            }
+            int removed = 0;
+            for (int index = 0; index < runtime->shutdown_hooks->length; index++) {
+                if (runtime->shutdown_hooks->values[index] != hook_value) {
+                    continue;
+                }
+                for (int cursor = index + 1; cursor < runtime->shutdown_hooks->length; cursor++) {
+                    runtime->shutdown_hooks->values[cursor - 1] = runtime->shutdown_hooks->values[cursor];
+                }
+                runtime->shutdown_hooks->length--;
+                runtime->shutdown_hooks->values[runtime->shutdown_hooks->length] = NULL;
+                runtime->shutdown_hooks->mod_count++;
+                removed = 1;
+                break;
+            }
+            javan_runtime_lock_leave();
+            return removed;
+        }
+
+        void javan_runtime_exit(void* runtime_value, int status) {
+            javan_runtime_checked(runtime_value);
+            javan_system_exit(status);
         }
 
         void* javan_management_thread_mxbean(void) {
@@ -5113,6 +5236,11 @@ final class RuntimeSourceMemorySections {
                 if (state != NULL && state->magic == JAVAN_VIRTUAL_THREAD_EXECUTOR_MAGIC) {
                     javan_gc_mark_value(state->factory);
                     javan_gc_mark_value((void*) state->threads);
+                }
+            } else if (runtime_kind == JAVAN_RUNTIME_KIND_RUNTIME) {
+                javan_runtime_value* runtime = (javan_runtime_value*) value;
+                if (runtime != NULL && runtime->magic == JAVAN_RUNTIME_MAGIC) {
+                    javan_gc_mark_value((void*) runtime->shutdown_hooks);
                 }
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_REFERENCE) {
                 javan_atomic_reference* state = (javan_atomic_reference*) value;

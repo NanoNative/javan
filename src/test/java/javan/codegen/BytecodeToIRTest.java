@@ -7415,6 +7415,78 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowerRuntimeManagementInstanceCallLowersShutdownHookAndExitCalls() {
+        final List<IrInstruction> addInstructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> addStack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("runtime")),
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("hook"))
+        ));
+        final Map<Integer, IrLocal> addLocals = new LinkedHashMap<>();
+        assertThat(BytecodeToIRInvokeSupport.lowerRuntimeManagementInstanceCall(
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/lang/Runtime;Ljava/lang/Thread;)V", 2, 2, plain(0, 177, "return")),
+            invokeVirtual(0, new MethodRef("java/lang/Runtime", "addShutdownHook", "(Ljava/lang/Thread;)V")),
+            new MethodRef("java/lang/Runtime", "addShutdownHook", "(Ljava/lang/Thread;)V"),
+            addInstructions,
+            addStack,
+            addLocals
+        )).isTrue();
+        assertThat(addInstructions).containsExactly(
+            IrInstruction.callStaticVoid(
+                "javan_runtime_add_shutdown_hook",
+                List.of(IrExpression.objectLocal("runtime"), IrExpression.objectLocal("hook"))
+            )
+        );
+        assertThat(addStack).isEmpty();
+
+        final List<IrInstruction> removeInstructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> removeStack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("runtime")),
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("hook"))
+        ));
+        final Map<Integer, IrLocal> removeLocals = new LinkedHashMap<>();
+        assertThat(BytecodeToIRInvokeSupport.lowerRuntimeManagementInstanceCall(
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/lang/Runtime;Ljava/lang/Thread;)Z", 2, 2, plain(0, 172, "ireturn")),
+            invokeVirtual(0, new MethodRef("java/lang/Runtime", "removeShutdownHook", "(Ljava/lang/Thread;)Z")),
+            new MethodRef("java/lang/Runtime", "removeShutdownHook", "(Ljava/lang/Thread;)Z"),
+            removeInstructions,
+            removeStack,
+            removeLocals
+        )).isTrue();
+        assertThat(removeInstructions).containsExactly(
+            IrInstruction.assignInt(
+                "int0",
+                IrExpression.intCall(
+                    "javan_runtime_remove_shutdown_hook",
+                    List.of(IrExpression.objectLocal("runtime"), IrExpression.objectLocal("hook"))
+                )
+            )
+        );
+        assertThat(removeStack).containsExactly(BytecodeToIR.StackValue.intExpression(IrExpression.intLocal("int0")));
+
+        final List<IrInstruction> exitInstructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> exitStack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("runtime")),
+            BytecodeToIR.StackValue.intExpression(IrExpression.intLiteral(7))
+        ));
+        final Map<Integer, IrLocal> exitLocals = new LinkedHashMap<>();
+        assertThat(BytecodeToIRInvokeSupport.lowerRuntimeManagementInstanceCall(
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/lang/Runtime;)V", 1, 1, plain(0, 177, "return")),
+            invokeVirtual(0, new MethodRef("java/lang/Runtime", "exit", "(I)V")),
+            new MethodRef("java/lang/Runtime", "exit", "(I)V"),
+            exitInstructions,
+            exitStack,
+            exitLocals
+        )).isTrue();
+        assertThat(exitInstructions).containsExactly(
+            IrInstruction.callStaticVoid("javan_runtime_exit", List.of(IrExpression.objectLocal("runtime"), IrExpression.intLiteral(7)))
+        );
+        assertThat(exitStack).isEmpty();
+    }
+
+    @Test
     void lowerRuntimeManagementInstanceCallReturnsFalseForUnsupportedRuntimeMethod() {
         final List<IrInstruction> instructions = new ArrayList<>();
         final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
@@ -7442,6 +7514,55 @@ final class BytecodeToIRTest {
             new MethodRef("java/lang/Runtime", "availableProcessors", "(I)I"),
             new ArrayList<>(),
             new ArrayList<>(List.of(BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("runtime")))),
+            new LinkedHashMap<>()
+        )).isFalse();
+
+        final List<BytecodeToIR.StackValue> removeStack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("runtime")),
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("hook"))
+        ));
+        final List<BytecodeToIR.StackValue> addStack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("runtime")),
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("hook"))
+        ));
+        assertThat(BytecodeToIRInvokeSupport.lowerRuntimeManagementInstanceCall(
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/lang/Runtime;Ljava/lang/Thread;)V", 2, 2, plain(0, 177, "return")),
+            invokeVirtual(0, new MethodRef("java/lang/Runtime", "addShutdownHook", "(Ljava/lang/Object;)V")),
+            new MethodRef("java/lang/Runtime", "addShutdownHook", "(Ljava/lang/Object;)V"),
+            new ArrayList<>(),
+            addStack,
+            new LinkedHashMap<>()
+        )).isFalse();
+        assertThat(addStack).containsExactly(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("runtime")),
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("hook"))
+        );
+
+        assertThat(BytecodeToIRInvokeSupport.lowerRuntimeManagementInstanceCall(
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/lang/Runtime;Ljava/lang/Thread;)V", 2, 2, plain(0, 177, "return")),
+            invokeVirtual(0, new MethodRef("java/lang/Runtime", "removeShutdownHook", "(Ljava/lang/Object;)Z")),
+            new MethodRef("java/lang/Runtime", "removeShutdownHook", "(Ljava/lang/Object;)Z"),
+            new ArrayList<>(),
+            removeStack,
+            new LinkedHashMap<>()
+        )).isFalse();
+        assertThat(removeStack).containsExactly(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("runtime")),
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("hook"))
+        );
+    }
+
+    @Test
+    void lowerRuntimeManagementInstanceCallReturnsFalseForUnsupportedOwner() {
+        assertThat(BytecodeToIRInvokeSupport.lowerRuntimeManagementInstanceCall(
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/lang/Object;)V", 1, 1, plain(0, 177, "return")),
+            invokeVirtual(0, new MethodRef("java/lang/Object", "toString", "()Ljava/lang/String;")),
+            new MethodRef("java/lang/Object", "toString", "()Ljava/lang/String;"),
+            new ArrayList<>(),
+            new ArrayList<>(List.of(BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("value")))),
             new LinkedHashMap<>()
         )).isFalse();
     }
@@ -9246,6 +9367,60 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void containsReachableThreadStartRejectsMalformedRuntimeAddShutdownHookSignature() {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main", classFile(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                List.of(),
+                List.of(method(
+                    0x0008,
+                    "main",
+                    "()V",
+                    1,
+                    0,
+                    invokeVirtual(0, new MethodRef("java/lang/Runtime", "addShutdownHook", "(Ljava/lang/Object;)V")),
+                    plain(1, 177, "return")
+                ))
+            )
+        );
+
+        assertThat(BytecodeToIRInvokeSupport.containsReachableThreadStart(
+            classes,
+            List.of(new EntryPoint("com/acme/Main", "main", "()V"))
+        )).isFalse();
+    }
+
+    @Test
+    void containsReachableThreadStartReturnsTrueForRuntimeAddShutdownHook() {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main", classFile(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                List.of(),
+                List.of(method(
+                    0x0008,
+                    "main",
+                    "()V",
+                    1,
+                    0,
+                    invokeVirtual(0, new MethodRef("java/lang/Runtime", "addShutdownHook", "(Ljava/lang/Thread;)V")),
+                    plain(1, 177, "return")
+                ))
+            )
+        );
+
+        assertThat(BytecodeToIRInvokeSupport.containsReachableThreadStart(
+            classes,
+            List.of(new EntryPoint("com/acme/Main", "main", "()V"))
+        )).isTrue();
+    }
+
+    @Test
     void allRunnableThreadTargetsSkipsThreadSubclassesAndCodeLessTargets() {
         final Map<String, ClassFile> classes = Map.ofEntries(
             Map.entry("com/acme/Task", classFile(
@@ -9390,6 +9565,102 @@ final class BytecodeToIRTest {
             classes,
             List.of(new EntryPoint("com/acme/Main", "main", "()V"))
         )).isEmpty();
+    }
+
+    @Test
+    void runnableThreadTargetsKeepReachableSyntheticRunnableTargetsForShutdownHooks() {
+        final Map<String, ClassFile> classes = Map.ofEntries(
+            Map.entry("com/acme/Main", classFile(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                List.of(),
+                List.of(method(
+                    0x0008,
+                    "main",
+                    "()V",
+                    2,
+                    0,
+                    invokeVirtual(0, new MethodRef("java/lang/Runtime", "addShutdownHook", "(Ljava/lang/Thread;)V")),
+                    plain(1, 177, "return")
+                ))
+            )),
+            Map.entry("com/acme/Main$$javan$lambda$main$run$7", classFile(
+                "com/acme/Main$$javan$lambda$main$run$7",
+                "java/lang/Object",
+                0x0010,
+                List.of("java/lang/Runnable"),
+                List.of(),
+                List.of(new MethodInfo(0x0001, "run", "()V", Optional.empty()))
+            ))
+        );
+
+        assertThat(BytecodeToIRInvokeSupport.runnableThreadTargets(
+            classes,
+            List.of(
+                new EntryPoint("com/acme/Main", "main", "()V"),
+                new EntryPoint("com/acme/Main$$javan$lambda$main$run$7", "run", "()V")
+            )
+        )).containsExactly(new EntryPoint("com/acme/Main$$javan$lambda$main$run$7", "run", "()V"));
+    }
+
+    @Test
+    void runnableThreadTargetsFallBackToAllRunnableTargetsForUnknownShutdownHookThreadTarget() {
+        final Map<String, ClassFile> classes = Map.ofEntries(
+            Map.entry("com/acme/Main", classFile(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                List.of(),
+                List.of(method(
+                    0x0008,
+                    "main",
+                    "()V",
+                    3,
+                    0,
+                    classInstruction(0, 187, "new", "java/lang/Thread"),
+                    plain(1, 89, "dup"),
+                    classInstruction(2, 187, "new", "com/acme/TaskA"),
+                    plain(3, 89, "dup"),
+                    invokeSpecial(4, new MethodRef("com/acme/TaskB", "<init>", "()V")),
+                    invokeSpecial(5, new MethodRef("java/lang/Thread", "<init>", "(Ljava/lang/Runnable;)V")),
+                    invokeVirtual(6, new MethodRef("java/lang/Runtime", "addShutdownHook", "(Ljava/lang/Thread;)V")),
+                    plain(7, 177, "return")
+                ))
+            )),
+            Map.entry("com/acme/TaskA", classFile(
+                "com/acme/TaskA",
+                "java/lang/Object",
+                0,
+                List.of("java/lang/Runnable"),
+                List.of(),
+                List.of(
+                    method(0, "<init>", "()V", 0, 0, plain(0, 177, "return")),
+                    method(0, "run", "()V", 0, 0, plain(0, 177, "return"))
+                )
+            )),
+            Map.entry("com/acme/TaskB", classFile(
+                "com/acme/TaskB",
+                "java/lang/Object",
+                0,
+                List.of("java/lang/Runnable"),
+                List.of(),
+                List.of(
+                    method(0, "<init>", "()V", 0, 0, plain(0, 177, "return")),
+                    method(0, "run", "()V", 0, 0, plain(0, 177, "return"))
+                )
+            ))
+        );
+
+        assertThat(BytecodeToIRInvokeSupport.runnableThreadTargets(
+            classes,
+            List.of(new EntryPoint("com/acme/Main", "main", "()V"))
+        )).containsExactlyInAnyOrder(
+            new EntryPoint("com/acme/TaskA", "run", "()V"),
+            new EntryPoint("com/acme/TaskB", "run", "()V")
+        );
     }
 
     @Test
