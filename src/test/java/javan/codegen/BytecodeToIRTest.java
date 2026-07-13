@@ -7274,6 +7274,68 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowerJdkStaticIntrinsicRoutesManagementFactoryGetRuntimeMxBean() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>();
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        assertThat(BytecodeToIRInvokeSupport.lowerJdkStaticIntrinsic(
+            sinkClass(),
+            method(0x0008, "main", "()Ljava/lang/management/RuntimeMXBean;", 0, 0, plain(0, 176, "areturn")),
+            invokeStatic(
+                0,
+                new MethodRef("java/lang/management/ManagementFactory", "getRuntimeMXBean", "()Ljava/lang/management/RuntimeMXBean;")
+            ),
+            new MethodRef("java/lang/management/ManagementFactory", "getRuntimeMXBean", "()Ljava/lang/management/RuntimeMXBean;"),
+            instructions,
+            stack,
+            locals,
+            new LinkedHashMap<>(),
+            SourceLineIndex.empty()
+        )).isTrue();
+
+        assertThat(instructions).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_management_runtime_mxbean", List.of()))
+        );
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("object0")));
+    }
+
+    @Test
+    void lowerJdkStaticIntrinsicRoutesManagementFactoryGetOperatingSystemMxBean() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>();
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        assertThat(BytecodeToIRInvokeSupport.lowerJdkStaticIntrinsic(
+            sinkClass(),
+            method(0x0008, "main", "()Ljava/lang/management/OperatingSystemMXBean;", 0, 0, plain(0, 176, "areturn")),
+            invokeStatic(
+                0,
+                new MethodRef(
+                    "java/lang/management/ManagementFactory",
+                    "getOperatingSystemMXBean",
+                    "()Ljava/lang/management/OperatingSystemMXBean;"
+                )
+            ),
+            new MethodRef(
+                "java/lang/management/ManagementFactory",
+                "getOperatingSystemMXBean",
+                "()Ljava/lang/management/OperatingSystemMXBean;"
+            ),
+            instructions,
+            stack,
+            locals,
+            new LinkedHashMap<>(),
+            SourceLineIndex.empty()
+        )).isTrue();
+
+        assertThat(instructions).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_management_operating_system_mxbean", List.of()))
+        );
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("object0")));
+    }
+
+    @Test
     void lowerRuntimeManagementInstanceCallLowersRuntimeMetrics() {
         final List<IrInstruction> totalInstructions = new ArrayList<>();
         final List<BytecodeToIR.StackValue> totalStack = new ArrayList<>(List.of(
@@ -7412,6 +7474,33 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowerVirtualCallRoutesRuntimeAvailableProcessors() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("runtime"))
+        ));
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        BytecodeToIRInvokeSupport.lowerVirtualCall(
+            Map.of(),
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/lang/Runtime;)I", 1, 1, plain(0, 172, "ireturn")),
+            invokeVirtual(0, new MethodRef("java/lang/Runtime", "availableProcessors", "()I")),
+            instructions,
+            stack,
+            locals,
+            new LinkedHashMap<>(),
+            new LinkedHashMap<>(),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(instructions).containsExactly(
+            IrInstruction.assignInt("int0", IrExpression.intCall("javan_runtime_available_processors", List.of(IrExpression.objectLocal("runtime"))))
+        );
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.intExpression(IrExpression.intLocal("int0")));
+    }
+
+    @Test
     void lowerRuntimeManagementInstanceCallLowersThreadAndRuntimeMxBeanMetrics() {
         final List<IrInstruction> threadInstructions = new ArrayList<>();
         final List<BytecodeToIR.StackValue> threadStack = new ArrayList<>(List.of(
@@ -7514,6 +7603,140 @@ final class BytecodeToIRTest {
             IrInstruction.assignInt("int0", IrExpression.intCall("javan_thread_mxbean_get_thread_count", List.of(IrExpression.objectLocal("bean"))))
         );
         assertThat(stack).containsExactly(BytecodeToIR.StackValue.intExpression(IrExpression.intLocal("int0")));
+    }
+
+    @Test
+    void lowerInterfaceCallRoutesRuntimeMxBeanGetStartTime() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("bean"))
+        ));
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        BytecodeToIRInvokeSupport.lowerInterfaceCall(
+            Map.of(),
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/lang/management/RuntimeMXBean;)J", 1, 1, plain(0, 173, "lreturn")),
+            invokeInterface(0, new MethodRef("java/lang/management/RuntimeMXBean", "getStartTime", "()J")),
+            instructions,
+            stack,
+            locals,
+            new LinkedHashMap<>()
+        );
+
+        assertThat(instructions).containsExactly(
+            IrInstruction.assignLong("long0", IrExpression.longCall("javan_runtime_mxbean_get_start_time", List.of(IrExpression.objectLocal("bean"))))
+        );
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.longExpression(IrExpression.longLocal("long0")));
+    }
+
+    @Test
+    void lowerInterfaceCallRoutesRuntimeMxBeanGetUptime() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("bean"))
+        ));
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        BytecodeToIRInvokeSupport.lowerInterfaceCall(
+            Map.of(),
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/lang/management/RuntimeMXBean;)J", 1, 1, plain(0, 173, "lreturn")),
+            invokeInterface(0, new MethodRef("java/lang/management/RuntimeMXBean", "getUptime", "()J")),
+            instructions,
+            stack,
+            locals,
+            new LinkedHashMap<>()
+        );
+
+        assertThat(instructions).containsExactly(
+            IrInstruction.assignLong("long0", IrExpression.longCall("javan_runtime_mxbean_get_uptime", List.of(IrExpression.objectLocal("bean"))))
+        );
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.longExpression(IrExpression.longLocal("long0")));
+    }
+
+    @Test
+    void lowerInterfaceCallRoutesOperatingSystemMxBeanGetSystemLoadAverage() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("bean"))
+        ));
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        BytecodeToIRInvokeSupport.lowerInterfaceCall(
+            Map.of(),
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/lang/management/OperatingSystemMXBean;)D", 1, 1, plain(0, 175, "dreturn")),
+            invokeInterface(0, new MethodRef("java/lang/management/OperatingSystemMXBean", "getSystemLoadAverage", "()D")),
+            instructions,
+            stack,
+            locals,
+            new LinkedHashMap<>()
+        );
+
+        assertThat(instructions).containsExactly(
+            IrInstruction.assignDouble(
+                "double0",
+                IrExpression.doubleCall("javan_operating_system_mxbean_get_system_load_average", List.of(IrExpression.objectLocal("bean")))
+            )
+        );
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.doubleExpression(IrExpression.doubleLocal("double0")));
+    }
+
+    @Test
+    void lowerInterfaceCallRoutesComSunOperatingSystemMxBeanGetCpuLoad() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("bean"))
+        ));
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        BytecodeToIRInvokeSupport.lowerInterfaceCall(
+            Map.of(),
+            sinkClass(),
+            method(0x0008, "main", "(Lcom/sun/management/OperatingSystemMXBean;)D", 1, 1, plain(0, 175, "dreturn")),
+            invokeInterface(0, new MethodRef("com/sun/management/OperatingSystemMXBean", "getCpuLoad", "()D")),
+            instructions,
+            stack,
+            locals,
+            new LinkedHashMap<>()
+        );
+
+        assertThat(instructions).containsExactly(
+            IrInstruction.assignDouble(
+                "double0",
+                IrExpression.doubleCall("javan_operating_system_mxbean_get_cpu_load", List.of(IrExpression.objectLocal("bean")))
+            )
+        );
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.doubleExpression(IrExpression.doubleLocal("double0")));
+    }
+
+    @Test
+    void lowerInterfaceCallRoutesComSunOperatingSystemMxBeanGetProcessCpuLoad() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("bean"))
+        ));
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        BytecodeToIRInvokeSupport.lowerInterfaceCall(
+            Map.of(),
+            sinkClass(),
+            method(0x0008, "main", "(Lcom/sun/management/OperatingSystemMXBean;)D", 1, 1, plain(0, 175, "dreturn")),
+            invokeInterface(0, new MethodRef("com/sun/management/OperatingSystemMXBean", "getProcessCpuLoad", "()D")),
+            instructions,
+            stack,
+            locals,
+            new LinkedHashMap<>()
+        );
+
+        assertThat(instructions).containsExactly(
+            IrInstruction.assignDouble(
+                "double0",
+                IrExpression.doubleCall("javan_operating_system_mxbean_get_process_cpu_load", List.of(IrExpression.objectLocal("bean")))
+            )
+        );
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.doubleExpression(IrExpression.doubleLocal("double0")));
     }
 
     @Test
