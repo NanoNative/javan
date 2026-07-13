@@ -180,6 +180,33 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void runtimeTotalMemoryIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Runtime",
+            "totalMemory",
+            "()J"
+        ))).isTrue();
+    }
+
+    @Test
+    void runtimeFreeMemoryIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Runtime",
+            "freeMemory",
+            "()J"
+        ))).isTrue();
+    }
+
+    @Test
+    void runtimeMaxMemoryIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Runtime",
+            "maxMemory",
+            "()J"
+        ))).isTrue();
+    }
+
+    @Test
     void runtimeMetricsRequireManagementRuntimeModule() {
         assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
             "java/lang/Runtime",
@@ -198,12 +225,39 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void managementFactoryGetRuntimeMxBeanIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/management/ManagementFactory",
+            "getRuntimeMXBean",
+            "()Ljava/lang/management/RuntimeMXBean;"
+        ))).isTrue();
+    }
+
+    @Test
+    void managementFactoryGetOperatingSystemMxBeanIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/management/ManagementFactory",
+            "getOperatingSystemMXBean",
+            "()Ljava/lang/management/OperatingSystemMXBean;"
+        ))).isTrue();
+    }
+
+    @Test
     void managementFactoryCallsRequireManagementRuntimeModule() {
         assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
             "java/lang/management/ManagementFactory",
             "getThreadMXBean",
             "()Ljava/lang/management/ThreadMXBean;"
         ))).containsExactly("management");
+    }
+
+    @Test
+    void threadMxBeanGetThreadCountIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/management/ThreadMXBean",
+            "getThreadCount",
+            "()I"
+        ))).isTrue();
     }
 
     @Test
@@ -225,12 +279,30 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void runtimeMxBeanGetUptimeIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/management/RuntimeMXBean",
+            "getUptime",
+            "()J"
+        ))).isTrue();
+    }
+
+    @Test
     void runtimeMxBeanCallsRequireManagementRuntimeModule() {
         assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
             "java/lang/management/RuntimeMXBean",
             "getUptime",
             "()J"
         ))).containsExactly("management");
+    }
+
+    @Test
+    void operatingSystemMxBeanSystemLoadAverageIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/management/OperatingSystemMXBean",
+            "getSystemLoadAverage",
+            "()D"
+        ))).isTrue();
     }
 
     @Test
@@ -243,10 +315,28 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void comSunOperatingSystemMxBeanSystemLoadAverageIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "com/sun/management/OperatingSystemMXBean",
+            "getSystemLoadAverage",
+            "()D"
+        ))).isTrue();
+    }
+
+    @Test
     void operatingSystemMxBeanCpuLoadIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "com/sun/management/OperatingSystemMXBean",
             "getCpuLoad",
+            "()D"
+        ))).isTrue();
+    }
+
+    @Test
+    void comSunOperatingSystemMxBeanProcessCpuLoadIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "com/sun/management/OperatingSystemMXBean",
+            "getProcessCpuLoad",
             "()D"
         ))).isTrue();
     }

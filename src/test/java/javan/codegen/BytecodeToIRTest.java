@@ -7501,6 +7501,60 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowerVirtualCallRoutesRuntimeFreeMemory() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("runtime"))
+        ));
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        BytecodeToIRInvokeSupport.lowerVirtualCall(
+            Map.of(),
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/lang/Runtime;)J", 1, 1, plain(0, 173, "lreturn")),
+            invokeVirtual(0, new MethodRef("java/lang/Runtime", "freeMemory", "()J")),
+            instructions,
+            stack,
+            locals,
+            new LinkedHashMap<>(),
+            new LinkedHashMap<>(),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(instructions).containsExactly(
+            IrInstruction.assignLong("long0", IrExpression.longCall("javan_runtime_free_memory", List.of(IrExpression.objectLocal("runtime"))))
+        );
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.longExpression(IrExpression.longLocal("long0")));
+    }
+
+    @Test
+    void lowerVirtualCallRoutesRuntimeMaxMemory() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("runtime"))
+        ));
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        BytecodeToIRInvokeSupport.lowerVirtualCall(
+            Map.of(),
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/lang/Runtime;)J", 1, 1, plain(0, 173, "lreturn")),
+            invokeVirtual(0, new MethodRef("java/lang/Runtime", "maxMemory", "()J")),
+            instructions,
+            stack,
+            locals,
+            new LinkedHashMap<>(),
+            new LinkedHashMap<>(),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(instructions).containsExactly(
+            IrInstruction.assignLong("long0", IrExpression.longCall("javan_runtime_max_memory", List.of(IrExpression.objectLocal("runtime"))))
+        );
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.longExpression(IrExpression.longLocal("long0")));
+    }
+
+    @Test
     void lowerRuntimeManagementInstanceCallLowersThreadAndRuntimeMxBeanMetrics() {
         final List<IrInstruction> threadInstructions = new ArrayList<>();
         final List<BytecodeToIR.StackValue> threadStack = new ArrayList<>(List.of(
@@ -7578,6 +7632,28 @@ final class BytecodeToIRTest {
             new ArrayList<>(List.of(BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("bean")))),
             new LinkedHashMap<>()
         )).isFalse();
+    }
+
+    @Test
+    void lowerRuntimeManagementInstanceCallPreservesReceiverForUnsupportedRuntimeMxBeanMethod() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("bean"))
+        ));
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        assertThat(BytecodeToIRInvokeSupport.lowerRuntimeManagementInstanceCall(
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/lang/management/RuntimeMXBean;)V", 1, 1, plain(0, 177, "return")),
+            invokeInterface(0, new MethodRef("java/lang/management/RuntimeMXBean", "getName", "()Ljava/lang/String;")),
+            new MethodRef("java/lang/management/RuntimeMXBean", "getName", "()Ljava/lang/String;"),
+            instructions,
+            stack,
+            locals
+        )).isFalse();
+
+        assertThat(instructions).isEmpty();
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("bean")));
     }
 
     @Test
@@ -7668,6 +7744,34 @@ final class BytecodeToIRTest {
             sinkClass(),
             method(0x0008, "main", "(Ljava/lang/management/OperatingSystemMXBean;)D", 1, 1, plain(0, 175, "dreturn")),
             invokeInterface(0, new MethodRef("java/lang/management/OperatingSystemMXBean", "getSystemLoadAverage", "()D")),
+            instructions,
+            stack,
+            locals,
+            new LinkedHashMap<>()
+        );
+
+        assertThat(instructions).containsExactly(
+            IrInstruction.assignDouble(
+                "double0",
+                IrExpression.doubleCall("javan_operating_system_mxbean_get_system_load_average", List.of(IrExpression.objectLocal("bean")))
+            )
+        );
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.doubleExpression(IrExpression.doubleLocal("double0")));
+    }
+
+    @Test
+    void lowerInterfaceCallRoutesComSunOperatingSystemMxBeanGetSystemLoadAverage() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("bean"))
+        ));
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        BytecodeToIRInvokeSupport.lowerInterfaceCall(
+            Map.of(),
+            sinkClass(),
+            method(0x0008, "main", "(Lcom/sun/management/OperatingSystemMXBean;)D", 1, 1, plain(0, 175, "dreturn")),
+            invokeInterface(0, new MethodRef("com/sun/management/OperatingSystemMXBean", "getSystemLoadAverage", "()D")),
             instructions,
             stack,
             locals,
@@ -7848,6 +7952,28 @@ final class BytecodeToIRTest {
             new ArrayList<>(List.of(BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("bean")))),
             new LinkedHashMap<>()
         )).isFalse();
+    }
+
+    @Test
+    void lowerRuntimeManagementInstanceCallPreservesReceiverForUnsupportedComSunOperatingSystemMxBeanMethod() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("bean"))
+        ));
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        assertThat(BytecodeToIRInvokeSupport.lowerRuntimeManagementInstanceCall(
+            sinkClass(),
+            method(0x0008, "main", "(Lcom/sun/management/OperatingSystemMXBean;)V", 1, 1, plain(0, 177, "return")),
+            invokeInterface(0, new MethodRef("com/sun/management/OperatingSystemMXBean", "getCommittedVirtualMemorySize", "()J")),
+            new MethodRef("com/sun/management/OperatingSystemMXBean", "getCommittedVirtualMemorySize", "()J"),
+            instructions,
+            stack,
+            locals
+        )).isFalse();
+
+        assertThat(instructions).isEmpty();
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("bean")));
     }
 
     @Test
