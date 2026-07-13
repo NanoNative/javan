@@ -1018,6 +1018,41 @@ final class RuntimeSourceIoSections {
             return optional->value;
         }
 
+        static javan_optional_int* javan_optional_int_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("null optional int");
+            }
+            javan_optional_int* optional = (javan_optional_int*) value;
+            if (optional->magic != JAVAN_OPTIONAL_INT_MAGIC) {
+                javan_panic("unsupported optional int object");
+            }
+            return optional;
+        }
+
+        static void* javan_optional_int_new(int value, int present) {
+            javan_optional_int* optional = (javan_optional_int*) javan_alloc(sizeof(javan_optional_int));
+            optional->magic = JAVAN_OPTIONAL_INT_MAGIC;
+            optional->present = present;
+            optional->value = value;
+            optional->reserved0 = 0;
+            optional->reserved1 = 0;
+            javan_update_runtime_allocation_kind((void*) optional, JAVAN_RUNTIME_KIND_OPTIONAL_INT);
+            return optional;
+        }
+
+        void* javan_optional_int_empty(void) {
+            return javan_optional_int_new(0, 0);
+        }
+
+        void* javan_optional_int_of(int value) {
+            return javan_optional_int_new(value, 1);
+        }
+
+        int javan_optional_int_or_else(void* value, int fallback) {
+            javan_optional_int* optional = javan_optional_int_checked(value);
+            return optional->present == 0 ? fallback : optional->value;
+        }
+
         void* javan_string_value_of_int(int value) {
             char buffer[32];
             snprintf(buffer, sizeof(buffer), "%d", value);

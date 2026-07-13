@@ -613,6 +613,30 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksToIntFunctionApplyAsIntAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/function/ToIntFunction", "applyAsInt", "(Ljava/lang/Object;)I")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksStreamMapToIntAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/stream/Stream", "mapToInt", "(Ljava/util/function/ToIntFunction;)Ljava/util/stream/IntStream;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksIntStreamMaxAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/stream/IntStream", "max", "()Ljava/util/OptionalInt;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksOptionalIntOrElseAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/OptionalInt", "orElse", "(I)I")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksStreamOfArrayAsExplicitRejected() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/stream/Stream", "of", "([Ljava/lang/Object;)Ljava/util/stream/Stream;")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);

@@ -268,6 +268,28 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void streamMapToIntIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/stream/Stream",
+            "mapToInt",
+            "(Ljava/util/function/ToIntFunction;)Ljava/util/stream/IntStream;"
+        ))).isTrue();
+    }
+
+    @Test
+    void streamMapToIntExposesClosedWorldToIntFunctionDispatchTarget() {
+        assertThat(JdkCallSupport.closedWorldHigherOrderDispatchTargets(new javan.classfile.MethodRef(
+            "java/util/stream/Stream",
+            "mapToInt",
+            "(Ljava/util/function/ToIntFunction;)Ljava/util/stream/IntStream;"
+        ))).containsExactly(new javan.classfile.MethodRef(
+            "java/util/function/ToIntFunction",
+            "applyAsInt",
+            "(Ljava/lang/Object;)I"
+        ));
+    }
+
+    @Test
     void streamAnyMatchExposesClosedWorldPredicateDispatchTarget() {
         assertThat(JdkCallSupport.closedWorldHigherOrderDispatchTargets(new javan.classfile.MethodRef(
             "java/util/stream/Stream",
@@ -291,6 +313,51 @@ final class JdkCallSupportTest {
             "test",
             "(Ljava/lang/Object;)Z"
         ));
+    }
+
+    @Test
+    void intStreamMaxIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/stream/IntStream",
+            "max",
+            "()Ljava/util/OptionalInt;"
+        ))).isTrue();
+    }
+
+    @Test
+    void optionalIntOrElseIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/OptionalInt",
+            "orElse",
+            "(I)I"
+        ))).isTrue();
+    }
+
+    @Test
+    void optionalIntCallsRequireOptionalRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/OptionalInt",
+            "orElse",
+            "(I)I"
+        ))).containsExactly("optional");
+    }
+
+    @Test
+    void intStreamMaxRequiresCollectionAndOptionalRuntimeModules() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/stream/IntStream",
+            "max",
+            "()Ljava/util/OptionalInt;"
+        ))).containsExactly("collections", "optional");
+    }
+
+    @Test
+    void intStreamNonOptionalSignatureHasNoRuntimeModules() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/stream/IntStream",
+            "max",
+            "()I"
+        ))).isEmpty();
     }
 
     @Test

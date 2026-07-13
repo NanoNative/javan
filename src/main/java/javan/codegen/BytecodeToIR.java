@@ -117,6 +117,7 @@ public final class BytecodeToIR {
         final Map<Integer, IrExpression> locals = new HashMap<>();
         final Map<Integer, StackKind> objectLocalKinds = new HashMap<>();
         final Map<Integer, String> objectLocalThrowableTypes = new HashMap<>();
+        final Map<Integer, StackValue> specialObjectLocals = new HashMap<>();
         final Map<Integer, IrLocal> localDeclarations = new LinkedHashMap<>();
         final Map<Integer, StackValue> pendingExceptionHandlerStacks = new HashMap<>();
         final CodeAttribute code = method.code().orElseThrow();
@@ -163,6 +164,7 @@ public final class BytecodeToIR {
                 locals,
                 objectLocalKinds,
                 objectLocalThrowableTypes,
+                specialObjectLocals,
                 localDeclarations,
                 dispatches,
                 skippedOffsets,
@@ -182,6 +184,7 @@ public final class BytecodeToIR {
                 locals,
                 objectLocalKinds,
                 objectLocalThrowableTypes,
+                specialObjectLocals,
                 localDeclarations,
                 dispatches,
                 skippedOffsets,
@@ -201,6 +204,7 @@ public final class BytecodeToIR {
                 locals,
                 objectLocalKinds,
                 objectLocalThrowableTypes,
+                specialObjectLocals,
                 localDeclarations,
                 dispatches,
                 sourceLines,
@@ -449,6 +453,9 @@ public final class BytecodeToIR {
         }
         if ("java/io/PrintStream".equals(target.owner()) && "print".equals(target.name()) && "(Ljava/lang/Object;)V".equals(target.descriptor())) {
             return new IrExpression(IrExpression.Kind.CALL, IrType.VOID, "javan_printstream_print_object", arguments);
+        }
+        if ("java/lang/String".equals(target.owner()) && "length".equals(target.name()) && "()I".equals(target.descriptor())) {
+            return IrExpression.intCall("javan_string_length", arguments);
         }
         if ("java/lang/Integer".equals(target.owner()) && "valueOf".equals(target.name()) && "(I)Ljava/lang/Integer;".equals(target.descriptor())) {
             return IrExpression.objectCall("javan_integer_value_of", arguments);
@@ -719,6 +726,7 @@ public final class BytecodeToIR {
         final Map<Integer, IrExpression> locals,
         final Map<Integer, StackKind> objectLocalKinds,
         final Map<Integer, String> objectLocalThrowableTypes,
+        final Map<Integer, StackValue> specialObjectLocals,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
         final SourceLineIndex sourceLines,
@@ -814,13 +822,13 @@ public final class BytecodeToIR {
                 stack.add(StackValue.doubleExpression(local(classFile, method, locals, instruction.opcode() - 38, IrType.DOUBLE)));
                 break;
             case 25:
-                stack.add(localObjectValue(classFile, method, locals, objectLocalKinds, objectLocalThrowableTypes, unsigned(instruction.operands()[0])));
+                stack.add(localObjectValue(classFile, method, locals, objectLocalKinds, objectLocalThrowableTypes, specialObjectLocals, unsigned(instruction.operands()[0])));
                 break;
             case 42:
             case 43:
             case 44:
             case 45:
-                stack.add(localObjectValue(classFile, method, locals, objectLocalKinds, objectLocalThrowableTypes, instruction.opcode() - 42));
+                stack.add(localObjectValue(classFile, method, locals, objectLocalKinds, objectLocalThrowableTypes, specialObjectLocals, instruction.opcode() - 42));
                 break;
             case 46:
                 loadIntArray(classFile, method, stack);
@@ -847,49 +855,49 @@ public final class BytecodeToIR {
                 loadObjectArray(classFile, method, stack);
                 break;
             case 54:
-                storeInt(classFile, method, instructions, stack, locals, localDeclarations, unsigned(instruction.operands()[0]));
+                storeInt(classFile, method, instructions, stack, locals, specialObjectLocals, localDeclarations, unsigned(instruction.operands()[0]));
                 break;
             case 55:
-                storeLong(classFile, method, instructions, stack, locals, localDeclarations, unsigned(instruction.operands()[0]));
+                storeLong(classFile, method, instructions, stack, locals, specialObjectLocals, localDeclarations, unsigned(instruction.operands()[0]));
                 break;
             case 56:
-                storeFloat(classFile, method, instructions, stack, locals, localDeclarations, unsigned(instruction.operands()[0]));
+                storeFloat(classFile, method, instructions, stack, locals, specialObjectLocals, localDeclarations, unsigned(instruction.operands()[0]));
                 break;
             case 57:
-                storeDouble(classFile, method, instructions, stack, locals, localDeclarations, unsigned(instruction.operands()[0]));
+                storeDouble(classFile, method, instructions, stack, locals, specialObjectLocals, localDeclarations, unsigned(instruction.operands()[0]));
                 break;
             case 59:
             case 60:
             case 61:
             case 62:
-                storeInt(classFile, method, instructions, stack, locals, localDeclarations, instruction.opcode() - 59);
+                storeInt(classFile, method, instructions, stack, locals, specialObjectLocals, localDeclarations, instruction.opcode() - 59);
                 break;
             case 63:
             case 64:
             case 65:
             case 66:
-                storeLong(classFile, method, instructions, stack, locals, localDeclarations, instruction.opcode() - 63);
+                storeLong(classFile, method, instructions, stack, locals, specialObjectLocals, localDeclarations, instruction.opcode() - 63);
                 break;
             case 67:
             case 68:
             case 69:
             case 70:
-                storeFloat(classFile, method, instructions, stack, locals, localDeclarations, instruction.opcode() - 67);
+                storeFloat(classFile, method, instructions, stack, locals, specialObjectLocals, localDeclarations, instruction.opcode() - 67);
                 break;
             case 71:
             case 72:
             case 73:
             case 74:
-                storeDouble(classFile, method, instructions, stack, locals, localDeclarations, instruction.opcode() - 71);
+                storeDouble(classFile, method, instructions, stack, locals, specialObjectLocals, localDeclarations, instruction.opcode() - 71);
                 break;
             case 58:
-                storeObject(classFile, method, instruction, instructions, stack, locals, objectLocalKinds, objectLocalThrowableTypes, localDeclarations, unsigned(instruction.operands()[0]));
+                storeObject(classFile, method, instruction, instructions, stack, locals, objectLocalKinds, objectLocalThrowableTypes, specialObjectLocals, localDeclarations, unsigned(instruction.operands()[0]));
                 break;
             case 75:
             case 76:
             case 77:
             case 78:
-                storeObject(classFile, method, instruction, instructions, stack, locals, objectLocalKinds, objectLocalThrowableTypes, localDeclarations, instruction.opcode() - 75);
+                storeObject(classFile, method, instruction, instructions, stack, locals, objectLocalKinds, objectLocalThrowableTypes, specialObjectLocals, localDeclarations, instruction.opcode() - 75);
                 break;
             case 79:
                 storeIntArray(classFile, method, instructions, stack);
@@ -1428,11 +1436,13 @@ public final class BytecodeToIR {
         final List<IrInstruction> instructions,
         final List<StackValue> stack,
         final Map<Integer, IrExpression> locals,
+        final Map<Integer, StackValue> specialObjectLocals,
         final Map<Integer, IrLocal> localDeclarations,
         final int slot
     ) {
         final IrExpression value = popInt(classFile, method, stack);
         final IrExpression target = localOrCreate(locals, localDeclarations, slot, IrType.INT);
+        specialObjectLocals.remove(slot);
         instructions.add(IrInstruction.assignInt(target.value(), value));
     }
 
@@ -1442,11 +1452,13 @@ public final class BytecodeToIR {
         final List<IrInstruction> instructions,
         final List<StackValue> stack,
         final Map<Integer, IrExpression> locals,
+        final Map<Integer, StackValue> specialObjectLocals,
         final Map<Integer, IrLocal> localDeclarations,
         final int slot
     ) {
         final IrExpression value = popLong(classFile, method, stack);
         final IrExpression target = localOrCreate(locals, localDeclarations, slot, IrType.LONG);
+        specialObjectLocals.remove(slot);
         instructions.add(IrInstruction.assignLong(target.value(), value));
     }
 
@@ -1456,11 +1468,13 @@ public final class BytecodeToIR {
         final List<IrInstruction> instructions,
         final List<StackValue> stack,
         final Map<Integer, IrExpression> locals,
+        final Map<Integer, StackValue> specialObjectLocals,
         final Map<Integer, IrLocal> localDeclarations,
         final int slot
     ) {
         final IrExpression value = popFloat(classFile, method, stack);
         final IrExpression target = localOrCreate(locals, localDeclarations, slot, IrType.FLOAT);
+        specialObjectLocals.remove(slot);
         instructions.add(IrInstruction.assignFloat(target.value(), value));
     }
 
@@ -1470,11 +1484,13 @@ public final class BytecodeToIR {
         final List<IrInstruction> instructions,
         final List<StackValue> stack,
         final Map<Integer, IrExpression> locals,
+        final Map<Integer, StackValue> specialObjectLocals,
         final Map<Integer, IrLocal> localDeclarations,
         final int slot
     ) {
         final IrExpression value = popDouble(classFile, method, stack);
         final IrExpression target = localOrCreate(locals, localDeclarations, slot, IrType.DOUBLE);
+        specialObjectLocals.remove(slot);
         instructions.add(IrInstruction.assignDouble(target.value(), value));
     }
 
@@ -1487,6 +1503,7 @@ public final class BytecodeToIR {
         final Map<Integer, IrExpression> locals,
         final Map<Integer, StackKind> objectLocalKinds,
         final Map<Integer, String> objectLocalThrowableTypes,
+        final Map<Integer, StackValue> specialObjectLocals,
         final Map<Integer, IrLocal> localDeclarations,
         final int slot
     ) {
@@ -1496,7 +1513,23 @@ public final class BytecodeToIR {
             }
             throw invalidStack(classFile, method, instruction, "object store requires a value on the bytecode stack");
         }
-        final StackValue value = popObjectValue(classFile, method, instruction, stack);
+        final StackValue value = pop(stack);
+        if (!BytecodeToIRControlFlowSupport.isObjectLike(value.kind())
+            && value.kind() != StackKind.OBJECT_STREAM
+            && value.kind() != StackKind.INT_STREAM
+            && value.kind() != StackKind.STREAM_COLLECTOR) {
+            throw invalidStack(classFile, method, instruction, wrongStackTypeReason("object", value.kind()));
+        }
+        if (value.kind() == StackKind.OBJECT_STREAM
+            || value.kind() == StackKind.INT_STREAM
+            || value.kind() == StackKind.STREAM_COLLECTOR) {
+            localOrCreate(locals, localDeclarations, slot, IrType.OBJECT);
+            specialObjectLocals.put(slot, value);
+            updateObjectLocalKind(objectLocalKinds, slot, value.kind());
+            objectLocalThrowableTypes.put(slot, null);
+            return;
+        }
+        specialObjectLocals.remove(slot);
         final IrExpression target = localOrCreate(locals, localDeclarations, slot, IrType.OBJECT);
         instructions.add(IrInstruction.assignObject(target.value(), stackValueExpression(value)));
         updateObjectLocalKind(objectLocalKinds, slot, value.kind());
@@ -1986,8 +2019,13 @@ public final class BytecodeToIR {
         final Map<Integer, IrExpression> locals,
         final Map<Integer, StackKind> objectLocalKinds,
         final Map<Integer, String> objectLocalThrowableTypes,
+        final Map<Integer, StackValue> specialObjectLocals,
         final int slot
     ) {
+        final StackValue special = specialObjectLocals.get(slot);
+        if (special != null) {
+            return special;
+        }
         final IrExpression expression = local(classFile, method, locals, slot, IrType.OBJECT);
         final StackKind kind = objectLocalKinds.getOrDefault(slot, StackKind.OBJECT);
         if (kind == StackKind.OBJECT) {
@@ -2023,11 +2061,7 @@ public final class BytecodeToIR {
         final int slot,
         final StackKind kind
     ) {
-        if (kind == StackKind.SOCKET_INPUT_STREAM
-            || kind == StackKind.SOCKET_OUTPUT_STREAM
-            || kind == StackKind.VIRTUAL_THREAD_BUILDER
-            || kind == StackKind.VIRTUAL_THREAD_FACTORY
-            || kind == StackKind.VIRTUAL_THREAD_EXECUTOR) {
+        if (kind != StackKind.OBJECT) {
             objectLocalKinds.put(slot, kind);
             return;
         }
@@ -3066,6 +3100,7 @@ public final class BytecodeToIR {
 
     enum StackKind {
         OBJECT_STREAM,
+        INT_STREAM,
         STREAM_COLLECTOR,
         VIRTUAL_THREAD_BUILDER,
         VIRTUAL_THREAD_FACTORY,
@@ -3093,14 +3128,25 @@ public final class BytecodeToIR {
     ) {
     }
 
+    record StreamToIntOperation(
+        IrExpression function,
+        MethodRef interfaceMethod
+    ) {
+    }
+
     record StreamPlan(
         IrExpression source,
-        List<StreamOperation> operations
+        List<StreamOperation> operations,
+        Optional<StreamToIntOperation> intTerminal
     ) {
         StreamPlan append(final StreamOperation operation) {
             final List<StreamOperation> next = new ArrayList<>(operations);
             next.add(operation);
-            return new StreamPlan(source, List.copyOf(next));
+            return new StreamPlan(source, List.copyOf(next), intTerminal);
+        }
+
+        StreamPlan mapToInt(final IrExpression function, final MethodRef interfaceMethod) {
+            return new StreamPlan(source, operations, Optional.of(new StreamToIntOperation(function, interfaceMethod)));
         }
     }
 
@@ -3139,6 +3185,10 @@ public final class BytecodeToIR {
 
         static StackValue objectStream(final StreamPlan streamPlan) {
             return new StackValue(StackKind.OBJECT_STREAM, Optional.empty(), Optional.empty(), Optional.of(streamPlan), Optional.empty());
+        }
+
+        static StackValue intStream(final StreamPlan streamPlan) {
+            return new StackValue(StackKind.INT_STREAM, Optional.empty(), Optional.empty(), Optional.of(streamPlan), Optional.empty());
         }
 
         static StackValue streamCollector(final CollectorPlan collectorPlan) {

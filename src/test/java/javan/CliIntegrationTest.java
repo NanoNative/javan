@@ -1299,6 +1299,26 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void buildRejectsReachableDisabledOptionalRuntimeModuleForIntStreamMax() throws Exception {
+        assertBuildRejectsDisabledRuntimeModule("disabled-optional-build-intstream-max", "optional", """
+            package com.acme;
+
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    List.of("a", "bbbb").stream()
+                        .mapToInt(String::length)
+                        .max();
+                }
+            }
+            """);
+    }
+
+    @Test
     void buildRejectsReachableDisabledEnvironmentRuntimeModule() throws Exception {
         assertBuildRejectsDisabledRuntimeModule("disabled-environment-build", "environment", """
             package com.acme;
@@ -7440,6 +7460,207 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void listStreamMapToIntMaxOrElseBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("list-stream-map-to-int-max-or-else");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(List.of("a", "bbbb", "cc").stream()
+                        .mapToInt(String::length)
+                        .max()
+                        .orElse(-1));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/list-stream-map-to-int-max-or-else").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("4\n");
+    }
+
+    @Test
+    void emptyListStreamMapToIntMaxOrElseBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("empty-list-stream-map-to-int-max-or-else");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(List.<String>of().stream()
+                        .mapToInt(String::length)
+                        .max()
+                        .orElse(-1));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/empty-list-stream-map-to-int-max-or-else").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("-1\n");
+    }
+
+    @Test
+    void filteredListStreamMapToIntMaxOrElseBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("filtered-list-stream-map-to-int-max-or-else");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(List.of("a", "bbbb", "cc").stream()
+                        .filter(value -> value.length() > 10)
+                        .mapToInt(String::length)
+                        .max()
+                        .orElse(-1));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/filtered-list-stream-map-to-int-max-or-else").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("-1\n");
+    }
+
+    @Test
+    void storedIntStreamMaxOrElseBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stored-intstream-max-or-else");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.List;
+            import java.util.stream.IntStream;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final IntStream stream = List.of("a", "bbbb", "cc").stream()
+                        .mapToInt(String::length);
+                    System.out.println(stream.max().orElse(-1));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stored-intstream-max-or-else").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("4\n");
+    }
+
+    @Test
+    void listStreamMapToIntMaxPrintedAsObjectBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("list-stream-map-to-int-max-printed-as-object");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Object value = List.of("a", "bbbb", "cc").stream()
+                        .mapToInt(String::length)
+                        .max();
+                    System.out.println(value);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/list-stream-map-to-int-max-printed-as-object").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("OptionalInt[4]\n");
+    }
+
+    @Test
+    void streamMapToIntNullMapperFailsEagerlyLikeJvm() throws Exception {
+        final Path project = project("stream-map-to-int-null-mapper");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.List;
+            import java.util.function.ToIntFunction;
+
+            public final class Main {
+                private Main() {
+                }
+
+                private static final class LengthMapper implements ToIntFunction<String> {
+                    @Override
+                    public int applyAsInt(final String value) {
+                        return value.length();
+                    }
+                }
+
+                public static void main(final String[] args) {
+                    ToIntFunction<String> mapper = new LengthMapper();
+                    mapper = null;
+                    List.of("a").stream().mapToInt(mapper);
+                    System.out.println("after");
+                }
+            }
+            """);
+
+        final Path classes = project.resolve("jvm-classes");
+        Files.createDirectories(classes);
+        final ProcessResult javac = process(project, List.of(
+            "javac",
+            "-d",
+            classes.toString(),
+            project.resolve("src/main/java/com/acme/Main.java").toString()
+        ));
+        assertThat(javac.exitCode()).isZero();
+        final ProcessResult jvmRun = process(project, List.of(
+            "java",
+            "-cp",
+            classes.toString(),
+            "com.acme.Main"
+        ));
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(jvmRun.exitCode()).isNotZero();
+        assertThat(jvmRun.stdout()).isEmpty();
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/stream-map-to-int-null-mapper").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stdout()).isEmpty();
+        assertThat(nativeRun.stderr()).contains("[JAVAN-RUNTIME-PANIC]", "detail: null object");
+    }
+
+    @Test
     void listStreamAnyMatchBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("list-stream-any-match");
         writeJava(project, "com.acme.Main", """
@@ -9228,11 +9449,15 @@ final class CliIntegrationTest {
             "java/util/Optional.filter(Ljava/util/function/Predicate;)Ljava/util/Optional;",
             "java/util/Optional.ifPresent(Ljava/util/function/Consumer;)V",
             "java/util/Optional.flatMap(Ljava/util/function/Function;)Ljava/util/Optional;",
+            "java/util/stream/Stream.mapToInt(Ljava/util/function/ToIntFunction;)Ljava/util/stream/IntStream;",
+            "java/util/stream/IntStream.max()Ljava/util/OptionalInt;",
+            "java/util/OptionalInt.orElse(I)I",
             "java/util/Optional.map(Ljava/util/function/Function;)Ljava/util/Optional;",
             "java/util/Optional.ifPresentOrElse(Ljava/util/function/Consumer;Ljava/lang/Runnable;)V",
             "java/util/Optional.orElseGet(Ljava/util/function/Supplier;)Ljava/lang/Object;",
             "java/util/function/Predicate.test(Ljava/lang/Object;)Z",
             "java/util/function/Function.apply(Ljava/lang/Object;)Ljava/lang/Object;",
+            "java/util/function/ToIntFunction.applyAsInt(Ljava/lang/Object;)I",
             "java/util/function/Consumer.accept(Ljava/lang/Object;)V",
             "java/util/function/BiConsumer.accept(Ljava/lang/Object;Ljava/lang/Object;)V",
             "java/lang/Runnable.run()V",

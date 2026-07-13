@@ -501,7 +501,8 @@ public final class JdkCallSupport {
         runtime("Optional.ifPresent", "java/util/Optional", "ifPresent", "(Ljava/util/function/Consumer;)V"),
         runtime("Optional.map", "java/util/Optional", "map", "(Ljava/util/function/Function;)Ljava/util/Optional;"),
         runtime("Optional.flatMap", "java/util/Optional", "flatMap", "(Ljava/util/function/Function;)Ljava/util/Optional;"),
-        runtime("Optional.ifPresentOrElse", "java/util/Optional", "ifPresentOrElse", "(Ljava/util/function/Consumer;Ljava/lang/Runnable;)V")
+        runtime("Optional.ifPresentOrElse", "java/util/Optional", "ifPresentOrElse", "(Ljava/util/function/Consumer;Ljava/lang/Runnable;)V"),
+        runtime("OptionalInt.orElse", "java/util/OptionalInt", "orElse", "(I)I")
     );
 
     private JdkCallSupport() {
@@ -572,6 +573,9 @@ public final class JdkCallSupport {
         if ("java/util/stream/Stream".equals(methodRef.owner())) {
             return isSupportedStreamCall(methodRef.name(), methodRef.descriptor());
         }
+        if ("java/util/stream/IntStream".equals(methodRef.owner())) {
+            return isSupportedIntStreamCall(methodRef.name(), methodRef.descriptor());
+        }
         if ("java/util/Map".equals(methodRef.owner())) {
             return isSupportedMapCall(methodRef.name(), methodRef.descriptor());
         }
@@ -630,6 +634,9 @@ public final class JdkCallSupport {
         if ("java/util/function/Function".equals(owner)) {
             return "apply".equals(name) && "(Ljava/lang/Object;)Ljava/lang/Object;".equals(descriptor);
         }
+        if ("java/util/function/ToIntFunction".equals(owner)) {
+            return "applyAsInt".equals(name) && "(Ljava/lang/Object;)I".equals(descriptor);
+        }
         if ("java/util/function/Predicate".equals(owner)) {
             return "test".equals(name) && "(Ljava/lang/Object;)Z".equals(descriptor);
         }
@@ -674,6 +681,9 @@ public final class JdkCallSupport {
             }
             if ("map".equals(name) && "(Ljava/util/function/Function;)Ljava/util/stream/Stream;".equals(descriptor)) {
                 return List.of(new MethodRef("java/util/function/Function", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;"));
+            }
+            if ("mapToInt".equals(name) && "(Ljava/util/function/ToIntFunction;)Ljava/util/stream/IntStream;".equals(descriptor)) {
+                return List.of(new MethodRef("java/util/function/ToIntFunction", "applyAsInt", "(Ljava/lang/Object;)I"));
             }
             if ("anyMatch".equals(name) && "(Ljava/util/function/Predicate;)Z".equals(descriptor)) {
                 return List.of(new MethodRef("java/util/function/Predicate", "test", "(Ljava/lang/Object;)Z"));
@@ -839,6 +849,9 @@ public final class JdkCallSupport {
         if ("map".equals(name)) {
             return "(Ljava/util/function/Function;)Ljava/util/stream/Stream;".equals(descriptor);
         }
+        if ("mapToInt".equals(name)) {
+            return "(Ljava/util/function/ToIntFunction;)Ljava/util/stream/IntStream;".equals(descriptor);
+        }
         if ("toList".equals(name)) {
             return "()Ljava/util/List;".equals(descriptor);
         }
@@ -847,6 +860,13 @@ public final class JdkCallSupport {
         }
         if ("anyMatch".equals(name) || "noneMatch".equals(name)) {
             return "(Ljava/util/function/Predicate;)Z".equals(descriptor);
+        }
+        return false;
+    }
+
+    private static boolean isSupportedIntStreamCall(final String name, final String descriptor) {
+        if ("max".equals(name)) {
+            return "()Ljava/util/OptionalInt;".equals(descriptor);
         }
         return false;
     }
@@ -1151,6 +1171,11 @@ public final class JdkCallSupport {
         if ("java/nio/file/attribute/FileTime".equals(owner)) {
             return List.of("filesystem", "time");
         }
+        if ("java/util/stream/IntStream".equals(owner)
+            && "max".equals(name)
+            && "()Ljava/util/OptionalInt;".equals(methodRef.descriptor())) {
+            return List.of("collections", "optional");
+        }
         if (isFileRuntimeOwner(owner)) {
             return List.of("filesystem");
         }
@@ -1161,6 +1186,9 @@ public final class JdkCallSupport {
             return List.of("maps");
         }
         if ("java/util/Optional".equals(owner)) {
+            return List.of("optional");
+        }
+        if ("java/util/OptionalInt".equals(owner)) {
             return List.of("optional");
         }
         if ("java/io/PrintStream".equals(owner)) {
@@ -1338,6 +1366,9 @@ public final class JdkCallSupport {
             return true;
         }
         if ("java/util/stream/Stream".equals(owner)) {
+            return true;
+        }
+        if ("java/util/stream/IntStream".equals(owner)) {
             return true;
         }
         if ("java/lang/Iterable".equals(owner)) {

@@ -687,6 +687,7 @@ final class BytecodeToIRTest {
         objectLocalKinds.put(0, BytecodeToIR.StackKind.OBJECT);
         final Map<Integer, String> objectLocalThrowableTypes = new HashMap<>();
         objectLocalThrowableTypes.put(0, "java/lang/NullPointerException");
+        final Map<Integer, BytecodeToIR.StackValue> specialObjectLocals = new HashMap<>();
 
         final BytecodeToIR.StackValue value = BytecodeToIR.localObjectValue(
             classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of()),
@@ -694,6 +695,7 @@ final class BytecodeToIRTest {
             locals,
             objectLocalKinds,
             objectLocalThrowableTypes,
+            specialObjectLocals,
             0
         );
 
@@ -707,6 +709,7 @@ final class BytecodeToIRTest {
         final Map<Integer, BytecodeToIR.StackKind> objectLocalKinds = new HashMap<>();
         final Map<Integer, String> objectLocalThrowableTypes = new HashMap<>();
         objectLocalThrowableTypes.put(0, "java/lang/NullPointerException");
+        final Map<Integer, BytecodeToIR.StackValue> specialObjectLocals = new HashMap<>();
         final Map<Integer, IrLocal> localDeclarations = new LinkedHashMap<>();
         final List<IrInstruction> instructions = new ArrayList<>();
         final List<BytecodeToIR.StackValue> stack = new ArrayList<>();
@@ -721,6 +724,7 @@ final class BytecodeToIRTest {
             locals,
             objectLocalKinds,
             objectLocalThrowableTypes,
+            specialObjectLocals,
             localDeclarations,
             0
         );
@@ -732,8 +736,117 @@ final class BytecodeToIRTest {
             locals,
             objectLocalKinds,
             objectLocalThrowableTypes,
+            specialObjectLocals,
             0
         ).throwableType()).isEmpty();
+    }
+
+    @Test
+    void storeObjectPersistsStoredIntStreamAsSpecialLocal() {
+        final Map<Integer, IrExpression> locals = new HashMap<>();
+        final Map<Integer, BytecodeToIR.StackKind> objectLocalKinds = new HashMap<>();
+        final Map<Integer, String> objectLocalThrowableTypes = new HashMap<>();
+        final Map<Integer, BytecodeToIR.StackValue> specialObjectLocals = new HashMap<>();
+        final Map<Integer, IrLocal> localDeclarations = new LinkedHashMap<>();
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>();
+        final BytecodeToIR.StreamPlan streamPlan = new BytecodeToIR.StreamPlan(
+            IrExpression.objectLocal("source"),
+            List.of(),
+            Optional.of(new BytecodeToIR.StreamToIntOperation(
+                IrExpression.objectLocal("mapper"),
+                new MethodRef("java/util/function/ToIntFunction", "applyAsInt", "(Ljava/lang/Object;)I")
+            ))
+        );
+        stack.add(BytecodeToIR.StackValue.intStream(streamPlan));
+
+        BytecodeToIR.storeObject(
+            classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of()),
+            method(0x0008, "main", "()V", 1, 1, plain(0, 177, "return")),
+            plain(0, 75, "astore_0"),
+            instructions,
+            stack,
+            locals,
+            objectLocalKinds,
+            objectLocalThrowableTypes,
+            specialObjectLocals,
+            localDeclarations,
+            0
+        );
+
+        assertThat(instructions).isEmpty();
+        assertThat(objectLocalKinds).containsEntry(0, BytecodeToIR.StackKind.INT_STREAM);
+        assertThat(BytecodeToIR.localObjectValue(
+            classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of()),
+            method(0x0008, "main", "()V", 1, 1, plain(0, 177, "return")),
+            locals,
+            objectLocalKinds,
+            objectLocalThrowableTypes,
+            specialObjectLocals,
+            0
+        )).isEqualTo(BytecodeToIR.StackValue.intStream(streamPlan));
+    }
+
+    @Test
+    void storeObjectPersistsStoredStreamCollectorAsSpecialLocal() {
+        final Map<Integer, IrExpression> locals = new HashMap<>();
+        final Map<Integer, BytecodeToIR.StackKind> objectLocalKinds = new HashMap<>();
+        final Map<Integer, String> objectLocalThrowableTypes = new HashMap<>();
+        final Map<Integer, BytecodeToIR.StackValue> specialObjectLocals = new HashMap<>();
+        final Map<Integer, IrLocal> localDeclarations = new LinkedHashMap<>();
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>();
+        final BytecodeToIR.CollectorPlan collectorPlan = new BytecodeToIR.CollectorPlan(
+            IrExpression.stringLiteral(", "),
+            IrExpression.stringLiteral("["),
+            IrExpression.stringLiteral("]")
+        );
+        stack.add(BytecodeToIR.StackValue.streamCollector(collectorPlan));
+
+        BytecodeToIR.storeObject(
+            classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of()),
+            method(0x0008, "main", "()V", 1, 1, plain(0, 177, "return")),
+            plain(0, 75, "astore_0"),
+            instructions,
+            stack,
+            locals,
+            objectLocalKinds,
+            objectLocalThrowableTypes,
+            specialObjectLocals,
+            localDeclarations,
+            0
+        );
+
+        assertThat(instructions).isEmpty();
+        assertThat(objectLocalKinds).containsEntry(0, BytecodeToIR.StackKind.STREAM_COLLECTOR);
+        assertThat(BytecodeToIR.localObjectValue(
+            classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of()),
+            method(0x0008, "main", "()V", 1, 1, plain(0, 177, "return")),
+            locals,
+            objectLocalKinds,
+            objectLocalThrowableTypes,
+            specialObjectLocals,
+            0
+        )).isEqualTo(BytecodeToIR.StackValue.streamCollector(collectorPlan));
+    }
+
+    @Test
+    void storeObjectRejectsPrimitiveValueForObjectLocal() {
+        assertThatThrownBy(() -> BytecodeToIR.storeObject(
+            classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of()),
+            method(0x0008, "main", "()V", 1, 1, plain(0, 177, "return")),
+            plain(0, 75, "astore_0"),
+            new ArrayList<>(),
+            new ArrayList<>(List.of(BytecodeToIR.StackValue.intExpression(IrExpression.intLiteral(7)))),
+            new HashMap<>(),
+            new HashMap<>(),
+            new HashMap<>(),
+            new HashMap<>(),
+            new LinkedHashMap<>(),
+            0
+        )).isInstanceOfSatisfying(DiagnosticException.class, exception ->
+            assertThat(exception.diagnostic().code()).isEqualTo("JAVAN049")
+        );
     }
 
     @Test
@@ -1887,6 +2000,7 @@ final class BytecodeToIRTest {
             new HashMap<>(),
             new HashMap<>(),
             new HashMap<>(),
+            new HashMap<>(),
             new LinkedHashMap<>(),
             0
         );
@@ -1902,6 +2016,7 @@ final class BytecodeToIRTest {
             plain(0, 75, "astore_0"),
             new ArrayList<>(),
             new ArrayList<>(),
+            new HashMap<>(),
             new HashMap<>(),
             new HashMap<>(),
             new HashMap<>(),
@@ -1930,6 +2045,7 @@ final class BytecodeToIRTest {
             plain(0, 3, "iconst_0"),
             new ArrayList<>(),
             new ArrayList<>(),
+            new HashMap<>(),
             new HashMap<>(),
             new HashMap<>(),
             new HashMap<>(),

@@ -344,6 +344,9 @@ final class RuntimeHeaderFile {
         int javan_optional_is_empty(void* optional);
         void* javan_optional_or_else(void* optional, void* fallback);
         void* javan_optional_or_else_throw(void* optional);
+        void* javan_optional_int_empty(void);
+        void* javan_optional_int_of(int value);
+        int javan_optional_int_or_else(void* optional, int fallback);
         void* javan_atomic_boolean_new(void);
         void javan_atomic_boolean_init(void* value, int initial_value);
         int javan_atomic_boolean_get(void* value);

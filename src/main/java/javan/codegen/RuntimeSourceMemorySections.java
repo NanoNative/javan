@@ -73,6 +73,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_RUNTIME_KIND_LOCAL_DATE_TIME 37
         #define JAVAN_RUNTIME_KIND_ZONED_DATE_TIME 38
         #define JAVAN_RUNTIME_KIND_ATOMIC_REFERENCE 39
+        #define JAVAN_RUNTIME_KIND_OPTIONAL_INT 40
 
         typedef struct {
             int magic;
@@ -119,6 +120,14 @@ final class RuntimeSourceMemorySections {
             int reserved1;
             void* value;
         } javan_optional;
+
+        typedef struct {
+            int magic;
+            int present;
+            int value;
+            int reserved0;
+            int reserved1;
+        } javan_optional_int;
 
         typedef struct {
             int magic;
@@ -387,6 +396,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_OBJECT_MAP_MAGIC 0x4a4d4150
         #define JAVAN_STRING_BUILDER_MAGIC 0x4a53424c
         #define JAVAN_OPTIONAL_MAGIC 0x4a4f5054
+        #define JAVAN_OPTIONAL_INT_MAGIC 0x4a4f5049
         #define JAVAN_ATOMIC_BOOLEAN_MAGIC 0x4a415442
         #define JAVAN_ATOMIC_INTEGER_MAGIC 0x4a415449
         #define JAVAN_ATOMIC_REFERENCE_MAGIC 0x4a415452
@@ -1038,6 +1048,7 @@ final class RuntimeSourceMemorySections {
                 || runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_ITERATOR
                 || runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_MAP
                 || runtime_kind == JAVAN_RUNTIME_KIND_OPTIONAL
+                || runtime_kind == JAVAN_RUNTIME_KIND_OPTIONAL_INT
                 || runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_BOOLEAN
                 || runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_INTEGER
                 || runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_REFERENCE
@@ -1487,6 +1498,19 @@ final class RuntimeSourceMemorySections {
             }
         }
 
+        static void* javan_optional_int_to_string(void* value) {
+            javan_optional_int* optional = (javan_optional_int*) value;
+            if (optional == NULL || optional->magic != JAVAN_OPTIONAL_INT_MAGIC) {
+                javan_panic("invalid optional int printable object");
+            }
+            if (optional->present == 0) {
+                return (void*) "OptionalInt.empty";
+            }
+            char buffer[64];
+            snprintf(buffer, sizeof(buffer), "OptionalInt[%d]", optional->value);
+            return javan_string_copy(buffer);
+        }
+
         void* javan_printable_object_string(void* value) {
             if (value == NULL) {
                 return (void*) "null";
@@ -1515,6 +1539,9 @@ final class RuntimeSourceMemorySections {
             }
             if (node->runtime_kind == JAVAN_RUNTIME_KIND_THROWABLE) {
                 return javan_throwable_get_message(value);
+            }
+            if (node->runtime_kind == JAVAN_RUNTIME_KIND_OPTIONAL_INT) {
+                return javan_optional_int_to_string(value);
             }
             if (node->runtime_kind == JAVAN_RUNTIME_KIND_INET_SOCKET_ADDRESS) {
                 return javan_inet_socket_address_to_string(value);
@@ -1549,6 +1576,7 @@ final class RuntimeSourceMemorySections {
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_OBJECT_ITERATOR
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_OBJECT_MAP
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_OPTIONAL
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_OPTIONAL_INT
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_STRING
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_PROCESS_RESULT
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_STRING_BUILDER
@@ -2443,6 +2471,8 @@ final class RuntimeSourceMemorySections {
                     return "java.util.LinkedHashMap";
                 case JAVAN_RUNTIME_KIND_OPTIONAL:
                     return "java.util.Optional";
+                case JAVAN_RUNTIME_KIND_OPTIONAL_INT:
+                    return "java.util.OptionalInt";
                 case JAVAN_RUNTIME_KIND_STRING:
                     return "java.lang.String";
                 case JAVAN_RUNTIME_KIND_PROCESS_RESULT:
@@ -4765,6 +4795,11 @@ final class RuntimeSourceMemorySections {
                 javan_optional* optional = (javan_optional*) value;
                 if (optional != NULL && optional->magic == JAVAN_OPTIONAL_MAGIC && optional->present != 0) {
                     javan_gc_mark_value(optional->value);
+                }
+            } else if (runtime_kind == JAVAN_RUNTIME_KIND_OPTIONAL_INT) {
+                javan_optional_int* optional = (javan_optional_int*) value;
+                if (optional != NULL && optional->magic != JAVAN_OPTIONAL_INT_MAGIC) {
+                    javan_panic("invalid optional int runtime object");
                 }
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_STRING_BUILDER) {
                 javan_string_builder* builder = (javan_string_builder*) value;
