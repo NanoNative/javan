@@ -72,6 +72,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_RUNTIME_KIND_LOCAL_TIME 36
         #define JAVAN_RUNTIME_KIND_LOCAL_DATE_TIME 37
         #define JAVAN_RUNTIME_KIND_ZONED_DATE_TIME 38
+        #define JAVAN_RUNTIME_KIND_ATOMIC_REFERENCE 39
 
         typedef struct {
             int magic;
@@ -132,6 +133,14 @@ final class RuntimeSourceMemorySections {
             int reserved0;
             int reserved1;
         } javan_atomic_integer;
+
+        typedef struct {
+            int magic;
+            int reserved0;
+            int reserved1;
+            int reserved2;
+            void* value;
+        } javan_atomic_reference;
 
         typedef struct {
             int magic;
@@ -380,6 +389,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_OPTIONAL_MAGIC 0x4a4f5054
         #define JAVAN_ATOMIC_BOOLEAN_MAGIC 0x4a415442
         #define JAVAN_ATOMIC_INTEGER_MAGIC 0x4a415449
+        #define JAVAN_ATOMIC_REFERENCE_MAGIC 0x4a415452
         #define JAVAN_THROWABLE_MAGIC 0x4a545242
         #define JAVAN_INET_ADDRESS_MAGIC 0x4a494144
         #define JAVAN_INET_SOCKET_ADDRESS_MAGIC 0x4a495341
@@ -1030,6 +1040,7 @@ final class RuntimeSourceMemorySections {
                 || runtime_kind == JAVAN_RUNTIME_KIND_OPTIONAL
                 || runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_BOOLEAN
                 || runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_INTEGER
+                || runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_REFERENCE
                 || runtime_kind == JAVAN_RUNTIME_KIND_STRING_BUILDER
                 || runtime_kind == JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_BUILDER
                 || runtime_kind == JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_FACTORY
@@ -1270,6 +1281,12 @@ final class RuntimeSourceMemorySections {
                 if (state->magic != JAVAN_ATOMIC_INTEGER_MAGIC) {
                     javan_panic("invalid runtime atomic integer metadata");
                 }
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_REFERENCE) {
+                javan_atomic_reference* state = (javan_atomic_reference*) node->value;
+                if (state->magic != JAVAN_ATOMIC_REFERENCE_MAGIC) {
+                    javan_panic("invalid runtime atomic reference metadata");
+                }
+                javan_validate_runtime_managed_reference(state->value);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_THROWABLE) {
                 javan_throwable_value* throwable = (javan_throwable_value*) node->value;
                 if (throwable->magic != JAVAN_THROWABLE_MAGIC || throwable->binary_name == NULL || throwable->binary_name[0] == '\\0') {
@@ -1565,6 +1582,7 @@ final class RuntimeSourceMemorySections {
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_CLASS
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_ATOMIC_BOOLEAN
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_ATOMIC_INTEGER
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_ATOMIC_REFERENCE
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_THROWABLE) {
                     javan_panic("invalid runtime allocation kind");
                 }
@@ -2491,6 +2509,8 @@ final class RuntimeSourceMemorySections {
                     return "java.util.concurrent.atomic.AtomicBoolean";
                 case JAVAN_RUNTIME_KIND_ATOMIC_INTEGER:
                     return "java.util.concurrent.atomic.AtomicInteger";
+                case JAVAN_RUNTIME_KIND_ATOMIC_REFERENCE:
+                    return "java.util.concurrent.atomic.AtomicReference";
                 case JAVAN_RUNTIME_KIND_THROWABLE:
                     return "java.lang.Throwable";
                 default:
@@ -2516,6 +2536,17 @@ final class RuntimeSourceMemorySections {
             javan_atomic_integer* state = (javan_atomic_integer*) value;
             if (state->magic != JAVAN_ATOMIC_INTEGER_MAGIC) {
                 javan_panic("unsupported atomic integer");
+            }
+            return state;
+        }
+
+        static javan_atomic_reference* javan_atomic_reference_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported atomic reference");
+            }
+            javan_atomic_reference* state = (javan_atomic_reference*) value;
+            if (state->magic != JAVAN_ATOMIC_REFERENCE_MAGIC) {
+                javan_panic("unsupported atomic reference");
             }
             return state;
         }
@@ -2751,6 +2782,36 @@ final class RuntimeSourceMemorySections {
             int result = state->value;
             javan_runtime_lock_leave();
             return result;
+        }
+
+        void* javan_atomic_reference_new(void) {
+            javan_atomic_reference* state = (javan_atomic_reference*) javan_alloc(sizeof(javan_atomic_reference));
+            state->magic = JAVAN_ATOMIC_REFERENCE_MAGIC;
+            state->reserved0 = 0;
+            state->reserved1 = 0;
+            state->reserved2 = 0;
+            state->value = NULL;
+            javan_update_runtime_allocation_kind((void*) state, JAVAN_RUNTIME_KIND_ATOMIC_REFERENCE);
+            return state;
+        }
+
+        void javan_atomic_reference_init(void* value, void* initial_value) {
+            javan_runtime_lock_enter();
+            javan_atomic_reference_checked(value)->value = initial_value;
+            javan_runtime_lock_leave();
+        }
+
+        void* javan_atomic_reference_get(void* value) {
+            javan_runtime_lock_enter();
+            void* result = javan_atomic_reference_checked(value)->value;
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        void javan_atomic_reference_set(void* value, void* next_value) {
+            javan_runtime_lock_enter();
+            javan_atomic_reference_checked(value)->value = next_value;
+            javan_runtime_lock_leave();
         }
 
         void* javan_virtual_thread_builder_new(void) {
@@ -4726,6 +4787,11 @@ final class RuntimeSourceMemorySections {
                 if (state != NULL && state->magic == JAVAN_VIRTUAL_THREAD_EXECUTOR_MAGIC) {
                     javan_gc_mark_value(state->factory);
                     javan_gc_mark_value((void*) state->threads);
+                }
+            } else if (runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_REFERENCE) {
+                javan_atomic_reference* state = (javan_atomic_reference*) value;
+                if (state != NULL && state->magic == JAVAN_ATOMIC_REFERENCE_MAGIC) {
+                    javan_gc_mark_value(state->value);
                 }
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_THROWABLE) {
                 javan_throwable_value* throwable = (javan_throwable_value*) value;

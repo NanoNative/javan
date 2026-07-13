@@ -10,6 +10,7 @@ import javan.classfile.DynamicRef;
 import javan.classfile.FieldInfo;
 import javan.classfile.FieldRef;
 import javan.classfile.Instruction;
+import javan.classfile.LambdaMetafactorySupport;
 import javan.classfile.LineNumberEntry;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
@@ -27,6 +28,7 @@ import javan.verify.DiagnosticException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -732,6 +734,1135 @@ final class BytecodeToIRTest {
             objectLocalThrowableTypes,
             0
         ).throwableType()).isEmpty();
+    }
+
+    @Test
+    void lowerJdkLambdaBridgeReturnsEmptyForClosedWorldDispatchTarget() throws Exception {
+        final LambdaMetafactorySupport.LambdaClosurePlan plan = new LambdaMetafactorySupport.LambdaClosurePlan(
+            "com/acme/Main$$javan$lambda$map$0",
+            "java/util/function/Function",
+            "apply",
+            "(Ljava/lang/Object;)Ljava/lang/Object;",
+            "(Ljava/lang/Object;)Ljava/lang/Object;",
+            List.of(),
+            new MethodRef("java/util/function/Function", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;"),
+            6,
+            LambdaMetafactorySupport.ReceiverBinding.NONE,
+            Path.of("com/acme/Main.class"),
+            true
+        );
+
+        assertThat(lowerJdkLambdaBridge(
+            plan,
+            List.of(IrExpression.objectLocal("value")),
+            List.of("Ljava/lang/Object;"),
+            IrType.OBJECT
+        )).isEmpty();
+    }
+
+    @Test
+    void lowerJdkLambdaBridgeReturnsEmptyForUnsupportedTarget() throws Exception {
+        final LambdaMetafactorySupport.LambdaClosurePlan plan = new LambdaMetafactorySupport.LambdaClosurePlan(
+            "com/acme/Main$$javan$lambda$unsupported$0",
+            "java/util/function/BiFunction",
+            "apply",
+            "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+            "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+            List.of(),
+            new MethodRef("java/util/Objects", "equals", "(Ljava/lang/Object;Ljava/lang/Object;)Z"),
+            6,
+            LambdaMetafactorySupport.ReceiverBinding.NONE,
+            Path.of("com/acme/Main.class"),
+            true
+        );
+
+        assertThat(lowerJdkLambdaBridge(
+            plan,
+            List.of(IrExpression.objectLocal("left"), IrExpression.objectLocal("right")),
+            List.of("Ljava/lang/Object;", "Ljava/lang/Object;"),
+            IrType.OBJECT
+        )).isEmpty();
+    }
+
+    @Test
+    void implementationBridgeCallLowersIntegerIntValue() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/lang/Integer", "intValue", "()I"),
+            List.of(IrExpression.objectLocal("boxed"))
+        )).isEqualTo(IrExpression.intCall("javan_integer_int_value", List.of(IrExpression.objectLocal("boxed"))));
+    }
+
+    @Test
+    void implementationBridgeCallLowersLongValueOf() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/lang/Long", "valueOf", "(J)Ljava/lang/Long;"),
+            List.of(IrExpression.longLiteral(7L))
+        )).isEqualTo(IrExpression.objectCall("javan_long_value_of", List.of(IrExpression.longLiteral(7L))));
+    }
+
+    @Test
+    void implementationBridgeCallLowersLongLongValue() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/lang/Long", "longValue", "()J"),
+            List.of(IrExpression.objectLocal("boxed"))
+        )).isEqualTo(IrExpression.longCall("javan_long_long_value", List.of(IrExpression.objectLocal("boxed"))));
+    }
+
+    @Test
+    void implementationBridgeCallLowersFloatValueOf() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/lang/Float", "valueOf", "(F)Ljava/lang/Float;"),
+            List.of(IrExpression.floatLiteral(3.5f))
+        )).isEqualTo(IrExpression.objectCall("javan_float_value_of", List.of(IrExpression.floatLiteral(3.5f))));
+    }
+
+    @Test
+    void implementationBridgeCallLowersFloatFloatValue() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/lang/Float", "floatValue", "()F"),
+            List.of(IrExpression.objectLocal("boxed"))
+        )).isEqualTo(IrExpression.floatCall("javan_float_float_value", List.of(IrExpression.objectLocal("boxed"))));
+    }
+
+    @Test
+    void implementationBridgeCallLowersDoubleValueOf() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/lang/Double", "valueOf", "(D)Ljava/lang/Double;"),
+            List.of(IrExpression.doubleLiteral(4.25d))
+        )).isEqualTo(IrExpression.objectCall("javan_double_value_of", List.of(IrExpression.doubleLiteral(4.25d))));
+    }
+
+    @Test
+    void implementationBridgeCallLowersDoubleDoubleValue() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/lang/Double", "doubleValue", "()D"),
+            List.of(IrExpression.objectLocal("boxed"))
+        )).isEqualTo(IrExpression.doubleCall("javan_double_double_value", List.of(IrExpression.objectLocal("boxed"))));
+    }
+
+    @Test
+    void implementationBridgeCallLowersBooleanValueOf() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/lang/Boolean", "valueOf", "(Z)Ljava/lang/Boolean;"),
+            List.of(IrExpression.intLiteral(1))
+        )).isEqualTo(IrExpression.objectCall("javan_boolean_value_of", List.of(IrExpression.intLiteral(1))));
+    }
+
+    @Test
+    void implementationBridgeCallLowersBooleanBooleanValue() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/lang/Boolean", "booleanValue", "()Z"),
+            List.of(IrExpression.objectLocal("boxed"))
+        )).isEqualTo(IrExpression.intCall("javan_boolean_boolean_value", List.of(IrExpression.objectLocal("boxed"))));
+    }
+
+    @Test
+    void implementationBridgeCallLowersCharacterValueOf() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/lang/Character", "valueOf", "(C)Ljava/lang/Character;"),
+            List.of(IrExpression.intLiteral('a'))
+        )).isEqualTo(IrExpression.objectCall("javan_character_value_of", List.of(IrExpression.intLiteral('a'))));
+    }
+
+    @Test
+    void implementationBridgeCallLowersCharacterCharValue() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/lang/Character", "charValue", "()C"),
+            List.of(IrExpression.objectLocal("boxed"))
+        )).isEqualTo(IrExpression.intCall("javan_character_char_value", List.of(IrExpression.objectLocal("boxed"))));
+    }
+
+    @Test
+    void implementationBridgeCallLowersPrintStreamPrintlnNoArg() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/io/PrintStream", "println", "()V"),
+            List.of(IrExpression.objectLocal("stream"))
+        )).isEqualTo(new IrExpression(
+            IrExpression.Kind.CALL,
+            IrType.VOID,
+            "javan_printstream_println_object",
+            List.of(IrExpression.objectLocal("stream"), IrExpression.stringLiteral(""))
+        ));
+    }
+
+    @Test
+    void implementationBridgeCallLowersPrintStreamPrintlnString() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/io/PrintStream", "println", "(Ljava/lang/String;)V"),
+            List.of(IrExpression.objectLocal("stream"), IrExpression.objectLocal("value"))
+        )).isEqualTo(new IrExpression(
+            IrExpression.Kind.CALL,
+            IrType.VOID,
+            "javan_printstream_println_object",
+            List.of(IrExpression.objectLocal("stream"), IrExpression.objectLocal("value"))
+        ));
+    }
+
+    @Test
+    void implementationBridgeCallLowersPrintStreamPrintObjectWithExplicitArguments() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/io/PrintStream", "print", "(Ljava/lang/Object;)V"),
+            List.of(IrExpression.objectLocal("stream"), IrExpression.objectLocal("value"))
+        )).isEqualTo(new IrExpression(
+            IrExpression.Kind.CALL,
+            IrType.VOID,
+            "javan_printstream_print_object",
+            List.of(IrExpression.objectLocal("stream"), IrExpression.objectLocal("value"))
+        ));
+    }
+
+    @Test
+    void implementationBridgeCallLowersZoneIdSystemDefault() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/time/ZoneId", "systemDefault", "()Ljava/time/ZoneId;"),
+            List.of()
+        )).isEqualTo(IrExpression.objectCall("javan_zone_id_system_default", List.of()));
+    }
+
+    @Test
+    void implementationBridgeCallLowersInstantOfEpochMilli() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/time/Instant", "ofEpochMilli", "(J)Ljava/time/Instant;"),
+            List.of(IrExpression.longLiteral(99L))
+        )).isEqualTo(IrExpression.objectCall("javan_instant_of_epoch_millis", List.of(IrExpression.longLiteral(99L))));
+    }
+
+    @Test
+    void implementationBridgeCallLowersInstantToEpochMilli() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/time/Instant", "toEpochMilli", "()J"),
+            List.of(IrExpression.objectLocal("instant"))
+        )).isEqualTo(IrExpression.longCall("javan_instant_to_epoch_millis", List.of(IrExpression.objectLocal("instant"))));
+    }
+
+    @Test
+    void implementationBridgeCallLowersInstantAtZone() throws Exception {
+        final List<IrExpression> arguments = List.of(IrExpression.objectLocal("instant"), IrExpression.objectLocal("zone"));
+
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/time/Instant", "atZone", "(Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;"),
+            arguments
+        )).isEqualTo(IrExpression.objectCall("javan_instant_at_zone", arguments));
+    }
+
+    @Test
+    void implementationBridgeCallLowersLocalDateOfEpochDay() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/time/LocalDate", "ofEpochDay", "(J)Ljava/time/LocalDate;"),
+            List.of(IrExpression.longLiteral(3L))
+        )).isEqualTo(IrExpression.objectCall("javan_local_date_of_epoch_day", List.of(IrExpression.longLiteral(3L))));
+    }
+
+    @Test
+    void implementationBridgeCallLowersLocalDateAtStartOfDay() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/time/LocalDate", "atStartOfDay", "()Ljava/time/LocalDateTime;"),
+            List.of(IrExpression.objectLocal("date"))
+        )).isEqualTo(IrExpression.objectCall("javan_local_date_at_start_of_day", List.of(IrExpression.objectLocal("date"))));
+    }
+
+    @Test
+    void implementationBridgeCallLowersLocalDateAtStartOfDayZone() throws Exception {
+        final List<IrExpression> arguments = List.of(IrExpression.objectLocal("date"), IrExpression.objectLocal("zone"));
+
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/time/LocalDate", "atStartOfDay", "(Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;"),
+            arguments
+        )).isEqualTo(IrExpression.objectCall("javan_local_date_at_start_of_day_zone", arguments));
+    }
+
+    @Test
+    void implementationBridgeCallLowersLocalDateTimeOfInstant() throws Exception {
+        final List<IrExpression> arguments = List.of(IrExpression.objectLocal("instant"), IrExpression.objectLocal("zone"));
+
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/time/LocalDateTime", "ofInstant", "(Ljava/time/Instant;Ljava/time/ZoneId;)Ljava/time/LocalDateTime;"),
+            arguments
+        )).isEqualTo(IrExpression.objectCall("javan_local_date_time_of_instant", arguments));
+    }
+
+    @Test
+    void implementationBridgeCallLowersLocalDateTimeAtZone() throws Exception {
+        final List<IrExpression> arguments = List.of(IrExpression.objectLocal("dateTime"), IrExpression.objectLocal("zone"));
+
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/time/LocalDateTime", "atZone", "(Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;"),
+            arguments
+        )).isEqualTo(IrExpression.objectCall("javan_local_date_time_at_zone", arguments));
+    }
+
+    @Test
+    void implementationBridgeCallLowersLocalDateTimeToLocalDate() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/time/LocalDateTime", "toLocalDate", "()Ljava/time/LocalDate;"),
+            List.of(IrExpression.objectLocal("dateTime"))
+        )).isEqualTo(IrExpression.objectCall("javan_local_date_time_to_local_date", List.of(IrExpression.objectLocal("dateTime"))));
+    }
+
+    @Test
+    void implementationBridgeCallLowersLocalDateTimeToLocalTime() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/time/LocalDateTime", "toLocalTime", "()Ljava/time/LocalTime;"),
+            List.of(IrExpression.objectLocal("dateTime"))
+        )).isEqualTo(IrExpression.objectCall("javan_local_date_time_to_local_time", List.of(IrExpression.objectLocal("dateTime"))));
+    }
+
+    @Test
+    void implementationBridgeCallLowersZonedDateTimeToInstant() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/time/ZonedDateTime", "toInstant", "()Ljava/time/Instant;"),
+            List.of(IrExpression.objectLocal("value"))
+        )).isEqualTo(IrExpression.objectCall("javan_zoned_date_time_to_instant", List.of(IrExpression.objectLocal("value"))));
+    }
+
+    @Test
+    void implementationBridgeCallLowersZonedDateTimeToLocalDate() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/time/ZonedDateTime", "toLocalDate", "()Ljava/time/LocalDate;"),
+            List.of(IrExpression.objectLocal("value"))
+        )).isEqualTo(IrExpression.objectCall("javan_zoned_date_time_to_local_date", List.of(IrExpression.objectLocal("value"))));
+    }
+
+    @Test
+    void implementationBridgeCallLowersZonedDateTimeToLocalTime() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/time/ZonedDateTime", "toLocalTime", "()Ljava/time/LocalTime;"),
+            List.of(IrExpression.objectLocal("value"))
+        )).isEqualTo(IrExpression.objectCall("javan_zoned_date_time_to_local_time", List.of(IrExpression.objectLocal("value"))));
+    }
+
+    @Test
+    void implementationBridgeCallLowersZonedDateTimeToLocalDateTime() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/time/ZonedDateTime", "toLocalDateTime", "()Ljava/time/LocalDateTime;"),
+            List.of(IrExpression.objectLocal("value"))
+        )).isEqualTo(IrExpression.objectCall("javan_zoned_date_time_to_local_date_time", List.of(IrExpression.objectLocal("value"))));
+    }
+
+    @Test
+    void implementationBridgeCallLowersDateFrom() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/util/Date", "from", "(Ljava/time/Instant;)Ljava/util/Date;"),
+            List.of(IrExpression.objectLocal("instant"))
+        )).isEqualTo(IrExpression.objectCall("javan_date_from_instant", List.of(IrExpression.objectLocal("instant"))));
+    }
+
+    @Test
+    void implementationBridgeCallLowersDateToInstant() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/util/Date", "toInstant", "()Ljava/time/Instant;"),
+            List.of(IrExpression.objectLocal("date"))
+        )).isEqualTo(IrExpression.objectCall("javan_date_to_instant", List.of(IrExpression.objectLocal("date"))));
+    }
+
+    @Test
+    void implementationBridgeCallLowersDateGetTime() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/util/Date", "getTime", "()J"),
+            List.of(IrExpression.objectLocal("date"))
+        )).isEqualTo(IrExpression.longCall("javan_date_get_time", List.of(IrExpression.objectLocal("date"))));
+    }
+
+    @Test
+    void implementationBridgeCallLowersPrintStreamPrintlnWithoutArguments() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/io/PrintStream", "println", "()V"),
+            List.of(IrExpression.objectLocal("stream"))
+        )).isEqualTo(new IrExpression(
+            IrExpression.Kind.CALL,
+            IrType.VOID,
+            "javan_printstream_println_object",
+            List.of(IrExpression.objectLocal("stream"), IrExpression.stringLiteral(""))
+        ));
+    }
+
+    @Test
+    void implementationBridgeCallLowersPrintStreamPrintObject() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/io/PrintStream", "print", "(Ljava/lang/Object;)V"),
+            List.of(IrExpression.objectLocal("stream"), IrExpression.objectLocal("value"))
+        )).isEqualTo(new IrExpression(
+            IrExpression.Kind.CALL,
+            IrType.VOID,
+            "javan_printstream_print_object",
+            List.of(IrExpression.objectLocal("stream"), IrExpression.objectLocal("value"))
+        ));
+    }
+
+    @Test
+    void implementationBridgeCallLowersIntegerValueOf() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;"),
+            List.of(IrExpression.intLocal("value"))
+        )).isEqualTo(IrExpression.objectCall("javan_integer_value_of", List.of(IrExpression.intLocal("value"))));
+    }
+
+    @Test
+    void implementationBridgeCallLowersNumberIntValue() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/lang/Number", "intValue", "()I"),
+            List.of(IrExpression.objectLocal("value"))
+        )).isEqualTo(IrExpression.intCall("javan_number_int_value", List.of(IrExpression.objectLocal("value"))));
+    }
+
+    @Test
+    void implementationBridgeCallLowersAtomicBooleanGet() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/util/concurrent/atomic/AtomicBoolean", "get", "()Z"),
+            List.of(IrExpression.objectLocal("flag"))
+        )).isEqualTo(IrExpression.intCall("javan_atomic_boolean_get", List.of(IrExpression.objectLocal("flag"))));
+    }
+
+    @Test
+    void implementationBridgeCallLowersAtomicIntegerGet() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/util/concurrent/atomic/AtomicInteger", "get", "()I"),
+            List.of(IrExpression.objectLocal("count"))
+        )).isEqualTo(IrExpression.intCall("javan_atomic_integer_get", List.of(IrExpression.objectLocal("count"))));
+    }
+
+    @Test
+    void implementationBridgeCallLowersAtomicReferenceGet() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/util/concurrent/atomic/AtomicReference", "get", "()Ljava/lang/Object;"),
+            List.of(IrExpression.objectLocal("ref"))
+        )).isEqualTo(IrExpression.objectCall("javan_atomic_reference_get", List.of(IrExpression.objectLocal("ref"))));
+    }
+
+    @Test
+    void implementationBridgeCallLowersAtomicReferenceSet() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/util/concurrent/atomic/AtomicReference", "set", "(Ljava/lang/Object;)V"),
+            List.of(IrExpression.objectLocal("ref"), IrExpression.objectLocal("value"))
+        )).isEqualTo(new IrExpression(
+            IrExpression.Kind.CALL,
+            IrType.VOID,
+            "javan_atomic_reference_set",
+            List.of(IrExpression.objectLocal("ref"), IrExpression.objectLocal("value"))
+        ));
+    }
+
+    @Test
+    void implementationBridgeCallLowersPathToStringAsIdentity() throws Exception {
+        final IrExpression path = IrExpression.objectLocal("path");
+
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/nio/file/Path", "toString", "()Ljava/lang/String;"),
+            List.of(path)
+        )).isEqualTo(path);
+    }
+
+    @Test
+    void implementationBridgeCallRejectsUnsupportedTarget() {
+        assertThatThrownBy(() -> implementationBridgeCall(
+            new MethodRef("java/lang/String", "trim", "()Ljava/lang/String;"),
+            List.of(IrExpression.objectLocal("value"))
+        ))
+            .isInstanceOf(java.lang.reflect.InvocationTargetException.class)
+            .cause()
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("unsupported JDK lambda bridge target");
+    }
+
+    @Test
+    void adaptBridgeArgumentReturnsOriginalForExactDescriptorMatch() throws Exception {
+        final IrExpression expression = IrExpression.objectLocal("value");
+
+        assertThat(adaptBridgeArgument("Ljava/lang/String;", expression, "Ljava/lang/String;"))
+            .isEqualTo(expression);
+    }
+
+    @Test
+    void adaptBridgeArgumentReturnsOriginalForObjectToObjectBridge() throws Exception {
+        final IrExpression expression = IrExpression.objectLocal("value");
+
+        assertThat(adaptBridgeArgument("Ljava/lang/String;", expression, "Ljava/lang/Object;"))
+            .isEqualTo(expression);
+    }
+
+    @Test
+    void adaptBridgeArgumentUnboxesLong() throws Exception {
+        final IrExpression expression = IrExpression.objectLocal("value");
+
+        assertThat(adaptBridgeArgument("Ljava/lang/Long;", expression, "J"))
+            .isEqualTo(IrExpression.longCall("javan_long_long_value", List.of(expression)));
+    }
+
+    @Test
+    void adaptBridgeArgumentUnboxesFloat() throws Exception {
+        final IrExpression expression = IrExpression.objectLocal("value");
+
+        assertThat(adaptBridgeArgument("Ljava/lang/Float;", expression, "F"))
+            .isEqualTo(IrExpression.floatCall("javan_float_float_value", List.of(expression)));
+    }
+
+    @Test
+    void adaptBridgeArgumentUnboxesDouble() throws Exception {
+        final IrExpression expression = IrExpression.objectLocal("value");
+
+        assertThat(adaptBridgeArgument("Ljava/lang/Double;", expression, "D"))
+            .isEqualTo(IrExpression.doubleCall("javan_double_double_value", List.of(expression)));
+    }
+
+    @Test
+    void adaptBridgeArgumentUnboxesBoolean() throws Exception {
+        final IrExpression expression = IrExpression.objectLocal("value");
+
+        assertThat(adaptBridgeArgument("Ljava/lang/Boolean;", expression, "Z"))
+            .isEqualTo(IrExpression.intCall("javan_boolean_boolean_value", List.of(expression)));
+    }
+
+    @Test
+    void adaptBridgeArgumentUnboxesCharacter() throws Exception {
+        final IrExpression expression = IrExpression.objectLocal("value");
+
+        assertThat(adaptBridgeArgument("Ljava/lang/Character;", expression, "C"))
+            .isEqualTo(IrExpression.intCall("javan_character_char_value", List.of(expression)));
+    }
+
+    @Test
+    void adaptBridgeArgumentUsesNumberForIntUnboxing() throws Exception {
+        final IrExpression expression = IrExpression.objectLocal("value");
+
+        assertThat(adaptBridgeArgument("Ljava/lang/Number;", expression, "I"))
+            .isEqualTo(IrExpression.intCall("javan_number_int_value", List.of(expression)));
+    }
+
+    @Test
+    void adaptBridgeArgumentRejectsUnsupportedReferenceTarget() {
+        assertThatThrownBy(() -> adaptBridgeArgument("I", IrExpression.intLiteral(1), "Q"))
+            .isInstanceOf(java.lang.reflect.InvocationTargetException.class)
+            .cause()
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("unsupported lambda bridge argument adaptation");
+    }
+
+    @Test
+    void adaptBridgeArgumentRejectsUnsupportedPrimitiveParameter() {
+        assertThatThrownBy(() -> adaptBridgeArgument("Ljava/lang/Integer;", IrExpression.objectLocal("value"), "B"))
+            .isInstanceOf(java.lang.reflect.InvocationTargetException.class)
+            .cause()
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("unsupported lambda bridge primitive parameter");
+    }
+
+    @Test
+    void adaptBridgeReturnReturnsImplementationResultForObjectResult() throws Exception {
+        final IrExpression expression = IrExpression.objectLocal("result");
+
+        assertThat(adaptBridgeReturn(
+            new MethodRef("java/nio/file/Path", "toString", "()Ljava/lang/String;"),
+            expression,
+            "Ljava/lang/String;",
+            "Ljava/lang/String;",
+            IrType.OBJECT
+        )).isEqualTo(expression);
+    }
+
+    @Test
+    void adaptBridgeReturnReturnsImplementationResultForPrimitiveErasedTypeMatch() throws Exception {
+        final IrExpression expression = IrExpression.longLocal("value");
+
+        assertThat(adaptBridgeReturn(
+            new MethodRef("java/time/Instant", "toEpochMilli", "()J"),
+            expression,
+            "J",
+            "J",
+            IrType.LONG
+        )).isEqualTo(expression);
+    }
+
+    @Test
+    void adaptBridgeReturnRejectsMismatchedPrimitiveErasedType() {
+        assertThatThrownBy(() -> adaptBridgeReturn(
+            new MethodRef("java/time/Instant", "toEpochMilli", "()J"),
+            IrExpression.longLocal("value"),
+            "J",
+            "J",
+            IrType.INT
+        ))
+            .isInstanceOf(java.lang.reflect.InvocationTargetException.class)
+            .cause()
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("unsupported lambda bridge return adaptation");
+    }
+
+    @Test
+    void boxPrimitiveExpressionBoxesLong() throws Exception {
+        assertThat(boxPrimitiveExpression("Ljava/lang/Long;", 'J', IrExpression.longLiteral(5L)))
+            .isEqualTo(IrExpression.objectCall("javan_long_value_of", List.of(IrExpression.longLiteral(5L))));
+    }
+
+    @Test
+    void boxPrimitiveExpressionBoxesFloat() throws Exception {
+        assertThat(boxPrimitiveExpression("Ljava/lang/Float;", 'F', IrExpression.floatLiteral(2.0f)))
+            .isEqualTo(IrExpression.objectCall("javan_float_value_of", List.of(IrExpression.floatLiteral(2.0f))));
+    }
+
+    @Test
+    void boxPrimitiveExpressionBoxesDouble() throws Exception {
+        assertThat(boxPrimitiveExpression("Ljava/lang/Double;", 'D', IrExpression.doubleLiteral(2.0d)))
+            .isEqualTo(IrExpression.objectCall("javan_double_value_of", List.of(IrExpression.doubleLiteral(2.0d))));
+    }
+
+    @Test
+    void boxPrimitiveExpressionBoxesBoolean() throws Exception {
+        assertThat(boxPrimitiveExpression("Ljava/lang/Boolean;", 'Z', IrExpression.intLiteral(1)))
+            .isEqualTo(IrExpression.objectCall("javan_boolean_value_of", List.of(IrExpression.intLiteral(1))));
+    }
+
+    @Test
+    void boxPrimitiveExpressionBoxesCharacter() throws Exception {
+        assertThat(boxPrimitiveExpression("Ljava/lang/Character;", 'C', IrExpression.intLiteral('z')))
+            .isEqualTo(IrExpression.objectCall("javan_character_value_of", List.of(IrExpression.intLiteral('z'))));
+    }
+
+    @Test
+    void boxPrimitiveExpressionRejectsUnsupportedPrimitive() {
+        assertThatThrownBy(() -> boxPrimitiveExpression("Ljava/lang/Byte;", 'B', IrExpression.intLiteral(1)))
+            .isInstanceOf(java.lang.reflect.InvocationTargetException.class)
+            .cause()
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("unsupported lambda bridge boxing target");
+    }
+
+    @Test
+    void captureFieldExpressionLowersLongField() throws Exception {
+        assertThat(captureFieldExpression("com/acme/Lambda", "capture0", "J", IrExpression.objectLocal("self")))
+            .isEqualTo(IrExpression.longField("com/acme/Lambda", "capture0", IrExpression.objectLocal("self")));
+    }
+
+    @Test
+    void captureFieldExpressionLowersIntField() throws Exception {
+        assertThat(captureFieldExpression("com/acme/Lambda", "capture0", "I", IrExpression.objectLocal("self")))
+            .isEqualTo(IrExpression.intField("com/acme/Lambda", "capture0", IrExpression.objectLocal("self")));
+    }
+
+    @Test
+    void captureFieldExpressionLowersFloatField() throws Exception {
+        assertThat(captureFieldExpression("com/acme/Lambda", "capture0", "F", IrExpression.objectLocal("self")))
+            .isEqualTo(IrExpression.floatField("com/acme/Lambda", "capture0", IrExpression.objectLocal("self")));
+    }
+
+    @Test
+    void captureFieldExpressionLowersDoubleField() throws Exception {
+        assertThat(captureFieldExpression("com/acme/Lambda", "capture0", "D", IrExpression.objectLocal("self")))
+            .isEqualTo(IrExpression.doubleField("com/acme/Lambda", "capture0", IrExpression.objectLocal("self")));
+    }
+
+    @Test
+    void captureFieldExpressionLowersObjectField() throws Exception {
+        assertThat(captureFieldExpression("com/acme/Lambda", "capture0", "Ljava/lang/String;", IrExpression.objectLocal("self")))
+            .isEqualTo(IrExpression.objectField("com/acme/Lambda", "capture0", IrExpression.objectLocal("self")));
+    }
+
+    @Test
+    void captureFieldExpressionRejectsVoidDescriptor() {
+        assertThatThrownBy(() -> captureFieldExpression("com/acme/Lambda", "capture0", "V", IrExpression.objectLocal("self")))
+            .isInstanceOf(java.lang.reflect.InvocationTargetException.class)
+            .cause()
+            .isInstanceOf(java.util.NoSuchElementException.class)
+            .hasMessageContaining("No value present");
+    }
+
+    @Test
+    void parameterExpressionLowersLongLocal() throws Exception {
+        assertThat(parameterExpression(IrType.LONG, "value")).isEqualTo(IrExpression.longLocal("value"));
+    }
+
+    @Test
+    void parameterExpressionLowersFloatLocal() throws Exception {
+        assertThat(parameterExpression(IrType.FLOAT, "value")).isEqualTo(IrExpression.floatLocal("value"));
+    }
+
+    @Test
+    void parameterExpressionLowersDoubleLocal() throws Exception {
+        assertThat(parameterExpression(IrType.DOUBLE, "value")).isEqualTo(IrExpression.doubleLocal("value"));
+    }
+
+    @Test
+    void parameterExpressionLowersObjectLocal() throws Exception {
+        assertThat(parameterExpression(IrType.OBJECT, "value")).isEqualTo(IrExpression.objectLocal("value"));
+    }
+
+    @Test
+    void parameterExpressionRejectsVoidType() {
+        assertThatThrownBy(() -> parameterExpression(IrType.VOID, "value"))
+            .isInstanceOf(java.lang.reflect.InvocationTargetException.class)
+            .cause()
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("void parameter is invalid");
+    }
+
+    @Test
+    void parameterDescriptorsParsesArrayDescriptors() throws Exception {
+        assertThat(parameterDescriptors("(I[J[[DLjava/lang/String;)V"))
+            .containsExactly("I", "[J", "[[D", "Ljava/lang/String;");
+    }
+
+    @Test
+    void adaptBridgeArgumentRejectsUnsupportedLongSource() {
+        assertThatThrownBy(() -> adaptBridgeArgument("Ljava/lang/Object;", IrExpression.objectLocal("value"), "J"))
+            .isInstanceOf(java.lang.reflect.InvocationTargetException.class)
+            .cause()
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("unsupported lambda bridge long source");
+    }
+
+    @Test
+    void adaptBridgeArgumentRejectsUnsupportedFloatSource() {
+        assertThatThrownBy(() -> adaptBridgeArgument("Ljava/lang/Object;", IrExpression.objectLocal("value"), "F"))
+            .isInstanceOf(java.lang.reflect.InvocationTargetException.class)
+            .cause()
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("unsupported lambda bridge float source");
+    }
+
+    @Test
+    void adaptBridgeArgumentRejectsUnsupportedDoubleSource() {
+        assertThatThrownBy(() -> adaptBridgeArgument("Ljava/lang/Object;", IrExpression.objectLocal("value"), "D"))
+            .isInstanceOf(java.lang.reflect.InvocationTargetException.class)
+            .cause()
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("unsupported lambda bridge double source");
+    }
+
+    @Test
+    void adaptBridgeArgumentRejectsUnsupportedBooleanSource() {
+        assertThatThrownBy(() -> adaptBridgeArgument("Ljava/lang/Object;", IrExpression.objectLocal("value"), "Z"))
+            .isInstanceOf(java.lang.reflect.InvocationTargetException.class)
+            .cause()
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("unsupported lambda bridge boolean source");
+    }
+
+    @Test
+    void adaptBridgeArgumentRejectsUnsupportedCharacterSource() {
+        assertThatThrownBy(() -> adaptBridgeArgument("Ljava/lang/Object;", IrExpression.objectLocal("value"), "C"))
+            .isInstanceOf(java.lang.reflect.InvocationTargetException.class)
+            .cause()
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("unsupported lambda bridge char source");
+    }
+
+    @Test
+    void lowerLambdaClosureFunctionReturnsPrimitiveIntForJdkBridge() throws Exception {
+        final IrFunction function = lowerLambdaClosureFunction(
+            Map.of(),
+            Map.of(),
+            new LambdaMetafactorySupport.LambdaClosurePlan(
+                "com/acme/Main$$javan$lambda$main$get$1",
+                "com/acme/IntSupplier",
+                "get",
+                "()I",
+                "()I",
+                List.of("Ljava/lang/Integer;"),
+                new MethodRef("java/lang/Integer", "intValue", "()I"),
+                5,
+                LambdaMetafactorySupport.ReceiverBinding.CAPTURE0,
+                Path.of("com/acme/Main.class"),
+                true
+            )
+        );
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_integer_int_value",
+                List.of(IrExpression.objectField("com/acme/Main$$javan$lambda$main$get$1", "capture0", IrExpression.objectLocal("self")))
+            ))
+        );
+    }
+
+    @Test
+    void lowerLambdaClosureFunctionReturnsPrimitiveLongForJdkBridge() throws Exception {
+        final IrFunction function = lowerLambdaClosureFunction(
+            Map.of(),
+            Map.of(),
+            new LambdaMetafactorySupport.LambdaClosurePlan(
+                "com/acme/Main$$javan$lambda$main$get$1",
+                "com/acme/LongSupplier",
+                "get",
+                "()J",
+                "()J",
+                List.of("Ljava/lang/Long;"),
+                new MethodRef("java/lang/Long", "longValue", "()J"),
+                5,
+                LambdaMetafactorySupport.ReceiverBinding.CAPTURE0,
+                Path.of("com/acme/Main.class"),
+                true
+            )
+        );
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnLong(IrExpression.longCall(
+                "javan_long_long_value",
+                List.of(IrExpression.objectField("com/acme/Main$$javan$lambda$main$get$1", "capture0", IrExpression.objectLocal("self")))
+            ))
+        );
+    }
+
+    @Test
+    void lowerLambdaClosureFunctionReturnsPrimitiveFloatForJdkBridge() throws Exception {
+        final IrFunction function = lowerLambdaClosureFunction(
+            Map.of(),
+            Map.of(),
+            new LambdaMetafactorySupport.LambdaClosurePlan(
+                "com/acme/Main$$javan$lambda$main$get$1",
+                "com/acme/FloatSupplier",
+                "get",
+                "()F",
+                "()F",
+                List.of("Ljava/lang/Float;"),
+                new MethodRef("java/lang/Float", "floatValue", "()F"),
+                5,
+                LambdaMetafactorySupport.ReceiverBinding.CAPTURE0,
+                Path.of("com/acme/Main.class"),
+                true
+            )
+        );
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnFloat(IrExpression.floatCall(
+                "javan_float_float_value",
+                List.of(IrExpression.objectField("com/acme/Main$$javan$lambda$main$get$1", "capture0", IrExpression.objectLocal("self")))
+            ))
+        );
+    }
+
+    @Test
+    void lowerLambdaClosureFunctionReturnsPrimitiveDoubleForJdkBridge() throws Exception {
+        final IrFunction function = lowerLambdaClosureFunction(
+            Map.of(),
+            Map.of(),
+            new LambdaMetafactorySupport.LambdaClosurePlan(
+                "com/acme/Main$$javan$lambda$main$get$1",
+                "com/acme/DoubleSupplier",
+                "get",
+                "()D",
+                "()D",
+                List.of("Ljava/lang/Double;"),
+                new MethodRef("java/lang/Double", "doubleValue", "()D"),
+                5,
+                LambdaMetafactorySupport.ReceiverBinding.CAPTURE0,
+                Path.of("com/acme/Main.class"),
+                true
+            )
+        );
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnDouble(IrExpression.doubleCall(
+                "javan_double_double_value",
+                List.of(IrExpression.objectField("com/acme/Main$$javan$lambda$main$get$1", "capture0", IrExpression.objectLocal("self")))
+            ))
+        );
+    }
+
+    @Test
+    void lowerLambdaClosureFunctionReturnsLongForStaticTarget() throws Exception {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Target",
+            classFile("com/acme/Target", "java/lang/Object", 0, List.of(), List.of(), List.of(method(0x0008, "value", "()J", 0, 0, plain(0, 9, "lconst_0"), plain(1, 173, "lreturn"))))
+        );
+
+        final IrFunction function = lowerLambdaClosureFunction(
+            classes,
+            Map.of(),
+            new LambdaMetafactorySupport.LambdaClosurePlan(
+                "com/acme/Main$$javan$lambda$main$get$1",
+                "com/acme/LongSupplier",
+                "get",
+                "()J",
+                "()J",
+                List.of(),
+                new MethodRef("com/acme/Target", "value", "()J"),
+                6,
+                LambdaMetafactorySupport.ReceiverBinding.NONE,
+                Path.of("com/acme/Main.class"),
+                true
+            )
+        );
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnLong(IrExpression.longCall(symbol("com/acme/Target", "value", "()J"), List.of()))
+        );
+    }
+
+    @Test
+    void lowerLambdaClosureFunctionReturnsFloatForStaticTarget() throws Exception {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Target",
+            classFile("com/acme/Target", "java/lang/Object", 0, List.of(), List.of(), List.of(method(0x0008, "value", "()F", 0, 0, plain(0, 11, "fconst_0"), plain(1, 174, "freturn"))))
+        );
+
+        final IrFunction function = lowerLambdaClosureFunction(
+            classes,
+            Map.of(),
+            new LambdaMetafactorySupport.LambdaClosurePlan(
+                "com/acme/Main$$javan$lambda$main$get$1",
+                "com/acme/FloatSupplier",
+                "get",
+                "()F",
+                "()F",
+                List.of(),
+                new MethodRef("com/acme/Target", "value", "()F"),
+                6,
+                LambdaMetafactorySupport.ReceiverBinding.NONE,
+                Path.of("com/acme/Main.class"),
+                true
+            )
+        );
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnFloat(IrExpression.floatCall(symbol("com/acme/Target", "value", "()F"), List.of()))
+        );
+    }
+
+    @Test
+    void lowerLambdaClosureFunctionReturnsDoubleForStaticTarget() throws Exception {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Target",
+            classFile("com/acme/Target", "java/lang/Object", 0, List.of(), List.of(), List.of(method(0x0008, "value", "()D", 0, 0, plain(0, 14, "dconst_0"), plain(1, 175, "dreturn"))))
+        );
+
+        final IrFunction function = lowerLambdaClosureFunction(
+            classes,
+            Map.of(),
+            new LambdaMetafactorySupport.LambdaClosurePlan(
+                "com/acme/Main$$javan$lambda$main$get$1",
+                "com/acme/DoubleSupplier",
+                "get",
+                "()D",
+                "()D",
+                List.of(),
+                new MethodRef("com/acme/Target", "value", "()D"),
+                6,
+                LambdaMetafactorySupport.ReceiverBinding.NONE,
+                Path.of("com/acme/Main.class"),
+                true
+            )
+        );
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnDouble(IrExpression.doubleCall(symbol("com/acme/Target", "value", "()D"), List.of()))
+        );
+    }
+
+    @Test
+    void lowerLambdaClosureFunctionLoadsMultipleCapturedArguments() throws Exception {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Target",
+            classFile("com/acme/Target", "java/lang/Object", 0, List.of(), List.of(), List.of(method(0x0008, "accept", "(IJ)V", 2, 2, plain(0, 177, "return"))))
+        );
+
+        final IrFunction function = lowerLambdaClosureFunction(
+            classes,
+            Map.of(),
+            new LambdaMetafactorySupport.LambdaClosurePlan(
+                "com/acme/Main$$javan$lambda$main$run$1",
+                "java/lang/Runnable",
+                "run",
+                "()V",
+                "()V",
+                List.of("I", "J"),
+                new MethodRef("com/acme/Target", "accept", "(IJ)V"),
+                6,
+                LambdaMetafactorySupport.ReceiverBinding.NONE,
+                Path.of("com/acme/Main.class"),
+                true
+            )
+        );
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid(
+                symbol("com/acme/Target", "accept", "(IJ)V"),
+                List.of(
+                    IrExpression.intField("com/acme/Main$$javan$lambda$main$run$1", "capture0", IrExpression.objectLocal("self")),
+                    IrExpression.longField("com/acme/Main$$javan$lambda$main$run$1", "capture1", IrExpression.objectLocal("self"))
+                )
+            ),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
+    void lowerLambdaClosureFunctionLowersCapturedPrintlnRunnableBridge() throws Exception {
+        final IrFunction function = lowerLambdaClosureFunction(
+            Map.of(),
+            Map.of(),
+            new LambdaMetafactorySupport.LambdaClosurePlan(
+                "com/acme/Main$$javan$lambda$main$run$1",
+                "java/lang/Runnable",
+                "run",
+                "()V",
+                "()V",
+                List.of("Ljava/io/PrintStream;"),
+                new MethodRef("java/io/PrintStream", "println", "()V"),
+                5,
+                LambdaMetafactorySupport.ReceiverBinding.CAPTURE0,
+                Path.of("com/acme/Main.class"),
+                true
+            )
+        );
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid(
+                "javan_printstream_println_object",
+                List.of(
+                    IrExpression.objectField("com/acme/Main$$javan$lambda$main$run$1", "capture0", IrExpression.objectLocal("self")),
+                    IrExpression.stringLiteral("")
+                )
+            ),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
+    void lowerLambdaClosureFunctionLowersCapturedPrintStringConsumerBridge() throws Exception {
+        final IrFunction function = lowerLambdaClosureFunction(
+            Map.of(),
+            Map.of(),
+            new LambdaMetafactorySupport.LambdaClosurePlan(
+                "com/acme/Main$$javan$lambda$main$accept$1",
+                "java/util/function/Consumer",
+                "accept",
+                "(Ljava/lang/Object;)V",
+                "(Ljava/lang/String;)V",
+                List.of("Ljava/io/PrintStream;"),
+                new MethodRef("java/io/PrintStream", "print", "(Ljava/lang/String;)V"),
+                5,
+                LambdaMetafactorySupport.ReceiverBinding.CAPTURE0,
+                Path.of("com/acme/Main.class"),
+                true
+            )
+        );
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid(
+                "javan_printstream_print_object",
+                List.of(
+                    IrExpression.objectField("com/acme/Main$$javan$lambda$main$accept$1", "capture0", IrExpression.objectLocal("self")),
+                    IrExpression.objectLocal("arg0")
+                )
+            ),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
+    void lowerLambdaClosureFunctionLowersInterfacePathToStringBridge() throws Exception {
+        final IrFunction function = lowerLambdaClosureFunction(
+            Map.of(),
+            Map.of(),
+            new LambdaMetafactorySupport.LambdaClosurePlan(
+                "com/acme/Main$$javan$lambda$main$apply$1",
+                "java/util/function/Function",
+                "apply",
+                "(Ljava/lang/Object;)Ljava/lang/Object;",
+                "(Ljava/nio/file/Path;)Ljava/lang/String;",
+                List.of(),
+                new MethodRef("java/nio/file/Path", "toString", "()Ljava/lang/String;"),
+                9,
+                LambdaMetafactorySupport.ReceiverBinding.FIRST_PARAMETER,
+                Path.of("com/acme/Main.class"),
+                true
+            )
+        );
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectLocal("arg0"))
+        );
+    }
+
+    @Test
+    void lambdaImplementationSymbolCreatesDispatchForMultipleInterfaceTargets() throws Exception {
+        final MethodRef target = new MethodRef("java/util/function/Supplier", "get", "()Ljava/lang/Object;");
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/SupplierA",
+            classFile("com/acme/SupplierA", "java/lang/Object", 0, List.of("java/util/function/Supplier"), List.of(), List.of(method(0, "get", "()Ljava/lang/Object;", 1, 1, plain(0, 1, "aconst_null"), plain(1, 176, "areturn")))),
+            "com/acme/SupplierB",
+            classFile("com/acme/SupplierB", "java/lang/Object", 0, List.of("java/util/function/Supplier"), List.of(), List.of(method(0, "get", "()Ljava/lang/Object;", 1, 1, plain(0, 1, "aconst_null"), plain(1, 176, "areturn"))))
+        );
+        final Map<String, IrDispatch> dispatches = new LinkedHashMap<>();
+
+        final String symbol = lambdaImplementationSymbol(
+            classes,
+            dispatches,
+            new LambdaMetafactorySupport.LambdaClosurePlan(
+                "com/acme/Main$$javan$lambda$main$get$1",
+                "java/util/function/Supplier",
+                "get",
+                "()Ljava/lang/Object;",
+                "()Ljava/lang/Object;",
+                List.of(),
+                target,
+                9,
+                LambdaMetafactorySupport.ReceiverBinding.NONE,
+                Path.of("com/acme/Main.class"),
+                true
+            )
+        );
+
+        assertThat(symbol).isEqualTo(BytecodeToIR.dispatchSymbol(target));
+        assertThat(dispatches).containsKey(symbol);
+    }
+
+    @Test
+    void lambdaImplementationSymbolCreatesDispatchForMultipleVirtualTargets() throws Exception {
+        final MethodRef target = new MethodRef("com/acme/Base", "runTask", "()V");
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/ImplA",
+            classFile("com/acme/ImplA", "com/acme/Base", 0, List.of(), List.of(), List.of(method(0, "runTask", "()V", 0, 0, plain(0, 177, "return")))),
+            "com/acme/ImplB",
+            classFile("com/acme/ImplB", "com/acme/Base", 0, List.of(), List.of(), List.of(method(0, "runTask", "()V", 0, 0, plain(0, 177, "return"))))
+        );
+        final Map<String, IrDispatch> dispatches = new LinkedHashMap<>();
+
+        final String symbol = lambdaImplementationSymbol(
+            classes,
+            dispatches,
+            new LambdaMetafactorySupport.LambdaClosurePlan(
+                "com/acme/Main$$javan$lambda$main$run$1",
+                "java/lang/Runnable",
+                "run",
+                "()V",
+                "()V",
+                List.of(),
+                target,
+                5,
+                LambdaMetafactorySupport.ReceiverBinding.FIRST_PARAMETER,
+                Path.of("com/acme/Main.class"),
+                true
+            )
+        );
+
+        assertThat(symbol).isEqualTo(BytecodeToIR.dispatchSymbol(target));
+        assertThat(dispatches).containsKey(symbol);
+    }
+
+    @Test
+    void lambdaImplementationSymbolRejectsMissingDeterministicTargets() {
+        final MethodRef target = new MethodRef("java/util/function/Supplier", "get", "()Ljava/lang/Object;");
+        assertThatThrownBy(() -> lambdaImplementationSymbol(
+            Map.of(),
+            new LinkedHashMap<>(),
+            new LambdaMetafactorySupport.LambdaClosurePlan(
+                "com/acme/Main$$javan$lambda$main$get$1",
+                "java/util/function/Supplier",
+                "get",
+                "()Ljava/lang/Object;",
+                "()Ljava/lang/Object;",
+                List.of(),
+                target,
+                9,
+                LambdaMetafactorySupport.ReceiverBinding.NONE,
+                Path.of("com/acme/Main.class"),
+                true
+            )
+        ))
+            .isInstanceOf(java.lang.reflect.InvocationTargetException.class)
+            .cause()
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("No deterministic bridge targets");
     }
 
     @Test
@@ -1946,7 +3077,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void rejectsUnsupportedObjectsEquals() {
+    void lowersObjectsEqualsAsUnsupportedCall() {
         assertThatThrownBy(() -> lowerMain(method(
             0x0008,
             "main",
@@ -1963,8 +3094,7 @@ final class BytecodeToIRTest {
             plain(3, 172, "ireturn")
         )))
             .isInstanceOf(DiagnosticException.class)
-            .hasMessageContaining("error[JAVAN040]: bytecode is not implemented by native code generation")
-            .hasMessageContaining("invokestatic java/util/Objects.equals(Ljava/lang/Object;Ljava/lang/Object;)Z");
+            .hasMessageContaining("Objects.equals");
     }
 
     @Test
@@ -5434,6 +6564,62 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersAtomicReferenceConstructorPredicateForDefaultSignature() {
+        assertThat(BytecodeToIRInvokeSupport.lowerAtomicConstructor(
+            new MethodRef("java/util/concurrent/atomic/AtomicReference", "<init>", "()V"),
+            new ArrayList<>(),
+            List.of(),
+            IrExpression.objectLocal("arg0")
+        )).isTrue();
+    }
+
+    @Test
+    void lowersAtomicReferenceConstructorValueSignatureToInitHelper() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+
+        assertThat(BytecodeToIRInvokeSupport.lowerAtomicConstructor(
+            new MethodRef("java/util/concurrent/atomic/AtomicReference", "<init>", "(Ljava/lang/Object;)V"),
+            instructions,
+            List.of(IrExpression.objectLocal("arg1")),
+            IrExpression.objectLocal("arg0")
+        )).isTrue();
+        assertThat(instructions).containsExactly(IrInstruction.callStaticVoid(
+            "javan_atomic_reference_init",
+            List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+        ));
+    }
+
+    @Test
+    void lowersAtomicReferenceConstructorRejectsUnsupportedDescriptor() {
+        assertThat(BytecodeToIRInvokeSupport.lowerAtomicConstructor(
+            new MethodRef("java/util/concurrent/atomic/AtomicReference", "<init>", "(II)V"),
+            new ArrayList<>(),
+            List.of(IrExpression.intLocal("arg1"), IrExpression.intLocal("arg2")),
+            IrExpression.objectLocal("arg0")
+        )).isFalse();
+    }
+
+    @Test
+    void lowersAtomicReferenceConstructorRejectsWrongOwner() {
+        assertThat(BytecodeToIRInvokeSupport.lowerAtomicConstructor(
+            new MethodRef("java/lang/Object", "<init>", "()V"),
+            new ArrayList<>(),
+            List.of(),
+            IrExpression.objectLocal("arg0")
+        )).isFalse();
+    }
+
+    @Test
+    void lowersAtomicReferenceConstructorRejectsWrongName() {
+        assertThat(BytecodeToIRInvokeSupport.lowerAtomicConstructor(
+            new MethodRef("java/util/concurrent/atomic/AtomicReference", "get", "()V"),
+            new ArrayList<>(),
+            List.of(),
+            IrExpression.objectLocal("arg0")
+        )).isFalse();
+    }
+
+    @Test
     void lowersThreadLocalConstructorPredicateRejectsWrongOwner() {
         assertThat(BytecodeToIRInvokeSupport.lowerThreadLocalConstructor(new MethodRef("java/lang/Object", "<init>", "()V")))
             .isFalse();
@@ -5498,6 +6684,52 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersAtomicReferenceGetToRuntimeHelperWithTemporaryLocal() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/concurrent/atomic/AtomicReference;)Ljava/lang/Object;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/util/concurrent/atomic/AtomicReference", "get", "()Ljava/lang/Object;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall("javan_atomic_reference_get", List.of(IrExpression.objectLocal("arg0")))
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersAtomicReferenceSetToRuntimeHelper() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/concurrent/atomic/AtomicReference;Ljava/lang/Object;)V",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/util/concurrent/atomic/AtomicReference", "set", "(Ljava/lang/Object;)V")),
+            plain(3, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid(
+                "javan_atomic_reference_set",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
     void lowersThreadLocalRemoveToRuntimeHelper() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -5520,6 +6752,73 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowerObjectsIntrinsicRejectsUnsupportedMethodShape() {
+        final MethodInfo method = method(0x0008, "main", "()V", 0, 0, plain(0, 177, "return"));
+        assertThat(BytecodeToIRInvokeSupport.lowerObjectsIntrinsic(
+            classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(method)),
+            method,
+            new MethodRef("java/util/Objects", "hashCode", "(Ljava/lang/Object;)I"),
+            new ArrayList<>(),
+            new ArrayList<>(),
+            new LinkedHashMap<>()
+        )).isFalse();
+    }
+
+    @Test
+    void lowerObjectsIntrinsicLowersRequireNonNullMessageDirectly() {
+        final MethodInfo method = method(0x0008, "main", "(Ljava/lang/Object;Ljava/lang/String;)Ljava/lang/Object;", 2, 2, plain(0, 176, "areturn"));
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("arg0")),
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("arg1"))
+        ));
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        assertThat(BytecodeToIRInvokeSupport.lowerObjectsIntrinsic(
+            classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(method)),
+            method,
+            new MethodRef("java/util/Objects", "requireNonNull", "(Ljava/lang/Object;Ljava/lang/String;)Ljava/lang/Object;"),
+            instructions,
+            stack,
+            locals
+        )).isTrue();
+        assertThat(locals.values()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(instructions).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectLocal("arg0")),
+            IrInstruction.callStaticVoid(
+                "javan_objects_require_non_null_msg",
+                List.of(IrExpression.objectLocal("object0"), IrExpression.objectLocal("arg1"))
+            )
+        );
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("object0")));
+    }
+
+    @Test
+    void lowerObjectsIntrinsicRejectsEqualsForNow() {
+        final MethodInfo method = method(0x0008, "main", "(Ljava/lang/Object;Ljava/lang/Object;)Z", 2, 2, plain(0, 172, "ireturn"));
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("arg0")),
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("arg1"))
+        ));
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        assertThat(BytecodeToIRInvokeSupport.lowerObjectsIntrinsic(
+            classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(method)),
+            method,
+            new MethodRef("java/util/Objects", "equals", "(Ljava/lang/Object;Ljava/lang/Object;)Z"),
+            instructions,
+            stack,
+            locals
+        )).isFalse();
+        assertThat(instructions).isEmpty();
+        assertThat(stack).containsExactly(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("arg0")),
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("arg1"))
+        );
+    }
+
+    @Test
     void lowerThreadLocalInstanceCallRejectsUnsupportedMethodShape() {
         assertThat(BytecodeToIRInvokeSupport.lowerThreadLocalInstanceCall(
             new MethodRef("java/lang/ThreadLocal", "initialValue", "()Ljava/lang/Object;"),
@@ -5528,6 +6827,160 @@ final class BytecodeToIRTest {
             new LinkedHashMap<>(),
             List.of(),
             IrExpression.objectLocal("arg0")
+        )).isFalse();
+    }
+
+    @Test
+    void lowerAtomicInstanceCallReturnsFalseForUnsupportedOwner() {
+        final boolean lowered = BytecodeToIRInvokeSupport.lowerAtomicInstanceCall(
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/lang/Object;)V", 1, 1, plain(0, 177, "return")),
+            new MethodRef("java/lang/Object", "toString", "()Ljava/lang/String;"),
+            new ArrayList<>(),
+            new ArrayList<>(List.of(BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("arg0")))),
+            new LinkedHashMap<>()
+        );
+
+        assertThat(lowered).isFalse();
+    }
+
+    @Test
+    void lowerAtomicInstanceCallReturnsFalseForAtomicReferenceUnsupportedMethod() {
+        final boolean lowered = BytecodeToIRInvokeSupport.lowerAtomicInstanceCall(
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/util/concurrent/atomic/AtomicReference;Ljava/lang/Object;Ljava/lang/Object;)V", 3, 3, plain(0, 177, "return")),
+            new MethodRef("java/util/concurrent/atomic/AtomicReference", "compareAndSet", "(Ljava/lang/Object;Ljava/lang/Object;)Z"),
+            new ArrayList<>(),
+            new ArrayList<>(List.of(
+                BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("arg0")),
+                BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("arg1")),
+                BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("arg2"))
+            )),
+            new LinkedHashMap<>()
+        );
+
+        assertThat(lowered).isFalse();
+    }
+
+    @Test
+    void lowerAtomicInstanceCallReturnsFalseForAtomicIntegerMatchingNameWrongDescriptor() {
+        final boolean lowered = BytecodeToIRInvokeSupport.lowerAtomicInstanceCall(
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/util/concurrent/atomic/AtomicInteger;I)V", 2, 2, plain(0, 177, "return")),
+            new MethodRef("java/util/concurrent/atomic/AtomicInteger", "get", "(I)I"),
+            new ArrayList<>(),
+            new ArrayList<>(List.of(
+                BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("arg0")),
+                BytecodeToIR.StackValue.intExpression(IrExpression.intLocal("arg1"))
+            )),
+            new LinkedHashMap<>()
+        );
+
+        assertThat(lowered).isFalse();
+    }
+
+    @Test
+    void lowerJdkTimeInstanceCallLowersLocalDateTimeToLocalDate() {
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("dateTime"))
+        ));
+
+        assertThat(BytecodeToIRInvokeSupport.lowerJdkTimeInstanceCall(
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/time/LocalDateTime;)Ljava/time/LocalDate;", 1, 1, plain(0, 176, "areturn")),
+            invokeVirtual(0, new MethodRef("java/time/LocalDateTime", "toLocalDate", "()Ljava/time/LocalDate;")),
+            new MethodRef("java/time/LocalDateTime", "toLocalDate", "()Ljava/time/LocalDate;"),
+            stack
+        )).isTrue();
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.objectExpression(
+            IrExpression.objectCall("javan_local_date_time_to_local_date", List.of(IrExpression.objectLocal("dateTime")))
+        ));
+    }
+
+    @Test
+    void lowerJdkTimeInstanceCallLowersLocalDateTimeToLocalTime() {
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("dateTime"))
+        ));
+
+        assertThat(BytecodeToIRInvokeSupport.lowerJdkTimeInstanceCall(
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/time/LocalDateTime;)Ljava/time/LocalTime;", 1, 1, plain(0, 176, "areturn")),
+            invokeVirtual(0, new MethodRef("java/time/LocalDateTime", "toLocalTime", "()Ljava/time/LocalTime;")),
+            new MethodRef("java/time/LocalDateTime", "toLocalTime", "()Ljava/time/LocalTime;"),
+            stack
+        )).isTrue();
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.objectExpression(
+            IrExpression.objectCall("javan_local_date_time_to_local_time", List.of(IrExpression.objectLocal("dateTime")))
+        ));
+    }
+
+    @Test
+    void lowerJdkTimeInstanceCallLowersZonedDateTimeToLocalDate() {
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("value"))
+        ));
+
+        assertThat(BytecodeToIRInvokeSupport.lowerJdkTimeInstanceCall(
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/time/ZonedDateTime;)Ljava/time/LocalDate;", 1, 1, plain(0, 176, "areturn")),
+            invokeVirtual(0, new MethodRef("java/time/ZonedDateTime", "toLocalDate", "()Ljava/time/LocalDate;")),
+            new MethodRef("java/time/ZonedDateTime", "toLocalDate", "()Ljava/time/LocalDate;"),
+            stack
+        )).isTrue();
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.objectExpression(
+            IrExpression.objectCall("javan_zoned_date_time_to_local_date", List.of(IrExpression.objectLocal("value")))
+        ));
+    }
+
+    @Test
+    void lowerJdkTimeInstanceCallLowersZonedDateTimeToLocalTime() {
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("value"))
+        ));
+
+        assertThat(BytecodeToIRInvokeSupport.lowerJdkTimeInstanceCall(
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/time/ZonedDateTime;)Ljava/time/LocalTime;", 1, 1, plain(0, 176, "areturn")),
+            invokeVirtual(0, new MethodRef("java/time/ZonedDateTime", "toLocalTime", "()Ljava/time/LocalTime;")),
+            new MethodRef("java/time/ZonedDateTime", "toLocalTime", "()Ljava/time/LocalTime;"),
+            stack
+        )).isTrue();
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.objectExpression(
+            IrExpression.objectCall("javan_zoned_date_time_to_local_time", List.of(IrExpression.objectLocal("value")))
+        ));
+    }
+
+    @Test
+    void lowerJdkTimeInstanceCallLowersZonedDateTimeToLocalDateTime() {
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("value"))
+        ));
+
+        assertThat(BytecodeToIRInvokeSupport.lowerJdkTimeInstanceCall(
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/time/ZonedDateTime;)Ljava/time/LocalDateTime;", 1, 1, plain(0, 176, "areturn")),
+            invokeVirtual(0, new MethodRef("java/time/ZonedDateTime", "toLocalDateTime", "()Ljava/time/LocalDateTime;")),
+            new MethodRef("java/time/ZonedDateTime", "toLocalDateTime", "()Ljava/time/LocalDateTime;"),
+            stack
+        )).isTrue();
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.objectExpression(
+            IrExpression.objectCall("javan_zoned_date_time_to_local_date_time", List.of(IrExpression.objectLocal("value")))
+        ));
+    }
+
+    @Test
+    void lowerJdkTimeInstanceCallReturnsFalseForUnsupportedLocalDateTimeDescriptor() {
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("dateTime"))
+        ));
+
+        assertThat(BytecodeToIRInvokeSupport.lowerJdkTimeInstanceCall(
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/time/LocalDateTime;)Ljava/time/LocalDate;", 1, 1, plain(0, 176, "areturn")),
+            invokeVirtual(0, new MethodRef("java/time/LocalDateTime", "toLocalDate", "(I)Ljava/time/LocalDate;")),
+            new MethodRef("java/time/LocalDateTime", "toLocalDate", "(I)Ljava/time/LocalDate;"),
+            stack
         )).isFalse();
     }
 
@@ -15352,34 +16805,216 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowersLambdaMetafactorySupplierBridgeClosureAllocationAndWrapper() {
-        final String syntheticOwner = "com/acme/Main$$javan$lambda$main$apply$1";
+    void lowersExactLambdaMetafactoryClosureAllocationWithLongCapture() {
+        final String syntheticOwner = "com/acme/Main$$javan$lambda$main$run$1";
         final IrProgram program = lowerProgram(
             method(
                 0x0008,
                 "main",
-                "()Ljava/util/function/Function;",
-                0,
-                0,
+                "(J)Ljava/lang/Runnable;",
+                2,
+                2,
+                plain(0, 30, "lload_0"),
                 invokeDynamic(1, new DynamicRef(
-                    "apply",
-                    "()Ljava/util/function/Function;",
+                    "run",
+                    "(J)Ljava/lang/Runnable;",
                     "java/lang/invoke/LambdaMetafactory",
                     "metafactory",
                     "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;",
-                    List.of("(Ljava/lang/Object;)Ljava/lang/Object;", "java/util/function/Supplier.get()Ljava/lang/Object;", "(Ljava/util/function/Supplier;)Ljava/lang/Object;"),
+                    List.of("()V", "com/acme/Holder.lambda$0(J)V", "()V"),
                     List.of(
-                        new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "(Ljava/lang/Object;)Ljava/lang/Object;"),
+                        new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "()V"),
                         BootstrapValue.methodHandle(
-                            "java/util/function/Supplier.get()Ljava/lang/Object;",
-                            new MethodRef("java/util/function/Supplier", "get", "()Ljava/lang/Object;"),
-                            9
+                            "com/acme/Holder.lambda$0(J)V",
+                            new MethodRef("com/acme/Holder", "lambda$0", "(J)V"),
+                            6
                         ),
-                        new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "(Ljava/util/function/Supplier;)Ljava/lang/Object;")
+                        new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "()V")
                     )
                 )),
                 plain(2, 176, "areturn")
             ),
+            classFile(
+                "com/acme/Holder",
+                "java/lang/Object",
+                0,
+                List.of(),
+                List.of(),
+                List.of(new MethodInfo(0x0009, "lambda$0", "(J)V", Optional.empty()))
+            )
+        );
+
+        assertThat(program.classes()).anySatisfy(irClass -> {
+            assertThat(irClass.jvmName()).isEqualTo(syntheticOwner);
+            assertThat(irClass.fields()).containsExactly(new IrField(IrType.LONG, "capture0", "field_capture0"));
+        });
+        assertThat(program.functions().getFirst().instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectAllocation(syntheticOwner)),
+            IrInstruction.assignFieldLong(syntheticOwner, "capture0", IrExpression.objectLocal("object0"), IrExpression.longLocal("arg0")),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersExactLambdaMetafactoryClosureAllocationWithFloatCapture() {
+        final String syntheticOwner = "com/acme/Main$$javan$lambda$main$run$1";
+        final IrProgram program = lowerProgram(
+            method(
+                0x0008,
+                "main",
+                "(F)Ljava/lang/Runnable;",
+                1,
+                1,
+                plain(0, 34, "fload_0"),
+                invokeDynamic(1, new DynamicRef(
+                    "run",
+                    "(F)Ljava/lang/Runnable;",
+                    "java/lang/invoke/LambdaMetafactory",
+                    "metafactory",
+                    "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;",
+                    List.of("()V", "com/acme/Holder.lambda$0(F)V", "()V"),
+                    List.of(
+                        new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "()V"),
+                        BootstrapValue.methodHandle(
+                            "com/acme/Holder.lambda$0(F)V",
+                            new MethodRef("com/acme/Holder", "lambda$0", "(F)V"),
+                            6
+                        ),
+                        new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "()V")
+                    )
+                )),
+                plain(2, 176, "areturn")
+            ),
+            classFile(
+                "com/acme/Holder",
+                "java/lang/Object",
+                0,
+                List.of(),
+                List.of(),
+                List.of(new MethodInfo(0x0009, "lambda$0", "(F)V", Optional.empty()))
+            )
+        );
+
+        assertThat(program.classes()).anySatisfy(irClass -> {
+            assertThat(irClass.jvmName()).isEqualTo(syntheticOwner);
+            assertThat(irClass.fields()).containsExactly(new IrField(IrType.FLOAT, "capture0", "field_capture0"));
+        });
+        assertThat(program.functions().getFirst().instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectAllocation(syntheticOwner)),
+            IrInstruction.assignFieldFloat(syntheticOwner, "capture0", IrExpression.objectLocal("object0"), IrExpression.floatLocal("arg0")),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersExactLambdaMetafactoryClosureAllocationWithDoubleCapture() {
+        final String syntheticOwner = "com/acme/Main$$javan$lambda$main$run$1";
+        final IrProgram program = lowerProgram(
+            method(
+                0x0008,
+                "main",
+                "(D)Ljava/lang/Runnable;",
+                2,
+                2,
+                plain(0, 38, "dload_0"),
+                invokeDynamic(1, new DynamicRef(
+                    "run",
+                    "(D)Ljava/lang/Runnable;",
+                    "java/lang/invoke/LambdaMetafactory",
+                    "metafactory",
+                    "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;",
+                    List.of("()V", "com/acme/Holder.lambda$0(D)V", "()V"),
+                    List.of(
+                        new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "()V"),
+                        BootstrapValue.methodHandle(
+                            "com/acme/Holder.lambda$0(D)V",
+                            new MethodRef("com/acme/Holder", "lambda$0", "(D)V"),
+                            6
+                        ),
+                        new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "()V")
+                    )
+                )),
+                plain(2, 176, "areturn")
+            ),
+            classFile(
+                "com/acme/Holder",
+                "java/lang/Object",
+                0,
+                List.of(),
+                List.of(),
+                List.of(new MethodInfo(0x0009, "lambda$0", "(D)V", Optional.empty()))
+            )
+        );
+
+        assertThat(program.classes()).anySatisfy(irClass -> {
+            assertThat(irClass.jvmName()).isEqualTo(syntheticOwner);
+            assertThat(irClass.fields()).containsExactly(new IrField(IrType.DOUBLE, "capture0", "field_capture0"));
+        });
+        assertThat(program.functions().getFirst().instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectAllocation(syntheticOwner)),
+            IrInstruction.assignFieldDouble(syntheticOwner, "capture0", IrExpression.objectLocal("object0"), IrExpression.doubleLocal("arg0")),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersExactLambdaMetafactoryClosureAllocationWithObjectCapture() {
+        final String syntheticOwner = "com/acme/Main$$javan$lambda$main$run$1";
+        final IrProgram program = lowerProgram(
+            method(
+                0x0008,
+                "main",
+                "(Ljava/lang/String;)Ljava/lang/Runnable;",
+                1,
+                1,
+                plain(0, 42, "aload_0"),
+                invokeDynamic(1, new DynamicRef(
+                    "run",
+                    "(Ljava/lang/String;)Ljava/lang/Runnable;",
+                    "java/lang/invoke/LambdaMetafactory",
+                    "metafactory",
+                    "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;",
+                    List.of("()V", "com/acme/Holder.lambda$0(Ljava/lang/String;)V", "()V"),
+                    List.of(
+                        new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "()V"),
+                        BootstrapValue.methodHandle(
+                            "com/acme/Holder.lambda$0(Ljava/lang/String;)V",
+                            new MethodRef("com/acme/Holder", "lambda$0", "(Ljava/lang/String;)V"),
+                            6
+                        ),
+                        new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "()V")
+                    )
+                )),
+                plain(2, 176, "areturn")
+            ),
+            classFile(
+                "com/acme/Holder",
+                "java/lang/Object",
+                0,
+                List.of(),
+                List.of(),
+                List.of(new MethodInfo(0x0009, "lambda$0", "(Ljava/lang/String;)V", Optional.empty()))
+            )
+        );
+
+        assertThat(program.classes()).anySatisfy(irClass -> {
+            assertThat(irClass.jvmName()).isEqualTo(syntheticOwner);
+            assertThat(irClass.fields()).containsExactly(new IrField(IrType.OBJECT, "capture0", "field_capture0"));
+        });
+        assertThat(program.functions().getFirst().instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectAllocation(syntheticOwner)),
+            IrInstruction.assignFieldObject(syntheticOwner, "capture0", IrExpression.objectLocal("object0"), IrExpression.objectLocal("arg0")),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersLambdaMetafactorySupplierBridgeClosureAllocationAndWrapper() throws Exception {
+        final String syntheticOwner = "com/acme/Main$$javan$lambda$main$apply$1";
+        final Map<String, ClassFile> classes = new LinkedHashMap<>();
+        classes.put("com/acme/Main", classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of()));
+        classes.put(
+            "com/acme/StringSupplier",
             classFile(
                 "com/acme/StringSupplier",
                 "java/lang/Object",
@@ -15398,21 +17033,138 @@ final class BytecodeToIRTest {
             )
         );
 
-        assertThat(program.classes()).anySatisfy(irClass -> {
-            assertThat(irClass.jvmName()).isEqualTo(syntheticOwner);
-            assertThat(irClass.fields()).isEmpty();
-        });
-        assertThat(program.functions()).anySatisfy(function -> {
-            if (!function.owner().equals(syntheticOwner) || !function.name().equals("apply")) {
-                return;
-            }
-            assertThat(function.instructions()).containsExactly(
-                IrInstruction.returnObject(IrExpression.objectCall(
-                    symbol("com/acme/StringSupplier", "get", "()Ljava/lang/Object;"),
+        final IrFunction function = lowerLambdaClosureFunction(
+            classes,
+            Map.of(),
+            new LambdaMetafactorySupport.LambdaClosurePlan(
+                syntheticOwner,
+                "java/util/function/Function",
+                "apply",
+                "(Ljava/lang/Object;)Ljava/lang/Object;",
+                "(Ljava/util/function/Supplier;)Ljava/lang/Object;",
+                List.of(),
+                new MethodRef("java/util/function/Supplier", "get", "()Ljava/lang/Object;"),
+                9,
+                LambdaMetafactorySupport.ReceiverBinding.FIRST_PARAMETER,
+                Path.of("com/acme/Main.class"),
+                true
+            )
+        );
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                symbol("com/acme/StringSupplier", "get", "()Ljava/lang/Object;"),
+                List.of(IrExpression.objectLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersLambdaMetafactoryJdkStaticValueOfBridgeWrapper() throws Exception {
+        final String syntheticOwner = "com/acme/Main$$javan$lambda$main$apply$1";
+        final IrFunction function = lowerLambdaClosureFunction(
+            Map.of(),
+            Map.of(),
+            new LambdaMetafactorySupport.LambdaClosurePlan(
+                syntheticOwner,
+                "java/util/function/Function",
+                "apply",
+                "(Ljava/lang/Object;)Ljava/lang/Object;",
+                "(Ljava/lang/Integer;)Ljava/lang/Integer;",
+                List.of(),
+                new MethodRef("java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;"),
+                6,
+                LambdaMetafactorySupport.ReceiverBinding.NONE,
+                Path.of("com/acme/Main.class"),
+                true
+            )
+        );
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_integer_value_of",
+                List.of(IrExpression.intCall(
+                    "javan_integer_int_value",
                     List.of(IrExpression.objectLocal("arg0"))
                 ))
-            );
-        });
+            ))
+        );
+    }
+
+    @Test
+    void lowersLambdaMetafactoryJdkNumberIntValueBridgeWrapper() throws Exception {
+        final String syntheticOwner = "com/acme/Main$$javan$lambda$main$apply$1";
+        final IrFunction function = lowerLambdaClosureFunction(
+            Map.of(),
+            Map.of(),
+            new LambdaMetafactorySupport.LambdaClosurePlan(
+                syntheticOwner,
+                "java/util/function/Function",
+                "apply",
+                "(Ljava/lang/Object;)Ljava/lang/Object;",
+                "(Ljava/lang/Number;)Ljava/lang/Integer;",
+                List.of(),
+                new MethodRef("java/lang/Number", "intValue", "()I"),
+                5,
+                LambdaMetafactorySupport.ReceiverBinding.FIRST_PARAMETER,
+                Path.of("com/acme/Main.class"),
+                true
+            )
+        );
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_integer_value_of",
+                List.of(IrExpression.intCall(
+                    "javan_number_int_value",
+                    List.of(IrExpression.objectLocal("arg0"))
+                ))
+            ))
+        );
+    }
+
+    @Test
+    void lowersLambdaMetafactoryCapturedVirtualReceiverWrapper() throws Exception {
+        final String syntheticOwner = "com/acme/Main$$javan$lambda$main$run$1";
+        final Map<String, ClassFile> classes = new LinkedHashMap<>();
+        classes.put("com/acme/Main", classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of()));
+        classes.put(
+            "com/acme/Greeter",
+            classFile(
+                "com/acme/Greeter",
+                "java/lang/Object",
+                0,
+                List.of(),
+                List.of(),
+                List.of(method(0, "runTask", "()V", 0, 1, plain(0, 177, "return")))
+            )
+        );
+
+        final IrFunction function = lowerLambdaClosureFunction(
+            classes,
+            Map.of(),
+            new LambdaMetafactorySupport.LambdaClosurePlan(
+                syntheticOwner,
+                "java/lang/Runnable",
+                "run",
+                "()V",
+                "()V",
+                List.of("Lcom/acme/Greeter;"),
+                new MethodRef("com/acme/Greeter", "runTask", "()V"),
+                5,
+                LambdaMetafactorySupport.ReceiverBinding.CAPTURE0,
+                Path.of("com/acme/Main.class"),
+                true
+            )
+        );
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid(
+                symbol("com/acme/Greeter", "runTask", "()V"),
+                List.of(IrExpression.objectField(syntheticOwner, "capture0", IrExpression.objectLocal("self")))
+            ),
+            IrInstruction.returnVoid()
+        );
     }
 
     @Test
@@ -16148,5 +17900,145 @@ final class BytecodeToIRTest {
             Optional.empty(),
             Optional.empty()
         );
+    }
+
+    private static IrFunction lowerLambdaClosureFunction(
+        final Map<String, ClassFile> classes,
+        final Map<String, IrDispatch> dispatches,
+        final LambdaMetafactorySupport.LambdaClosurePlan plan
+    ) throws Exception {
+        final Method method = BytecodeToIR.class.getDeclaredMethod(
+            "lowerLambdaClosureFunction",
+            Map.class,
+            Map.class,
+            LambdaMetafactorySupport.LambdaClosurePlan.class
+        );
+        method.setAccessible(true);
+        return (IrFunction) method.invoke(null, classes, dispatches, plan);
+    }
+
+    private static String lambdaImplementationSymbol(
+        final Map<String, ClassFile> classes,
+        final Map<String, IrDispatch> dispatches,
+        final LambdaMetafactorySupport.LambdaClosurePlan plan
+    ) throws Exception {
+        final Method method = BytecodeToIR.class.getDeclaredMethod(
+            "lambdaImplementationSymbol",
+            Map.class,
+            Map.class,
+            LambdaMetafactorySupport.LambdaClosurePlan.class
+        );
+        method.setAccessible(true);
+        return (String) method.invoke(null, classes, dispatches, plan);
+    }
+
+    private static IrExpression captureFieldExpression(
+        final String owner,
+        final String fieldName,
+        final String descriptor,
+        final IrExpression self
+    ) throws Exception {
+        final Method method = BytecodeToIR.class.getDeclaredMethod(
+            "captureFieldExpression",
+            String.class,
+            String.class,
+            String.class,
+            IrExpression.class
+        );
+        method.setAccessible(true);
+        return (IrExpression) method.invoke(null, owner, fieldName, descriptor, self);
+    }
+
+    private static IrExpression parameterExpression(final IrType type, final String name) throws Exception {
+        final Method method = BytecodeToIR.class.getDeclaredMethod("parameterExpression", IrType.class, String.class);
+        method.setAccessible(true);
+        return (IrExpression) method.invoke(null, type, name);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<String> parameterDescriptors(final String descriptor) throws Exception {
+        final Method method = BytecodeToIR.class.getDeclaredMethod("parameterDescriptors", String.class);
+        method.setAccessible(true);
+        return (List<String>) method.invoke(null, descriptor);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Optional<IrExpression> lowerJdkLambdaBridge(
+        final LambdaMetafactorySupport.LambdaClosurePlan plan,
+        final List<IrExpression> arguments,
+        final List<String> exactArgumentDescriptors,
+        final IrType erasedReturnType
+    ) throws Exception {
+        final Method method = BytecodeToIR.class.getDeclaredMethod(
+            "lowerJdkLambdaBridge",
+            LambdaMetafactorySupport.LambdaClosurePlan.class,
+            List.class,
+            List.class,
+            IrType.class
+        );
+        method.setAccessible(true);
+        return (Optional<IrExpression>) method.invoke(null, plan, arguments, exactArgumentDescriptors, erasedReturnType);
+    }
+
+    private static IrExpression implementationBridgeCall(final MethodRef target, final List<IrExpression> arguments) throws Exception {
+        final Method method = BytecodeToIR.class.getDeclaredMethod("implementationBridgeCall", MethodRef.class, List.class);
+        method.setAccessible(true);
+        return (IrExpression) method.invoke(null, target, arguments);
+    }
+
+    private static IrExpression adaptBridgeArgument(
+        final String sourceDescriptor,
+        final IrExpression sourceExpression,
+        final String implementationDescriptor
+    ) throws Exception {
+        final Method method = BytecodeToIR.class.getDeclaredMethod(
+            "adaptBridgeArgument",
+            String.class,
+            IrExpression.class,
+            String.class
+        );
+        method.setAccessible(true);
+        return (IrExpression) method.invoke(null, sourceDescriptor, sourceExpression, implementationDescriptor);
+    }
+
+    private static IrExpression adaptBridgeReturn(
+        final MethodRef target,
+        final IrExpression implementationResult,
+        final String implementationReturnDescriptor,
+        final String instantiatedReturnDescriptor,
+        final IrType erasedReturnType
+    ) throws Exception {
+        final Method method = BytecodeToIR.class.getDeclaredMethod(
+            "adaptBridgeReturn",
+            MethodRef.class,
+            IrExpression.class,
+            String.class,
+            String.class,
+            IrType.class
+        );
+        method.setAccessible(true);
+        return (IrExpression) method.invoke(
+            null,
+            target,
+            implementationResult,
+            implementationReturnDescriptor,
+            instantiatedReturnDescriptor,
+            erasedReturnType
+        );
+    }
+
+    private static IrExpression boxPrimitiveExpression(
+        final String targetDescriptor,
+        final char primitive,
+        final IrExpression primitiveExpression
+    ) throws Exception {
+        final Method method = BytecodeToIR.class.getDeclaredMethod(
+            "boxPrimitiveExpression",
+            String.class,
+            char.class,
+            IrExpression.class
+        );
+        method.setAccessible(true);
+        return (IrExpression) method.invoke(null, targetDescriptor, primitive, primitiveExpression);
     }
 }

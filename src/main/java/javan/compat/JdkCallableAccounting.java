@@ -41,6 +41,9 @@ final class JdkCallableAccounting {
             }
             return false;
         }
+        if ("java/util/Objects".equals(owner)) {
+            return "equals".equals(methodName) && "(Ljava/lang/Object;Ljava/lang/Object;)Z".equals(descriptor);
+        }
         if ("java/lang/String".equals(owner)) {
             if ("<init>".equals(methodName)) {
                 return "(Ljava/lang/StringBuffer;)V".equals(descriptor)

@@ -18,6 +18,33 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void atomicReferenceGetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/atomic/AtomicReference",
+            "get",
+            "()Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void atomicReferenceCallsRequireThreadsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/concurrent/atomic/AtomicReference",
+            "set",
+            "(Ljava/lang/Object;)V"
+        ))).containsExactly("threads");
+    }
+
+    @Test
+    void objectsEqualsIsNotSupportedYet() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Objects",
+            "equals",
+            "(Ljava/lang/Object;Ljava/lang/Object;)Z"
+        ))).isFalse();
+    }
+
+    @Test
     void threadBuilderUnstartedIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/Thread$Builder$OfVirtual",
@@ -180,6 +207,141 @@ final class JdkCallSupportTest {
             "java/util/function/Consumer",
             "accept",
             "(Ljava/lang/Object;)V"
+        ));
+    }
+
+    @Test
+    void listAddAtIndexIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/List",
+            "add",
+            "(ILjava/lang/Object;)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void listAddAllCollectionIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/List",
+            "addAll",
+            "(Ljava/util/Collection;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void mapForEachExposesClosedWorldBiConsumerDispatchTarget() {
+        assertThat(JdkCallSupport.closedWorldHigherOrderDispatchTargets(new javan.classfile.MethodRef(
+            "java/util/Map",
+            "forEach",
+            "(Ljava/util/function/BiConsumer;)V"
+        ))).containsExactly(new javan.classfile.MethodRef(
+            "java/util/function/BiConsumer",
+            "accept",
+            "(Ljava/lang/Object;Ljava/lang/Object;)V"
+        ));
+    }
+
+    @Test
+    void streamFilterExposesClosedWorldPredicateDispatchTarget() {
+        assertThat(JdkCallSupport.closedWorldHigherOrderDispatchTargets(new javan.classfile.MethodRef(
+            "java/util/stream/Stream",
+            "filter",
+            "(Ljava/util/function/Predicate;)Ljava/util/stream/Stream;"
+        ))).containsExactly(new javan.classfile.MethodRef(
+            "java/util/function/Predicate",
+            "test",
+            "(Ljava/lang/Object;)Z"
+        ));
+    }
+
+    @Test
+    void streamMapExposesClosedWorldFunctionDispatchTarget() {
+        assertThat(JdkCallSupport.closedWorldHigherOrderDispatchTargets(new javan.classfile.MethodRef(
+            "java/util/stream/Stream",
+            "map",
+            "(Ljava/util/function/Function;)Ljava/util/stream/Stream;"
+        ))).containsExactly(new javan.classfile.MethodRef(
+            "java/util/function/Function",
+            "apply",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
+        ));
+    }
+
+    @Test
+    void streamAnyMatchExposesClosedWorldPredicateDispatchTarget() {
+        assertThat(JdkCallSupport.closedWorldHigherOrderDispatchTargets(new javan.classfile.MethodRef(
+            "java/util/stream/Stream",
+            "anyMatch",
+            "(Ljava/util/function/Predicate;)Z"
+        ))).containsExactly(new javan.classfile.MethodRef(
+            "java/util/function/Predicate",
+            "test",
+            "(Ljava/lang/Object;)Z"
+        ));
+    }
+
+    @Test
+    void streamNoneMatchExposesClosedWorldPredicateDispatchTarget() {
+        assertThat(JdkCallSupport.closedWorldHigherOrderDispatchTargets(new javan.classfile.MethodRef(
+            "java/util/stream/Stream",
+            "noneMatch",
+            "(Ljava/util/function/Predicate;)Z"
+        ))).containsExactly(new javan.classfile.MethodRef(
+            "java/util/function/Predicate",
+            "test",
+            "(Ljava/lang/Object;)Z"
+        ));
+    }
+
+    @Test
+    void optionalOrElseGetExposesClosedWorldSupplierDispatchTarget() {
+        assertThat(JdkCallSupport.closedWorldHigherOrderDispatchTargets(new javan.classfile.MethodRef(
+            "java/util/Optional",
+            "orElseGet",
+            "(Ljava/util/function/Supplier;)Ljava/lang/Object;"
+        ))).containsExactly(new javan.classfile.MethodRef(
+            "java/util/function/Supplier",
+            "get",
+            "()Ljava/lang/Object;"
+        ));
+    }
+
+    @Test
+    void optionalFilterExposesClosedWorldPredicateDispatchTarget() {
+        assertThat(JdkCallSupport.closedWorldHigherOrderDispatchTargets(new javan.classfile.MethodRef(
+            "java/util/Optional",
+            "filter",
+            "(Ljava/util/function/Predicate;)Ljava/util/Optional;"
+        ))).containsExactly(new javan.classfile.MethodRef(
+            "java/util/function/Predicate",
+            "test",
+            "(Ljava/lang/Object;)Z"
+        ));
+    }
+
+    @Test
+    void optionalIfPresentExposesClosedWorldConsumerDispatchTarget() {
+        assertThat(JdkCallSupport.closedWorldHigherOrderDispatchTargets(new javan.classfile.MethodRef(
+            "java/util/Optional",
+            "ifPresent",
+            "(Ljava/util/function/Consumer;)V"
+        ))).containsExactly(new javan.classfile.MethodRef(
+            "java/util/function/Consumer",
+            "accept",
+            "(Ljava/lang/Object;)V"
+        ));
+    }
+
+    @Test
+    void optionalMapExposesClosedWorldFunctionDispatchTarget() {
+        assertThat(JdkCallSupport.closedWorldHigherOrderDispatchTargets(new javan.classfile.MethodRef(
+            "java/util/Optional",
+            "map",
+            "(Ljava/util/function/Function;)Ljava/util/Optional;"
+        ))).containsExactly(new javan.classfile.MethodRef(
+            "java/util/function/Function",
+            "apply",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
         ));
     }
 

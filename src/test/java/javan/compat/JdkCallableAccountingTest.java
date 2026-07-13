@@ -37,6 +37,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksObjectWaitNoArgAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Object", "wait", "()V")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
     void marksObjectWaitLongIntAsExplicitRejected() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Object", "wait", "(JI)V")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
@@ -57,6 +63,12 @@ final class JdkCallableAccountingTest {
     @Test
     void marksUnsupportedExecutorFactoryAsExplicitRejected() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/Executors", "newSingleThreadExecutor", "()Ljava/util/concurrent/ExecutorService;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksCachedExecutorFactoryAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/Executors", "newCachedThreadPool", "()Ljava/util/concurrent/ExecutorService;")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
     }
 
@@ -159,6 +171,12 @@ final class JdkCallableAccountingTest {
     @Test
     void marksStringGetBytesCharsetAsExplicitRejected() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/String", "getBytes", "(Ljava/nio/charset/Charset;)[B")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksStringGetBytesNoArgAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/String", "getBytes", "()[B")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
     }
 
@@ -748,6 +766,36 @@ final class JdkCallableAccountingTest {
     void marksAtomicIntegerGetAndIncrementAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/atomic/AtomicInteger", "getAndIncrement", "()I")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksAtomicReferenceDefaultConstructorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/atomic/AtomicReference", "<init>", "()V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksAtomicReferenceValueConstructorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/atomic/AtomicReference", "<init>", "(Ljava/lang/Object;)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksAtomicReferenceGetAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/atomic/AtomicReference", "get", "()Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksAtomicReferenceSetAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/atomic/AtomicReference", "set", "(Ljava/lang/Object;)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksObjectsEqualsAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Objects", "equals", "(Ljava/lang/Object;Ljava/lang/Object;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
     }
 
     @Test

@@ -909,7 +909,7 @@ final class CoreBehaviorTest {
 
     @Test
     void jdkCallSupportRejectsUnknownHashMapCall() {
-        assertThat(JdkCallSupport.isSupported(new MethodRef("java/util/HashMap", "clear", "()V"))).isFalse();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/util/HashMap", "replaceAll", "(Ljava/util/function/BiFunction;)V"))).isFalse();
     }
 
     @Test

@@ -122,4 +122,17 @@ final class SourceLineIndexTest {
         assertThat(index.line("Main", Optional.of("Main.java"), Optional.of(2)))
             .contains("final class Other {}");
     }
+
+    @Test
+    void resolvesFinalLineWithoutTrailingLineTerminator() throws Exception {
+        final Path sourceRoot = tempDir.resolve("src/main/java");
+        final Path source = sourceRoot.resolve("Main.java");
+        Files.createDirectories(source.getParent());
+        Files.writeString(source, "class Main {}\nfinal class Other {}");
+
+        final SourceLineIndex index = SourceLineIndex.from(List.of(sourceRoot));
+
+        assertThat(index.line("Main", Optional.of("Main.java"), Optional.of(2)))
+            .contains("final class Other {}");
+    }
 }

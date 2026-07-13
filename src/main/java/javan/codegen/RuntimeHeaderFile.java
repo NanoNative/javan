@@ -356,6 +356,10 @@ final class RuntimeHeaderFile {
         int javan_atomic_integer_get_and_increment(void* value);
         int javan_atomic_integer_increment_and_get(void* value);
         int javan_atomic_integer_decrement_and_get(void* value);
+        void* javan_atomic_reference_new(void);
+        void javan_atomic_reference_init(void* value, void* initial_value);
+        void* javan_atomic_reference_get(void* value);
+        void javan_atomic_reference_set(void* value, void* next_value);
         void* javan_character_value_of(int value);
         int javan_character_char_value(void* value);
         void* javan_integer_value_of(int value);

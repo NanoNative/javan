@@ -139,6 +139,49 @@ final class LambdaMetafactorySupportTest {
     }
 
     @Test
+    void scanCreatesPlanForStaticJdkValueOfBridge() {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                method(
+                    "main",
+                    "()Ljava/util/function/Function;",
+                    invokeDynamic(7, new DynamicRef(
+                        "apply",
+                        "()Ljava/util/function/Function;",
+                        "java/lang/invoke/LambdaMetafactory",
+                        "metafactory",
+                        "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;",
+                        List.of("(Ljava/lang/Object;)Ljava/lang/Object;", "java/lang/Integer.valueOf(I)Ljava/lang/Integer;", "(Ljava/lang/Integer;)Ljava/lang/Integer;"),
+                        List.of(
+                            new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "(Ljava/lang/Object;)Ljava/lang/Object;"),
+                            BootstrapValue.methodHandle(
+                                "java/lang/Integer.valueOf(I)Ljava/lang/Integer;",
+                                new MethodRef("java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;"),
+                                6
+                            ),
+                            new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "(Ljava/lang/Integer;)Ljava/lang/Integer;")
+                        )
+                    ))
+                )
+            )
+        );
+
+        final LambdaMetafactorySupport.LambdaClosurePlan plan = LambdaMetafactorySupport.scan(classes)
+            .planForSite("com/acme/Main", "main", "()Ljava/util/function/Function;", 7)
+            .orElseThrow();
+
+        assertThat(plan.methodDescriptor()).isEqualTo("(Ljava/lang/Object;)Ljava/lang/Object;");
+        assertThat(plan.instantiatedMethodDescriptor()).isEqualTo("(Ljava/lang/Integer;)Ljava/lang/Integer;");
+        assertThat(plan.implementationTarget()).isEqualTo(new MethodRef("java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;"));
+        assertThat(plan.receiverBinding()).isEqualTo(LambdaMetafactorySupport.ReceiverBinding.NONE);
+    }
+
+    @Test
     void expandedClassesAddsSyntheticClassForStaticPlan() {
         final Map<String, ClassFile> classes = Map.of(
             "com/acme/Main",
@@ -224,6 +267,48 @@ final class LambdaMetafactorySupportTest {
         assertThat(plan.captureDescriptors()).isEmpty();
         assertThat(plan.methodName()).isEqualTo("accept");
         assertThat(plan.methodDescriptor()).isEqualTo("(Ljava/lang/Object;)V");
+    }
+
+    @Test
+    void scanCreatesPlanForFirstParameterJdkNumberBridge() {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                method(
+                    "main",
+                    "()Ljava/util/function/Function;",
+                    invokeDynamic(11, new DynamicRef(
+                        "apply",
+                        "()Ljava/util/function/Function;",
+                        "java/lang/invoke/LambdaMetafactory",
+                        "metafactory",
+                        "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;",
+                        List.of("(Ljava/lang/Object;)Ljava/lang/Object;", "java/lang/Number.intValue()I", "(Ljava/lang/Number;)Ljava/lang/Integer;"),
+                        List.of(
+                            new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "(Ljava/lang/Object;)Ljava/lang/Object;"),
+                            BootstrapValue.methodHandle(
+                                "java/lang/Number.intValue()I",
+                                new MethodRef("java/lang/Number", "intValue", "()I"),
+                                5
+                            ),
+                            new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "(Ljava/lang/Number;)Ljava/lang/Integer;")
+                        )
+                    ))
+                )
+            )
+        );
+
+        final LambdaMetafactorySupport.LambdaClosurePlan plan = LambdaMetafactorySupport.scan(classes)
+            .planForSite("com/acme/Main", "main", "()Ljava/util/function/Function;", 11)
+            .orElseThrow();
+
+        assertThat(plan.instantiatedMethodDescriptor()).isEqualTo("(Ljava/lang/Number;)Ljava/lang/Integer;");
+        assertThat(plan.implementationTarget()).isEqualTo(new MethodRef("java/lang/Number", "intValue", "()I"));
+        assertThat(plan.receiverBinding()).isEqualTo(LambdaMetafactorySupport.ReceiverBinding.FIRST_PARAMETER);
     }
 
     @Test
@@ -517,6 +602,123 @@ final class LambdaMetafactorySupportTest {
     }
 
     @Test
+    void scanRejectsBootstrapWhenInstantiatedSamIsNotMethodType() {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                method(
+                    "main",
+                    "()Ljava/lang/Runnable;",
+                    invokeDynamic(
+                        2,
+                        new DynamicRef(
+                            "run",
+                            "()Ljava/lang/Runnable;",
+                            "java/lang/invoke/LambdaMetafactory",
+                            "metafactory",
+                            "",
+                            List.of("()V", "com/acme/Main.lambda$main$0()V", "raw"),
+                            List.of(
+                                new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "()V"),
+                                BootstrapValue.methodHandle(
+                                    "com/acme/Main.lambda$main$0()V",
+                                    new MethodRef("com/acme/Main", "lambda$main$0", "()V"),
+                                    6
+                                ),
+                                new BootstrapValue(BootstrapValue.Kind.STRING, "raw")
+                            )
+                        )
+                    )
+                ),
+                method("lambda$main$0", "()V")
+            )
+        );
+
+        assertThat(LambdaMetafactorySupport.scan(classes).bySite()).isEmpty();
+    }
+
+    @Test
+    void scanRejectsBootstrapWhenImplementationIsNotMethodHandle() {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                method(
+                    "main",
+                    "()Ljava/lang/Runnable;",
+                    invokeDynamic(
+                        2,
+                        new DynamicRef(
+                            "run",
+                            "()Ljava/lang/Runnable;",
+                            "java/lang/invoke/LambdaMetafactory",
+                            "metafactory",
+                            "",
+                            List.of("()V", "raw", "()V"),
+                            List.of(
+                                new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "()V"),
+                                new BootstrapValue(BootstrapValue.Kind.STRING, "raw"),
+                                new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "()V")
+                            )
+                        )
+                    )
+                ),
+                method("lambda$main$0", "()V")
+            )
+        );
+
+        assertThat(LambdaMetafactorySupport.scan(classes).bySite()).isEmpty();
+    }
+
+    @Test
+    void scanRejectsBootstrapWhenMethodHandleReferenceKindIsMissing() {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                method(
+                    "main",
+                    "()Ljava/lang/Runnable;",
+                    invokeDynamic(
+                        2,
+                        new DynamicRef(
+                            "run",
+                            "()Ljava/lang/Runnable;",
+                            "java/lang/invoke/LambdaMetafactory",
+                            "metafactory",
+                            "",
+                            List.of("()V", "com/acme/Main.lambda$main$0()V", "()V"),
+                            List.of(
+                                new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "()V"),
+                                new BootstrapValue(
+                                    BootstrapValue.Kind.METHOD_HANDLE,
+                                    "com/acme/Main.lambda$main$0()V",
+                                    Optional.of(new MethodRef("com/acme/Main", "lambda$main$0", "()V")),
+                                    Optional.empty()
+                                ),
+                                new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "()V")
+                            )
+                        )
+                    )
+                ),
+                method("lambda$main$0", "()V")
+            )
+        );
+
+        assertThat(LambdaMetafactorySupport.scan(classes).bySite()).isEmpty();
+    }
+
+    @Test
     void scanRejectsVirtualReferenceWithoutReceiverSource() {
         final Map<String, ClassFile> classes = Map.of(
             "com/acme/Main",
@@ -688,6 +890,211 @@ final class LambdaMetafactorySupportTest {
                     )
                 ),
                 method("lambda$main$0", "()I", plain(0, 3, "iconst_0"), plain(1, 172, "ireturn"))
+            )
+        );
+
+        assertThat(LambdaMetafactorySupport.scan(classes).bySite()).isEmpty();
+    }
+
+    @Test
+    void scanRejectsFunctionalBridgeSamShapeMismatchAfterReceiverBinding() {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                method(
+                    "main",
+                    "()Ljava/util/function/BiConsumer;",
+                    invokeDynamic(
+                        6,
+                        new DynamicRef(
+                            "accept",
+                            "()Ljava/util/function/BiConsumer;",
+                            "java/lang/invoke/LambdaMetafactory",
+                            "metafactory",
+                            "",
+                            List.of(
+                                "(Ljava/lang/Object;Ljava/lang/Object;)V",
+                                "java/util/function/BiConsumer.accept(Ljava/lang/Object;Ljava/lang/Object;)V",
+                                "(Ljava/lang/Object;I)V"
+                            ),
+                            List.of(
+                                new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "(Ljava/lang/Object;Ljava/lang/Object;)V"),
+                                BootstrapValue.methodHandle(
+                                    "java/util/function/BiConsumer.accept(Ljava/lang/Object;Ljava/lang/Object;)V",
+                                    new MethodRef("java/util/function/BiConsumer", "accept", "(Ljava/lang/Object;Ljava/lang/Object;)V"),
+                                    9
+                                ),
+                                new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "(Ljava/lang/Object;I)V")
+                            )
+                        )
+                    )
+                )
+            ),
+            "com/acme/BiConsumerImpl",
+            classWithMethods(
+                "com/acme/BiConsumerImpl",
+                "java/lang/Object",
+                0,
+                List.of("java/util/function/BiConsumer"),
+                method("accept", "(Ljava/lang/Object;Ljava/lang/Object;)V", plain(0, 177, "return"))
+            )
+        );
+
+        assertThat(LambdaMetafactorySupport.scan(classes).bySite()).isEmpty();
+    }
+
+    @Test
+    void scanRejectsFunctionalBridgeWhenExtraCapturedArgumentDoesNotMatchImplementation() {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                method(
+                    "main",
+                    "(Ljava/lang/Runnable;I)Ljava/lang/Runnable;",
+                    invokeDynamic(
+                        6,
+                        new DynamicRef(
+                            "run",
+                            "(Ljava/lang/Runnable;I)Ljava/lang/Runnable;",
+                            "java/lang/invoke/LambdaMetafactory",
+                            "metafactory",
+                            "",
+                            List.of("()V", "java/lang/Runnable.run()V", "()V"),
+                            List.of(
+                                new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "()V"),
+                                BootstrapValue.methodHandle(
+                                    "java/lang/Runnable.run()V",
+                                    new MethodRef("java/lang/Runnable", "run", "()V"),
+                                    9
+                                ),
+                                new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "()V")
+                            )
+                        )
+                    )
+                )
+            ),
+            "com/acme/RunnableImpl",
+            classWithMethods(
+                "com/acme/RunnableImpl",
+                "java/lang/Object",
+                0,
+                List.of("java/lang/Runnable"),
+                method("run", "()V", plain(0, 177, "return"))
+            )
+        );
+
+        assertThat(LambdaMetafactorySupport.scan(classes).bySite()).isEmpty();
+    }
+
+    @Test
+    void scanRejectsFunctionalBridgeReturnMismatchAfterSuccessfulTargetResolution() {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                method(
+                    "main",
+                    "()Ljava/util/function/Function;",
+                    invokeDynamic(
+                        6,
+                        new DynamicRef(
+                            "apply",
+                            "()Ljava/util/function/Function;",
+                            "java/lang/invoke/LambdaMetafactory",
+                            "metafactory",
+                            "",
+                            List.of(
+                                "(Ljava/lang/Object;)Ljava/lang/Object;",
+                                "java/util/function/Function.apply(Ljava/lang/Object;)Ljava/lang/Object;",
+                                "(Ljava/lang/Object;)I"
+                            ),
+                            List.of(
+                                new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "(Ljava/lang/Object;)Ljava/lang/Object;"),
+                                BootstrapValue.methodHandle(
+                                    "java/util/function/Function.apply(Ljava/lang/Object;)Ljava/lang/Object;",
+                                    new MethodRef("java/util/function/Function", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;"),
+                                    9
+                                ),
+                                new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "(Ljava/lang/Object;)I")
+                            )
+                        )
+                    )
+                )
+            ),
+            "com/acme/FunctionImpl",
+            classWithMethods(
+                "com/acme/FunctionImpl",
+                "java/lang/Object",
+                0,
+                List.of("java/util/function/Function"),
+                method(
+                    "apply",
+                    "(Ljava/lang/Object;)Ljava/lang/Object;",
+                    plain(0, 1, "aconst_null"),
+                    plain(1, 176, "areturn")
+                )
+            )
+        );
+
+        assertThat(LambdaMetafactorySupport.scan(classes).bySite()).isEmpty();
+    }
+
+    @Test
+    void scanRejectsBooleanSupplierBridgeReturnMismatchAfterSuccessfulTargetResolution() {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                method(
+                    "main",
+                    "(Ljava/util/function/BooleanSupplier;)Ljava/util/function/Supplier;",
+                    invokeDynamic(
+                        6,
+                        new DynamicRef(
+                            "get",
+                            "(Ljava/util/function/BooleanSupplier;)Ljava/util/function/Supplier;",
+                            "java/lang/invoke/LambdaMetafactory",
+                            "metafactory",
+                            "",
+                            List.of(
+                                "()Ljava/lang/Object;",
+                                "java/util/function/BooleanSupplier.getAsBoolean()Z",
+                                "()Ljava/lang/Object;"
+                            ),
+                            List.of(
+                                new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "()Ljava/lang/Object;"),
+                                BootstrapValue.methodHandle(
+                                    "java/util/function/BooleanSupplier.getAsBoolean()Z",
+                                    new MethodRef("java/util/function/BooleanSupplier", "getAsBoolean", "()Z"),
+                                    9
+                                ),
+                                new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "()Ljava/lang/Object;")
+                            )
+                        )
+                    )
+                )
+            ),
+            "com/acme/FlagSupplier",
+            classWithMethods(
+                "com/acme/FlagSupplier",
+                "java/lang/Object",
+                0,
+                List.of("java/util/function/BooleanSupplier"),
+                method("getAsBoolean", "()Z", plain(0, 4, "iconst_1"), plain(1, 172, "ireturn"))
             )
         );
 
@@ -1057,6 +1464,81 @@ final class LambdaMetafactorySupportTest {
     }
 
     @Test
+    void supportedJdkBridgeTargetRejectsParameterMismatch() throws Exception {
+        assertThat(supportedJdkBridgeTarget(
+            LambdaMetafactorySupport.ReceiverBinding.NONE,
+            List.of(),
+            new MethodRef("java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;"),
+            "(Ljava/lang/Long;)Ljava/lang/Integer;"
+        )).isFalse();
+    }
+
+    @Test
+    void supportedJdkBridgeTargetRejectsReturnMismatch() throws Exception {
+        assertThat(supportedJdkBridgeTarget(
+            LambdaMetafactorySupport.ReceiverBinding.NONE,
+            List.of(),
+            new MethodRef("java/lang/Integer", "intValue", "()I"),
+            "()Ljava/lang/Long;"
+        )).isFalse();
+    }
+
+    @Test
+    void jdkBridgeParametersMatchRejectsEmptyCaptureReceiver() throws Exception {
+        assertThat(jdkBridgeParametersMatch(
+            LambdaMetafactorySupport.ReceiverBinding.CAPTURE0,
+            List.of(),
+            List.of(),
+            List.of("Ljava/lang/Object;")
+        )).isFalse();
+    }
+
+    @Test
+    void jdkBridgeParametersMatchRejectsEmptyFirstParameterReceiver() throws Exception {
+        assertThat(jdkBridgeParametersMatch(
+            LambdaMetafactorySupport.ReceiverBinding.FIRST_PARAMETER,
+            List.of(),
+            List.of(),
+            List.of("Ljava/lang/Object;")
+        )).isFalse();
+    }
+
+    @Test
+    void jdkBridgeParametersMatchRejectsSizeMismatch() throws Exception {
+        assertThat(jdkBridgeParametersMatch(
+            LambdaMetafactorySupport.ReceiverBinding.NONE,
+            List.of("Ljava/lang/String;"),
+            List.of(),
+            List.of("Ljava/lang/String;", "Ljava/lang/String;")
+        )).isFalse();
+    }
+
+    @Test
+    void jdkBridgeParametersMatchRejectsDescriptorMismatch() throws Exception {
+        assertThat(jdkBridgeParametersMatch(
+            LambdaMetafactorySupport.ReceiverBinding.NONE,
+            List.of("Ljava/lang/String;"),
+            List.of(),
+            List.of("Q")
+        )).isFalse();
+    }
+
+    @Test
+    void jdkBridgeParameterMatchesRejectsNonPrimitiveImplementationDescriptor() throws Exception {
+        assertThat(jdkBridgeParameterMatches("I", "Q")).isFalse();
+    }
+
+    @Test
+    void boxedPrimitiveMatchesRejectsWideDescriptor() throws Exception {
+        assertThat(boxedPrimitiveMatches("Ljava/lang/Integer;", "II")).isFalse();
+    }
+
+    @Test
+    void boxedPrimitiveMatchesRejectsUnknownPrimitiveDescriptor() throws Exception {
+        assertThat(boxedPrimitiveMatches("Ljava/lang/Integer;", "B")).isFalse();
+    }
+
+    @Test
     void sameIrTypesRejectsSizeAndElementMismatch() throws Exception {
         assertThat(sameIrTypes(List.of(IrType.INT), List.of())).isFalse();
         assertThat(sameIrTypes(List.of(IrType.INT), List.of(IrType.OBJECT))).isFalse();
@@ -1098,11 +1580,36 @@ final class LambdaMetafactorySupportTest {
     }
 
     @Test
+    void returnDescriptorRejectsMissingReturnType() {
+        assertThatThrownBy(() -> returnDescriptor("()"))
+            .isInstanceOf(java.lang.reflect.InvocationTargetException.class)
+            .cause()
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Invalid descriptor");
+    }
+
+    @Test
+    void returnDescriptorRejectsDescriptorWithoutClosingParen() {
+        assertThatThrownBy(() -> returnDescriptor("I"))
+            .isInstanceOf(java.lang.reflect.InvocationTargetException.class)
+            .cause()
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Invalid descriptor");
+    }
+
+    @Test
+    void isObjectDescriptorRejectsPrimitiveAndAcceptsArray() throws Exception {
+        assertThat(isObjectDescriptor("I")).isFalse();
+        assertThat(isObjectDescriptor("[I")).isTrue();
+    }
+
+    @Test
     void lambdaClosurePlanMatchesSamRejectsNameAndDescriptorMismatch() {
         final LambdaMetafactorySupport.LambdaClosurePlan plan = new LambdaMetafactorySupport.LambdaClosurePlan(
             "com/acme/Synthetic",
             "java/util/function/Function",
             "apply",
+            "(Ljava/lang/Object;)Ljava/lang/Object;",
             "(Ljava/lang/Object;)Ljava/lang/Object;",
             List.of(),
             new MethodRef("com/acme/Main", "lambda$main$0", "(Ljava/lang/Object;)Ljava/lang/Object;"),
@@ -1122,6 +1629,7 @@ final class LambdaMetafactorySupportTest {
             "com/acme/Synthetic",
             "java/util/function/Function",
             "apply",
+            "(Ljava/lang/Object;)Ljava/lang/Object;",
             "(Ljava/lang/Object;)Ljava/lang/Object;",
             List.of(),
             new MethodRef("com/acme/Main", "lambda$main$0", "(Ljava/lang/Object;)Ljava/lang/Object;"),
@@ -1293,6 +1801,24 @@ final class LambdaMetafactorySupportTest {
     }
 
     @Test
+    void lowerableResolvedInvokeVirtualTargetSkipsLessSpecificInterfaceWithoutDefaultMatch() throws Exception {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/General",
+            classWithMethods("com/acme/General", "java/lang/Object", 0x0200, List.of()),
+            "com/acme/Specific",
+            classWithMethods("com/acme/Specific", "java/lang/Object", 0x0200, List.of("com/acme/General")),
+            "com/acme/Type",
+            classWithMethods("com/acme/Type", "java/lang/Object", 0, List.of("com/acme/Specific", "com/acme/General"))
+        );
+
+        assertThat(lowerableResolvedInvokeVirtualTarget(
+            classes,
+            "com/acme/Type",
+            new MethodRef("java/lang/Runnable", "run", "()V")
+        )).isEmpty();
+    }
+
+    @Test
     void lowerableResolvedInterfaceTargetResolvesParentDefaultMethod() throws Exception {
         final Map<String, ClassFile> classes = Map.of(
             "com/acme/ParentRunnable",
@@ -1311,6 +1837,18 @@ final class LambdaMetafactorySupportTest {
 
         assertThat(lowerableResolvedInterfaceTarget(classes, "com/acme/RunnableImpl", new MethodRef("java/lang/Runnable", "run", "()V")))
             .contains(new EntryPoint("com/acme/ParentRunnable", "run", "()V"));
+    }
+
+    @Test
+    void lowerableMethodTargetRejectsMissingOwnerAndMethodWithoutCode() throws Exception {
+        assertThat(lowerableMethodTarget(Map.of(), new EntryPoint("com/acme/Missing", "run", "()V"))).isEmpty();
+
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Owner",
+            classWithMethods("com/acme/Owner", "java/lang/Object", 0, List.of(), new MethodInfo(0, "run", "()V", Optional.empty()))
+        );
+
+        assertThat(lowerableMethodTarget(classes, new EntryPoint("com/acme/Owner", "run", "()V"))).isEmpty();
     }
 
     @Test
@@ -1391,6 +1929,54 @@ final class LambdaMetafactorySupportTest {
     }
 
     @Test
+    void lowerableBridgeTargetsExistRejectsInterfaceImplementationWithoutLowerableTarget() throws Exception {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/SupplierImpl",
+            classWithMethods(
+                "com/acme/SupplierImpl",
+                "java/lang/Object",
+                0,
+                List.of("java/util/function/Supplier"),
+                new MethodInfo(0, "get", "()Ljava/lang/Object;", Optional.empty())
+            )
+        );
+
+        assertThat(lowerableBridgeTargetsExist(classes, new MethodRef("java/util/function/Supplier", "get", "()Ljava/lang/Object;"), 9)).isFalse();
+    }
+
+    @Test
+    void lowerableBridgeTargetsExistRejectsVirtualSubtypeWithoutLowerableBody() throws Exception {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Task",
+            classWithMethods("com/acme/Task", "java/lang/Object", 0, List.of(), new MethodInfo(0, "run", "()V", Optional.empty())),
+            "com/acme/Leaf",
+            classWithMethods("com/acme/Leaf", "com/acme/Task", 0, List.of())
+        );
+
+        assertThat(lowerableBridgeTargetsExist(classes, new MethodRef("com/acme/Task", "run", "()V"), 5)).isFalse();
+    }
+
+    @Test
+    void supportedBridgeTargetAcceptsResolvableInterfaceImplementation() throws Exception {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/SupplierImpl",
+            classWithMethods(
+                "com/acme/SupplierImpl",
+                "java/lang/Object",
+                0,
+                List.of("java/util/function/Supplier"),
+                method("get", "()Ljava/lang/Object;", plain(0, 1, "aconst_null"), plain(1, 176, "areturn"))
+            )
+        );
+
+        assertThat(supportedBridgeTarget(
+            classes,
+            new MethodRef("java/util/function/Supplier", "get", "()Ljava/lang/Object;"),
+            9
+        )).isTrue();
+    }
+
+    @Test
     void supportedBridgeTargetRejectsUnsupportedFunctionalOwnerWithoutSearchingLowerableTargets() throws Exception {
         assertThat(supportedBridgeTarget(
             Map.of(),
@@ -1438,6 +2024,26 @@ final class LambdaMetafactorySupportTest {
     }
 
     @Test
+    void implementedInterfacesReturnsEmptyWhenReceiverNameIsNull() throws Exception {
+        assertThat(implementedInterfaces(Map.of(), null)).isEmpty();
+    }
+
+    @Test
+    void implementedInterfacesAvoidsDuplicateEntriesFromSuperclassAndDirectDeclaration() throws Exception {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/BaseRunnable",
+            classWithMethods("com/acme/BaseRunnable", "java/lang/Object", 0x0200, List.of()),
+            "com/acme/Base",
+            classWithMethods("com/acme/Base", "java/lang/Object", 0, List.of("com/acme/BaseRunnable")),
+            "com/acme/Impl",
+            classWithMethods("com/acme/Impl", "com/acme/Base", 0, List.of("com/acme/BaseRunnable"))
+        );
+
+        assertThat(implementedInterfaces(classes, "com/acme/Impl"))
+            .containsExactly("com/acme/BaseRunnable");
+    }
+
+    @Test
     void defaultInterfaceTargetRejectsVisitedCyclesAndNonInterfaceDefinitions() throws Exception {
         final Map<String, ClassFile> classes = Map.of(
             "com/acme/Loop",
@@ -1463,6 +2069,16 @@ final class LambdaMetafactorySupportTest {
     }
 
     @Test
+    void defaultInterfaceTargetRejectsMissingInterfaceDefinition() throws Exception {
+        assertThat(defaultInterfaceTarget(
+            Map.of(),
+            "com/acme/Missing",
+            new MethodRef("java/lang/Runnable", "run", "()V"),
+            new java.util.ArrayList<>()
+        )).isEmpty();
+    }
+
+    @Test
     void defaultInterfaceTargetReturnsDirectDefaultMethod() throws Exception {
         final Map<String, ClassFile> classes = Map.of(
             "com/acme/BridgeRunnable",
@@ -1482,6 +2098,49 @@ final class LambdaMetafactorySupportTest {
             new java.util.ArrayList<>()
         ))
             .contains(new EntryPoint("com/acme/BridgeRunnable", "run", "()V"));
+    }
+
+    @Test
+    void lowerableMethodTargetRejectsMissingMethodOnExistingOwner() throws Exception {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Owner",
+            classWithMethods("com/acme/Owner", "java/lang/Object", 0, List.of(), method("other", "()V", plain(0, 177, "return")))
+        );
+
+        assertThat(lowerableMethodTarget(classes, new EntryPoint("com/acme/Owner", "run", "()V"))).isEmpty();
+    }
+
+    @Test
+    void isAssignableToRejectsNullCandidateAndBreaksInterfaceCycles() throws Exception {
+        assertThat(isAssignableTo(Map.of(), null, "java/lang/Runnable")).isFalse();
+
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/LoopA",
+            classWithMethods("com/acme/LoopA", "java/lang/Object", 0x0200, List.of("com/acme/LoopB")),
+            "com/acme/LoopB",
+            classWithMethods("com/acme/LoopB", "java/lang/Object", 0x0200, List.of("com/acme/LoopA")),
+            "com/acme/Impl",
+            classWithMethods("com/acme/Impl", "java/lang/Object", 0, List.of("com/acme/LoopA"))
+        );
+
+        assertThat(isAssignableTo(classes, "com/acme/Impl", "java/lang/Runnable")).isFalse();
+    }
+
+    @Test
+    void defaultInterfaceTargetReturnsEmptyWhenParentInterfacesDoNotDefineTarget() throws Exception {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/ParentRunnable",
+            classWithMethods("com/acme/ParentRunnable", "java/lang/Object", 0x0200, List.of()),
+            "com/acme/ChildRunnable",
+            classWithMethods("com/acme/ChildRunnable", "java/lang/Object", 0x0200, List.of("com/acme/ParentRunnable"))
+        );
+
+        assertThat(defaultInterfaceTarget(
+            classes,
+            "com/acme/ChildRunnable",
+            new MethodRef("java/lang/Runnable", "run", "()V"),
+            new java.util.ArrayList<>()
+        )).isEmpty();
     }
 
     @Test
@@ -1851,6 +2510,20 @@ final class LambdaMetafactorySupportTest {
         return (Optional<EntryPoint>) method.invoke(null, classes, receiver, target);
     }
 
+    @SuppressWarnings("unchecked")
+    private static Optional<EntryPoint> lowerableMethodTarget(
+        final Map<String, ClassFile> classes,
+        final EntryPoint entryPoint
+    ) throws Exception {
+        final Method method = LambdaMetafactorySupport.class.getDeclaredMethod(
+            "lowerableMethodTarget",
+            Map.class,
+            EntryPoint.class
+        );
+        method.setAccessible(true);
+        return (Optional<EntryPoint>) method.invoke(null, classes, entryPoint);
+    }
+
     private static boolean isSubtypeOf(
         final Map<String, ClassFile> classes,
         final String candidate,
@@ -1986,6 +2659,12 @@ final class LambdaMetafactorySupportTest {
         return (IrType) method.invoke(null, descriptor);
     }
 
+    private static String returnDescriptor(final String descriptor) throws Exception {
+        final Method method = LambdaMetafactorySupport.class.getDeclaredMethod("returnDescriptor", String.class);
+        method.setAccessible(true);
+        return (String) method.invoke(null, descriptor);
+    }
+
     private static boolean implementationMatches(
         final LambdaMetafactorySupport.ReceiverBinding receiverBinding,
         final List<String> captureDescriptors,
@@ -2001,5 +2680,65 @@ final class LambdaMetafactorySupportTest {
         );
         method.setAccessible(true);
         return (Boolean) method.invoke(null, receiverBinding, captureDescriptors, implementationParameters, samParameters);
+    }
+
+    private static boolean supportedJdkBridgeTarget(
+        final LambdaMetafactorySupport.ReceiverBinding receiverBinding,
+        final List<String> captureDescriptors,
+        final MethodRef implementationTarget,
+        final String instantiatedSamDescriptor
+    ) throws Exception {
+        final Method method = LambdaMetafactorySupport.class.getDeclaredMethod(
+            "supportedJdkBridgeTarget",
+            LambdaMetafactorySupport.ReceiverBinding.class,
+            List.class,
+            MethodRef.class,
+            String.class
+        );
+        method.setAccessible(true);
+        return (Boolean) method.invoke(null, receiverBinding, captureDescriptors, implementationTarget, instantiatedSamDescriptor);
+    }
+
+    private static boolean jdkBridgeParametersMatch(
+        final LambdaMetafactorySupport.ReceiverBinding receiverBinding,
+        final List<String> captureDescriptors,
+        final List<String> instantiatedParameters,
+        final List<String> implementationParameters
+    ) throws Exception {
+        final Method method = LambdaMetafactorySupport.class.getDeclaredMethod(
+            "jdkBridgeParametersMatch",
+            LambdaMetafactorySupport.ReceiverBinding.class,
+            List.class,
+            List.class,
+            List.class
+        );
+        method.setAccessible(true);
+        return (Boolean) method.invoke(null, receiverBinding, captureDescriptors, instantiatedParameters, implementationParameters);
+    }
+
+    private static boolean jdkBridgeParameterMatches(final String sourceDescriptor, final String implementationDescriptor) throws Exception {
+        final Method method = LambdaMetafactorySupport.class.getDeclaredMethod(
+            "jdkBridgeParameterMatches",
+            String.class,
+            String.class
+        );
+        method.setAccessible(true);
+        return (Boolean) method.invoke(null, sourceDescriptor, implementationDescriptor);
+    }
+
+    private static boolean boxedPrimitiveMatches(final String objectDescriptor, final String primitiveDescriptor) throws Exception {
+        final Method method = LambdaMetafactorySupport.class.getDeclaredMethod(
+            "boxedPrimitiveMatches",
+            String.class,
+            String.class
+        );
+        method.setAccessible(true);
+        return (Boolean) method.invoke(null, objectDescriptor, primitiveDescriptor);
+    }
+
+    private static boolean isObjectDescriptor(final String descriptor) throws Exception {
+        final Method method = LambdaMetafactorySupport.class.getDeclaredMethod("isObjectDescriptor", String.class);
+        method.setAccessible(true);
+        return (Boolean) method.invoke(null, descriptor);
     }
 }

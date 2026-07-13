@@ -1,6 +1,7 @@
 package javan.classfile;
 
 import javan.analysis.EntryPoint;
+import javan.compat.JdkCallSupport;
 import javan.ir.IrType;
 
 import java.nio.file.Path;
@@ -119,22 +120,37 @@ public final class LambdaMetafactorySupport {
         final List<String> captureDescriptors = parameterDescriptors(dynamicRef.descriptor());
         final List<IrType> erasedSamParameters = parameterIrTypes(erasedSam.value());
         final List<IrType> instantiatedSamParameters = parameterIrTypes(instantiatedSam.value());
-        if (!sameIrTypes(erasedSamParameters, instantiatedSamParameters)) {
-            return Optional.empty();
-        }
         final Optional<ReceiverBinding> receiverBinding = receiverBinding(referenceKind, captureDescriptors, instantiatedSamParameters);
         if (receiverBinding.isEmpty()) {
             return Optional.empty();
         }
-        if (!classes.containsKey(implementationTarget.owner())
-            && !supportedBridgeTarget(classes, implementationTarget, referenceKind)) {
-            return Optional.empty();
-        }
-        final List<IrType> implementationParameters = parameterIrTypes(implementationTarget.descriptor());
-        if (!implementationMatches(receiverBinding.orElseThrow(), captureDescriptors, implementationParameters, instantiatedSamParameters)) {
-            return Optional.empty();
-        }
-        if (returnIrType(implementationTarget.descriptor()) != returnIrType(instantiatedSam.value())) {
+        final ReceiverBinding binding = receiverBinding.orElseThrow();
+        if (classes.containsKey(implementationTarget.owner())) {
+            if (!sameIrTypes(erasedSamParameters, instantiatedSamParameters)) {
+                return Optional.empty();
+            }
+            final List<IrType> implementationParameters = parameterIrTypes(implementationTarget.descriptor());
+            if (!implementationMatches(binding, captureDescriptors, implementationParameters, instantiatedSamParameters)) {
+                return Optional.empty();
+            }
+            if (returnIrType(implementationTarget.descriptor()) != returnIrType(instantiatedSam.value())) {
+                return Optional.empty();
+            }
+        } else if (supportedFunctionalBridgeTarget(implementationTarget)) {
+            if (!sameIrTypes(erasedSamParameters, instantiatedSamParameters)) {
+                return Optional.empty();
+            }
+            if (!lowerableBridgeTargetsExist(classes, implementationTarget, referenceKind)) {
+                return Optional.empty();
+            }
+            final List<IrType> implementationParameters = parameterIrTypes(implementationTarget.descriptor());
+            if (!implementationMatches(binding, captureDescriptors, implementationParameters, instantiatedSamParameters)) {
+                return Optional.empty();
+            }
+            if (returnIrType(implementationTarget.descriptor()) != returnIrType(instantiatedSam.value())) {
+                return Optional.empty();
+            }
+        } else if (!supportedJdkBridgeTarget(binding, captureDescriptors, implementationTarget, instantiatedSam.value())) {
             return Optional.empty();
         }
         final String syntheticOwner = syntheticOwner(classFile.name(), enclosingMethod.name(), instruction.offset(), dynamicRef.name());
@@ -143,10 +159,11 @@ public final class LambdaMetafactorySupport {
             interfaceOwner.orElseThrow(),
             dynamicRef.name(),
             erasedSam.value(),
+            instantiatedSam.value(),
             captureDescriptors,
             implementationTarget,
             referenceKind,
-            receiverBinding.orElseThrow(),
+            binding,
             classFile.source(),
             classFile.application()
         ));
@@ -199,6 +216,26 @@ public final class LambdaMetafactorySupport {
             return Optional.of(ReceiverBinding.FIRST_PARAMETER);
         }
         return Optional.empty();
+    }
+
+    private static boolean supportedJdkBridgeTarget(
+        final ReceiverBinding receiverBinding,
+        final List<String> captureDescriptors,
+        final MethodRef implementationTarget,
+        final String instantiatedSamDescriptor
+    ) {
+        if (!JdkCallSupport.isSupported(implementationTarget)) {
+            return false;
+        }
+        final List<String> instantiatedParameters = parameterDescriptors(instantiatedSamDescriptor);
+        final List<String> implementationParameters = parameterDescriptors(implementationTarget.descriptor());
+        if (!jdkBridgeParametersMatch(receiverBinding, captureDescriptors, instantiatedParameters, implementationParameters)) {
+            return false;
+        }
+        return jdkBridgeReturnMatches(
+            returnDescriptor(implementationTarget.descriptor()),
+            returnDescriptor(instantiatedSamDescriptor)
+        );
     }
 
     private static boolean supportedBridgeTarget(
@@ -297,6 +334,100 @@ public final class LambdaMetafactorySupport {
             return IrType.VOID;
         }
         return irType(descriptor.substring(end + 1));
+    }
+
+    private static String returnDescriptor(final String descriptor) {
+        final int end = descriptor.indexOf(')');
+        if (end < 0 || end + 1 >= descriptor.length()) {
+            throw new IllegalArgumentException("Invalid descriptor: " + descriptor);
+        }
+        return descriptor.substring(end + 1);
+    }
+
+    private static boolean jdkBridgeParametersMatch(
+        final ReceiverBinding receiverBinding,
+        final List<String> captureDescriptors,
+        final List<String> instantiatedParameters,
+        final List<String> implementationParameters
+    ) {
+        final List<String> sourceDescriptors = new ArrayList<>();
+        int captureStart = 0;
+        int samStart = 0;
+        if (receiverBinding == ReceiverBinding.CAPTURE0) {
+            if (captureDescriptors.isEmpty()) {
+                return false;
+            }
+            captureStart = 1;
+        } else if (receiverBinding == ReceiverBinding.FIRST_PARAMETER) {
+            if (instantiatedParameters.isEmpty()) {
+                return false;
+            }
+            samStart = 1;
+        }
+        for (int index = captureStart; index < captureDescriptors.size(); index++) {
+            sourceDescriptors.add(captureDescriptors.get(index));
+        }
+        for (int index = samStart; index < instantiatedParameters.size(); index++) {
+            sourceDescriptors.add(instantiatedParameters.get(index));
+        }
+        if (sourceDescriptors.size() != implementationParameters.size()) {
+            return false;
+        }
+        for (int index = 0; index < sourceDescriptors.size(); index++) {
+            if (!jdkBridgeParameterMatches(sourceDescriptors.get(index), implementationParameters.get(index))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean jdkBridgeParameterMatches(final String sourceDescriptor, final String implementationDescriptor) {
+        if (sourceDescriptor.equals(implementationDescriptor)) {
+            return true;
+        }
+        if (isObjectDescriptor(sourceDescriptor) && isObjectDescriptor(implementationDescriptor)) {
+            return true;
+        }
+        if (!isPrimitiveDescriptor(implementationDescriptor)) {
+            return false;
+        }
+        return boxedPrimitiveMatches(sourceDescriptor, implementationDescriptor);
+    }
+
+    private static boolean jdkBridgeReturnMatches(final String implementationDescriptor, final String instantiatedDescriptor) {
+        if (implementationDescriptor.equals(instantiatedDescriptor)) {
+            return true;
+        }
+        if (isObjectDescriptor(implementationDescriptor) && isObjectDescriptor(instantiatedDescriptor)) {
+            return true;
+        }
+        if (!isPrimitiveDescriptor(implementationDescriptor)) {
+            return false;
+        }
+        return boxedPrimitiveMatches(instantiatedDescriptor, implementationDescriptor);
+    }
+
+    private static boolean boxedPrimitiveMatches(final String objectDescriptor, final String primitiveDescriptor) {
+        if (primitiveDescriptor.length() != 1) {
+            return false;
+        }
+        return switch (primitiveDescriptor.charAt(0)) {
+            case 'I' -> "Ljava/lang/Integer;".equals(objectDescriptor);
+            case 'J' -> "Ljava/lang/Long;".equals(objectDescriptor);
+            case 'F' -> "Ljava/lang/Float;".equals(objectDescriptor);
+            case 'D' -> "Ljava/lang/Double;".equals(objectDescriptor);
+            case 'Z' -> "Ljava/lang/Boolean;".equals(objectDescriptor);
+            case 'C' -> "Ljava/lang/Character;".equals(objectDescriptor);
+            default -> false;
+        };
+    }
+
+    private static boolean isPrimitiveDescriptor(final String descriptor) {
+        return descriptor.length() == 1 && "BCDFIJSZV".indexOf(descriptor.charAt(0)) >= 0;
+    }
+
+    private static boolean isObjectDescriptor(final String descriptor) {
+        return descriptor.startsWith("L") || descriptor.startsWith("[");
     }
 
     private static IrType irType(final String descriptor) {
@@ -695,6 +826,7 @@ public final class LambdaMetafactorySupport {
         String interfaceOwner,
         String methodName,
         String methodDescriptor,
+        String instantiatedMethodDescriptor,
         List<String> captureDescriptors,
         MethodRef implementationTarget,
         int implementationReferenceKind,

@@ -226,19 +226,23 @@ public final class BytecodeToIR {
         final LambdaMetafactorySupport.LambdaClosurePlan plan
     ) {
         final MethodDescriptor descriptor = MethodDescriptor.parse(plan.methodDescriptor());
+        final MethodDescriptor instantiatedDescriptor = MethodDescriptor.parse(plan.instantiatedMethodDescriptor());
         final List<IrParameter> parameters = new ArrayList<>();
         parameters.add(new IrParameter(IrType.OBJECT, "self"));
         parameters.addAll(descriptor.parameters());
 
         final List<IrExpression> arguments = new ArrayList<>();
+        final List<String> exactArgumentDescriptors = new ArrayList<>();
         int captureStart = 0;
         int parameterStart = 0;
         if (plan.implementationReferenceKind() == 5 || plan.implementationReferenceKind() == 9) {
             if (plan.receiverBinding() == LambdaMetafactorySupport.ReceiverBinding.CAPTURE0) {
                 arguments.add(captureFieldExpression(plan.syntheticOwner(), "capture0", plan.captureDescriptors().getFirst(), IrExpression.objectLocal("self")));
+                exactArgumentDescriptors.add(plan.captureDescriptors().getFirst());
                 captureStart = 1;
             } else if (plan.receiverBinding() == LambdaMetafactorySupport.ReceiverBinding.FIRST_PARAMETER) {
                 arguments.add(parameterExpression(descriptor.parameterTypes().getFirst(), "arg0"));
+                exactArgumentDescriptors.add(parameterDescriptors(plan.instantiatedMethodDescriptor()).getFirst());
                 parameterStart = 1;
             }
         }
@@ -249,13 +253,47 @@ public final class BytecodeToIR {
                 plan.captureDescriptors().get(index),
                 IrExpression.objectLocal("self")
             ));
+            exactArgumentDescriptors.add(plan.captureDescriptors().get(index));
         }
         for (int index = parameterStart; index < descriptor.parameterTypes().size(); index++) {
             arguments.add(parameterExpression(descriptor.parameterTypes().get(index), "arg" + index));
+            exactArgumentDescriptors.add(parameterDescriptors(plan.instantiatedMethodDescriptor()).get(index));
+        }
+
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final Optional<IrExpression> jdkBridgeResult = lowerJdkLambdaBridge(plan, arguments, exactArgumentDescriptors, descriptor.returnType());
+        if (jdkBridgeResult.isPresent()) {
+            final IrExpression result = jdkBridgeResult.orElseThrow();
+            final IrType returnType = descriptor.returnType();
+            if (returnType == IrType.VOID) {
+                instructions.add(IrInstruction.callStaticVoid(result.value(), result.arguments()));
+                instructions.add(IrInstruction.returnVoid());
+            } else if (returnType == IrType.INT) {
+                instructions.add(IrInstruction.returnInt(result));
+            } else if (returnType == IrType.LONG) {
+                instructions.add(IrInstruction.returnLong(result));
+            } else if (returnType == IrType.FLOAT) {
+                instructions.add(IrInstruction.returnFloat(result));
+            } else if (returnType == IrType.DOUBLE) {
+                instructions.add(IrInstruction.returnDouble(result));
+            } else if (returnType == IrType.OBJECT) {
+                instructions.add(IrInstruction.returnObject(result));
+            } else {
+                throw new IllegalStateException("unsupported lambda return type: " + returnType);
+            }
+            return new IrFunction(
+                plan.syntheticOwner(),
+                plan.methodName(),
+                plan.methodDescriptor(),
+                symbol(plan.wrapperEntryPoint()),
+                descriptor.returnType(),
+                List.copyOf(parameters),
+                List.of(),
+                List.copyOf(instructions)
+            );
         }
 
         final String targetSymbol = lambdaImplementationSymbol(classes, dispatches, plan);
-        final List<IrInstruction> instructions = new ArrayList<>();
         final IrType returnType = descriptor.returnType();
         if (returnType == IrType.VOID) {
             instructions.add(IrInstruction.callStaticVoid(targetSymbol, arguments));
@@ -357,6 +395,308 @@ public final class BytecodeToIR {
             return IrExpression.objectLocal(name);
         }
         throw new IllegalStateException("void parameter is invalid");
+    }
+
+    private static Optional<IrExpression> lowerJdkLambdaBridge(
+        final LambdaMetafactorySupport.LambdaClosurePlan plan,
+        final List<IrExpression> arguments,
+        final List<String> exactArgumentDescriptors,
+        final IrType erasedReturnType
+    ) {
+        final MethodRef target = plan.implementationTarget();
+        if (!JdkCallSupport.isSupported(target) || JdkCallSupport.isSupportedClosedWorldDispatchCall(target)) {
+            return Optional.empty();
+        }
+        final List<String> implementationParameters = parameterDescriptors(target.descriptor());
+        final List<IrExpression> implementationArguments = new ArrayList<>();
+        int implementationStart = 0;
+        if (plan.implementationReferenceKind() == 5 || plan.implementationReferenceKind() == 9) {
+            implementationArguments.add(arguments.getFirst());
+            implementationStart = 1;
+        }
+        for (int index = 0; index < implementationParameters.size(); index++) {
+            implementationArguments.add(adaptBridgeArgument(
+                exactArgumentDescriptors.get(index + implementationStart),
+                arguments.get(index + implementationStart),
+                implementationParameters.get(index)
+            ));
+        }
+        final IrExpression implementationResult = implementationBridgeCall(target, implementationArguments);
+        if (implementationResult.type() == IrType.VOID) {
+            return Optional.of(implementationResult);
+        }
+        return Optional.of(adaptBridgeReturn(
+            target,
+            implementationResult,
+            returnDescriptor(target.descriptor()),
+            returnDescriptor(plan.instantiatedMethodDescriptor()),
+            erasedReturnType
+        ));
+    }
+
+    private static IrExpression implementationBridgeCall(final MethodRef target, final List<IrExpression> arguments) {
+        if ("java/io/PrintStream".equals(target.owner()) && "println".equals(target.name()) && "()V".equals(target.descriptor())) {
+            return new IrExpression(IrExpression.Kind.CALL, IrType.VOID, "javan_printstream_println_object", List.of(arguments.getFirst(), IrExpression.stringLiteral("")));
+        }
+        if ("java/io/PrintStream".equals(target.owner()) && "println".equals(target.name()) && "(Ljava/lang/String;)V".equals(target.descriptor())) {
+            return new IrExpression(IrExpression.Kind.CALL, IrType.VOID, "javan_printstream_println_object", arguments);
+        }
+        if ("java/io/PrintStream".equals(target.owner()) && "println".equals(target.name()) && "(Ljava/lang/Object;)V".equals(target.descriptor())) {
+            return new IrExpression(IrExpression.Kind.CALL, IrType.VOID, "javan_printstream_println_object", arguments);
+        }
+        if ("java/io/PrintStream".equals(target.owner()) && "print".equals(target.name()) && "(Ljava/lang/String;)V".equals(target.descriptor())) {
+            return new IrExpression(IrExpression.Kind.CALL, IrType.VOID, "javan_printstream_print_object", arguments);
+        }
+        if ("java/io/PrintStream".equals(target.owner()) && "print".equals(target.name()) && "(Ljava/lang/Object;)V".equals(target.descriptor())) {
+            return new IrExpression(IrExpression.Kind.CALL, IrType.VOID, "javan_printstream_print_object", arguments);
+        }
+        if ("java/lang/Integer".equals(target.owner()) && "valueOf".equals(target.name()) && "(I)Ljava/lang/Integer;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_integer_value_of", arguments);
+        }
+        if ("java/lang/Integer".equals(target.owner()) && "intValue".equals(target.name()) && "()I".equals(target.descriptor())) {
+            return IrExpression.intCall("javan_integer_int_value", arguments);
+        }
+        if ("java/lang/Long".equals(target.owner()) && "valueOf".equals(target.name()) && "(J)Ljava/lang/Long;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_long_value_of", arguments);
+        }
+        if ("java/lang/Long".equals(target.owner()) && "longValue".equals(target.name()) && "()J".equals(target.descriptor())) {
+            return IrExpression.longCall("javan_long_long_value", arguments);
+        }
+        if ("java/lang/Float".equals(target.owner()) && "valueOf".equals(target.name()) && "(F)Ljava/lang/Float;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_float_value_of", arguments);
+        }
+        if ("java/lang/Float".equals(target.owner()) && "floatValue".equals(target.name()) && "()F".equals(target.descriptor())) {
+            return IrExpression.floatCall("javan_float_float_value", arguments);
+        }
+        if ("java/lang/Double".equals(target.owner()) && "valueOf".equals(target.name()) && "(D)Ljava/lang/Double;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_double_value_of", arguments);
+        }
+        if ("java/lang/Double".equals(target.owner()) && "doubleValue".equals(target.name()) && "()D".equals(target.descriptor())) {
+            return IrExpression.doubleCall("javan_double_double_value", arguments);
+        }
+        if ("java/lang/Boolean".equals(target.owner()) && "valueOf".equals(target.name()) && "(Z)Ljava/lang/Boolean;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_boolean_value_of", arguments);
+        }
+        if ("java/lang/Boolean".equals(target.owner()) && "booleanValue".equals(target.name()) && "()Z".equals(target.descriptor())) {
+            return IrExpression.intCall("javan_boolean_boolean_value", arguments);
+        }
+        if ("java/lang/Character".equals(target.owner()) && "valueOf".equals(target.name()) && "(C)Ljava/lang/Character;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_character_value_of", arguments);
+        }
+        if ("java/lang/Character".equals(target.owner()) && "charValue".equals(target.name()) && "()C".equals(target.descriptor())) {
+            return IrExpression.intCall("javan_character_char_value", arguments);
+        }
+        if ("java/lang/Number".equals(target.owner()) && "intValue".equals(target.name()) && "()I".equals(target.descriptor())) {
+            return IrExpression.intCall("javan_number_int_value", arguments);
+        }
+        if ("java/time/ZoneId".equals(target.owner()) && "systemDefault".equals(target.name()) && "()Ljava/time/ZoneId;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_zone_id_system_default", arguments);
+        }
+        if ("java/time/Instant".equals(target.owner()) && "ofEpochMilli".equals(target.name()) && "(J)Ljava/time/Instant;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_instant_of_epoch_millis", arguments);
+        }
+        if ("java/time/Instant".equals(target.owner()) && "toEpochMilli".equals(target.name()) && "()J".equals(target.descriptor())) {
+            return IrExpression.longCall("javan_instant_to_epoch_millis", arguments);
+        }
+        if ("java/time/Instant".equals(target.owner()) && "atZone".equals(target.name()) && "(Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_instant_at_zone", arguments);
+        }
+        if ("java/time/LocalDate".equals(target.owner()) && "ofEpochDay".equals(target.name()) && "(J)Ljava/time/LocalDate;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_local_date_of_epoch_day", arguments);
+        }
+        if ("java/time/LocalDate".equals(target.owner()) && "atStartOfDay".equals(target.name()) && "()Ljava/time/LocalDateTime;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_local_date_at_start_of_day", arguments);
+        }
+        if ("java/time/LocalDate".equals(target.owner()) && "atStartOfDay".equals(target.name()) && "(Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_local_date_at_start_of_day_zone", arguments);
+        }
+        if ("java/time/LocalDateTime".equals(target.owner()) && "ofInstant".equals(target.name()) && "(Ljava/time/Instant;Ljava/time/ZoneId;)Ljava/time/LocalDateTime;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_local_date_time_of_instant", arguments);
+        }
+        if ("java/time/LocalDateTime".equals(target.owner()) && "atZone".equals(target.name()) && "(Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_local_date_time_at_zone", arguments);
+        }
+        if ("java/time/LocalDateTime".equals(target.owner()) && "toLocalDate".equals(target.name()) && "()Ljava/time/LocalDate;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_local_date_time_to_local_date", arguments);
+        }
+        if ("java/time/LocalDateTime".equals(target.owner()) && "toLocalTime".equals(target.name()) && "()Ljava/time/LocalTime;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_local_date_time_to_local_time", arguments);
+        }
+        if ("java/time/ZonedDateTime".equals(target.owner()) && "toInstant".equals(target.name()) && "()Ljava/time/Instant;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_zoned_date_time_to_instant", arguments);
+        }
+        if ("java/time/ZonedDateTime".equals(target.owner()) && "toLocalDate".equals(target.name()) && "()Ljava/time/LocalDate;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_zoned_date_time_to_local_date", arguments);
+        }
+        if ("java/time/ZonedDateTime".equals(target.owner()) && "toLocalTime".equals(target.name()) && "()Ljava/time/LocalTime;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_zoned_date_time_to_local_time", arguments);
+        }
+        if ("java/time/ZonedDateTime".equals(target.owner()) && "toLocalDateTime".equals(target.name()) && "()Ljava/time/LocalDateTime;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_zoned_date_time_to_local_date_time", arguments);
+        }
+        if ("java/util/Date".equals(target.owner()) && "from".equals(target.name()) && "(Ljava/time/Instant;)Ljava/util/Date;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_date_from_instant", arguments);
+        }
+        if ("java/util/Date".equals(target.owner()) && "toInstant".equals(target.name()) && "()Ljava/time/Instant;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_date_to_instant", arguments);
+        }
+        if ("java/util/Date".equals(target.owner()) && "getTime".equals(target.name()) && "()J".equals(target.descriptor())) {
+            return IrExpression.longCall("javan_date_get_time", arguments);
+        }
+        if ("java/util/concurrent/atomic/AtomicBoolean".equals(target.owner()) && "get".equals(target.name()) && "()Z".equals(target.descriptor())) {
+            return IrExpression.intCall("javan_atomic_boolean_get", arguments);
+        }
+        if ("java/util/concurrent/atomic/AtomicInteger".equals(target.owner()) && "get".equals(target.name()) && "()I".equals(target.descriptor())) {
+            return IrExpression.intCall("javan_atomic_integer_get", arguments);
+        }
+        if ("java/util/concurrent/atomic/AtomicReference".equals(target.owner()) && "get".equals(target.name()) && "()Ljava/lang/Object;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_atomic_reference_get", arguments);
+        }
+        if ("java/util/concurrent/atomic/AtomicReference".equals(target.owner())
+            && "set".equals(target.name())
+            && "(Ljava/lang/Object;)V".equals(target.descriptor())) {
+            return new IrExpression(IrExpression.Kind.CALL, IrType.VOID, "javan_atomic_reference_set", arguments);
+        }
+        if ("java/nio/file/Path".equals(target.owner()) && "toString".equals(target.name()) && "()Ljava/lang/String;".equals(target.descriptor())) {
+            return arguments.getFirst();
+        }
+        throw new IllegalStateException("unsupported JDK lambda bridge target: " + target.display());
+    }
+
+    private static IrExpression adaptBridgeArgument(
+        final String sourceDescriptor,
+        final IrExpression sourceExpression,
+        final String implementationDescriptor
+    ) {
+        if (sourceDescriptor.equals(implementationDescriptor)) {
+            return sourceExpression;
+        }
+        if (isObjectDescriptor(sourceDescriptor) && isObjectDescriptor(implementationDescriptor)) {
+            return sourceExpression;
+        }
+        if (!isPrimitiveDescriptor(implementationDescriptor)) {
+            throw new IllegalStateException("unsupported lambda bridge argument adaptation: " + sourceDescriptor + " -> " + implementationDescriptor);
+        }
+        return switch (implementationDescriptor.charAt(0)) {
+            case 'I' -> intUnboxExpression(sourceDescriptor, sourceExpression);
+            case 'J' -> longUnboxExpression(sourceDescriptor, sourceExpression);
+            case 'F' -> floatUnboxExpression(sourceDescriptor, sourceExpression);
+            case 'D' -> doubleUnboxExpression(sourceDescriptor, sourceExpression);
+            case 'Z' -> booleanUnboxExpression(sourceDescriptor, sourceExpression);
+            case 'C' -> charUnboxExpression(sourceDescriptor, sourceExpression);
+            default -> throw new IllegalStateException("unsupported lambda bridge primitive parameter: " + implementationDescriptor);
+        };
+    }
+
+    private static IrExpression adaptBridgeReturn(
+        final MethodRef target,
+        final IrExpression implementationResult,
+        final String implementationReturnDescriptor,
+        final String instantiatedReturnDescriptor,
+        final IrType erasedReturnType
+    ) {
+        if (erasedReturnType == IrType.OBJECT) {
+            if (isPrimitiveDescriptor(implementationReturnDescriptor)) {
+                return boxPrimitiveExpression(instantiatedReturnDescriptor, implementationReturnDescriptor.charAt(0), implementationResult);
+            }
+            return implementationResult;
+        }
+        if (erasedReturnType == implementationResult.type()) {
+            return implementationResult;
+        }
+        throw new IllegalStateException("unsupported lambda bridge return adaptation for " + target.display());
+    }
+
+    private static IrExpression boxPrimitiveExpression(
+        final String targetDescriptor,
+        final char primitive,
+        final IrExpression primitiveExpression
+    ) {
+        return switch (primitive) {
+            case 'I' -> IrExpression.objectCall("javan_integer_value_of", List.of(primitiveExpression));
+            case 'J' -> IrExpression.objectCall("javan_long_value_of", List.of(primitiveExpression));
+            case 'F' -> IrExpression.objectCall("javan_float_value_of", List.of(primitiveExpression));
+            case 'D' -> IrExpression.objectCall("javan_double_value_of", List.of(primitiveExpression));
+            case 'Z' -> IrExpression.objectCall("javan_boolean_value_of", List.of(primitiveExpression));
+            case 'C' -> IrExpression.objectCall("javan_character_value_of", List.of(primitiveExpression));
+            default -> throw new IllegalStateException("unsupported lambda bridge boxing target: " + targetDescriptor);
+        };
+    }
+
+    private static IrExpression intUnboxExpression(final String sourceDescriptor, final IrExpression sourceExpression) {
+        if ("Ljava/lang/Integer;".equals(sourceDescriptor)) {
+            return IrExpression.intCall("javan_integer_int_value", List.of(sourceExpression));
+        }
+        if ("Ljava/lang/Number;".equals(sourceDescriptor)) {
+            return IrExpression.intCall("javan_number_int_value", List.of(sourceExpression));
+        }
+        throw new IllegalStateException("unsupported lambda bridge int source: " + sourceDescriptor);
+    }
+
+    private static IrExpression longUnboxExpression(final String sourceDescriptor, final IrExpression sourceExpression) {
+        if ("Ljava/lang/Long;".equals(sourceDescriptor)) {
+            return IrExpression.longCall("javan_long_long_value", List.of(sourceExpression));
+        }
+        throw new IllegalStateException("unsupported lambda bridge long source: " + sourceDescriptor);
+    }
+
+    private static IrExpression floatUnboxExpression(final String sourceDescriptor, final IrExpression sourceExpression) {
+        if ("Ljava/lang/Float;".equals(sourceDescriptor)) {
+            return IrExpression.floatCall("javan_float_float_value", List.of(sourceExpression));
+        }
+        throw new IllegalStateException("unsupported lambda bridge float source: " + sourceDescriptor);
+    }
+
+    private static IrExpression doubleUnboxExpression(final String sourceDescriptor, final IrExpression sourceExpression) {
+        if ("Ljava/lang/Double;".equals(sourceDescriptor)) {
+            return IrExpression.doubleCall("javan_double_double_value", List.of(sourceExpression));
+        }
+        throw new IllegalStateException("unsupported lambda bridge double source: " + sourceDescriptor);
+    }
+
+    private static IrExpression booleanUnboxExpression(final String sourceDescriptor, final IrExpression sourceExpression) {
+        if ("Ljava/lang/Boolean;".equals(sourceDescriptor)) {
+            return IrExpression.intCall("javan_boolean_boolean_value", List.of(sourceExpression));
+        }
+        throw new IllegalStateException("unsupported lambda bridge boolean source: " + sourceDescriptor);
+    }
+
+    private static IrExpression charUnboxExpression(final String sourceDescriptor, final IrExpression sourceExpression) {
+        if ("Ljava/lang/Character;".equals(sourceDescriptor)) {
+            return IrExpression.intCall("javan_character_char_value", List.of(sourceExpression));
+        }
+        throw new IllegalStateException("unsupported lambda bridge char source: " + sourceDescriptor);
+    }
+
+    private static List<String> parameterDescriptors(final String descriptor) {
+        final List<String> result = new ArrayList<>();
+        int index = descriptor.indexOf('(') + 1;
+        while (index > 0 && index < descriptor.length() && descriptor.charAt(index) != ')') {
+            final int start = index;
+            while (descriptor.charAt(index) == '[') {
+                index++;
+            }
+            if (descriptor.charAt(index) == 'L') {
+                index = descriptor.indexOf(';', index) + 1;
+            } else {
+                index++;
+            }
+            result.add(descriptor.substring(start, index));
+        }
+        return List.copyOf(result);
+    }
+
+    private static String returnDescriptor(final String descriptor) {
+        final int end = descriptor.indexOf(')');
+        return descriptor.substring(end + 1);
+    }
+
+    private static boolean isPrimitiveDescriptor(final String descriptor) {
+        return descriptor.length() == 1 && "BCDFIJSZV".indexOf(descriptor.charAt(0)) >= 0;
+    }
+
+    private static boolean isObjectDescriptor(final String descriptor) {
+        return descriptor.startsWith("L") || descriptor.startsWith("[");
     }
 
 

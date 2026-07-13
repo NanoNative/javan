@@ -7759,6 +7759,120 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void integerValueOfMethodReferenceBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("integer-value-of-method-reference");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Function<Integer, Integer> function = Integer::valueOf;
+                    System.out.println(function.apply(Integer.valueOf(7)).intValue());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/integer-value-of-method-reference").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("7\n");
+    }
+
+    @Test
+    void numberIntValueMethodReferenceBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("number-int-value-method-reference");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Function<Number, Integer> function = Number::intValue;
+                    System.out.println(function.apply(Long.valueOf(9L)).intValue());
+                    System.out.println(function.apply(Double.valueOf(-2.5d)).intValue());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/number-int-value-method-reference").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("9\n-2\n");
+    }
+
+    @Test
+    void printStreamPrintlnRunnableMethodReferenceBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("printstream-println-runnable-method-reference");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Runnable runnable = System.out::println;
+                    runnable.run();
+                    runnable.run();
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/printstream-println-runnable-method-reference").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("\n\n");
+    }
+
+    @Test
+    void printStreamConsumerMethodReferencesBuildAndMatchJvmOutput() throws Exception {
+        final Path project = project("printstream-consumer-method-references");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Consumer;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Consumer<String> print = System.out::print;
+                    final Consumer<String> println = System.out::println;
+                    print.accept("alpha");
+                    println.accept("beta");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/printstream-consumer-method-references").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("alphabeta\n");
+    }
+
+    @Test
     void tryWithResourcesSuppressedBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("try-with-resources-suppressed");
         writeJava(project, "com.acme.Main", """
@@ -8183,6 +8297,168 @@ final class CliIntegrationTest {
 
         assertThat(run.exitCode()).isEqualTo(2);
         assertThat(run.stderr()).contains("AtomicInteger.updateAndGet");
+        assertThat(run.stderr()).contains("unsupported reachable JDK call");
+    }
+
+    @Test
+    void atomicReferenceDefaultGetBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("atomic-reference-default-get");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.atomic.AtomicReference;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new AtomicReference<>().get());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/atomic-reference-default-get").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("null\n");
+    }
+
+    @Test
+    void atomicReferenceValueConstructorGetBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("atomic-reference-value-get");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.atomic.AtomicReference;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new AtomicReference<>("hello").get());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/atomic-reference-value-get").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("hello\n");
+    }
+
+    @Test
+    void atomicReferenceSetBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("atomic-reference-set");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.atomic.AtomicReference;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final AtomicReference<String> value = new AtomicReference<>();
+                    value.set("world");
+                    System.out.println(value.get());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/atomic-reference-set").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("world\n");
+    }
+
+    @Test
+    void atomicReferenceSetMethodReferenceBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("atomic-reference-set-method-reference");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.atomic.AtomicReference;
+            import java.util.function.Consumer;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final AtomicReference<String> value = new AtomicReference<>();
+                    final Consumer<String> writer = value::set;
+                    writer.accept("bridge");
+                    System.out.println(value.get());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/atomic-reference-set-method-reference").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("bridge\n");
+    }
+
+    @Test
+    void atomicReferenceCompareAndSetFailsClearlyAtBuildTime() throws Exception {
+        final Path project = project("atomic-reference-compare-and-set-reject");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.atomic.AtomicReference;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final AtomicReference<String> value = new AtomicReference<>("a");
+                    System.out.println(value.compareAndSet("a", "b"));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains("AtomicReference.compareAndSet");
+        assertThat(run.stderr()).contains("unsupported reachable JDK call");
+    }
+
+    @Test
+    void objectsEqualsFailsClearlyAtBuildTime() throws Exception {
+        final Path project = project("objects-equals-reject");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Objects;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Objects.equals(Integer.valueOf(200), Integer.valueOf(200)));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains("Objects.equals");
         assertThat(run.stderr()).contains("unsupported reachable JDK call");
     }
 
@@ -8804,7 +9080,10 @@ final class CliIntegrationTest {
             "java/util/Collections.emptyList()Ljava/util/List;",
             "java/util/List.stream()Ljava/util/stream/Stream;",
             "java/util/Collection.stream()Ljava/util/stream/Stream;",
-            "java/util/stream/Stream.forEach(Ljava/util/function/Consumer;)V"
+            "java/util/stream/Stream.forEach(Ljava/util/function/Consumer;)V",
+            "java/util/concurrent/atomic/AtomicReference.<init>(Ljava/lang/Object;)V",
+            "java/util/concurrent/atomic/AtomicReference.get()Ljava/lang/Object;",
+            "java/util/concurrent/atomic/AtomicReference.set(Ljava/lang/Object;)V"
         );
         assertThat(diagnostics).doesNotContain(
             "berlin/yuna/typemap/model/FunctionOrNull.applyWithException(Ljava/lang/Object;)Ljava/lang/Object;",

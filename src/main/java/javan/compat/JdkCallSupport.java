@@ -56,7 +56,13 @@ public final class JdkCallSupport {
     };
 
     private static final List<SupportedCall> SUPPORTED_CALLS = List.of(
-        intrinsic("Objects.requireNonNull", "java/util/Objects", "requireNonNull", "(Ljava/lang/Object;)Ljava/lang/Object;", "(Ljava/lang/Object;Ljava/lang/String;)Ljava/lang/Object;"),
+        intrinsic(
+            "Objects.requireNonNull",
+            "java/util/Objects",
+            "requireNonNull",
+            "(Ljava/lang/Object;)Ljava/lang/Object;",
+            "(Ljava/lang/Object;Ljava/lang/String;)Ljava/lang/Object;"
+        ),
         intrinsic("Math.abs", "java/lang/Math", "abs", "(I)I", "(J)J", "(F)F", "(D)D"),
         intrinsic("Math.min", "java/lang/Math", "min", "(II)I", "(JJ)J"),
         intrinsic("Math.max", "java/lang/Math", "max", "(II)I", "(JJ)J"),
@@ -130,6 +136,9 @@ public final class JdkCallSupport {
         runtime("AtomicInteger.getAndIncrement", "java/util/concurrent/atomic/AtomicInteger", "getAndIncrement", "()I"),
         runtime("AtomicInteger.incrementAndGet", "java/util/concurrent/atomic/AtomicInteger", "incrementAndGet", "()I"),
         runtime("AtomicInteger.decrementAndGet", "java/util/concurrent/atomic/AtomicInteger", "decrementAndGet", "()I"),
+        runtime("AtomicReference.<init>", "java/util/concurrent/atomic/AtomicReference", "<init>", "()V", "(Ljava/lang/Object;)V"),
+        runtime("AtomicReference.get", "java/util/concurrent/atomic/AtomicReference", "get", "()Ljava/lang/Object;"),
+        runtime("AtomicReference.set", "java/util/concurrent/atomic/AtomicReference", "set", "(Ljava/lang/Object;)V"),
         runtime("Object.getClass", "java/lang/Object", "getClass", "()Ljava/lang/Class;"),
         runtime("Class.getName", "java/lang/Class", "getName", "()Ljava/lang/String;"),
         runtime("Class.getSimpleName", "java/lang/Class", "getSimpleName", "()Ljava/lang/String;"),
@@ -1096,6 +1105,9 @@ public final class JdkCallSupport {
             return List.of("threads");
         }
         if ("java/util/concurrent/atomic/AtomicInteger".equals(owner)) {
+            return List.of("threads");
+        }
+        if ("java/util/concurrent/atomic/AtomicReference".equals(owner)) {
             return List.of("threads");
         }
         if ("java/util/concurrent/ThreadFactory".equals(owner)) {
