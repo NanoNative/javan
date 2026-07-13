@@ -25,6 +25,24 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksOptionalOrAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef(
+            "java/util/Optional",
+            "or",
+            "(Ljava/util/function/Supplier;)Ljava/util/Optional;"
+        ))).isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksOptionalFlatMapAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef(
+            "java/util/Optional",
+            "flatMap",
+            "(Ljava/util/function/Function;)Ljava/util/Optional;"
+        ))).isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksForbiddenDynamicApiAsExplicitRejected() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Class", "forName", "(Ljava/lang/String;)Ljava/lang/Class;")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);

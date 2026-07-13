@@ -2500,6 +2500,54 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_optional_or_else", List.of(receiver, arguments.getFirst()))));
             return true;
         }
+        if ("or".equals(name) && "(Ljava/util/function/Supplier;)Ljava/util/Optional;".equals(descriptor)) {
+            final IrExpression supplier = arguments.getFirst();
+            instructions.add(IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(receiver)));
+            instructions.add(IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(supplier)));
+            final String optionalLocal = declareLocal(localDeclarations, IrType.OBJECT);
+            instructions.add(IrInstruction.assignObject(optionalLocal, receiver));
+            final String resultLocal = declareLocal(localDeclarations, IrType.OBJECT);
+            instructions.add(IrInstruction.assignObject(resultLocal, IrExpression.objectLocal(optionalLocal)));
+            final String presentLocal = declareLocal(localDeclarations, IrType.INT);
+            instructions.add(IrInstruction.assignInt(
+                presentLocal,
+                IrExpression.intCall("javan_optional_is_present", List.of(IrExpression.objectLocal(optionalLocal)))
+            ));
+            final String presentLabel = "label_optional_or_present_" + instruction.offset() + "_" + localDeclarations.size();
+            final String emptyLabel = "label_optional_or_empty_" + instruction.offset() + "_" + localDeclarations.size();
+            final String doneLabel = "label_optional_or_done_" + instruction.offset() + "_" + localDeclarations.size();
+            instructions.add(IrInstruction.branchIf(
+                presentLabel,
+                IrExpression.intComparison("!=", IrExpression.intLocal(presentLocal), IrExpression.intLiteral(0))
+            ));
+            instructions.add(IrInstruction.jump(emptyLabel));
+            instructions.add(IrInstruction.label(presentLabel));
+            instructions.add(IrInstruction.jump(doneLabel));
+            instructions.add(IrInstruction.label(emptyLabel));
+            appendInterfaceObjectCall(
+                classes,
+                classFile,
+                method,
+                instruction,
+                dispatches,
+                new MethodRef("java/util/function/Supplier", "get", "()Ljava/lang/Object;"),
+                List.of(supplier),
+                instructions,
+                resultLocal
+            );
+            instructions.add(IrInstruction.callStaticVoid(
+                "javan_objects_require_non_null",
+                List.of(IrExpression.objectLocal(resultLocal))
+            ));
+            final String validatedLocal = declareLocal(localDeclarations, IrType.INT);
+            instructions.add(IrInstruction.assignInt(
+                validatedLocal,
+                IrExpression.intCall("javan_optional_is_present", List.of(IrExpression.objectLocal(resultLocal)))
+            ));
+            instructions.add(IrInstruction.label(doneLabel));
+            stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
+            return true;
+        }
         if ("orElseGet".equals(name) && "(Ljava/util/function/Supplier;)Ljava/lang/Object;".equals(descriptor)) {
             final IrExpression supplier = arguments.getFirst();
             instructions.add(IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(receiver)));
@@ -2672,6 +2720,56 @@ final class BytecodeToIRInvokeSupport {
             instructions.add(IrInstruction.assignObject(
                 resultLocal,
                 IrExpression.objectCall("javan_optional_of_nullable", List.of(IrExpression.objectLocal(mappedLocal)))
+            ));
+            instructions.add(IrInstruction.label(doneLabel));
+            stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
+            return true;
+        }
+        if ("flatMap".equals(name) && "(Ljava/util/function/Function;)Ljava/util/Optional;".equals(descriptor)) {
+            final IrExpression function = arguments.getFirst();
+            instructions.add(IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(receiver)));
+            instructions.add(IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(function)));
+            final String optionalLocal = declareLocal(localDeclarations, IrType.OBJECT);
+            instructions.add(IrInstruction.assignObject(optionalLocal, receiver));
+            final String resultLocal = declareLocal(localDeclarations, IrType.OBJECT);
+            instructions.add(IrInstruction.assignObject(resultLocal, IrExpression.objectCall("javan_optional_empty", List.of())));
+            final String presentLocal = declareLocal(localDeclarations, IrType.INT);
+            instructions.add(IrInstruction.assignInt(
+                presentLocal,
+                IrExpression.intCall("javan_optional_is_present", List.of(IrExpression.objectLocal(optionalLocal)))
+            ));
+            final String applyLabel = "label_optional_flat_map_apply_" + instruction.offset() + "_" + localDeclarations.size();
+            final String doneLabel = "label_optional_flat_map_done_" + instruction.offset() + "_" + localDeclarations.size();
+            instructions.add(IrInstruction.branchIf(
+                applyLabel,
+                IrExpression.intComparison("!=", IrExpression.intLocal(presentLocal), IrExpression.intLiteral(0))
+            ));
+            instructions.add(IrInstruction.jump(doneLabel));
+            instructions.add(IrInstruction.label(applyLabel));
+            final String valueLocal = declareLocal(localDeclarations, IrType.OBJECT);
+            instructions.add(IrInstruction.assignObject(
+                valueLocal,
+                IrExpression.objectCall("javan_optional_or_else_throw", List.of(IrExpression.objectLocal(optionalLocal)))
+            ));
+            appendInterfaceObjectCall(
+                classes,
+                classFile,
+                method,
+                instruction,
+                dispatches,
+                new MethodRef("java/util/function/Function", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;"),
+                List.of(function, IrExpression.objectLocal(valueLocal)),
+                instructions,
+                resultLocal
+            );
+            instructions.add(IrInstruction.callStaticVoid(
+                "javan_objects_require_non_null",
+                List.of(IrExpression.objectLocal(resultLocal))
+            ));
+            final String validatedLocal = declareLocal(localDeclarations, IrType.INT);
+            instructions.add(IrInstruction.assignInt(
+                validatedLocal,
+                IrExpression.intCall("javan_optional_is_present", List.of(IrExpression.objectLocal(resultLocal)))
             ));
             instructions.add(IrInstruction.label(doneLabel));
             stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));

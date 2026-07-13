@@ -7053,6 +7053,58 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void optionalOrPresentBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-or-present");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Optional.of("world").or(() -> Optional.of("miss")).orElse("fallback"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-or-present").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("world\n");
+    }
+
+    @Test
+    void optionalOrEmptyBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-or-empty");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Optional.<String>empty().or(() -> Optional.of("world")).orElse("fallback"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-or-empty").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("world\n");
+    }
+
+    @Test
     void consumerInterfaceLambdaBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("consumer-interface-lambda");
         writeJava(project, "com.acme.Main", """
@@ -7107,6 +7159,32 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void optionalFlatMapLambdaBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-flat-map-lambda");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Optional.of("world").flatMap(value -> Optional.of(value + "!")).orElse("miss"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-flat-map-lambda").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("world!\n");
+    }
+
+    @Test
     void optionalMapLambdaBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("optional-map-lambda");
         writeJava(project, "com.acme.Main", """
@@ -7130,6 +7208,32 @@ final class CliIntegrationTest {
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/optional-map-lambda").toString())).stdout()).isEqualTo(jvmOutput);
         assertThat(jvmOutput).isEqualTo("world!\n");
+    }
+
+    @Test
+    void optionalFlatMapEmptyResultBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-flat-map-empty-result");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Optional.of("world").flatMap(value -> Optional.<String>empty()).orElse("miss"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-flat-map-empty-result").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("miss\n");
     }
 
     @Test
@@ -7157,6 +7261,36 @@ final class CliIntegrationTest {
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/function-interface-lambda").toString())).stdout()).isEqualTo(jvmOutput);
         assertThat(jvmOutput).isEqualTo("world!\n");
+    }
+
+    @Test
+    void optionalFlatMapNullResultFailsLikeJvm() throws Exception {
+        final Path project = project("optional-flat-map-null-result");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Optional.of("world").flatMap(value -> (Optional<String>) null).orElse("miss"));
+                }
+            }
+            """);
+
+        final CliRun build = run(tempDir, "build", project.toString());
+
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(
+            project,
+            List.of(project.resolve(".javan/bin/optional-flat-map-null-result").toString()),
+            Duration.ofSeconds(30)
+        );
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("[JAVAN-RUNTIME-PANIC]", "detail: null object");
     }
 
     @Test
@@ -9090,8 +9224,10 @@ final class CliIntegrationTest {
             "org/nanonative/nano/helper/ExRunnable.run()V",
             "berlin/yuna/typemap/model/Type.isPresent([Ljava/lang/Object;)Z",
             "berlin/yuna/typemap/model/Type.or(Ljava/util/function/Supplier;[Ljava/lang/Object;)Lberlin/yuna/typemap/model/Type;",
+            "java/util/Optional.or(Ljava/util/function/Supplier;)Ljava/util/Optional;",
             "java/util/Optional.filter(Ljava/util/function/Predicate;)Ljava/util/Optional;",
             "java/util/Optional.ifPresent(Ljava/util/function/Consumer;)V",
+            "java/util/Optional.flatMap(Ljava/util/function/Function;)Ljava/util/Optional;",
             "java/util/Optional.map(Ljava/util/function/Function;)Ljava/util/Optional;",
             "java/util/Optional.ifPresentOrElse(Ljava/util/function/Consumer;Ljava/lang/Runnable;)V",
             "java/util/Optional.orElseGet(Ljava/util/function/Supplier;)Ljava/lang/Object;",

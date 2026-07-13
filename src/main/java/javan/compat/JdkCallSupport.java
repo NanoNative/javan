@@ -494,11 +494,13 @@ public final class JdkCallSupport {
         runtime("Optional.isEmpty", "java/util/Optional", "isEmpty", "()Z"),
         runtime("Optional.get", "java/util/Optional", "get", "()Ljava/lang/Object;"),
         runtime("Optional.orElse", "java/util/Optional", "orElse", "(Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("Optional.or", "java/util/Optional", "or", "(Ljava/util/function/Supplier;)Ljava/util/Optional;"),
         runtime("Optional.orElseGet", "java/util/Optional", "orElseGet", "(Ljava/util/function/Supplier;)Ljava/lang/Object;"),
         runtime("Optional.orElseThrow", "java/util/Optional", "orElseThrow", "()Ljava/lang/Object;"),
         runtime("Optional.filter", "java/util/Optional", "filter", "(Ljava/util/function/Predicate;)Ljava/util/Optional;"),
         runtime("Optional.ifPresent", "java/util/Optional", "ifPresent", "(Ljava/util/function/Consumer;)V"),
         runtime("Optional.map", "java/util/Optional", "map", "(Ljava/util/function/Function;)Ljava/util/Optional;"),
+        runtime("Optional.flatMap", "java/util/Optional", "flatMap", "(Ljava/util/function/Function;)Ljava/util/Optional;"),
         runtime("Optional.ifPresentOrElse", "java/util/Optional", "ifPresentOrElse", "(Ljava/util/function/Consumer;Ljava/lang/Runnable;)V")
     );
 
@@ -681,6 +683,9 @@ public final class JdkCallSupport {
             }
         }
         if ("java/util/Optional".equals(owner)) {
+            if ("or".equals(name) && "(Ljava/util/function/Supplier;)Ljava/util/Optional;".equals(descriptor)) {
+                return List.of(new MethodRef("java/util/function/Supplier", "get", "()Ljava/lang/Object;"));
+            }
             if ("orElseGet".equals(name) && "(Ljava/util/function/Supplier;)Ljava/lang/Object;".equals(descriptor)) {
                 return List.of(new MethodRef("java/util/function/Supplier", "get", "()Ljava/lang/Object;"));
             }
@@ -691,6 +696,9 @@ public final class JdkCallSupport {
                 return List.of(new MethodRef("java/util/function/Consumer", "accept", "(Ljava/lang/Object;)V"));
             }
             if ("map".equals(name) && "(Ljava/util/function/Function;)Ljava/util/Optional;".equals(descriptor)) {
+                return List.of(new MethodRef("java/util/function/Function", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;"));
+            }
+            if ("flatMap".equals(name) && "(Ljava/util/function/Function;)Ljava/util/Optional;".equals(descriptor)) {
                 return List.of(new MethodRef("java/util/function/Function", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;"));
             }
             if ("ifPresentOrElse".equals(name) && "(Ljava/util/function/Consumer;Ljava/lang/Runnable;)V".equals(descriptor)) {

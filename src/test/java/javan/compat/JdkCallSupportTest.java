@@ -307,6 +307,28 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void optionalOrIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Optional",
+            "or",
+            "(Ljava/util/function/Supplier;)Ljava/util/Optional;"
+        ))).isTrue();
+    }
+
+    @Test
+    void optionalOrExposesClosedWorldSupplierDispatchTarget() {
+        assertThat(JdkCallSupport.closedWorldHigherOrderDispatchTargets(new javan.classfile.MethodRef(
+            "java/util/Optional",
+            "or",
+            "(Ljava/util/function/Supplier;)Ljava/util/Optional;"
+        ))).containsExactly(new javan.classfile.MethodRef(
+            "java/util/function/Supplier",
+            "get",
+            "()Ljava/lang/Object;"
+        ));
+    }
+
+    @Test
     void optionalFilterExposesClosedWorldPredicateDispatchTarget() {
         assertThat(JdkCallSupport.closedWorldHigherOrderDispatchTargets(new javan.classfile.MethodRef(
             "java/util/Optional",
@@ -329,6 +351,28 @@ final class JdkCallSupportTest {
             "java/util/function/Consumer",
             "accept",
             "(Ljava/lang/Object;)V"
+        ));
+    }
+
+    @Test
+    void optionalFlatMapIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Optional",
+            "flatMap",
+            "(Ljava/util/function/Function;)Ljava/util/Optional;"
+        ))).isTrue();
+    }
+
+    @Test
+    void optionalFlatMapExposesClosedWorldFunctionDispatchTarget() {
+        assertThat(JdkCallSupport.closedWorldHigherOrderDispatchTargets(new javan.classfile.MethodRef(
+            "java/util/Optional",
+            "flatMap",
+            "(Ljava/util/function/Function;)Ljava/util/Optional;"
+        ))).containsExactly(new javan.classfile.MethodRef(
+            "java/util/function/Function",
+            "apply",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
         ));
     }
 
