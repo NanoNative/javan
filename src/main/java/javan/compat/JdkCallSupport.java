@@ -74,6 +74,21 @@ public final class JdkCallSupport {
         intrinsic("System.getProperty", "java/lang/System", "getProperty", "(Ljava/lang/String;)Ljava/lang/String;", "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;"),
         intrinsic("System.arraycopy", "java/lang/System", "arraycopy", "(Ljava/lang/Object;ILjava/lang/Object;II)V"),
         intrinsic("System.exit", "java/lang/System", "exit", "(I)V"),
+        runtime("Runtime.getRuntime", "java/lang/Runtime", "getRuntime", "()Ljava/lang/Runtime;"),
+        runtime("Runtime.totalMemory", "java/lang/Runtime", "totalMemory", "()J"),
+        runtime("Runtime.freeMemory", "java/lang/Runtime", "freeMemory", "()J"),
+        runtime("Runtime.maxMemory", "java/lang/Runtime", "maxMemory", "()J"),
+        runtime("Runtime.availableProcessors", "java/lang/Runtime", "availableProcessors", "()I"),
+        runtime("ManagementFactory.getThreadMXBean", "java/lang/management/ManagementFactory", "getThreadMXBean", "()Ljava/lang/management/ThreadMXBean;"),
+        runtime("ThreadMXBean.getThreadCount", "java/lang/management/ThreadMXBean", "getThreadCount", "()I"),
+        runtime("ManagementFactory.getRuntimeMXBean", "java/lang/management/ManagementFactory", "getRuntimeMXBean", "()Ljava/lang/management/RuntimeMXBean;"),
+        runtime("RuntimeMXBean.getUptime", "java/lang/management/RuntimeMXBean", "getUptime", "()J"),
+        runtime("RuntimeMXBean.getStartTime", "java/lang/management/RuntimeMXBean", "getStartTime", "()J"),
+        runtime("ManagementFactory.getOperatingSystemMXBean", "java/lang/management/ManagementFactory", "getOperatingSystemMXBean", "()Ljava/lang/management/OperatingSystemMXBean;"),
+        runtime("OperatingSystemMXBean.getSystemLoadAverage", "java/lang/management/OperatingSystemMXBean", "getSystemLoadAverage", "()D"),
+        runtime("OperatingSystemMXBean.getSystemLoadAverage", "com/sun/management/OperatingSystemMXBean", "getSystemLoadAverage", "()D"),
+        runtime("OperatingSystemMXBean.getProcessCpuLoad", "com/sun/management/OperatingSystemMXBean", "getProcessCpuLoad", "()D"),
+        runtime("OperatingSystemMXBean.getCpuLoad", "com/sun/management/OperatingSystemMXBean", "getCpuLoad", "()D"),
         runtime("Thread.<init>", "java/lang/Thread", "<init>", "()V", "(Ljava/lang/Runnable;)V"),
         runtime("Thread.ofVirtual", "java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;"),
         runtime("Thread.startVirtualThread", "java/lang/Thread", "startVirtualThread", "(Ljava/lang/Runnable;)Ljava/lang/Thread;"),
@@ -1104,6 +1119,24 @@ public final class JdkCallSupport {
         }
         if ("java/lang/Math".equals(owner)) {
             return List.of("math");
+        }
+        if ("java/lang/Runtime".equals(owner)) {
+            return List.of("management");
+        }
+        if ("java/lang/management/ManagementFactory".equals(owner)) {
+            return List.of("management");
+        }
+        if ("java/lang/management/ThreadMXBean".equals(owner)) {
+            return List.of("management");
+        }
+        if ("java/lang/management/RuntimeMXBean".equals(owner)) {
+            return List.of("management");
+        }
+        if ("java/lang/management/OperatingSystemMXBean".equals(owner)) {
+            return List.of("management");
+        }
+        if ("com/sun/management/OperatingSystemMXBean".equals(owner)) {
+            return List.of("management");
         }
         if ("java/lang/Thread".equals(owner)) {
             return List.of("threads");

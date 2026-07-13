@@ -6,8 +6,8 @@ This matrix tracks named javan/JDK behavior scenarios. It is not a claim that ev
 
 | Measure | Count |
 | --- | ---: |
-| rows | 109 |
-| pass | 109 |
+| rows | 113 |
+| pass | 113 |
 | scoped | 0 |
 | target | 0 |
 | rejected | 0 |
@@ -126,6 +126,10 @@ Status mapping:
 | `platform-thread-current-thread-start-build-reject` | pass |
 | `platform-thread-current-thread-join-build-reject` | pass |
 | `platform-thread-duplicate-start-build-reject` | pass |
+| `management-runtime-module-rejection` | pass |
+| `management-runtime-memory-processors` | pass |
+| `management-thread-runtime-mxbeans` | pass |
+| `management-operating-system-mxbean` | pass |
 | `network-socket-rejection` | pass |
 | `network-http-rejection` | pass |
 | `network-runtime-feature-reporting` | pass |

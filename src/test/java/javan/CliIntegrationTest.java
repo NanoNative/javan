@@ -1528,6 +1528,117 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void buildRejectsReachableDisabledManagementRuntimeModule() throws Exception {
+        assertBuildRejectsDisabledRuntimeModule("disabled-management-build", "management", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Runtime.getRuntime().availableProcessors());
+                }
+            }
+            """);
+    }
+
+    @Test
+    void runtimeMemoryAndProcessorMetricsBuildAndMatchJvmOutput() throws Exception {
+        final Path project = project("runtime-memory-and-processor-metrics");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Runtime runtime = Runtime.getRuntime();
+                    final long total = runtime.totalMemory();
+                    final long max = runtime.maxMemory();
+                    final long free = runtime.freeMemory();
+                    System.out.println(runtime.availableProcessors() > 0);
+                    System.out.println(total >= 0L);
+                    System.out.println(max >= total);
+                    System.out.println(free >= 0L);
+                    System.out.println(free <= max);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/runtime-memory-and-processor-metrics").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void managementThreadAndRuntimeMxBeansBuildAndMatchJvmOutput() throws Exception {
+        final Path project = project("management-thread-and-runtime-mxbeans");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.lang.management.ManagementFactory;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final var threadBean = ManagementFactory.getThreadMXBean();
+                    final var runtimeBean = ManagementFactory.getRuntimeMXBean();
+                    System.out.println(threadBean.getThreadCount() >= 1);
+                    System.out.println(runtimeBean.getStartTime() > 0L);
+                    System.out.println(runtimeBean.getUptime() >= 0L);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/management-thread-and-runtime-mxbeans").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void managementOperatingSystemMxBeanBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("management-operating-system-mxbean");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.lang.management.ManagementFactory;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final com.sun.management.OperatingSystemMXBean bean =
+                        (com.sun.management.OperatingSystemMXBean) ManagementFactory.getOperatingSystemMXBean();
+                    final double load = bean.getSystemLoadAverage();
+                    final double process = bean.getProcessCpuLoad();
+                    final double cpu = bean.getCpuLoad();
+                    System.out.println(load == -1.0d || load >= 0.0d);
+                    System.out.println(process == -1.0d || (process >= 0.0d && process <= 1.0d));
+                    System.out.println(cpu == -1.0d || (cpu >= 0.0d && cpu <= 1.0d));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/management-operating-system-mxbean").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
     void socketConnectStateBuildsAndTalksToLoopbackServer() throws Exception {
         final int port = freeTcpPort();
         try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {

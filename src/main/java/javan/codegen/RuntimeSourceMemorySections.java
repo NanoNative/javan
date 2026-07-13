@@ -74,6 +74,10 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_RUNTIME_KIND_ZONED_DATE_TIME 38
         #define JAVAN_RUNTIME_KIND_ATOMIC_REFERENCE 39
         #define JAVAN_RUNTIME_KIND_OPTIONAL_INT 40
+        #define JAVAN_RUNTIME_KIND_RUNTIME 41
+        #define JAVAN_RUNTIME_KIND_THREAD_MXBEAN 42
+        #define JAVAN_RUNTIME_KIND_RUNTIME_MXBEAN 43
+        #define JAVAN_RUNTIME_KIND_OPERATING_SYSTEM_MXBEAN 44
 
         typedef struct {
             int magic;
@@ -187,6 +191,34 @@ final class RuntimeSourceMemorySections {
             int reserved2;
             const char* binary_name;
         } javan_runtime_class_state;
+
+        typedef struct {
+            int magic;
+            int reserved0;
+            int reserved1;
+            int reserved2;
+        } javan_runtime_value;
+
+        typedef struct {
+            int magic;
+            int reserved0;
+            int reserved1;
+            int reserved2;
+        } javan_thread_mxbean_value;
+
+        typedef struct {
+            int magic;
+            int reserved0;
+            int reserved1;
+            int reserved2;
+        } javan_runtime_mxbean_value;
+
+        typedef struct {
+            int magic;
+            int reserved0;
+            int reserved1;
+            int reserved2;
+        } javan_operating_system_mxbean_value;
 
         typedef struct {
             int magic;
@@ -418,6 +450,10 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_VIRTUAL_THREAD_FACTORY_MAGIC 0x4a565446
         #define JAVAN_VIRTUAL_THREAD_EXECUTOR_MAGIC 0x4a565445
         #define JAVAN_RUNTIME_CLASS_MAGIC 0x4a434c53
+        #define JAVAN_RUNTIME_MAGIC 0x4a52554e
+        #define JAVAN_THREAD_MXBEAN_MAGIC 0x4a544d58
+        #define JAVAN_RUNTIME_MXBEAN_MAGIC 0x4a524d58
+        #define JAVAN_OPERATING_SYSTEM_MXBEAN_MAGIC 0x4a4f4d58
         #define JAVAN_LOCALE_MAGIC 0x4a4c4f43
         #define JAVAN_DATETIME_FORMATTER_BUILDER_MAGIC 0x4a445446
         #define JAVAN_DATETIME_FORMATTER_MAGIC 0x4a44544d
@@ -477,6 +513,12 @@ final class RuntimeSourceMemorySections {
         static unsigned long javan_heap_stress_interval = 0;
         static unsigned long javan_heap_stress_ticks = 0;
         static void* javan_locale_root_value = NULL;
+        static void* javan_runtime_root_value = NULL;
+        static void* javan_thread_mxbean_root_value = NULL;
+        static void* javan_runtime_mxbean_root_value = NULL;
+        static void* javan_operating_system_mxbean_root_value = NULL;
+        static int javan_management_start_time_initialized_value = 0;
+        static long long javan_management_start_time_millis_value = 0;
         static JavanTypeDescriptor* javan_type_descriptor_for(int type_id);
         static int javan_allocation_limit_initialized = 0;
         static unsigned long javan_max_allocation_bytes = 0;
@@ -515,6 +557,10 @@ final class RuntimeSourceMemorySections {
         static javan_object_list* javan_list_new_with_capacity(int capacity, int immutable);
         static void javan_list_append_raw(javan_object_list* list, void* value);
         static javan_locale_value* javan_locale_checked(void* value);
+        static javan_runtime_value* javan_runtime_checked(void* value);
+        static javan_thread_mxbean_value* javan_thread_mxbean_checked(void* value);
+        static javan_runtime_mxbean_value* javan_runtime_mxbean_checked(void* value);
+        static javan_operating_system_mxbean_value* javan_operating_system_mxbean_checked(void* value);
         static javan_zone_id_value* javan_zone_id_checked(void* value);
         static javan_instant_value* javan_instant_checked(void* value);
         static javan_date_value* javan_date_checked(void* value);
@@ -522,6 +568,7 @@ final class RuntimeSourceMemorySections {
         static javan_local_time_value* javan_local_time_checked(void* value);
         static javan_local_date_time_value* javan_local_date_time_checked(void* value);
         static javan_zoned_date_time_value* javan_zoned_date_time_checked(void* value);
+        static const char* javan_runtime_kind_binary_name(int runtime_kind);
         void* javan_printable_object_string(void* value);
         #if defined(_WIN32)
         static CRITICAL_SECTION javan_runtime_lock_value;
@@ -1057,6 +1104,10 @@ final class RuntimeSourceMemorySections {
                 || runtime_kind == JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_FACTORY
                 || runtime_kind == JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_EXECUTOR
                 || runtime_kind == JAVAN_RUNTIME_KIND_CLASS
+                || runtime_kind == JAVAN_RUNTIME_KIND_RUNTIME
+                || runtime_kind == JAVAN_RUNTIME_KIND_THREAD_MXBEAN
+                || runtime_kind == JAVAN_RUNTIME_KIND_RUNTIME_MXBEAN
+                || runtime_kind == JAVAN_RUNTIME_KIND_OPERATING_SYSTEM_MXBEAN
                 || runtime_kind == JAVAN_RUNTIME_KIND_THROWABLE
                 || runtime_kind == JAVAN_RUNTIME_KIND_OWNED_BUFFER
                 || runtime_kind == JAVAN_RUNTIME_KIND_INET_ADDRESS
@@ -1282,6 +1333,14 @@ final class RuntimeSourceMemorySections {
                 if (state->magic != JAVAN_RUNTIME_CLASS_MAGIC || state->binary_name == NULL || state->binary_name[0] == '\\0') {
                     javan_panic("invalid runtime class metadata");
                 }
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_RUNTIME) {
+                javan_runtime_checked(node->value);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_THREAD_MXBEAN) {
+                javan_thread_mxbean_checked(node->value);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_RUNTIME_MXBEAN) {
+                javan_runtime_mxbean_checked(node->value);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_OPERATING_SYSTEM_MXBEAN) {
+                javan_operating_system_mxbean_checked(node->value);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_BOOLEAN) {
                 javan_atomic_boolean* state = (javan_atomic_boolean*) node->value;
                 if (state->magic != JAVAN_ATOMIC_BOOLEAN_MAGIC || (state->value != 0 && state->value != 1)) {
@@ -1537,6 +1596,12 @@ final class RuntimeSourceMemorySections {
             if (node->runtime_kind == JAVAN_RUNTIME_KIND_CLASS) {
                 return javan_runtime_class_get_name(value);
             }
+            if (node->runtime_kind == JAVAN_RUNTIME_KIND_RUNTIME
+                || node->runtime_kind == JAVAN_RUNTIME_KIND_THREAD_MXBEAN
+                || node->runtime_kind == JAVAN_RUNTIME_KIND_RUNTIME_MXBEAN
+                || node->runtime_kind == JAVAN_RUNTIME_KIND_OPERATING_SYSTEM_MXBEAN) {
+                return javan_string_from(javan_runtime_kind_binary_name(node->runtime_kind));
+            }
             if (node->runtime_kind == JAVAN_RUNTIME_KIND_THROWABLE) {
                 return javan_throwable_get_message(value);
             }
@@ -1608,6 +1673,10 @@ final class RuntimeSourceMemorySections {
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_FACTORY
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_EXECUTOR
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_CLASS
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_RUNTIME
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_THREAD_MXBEAN
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_RUNTIME_MXBEAN
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_OPERATING_SYSTEM_MXBEAN
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_ATOMIC_BOOLEAN
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_ATOMIC_INTEGER
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_ATOMIC_REFERENCE
@@ -2320,6 +2389,50 @@ final class RuntimeSourceMemorySections {
             return state;
         }
 
+        static javan_runtime_value* javan_runtime_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported runtime");
+            }
+            javan_runtime_value* state = (javan_runtime_value*) value;
+            if (state->magic != JAVAN_RUNTIME_MAGIC) {
+                javan_panic("unsupported runtime");
+            }
+            return state;
+        }
+
+        static javan_thread_mxbean_value* javan_thread_mxbean_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported thread mxbean");
+            }
+            javan_thread_mxbean_value* state = (javan_thread_mxbean_value*) value;
+            if (state->magic != JAVAN_THREAD_MXBEAN_MAGIC) {
+                javan_panic("unsupported thread mxbean");
+            }
+            return state;
+        }
+
+        static javan_runtime_mxbean_value* javan_runtime_mxbean_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported runtime mxbean");
+            }
+            javan_runtime_mxbean_value* state = (javan_runtime_mxbean_value*) value;
+            if (state->magic != JAVAN_RUNTIME_MXBEAN_MAGIC) {
+                javan_panic("unsupported runtime mxbean");
+            }
+            return state;
+        }
+
+        static javan_operating_system_mxbean_value* javan_operating_system_mxbean_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported operating system mxbean");
+            }
+            javan_operating_system_mxbean_value* state = (javan_operating_system_mxbean_value*) value;
+            if (state->magic != JAVAN_OPERATING_SYSTEM_MXBEAN_MAGIC) {
+                javan_panic("unsupported operating system mxbean");
+            }
+            return state;
+        }
+
         static javan_locale_value* javan_locale_checked(void* value) {
             if (value == NULL) {
                 javan_panic("unsupported locale");
@@ -2535,6 +2648,14 @@ final class RuntimeSourceMemorySections {
                     return "java.util.concurrent.ThreadPerTaskExecutor";
                 case JAVAN_RUNTIME_KIND_CLASS:
                     return "java.lang.Class";
+                case JAVAN_RUNTIME_KIND_RUNTIME:
+                    return "java.lang.Runtime";
+                case JAVAN_RUNTIME_KIND_THREAD_MXBEAN:
+                    return "java.lang.management.ThreadMXBean";
+                case JAVAN_RUNTIME_KIND_RUNTIME_MXBEAN:
+                    return "java.lang.management.RuntimeMXBean";
+                case JAVAN_RUNTIME_KIND_OPERATING_SYSTEM_MXBEAN:
+                    return "com.sun.management.OperatingSystemMXBean";
                 case JAVAN_RUNTIME_KIND_ATOMIC_BOOLEAN:
                     return "java.util.concurrent.atomic.AtomicBoolean";
                 case JAVAN_RUNTIME_KIND_ATOMIC_INTEGER:
@@ -3719,6 +3840,176 @@ final class RuntimeSourceMemorySections {
             javan_update_runtime_allocation_kind((void*) locale, JAVAN_RUNTIME_KIND_LOCALE);
             javan_locale_root_value = (void*) locale;
             return javan_locale_root_value;
+        }
+
+        static long long javan_management_start_time_millis(void) {
+            javan_runtime_lock_enter();
+            if (javan_management_start_time_initialized_value == 0) {
+                javan_management_start_time_millis_value = javan_system_current_time_millis();
+                javan_management_start_time_initialized_value = 1;
+            }
+            long long result = javan_management_start_time_millis_value;
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        static int javan_management_available_processors_native(void) {
+        #if defined(_WIN32)
+            SYSTEM_INFO info;
+            GetSystemInfo(&info);
+            if (info.dwNumberOfProcessors == 0) {
+                return 1;
+            }
+            if (info.dwNumberOfProcessors > INT_MAX) {
+                return INT_MAX;
+            }
+            return (int) info.dwNumberOfProcessors;
+        #else
+            long count = sysconf(_SC_NPROCESSORS_ONLN);
+            if (count <= 0) {
+                return 1;
+            }
+            if (count > INT_MAX) {
+                return INT_MAX;
+            }
+            return (int) count;
+        #endif
+        }
+
+        static double javan_management_system_load_average_native(void) {
+        #if defined(_WIN32)
+            return -1.0;
+        #else
+            double load = -1.0;
+            if (getloadavg(&load, 1) != 1) {
+                return -1.0;
+            }
+            return load;
+        #endif
+        }
+
+        static double javan_management_cpu_load_unavailable(void) {
+            return -1.0;
+        }
+
+        void* javan_runtime_get_runtime(void) {
+            if (javan_runtime_root_value != NULL) {
+                return javan_runtime_root_value;
+            }
+            javan_runtime_value* runtime = (javan_runtime_value*) javan_alloc(sizeof(javan_runtime_value));
+            runtime->magic = JAVAN_RUNTIME_MAGIC;
+            runtime->reserved0 = 0;
+            runtime->reserved1 = 0;
+            runtime->reserved2 = 0;
+            javan_update_runtime_allocation_kind((void*) runtime, JAVAN_RUNTIME_KIND_RUNTIME);
+            javan_runtime_root_value = (void*) runtime;
+            return javan_runtime_root_value;
+        }
+
+        long long javan_runtime_total_memory(void* value) {
+            javan_runtime_checked(value);
+            return (long long) javan_heap_live_bytes();
+        }
+
+        long long javan_runtime_max_memory(void* value) {
+            javan_runtime_checked(value);
+            javan_allocation_limit_init();
+            if (javan_heap_limit_bytes > 0) {
+                return (long long) javan_heap_limit_bytes;
+            }
+            return (long long) javan_heap_live_bytes();
+        }
+
+        long long javan_runtime_free_memory(void* value) {
+            long long max = javan_runtime_max_memory(value);
+            long long total = javan_runtime_total_memory(value);
+            if (max <= total) {
+                return 0LL;
+            }
+            return max - total;
+        }
+
+        int javan_runtime_available_processors(void* value) {
+            javan_runtime_checked(value);
+            return javan_management_available_processors_native();
+        }
+
+        void* javan_management_thread_mxbean(void) {
+            if (javan_thread_mxbean_root_value != NULL) {
+                return javan_thread_mxbean_root_value;
+            }
+            javan_thread_mxbean_value* bean = (javan_thread_mxbean_value*) javan_alloc(sizeof(javan_thread_mxbean_value));
+            bean->magic = JAVAN_THREAD_MXBEAN_MAGIC;
+            bean->reserved0 = 0;
+            bean->reserved1 = 0;
+            bean->reserved2 = 0;
+            javan_update_runtime_allocation_kind((void*) bean, JAVAN_RUNTIME_KIND_THREAD_MXBEAN);
+            javan_thread_mxbean_root_value = (void*) bean;
+            return javan_thread_mxbean_root_value;
+        }
+
+        int javan_thread_mxbean_get_thread_count(void* value) {
+            javan_thread_mxbean_checked(value);
+            javan_thread_current();
+            unsigned long active = javan_heap_active_threads();
+            if (active >= (unsigned long) INT_MAX) {
+                return INT_MAX;
+            }
+            return (int) active + 1;
+        }
+
+        void* javan_management_runtime_mxbean(void) {
+            if (javan_runtime_mxbean_root_value != NULL) {
+                return javan_runtime_mxbean_root_value;
+            }
+            javan_runtime_mxbean_value* bean = (javan_runtime_mxbean_value*) javan_alloc(sizeof(javan_runtime_mxbean_value));
+            bean->magic = JAVAN_RUNTIME_MXBEAN_MAGIC;
+            bean->reserved0 = 0;
+            bean->reserved1 = 0;
+            bean->reserved2 = 0;
+            javan_update_runtime_allocation_kind((void*) bean, JAVAN_RUNTIME_KIND_RUNTIME_MXBEAN);
+            javan_runtime_mxbean_root_value = (void*) bean;
+            return javan_runtime_mxbean_root_value;
+        }
+
+        long long javan_runtime_mxbean_get_uptime(void* value) {
+            javan_runtime_mxbean_checked(value);
+            return javan_system_current_time_millis() - javan_management_start_time_millis();
+        }
+
+        long long javan_runtime_mxbean_get_start_time(void* value) {
+            javan_runtime_mxbean_checked(value);
+            return javan_management_start_time_millis();
+        }
+
+        void* javan_management_operating_system_mxbean(void) {
+            if (javan_operating_system_mxbean_root_value != NULL) {
+                return javan_operating_system_mxbean_root_value;
+            }
+            javan_operating_system_mxbean_value* bean =
+                (javan_operating_system_mxbean_value*) javan_alloc(sizeof(javan_operating_system_mxbean_value));
+            bean->magic = JAVAN_OPERATING_SYSTEM_MXBEAN_MAGIC;
+            bean->reserved0 = 0;
+            bean->reserved1 = 0;
+            bean->reserved2 = 0;
+            javan_update_runtime_allocation_kind((void*) bean, JAVAN_RUNTIME_KIND_OPERATING_SYSTEM_MXBEAN);
+            javan_operating_system_mxbean_root_value = (void*) bean;
+            return javan_operating_system_mxbean_root_value;
+        }
+
+        double javan_operating_system_mxbean_get_system_load_average(void* value) {
+            javan_operating_system_mxbean_checked(value);
+            return javan_management_system_load_average_native();
+        }
+
+        double javan_operating_system_mxbean_get_process_cpu_load(void* value) {
+            javan_operating_system_mxbean_checked(value);
+            return javan_management_cpu_load_unavailable();
+        }
+
+        double javan_operating_system_mxbean_get_cpu_load(void* value) {
+            javan_operating_system_mxbean_checked(value);
+            return javan_management_cpu_load_unavailable();
         }
 
         void* javan_datetime_formatter_builder_new(void) {
@@ -4994,6 +5285,10 @@ final class RuntimeSourceMemorySections {
 
         static void javan_gc_mark_runtime_object_references(void) {
             javan_gc_mark_value(javan_locale_root_value);
+            javan_gc_mark_value(javan_runtime_root_value);
+            javan_gc_mark_value(javan_thread_mxbean_root_value);
+            javan_gc_mark_value(javan_runtime_mxbean_root_value);
+            javan_gc_mark_value(javan_operating_system_mxbean_root_value);
             javan_allocation_node* node = javan_allocations;
             while (node != NULL) {
                 if (node->kind == JAVAN_HEAP_KIND_RUNTIME && node->mark != 0) {

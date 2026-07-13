@@ -1145,4 +1145,16 @@ final class JdkCallableAccountingTest {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/net/Socket", "<init>", "(Ljava/net/InetAddress;I)V")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
+
+    @Test
+    void marksRuntimeGetRuntimeAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Runtime", "getRuntime", "()Ljava/lang/Runtime;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksOperatingSystemMxBeanCpuLoadAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("com/sun/management/OperatingSystemMXBean", "getCpuLoad", "()D")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
 }

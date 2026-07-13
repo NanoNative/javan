@@ -171,6 +171,96 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void runtimeGetRuntimeIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Runtime",
+            "getRuntime",
+            "()Ljava/lang/Runtime;"
+        ))).isTrue();
+    }
+
+    @Test
+    void runtimeMetricsRequireManagementRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/lang/Runtime",
+            "availableProcessors",
+            "()I"
+        ))).containsExactly("management");
+    }
+
+    @Test
+    void managementFactoryGetThreadMxBeanIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/management/ManagementFactory",
+            "getThreadMXBean",
+            "()Ljava/lang/management/ThreadMXBean;"
+        ))).isTrue();
+    }
+
+    @Test
+    void managementFactoryCallsRequireManagementRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/lang/management/ManagementFactory",
+            "getThreadMXBean",
+            "()Ljava/lang/management/ThreadMXBean;"
+        ))).containsExactly("management");
+    }
+
+    @Test
+    void threadMxBeanCallsRequireManagementRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/lang/management/ThreadMXBean",
+            "getThreadCount",
+            "()I"
+        ))).containsExactly("management");
+    }
+
+    @Test
+    void runtimeMxBeanGetStartTimeIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/management/RuntimeMXBean",
+            "getStartTime",
+            "()J"
+        ))).isTrue();
+    }
+
+    @Test
+    void runtimeMxBeanCallsRequireManagementRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/lang/management/RuntimeMXBean",
+            "getUptime",
+            "()J"
+        ))).containsExactly("management");
+    }
+
+    @Test
+    void operatingSystemMxBeanCallsRequireManagementRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/lang/management/OperatingSystemMXBean",
+            "getSystemLoadAverage",
+            "()D"
+        ))).containsExactly("management");
+    }
+
+    @Test
+    void operatingSystemMxBeanCpuLoadIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "com/sun/management/OperatingSystemMXBean",
+            "getCpuLoad",
+            "()D"
+        ))).isTrue();
+    }
+
+    @Test
+    void comSunOperatingSystemMxBeanCallsRequireManagementRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "com/sun/management/OperatingSystemMXBean",
+            "getProcessCpuLoad",
+            "()D"
+        ))).containsExactly("management");
+    }
+
+    @Test
     void collectionsEmptyListIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Collections",

@@ -31,6 +31,7 @@ public final class RuntimeContractReports {
         "environment",
         "time",
         "math",
+        "management",
         "threads",
         "ffi-memory"
     );

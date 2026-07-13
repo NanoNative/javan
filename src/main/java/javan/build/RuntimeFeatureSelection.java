@@ -35,6 +35,7 @@ public final class RuntimeFeatureSelection {
         "io",
         "live-profiling",
         "managed-heap",
+        "management",
         "maps",
         "math",
         "network",

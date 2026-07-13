@@ -562,6 +562,9 @@ final class BytecodeToIRInvokeSupport {
         if (lowerJdkPathInstanceCall(classFile, method, instruction, methodRef, stack)) {
             return;
         }
+        if (lowerRuntimeManagementInstanceCall(classFile, method, instruction, methodRef, instructions, stack, localDeclarations)) {
+            return;
+        }
         if (lowerJdkTimeInstanceCall(classFile, method, instruction, methodRef, stack)) {
             return;
         }
@@ -1589,6 +1592,10 @@ final class BytecodeToIRInvokeSupport {
         if ("java/lang/System".equals(methodRef.owner())) {
             return lowerSystemIntrinsic(classFile, method, methodRef, instructions, stack);
         }
+        if ("java/lang/Runtime".equals(methodRef.owner())
+            || "java/lang/management/ManagementFactory".equals(methodRef.owner())) {
+            return lowerRuntimeManagementStaticCall(classFile, method, methodRef, instructions, stack, localDeclarations);
+        }
         if ("java/util/Objects".equals(methodRef.owner())) {
             return lowerObjectsIntrinsic(classFile, method, methodRef, instructions, stack, localDeclarations);
         }
@@ -2182,6 +2189,42 @@ final class BytecodeToIRInvokeSupport {
         }
         return false;
     }
+
+    static boolean lowerRuntimeManagementStaticCall(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final MethodRef methodRef,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations
+    ) {
+        if ("java/lang/Runtime".equals(methodRef.owner())
+            && "getRuntime".equals(methodRef.name())
+            && "()Ljava/lang/Runtime;".equals(methodRef.descriptor())) {
+            pushObjectCall(instructions, stack, localDeclarations, "javan_runtime_get_runtime", List.of());
+            return true;
+        }
+        if (!"java/lang/management/ManagementFactory".equals(methodRef.owner())) {
+            return false;
+        }
+        if ("getThreadMXBean".equals(methodRef.name())
+            && "()Ljava/lang/management/ThreadMXBean;".equals(methodRef.descriptor())) {
+            pushObjectCall(instructions, stack, localDeclarations, "javan_management_thread_mxbean", List.of());
+            return true;
+        }
+        if ("getRuntimeMXBean".equals(methodRef.name())
+            && "()Ljava/lang/management/RuntimeMXBean;".equals(methodRef.descriptor())) {
+            pushObjectCall(instructions, stack, localDeclarations, "javan_management_runtime_mxbean", List.of());
+            return true;
+        }
+        if ("getOperatingSystemMXBean".equals(methodRef.name())
+            && "()Ljava/lang/management/OperatingSystemMXBean;".equals(methodRef.descriptor())) {
+            pushObjectCall(instructions, stack, localDeclarations, "javan_management_operating_system_mxbean", List.of());
+            return true;
+        }
+        return false;
+    }
+
     static boolean lowerArraysIntrinsic(
         final ClassFile classFile,
         final MethodInfo method,
@@ -4487,6 +4530,33 @@ final class BytecodeToIRInvokeSupport {
         instructions.add(IrInstruction.assignInt(localName, IrExpression.intCall(symbol, arguments)));
         stack.add(StackValue.intExpression(IrExpression.intLocal(localName)));
     }
+
+    static void pushLongCall(
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final String symbol,
+        final List<IrExpression> arguments
+    ) {
+        final String localName = "long" + localDeclarations.size();
+        localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.LONG, localName));
+        instructions.add(IrInstruction.assignLong(localName, IrExpression.longCall(symbol, arguments)));
+        stack.add(StackValue.longExpression(IrExpression.longLocal(localName)));
+    }
+
+    static void pushDoubleCall(
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final String symbol,
+        final List<IrExpression> arguments
+    ) {
+        final String localName = "double" + localDeclarations.size();
+        localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.DOUBLE, localName));
+        instructions.add(IrInstruction.assignDouble(localName, IrExpression.doubleCall(symbol, arguments)));
+        stack.add(StackValue.doubleExpression(IrExpression.doubleLocal(localName)));
+    }
+
     static void pushObjectCall(
         final List<IrInstruction> instructions,
         final List<StackValue> stack,
@@ -4777,6 +4847,103 @@ final class BytecodeToIRInvokeSupport {
         }
         return false;
     }
+    static boolean lowerRuntimeManagementInstanceCall(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final MethodRef methodRef,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations
+    ) {
+        final String owner = methodRef.owner();
+        if ("java/lang/Runtime".equals(owner)) {
+            final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+            if ("totalMemory".equals(methodRef.name()) && "()J".equals(methodRef.descriptor())) {
+                pushLongCall(instructions, stack, localDeclarations, "javan_runtime_total_memory", List.of(receiver));
+                return true;
+            }
+            if ("freeMemory".equals(methodRef.name()) && "()J".equals(methodRef.descriptor())) {
+                pushLongCall(instructions, stack, localDeclarations, "javan_runtime_free_memory", List.of(receiver));
+                return true;
+            }
+            if ("maxMemory".equals(methodRef.name()) && "()J".equals(methodRef.descriptor())) {
+                pushLongCall(instructions, stack, localDeclarations, "javan_runtime_max_memory", List.of(receiver));
+                return true;
+            }
+            if ("availableProcessors".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
+                pushIntCall(instructions, stack, localDeclarations, "javan_runtime_available_processors", List.of(receiver));
+                return true;
+            }
+            stack.add(StackValue.objectExpression(receiver));
+            return false;
+        }
+        if ("java/lang/management/ThreadMXBean".equals(owner)
+            && "getThreadCount".equals(methodRef.name())
+            && "()I".equals(methodRef.descriptor())) {
+            pushIntCall(
+                instructions,
+                stack,
+                localDeclarations,
+                "javan_thread_mxbean_get_thread_count",
+                List.of(popObjectForJdkCall(classFile, method, instruction, stack))
+            );
+            return true;
+        }
+        if ("java/lang/management/RuntimeMXBean".equals(owner)) {
+            final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+            if ("getUptime".equals(methodRef.name()) && "()J".equals(methodRef.descriptor())) {
+                pushLongCall(instructions, stack, localDeclarations, "javan_runtime_mxbean_get_uptime", List.of(receiver));
+                return true;
+            }
+            if ("getStartTime".equals(methodRef.name()) && "()J".equals(methodRef.descriptor())) {
+                pushLongCall(instructions, stack, localDeclarations, "javan_runtime_mxbean_get_start_time", List.of(receiver));
+                return true;
+            }
+            stack.add(StackValue.objectExpression(receiver));
+            return false;
+        }
+        if (("java/lang/management/OperatingSystemMXBean".equals(owner)
+            || "com/sun/management/OperatingSystemMXBean".equals(owner))
+            && "getSystemLoadAverage".equals(methodRef.name())
+            && "()D".equals(methodRef.descriptor())) {
+            pushDoubleCall(
+                instructions,
+                stack,
+                localDeclarations,
+                "javan_operating_system_mxbean_get_system_load_average",
+                List.of(popObjectForJdkCall(classFile, method, instruction, stack))
+            );
+            return true;
+        }
+        if ("com/sun/management/OperatingSystemMXBean".equals(owner)) {
+            final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+            if ("getProcessCpuLoad".equals(methodRef.name()) && "()D".equals(methodRef.descriptor())) {
+                pushDoubleCall(
+                    instructions,
+                    stack,
+                    localDeclarations,
+                    "javan_operating_system_mxbean_get_process_cpu_load",
+                    List.of(receiver)
+                );
+                return true;
+            }
+            if ("getCpuLoad".equals(methodRef.name()) && "()D".equals(methodRef.descriptor())) {
+                pushDoubleCall(
+                    instructions,
+                    stack,
+                    localDeclarations,
+                    "javan_operating_system_mxbean_get_cpu_load",
+                    List.of(receiver)
+                );
+                return true;
+            }
+            stack.add(StackValue.objectExpression(receiver));
+            return false;
+        }
+        return false;
+    }
+
     static boolean lowerJdkTimeInstanceCall(
         final ClassFile classFile,
         final MethodInfo method,
@@ -5814,6 +5981,9 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if (lowerJdkHttpInterfaceCall(classFile, method, instruction, methodRef, instructions, stack, localDeclarations)) {
+            return;
+        }
+        if (lowerRuntimeManagementInstanceCall(classFile, method, instruction, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
         if (lowerJdkCollectionInstanceCall(classes, classFile, method, instruction, methodRef, instructions, stack, localDeclarations, dispatches)) {

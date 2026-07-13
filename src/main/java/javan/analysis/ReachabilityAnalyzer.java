@@ -712,7 +712,7 @@ public final class ReachabilityAnalyzer {
         if (owner.startsWith("jdk/")) {
             return true;
         }
-        return owner.startsWith("sun/");
+        return owner.startsWith("sun/") || owner.startsWith("com/sun/");
     }
 
     private static boolean enqueueRunnableThreadTargets(
