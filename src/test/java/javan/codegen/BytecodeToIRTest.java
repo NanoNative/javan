@@ -18387,6 +18387,296 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersLambdaMetafactoryStringBuilderConstructorBridgeWrapper() throws Exception {
+        final String syntheticOwner = "com/acme/Main$$javan$lambda$main$apply$1";
+        final IrFunction function = lowerLambdaClosureFunction(
+            Map.of(),
+            Map.of(),
+            new LambdaMetafactorySupport.LambdaClosurePlan(
+                syntheticOwner,
+                "java/util/function/Function",
+                "apply",
+                "(Ljava/lang/Object;)Ljava/lang/Object;",
+                "(Ljava/lang/String;)Ljava/lang/StringBuilder;",
+                List.of(),
+                new MethodRef("java/lang/StringBuilder", "<init>", "(Ljava/lang/String;)V"),
+                8,
+                LambdaMetafactorySupport.ReceiverBinding.NONE,
+                Path.of("com/acme/Main.class"),
+                true
+            )
+        );
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_stringbuilder_new", List.of())),
+            IrInstruction.callStaticVoid(
+                "javan_stringbuilder_reserve_for_string",
+                List.of(IrExpression.objectLocal("object0"), IrExpression.objectLocal("arg0"))
+            ),
+            IrInstruction.callStaticVoid(
+                "javan_stringbuilder_append_string",
+                List.of(IrExpression.objectLocal("object0"), IrExpression.objectLocal("arg0"))
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersLambdaMetafactoryAtomicBooleanConstructorBridgeWrapper() throws Exception {
+        final String syntheticOwner = "com/acme/Main$$javan$lambda$main$apply$1";
+        final IrFunction function = lowerLambdaClosureFunction(
+            Map.of(),
+            Map.of(),
+            new LambdaMetafactorySupport.LambdaClosurePlan(
+                syntheticOwner,
+                "java/util/function/Function",
+                "apply",
+                "(Ljava/lang/Object;)Ljava/lang/Object;",
+                "(Ljava/lang/Boolean;)Ljava/util/concurrent/atomic/AtomicBoolean;",
+                List.of(),
+                new MethodRef("java/util/concurrent/atomic/AtomicBoolean", "<init>", "(Z)V"),
+                8,
+                LambdaMetafactorySupport.ReceiverBinding.NONE,
+                Path.of("com/acme/Main.class"),
+                true
+            )
+        );
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_atomic_boolean_new", List.of())),
+            IrInstruction.callStaticVoid(
+                "javan_atomic_boolean_init",
+                List.of(
+                    IrExpression.objectLocal("object0"),
+                    IrExpression.intCall("javan_boolean_boolean_value", List.of(IrExpression.objectLocal("arg0")))
+                )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowerJdkLambdaConstructorBridgeRejectsNonConstructorReferenceKind() throws Exception {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<IrLocal> locals = new ArrayList<>();
+
+        assertThat(lowerJdkLambdaConstructorBridge(
+            Map.of(),
+            constructorLambdaPlan("java/lang/StringBuilder", "<init>", "(Ljava/lang/String;)V"),
+            IrType.OBJECT,
+            List.of(IrExpression.objectLocal("arg0")),
+            List.of("Ljava/lang/String;"),
+            instructions,
+            locals,
+            6
+        )).isFalse();
+        assertThat(instructions).isEmpty();
+        assertThat(locals).isEmpty();
+    }
+
+    @Test
+    void lowerJdkLambdaConstructorBridgeRejectsWrongMethodName() throws Exception {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<IrLocal> locals = new ArrayList<>();
+
+        assertThat(lowerJdkLambdaConstructorBridge(
+            Map.of(),
+            constructorLambdaPlan("java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;"),
+            IrType.OBJECT,
+            List.of(IrExpression.objectLocal("arg0")),
+            List.of("Ljava/lang/String;"),
+            instructions,
+            locals,
+            8
+        )).isFalse();
+        assertThat(instructions).isEmpty();
+        assertThat(locals).isEmpty();
+    }
+
+    @Test
+    void lowerJdkLambdaConstructorBridgeRejectsNonObjectReturnType() throws Exception {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<IrLocal> locals = new ArrayList<>();
+
+        assertThat(lowerJdkLambdaConstructorBridge(
+            Map.of(),
+            constructorLambdaPlan("java/lang/StringBuilder", "<init>", "(Ljava/lang/String;)V"),
+            IrType.INT,
+            List.of(IrExpression.objectLocal("arg0")),
+            List.of("Ljava/lang/String;"),
+            instructions,
+            locals,
+            8
+        )).isFalse();
+        assertThat(instructions).isEmpty();
+        assertThat(locals).isEmpty();
+    }
+
+    @Test
+    void lowerJdkLambdaConstructorBridgeRejectsUnsupportedJdkTarget() throws Exception {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<IrLocal> locals = new ArrayList<>();
+
+        assertThat(lowerJdkLambdaConstructorBridge(
+            Map.of(),
+            constructorLambdaPlan("java/lang/StringBuffer", "<init>", "(Ljava/lang/String;)V"),
+            IrType.OBJECT,
+            List.of(IrExpression.objectLocal("arg0")),
+            List.of("Ljava/lang/String;"),
+            instructions,
+            locals,
+            8
+        )).isFalse();
+        assertThat(instructions).isEmpty();
+        assertThat(locals).isEmpty();
+    }
+
+    @Test
+    void jdkConstructorReceiverAllocationReturnsNullObjectForStringOwner() throws Exception {
+        assertThat(jdkConstructorReceiverAllocation("java/lang/String"))
+            .contains(IrExpression.objectNull());
+    }
+
+    @Test
+    void jdkConstructorReceiverAllocationReturnsNullObjectForInetSocketAddressOwner() throws Exception {
+        assertThat(jdkConstructorReceiverAllocation("java/net/InetSocketAddress"))
+            .contains(IrExpression.objectNull());
+    }
+
+    @Test
+    void jdkConstructorReceiverAllocationReturnsNullObjectForSocketOwner() throws Exception {
+        assertThat(jdkConstructorReceiverAllocation("java/net/Socket"))
+            .contains(IrExpression.objectNull());
+    }
+
+    @Test
+    void jdkConstructorReceiverAllocationReturnsNullObjectForServerSocketOwner() throws Exception {
+        assertThat(jdkConstructorReceiverAllocation("java/net/ServerSocket"))
+            .contains(IrExpression.objectNull());
+    }
+
+    @Test
+    void jdkConstructorReceiverAllocationReturnsStringBuilderAllocation() throws Exception {
+        assertThat(jdkConstructorReceiverAllocation("java/lang/StringBuilder"))
+            .contains(IrExpression.objectCall("javan_stringbuilder_new", List.of()));
+    }
+
+    @Test
+    void jdkConstructorReceiverAllocationReturnsAtomicBooleanAllocation() throws Exception {
+        assertThat(jdkConstructorReceiverAllocation("java/util/concurrent/atomic/AtomicBoolean"))
+            .contains(IrExpression.objectCall("javan_atomic_boolean_new", List.of()));
+    }
+
+    @Test
+    void jdkConstructorReceiverAllocationReturnsAtomicIntegerAllocation() throws Exception {
+        assertThat(jdkConstructorReceiverAllocation("java/util/concurrent/atomic/AtomicInteger"))
+            .contains(IrExpression.objectCall("javan_atomic_integer_new", List.of()));
+    }
+
+    @Test
+    void jdkConstructorReceiverAllocationReturnsAtomicReferenceAllocation() throws Exception {
+        assertThat(jdkConstructorReceiverAllocation("java/util/concurrent/atomic/AtomicReference"))
+            .contains(IrExpression.objectCall("javan_atomic_reference_new", List.of()));
+    }
+
+    @Test
+    void jdkConstructorReceiverAllocationReturnsThreadLocalAllocation() throws Exception {
+        assertThat(jdkConstructorReceiverAllocation("java/lang/ThreadLocal"))
+            .contains(IrExpression.objectCall("javan_thread_local_new", List.of()));
+    }
+
+    @Test
+    void jdkConstructorReceiverAllocationReturnsThreadAllocation() throws Exception {
+        assertThat(jdkConstructorReceiverAllocation("java/lang/Thread"))
+            .contains(IrExpression.objectCall("javan_thread_new", List.of()));
+    }
+
+    @Test
+    void jdkConstructorReceiverAllocationReturnsFormatterBuilderAllocation() throws Exception {
+        assertThat(jdkConstructorReceiverAllocation("java/time/format/DateTimeFormatterBuilder"))
+            .contains(IrExpression.objectCall("javan_datetime_formatter_builder_new", List.of()));
+    }
+
+    @Test
+    void jdkConstructorReceiverAllocationReturnsArrayListAllocation() throws Exception {
+        assertThat(jdkConstructorReceiverAllocation("java/util/ArrayList"))
+            .contains(IrExpression.objectCall("javan_arraylist_new", List.of()));
+    }
+
+    @Test
+    void jdkConstructorReceiverAllocationReturnsCopyOnWriteArrayListAllocation() throws Exception {
+        assertThat(jdkConstructorReceiverAllocation("java/util/concurrent/CopyOnWriteArrayList"))
+            .contains(IrExpression.objectCall("javan_arraylist_new", List.of()));
+    }
+
+    @Test
+    void jdkConstructorReceiverAllocationRejectsUnknownOwner() throws Exception {
+        assertThat(jdkConstructorReceiverAllocation("java/lang/StringBuffer")).isEmpty();
+    }
+
+    @Test
+    void lowersLambdaMetafactoryDateTimeFormatterBuilderConstructorBridgeWrapper() throws Exception {
+        final String syntheticOwner = "com/acme/Main$$javan$lambda$main$get$1";
+        final IrFunction function = lowerLambdaClosureFunction(
+            Map.of(),
+            Map.of(),
+            new LambdaMetafactorySupport.LambdaClosurePlan(
+                syntheticOwner,
+                "java/util/function/Supplier",
+                "get",
+                "()Ljava/lang/Object;",
+                "()Ljava/time/format/DateTimeFormatterBuilder;",
+                List.of(),
+                new MethodRef("java/time/format/DateTimeFormatterBuilder", "<init>", "()V"),
+                8,
+                LambdaMetafactorySupport.ReceiverBinding.NONE,
+                Path.of("com/acme/Main.class"),
+                true
+            )
+        );
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_datetime_formatter_builder_new", List.of())),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersLambdaMetafactoryArrayListCollectionConstructorBridgeWrapper() throws Exception {
+        final String syntheticOwner = "com/acme/Main$$javan$lambda$main$apply$1";
+        final IrFunction function = lowerLambdaClosureFunction(
+            Map.of(),
+            Map.of(),
+            new LambdaMetafactorySupport.LambdaClosurePlan(
+                syntheticOwner,
+                "java/util/function/Function",
+                "apply",
+                "(Ljava/lang/Object;)Ljava/lang/Object;",
+                "(Ljava/util/Collection;)Ljava/util/ArrayList;",
+                List.of(),
+                new MethodRef("java/util/ArrayList", "<init>", "(Ljava/util/Collection;)V"),
+                8,
+                LambdaMetafactorySupport.ReceiverBinding.NONE,
+                Path.of("com/acme/Main.class"),
+                true
+            )
+        );
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_arraylist_new", List.of())),
+            IrInstruction.callStaticVoid(
+                "javan_arraylist_add_all",
+                List.of(IrExpression.objectLocal("object0"), IrExpression.objectLocal("arg0"))
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
     void lowersLambdaMetafactoryCapturedVirtualReceiverWrapper() throws Exception {
         final String syntheticOwner = "com/acme/Main$$javan$lambda$main$run$1";
         final Map<String, ClassFile> classes = new LinkedHashMap<>();
@@ -19178,6 +19468,78 @@ final class BytecodeToIRTest {
         );
         method.setAccessible(true);
         return (IrFunction) method.invoke(null, classes, dispatches, plan);
+    }
+
+    private static boolean lowerJdkLambdaConstructorBridge(
+        final Map<String, ClassFile> classes,
+        final LambdaMetafactorySupport.LambdaClosurePlan plan,
+        final IrType erasedReturnType,
+        final List<IrExpression> arguments,
+        final List<String> exactArgumentDescriptors,
+        final List<IrInstruction> instructions,
+        final List<IrLocal> locals,
+        final int referenceKind
+    ) throws Exception {
+        final Method method = BytecodeToIR.class.getDeclaredMethod(
+            "lowerJdkLambdaConstructorBridge",
+            Map.class,
+            LambdaMetafactorySupport.LambdaClosurePlan.class,
+            IrType.class,
+            List.class,
+            List.class,
+            List.class,
+            List.class
+        );
+        method.setAccessible(true);
+        return (Boolean) method.invoke(
+            null,
+            classes,
+            new LambdaMetafactorySupport.LambdaClosurePlan(
+                plan.syntheticOwner(),
+                plan.interfaceOwner(),
+                plan.methodName(),
+                plan.methodDescriptor(),
+                plan.instantiatedMethodDescriptor(),
+                plan.captureDescriptors(),
+                plan.implementationTarget(),
+                referenceKind,
+                plan.receiverBinding(),
+                plan.source(),
+                plan.application()
+            ),
+            erasedReturnType,
+            arguments,
+            exactArgumentDescriptors,
+            instructions,
+            locals
+        );
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Optional<IrExpression> jdkConstructorReceiverAllocation(final String owner) throws Exception {
+        final Method method = BytecodeToIR.class.getDeclaredMethod("jdkConstructorReceiverAllocation", String.class);
+        method.setAccessible(true);
+        return (Optional<IrExpression>) method.invoke(null, owner);
+    }
+
+    private static LambdaMetafactorySupport.LambdaClosurePlan constructorLambdaPlan(
+        final String owner,
+        final String name,
+        final String descriptor
+    ) {
+        return new LambdaMetafactorySupport.LambdaClosurePlan(
+            "com/acme/Main$$javan$lambda$main$apply$1",
+            "java/util/function/Function",
+            "apply",
+            "(Ljava/lang/Object;)Ljava/lang/Object;",
+            "(Ljava/lang/String;)Ljava/lang/Object;",
+            List.of(),
+            new MethodRef(owner, name, descriptor),
+            8,
+            LambdaMetafactorySupport.ReceiverBinding.NONE,
+            Path.of("com/acme/Main.class"),
+            true
+        );
     }
 
     private static String lambdaImplementationSymbol(

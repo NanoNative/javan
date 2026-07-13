@@ -265,6 +265,19 @@ public final class BytecodeToIR {
         }
 
         final List<IrInstruction> instructions = new ArrayList<>();
+        final List<IrLocal> locals = new ArrayList<>();
+        if (lowerJdkLambdaConstructorBridge(classes, plan, descriptor.returnType(), arguments, exactArgumentDescriptors, instructions, locals)) {
+            return new IrFunction(
+                plan.syntheticOwner(),
+                plan.methodName(),
+                plan.methodDescriptor(),
+                symbol(plan.wrapperEntryPoint()),
+                descriptor.returnType(),
+                List.copyOf(parameters),
+                List.copyOf(locals),
+                List.copyOf(instructions)
+            );
+        }
         final Optional<IrExpression> jdkBridgeResult = lowerJdkLambdaBridge(plan, arguments, exactArgumentDescriptors, descriptor.returnType());
         if (jdkBridgeResult.isPresent()) {
             final IrExpression result = jdkBridgeResult.orElseThrow();
@@ -292,7 +305,7 @@ public final class BytecodeToIR {
                 symbol(plan.wrapperEntryPoint()),
                 descriptor.returnType(),
                 List.copyOf(parameters),
-                List.of(),
+                List.copyOf(locals),
                 List.copyOf(instructions)
             );
         }
@@ -322,9 +335,91 @@ public final class BytecodeToIR {
             symbol(plan.wrapperEntryPoint()),
             descriptor.returnType(),
             List.copyOf(parameters),
-            List.of(),
+            List.copyOf(locals),
             List.copyOf(instructions)
         );
+    }
+
+    private static boolean lowerJdkLambdaConstructorBridge(
+        final Map<String, ClassFile> classes,
+        final LambdaMetafactorySupport.LambdaClosurePlan plan,
+        final IrType erasedReturnType,
+        final List<IrExpression> arguments,
+        final List<String> exactArgumentDescriptors,
+        final List<IrInstruction> instructions,
+        final List<IrLocal> locals
+    ) {
+        final MethodRef target = plan.implementationTarget();
+        if (plan.implementationReferenceKind() != 8
+            || !"<init>".equals(target.name())
+            || erasedReturnType != IrType.OBJECT
+            || !JdkCallSupport.isSupported(target)) {
+            return false;
+        }
+        final Optional<IrExpression> receiverAllocation = jdkConstructorReceiverAllocation(target.owner());
+        if (receiverAllocation.isEmpty()) {
+            return false;
+        }
+        final String localName = "object" + locals.size();
+        locals.add(new IrLocal(IrType.OBJECT, localName));
+        final IrExpression receiver = IrExpression.objectLocal(localName);
+        instructions.add(IrInstruction.assignObject(localName, receiverAllocation.orElseThrow()));
+        final List<String> implementationParameters = parameterDescriptors(target.descriptor());
+        final List<IrExpression> implementationArguments = new ArrayList<>();
+        for (int index = 0; index < implementationParameters.size(); index++) {
+            implementationArguments.add(adaptBridgeArgument(
+                exactArgumentDescriptors.get(index),
+                arguments.get(index),
+                implementationParameters.get(index)
+            ));
+        }
+        if (BytecodeToIRInvokeSupport.lowerThreadConstructor(target, instructions, implementationArguments, receiver)
+            || BytecodeToIRInvokeSupport.lowerAtomicConstructor(target, instructions, implementationArguments, receiver)
+            || BytecodeToIRInvokeSupport.lowerThreadLocalConstructor(target)
+            || BytecodeToIRInvokeSupport.lowerStringConstructor(target, instructions, implementationArguments, receiver)
+            || BytecodeToIRInvokeSupport.lowerInetSocketAddressConstructor(target, instructions, implementationArguments, receiver)
+            || BytecodeToIRInvokeSupport.lowerSocketConstructor(target, instructions, implementationArguments, receiver)
+            || BytecodeToIRInvokeSupport.lowerStringBuilderConstructor(target, instructions, new ArrayList<>(), implementationArguments, receiver)
+            || BytecodeToIRInvokeSupport.lowerDateTimeFormatterBuilderConstructor(target)
+            || BytecodeToIRInvokeSupport.lowerJdkCollectionConstructorCall(target, instructions, implementationArguments, receiver)) {
+            instructions.add(IrInstruction.returnObject(receiver));
+            return true;
+        }
+        return false;
+    }
+
+    private static Optional<IrExpression> jdkConstructorReceiverAllocation(final String owner) {
+        if ("java/lang/String".equals(owner)
+            || "java/net/InetSocketAddress".equals(owner)
+            || "java/net/Socket".equals(owner)
+            || "java/net/ServerSocket".equals(owner)) {
+            return Optional.of(IrExpression.objectNull());
+        }
+        if ("java/lang/StringBuilder".equals(owner)) {
+            return Optional.of(IrExpression.objectCall("javan_stringbuilder_new", List.of()));
+        }
+        if ("java/util/concurrent/atomic/AtomicBoolean".equals(owner)) {
+            return Optional.of(IrExpression.objectCall("javan_atomic_boolean_new", List.of()));
+        }
+        if ("java/util/concurrent/atomic/AtomicInteger".equals(owner)) {
+            return Optional.of(IrExpression.objectCall("javan_atomic_integer_new", List.of()));
+        }
+        if ("java/util/concurrent/atomic/AtomicReference".equals(owner)) {
+            return Optional.of(IrExpression.objectCall("javan_atomic_reference_new", List.of()));
+        }
+        if ("java/lang/ThreadLocal".equals(owner)) {
+            return Optional.of(IrExpression.objectCall("javan_thread_local_new", List.of()));
+        }
+        if ("java/lang/Thread".equals(owner)) {
+            return Optional.of(IrExpression.objectCall("javan_thread_new", List.of()));
+        }
+        if ("java/time/format/DateTimeFormatterBuilder".equals(owner)) {
+            return Optional.of(IrExpression.objectCall("javan_datetime_formatter_builder_new", List.of()));
+        }
+        if ("java/util/ArrayList".equals(owner) || "java/util/concurrent/CopyOnWriteArrayList".equals(owner)) {
+            return Optional.of(IrExpression.objectCall("javan_arraylist_new", List.of()));
+        }
+        return Optional.empty();
     }
 
     private static String lambdaImplementationSymbol(

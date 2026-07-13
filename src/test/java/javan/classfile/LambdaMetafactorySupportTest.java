@@ -312,6 +312,53 @@ final class LambdaMetafactorySupportTest {
     }
 
     @Test
+    void scanCreatesPlanForJdkConstructorBridgeTarget() {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                method(
+                    "main",
+                    "()Ljava/util/function/Function;",
+                    invokeDynamic(11, new DynamicRef(
+                        "apply",
+                        "()Ljava/util/function/Function;",
+                        "java/lang/invoke/LambdaMetafactory",
+                        "metafactory",
+                        "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;",
+                        List.of(
+                            "(Ljava/lang/Object;)Ljava/lang/Object;",
+                            "java/lang/StringBuilder.<init>(Ljava/lang/String;)V",
+                            "(Ljava/lang/String;)Ljava/lang/StringBuilder;"
+                        ),
+                        List.of(
+                            new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "(Ljava/lang/Object;)Ljava/lang/Object;"),
+                            BootstrapValue.methodHandle(
+                                "java/lang/StringBuilder.<init>(Ljava/lang/String;)V",
+                                new MethodRef("java/lang/StringBuilder", "<init>", "(Ljava/lang/String;)V"),
+                                8
+                            ),
+                            new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+                        )
+                    ))
+                )
+            )
+        );
+
+        final LambdaMetafactorySupport.LambdaClosurePlan plan = LambdaMetafactorySupport.scan(classes)
+            .planForSite("com/acme/Main", "main", "()Ljava/util/function/Function;", 11)
+            .orElseThrow();
+
+        assertThat(plan.instantiatedMethodDescriptor()).isEqualTo("(Ljava/lang/String;)Ljava/lang/StringBuilder;");
+        assertThat(plan.implementationTarget()).isEqualTo(new MethodRef("java/lang/StringBuilder", "<init>", "(Ljava/lang/String;)V"));
+        assertThat(plan.implementationReferenceKind()).isEqualTo(8);
+        assertThat(plan.receiverBinding()).isEqualTo(LambdaMetafactorySupport.ReceiverBinding.NONE);
+    }
+
+    @Test
     void scanCreatesPlanForSupportedSupplierBridgeTarget() {
         final Map<String, ClassFile> classes = Map.of(
             "com/acme/Main",
@@ -1455,6 +1502,7 @@ final class LambdaMetafactorySupportTest {
     @Test
     void receiverBindingCoversStaticUnsupportedCapturedAndPrimitiveSamCases() throws Exception {
         assertThat(receiverBinding(6, List.of(), List.of())).contains(LambdaMetafactorySupport.ReceiverBinding.NONE);
+        assertThat(receiverBinding(8, List.of(), List.of())).contains(LambdaMetafactorySupport.ReceiverBinding.NONE);
         assertThat(receiverBinding(7, List.of(), List.of())).isEmpty();
         assertThat(receiverBinding(5, List.of("Ljava/lang/Object;"), List.of(IrType.OBJECT)))
             .contains(LambdaMetafactorySupport.ReceiverBinding.CAPTURE0);
@@ -1466,6 +1514,7 @@ final class LambdaMetafactorySupportTest {
     @Test
     void supportedJdkBridgeTargetRejectsParameterMismatch() throws Exception {
         assertThat(supportedJdkBridgeTarget(
+            6,
             LambdaMetafactorySupport.ReceiverBinding.NONE,
             List.of(),
             new MethodRef("java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;"),
@@ -1476,10 +1525,22 @@ final class LambdaMetafactorySupportTest {
     @Test
     void supportedJdkBridgeTargetRejectsReturnMismatch() throws Exception {
         assertThat(supportedJdkBridgeTarget(
+            6,
             LambdaMetafactorySupport.ReceiverBinding.NONE,
             List.of(),
             new MethodRef("java/lang/Integer", "intValue", "()I"),
             "()Ljava/lang/Long;"
+        )).isFalse();
+    }
+
+    @Test
+    void supportedJdkBridgeTargetRejectsConstructorReturnMismatch() throws Exception {
+        assertThat(supportedJdkBridgeTarget(
+            8,
+            LambdaMetafactorySupport.ReceiverBinding.NONE,
+            List.of(),
+            new MethodRef("java/lang/StringBuilder", "<init>", "(Ljava/lang/String;)V"),
+            "(Ljava/lang/String;)I"
         )).isFalse();
     }
 
@@ -2683,6 +2744,7 @@ final class LambdaMetafactorySupportTest {
     }
 
     private static boolean supportedJdkBridgeTarget(
+        final int referenceKind,
         final LambdaMetafactorySupport.ReceiverBinding receiverBinding,
         final List<String> captureDescriptors,
         final MethodRef implementationTarget,
@@ -2690,13 +2752,14 @@ final class LambdaMetafactorySupportTest {
     ) throws Exception {
         final Method method = LambdaMetafactorySupport.class.getDeclaredMethod(
             "supportedJdkBridgeTarget",
+            int.class,
             LambdaMetafactorySupport.ReceiverBinding.class,
             List.class,
             MethodRef.class,
             String.class
         );
         method.setAccessible(true);
-        return (Boolean) method.invoke(null, receiverBinding, captureDescriptors, implementationTarget, instantiatedSamDescriptor);
+        return (Boolean) method.invoke(null, referenceKind, receiverBinding, captureDescriptors, implementationTarget, instantiatedSamDescriptor);
     }
 
     private static boolean jdkBridgeParametersMatch(

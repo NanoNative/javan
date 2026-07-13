@@ -6,8 +6,8 @@ This matrix tracks named javan/JDK behavior scenarios. It is not a claim that ev
 
 | Measure | Count |
 | --- | ---: |
-| rows | 113 |
-| pass | 113 |
+| rows | 115 |
+| pass | 115 |
 | scoped | 0 |
 | target | 0 |
 | rejected | 0 |
@@ -49,6 +49,8 @@ Status mapping:
 | `polymorphic-virtual` | pass |
 | `interface-polymorphic` | pass |
 | `string-intrinsics` | pass |
+| `lambda-constructor-reference-stringbuilder` | pass |
+| `lambda-constructor-reference-atomicboolean` | pass |
 | `non-ascii-string-semantic-rejection` | pass |
 | `operand-object-compare-temporary-root` | pass |
 | `operand-field-load-temporary-root` | pass |

@@ -8603,6 +8603,34 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void atomicBooleanConstructorReferenceBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("atomic-boolean-constructor-reference");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.atomic.AtomicBoolean;
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Function<Boolean, AtomicBoolean> factory = AtomicBoolean::new;
+                    System.out.println(factory.apply(true).get());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/atomic-boolean-constructor-reference").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n");
+    }
+
+    @Test
     void atomicBooleanSetBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("atomic-boolean-set");
         writeJava(project, "com.acme.Main", """
@@ -11545,6 +11573,33 @@ final class CliIntegrationTest {
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-char-at").toString())).stdout()).isEqualTo(jvmOutput);
         assertThat(jvmOutput).isEqualTo("t\n");
+    }
+
+    @Test
+    void stringBuilderConstructorReferenceBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stringbuilder-constructor-reference");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Function<String, StringBuilder> factory = StringBuilder::new;
+                    System.out.println(factory.apply("javan").append(" native"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stringbuilder-constructor-reference").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("javan native\n");
     }
 
     @Test

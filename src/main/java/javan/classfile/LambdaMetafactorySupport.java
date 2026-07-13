@@ -19,6 +19,7 @@ public final class LambdaMetafactorySupport {
     private static final int ACC_FINAL = 0x0010;
     private static final int REF_INVOKE_VIRTUAL = 5;
     private static final int REF_INVOKE_STATIC = 6;
+    private static final int REF_NEW_INVOKE_SPECIAL = 8;
     private static final int REF_INVOKE_INTERFACE = 9;
 
     private LambdaMetafactorySupport() {
@@ -111,12 +112,13 @@ public final class LambdaMetafactorySupport {
             return Optional.empty();
         }
         final int referenceKind = implementation.referenceKind().orElseThrow().intValue();
+        final MethodRef implementationTarget = implementation.methodRef().orElseThrow();
         if (referenceKind != REF_INVOKE_STATIC
             && referenceKind != REF_INVOKE_VIRTUAL
-            && referenceKind != REF_INVOKE_INTERFACE) {
+            && referenceKind != REF_INVOKE_INTERFACE
+            && !(referenceKind == REF_NEW_INVOKE_SPECIAL && "<init>".equals(implementationTarget.name()))) {
             return Optional.empty();
         }
-        final MethodRef implementationTarget = implementation.methodRef().orElseThrow();
         final List<String> captureDescriptors = parameterDescriptors(dynamicRef.descriptor());
         final List<IrType> erasedSamParameters = parameterIrTypes(erasedSam.value());
         final List<IrType> instantiatedSamParameters = parameterIrTypes(instantiatedSam.value());
@@ -150,7 +152,7 @@ public final class LambdaMetafactorySupport {
             if (returnIrType(implementationTarget.descriptor()) != returnIrType(instantiatedSam.value())) {
                 return Optional.empty();
             }
-        } else if (!supportedJdkBridgeTarget(binding, captureDescriptors, implementationTarget, instantiatedSam.value())) {
+        } else if (!supportedJdkBridgeTarget(referenceKind, binding, captureDescriptors, implementationTarget, instantiatedSam.value())) {
             return Optional.empty();
         }
         final String syntheticOwner = syntheticOwner(classFile.name(), enclosingMethod.name(), instruction.offset(), dynamicRef.name());
@@ -203,7 +205,7 @@ public final class LambdaMetafactorySupport {
         final List<String> captureDescriptors,
         final List<IrType> samParameters
     ) {
-        if (referenceKind == REF_INVOKE_STATIC) {
+        if (referenceKind == REF_INVOKE_STATIC || referenceKind == REF_NEW_INVOKE_SPECIAL) {
             return Optional.of(ReceiverBinding.NONE);
         }
         if (referenceKind != REF_INVOKE_VIRTUAL && referenceKind != REF_INVOKE_INTERFACE) {
@@ -219,6 +221,7 @@ public final class LambdaMetafactorySupport {
     }
 
     private static boolean supportedJdkBridgeTarget(
+        final int referenceKind,
         final ReceiverBinding receiverBinding,
         final List<String> captureDescriptors,
         final MethodRef implementationTarget,
@@ -231,6 +234,16 @@ public final class LambdaMetafactorySupport {
         final List<String> implementationParameters = parameterDescriptors(implementationTarget.descriptor());
         if (!jdkBridgeParametersMatch(receiverBinding, captureDescriptors, instantiatedParameters, implementationParameters)) {
             return false;
+        }
+        if (referenceKind == REF_NEW_INVOKE_SPECIAL && "<init>".equals(implementationTarget.name())) {
+            return jdkBridgeReturnMatches(
+                new StringBuilder()
+                    .append('L')
+                    .append(implementationTarget.owner())
+                    .append(';')
+                    .toString(),
+                returnDescriptor(instantiatedSamDescriptor)
+            );
         }
         return jdkBridgeReturnMatches(
             returnDescriptor(implementationTarget.descriptor()),
