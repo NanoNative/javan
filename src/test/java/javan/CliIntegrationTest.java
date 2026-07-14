@@ -11719,8 +11719,8 @@ final class CliIntegrationTest {
         assertThat(run.exitCode()).isEqualTo(2);
         final String diagnostics = Files.readString(project.resolve(".javan/reports/diagnostics.md"));
         assertThat(diagnostics).contains(
-            "- diagnostics: `441`",
-            "- errors: `427`",
+            "- diagnostics: `432`",
+            "- errors: `418`",
             "- warnings: `14`",
             "error[JAVAN030] unsupported reachable bytecode",
             "`invokedynamic`"
@@ -11822,6 +11822,10 @@ final class CliIntegrationTest {
             "com/sun/net/httpserver/HttpServer.createContext(Ljava/lang/String;Lcom/sun/net/httpserver/HttpHandler;)Lcom/sun/net/httpserver/HttpContext;",
             "com/sun/net/httpserver/HttpServer.start()V",
             "com/sun/net/httpserver/HttpServer.stop(I)V",
+            "java/lang/Thread.ofVirtual()Ljava/lang/Thread$Builder$OfVirtual;",
+            "java/lang/Thread$Builder$OfVirtual.name(Ljava/lang/String;J)Ljava/lang/Thread$Builder$OfVirtual;",
+            "java/lang/Thread$Builder$OfVirtual.factory()Ljava/util/concurrent/ThreadFactory;",
+            "java/util/concurrent/Executors.newThreadPerTaskExecutor(Ljava/util/concurrent/ThreadFactory;)Ljava/util/concurrent/ExecutorService;",
             "java/util/UUID.randomUUID()Ljava/util/UUID;",
             "java/util/UUID.toString()Ljava/lang/String;"
         );
@@ -20903,6 +20907,111 @@ final class CliIntegrationTest {
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
         assertThat(nativeRun.stdout().lines().toList()).containsExactlyInAnyOrder("done", "task");
+    }
+
+    @Test
+    void staticFieldBackedThreadPerTaskExecutorSubmitBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-static-field-executor-submit");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.ExecutorService;
+            import java.util.concurrent.Executors;
+            import java.util.concurrent.ThreadFactory;
+
+            public final class Main {
+                private static final ThreadFactory FACTORY = Thread.ofVirtual().name("worker-", 0).factory();
+                private static final ExecutorService EXECUTOR = Executors.newThreadPerTaskExecutor(FACTORY);
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    EXECUTOR.submit(new Task());
+                    EXECUTOR.close();
+                    System.out.println("done");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Thread.currentThread().getName());
+                    System.out.println(Thread.currentThread().isVirtual());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-static-field-executor-submit").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void inheritedStaticFieldBackedThreadPerTaskExecutorSubmitBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-inherited-static-field-executor-submit");
+        writeJava(project, "com.acme.Base", """
+            package com.acme;
+
+            import java.util.concurrent.ExecutorService;
+            import java.util.concurrent.Executors;
+            import java.util.concurrent.ThreadFactory;
+
+            class Base {
+                static final ThreadFactory FACTORY = Thread.ofVirtual().name("worker-", 0).factory();
+                static final ExecutorService EXECUTOR = Executors.newThreadPerTaskExecutor(FACTORY);
+
+                Base() {
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Sub", """
+            package com.acme;
+
+            final class Sub extends Base {
+                private Sub() {
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Sub.FACTORY != null);
+                    Sub.EXECUTOR.submit(new Task());
+                    Sub.EXECUTOR.close();
+                    System.out.println("done");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Thread.currentThread().getName());
+                    System.out.println(Thread.currentThread().isVirtual());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-inherited-static-field-executor-submit").toString())).stdout())
+            .isEqualTo(jvmOutput);
     }
 
     @Test

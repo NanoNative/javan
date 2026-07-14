@@ -24,9 +24,11 @@ import javan.verify.Diagnostic;
 import javan.verify.DiagnosticException;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static javan.codegen.BytecodeToIR.*;
 import static javan.codegen.BytecodeToIRMetadataSupport.*;
@@ -109,6 +111,14 @@ final class BytecodeToIRInvokeSupport {
         final List<StackValue> stack
     ) {
         final FieldRef fieldRef = instruction.fieldRef().orElseThrow();
+        final FieldRef resolvedFieldRef = VirtualThreadInvokePatterns.resolvedStaticField(classes, fieldRef)
+            .map(VirtualThreadInvokePatterns.ResolvedStaticField::fieldRef)
+            .orElse(fieldRef);
+        final Optional<StackValue> virtualThreadField = supportedVirtualThreadStaticFieldValue(classes, fieldRef);
+        if (virtualThreadField.isPresent()) {
+            stack.add(virtualThreadField.orElseThrow());
+            return;
+        }
         if ("java/util/Locale".equals(fieldRef.owner())
             && "ROOT".equals(fieldRef.name())
             && "Ljava/util/Locale;".equals(fieldRef.descriptor())) {
@@ -189,11 +199,11 @@ final class BytecodeToIRInvokeSupport {
             throw unsupported(classFile, method, instruction);
         }
         switch (type.orElseThrow()) {
-            case INT -> stack.add(StackValue.intExpression(IrExpression.intStaticField(fieldRef.owner(), fieldRef.name())));
-            case LONG -> stack.add(StackValue.longExpression(IrExpression.longStaticField(fieldRef.owner(), fieldRef.name())));
-            case FLOAT -> stack.add(StackValue.floatExpression(IrExpression.floatStaticField(fieldRef.owner(), fieldRef.name())));
-            case DOUBLE -> stack.add(StackValue.doubleExpression(IrExpression.doubleStaticField(fieldRef.owner(), fieldRef.name())));
-            case OBJECT -> stack.add(StackValue.objectExpression(IrExpression.objectStaticField(fieldRef.owner(), fieldRef.name())));
+            case INT -> stack.add(StackValue.intExpression(IrExpression.intStaticField(resolvedFieldRef.owner(), resolvedFieldRef.name())));
+            case LONG -> stack.add(StackValue.longExpression(IrExpression.longStaticField(resolvedFieldRef.owner(), resolvedFieldRef.name())));
+            case FLOAT -> stack.add(StackValue.floatExpression(IrExpression.floatStaticField(resolvedFieldRef.owner(), resolvedFieldRef.name())));
+            case DOUBLE -> stack.add(StackValue.doubleExpression(IrExpression.doubleStaticField(resolvedFieldRef.owner(), resolvedFieldRef.name())));
+            case OBJECT -> stack.add(StackValue.objectExpression(IrExpression.objectStaticField(resolvedFieldRef.owner(), resolvedFieldRef.name())));
         }
     }
     static void assignStaticField(
@@ -205,13 +215,16 @@ final class BytecodeToIRInvokeSupport {
         final List<StackValue> stack
     ) {
         final FieldRef fieldRef = instruction.fieldRef().orElseThrow();
+        final FieldRef resolvedFieldRef = VirtualThreadInvokePatterns.resolvedStaticField(classes, fieldRef)
+            .map(VirtualThreadInvokePatterns.ResolvedStaticField::fieldRef)
+            .orElse(fieldRef);
         final IrType type = requiredIrType(staticFieldType(classes, fieldRef), classFile, method, instruction);
         switch (type) {
-            case INT -> instructions.add(IrInstruction.assignStaticFieldInt(fieldRef.owner(), fieldRef.name(), popInt(classFile, method, stack)));
-            case LONG -> instructions.add(IrInstruction.assignStaticFieldLong(fieldRef.owner(), fieldRef.name(), popLong(classFile, method, stack)));
-            case FLOAT -> instructions.add(IrInstruction.assignStaticFieldFloat(fieldRef.owner(), fieldRef.name(), popFloat(classFile, method, stack)));
-            case DOUBLE -> instructions.add(IrInstruction.assignStaticFieldDouble(fieldRef.owner(), fieldRef.name(), popDouble(classFile, method, stack)));
-            case OBJECT -> instructions.add(IrInstruction.assignStaticFieldObject(fieldRef.owner(), fieldRef.name(), popObject(classFile, method, stack)));
+            case INT -> instructions.add(IrInstruction.assignStaticFieldInt(resolvedFieldRef.owner(), resolvedFieldRef.name(), popInt(classFile, method, stack)));
+            case LONG -> instructions.add(IrInstruction.assignStaticFieldLong(resolvedFieldRef.owner(), resolvedFieldRef.name(), popLong(classFile, method, stack)));
+            case FLOAT -> instructions.add(IrInstruction.assignStaticFieldFloat(resolvedFieldRef.owner(), resolvedFieldRef.name(), popFloat(classFile, method, stack)));
+            case DOUBLE -> instructions.add(IrInstruction.assignStaticFieldDouble(resolvedFieldRef.owner(), resolvedFieldRef.name(), popDouble(classFile, method, stack)));
+            case OBJECT -> instructions.add(IrInstruction.assignStaticFieldObject(resolvedFieldRef.owner(), resolvedFieldRef.name(), popObject(classFile, method, stack)));
             case VOID -> throw new IllegalStateException("void static field is invalid");
         }
     }
@@ -8622,6 +8635,15 @@ final class BytecodeToIRInvokeSupport {
         final List<Instruction> instructions,
         final int producerIndex
     ) {
+        return supportedVirtualThreadBuilderProducer(classes, instructions, producerIndex, new HashSet<>());
+    }
+
+    private static boolean supportedVirtualThreadBuilderProducer(
+        final Map<String, ClassFile> classes,
+        final List<Instruction> instructions,
+        final int producerIndex,
+        final Set<String> visitedStaticFields
+    ) {
         final int transparentProducerIndex = VirtualThreadInvokePatterns.transparentReferenceProducerIndex(instructions, producerIndex);
         if (transparentProducerIndex < 0) {
             return false;
@@ -8640,9 +8662,13 @@ final class BytecodeToIRInvokeSupport {
                 return supportedVirtualThreadBuilderProducer(
                     classes,
                     instructions,
-                    transparentProducerIndex - VirtualThreadInvokePatterns.virtualThreadBuilderNameProducerOffset(methodRef.orElseThrow())
+                    transparentProducerIndex - VirtualThreadInvokePatterns.virtualThreadBuilderNameProducerOffset(methodRef.orElseThrow()),
+                    visitedStaticFields
                 );
             }
+        }
+        if (producer.opcode() == 178 && producer.fieldRef().isPresent()) {
+            return supportedVirtualThreadBuilderStaticField(classes, producer.fieldRef().orElseThrow(), visitedStaticFields);
         }
         if (transparentProducerIndex < 1) {
             return false;
@@ -8655,7 +8681,7 @@ final class BytecodeToIRInvokeSupport {
         if (storeIndex < 0) {
             return false;
         }
-        return supportedVirtualThreadBuilderProducer(classes, instructions, storeIndex - 1);
+        return supportedVirtualThreadBuilderProducer(classes, instructions, storeIndex - 1, visitedStaticFields);
     }
 
     private static boolean supportedVirtualThreadFactoryReceiver(
@@ -8675,6 +8701,15 @@ final class BytecodeToIRInvokeSupport {
         final List<Instruction> instructions,
         final int producerIndex
     ) {
+        return supportedVirtualThreadFactoryProducer(classes, instructions, producerIndex, new HashSet<>());
+    }
+
+    private static boolean supportedVirtualThreadFactoryProducer(
+        final Map<String, ClassFile> classes,
+        final List<Instruction> instructions,
+        final int producerIndex,
+        final Set<String> visitedStaticFields
+    ) {
         final int transparentProducerIndex = VirtualThreadInvokePatterns.transparentReferenceProducerIndex(instructions, producerIndex);
         if (transparentProducerIndex < 0) {
             return false;
@@ -8682,12 +8717,15 @@ final class BytecodeToIRInvokeSupport {
         final Instruction producer = instructions.get(transparentProducerIndex);
         final Optional<MethodRef> methodRef = producer.methodRef();
         if (methodRef.isPresent() && isVirtualThreadBuilderFactory(methodRef.orElseThrow())) {
-            return supportedVirtualThreadBuilderProducer(classes, instructions, transparentProducerIndex - 1);
+            return supportedVirtualThreadBuilderProducer(classes, instructions, transparentProducerIndex - 1, visitedStaticFields);
         }
         if (methodRef.isPresent()
             && producer.opcode() == 184
             && VirtualThreadInvokePatterns.isSupportedFactoryWrapperCall(classes, methodRef.orElseThrow())) {
             return true;
+        }
+        if (producer.opcode() == 178 && producer.fieldRef().isPresent()) {
+            return supportedVirtualThreadFactoryStaticField(classes, producer.fieldRef().orElseThrow(), visitedStaticFields);
         }
         if (transparentProducerIndex < 1) {
             return false;
@@ -8700,7 +8738,7 @@ final class BytecodeToIRInvokeSupport {
         if (storeIndex < 0) {
             return false;
         }
-        return supportedVirtualThreadFactoryProducer(classes, instructions, storeIndex - 1);
+        return supportedVirtualThreadFactoryProducer(classes, instructions, storeIndex - 1, visitedStaticFields);
     }
 
     private static boolean supportedVirtualThreadExecutorReceiver(
@@ -8720,6 +8758,15 @@ final class BytecodeToIRInvokeSupport {
         final List<Instruction> instructions,
         final int producerIndex
     ) {
+        return supportedVirtualThreadExecutorProducer(classes, instructions, producerIndex, new HashSet<>());
+    }
+
+    private static boolean supportedVirtualThreadExecutorProducer(
+        final Map<String, ClassFile> classes,
+        final List<Instruction> instructions,
+        final int producerIndex,
+        final Set<String> visitedStaticFields
+    ) {
         final int transparentProducerIndex = VirtualThreadInvokePatterns.transparentReferenceProducerIndex(instructions, producerIndex);
         if (transparentProducerIndex < 0) {
             return false;
@@ -8731,8 +8778,11 @@ final class BytecodeToIRInvokeSupport {
                 return true;
             }
             if (VirtualThreadInvokePatterns.isExecutorsNewThreadPerTaskExecutor(methodRef.orElseThrow())) {
-                return supportedVirtualThreadFactoryProducer(classes, instructions, transparentProducerIndex - 1);
+                return supportedVirtualThreadFactoryProducer(classes, instructions, transparentProducerIndex - 1, visitedStaticFields);
             }
+        }
+        if (producer.opcode() == 178 && producer.fieldRef().isPresent()) {
+            return supportedVirtualThreadExecutorStaticField(classes, producer.fieldRef().orElseThrow(), visitedStaticFields);
         }
         if (transparentProducerIndex < 1) {
             return false;
@@ -8745,7 +8795,98 @@ final class BytecodeToIRInvokeSupport {
         if (storeIndex < 0) {
             return false;
         }
-        return supportedVirtualThreadExecutorProducer(classes, instructions, storeIndex - 1);
+        return supportedVirtualThreadExecutorProducer(classes, instructions, storeIndex - 1, visitedStaticFields);
+    }
+
+    private static Optional<StackValue> supportedVirtualThreadStaticFieldValue(
+        final Map<String, ClassFile> classes,
+        final FieldRef fieldRef
+    ) {
+        final FieldRef resolvedFieldRef = VirtualThreadInvokePatterns.resolvedStaticField(classes, fieldRef)
+            .map(VirtualThreadInvokePatterns.ResolvedStaticField::fieldRef)
+            .orElse(fieldRef);
+        if (supportedVirtualThreadBuilderStaticField(classes, fieldRef, new HashSet<>())) {
+            return Optional.of(StackValue.virtualThreadBuilder(IrExpression.objectStaticField(resolvedFieldRef.owner(), resolvedFieldRef.name())));
+        }
+        if (supportedVirtualThreadFactoryStaticField(classes, fieldRef, new HashSet<>())) {
+            return Optional.of(StackValue.virtualThreadFactory(IrExpression.objectStaticField(resolvedFieldRef.owner(), resolvedFieldRef.name())));
+        }
+        if (supportedVirtualThreadExecutorStaticField(classes, fieldRef, new HashSet<>())) {
+            return Optional.of(StackValue.virtualThreadExecutor(IrExpression.objectStaticField(resolvedFieldRef.owner(), resolvedFieldRef.name())));
+        }
+        return Optional.empty();
+    }
+
+    private static boolean supportedVirtualThreadBuilderStaticField(
+        final Map<String, ClassFile> classes,
+        final FieldRef fieldRef,
+        final Set<String> visitedStaticFields
+    ) {
+        final FieldRef resolvedFieldRef = VirtualThreadInvokePatterns.resolvedStaticField(classes, fieldRef)
+            .map(VirtualThreadInvokePatterns.ResolvedStaticField::fieldRef)
+            .orElse(fieldRef);
+        final String key = resolvedFieldRef.owner() + "#" + resolvedFieldRef.name() + ":" + resolvedFieldRef.descriptor();
+        if (!visitedStaticFields.add(key)) {
+            return false;
+        }
+        final Optional<VirtualThreadInvokePatterns.StaticFieldProducer> producer = VirtualThreadInvokePatterns.staticFieldProducer(classes, fieldRef);
+        if (producer.isEmpty() || producer.orElseThrow().method().code().isEmpty()) {
+            return false;
+        }
+        return supportedVirtualThreadBuilderProducer(
+            classes,
+            producer.orElseThrow().method().code().orElseThrow().instructions(),
+            producer.orElseThrow().producerIndex(),
+            visitedStaticFields
+        );
+    }
+
+    private static boolean supportedVirtualThreadFactoryStaticField(
+        final Map<String, ClassFile> classes,
+        final FieldRef fieldRef,
+        final Set<String> visitedStaticFields
+    ) {
+        final FieldRef resolvedFieldRef = VirtualThreadInvokePatterns.resolvedStaticField(classes, fieldRef)
+            .map(VirtualThreadInvokePatterns.ResolvedStaticField::fieldRef)
+            .orElse(fieldRef);
+        final String key = resolvedFieldRef.owner() + "#" + resolvedFieldRef.name() + ":" + resolvedFieldRef.descriptor();
+        if (!visitedStaticFields.add(key)) {
+            return false;
+        }
+        final Optional<VirtualThreadInvokePatterns.StaticFieldProducer> producer = VirtualThreadInvokePatterns.staticFieldProducer(classes, fieldRef);
+        if (producer.isEmpty() || producer.orElseThrow().method().code().isEmpty()) {
+            return false;
+        }
+        return supportedVirtualThreadFactoryProducer(
+            classes,
+            producer.orElseThrow().method().code().orElseThrow().instructions(),
+            producer.orElseThrow().producerIndex(),
+            visitedStaticFields
+        );
+    }
+
+    private static boolean supportedVirtualThreadExecutorStaticField(
+        final Map<String, ClassFile> classes,
+        final FieldRef fieldRef,
+        final Set<String> visitedStaticFields
+    ) {
+        final FieldRef resolvedFieldRef = VirtualThreadInvokePatterns.resolvedStaticField(classes, fieldRef)
+            .map(VirtualThreadInvokePatterns.ResolvedStaticField::fieldRef)
+            .orElse(fieldRef);
+        final String key = resolvedFieldRef.owner() + "#" + resolvedFieldRef.name() + ":" + resolvedFieldRef.descriptor();
+        if (!visitedStaticFields.add(key)) {
+            return false;
+        }
+        final Optional<VirtualThreadInvokePatterns.StaticFieldProducer> producer = VirtualThreadInvokePatterns.staticFieldProducer(classes, fieldRef);
+        if (producer.isEmpty() || producer.orElseThrow().method().code().isEmpty()) {
+            return false;
+        }
+        return supportedVirtualThreadExecutorProducer(
+            classes,
+            producer.orElseThrow().method().code().orElseThrow().instructions(),
+            producer.orElseThrow().producerIndex(),
+            visitedStaticFields
+        );
     }
 
     private static boolean isThreadOfVirtual(final MethodRef methodRef) {

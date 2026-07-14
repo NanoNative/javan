@@ -9320,6 +9320,183 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void staticVerifierAcceptsReachableStaticFieldBackedThreadPerTaskExecutorSubmitAndClose() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile main = new ClassFile(
+            69,
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            List.of(
+                new FieldInfo(0x0008, "FACTORY", "Ljava/util/concurrent/ThreadFactory;"),
+                new FieldInfo(0x0008, "EXECUTOR", "Ljava/util/concurrent/ExecutorService;")
+            ),
+            List.of(
+                new MethodInfo(
+                    0x0008,
+                    "<clinit>",
+                    "()V",
+                    Optional.of(new CodeAttribute(
+                        1,
+                        0,
+                        new byte[0],
+                        0,
+                        List.of(
+                            instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;")),
+                            instruction(1, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "factory", "()Ljava/util/concurrent/ThreadFactory;")),
+                            instruction(2, 179, "putstatic", new FieldRef("com/acme/Main", "FACTORY", "Ljava/util/concurrent/ThreadFactory;")),
+                            instruction(3, 178, "getstatic", new FieldRef("com/acme/Main", "FACTORY", "Ljava/util/concurrent/ThreadFactory;")),
+                            instruction(4, 184, "invokestatic", new MethodRef("java/util/concurrent/Executors", "newThreadPerTaskExecutor", "(Ljava/util/concurrent/ThreadFactory;)Ljava/util/concurrent/ExecutorService;")),
+                            instruction(5, 179, "putstatic", new FieldRef("com/acme/Main", "EXECUTOR", "Ljava/util/concurrent/ExecutorService;")),
+                            instruction(6, 177, "return")
+                        )
+                    ))
+                ),
+                new MethodInfo(
+                    0x0008,
+                    "main",
+                    "()V",
+                    Optional.of(new CodeAttribute(
+                        3,
+                        1,
+                        new byte[0],
+                        0,
+                        List.of(
+                            instruction(0, 178, "getstatic", new FieldRef("com/acme/Main", "EXECUTOR", "Ljava/util/concurrent/ExecutorService;")),
+                            classInstruction(1, 187, "new", "com/acme/Task"),
+                            instruction(2, 89, "dup"),
+                            instruction(3, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                            instruction(4, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "submit", "(Ljava/lang/Runnable;)Ljava/util/concurrent/Future;")),
+                            instruction(5, 87, "pop"),
+                            instruction(6, 178, "getstatic", new FieldRef("com/acme/Main", "EXECUTOR", "Ljava/util/concurrent/ExecutorService;")),
+                            instruction(7, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "close", "()V")),
+                            instruction(8, 177, "return")
+                        )
+                    ))
+                )
+            ),
+            Path.of("Main.java"),
+            true
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableInheritedStaticFieldBackedThreadPerTaskExecutorSubmitAndClose() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile base = new ClassFile(
+            69,
+            "com/acme/Base",
+            "java/lang/Object",
+            0,
+            List.of(),
+            List.of(
+                new FieldInfo(0x0008, "FACTORY", "Ljava/util/concurrent/ThreadFactory;"),
+                new FieldInfo(0x0008, "EXECUTOR", "Ljava/util/concurrent/ExecutorService;")
+            ),
+            List.of(
+                new MethodInfo(
+                    0x0008,
+                    "<clinit>",
+                    "()V",
+                    Optional.of(new CodeAttribute(
+                        1,
+                        0,
+                        new byte[0],
+                        0,
+                        List.of(
+                            instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;")),
+                            instruction(1, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "factory", "()Ljava/util/concurrent/ThreadFactory;")),
+                            instruction(2, 179, "putstatic", new FieldRef("com/acme/Base", "FACTORY", "Ljava/util/concurrent/ThreadFactory;")),
+                            instruction(3, 178, "getstatic", new FieldRef("com/acme/Base", "FACTORY", "Ljava/util/concurrent/ThreadFactory;")),
+                            instruction(4, 184, "invokestatic", new MethodRef("java/util/concurrent/Executors", "newThreadPerTaskExecutor", "(Ljava/util/concurrent/ThreadFactory;)Ljava/util/concurrent/ExecutorService;")),
+                            instruction(5, 179, "putstatic", new FieldRef("com/acme/Base", "EXECUTOR", "Ljava/util/concurrent/ExecutorService;")),
+                            instruction(6, 177, "return")
+                        )
+                    ))
+                )
+            ),
+            Path.of("Base.java"),
+            true
+        );
+        final ClassFile sub = new ClassFile(
+            69,
+            "com/acme/Sub",
+            "com/acme/Base",
+            0,
+            List.of(),
+            List.of(),
+            List.of(),
+            Path.of("Sub.java"),
+            true
+        );
+        final ClassFile main = new ClassFile(
+            69,
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            List.of(),
+            List.of(
+                new MethodInfo(
+                    0x0008,
+                    "main",
+                    "()V",
+                    Optional.of(new CodeAttribute(
+                        3,
+                        1,
+                        new byte[0],
+                        0,
+                        List.of(
+                            instruction(0, 178, "getstatic", new FieldRef("com/acme/Sub", "FACTORY", "Ljava/util/concurrent/ThreadFactory;")),
+                            instruction(1, 87, "pop"),
+                            instruction(2, 178, "getstatic", new FieldRef("com/acme/Sub", "EXECUTOR", "Ljava/util/concurrent/ExecutorService;")),
+                            classInstruction(3, 187, "new", "com/acme/Task"),
+                            instruction(4, 89, "dup"),
+                            instruction(5, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                            instruction(6, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "submit", "(Ljava/lang/Runnable;)Ljava/util/concurrent/Future;")),
+                            instruction(7, 87, "pop"),
+                            instruction(8, 178, "getstatic", new FieldRef("com/acme/Sub", "EXECUTOR", "Ljava/util/concurrent/ExecutorService;")),
+                            instruction(9, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "close", "()V")),
+                            instruction(10, 177, "return")
+                        )
+                    ))
+                )
+            ),
+            Path.of("Main.java"),
+            true
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(base.name(), base, sub.name(), sub, main.name(), main, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
     void staticVerifierRejectsReachableExecutorServiceSubmitWithUnknownReceiver() {
         final String descriptor = "(Ljava/util/concurrent/ExecutorService;)V";
         final ClassFile main = classWithMethods(

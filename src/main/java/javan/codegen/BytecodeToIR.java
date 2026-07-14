@@ -2,6 +2,7 @@ package javan.codegen;
 
 import javan.analysis.CallGraph;
 import javan.analysis.EntryPoint;
+import javan.analysis.VirtualThreadInvokePatterns;
 import javan.classfile.ClassFile;
 import javan.classfile.CodeAttribute;
 import javan.classfile.DynamicRef;
@@ -2962,18 +2963,11 @@ public final class BytecodeToIR {
     }
 
     static Optional<IrType> staticFieldType(final Map<String, ClassFile> classes, final FieldRef fieldRef) {
-        final ClassFile owner = classes.get(fieldRef.owner());
-        if (owner == null) {
+        final Optional<VirtualThreadInvokePatterns.ResolvedStaticField> resolved = VirtualThreadInvokePatterns.resolvedStaticField(classes, fieldRef);
+        if (resolved.isEmpty()) {
             return Optional.empty();
         }
-        for (final FieldInfo field : owner.fields()) {
-            if (field.isStatic()
-                && field.name().equals(fieldRef.name())
-                && field.descriptor().equals(fieldRef.descriptor())) {
-                return BytecodeToIRMetadataSupport.fieldType(field.descriptor());
-            }
-        }
-        return Optional.empty();
+        return BytecodeToIRMetadataSupport.fieldType(resolved.orElseThrow().fieldRef().descriptor());
     }
 
     static List<EntryPoint> interfaceTargets(final Map<String, ClassFile> classes, final MethodRef methodRef) {

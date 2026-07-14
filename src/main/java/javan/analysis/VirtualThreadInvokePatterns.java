@@ -4,6 +4,7 @@ import java.util.Map;
 import java.util.List;
 import java.util.Optional;
 import javan.classfile.ClassFile;
+import javan.classfile.FieldRef;
 import javan.classfile.Instruction;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
@@ -14,6 +15,12 @@ import javan.ir.IrType;
  * Shared bytecode-shape helpers for the currently supported virtual-thread invocation slice.
  */
 public final class VirtualThreadInvokePatterns {
+    public record ResolvedStaticField(ClassFile classFile, FieldRef fieldRef) {
+    }
+
+    public record StaticFieldProducer(ClassFile classFile, MethodInfo method, int producerIndex) {
+    }
+
     private VirtualThreadInvokePatterns() {
     }
 
@@ -166,6 +173,71 @@ public final class VirtualThreadInvokePatterns {
             index--;
         }
         return index;
+    }
+
+    public static Optional<StaticFieldProducer> staticFieldProducer(
+        final Map<String, ClassFile> classes,
+        final FieldRef fieldRef
+    ) {
+        final Optional<ResolvedStaticField> resolved = resolvedStaticField(classes, fieldRef);
+        if (resolved.isEmpty()) {
+            return Optional.empty();
+        }
+        final ResolvedStaticField resolvedField = resolved.orElseThrow();
+        final ClassFile owner = resolvedField.classFile();
+        final FieldRef declaredFieldRef = resolvedField.fieldRef();
+        StaticFieldProducer match = null;
+        for (final MethodInfo method : owner.methods()) {
+            if (method.code().isEmpty()) {
+                continue;
+            }
+            final List<Instruction> instructions = method.code().orElseThrow().instructions();
+            for (int index = 0; index < instructions.size(); index++) {
+                final Instruction instruction = instructions.get(index);
+                if (instruction.opcode() != 179 || instruction.fieldRef().isEmpty()) {
+                    continue;
+                }
+                final FieldRef candidate = instruction.fieldRef().orElseThrow();
+                if (!candidate.owner().equals(declaredFieldRef.owner())
+                    || !candidate.name().equals(declaredFieldRef.name())
+                    || !candidate.descriptor().equals(declaredFieldRef.descriptor())) {
+                    continue;
+                }
+                if (!"<clinit>".equals(method.name())
+                    || !"()V".equals(method.descriptor())
+                    || index == 0
+                    || match != null) {
+                    return Optional.empty();
+                }
+                match = new StaticFieldProducer(owner, method, index - 1);
+            }
+        }
+        return Optional.ofNullable(match);
+    }
+
+    public static Optional<ResolvedStaticField> resolvedStaticField(
+        final Map<String, ClassFile> classes,
+        final FieldRef fieldRef
+    ) {
+        String current = fieldRef.owner();
+        while (current != null && !current.isEmpty()) {
+            final ClassFile classFile = classes.get(current);
+            if (classFile == null) {
+                return Optional.empty();
+            }
+            for (final var field : classFile.fields()) {
+                if (field.isStatic()
+                    && field.name().equals(fieldRef.name())
+                    && field.descriptor().equals(fieldRef.descriptor())) {
+                    return Optional.of(new ResolvedStaticField(
+                        classFile,
+                        new FieldRef(classFile.name(), field.name(), field.descriptor())
+                    ));
+                }
+            }
+            current = classFile.superName();
+        }
+        return Optional.empty();
     }
 
     public static int localLoadSlot(final Instruction instruction) {

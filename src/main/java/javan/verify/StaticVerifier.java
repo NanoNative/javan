@@ -20,9 +20,11 @@ import javan.compat.NetworkApiSupport;
 import javan.util.Strings2;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Verifies the static Java profile for reachable code and warns about unreachable violations.
@@ -2055,6 +2057,16 @@ public final class StaticVerifier {
         final int producerIndex,
         final int rootProducerIndex
     ) {
+        return supportedVirtualThreadBuilderProducer(classes, instructions, producerIndex, rootProducerIndex, new HashSet<>());
+    }
+
+    private static boolean supportedVirtualThreadBuilderProducer(
+        final Map<String, ClassFile> classes,
+        final List<Instruction> instructions,
+        final int producerIndex,
+        final int rootProducerIndex,
+        final Set<String> visitedStaticFields
+    ) {
         final int transparentProducerIndex = VirtualThreadInvokePatterns.transparentReferenceProducerIndex(instructions, producerIndex);
         if (transparentProducerIndex < 0) {
             return false;
@@ -2077,9 +2089,13 @@ public final class StaticVerifier {
                     classes,
                     instructions,
                     transparentProducerIndex - virtualThreadBuilderNameProducerOffset(methodRef.orElseThrow()),
-                    rootProducerIndex
+                    rootProducerIndex,
+                    visitedStaticFields
                 );
             }
+        }
+        if (producer.opcode() == 178 && producer.fieldRef().isPresent()) {
+            return supportedVirtualThreadBuilderStaticField(classes, producer.fieldRef().orElseThrow(), visitedStaticFields);
         }
         if (transparentProducerIndex < 2) {
             return false;
@@ -2094,9 +2110,9 @@ public final class StaticVerifier {
         }
         if (rootProducerIndex >= 0
             && rootProducerMutatesBuilderLocal(instructions, rootProducerIndex, loadSlot, storeIndex, transparentProducerIndex)) {
-            return supportedVirtualThreadBuilderProducer(classes, instructions, storeIndex - 1, -1);
+            return supportedVirtualThreadBuilderProducer(classes, instructions, storeIndex - 1, -1, visitedStaticFields);
         }
-        return supportedVirtualThreadBuilderProducer(classes, instructions, storeIndex - 1, rootProducerIndex);
+        return supportedVirtualThreadBuilderProducer(classes, instructions, storeIndex - 1, rootProducerIndex, visitedStaticFields);
     }
 
     private static boolean rootProducerMutatesBuilderLocal(
@@ -2161,6 +2177,16 @@ public final class StaticVerifier {
         final int producerIndex,
         final int rootProducerIndex
     ) {
+        return supportedVirtualThreadFactoryProducer(classes, instructions, producerIndex, rootProducerIndex, new HashSet<>());
+    }
+
+    private static boolean supportedVirtualThreadFactoryProducer(
+        final Map<String, ClassFile> classes,
+        final List<Instruction> instructions,
+        final int producerIndex,
+        final int rootProducerIndex,
+        final Set<String> visitedStaticFields
+    ) {
         final int transparentProducerIndex = VirtualThreadInvokePatterns.transparentReferenceProducerIndex(instructions, producerIndex);
         if (transparentProducerIndex < 0) {
             return false;
@@ -2172,12 +2198,15 @@ public final class StaticVerifier {
         final Optional<MethodRef> methodRef = producer.methodRef();
         if (methodRef.isPresent()) {
             if (isThreadBuilderVirtualFactory(methodRef.orElseThrow())) {
-                return supportedVirtualThreadBuilderProducer(classes, instructions, transparentProducerIndex - 1, rootProducerIndex);
+                return supportedVirtualThreadBuilderProducer(classes, instructions, transparentProducerIndex - 1, rootProducerIndex, visitedStaticFields);
             }
             if (producer.opcode() == 184
                 && VirtualThreadInvokePatterns.isSupportedFactoryWrapperCall(classes, methodRef.orElseThrow())) {
                 return rootProducerIndex < 0;
             }
+        }
+        if (producer.opcode() == 178 && producer.fieldRef().isPresent()) {
+            return supportedVirtualThreadFactoryStaticField(classes, producer.fieldRef().orElseThrow(), visitedStaticFields);
         }
         if (transparentProducerIndex < 2) {
             return false;
@@ -2190,7 +2219,7 @@ public final class StaticVerifier {
         if (storeIndex < 0) {
             return false;
         }
-        return supportedVirtualThreadFactoryProducer(classes, instructions, storeIndex - 1, rootProducerIndex);
+        return supportedVirtualThreadFactoryProducer(classes, instructions, storeIndex - 1, rootProducerIndex, visitedStaticFields);
     }
 
     private static boolean supportedVirtualThreadExecutorReceiver(
@@ -2246,6 +2275,15 @@ public final class StaticVerifier {
         final List<Instruction> instructions,
         final int producerIndex
     ) {
+        return supportedVirtualThreadExecutorProducer(classes, instructions, producerIndex, new HashSet<>());
+    }
+
+    private static boolean supportedVirtualThreadExecutorProducer(
+        final Map<String, ClassFile> classes,
+        final List<Instruction> instructions,
+        final int producerIndex,
+        final Set<String> visitedStaticFields
+    ) {
         final int transparentProducerIndex = VirtualThreadInvokePatterns.transparentReferenceProducerIndex(instructions, producerIndex);
         if (transparentProducerIndex < 0) {
             return false;
@@ -2257,8 +2295,11 @@ public final class StaticVerifier {
                 return true;
             }
             if (isExecutorsNewThreadPerTaskExecutor(methodRef.orElseThrow())) {
-                return supportedVirtualThreadFactoryProducer(classes, instructions, transparentProducerIndex - 1, -1);
+                return supportedVirtualThreadFactoryProducer(classes, instructions, transparentProducerIndex - 1, -1, visitedStaticFields);
             }
+        }
+        if (producer.opcode() == 178 && producer.fieldRef().isPresent()) {
+            return supportedVirtualThreadExecutorStaticField(classes, producer.fieldRef().orElseThrow(), visitedStaticFields);
         }
         if (transparentProducerIndex < 2) {
             return false;
@@ -2271,7 +2312,81 @@ public final class StaticVerifier {
         if (storeIndex < 0) {
             return false;
         }
-        return supportedVirtualThreadExecutorProducer(classes, instructions, storeIndex - 1);
+        return supportedVirtualThreadExecutorProducer(classes, instructions, storeIndex - 1, visitedStaticFields);
+    }
+
+    private static boolean supportedVirtualThreadBuilderStaticField(
+        final Map<String, ClassFile> classes,
+        final FieldRef fieldRef,
+        final Set<String> visitedStaticFields
+    ) {
+        final FieldRef resolvedFieldRef = VirtualThreadInvokePatterns.resolvedStaticField(classes, fieldRef)
+            .map(VirtualThreadInvokePatterns.ResolvedStaticField::fieldRef)
+            .orElse(fieldRef);
+        final String key = resolvedFieldRef.owner() + "#" + resolvedFieldRef.name() + ":" + resolvedFieldRef.descriptor();
+        if (!visitedStaticFields.add(key)) {
+            return false;
+        }
+        final Optional<VirtualThreadInvokePatterns.StaticFieldProducer> producer = VirtualThreadInvokePatterns.staticFieldProducer(classes, fieldRef);
+        if (producer.isEmpty() || producer.orElseThrow().method().code().isEmpty()) {
+            return false;
+        }
+        return supportedVirtualThreadBuilderProducer(
+            classes,
+            producer.orElseThrow().method().code().orElseThrow().instructions(),
+            producer.orElseThrow().producerIndex(),
+            -1,
+            visitedStaticFields
+        );
+    }
+
+    private static boolean supportedVirtualThreadFactoryStaticField(
+        final Map<String, ClassFile> classes,
+        final FieldRef fieldRef,
+        final Set<String> visitedStaticFields
+    ) {
+        final FieldRef resolvedFieldRef = VirtualThreadInvokePatterns.resolvedStaticField(classes, fieldRef)
+            .map(VirtualThreadInvokePatterns.ResolvedStaticField::fieldRef)
+            .orElse(fieldRef);
+        final String key = resolvedFieldRef.owner() + "#" + resolvedFieldRef.name() + ":" + resolvedFieldRef.descriptor();
+        if (!visitedStaticFields.add(key)) {
+            return false;
+        }
+        final Optional<VirtualThreadInvokePatterns.StaticFieldProducer> producer = VirtualThreadInvokePatterns.staticFieldProducer(classes, fieldRef);
+        if (producer.isEmpty() || producer.orElseThrow().method().code().isEmpty()) {
+            return false;
+        }
+        return supportedVirtualThreadFactoryProducer(
+            classes,
+            producer.orElseThrow().method().code().orElseThrow().instructions(),
+            producer.orElseThrow().producerIndex(),
+            -1,
+            visitedStaticFields
+        );
+    }
+
+    private static boolean supportedVirtualThreadExecutorStaticField(
+        final Map<String, ClassFile> classes,
+        final FieldRef fieldRef,
+        final Set<String> visitedStaticFields
+    ) {
+        final FieldRef resolvedFieldRef = VirtualThreadInvokePatterns.resolvedStaticField(classes, fieldRef)
+            .map(VirtualThreadInvokePatterns.ResolvedStaticField::fieldRef)
+            .orElse(fieldRef);
+        final String key = resolvedFieldRef.owner() + "#" + resolvedFieldRef.name() + ":" + resolvedFieldRef.descriptor();
+        if (!visitedStaticFields.add(key)) {
+            return false;
+        }
+        final Optional<VirtualThreadInvokePatterns.StaticFieldProducer> producer = VirtualThreadInvokePatterns.staticFieldProducer(classes, fieldRef);
+        if (producer.isEmpty() || producer.orElseThrow().method().code().isEmpty()) {
+            return false;
+        }
+        return supportedVirtualThreadExecutorProducer(
+            classes,
+            producer.orElseThrow().method().code().orElseThrow().instructions(),
+            producer.orElseThrow().producerIndex(),
+            visitedStaticFields
+        );
     }
 
     private static boolean supportedRunnableProducer(
