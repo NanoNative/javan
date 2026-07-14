@@ -29,7 +29,7 @@ final class NativeLinkerTest {
     @Test
     void windowsHostAddsWinsockLibraryDuringLink() {
         assertThat(NativeLinker.platformLinkFlagsForOs("Windows 11"))
-            .containsExactly("-lws2_32");
+            .containsExactly("-lws2_32", "-ladvapi32");
     }
 
     @Test
@@ -268,6 +268,7 @@ final class NativeLinkerTest {
             mainC.toString(),
             runtimeC.toString(),
             "-lws2_32",
+            "-ladvapi32",
             "-o",
             output.toString()
         );

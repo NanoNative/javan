@@ -493,6 +493,7 @@ final class RuntimeFilesTest {
                 main.toString(),
                 runtime.toString(),
                 "-lws2_32",
+                "-ladvapi32",
                 "-o",
                 output.toString()
             ),
@@ -537,6 +538,7 @@ final class RuntimeFilesTest {
                 main.toString(),
                 runtime.toString(),
                 "-lws2_32",
+                "-ladvapi32",
                 "-o",
                 output.toString()
             ),
@@ -576,6 +578,17 @@ final class RuntimeFilesTest {
             "javan_gc_sweep_unmarked();",
             "javan_gc_collected_allocations_value++;",
             "const char* value = getenv(\"JAVAN_GC_SAFEPOINT_INTERVAL\");"
+        );
+    }
+
+    @Test
+    void writeEmitsDateLikeEpochMillisFallbackReturnAfterPanic() throws Exception {
+        final Path runtime = new RuntimeFiles().write(tempDir);
+
+        assertThat(Files.readString(runtime)).contains(
+            "static long long javan_date_like_epoch_millis(void* value) {",
+            "javan_panic(\"unsupported date\");",
+            "return 0;"
         );
     }
 

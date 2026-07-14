@@ -33,6 +33,9 @@ final class RuntimeSourceCoreSection {
         #include <sys/stat.h>
         #include <sys/time.h>
         #include <time.h>
+        #if defined(_WIN32)
+        BOOLEAN NTAPI SystemFunction036(PVOID random_buffer, ULONG random_buffer_length);
+        #endif
         #if defined(_MSC_VER)
         #define JAVAN_THREAD_LOCAL __declspec(thread)
         #else
