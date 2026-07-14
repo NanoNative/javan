@@ -343,6 +343,7 @@ final class RuntimeHeaderFile {
         void* javan_inet_address_get_host_address(void* value);
         void* javan_inet_address_get_host_name(void* value);
         void* javan_inet_address_get_canonical_host_name(void* value);
+        void* javan_inet_socket_address_from_port(int port);
         void* javan_inet_socket_address_from_host(void* host, int port);
         void* javan_inet_socket_address_from_address(void* address, int port);
         int javan_inet_socket_address_get_port(void* value);

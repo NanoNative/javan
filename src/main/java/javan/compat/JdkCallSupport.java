@@ -608,7 +608,7 @@ public final class JdkCallSupport {
         runtime("InetAddress.getHostAddress", "java/net/InetAddress", "getHostAddress", "()Ljava/lang/String;"),
         runtime("InetAddress.getHostName", "java/net/InetAddress", "getHostName", "()Ljava/lang/String;"),
         runtime("InetAddress.getCanonicalHostName", "java/net/InetAddress", "getCanonicalHostName", "()Ljava/lang/String;"),
-        runtime("InetSocketAddress.<init>", "java/net/InetSocketAddress", "<init>", "(Ljava/lang/String;I)V", "(Ljava/net/InetAddress;I)V"),
+        runtime("InetSocketAddress.<init>", "java/net/InetSocketAddress", "<init>", "(I)V", "(Ljava/lang/String;I)V", "(Ljava/net/InetAddress;I)V"),
         runtime("InetSocketAddress.getPort", "java/net/InetSocketAddress", "getPort", "()I"),
         runtime("InetSocketAddress.getHostString", "java/net/InetSocketAddress", "getHostString", "()Ljava/lang/String;"),
         runtime("InetSocketAddress.getAddress", "java/net/InetSocketAddress", "getAddress", "()Ljava/net/InetAddress;"),

@@ -3338,6 +3338,13 @@ final class BytecodeToIRInvokeSupport {
         if (!"java/net/InetSocketAddress".equals(methodRef.owner()) || !"<init>".equals(methodRef.name())) {
             return false;
         }
+        if ("(I)V".equals(methodRef.descriptor())) {
+            instructions.add(IrInstruction.assignObject(
+                receiver.value(),
+                IrExpression.objectCall("javan_inet_socket_address_from_port", arguments)
+            ));
+            return true;
+        }
         if ("(Ljava/lang/String;I)V".equals(methodRef.descriptor())) {
             instructions.add(IrInstruction.assignObject(
                 receiver.value(),

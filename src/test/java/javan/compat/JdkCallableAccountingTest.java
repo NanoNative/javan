@@ -106,6 +106,15 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksInetSocketAddressPortOnlyConstructorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef(
+            "java/net/InetSocketAddress",
+            "<init>",
+            "(I)V"
+        ))).isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksInputStreamReadAllBytesAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef(
             "java/io/InputStream",

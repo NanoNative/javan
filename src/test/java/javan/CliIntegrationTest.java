@@ -4229,6 +4229,31 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void inetSocketAddressPortOnlyToStringBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("inet-socket-address-port-only-to-string");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.InetSocketAddress;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new InetSocketAddress(8080).toString());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/inet-socket-address-port-only-to-string").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void inetSocketAddressGetHostStringBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("inet-socket-address-get-host-string");
         writeJava(project, "com.acme.Main", """
@@ -11472,8 +11497,8 @@ final class CliIntegrationTest {
         assertThat(run.exitCode()).isEqualTo(2);
         final String diagnostics = Files.readString(project.resolve(".javan/reports/diagnostics.md"));
         assertThat(diagnostics).contains(
-            "- diagnostics: `487`",
-            "- errors: `473`",
+            "- diagnostics: `479`",
+            "- errors: `465`",
             "- warnings: `14`",
             "error[JAVAN030] unsupported reachable bytecode",
             "`invokedynamic`"
@@ -11558,6 +11583,7 @@ final class CliIntegrationTest {
             "java/time/ZonedDateTime.now(Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;",
             "java/time/ZonedDateTime.getOffset()Ljava/time/ZoneOffset;",
             "java/time/ZoneOffset.getTotalSeconds()I",
+            "java/net/InetSocketAddress.<init>(I)V",
             "java/util/UUID.randomUUID()Ljava/util/UUID;",
             "java/util/UUID.toString()Ljava/lang/String;"
         );

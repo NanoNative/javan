@@ -387,6 +387,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void inetSocketAddressPortOnlyConstructorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/InetSocketAddress",
+            "<init>",
+            "(I)V"
+        ))).isTrue();
+    }
+
+    @Test
     void inputStreamReadAllBytesIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/io/InputStream",

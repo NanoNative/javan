@@ -10614,6 +10614,32 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersInetSocketAddressPortOnlyConstructorCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(I)Ljava/net/InetSocketAddress;",
+            2,
+            1,
+            classInstruction(0, 187, "new", "java/net/InetSocketAddress"),
+            plain(1, 89, "dup"),
+            plain(2, 26, "iload_0"),
+            invokeSpecial(3, new MethodRef("java/net/InetSocketAddress", "<init>", "(I)V")),
+            plain(4, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectNull()),
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall("javan_inet_socket_address_from_port", List.of(IrExpression.intLocal("arg0")))
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
     void lowersSocketCloseCall() {
         final IrFunction function = lowerMain(method(
             0x0008,

@@ -1046,6 +1046,18 @@ final class RuntimeSourcePlatformSection {
             return socket_address;
         }
 
+        void* javan_inet_socket_address_from_port(int port) {
+            void* address = javan_inet_address_new("0.0.0.0", "0.0.0.0");
+            void* address_root = address;
+            void** javan_inet_socket_port_roots[] = {
+                (void**) &address_root
+            };
+            javan_root_frame_push(javan_inet_socket_port_roots, 1);
+            void* result = javan_inet_socket_address_new(address_root, port, 0);
+            javan_root_frame_pop(javan_inet_socket_port_roots);
+            return result;
+        }
+
         void* javan_inet_socket_address_from_host(void* host, int port) {
             const char* host_value = host == NULL ? "0.0.0.0" : (const char*) host;
             void* address = javan_inet_address_new(host_value, host_value);
