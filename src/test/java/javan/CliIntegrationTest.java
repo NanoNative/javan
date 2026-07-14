@@ -13924,6 +13924,72 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void dateTimeFormatterBuilderAppendLiteralBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("datetime-formatter-builder-append-literal");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.time.format.DateTimeFormatterBuilder;
+            import java.util.Locale;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new DateTimeFormatterBuilder()
+                        .appendLiteral('T')
+                        .toFormatter(Locale.ROOT) != null);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/datetime-formatter-builder-append-literal").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void dateTimeFormatterParseTemporalWithSplitLiteralPatternBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("datetime-formatter-parse-split-literal-pattern");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.time.format.DateTimeFormatter;
+            import java.time.format.DateTimeFormatterBuilder;
+            import java.time.temporal.ChronoField;
+            import java.time.temporal.TemporalAccessor;
+            import java.util.Locale;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final DateTimeFormatter formatter = new DateTimeFormatterBuilder()
+                        .appendPattern("yyyy-MM-dd")
+                        .appendLiteral('T')
+                        .appendPattern("HH:mm:ss")
+                        .optionalStart()
+                        .appendFraction(ChronoField.NANO_OF_SECOND, 1, 9, true)
+                        .optionalEnd()
+                        .toFormatter(Locale.ROOT);
+                    final TemporalAccessor temporal = formatter.parse("2024-05-06T07:08:09.123");
+                    System.out.println(temporal.isSupported(ChronoField.NANO_OF_DAY));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/datetime-formatter-parse-split-literal-pattern").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void instantOfEpochMilliToEpochMilliBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("instant-of-epoch-milli");
         writeJava(project, "com.acme.Main", """

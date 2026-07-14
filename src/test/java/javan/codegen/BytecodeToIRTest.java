@@ -14954,6 +14954,34 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersDateTimeFormatterBuilderAppendLiteralCharToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/time/format/DateTimeFormatterBuilder;",
+            3,
+            0,
+            classInstruction(0, 187, "new", "java/time/format/DateTimeFormatterBuilder"),
+            plain(1, 89, "dup"),
+            invokeSpecial(2, new MethodRef("java/time/format/DateTimeFormatterBuilder", "<init>", "()V")),
+            plainOperands(3, 16, "bipush", 84),
+            invokeVirtual(4, new MethodRef("java/time/format/DateTimeFormatterBuilder", "appendLiteral", "(C)Ljava/time/format/DateTimeFormatterBuilder;")),
+            plain(5, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_datetime_formatter_builder_new", List.of())),
+            IrInstruction.returnObject(
+                IrExpression.objectCall(
+                    "javan_datetime_formatter_builder_append_literal_char",
+                    List.of(IrExpression.objectLocal("object0"), IrExpression.intLiteral(84))
+                )
+            )
+        );
+    }
+
+    @Test
     void lowersDateTimeFormatterParseToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,

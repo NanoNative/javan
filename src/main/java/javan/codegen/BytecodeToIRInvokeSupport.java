@@ -8284,6 +8284,16 @@ final class BytecodeToIRInvokeSupport {
             )));
             return true;
         }
+        if ("appendLiteral".equals(methodRef.name())
+            && "(C)Ljava/time/format/DateTimeFormatterBuilder;".equals(methodRef.descriptor())) {
+            final IrExpression literal = popInt(classFile, method, stack);
+            final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_datetime_formatter_builder_append_literal_char",
+                List.of(receiver, literal)
+            )));
+            return true;
+        }
         if ("optionalStart".equals(methodRef.name())
             && "()Ljava/time/format/DateTimeFormatterBuilder;".equals(methodRef.descriptor())) {
             stack.add(StackValue.objectExpression(IrExpression.objectCall(

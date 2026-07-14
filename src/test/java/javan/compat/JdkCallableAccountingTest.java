@@ -1108,6 +1108,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksDateTimeFormatterBuilderAppendLiteralAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/time/format/DateTimeFormatterBuilder", "appendLiteral", "(C)Ljava/time/format/DateTimeFormatterBuilder;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksDateTimeFormatterBuilderToFormatterAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/time/format/DateTimeFormatterBuilder", "toFormatter", "(Ljava/util/Locale;)Ljava/time/format/DateTimeFormatter;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

@@ -6391,18 +6391,56 @@ final class RuntimeSourceMemorySections {
         void* javan_datetime_formatter_builder_append_pattern(void* value, void* pattern) {
             void* builder_root = value;
             void* pattern_root = pattern;
+            void* merged_root = NULL;
             void** roots[] = {
                 (void**) &builder_root,
-                (void**) &pattern_root
+                (void**) &pattern_root,
+                (void**) &merged_root
             };
-            javan_root_frame_push(roots, 2);
+            javan_root_frame_push(roots, 3);
             javan_datetime_formatter_builder_value* builder =
                 javan_datetime_formatter_builder_checked(builder_root);
             if (pattern_root == NULL) {
                 javan_root_frame_pop(roots);
                 javan_panic("DateTimeFormatterBuilder.appendPattern null");
             }
-            javan_list_append_raw(builder->patterns, pattern_root);
+            if (builder->patterns->length > 0) {
+                const char* values[2] = {
+                    javan_charsequence_string_value(builder->patterns->values[builder->patterns->length - 1]),
+                    javan_charsequence_string_value(pattern_root)
+                };
+                merged_root = javan_string_concat("\1\1", 2, values);
+                builder->patterns->values[builder->patterns->length - 1] = merged_root;
+            } else {
+                javan_list_append_raw(builder->patterns, pattern_root);
+            }
+            javan_root_frame_pop(roots);
+            return builder_root;
+        }
+
+        void* javan_datetime_formatter_builder_append_literal_char(void* value, int literal) {
+            void* builder_root = value;
+            void* literal_root = NULL;
+            void* merged_root = NULL;
+            void** roots[] = {
+                (void**) &builder_root,
+                (void**) &literal_root,
+                (void**) &merged_root
+            };
+            javan_root_frame_push(roots, 3);
+            javan_datetime_formatter_builder_value* builder =
+                javan_datetime_formatter_builder_checked(builder_root);
+            literal_root = javan_string_value_of_char(literal);
+            if (builder->patterns->length > 0) {
+                const char* values[2] = {
+                    javan_charsequence_string_value(builder->patterns->values[builder->patterns->length - 1]),
+                    javan_charsequence_string_value(literal_root)
+                };
+                merged_root = javan_string_concat("\1\1", 2, values);
+                builder->patterns->values[builder->patterns->length - 1] = merged_root;
+            } else {
+                javan_list_append_raw(builder->patterns, literal_root);
+            }
             javan_root_frame_pop(roots);
             return builder_root;
         }

@@ -1990,6 +1990,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void dateTimeFormatterBuilderAppendLiteralIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/time/format/DateTimeFormatterBuilder",
+            "appendLiteral",
+            "(C)Ljava/time/format/DateTimeFormatterBuilder;"
+        ))).isTrue();
+    }
+
+    @Test
     void dateTimeFormatterBuilderToFormatterRequiresTimeRuntimeModule() {
         assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
             "java/time/format/DateTimeFormatterBuilder",

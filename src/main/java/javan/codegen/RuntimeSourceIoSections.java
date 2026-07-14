@@ -421,7 +421,7 @@ final class RuntimeSourceIoSections {
             }
             int written = 0;
             while (written < length) {
-                ssize_t chunk = send(socket->fd, data + written, (size_t) (length - written), 0);
+                ssize_t chunk = send(socket->fd, (const char*) (data + written), (size_t) (length - written), 0);
                 if (chunk <= 0) {
                     javan_panic("http response write failed");
                 }
@@ -969,7 +969,7 @@ final class RuntimeSourceIoSections {
             int header_end = -1;
             while (header_end < 0) {
                 javan_http_server_buffer_ensure_capacity(&request_buffer, &request_capacity, request_length + 256);
-                ssize_t read = recv(socket->fd, request_buffer + request_length, (size_t) (request_capacity - request_length), 0);
+                ssize_t read = recv(socket->fd, (char*) (request_buffer + request_length), (size_t) (request_capacity - request_length), 0);
                 if (read <= 0) {
                     free(request_buffer);
                     javan_panic("http request read failed");
@@ -980,7 +980,7 @@ final class RuntimeSourceIoSections {
             int body_length = javan_http_request_content_length(request_buffer, header_end);
             while (request_length < header_end + body_length) {
                 javan_http_server_buffer_ensure_capacity(&request_buffer, &request_capacity, header_end + body_length + 1);
-                ssize_t read = recv(socket->fd, request_buffer + request_length, (size_t) (request_capacity - request_length), 0);
+                ssize_t read = recv(socket->fd, (char*) (request_buffer + request_length), (size_t) (request_capacity - request_length), 0);
                 if (read <= 0) {
                     free(request_buffer);
                     javan_panic("http request body read failed");

@@ -370,6 +370,7 @@ public final class JdkCallSupport {
         runtime("DateTimeFormatterBuilder.<init>", "java/time/format/DateTimeFormatterBuilder", "<init>", "()V"),
         runtime("DateTimeFormatterBuilder.parseCaseInsensitive", "java/time/format/DateTimeFormatterBuilder", "parseCaseInsensitive", "()Ljava/time/format/DateTimeFormatterBuilder;"),
         runtime("DateTimeFormatterBuilder.appendPattern", "java/time/format/DateTimeFormatterBuilder", "appendPattern", "(Ljava/lang/String;)Ljava/time/format/DateTimeFormatterBuilder;"),
+        runtime("DateTimeFormatterBuilder.appendLiteral", "java/time/format/DateTimeFormatterBuilder", "appendLiteral", "(C)Ljava/time/format/DateTimeFormatterBuilder;"),
         runtime("DateTimeFormatterBuilder.optionalStart", "java/time/format/DateTimeFormatterBuilder", "optionalStart", "()Ljava/time/format/DateTimeFormatterBuilder;"),
         runtime("DateTimeFormatterBuilder.appendFraction", "java/time/format/DateTimeFormatterBuilder", "appendFraction", "(Ljava/time/temporal/TemporalField;IIZ)Ljava/time/format/DateTimeFormatterBuilder;"),
         runtime("DateTimeFormatterBuilder.optionalEnd", "java/time/format/DateTimeFormatterBuilder", "optionalEnd", "()Ljava/time/format/DateTimeFormatterBuilder;"),

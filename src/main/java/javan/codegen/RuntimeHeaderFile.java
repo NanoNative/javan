@@ -570,6 +570,7 @@ final class RuntimeHeaderFile {
         void* javan_datetime_formatter_builder_new(void);
         void* javan_datetime_formatter_builder_parse_case_insensitive(void* value);
         void* javan_datetime_formatter_builder_append_pattern(void* value, void* pattern);
+        void* javan_datetime_formatter_builder_append_literal_char(void* value, int literal);
         void* javan_datetime_formatter_builder_optional_start(void* value);
         void* javan_datetime_formatter_builder_append_fraction(void* value, void* field, int min_width, int max_width, int decimal_point);
         void* javan_datetime_formatter_builder_optional_end(void* value);
