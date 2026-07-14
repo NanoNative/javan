@@ -477,6 +477,9 @@ public final class BytecodeToIR {
         if ("java/lang/ThreadLocal".equals(owner)) {
             return Optional.of(IrExpression.objectCall("javan_thread_local_new", List.of()));
         }
+        if ("java/util/concurrent/ThreadPoolExecutor$CallerRunsPolicy".equals(owner)) {
+            return Optional.of(IrExpression.objectAllocation(owner));
+        }
         if ("java/lang/Thread".equals(owner)) {
             return Optional.of(IrExpression.objectCall("javan_thread_new", List.of()));
         }

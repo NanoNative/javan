@@ -299,6 +299,7 @@ final class RuntimeHeaderFile {
         void* javan_list_iterator(void* list);
         int javan_collection_add(void* collection, void* value);
         void* javan_hashset_new(void);
+        void* javan_set_unmodifiable(void* set);
         int javan_set_add(void* set, void* value);
         int javan_set_remove(void* set, void* value);
         int javan_set_add_all(void* set, void* collection);
@@ -622,6 +623,8 @@ final class RuntimeHeaderFile {
         void* javan_thread_current(void);
         void* javan_thread_get_name(void* value);
         void javan_thread_set_name(void* value, void* name);
+        void javan_thread_set_daemon(void* value, int daemon);
+        int javan_thread_is_daemon(void* value);
         void javan_thread_detach_current(void);
         void javan_thread_set_target(void* value, void* target);
         void* javan_thread_local_new(void);

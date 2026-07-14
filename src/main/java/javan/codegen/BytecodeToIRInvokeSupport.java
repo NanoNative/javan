@@ -1832,7 +1832,9 @@ final class BytecodeToIRInvokeSupport {
         if (!"<init>".equals(methodRef.name()) || !"()V".equals(methodRef.descriptor())) {
             return false;
         }
-        return "java/lang/Object".equals(methodRef.owner()) || "java/lang/Record".equals(methodRef.owner());
+        return "java/lang/Object".equals(methodRef.owner())
+            || "java/lang/Record".equals(methodRef.owner())
+            || "java/util/concurrent/ThreadPoolExecutor$CallerRunsPolicy".equals(methodRef.owner());
     }
     static void lowerStaticCall(
         final Map<String, ClassFile> classes,
@@ -4291,6 +4293,11 @@ final class BytecodeToIRInvokeSupport {
             if ("unmodifiableList".equals(name) && "(Ljava/util/List;)Ljava/util/List;".equals(descriptor)) {
                 final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
                 stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_unmodifiable", arguments)));
+                return true;
+            }
+            if ("unmodifiableSet".equals(name) && "(Ljava/util/Set;)Ljava/util/Set;".equals(descriptor)) {
+                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_set_unmodifiable", arguments)));
                 return true;
             }
             return false;
@@ -8364,6 +8371,12 @@ final class BytecodeToIRInvokeSupport {
         if (!"java/lang/Thread".equals(methodRef.owner())) {
             return false;
         }
+        if ("setDaemon".equals(methodRef.name()) && "(Z)V".equals(methodRef.descriptor())) {
+            final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
+            final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+            instructions.add(IrInstruction.callStaticVoid("javan_thread_set_daemon", List.of(receiver, arguments.getFirst())));
+            return true;
+        }
         final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
         if ("interrupt".equals(methodRef.name()) && "()V".equals(methodRef.descriptor())) {
             instructions.add(IrInstruction.callStaticVoid("javan_thread_interrupt", List.of(receiver)));
@@ -8383,6 +8396,10 @@ final class BytecodeToIRInvokeSupport {
         }
         if ("getName".equals(methodRef.name()) && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
             pushObjectCall(instructions, stack, localDeclarations, "javan_thread_get_name", List.of(receiver));
+            return true;
+        }
+        if ("isDaemon".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor())) {
+            pushIntCall(instructions, stack, localDeclarations, "javan_thread_is_daemon", List.of(receiver));
             return true;
         }
         if ("start".equals(methodRef.name()) && "()V".equals(methodRef.descriptor())) {

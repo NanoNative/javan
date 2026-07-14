@@ -2881,6 +2881,7 @@ final class RuntimeSourceMemorySections {
             int started;
             int completed;
             int virtual_thread;
+            int daemon;
             int park_permit;
             char* name;
             #if defined(_WIN32)
@@ -7180,6 +7181,14 @@ final class RuntimeSourceMemorySections {
             thread->name = (char*) name;
         }
 
+        void javan_thread_set_daemon(void* value, int daemon) {
+            javan_require_thread(value)->daemon = daemon != 0 ? 1 : 0;
+        }
+
+        int javan_thread_is_daemon(void* value) {
+            return javan_require_thread(value)->daemon != 0;
+        }
+
         void javan_thread_detach_current(void) {
             if (javan_current_thread_value == NULL) {
                 return;
@@ -10103,6 +10112,13 @@ final class RuntimeSourceMemorySections {
             javan_object_list* set = javan_list_new_with_capacity(0, 0);
             javan_update_runtime_allocation_kind((void*) set, JAVAN_RUNTIME_KIND_OBJECT_SET);
             return set;
+        }
+
+        void* javan_set_unmodifiable(void* value) {
+            javan_object_list* set = javan_list_checked(value);
+            javan_object_list* view = javan_list_new_view(set, 1, JAVAN_LIST_VIEW_UNMODIFIABLE);
+            javan_update_runtime_allocation_kind((void*) view, JAVAN_RUNTIME_KIND_OBJECT_SET);
+            return view;
         }
 
         int javan_collection_add(void* value, void* element) {

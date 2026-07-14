@@ -8101,6 +8101,29 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowerJdkCollectionStaticCallLowersCollectionsUnmodifiableSet() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("set"))
+        ));
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        assertThat(BytecodeToIRInvokeSupport.lowerJdkCollectionStaticCall(
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/util/Set;)Ljava/util/Set;", 1, 1, plain(0, 176, "areturn")),
+            new MethodRef("java/util/Collections", "unmodifiableSet", "(Ljava/util/Set;)Ljava/util/Set;"),
+            instructions,
+            stack,
+            locals
+        )).isTrue();
+
+        assertThat(instructions).isEmpty();
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.objectExpression(
+            IrExpression.objectCall("javan_set_unmodifiable", List.of(IrExpression.objectLocal("set")))
+        ));
+    }
+
+    @Test
     void lowerJdkCollectionInstanceCallLowersArrayListReversed() {
         final List<IrInstruction> instructions = new ArrayList<>();
         final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
@@ -10962,6 +10985,48 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).containsExactly(
             IrInstruction.assignObject("object0", IrExpression.objectCall("javan_thread_get_name", List.of(IrExpression.objectLocal("arg0")))),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersThreadSetDaemonInstanceCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Thread;Z)V",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 27, "iload_1"),
+            invokeVirtual(2, new MethodRef("java/lang/Thread", "setDaemon", "(Z)V")),
+            plain(3, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid(
+                "javan_thread_set_daemon",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"))
+            ),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
+    void lowersThreadIsDaemonInstanceCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Thread;)Z",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/Thread", "isDaemon", "()Z")),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignInt("int0", IrExpression.intCall("javan_thread_is_daemon", List.of(IrExpression.objectLocal("arg0")))),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
         );
     }
 
