@@ -2783,6 +2783,19 @@ final class RuntimeSourceMemorySections {
             return javan_runtime_kind_of(value) == JAVAN_RUNTIME_KIND_ATOMIC_REFERENCE;
         }
 
+        int javan_object_is_scheduled_executor_service(void* value) {
+            if (value == NULL) {
+                return 0;
+            }
+            int type_id = javan_registered_type_id(value);
+            if (type_id == 0) {
+                return 0;
+            }
+            JavanTypeDescriptor* descriptor = javan_type_descriptor_for(type_id);
+            return descriptor != NULL
+                && javan_type_descriptor_contains_assignable_name(descriptor, "java.util.concurrent.ScheduledExecutorService") != 0;
+        }
+
         int javan_object_is_collection(void* value) {
             int runtime_kind = javan_runtime_kind_of(value);
             return runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_LIST
@@ -3541,6 +3554,9 @@ final class RuntimeSourceMemorySections {
             if (strcmp(binary_name, "java.util.concurrent.atomic.AtomicReference") == 0) {
                 return runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_REFERENCE;
             }
+            if (strcmp(binary_name, "java.util.concurrent.ScheduledExecutorService") == 0) {
+                return javan_object_is_scheduled_executor_service(value);
+            }
             if (strcmp(binary_name, "java.lang.CharSequence") == 0) {
                 return javan_value_is_string(value) != 0 || runtime_kind == JAVAN_RUNTIME_KIND_STRING_BUILDER;
             }
@@ -4187,11 +4203,6 @@ final class RuntimeSourceMemorySections {
         void* javan_virtual_thread_factory_get_class(void* value) {
             javan_virtual_thread_factory_checked(value);
             return javan_runtime_class_new("java.lang.ThreadBuilders$VirtualThreadFactory");
-        }
-
-        void* javan_virtual_thread_executor_get_class(void* value) {
-            javan_virtual_thread_executor_checked(value);
-            return javan_runtime_class_new("java.util.concurrent.ThreadPerTaskExecutor");
         }
 
         void* javan_object_get_class(void* value) {

@@ -1735,8 +1735,7 @@ public final class StaticVerifier {
             return supportedVirtualThreadExecutorObservationReceiver(classes, instructions, instructionIndex, methodRef);
         }
         if (isObjectGetClassObservationMethod(methodRef)) {
-            return instructionIndex >= 1
-                && supportedVirtualThreadExecutorProducer(classes, instructions, instructionIndex - 1);
+            return instructionIndex >= 1;
         }
         return false;
     }
@@ -2997,7 +2996,10 @@ public final class StaticVerifier {
         if ("java/util/concurrent/atomic/AtomicLong".equals(target)) {
             return true;
         }
-        return "java/util/concurrent/atomic/AtomicReference".equals(target);
+        if ("java/util/concurrent/atomic/AtomicReference".equals(target)) {
+            return true;
+        }
+        return "java/util/concurrent/ScheduledExecutorService".equals(target);
     }
 
     private static boolean hasAssignableClass(final Map<String, ClassFile> classes, final String target) {

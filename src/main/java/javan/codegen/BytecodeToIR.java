@@ -3243,6 +3243,9 @@ public final class BytecodeToIR {
         if ("java/util/concurrent/atomic/AtomicReference".equals(target)) {
             return Optional.of("javan_object_is_atomic_reference");
         }
+        if ("java/util/concurrent/ScheduledExecutorService".equals(target)) {
+            return Optional.of("javan_object_is_scheduled_executor_service");
+        }
         return Optional.empty();
     }
 

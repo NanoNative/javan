@@ -4437,6 +4437,27 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersInstanceOfScheduledExecutorServiceToRuntimeAwareIntrinsic() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Object;)I",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            classInstruction(1, 193, "instanceof", "java/util/concurrent/ScheduledExecutorService"),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_object_is_scheduled_executor_service",
+                List.of(IrExpression.objectLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
     void lowersInstanceOfBooleanWrapperToTypeIntrinsic() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -9180,6 +9201,34 @@ final class BytecodeToIRTest {
             )
         );
         assertThat(cancelStack).containsExactly(BytecodeToIR.StackValue.intExpression(IrExpression.intLocal("int0")));
+    }
+
+    @Test
+    void lowerInterfaceCallRoutesExecutorServiceGetClassThroughGenericObjectHelper() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.virtualThreadExecutor(IrExpression.objectLocal("executor"))
+        ));
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        BytecodeToIRInvokeSupport.lowerInterfaceCall(
+            Map.of(),
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/util/concurrent/ExecutorService;)Ljava/lang/Class;", 1, 1, plain(0, 176, "areturn")),
+            invokeInterface(0, new MethodRef("java/util/concurrent/ExecutorService", "getClass", "()Ljava/lang/Class;")),
+            instructions,
+            stack,
+            locals,
+            new LinkedHashMap<>()
+        );
+
+        assertThat(instructions).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall("javan_object_get_class", List.of(IrExpression.objectLocal("executor")))
+            )
+        );
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("object0")));
     }
 
     @Test

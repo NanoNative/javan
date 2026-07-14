@@ -1245,6 +1245,13 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void staticVerifierAcceptsReachableInstanceofScheduledExecutorServiceTarget() {
+        final List<Diagnostic> diagnostics = verifyInstanceOf(Map.of(), "java/util/concurrent/ScheduledExecutorService", true);
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
     void staticVerifierAcceptsReachableInstanceofCollectionTarget() {
         final List<Diagnostic> diagnostics = verifyInstanceOf(Map.of(), "java/util/Collection", true);
 
@@ -9359,6 +9366,41 @@ final class CoreBehaviorTest {
             assertThat(diagnostic.code()).isEqualTo("JAVAN077");
             assertThat(diagnostic.subject()).isEqualTo("ExecutorService.submit(Runnable)");
         });
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableExecutorServiceGetClassWithUnknownReceiver() {
+        final String descriptor = "(Ljava/util/concurrent/ExecutorService;)V";
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                descriptor,
+                Optional.of(new CodeAttribute(
+                    1,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 42, "aload_0"),
+                        instruction(1, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "getClass", "()Ljava/lang/Class;")),
+                        instruction(2, 87, "pop"),
+                        instruction(3, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main),
+            List.of(new EntryPoint(main.name(), "main", descriptor))
+        );
+
+        assertThat(diagnostics).isEmpty();
     }
 
     @Test

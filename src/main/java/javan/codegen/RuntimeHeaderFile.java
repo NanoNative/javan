@@ -196,6 +196,7 @@ final class RuntimeHeaderFile {
         int javan_object_is_atomic_integer(void* value);
         int javan_object_is_atomic_long(void* value);
         int javan_object_is_atomic_reference(void* value);
+        int javan_object_is_scheduled_executor_service(void* value);
         int javan_object_is_collection(void* value);
         int javan_object_is_optional(void* value);
         int javan_object_is_string(void* value);
@@ -603,7 +604,6 @@ final class RuntimeHeaderFile {
         void* javan_runtime_class_literal(void* binary_name);
         void* javan_virtual_thread_builder_get_class(void* value);
         void* javan_virtual_thread_factory_get_class(void* value);
-        void* javan_virtual_thread_executor_get_class(void* value);
         void* javan_object_get_class(void* value);
         void* javan_runtime_class_get_name(void* value);
         void* javan_runtime_class_get_simple_name(void* value);

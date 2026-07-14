@@ -9790,13 +9790,13 @@ final class BytecodeToIRInvokeSupport {
             return true;
         }
         if (isVirtualThreadExecutorGetClass(methodRef)) {
-            final StackValue executor = popVirtualThreadExecutor(classFile, method, instruction, stack);
+            final IrExpression executor = popObject(classFile, method, instruction, stack);
             pushObjectCall(
                 instructions,
                 stack,
                 localDeclarations,
-                "javan_virtual_thread_executor_get_class",
-                List.of(executor.expression().orElse(IrExpression.objectNull()))
+                "javan_object_get_class",
+                List.of(executor)
             );
             return true;
         }

@@ -11719,8 +11719,8 @@ final class CliIntegrationTest {
         assertThat(run.exitCode()).isEqualTo(2);
         final String diagnostics = Files.readString(project.resolve(".javan/reports/diagnostics.md"));
         assertThat(diagnostics).contains(
-            "- diagnostics: `444`",
-            "- errors: `430`",
+            "- diagnostics: `441`",
+            "- errors: `427`",
             "- warnings: `14`",
             "error[JAVAN030] unsupported reachable bytecode",
             "`invokedynamic`"
@@ -21039,6 +21039,94 @@ final class CliIntegrationTest {
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-executor-equals-hash").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void virtualThreadExecutorGetClassSimpleNameBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-executor-get-class-simple-name");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.ExecutorService;
+            import java.util.concurrent.Executors;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+                    System.out.println(executor.getClass().getSimpleName());
+                    executor.close();
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-executor-get-class-simple-name").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void virtualThreadExecutorInstanceOfScheduledExecutorServiceBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-executor-instanceof-scheduled-executor-service");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.ExecutorService;
+            import java.util.concurrent.Executors;
+            import java.util.concurrent.ScheduledExecutorService;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+                    System.out.println(executor instanceof ScheduledExecutorService);
+                    executor.close();
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-executor-instanceof-scheduled-executor-service").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void scheduledExecutorServiceClassIsInstanceRejectsVirtualThreadExecutorBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("scheduled-executor-service-class-is-instance-virtual-thread-executor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.Executors;
+            import java.util.concurrent.ScheduledExecutorService;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final var executor = Executors.newVirtualThreadPerTaskExecutor();
+                    System.out.println(ScheduledExecutorService.class.isInstance(executor));
+                    executor.close();
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/scheduled-executor-service-class-is-instance-virtual-thread-executor").toString())).stdout())
             .isEqualTo(jvmOutput);
     }
 

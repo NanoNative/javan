@@ -1300,6 +1300,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksExecutorServiceGetClassAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/ExecutorService", "getClass", "()Ljava/lang/Class;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksSqlDateValueOfAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/sql/Date", "valueOf", "(Ljava/time/LocalDate;)Ljava/sql/Date;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

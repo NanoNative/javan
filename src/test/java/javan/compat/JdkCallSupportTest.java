@@ -63,6 +63,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void executorServiceGetClassIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/ExecutorService",
+            "getClass",
+            "()Ljava/lang/Class;"
+        ))).isTrue();
+    }
+
+    @Test
     void objectEqualsIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/Object",
