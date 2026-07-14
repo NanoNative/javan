@@ -1435,7 +1435,18 @@ public final class BytecodeToIR {
                 );
                 break;
             case 185:
-                BytecodeToIRInvokeSupport.lowerInterfaceCall(classes, classFile, method, instruction, instructions, stack, localDeclarations, dispatches);
+                BytecodeToIRInvokeSupport.lowerInterfaceCall(
+                    classes,
+                    classFile,
+                    method,
+                    instruction,
+                    instructions,
+                    stack,
+                    localDeclarations,
+                    pendingExceptionHandlerStacks,
+                    dispatches,
+                    sourceLines
+                );
                 break;
             case 186:
                 BytecodeToIRInvokeSupport.lowerDynamicCall(

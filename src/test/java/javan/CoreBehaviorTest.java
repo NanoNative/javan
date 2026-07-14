@@ -9704,6 +9704,160 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void staticVerifierRejectsReachableExecutorServiceShutdownNowWithUnknownReceiver() {
+        final String descriptor = "(Ljava/util/concurrent/ExecutorService;)V";
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                descriptor,
+                Optional.of(new CodeAttribute(
+                    1,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 42, "aload_0"),
+                        instruction(1, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "shutdownNow", "()Ljava/util/List;")),
+                        instruction(2, 87, "pop"),
+                        instruction(3, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main),
+            List.of(new EntryPoint(main.name(), "main", descriptor))
+        );
+
+        assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
+            assertThat(diagnostic.code()).isEqualTo("JAVAN077");
+            assertThat(diagnostic.subject()).isEqualTo("ExecutorService.shutdownNow()");
+        });
+    }
+
+    @Test
+    void staticVerifierRejectsReachableExecutorServiceAwaitTerminationWithUnknownReceiver() {
+        final String descriptor = "(Ljava/util/concurrent/ExecutorService;)V";
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                descriptor,
+                Optional.of(new CodeAttribute(
+                    4,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 42, "aload_0"),
+                        instruction(1, 9, "lconst_0"),
+                        instruction(2, 178, "getstatic", new FieldRef("java/util/concurrent/TimeUnit", "MILLISECONDS", "Ljava/util/concurrent/TimeUnit;")),
+                        instruction(3, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "awaitTermination", "(JLjava/util/concurrent/TimeUnit;)Z")),
+                        instruction(4, 87, "pop"),
+                        instruction(5, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main),
+            List.of(new EntryPoint(main.name(), "main", descriptor))
+        );
+
+        assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
+            assertThat(diagnostic.code()).isEqualTo("JAVAN077");
+            assertThat(diagnostic.subject()).isEqualTo("ExecutorService.awaitTermination(long,TimeUnit)");
+        });
+    }
+
+    @Test
+    void staticVerifierRejectsReachableExecutorServiceIsShutdownWithUnknownReceiver() {
+        final String descriptor = "(Ljava/util/concurrent/ExecutorService;)V";
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                descriptor,
+                Optional.of(new CodeAttribute(
+                    1,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 42, "aload_0"),
+                        instruction(1, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "isShutdown", "()Z")),
+                        instruction(2, 87, "pop"),
+                        instruction(3, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main),
+            List.of(new EntryPoint(main.name(), "main", descriptor))
+        );
+
+        assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
+            assertThat(diagnostic.code()).isEqualTo("JAVAN077");
+            assertThat(diagnostic.subject()).isEqualTo("ExecutorService.isShutdown()");
+        });
+    }
+
+    @Test
+    void staticVerifierRejectsReachableExecutorServiceIsTerminatedWithUnknownReceiver() {
+        final String descriptor = "(Ljava/util/concurrent/ExecutorService;)V";
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                descriptor,
+                Optional.of(new CodeAttribute(
+                    1,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 42, "aload_0"),
+                        instruction(1, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "isTerminated", "()Z")),
+                        instruction(2, 87, "pop"),
+                        instruction(3, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main),
+            List.of(new EntryPoint(main.name(), "main", descriptor))
+        );
+
+        assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
+            assertThat(diagnostic.code()).isEqualTo("JAVAN077");
+            assertThat(diagnostic.subject()).isEqualTo("ExecutorService.isTerminated()");
+        });
+    }
+
+    @Test
     void staticVerifierRejectsReachableExecutorsFactoryAsConcurrencyRuntimeApi() {
         final ClassFile main = classWithMethods(
             "com/acme/Main",

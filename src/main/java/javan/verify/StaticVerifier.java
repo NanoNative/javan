@@ -1730,7 +1730,12 @@ public final class StaticVerifier {
         if (isExecutorServiceSubmitRunnable(methodRef)) {
             return supportsVirtualThreadExecutorExecute(classes, instructions, instructionIndex);
         }
-        if (isExecutorServiceShutdown(methodRef) || isExecutorServiceClose(methodRef)) {
+        if (isExecutorServiceShutdown(methodRef)
+            || isExecutorServiceClose(methodRef)
+            || isExecutorServiceShutdownNow(methodRef)
+            || isExecutorServiceAwaitTermination(methodRef)
+            || isExecutorServiceIsShutdown(methodRef)
+            || isExecutorServiceIsTerminated(methodRef)) {
             return supportedVirtualThreadExecutorReceiver(classes, instructions, instructionIndex);
         }
         if (isVirtualThreadExecutorObservationMethod(methodRef)) {
@@ -2227,17 +2232,36 @@ public final class StaticVerifier {
         final List<Instruction> instructions,
         final int instructionIndex
     ) {
-        final Optional<MethodRef> methodRef = instructions.get(instructionIndex).methodRef();
-        if (methodRef.isPresent()
-            && (isExecutorServiceShutdown(methodRef.orElseThrow())
-            || isExecutorServiceClose(methodRef.orElseThrow()))) {
-            return supportedVirtualThreadExecutorProducer(classes, instructions, instructionIndex - 1);
+        if (instructionIndex < 0 || instructionIndex >= instructions.size()) {
+            return false;
         }
-        final int receiverIndex = VirtualThreadInvokePatterns.virtualThreadReceiverProducerIndex(instructions, instructionIndex);
+        final Optional<MethodRef> methodRef = instructions.get(instructionIndex).methodRef();
+        if (methodRef.isEmpty()) {
+            return false;
+        }
+        final int receiverIndex = virtualThreadExecutorReceiverProducerIndex(instructions, instructionIndex, methodRef.orElseThrow());
         if (receiverIndex < 0) {
             return false;
         }
         return supportedVirtualThreadExecutorProducer(classes, instructions, receiverIndex);
+    }
+
+    private static int virtualThreadExecutorReceiverProducerIndex(
+        final List<Instruction> instructions,
+        final int instructionIndex,
+        final MethodRef methodRef
+    ) {
+        if (isExecutorServiceShutdown(methodRef)
+            || isExecutorServiceClose(methodRef)
+            || isExecutorServiceShutdownNow(methodRef)
+            || isExecutorServiceIsShutdown(methodRef)
+            || isExecutorServiceIsTerminated(methodRef)) {
+            return instructionIndex - 1;
+        }
+        if (isExecutorServiceAwaitTermination(methodRef)) {
+            return instructionIndex - 3;
+        }
+        return VirtualThreadInvokePatterns.virtualThreadReceiverProducerIndex(instructions, instructionIndex);
     }
 
     private static boolean supportedVirtualThreadExecutorObservationReceiver(
@@ -2483,6 +2507,22 @@ public final class StaticVerifier {
         return VirtualThreadInvokePatterns.isExecutorServiceClose(methodRef);
     }
 
+    private static boolean isExecutorServiceShutdownNow(final MethodRef methodRef) {
+        return VirtualThreadInvokePatterns.isExecutorServiceShutdownNow(methodRef);
+    }
+
+    private static boolean isExecutorServiceAwaitTermination(final MethodRef methodRef) {
+        return VirtualThreadInvokePatterns.isExecutorServiceAwaitTermination(methodRef);
+    }
+
+    private static boolean isExecutorServiceIsShutdown(final MethodRef methodRef) {
+        return VirtualThreadInvokePatterns.isExecutorServiceIsShutdown(methodRef);
+    }
+
+    private static boolean isExecutorServiceIsTerminated(final MethodRef methodRef) {
+        return VirtualThreadInvokePatterns.isExecutorServiceIsTerminated(methodRef);
+    }
+
     private static boolean isVirtualThreadBuilderOwner(final String owner) {
         return VirtualThreadInvokePatterns.isThreadBuilderVirtualOwner(owner);
     }
@@ -2629,6 +2669,18 @@ public final class StaticVerifier {
             }
             if ("close".equals(methodRef.name())) {
                 return "ExecutorService.close()";
+            }
+            if ("shutdownNow".equals(methodRef.name())) {
+                return "ExecutorService.shutdownNow()";
+            }
+            if ("awaitTermination".equals(methodRef.name())) {
+                return "ExecutorService.awaitTermination(long,TimeUnit)";
+            }
+            if ("isShutdown".equals(methodRef.name())) {
+                return "ExecutorService.isShutdown()";
+            }
+            if ("isTerminated".equals(methodRef.name())) {
+                return "ExecutorService.isTerminated()";
             }
         }
         return methodRef.display();

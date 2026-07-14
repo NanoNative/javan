@@ -20910,6 +20910,110 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void threadPerTaskExecutorLifecyclePredicatesBuildAndMatchJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-executor-lifecycle-predicates");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.Executors;
+            import java.util.concurrent.TimeUnit;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final var executor = Executors.newThreadPerTaskExecutor(Thread.ofVirtual().factory());
+                    printBoolean(executor.isShutdown());
+                    printBoolean(executor.isTerminated());
+                    printBoolean(executor.awaitTermination(0, TimeUnit.MILLISECONDS));
+                    executor.shutdown();
+                    printBoolean(executor.isShutdown());
+                    printBoolean(executor.isTerminated());
+                    printBoolean(executor.awaitTermination(0, TimeUnit.MILLISECONDS));
+                    printBoolean(executor.isTerminated());
+                }
+
+                private static void printBoolean(final boolean value) {
+                    System.out.println(value ? "true" : "false");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-executor-lifecycle-predicates").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadPerTaskExecutorShutdownNowBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-executor-shutdown-now");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.CountDownLatch;
+            import java.util.concurrent.Executors;
+            import java.util.concurrent.TimeUnit;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final var executor = Executors.newThreadPerTaskExecutor(Thread.ofVirtual().factory());
+                    final var started = new CountDownLatch(1);
+                    final var stopped = new CountDownLatch(1);
+                    executor.submit(new Task(started, stopped));
+                    printBoolean(started.await(1, TimeUnit.SECONDS));
+                    System.out.println(executor.shutdownNow().size());
+                    printBoolean(executor.awaitTermination(2, TimeUnit.SECONDS));
+                    printBoolean(stopped.await(0, TimeUnit.MILLISECONDS));
+                    printBoolean(executor.isShutdown());
+                    printBoolean(executor.isTerminated());
+                }
+
+                private static void printBoolean(final boolean value) {
+                    System.out.println(value ? "true" : "false");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            import java.util.concurrent.CountDownLatch;
+
+            public final class Task implements Runnable {
+                private final CountDownLatch started;
+                private final CountDownLatch stopped;
+
+                public Task(final CountDownLatch started, final CountDownLatch stopped) {
+                    this.started = started;
+                    this.stopped = stopped;
+                }
+
+                @Override
+                public void run() {
+                    started.countDown();
+                    while (!Thread.currentThread().isInterrupted()) {
+                        // spin until shutdownNow interrupts the task
+                    }
+                    stopped.countDown();
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-executor-shutdown-now").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
     void staticFieldBackedThreadPerTaskExecutorSubmitBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("virtual-thread-static-field-executor-submit");
         writeJava(project, "com.acme.Main", """

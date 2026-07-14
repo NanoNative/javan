@@ -115,6 +115,30 @@ public final class VirtualThreadInvokePatterns {
             && "()V".equals(methodRef.descriptor());
     }
 
+    public static boolean isExecutorServiceShutdownNow(final MethodRef methodRef) {
+        return "java/util/concurrent/ExecutorService".equals(methodRef.owner())
+            && "shutdownNow".equals(methodRef.name())
+            && "()Ljava/util/List;".equals(methodRef.descriptor());
+    }
+
+    public static boolean isExecutorServiceAwaitTermination(final MethodRef methodRef) {
+        return "java/util/concurrent/ExecutorService".equals(methodRef.owner())
+            && "awaitTermination".equals(methodRef.name())
+            && "(JLjava/util/concurrent/TimeUnit;)Z".equals(methodRef.descriptor());
+    }
+
+    public static boolean isExecutorServiceIsShutdown(final MethodRef methodRef) {
+        return "java/util/concurrent/ExecutorService".equals(methodRef.owner())
+            && "isShutdown".equals(methodRef.name())
+            && "()Z".equals(methodRef.descriptor());
+    }
+
+    public static boolean isExecutorServiceIsTerminated(final MethodRef methodRef) {
+        return "java/util/concurrent/ExecutorService".equals(methodRef.owner())
+            && "isTerminated".equals(methodRef.name())
+            && "()Z".equals(methodRef.descriptor());
+    }
+
     public static int virtualThreadReceiverProducerIndex(
         final List<Instruction> instructions,
         final int callIndex

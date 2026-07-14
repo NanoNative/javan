@@ -9356,7 +9356,9 @@ final class BytecodeToIRInvokeSupport {
         final List<IrInstruction> instructions,
         final List<StackValue> stack,
         final Map<Integer, IrLocal> localDeclarations,
-        final Map<String, IrDispatch> dispatches
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final Map<String, IrDispatch> dispatches,
+        final SourceLineIndex sourceLines
     ) {
         final MethodRef methodRef = instruction.methodRef().orElseThrow();
         if (lowerCharSequenceInterfaceCall(classFile, method, instruction, methodRef, stack)) {
@@ -9368,7 +9370,17 @@ final class BytecodeToIRInvokeSupport {
         if (lowerVirtualThreadBuilderInterfaceCall(classFile, method, instruction, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
-        if (lowerVirtualThreadExecutorInterfaceCall(classFile, method, instruction, methodRef, instructions, stack, localDeclarations)) {
+        if (lowerVirtualThreadExecutorInterfaceCall(
+            classFile,
+            method,
+            instruction,
+            methodRef,
+            instructions,
+            stack,
+            localDeclarations,
+            pendingExceptionHandlerStacks,
+            sourceLines
+        )) {
             return;
         }
         if (lowerConcurrentInterfaceCall(classFile, method, instruction, methodRef, instructions, stack, localDeclarations)) {
@@ -9589,7 +9601,9 @@ final class BytecodeToIRInvokeSupport {
         final MethodRef methodRef,
         final List<IrInstruction> instructions,
         final List<StackValue> stack,
-        final Map<Integer, IrLocal> localDeclarations
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
     ) {
         if (VirtualThreadInvokePatterns.isExecutorExecute(methodRef)) {
             final IrExpression runnable = popObject(classFile, method, instruction, stack);
@@ -9618,6 +9632,74 @@ final class BytecodeToIRInvokeSupport {
                 "javan_virtual_thread_executor_shutdown",
                 List.of(executor.expression().orElse(IrExpression.objectNull()))
             ));
+            return true;
+        }
+        if (VirtualThreadInvokePatterns.isExecutorServiceShutdownNow(methodRef)) {
+            final StackValue executor = popVirtualThreadExecutor(classFile, method, instruction, stack);
+            pushObjectCall(
+                instructions,
+                stack,
+                localDeclarations,
+                "javan_virtual_thread_executor_shutdown_now",
+                List.of(executor.expression().orElse(IrExpression.objectNull()))
+            );
+            return true;
+        }
+        if (VirtualThreadInvokePatterns.isExecutorServiceAwaitTermination(methodRef)) {
+            if (stack.size() < 3) {
+                return false;
+            }
+            final StackValue unitValue = stack.get(stack.size() - 1);
+            final StackValue timeoutValue = stack.get(stack.size() - 2);
+            if (unitValue.expression().isEmpty() || timeoutValue.expression().isEmpty()) {
+                return false;
+            }
+            final Optional<IrExpression> timeoutMillis = timeUnitTimeoutMillis(
+                timeoutValue.expression().orElseThrow(),
+                unitValue.expression().orElseThrow()
+            );
+            if (timeoutMillis.isEmpty()) {
+                return false;
+            }
+            popObject(classFile, method, stack);
+            popLong(classFile, method, stack);
+            final StackValue executor = popVirtualThreadExecutor(classFile, method, instruction, stack);
+            lowerInterruptAwareBooleanWait(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                localDeclarations,
+                pendingExceptionHandlerStacks,
+                sourceLines,
+                true,
+                IrExpression.stringLiteral("awaitTermination interrupted"),
+                "javan_virtual_thread_executor_await_termination",
+                List.of(executor.expression().orElse(IrExpression.objectNull()), timeoutMillis.orElseThrow())
+            );
+            return true;
+        }
+        if (VirtualThreadInvokePatterns.isExecutorServiceIsShutdown(methodRef)) {
+            final StackValue executor = popVirtualThreadExecutor(classFile, method, instruction, stack);
+            pushIntCall(
+                instructions,
+                stack,
+                localDeclarations,
+                "javan_virtual_thread_executor_is_shutdown",
+                List.of(executor.expression().orElse(IrExpression.objectNull()))
+            );
+            return true;
+        }
+        if (VirtualThreadInvokePatterns.isExecutorServiceIsTerminated(methodRef)) {
+            final StackValue executor = popVirtualThreadExecutor(classFile, method, instruction, stack);
+            pushIntCall(
+                instructions,
+                stack,
+                localDeclarations,
+                "javan_virtual_thread_executor_is_terminated",
+                List.of(executor.expression().orElse(IrExpression.objectNull()))
+            );
             return true;
         }
         if (VirtualThreadInvokePatterns.isExecutorServiceClose(methodRef)) {

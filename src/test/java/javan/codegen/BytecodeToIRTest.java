@@ -9234,7 +9234,9 @@ final class BytecodeToIRTest {
             instructions,
             stack,
             locals,
-            new LinkedHashMap<>()
+            new LinkedHashMap<>(),
+            new LinkedHashMap<>(),
+            SourceLineIndex.empty()
         );
 
         assertThat(instructions).containsExactly(
@@ -9259,7 +9261,9 @@ final class BytecodeToIRTest {
             idsInstructions,
             idsStack,
             idsLocals,
-            new LinkedHashMap<>()
+            new LinkedHashMap<>(),
+            new LinkedHashMap<>(),
+            SourceLineIndex.empty()
         );
 
         assertThat(idsInstructions).containsExactly(
@@ -9282,7 +9286,9 @@ final class BytecodeToIRTest {
             infoInstructions,
             infoStack,
             infoLocals,
-            new LinkedHashMap<>()
+            new LinkedHashMap<>(),
+            new LinkedHashMap<>(),
+            SourceLineIndex.empty()
         );
 
         assertThat(infoInstructions).containsExactly(
@@ -9311,7 +9317,9 @@ final class BytecodeToIRTest {
             submitInstructions,
             submitStack,
             submitLocals,
-            new LinkedHashMap<>()
+            new LinkedHashMap<>(),
+            new LinkedHashMap<>(),
+            SourceLineIndex.empty()
         );
 
         assertThat(submitInstructions).containsExactly(
@@ -9337,7 +9345,9 @@ final class BytecodeToIRTest {
             cancelInstructions,
             cancelStack,
             cancelLocals,
-            new LinkedHashMap<>()
+            new LinkedHashMap<>(),
+            new LinkedHashMap<>(),
+            SourceLineIndex.empty()
         );
 
         assertThat(cancelInstructions).containsExactly(
@@ -9347,6 +9357,132 @@ final class BytecodeToIRTest {
             )
         );
         assertThat(cancelStack).containsExactly(BytecodeToIR.StackValue.intExpression(IrExpression.intLocal("int0")));
+    }
+
+    @Test
+    void lowerInterfaceCallRoutesExecutorShutdownNow() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.virtualThreadExecutor(IrExpression.objectLocal("executor"))
+        ));
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        BytecodeToIRInvokeSupport.lowerInterfaceCall(
+            Map.of(),
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/util/concurrent/ExecutorService;)Ljava/util/List;", 1, 1, plain(0, 176, "areturn")),
+            invokeInterface(0, new MethodRef("java/util/concurrent/ExecutorService", "shutdownNow", "()Ljava/util/List;")),
+            instructions,
+            stack,
+            locals,
+            new LinkedHashMap<>(),
+            new LinkedHashMap<>(),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(instructions).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall("javan_virtual_thread_executor_shutdown_now", List.of(IrExpression.objectLocal("executor")))
+            )
+        );
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("object0")));
+    }
+
+    @Test
+    void lowerInterfaceCallRoutesExecutorAwaitTermination() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.virtualThreadExecutor(IrExpression.objectLocal("executor")),
+            BytecodeToIR.StackValue.longExpression(IrExpression.longLiteral(0L)),
+            BytecodeToIR.StackValue.objectExpression(IrExpression.stringLiteral("java/util/concurrent/TimeUnit#MILLISECONDS"))
+        ));
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        BytecodeToIRInvokeSupport.lowerInterfaceCall(
+            Map.of(),
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/util/concurrent/ExecutorService;)Z", 1, 1, plain(0, 172, "ireturn")),
+            invokeInterface(0, new MethodRef("java/util/concurrent/ExecutorService", "awaitTermination", "(JLjava/util/concurrent/TimeUnit;)Z")),
+            instructions,
+            stack,
+            locals,
+            new LinkedHashMap<>(),
+            new LinkedHashMap<>(),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(instructions).contains(
+            IrInstruction.assignInt("int0", IrExpression.intCall("javan_thread_interrupted", List.of())),
+            IrInstruction.assignInt(
+                "int1",
+                IrExpression.intCall("javan_virtual_thread_executor_await_termination", List.of(
+                    IrExpression.objectLocal("executor"),
+                    IrExpression.longLiteral(0L)
+                ))
+            )
+        );
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.intExpression(IrExpression.intLocal("int1")));
+    }
+
+    @Test
+    void lowerInterfaceCallRoutesExecutorIsShutdown() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.virtualThreadExecutor(IrExpression.objectLocal("executor"))
+        ));
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        BytecodeToIRInvokeSupport.lowerInterfaceCall(
+            Map.of(),
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/util/concurrent/ExecutorService;)Z", 1, 1, plain(0, 172, "ireturn")),
+            invokeInterface(0, new MethodRef("java/util/concurrent/ExecutorService", "isShutdown", "()Z")),
+            instructions,
+            stack,
+            locals,
+            new LinkedHashMap<>(),
+            new LinkedHashMap<>(),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(instructions).containsExactly(
+            IrInstruction.assignInt(
+                "int0",
+                IrExpression.intCall("javan_virtual_thread_executor_is_shutdown", List.of(IrExpression.objectLocal("executor")))
+            )
+        );
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.intExpression(IrExpression.intLocal("int0")));
+    }
+
+    @Test
+    void lowerInterfaceCallRoutesExecutorIsTerminated() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.virtualThreadExecutor(IrExpression.objectLocal("executor"))
+        ));
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        BytecodeToIRInvokeSupport.lowerInterfaceCall(
+            Map.of(),
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/util/concurrent/ExecutorService;)Z", 1, 1, plain(0, 172, "ireturn")),
+            invokeInterface(0, new MethodRef("java/util/concurrent/ExecutorService", "isTerminated", "()Z")),
+            instructions,
+            stack,
+            locals,
+            new LinkedHashMap<>(),
+            new LinkedHashMap<>(),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(instructions).containsExactly(
+            IrInstruction.assignInt(
+                "int0",
+                IrExpression.intCall("javan_virtual_thread_executor_is_terminated", List.of(IrExpression.objectLocal("executor")))
+            )
+        );
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.intExpression(IrExpression.intLocal("int0")));
     }
 
     @Test
@@ -9365,7 +9501,9 @@ final class BytecodeToIRTest {
             instructions,
             stack,
             locals,
-            new LinkedHashMap<>()
+            new LinkedHashMap<>(),
+            new LinkedHashMap<>(),
+            SourceLineIndex.empty()
         );
 
         assertThat(instructions).containsExactly(
@@ -9444,7 +9582,9 @@ final class BytecodeToIRTest {
             instructions,
             stack,
             locals,
-            new LinkedHashMap<>()
+            new LinkedHashMap<>(),
+            new LinkedHashMap<>(),
+            SourceLineIndex.empty()
         );
 
         assertThat(instructions).isEmpty();
@@ -9470,7 +9610,9 @@ final class BytecodeToIRTest {
             instructions,
             stack,
             locals,
-            new LinkedHashMap<>()
+            new LinkedHashMap<>(),
+            new LinkedHashMap<>(),
+            SourceLineIndex.empty()
         );
 
         assertThat(instructions).isEmpty();
@@ -9496,7 +9638,9 @@ final class BytecodeToIRTest {
             instructions,
             stack,
             locals,
-            new LinkedHashMap<>()
+            new LinkedHashMap<>(),
+            new LinkedHashMap<>(),
+            SourceLineIndex.empty()
         );
 
         assertThat(instructions).isEmpty();
@@ -9525,7 +9669,9 @@ final class BytecodeToIRTest {
             instructions,
             stack,
             locals,
-            new LinkedHashMap<>()
+            new LinkedHashMap<>(),
+            new LinkedHashMap<>(),
+            SourceLineIndex.empty()
         );
 
         assertThat(instructions).isEmpty();
@@ -9678,7 +9824,9 @@ final class BytecodeToIRTest {
             instructions,
             stack,
             locals,
-            new LinkedHashMap<>()
+            new LinkedHashMap<>(),
+            new LinkedHashMap<>(),
+            SourceLineIndex.empty()
         );
 
         assertThat(instructions).containsExactly(
@@ -9703,7 +9851,9 @@ final class BytecodeToIRTest {
             instructions,
             stack,
             locals,
-            new LinkedHashMap<>()
+            new LinkedHashMap<>(),
+            new LinkedHashMap<>(),
+            SourceLineIndex.empty()
         );
 
         assertThat(instructions).containsExactly(
@@ -9728,7 +9878,9 @@ final class BytecodeToIRTest {
             instructions,
             stack,
             locals,
-            new LinkedHashMap<>()
+            new LinkedHashMap<>(),
+            new LinkedHashMap<>(),
+            SourceLineIndex.empty()
         );
 
         assertThat(instructions).containsExactly(
@@ -9756,7 +9908,9 @@ final class BytecodeToIRTest {
             instructions,
             stack,
             locals,
-            new LinkedHashMap<>()
+            new LinkedHashMap<>(),
+            new LinkedHashMap<>(),
+            SourceLineIndex.empty()
         );
 
         assertThat(instructions).containsExactly(
@@ -9784,7 +9938,9 @@ final class BytecodeToIRTest {
             instructions,
             stack,
             locals,
-            new LinkedHashMap<>()
+            new LinkedHashMap<>(),
+            new LinkedHashMap<>(),
+            SourceLineIndex.empty()
         );
 
         assertThat(instructions).containsExactly(
@@ -9812,7 +9968,9 @@ final class BytecodeToIRTest {
             instructions,
             stack,
             locals,
-            new LinkedHashMap<>()
+            new LinkedHashMap<>(),
+            new LinkedHashMap<>(),
+            SourceLineIndex.empty()
         );
 
         assertThat(instructions).containsExactly(

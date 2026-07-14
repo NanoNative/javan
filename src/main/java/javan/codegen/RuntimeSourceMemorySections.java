@@ -4360,6 +4360,88 @@ final class RuntimeSourceMemorySections {
             }
         }
 
+        void* javan_virtual_thread_executor_shutdown_now(void* value) {
+            void* executor_root = value;
+            void* result_value = NULL;
+            void** roots[] = {
+                (void**) &executor_root,
+                (void**) &result_value
+            };
+            javan_root_frame_push(roots, 2);
+            javan_virtual_thread_executor_state* state = javan_virtual_thread_executor_checked(executor_root);
+            state->closed = 1;
+            if (state->threads != NULL && state->threads->values != NULL) {
+                for (int index = 0; index < state->threads->length; index++) {
+                    void* thread_value = state->threads->values[index];
+                    if (thread_value == NULL) {
+                        continue;
+                    }
+                    javan_thread* thread = javan_require_thread(thread_value);
+                    javan_runtime_lock_enter();
+                    if (thread->completed == 0) {
+                        thread->interrupted = 1;
+                    }
+                    javan_runtime_lock_leave();
+                }
+            }
+            result_value = javan_list_new_with_capacity(0, 0);
+            javan_root_frame_pop(roots);
+            return result_value;
+        }
+
+        int javan_virtual_thread_executor_is_shutdown(void* value) {
+            return javan_virtual_thread_executor_checked(value)->closed != 0;
+        }
+
+        int javan_virtual_thread_executor_is_terminated(void* value) {
+            javan_virtual_thread_executor_state* state = javan_virtual_thread_executor_checked(value);
+            if (state->closed == 0) {
+                return 0;
+            }
+            if (state->threads == NULL || state->threads->length <= 0 || state->threads->values == NULL) {
+                return 1;
+            }
+            int terminated = 1;
+            javan_runtime_lock_enter();
+            for (int index = 0; index < state->threads->length; index++) {
+                void* thread_value = state->threads->values[index];
+                if (thread_value == NULL) {
+                    continue;
+                }
+                if (javan_require_thread(thread_value)->completed == 0) {
+                    terminated = 0;
+                    break;
+                }
+            }
+            javan_runtime_lock_leave();
+            return terminated;
+        }
+
+        int javan_virtual_thread_executor_await_termination(void* value, long long timeout_millis) {
+            javan_virtual_thread_executor_state* state = javan_virtual_thread_executor_checked(value);
+            if (timeout_millis < 0LL) {
+                return 0;
+            }
+            long long deadline = javan_system_current_time_millis() + timeout_millis;
+            while (1) {
+                if (javan_virtual_thread_executor_is_terminated(value) != 0) {
+                    return 1;
+                }
+                if (javan_thread_current_interrupted_peek() != 0) {
+                    (void) javan_thread_interrupted();
+                    return -1;
+                }
+                if (state->closed == 0) {
+                    if (timeout_millis == 0LL || javan_system_current_time_millis() >= deadline) {
+                        return 0;
+                    }
+                } else if (javan_system_current_time_millis() >= deadline) {
+                    return 0;
+                }
+                javan_sleep_micros(1000UL);
+            }
+        }
+
         """;
 
     private static final String SOURCE_HEAP_ALLOC_EXECUTOR_CONT = """
