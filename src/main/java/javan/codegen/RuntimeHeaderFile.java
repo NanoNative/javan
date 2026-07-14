@@ -539,6 +539,9 @@ final class RuntimeHeaderFile {
         void* javan_datetime_formatter_builder_append_fraction(void* value, void* field, int min_width, int max_width, int decimal_point);
         void* javan_datetime_formatter_builder_optional_end(void* value);
         void* javan_datetime_formatter_builder_to_formatter(void* value, void* locale);
+        void* javan_datetime_formatter_parse(void* value, void* text);
+        void* javan_instant_from_temporal(void* value);
+        void* javan_zoned_date_time_from_temporal(void* value);
         void* javan_thread_new(void);
         void* javan_thread_new_virtual(void);
         void* javan_virtual_thread_builder_new(void);

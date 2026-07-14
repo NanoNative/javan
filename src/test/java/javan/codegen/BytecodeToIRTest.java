@@ -1067,6 +1067,14 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void implementationBridgeCallLowersInstantFromTemporal() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/time/Instant", "from", "(Ljava/time/temporal/TemporalAccessor;)Ljava/time/Instant;"),
+            List.of(IrExpression.objectLocal("temporal"))
+        )).isEqualTo(IrExpression.objectCall("javan_instant_from_temporal", List.of(IrExpression.objectLocal("temporal"))));
+    }
+
+    @Test
     void implementationBridgeCallLowersLocalDateOfEpochDay() throws Exception {
         assertThat(implementationBridgeCall(
             new MethodRef("java/time/LocalDate", "ofEpochDay", "(J)Ljava/time/LocalDate;"),
@@ -1164,6 +1172,14 @@ final class BytecodeToIRTest {
             new MethodRef("java/time/ZonedDateTime", "of", "(Ljava/time/LocalDate;Ljava/time/LocalTime;Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;"),
             arguments
         )).isEqualTo(IrExpression.objectCall("javan_zoned_date_time_of", arguments));
+    }
+
+    @Test
+    void implementationBridgeCallLowersZonedDateTimeFromTemporal() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/time/ZonedDateTime", "from", "(Ljava/time/temporal/TemporalAccessor;)Ljava/time/ZonedDateTime;"),
+            List.of(IrExpression.objectLocal("temporal"))
+        )).isEqualTo(IrExpression.objectCall("javan_zoned_date_time_from_temporal", List.of(IrExpression.objectLocal("temporal"))));
     }
 
     @Test
@@ -14566,6 +14582,70 @@ final class BytecodeToIRTest {
                     )
                 )
             )
+        );
+    }
+
+    @Test
+    void lowersDateTimeFormatterParseToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/time/format/DateTimeFormatter;Ljava/lang/String;)Ljava/time/temporal/TemporalAccessor;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/time/format/DateTimeFormatter", "parse", "(Ljava/lang/CharSequence;)Ljava/time/temporal/TemporalAccessor;")),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_datetime_formatter_parse",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersInstantFromTemporalToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/time/temporal/TemporalAccessor;)Ljava/time/Instant;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeStatic(1, new MethodRef("java/time/Instant", "from", "(Ljava/time/temporal/TemporalAccessor;)Ljava/time/Instant;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_instant_from_temporal",
+                List.of(IrExpression.objectLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersZonedDateTimeFromTemporalToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/time/temporal/TemporalAccessor;)Ljava/time/ZonedDateTime;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeStatic(1, new MethodRef("java/time/ZonedDateTime", "from", "(Ljava/time/temporal/TemporalAccessor;)Ljava/time/ZonedDateTime;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_zoned_date_time_from_temporal",
+                List.of(IrExpression.objectLocal("arg0"))
+            ))
         );
     }
 

@@ -638,6 +638,9 @@ public final class BytecodeToIR {
         if ("java/time/Instant".equals(target.owner()) && "ofEpochMilli".equals(target.name()) && "(J)Ljava/time/Instant;".equals(target.descriptor())) {
             return IrExpression.objectCall("javan_instant_of_epoch_millis", arguments);
         }
+        if ("java/time/Instant".equals(target.owner()) && "from".equals(target.name()) && "(Ljava/time/temporal/TemporalAccessor;)Ljava/time/Instant;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_instant_from_temporal", arguments);
+        }
         if ("java/time/Instant".equals(target.owner()) && "toEpochMilli".equals(target.name()) && "()J".equals(target.descriptor())) {
             return IrExpression.longCall("javan_instant_to_epoch_millis", arguments);
         }
@@ -686,8 +689,14 @@ public final class BytecodeToIR {
         if ("java/time/ZonedDateTime".equals(target.owner()) && "toLocalDateTime".equals(target.name()) && "()Ljava/time/LocalDateTime;".equals(target.descriptor())) {
             return IrExpression.objectCall("javan_zoned_date_time_to_local_date_time", arguments);
         }
+        if ("java/time/ZonedDateTime".equals(target.owner()) && "from".equals(target.name()) && "(Ljava/time/temporal/TemporalAccessor;)Ljava/time/ZonedDateTime;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_zoned_date_time_from_temporal", arguments);
+        }
         if ("java/time/ZonedDateTime".equals(target.owner()) && "of".equals(target.name()) && "(Ljava/time/LocalDate;Ljava/time/LocalTime;Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;".equals(target.descriptor())) {
             return IrExpression.objectCall("javan_zoned_date_time_of", arguments);
+        }
+        if ("java/time/format/DateTimeFormatter".equals(target.owner()) && "parse".equals(target.name()) && "(Ljava/lang/CharSequence;)Ljava/time/temporal/TemporalAccessor;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_datetime_formatter_parse", arguments);
         }
         if ("java/time/temporal/TemporalQueries".equals(target.owner()) && "zone".equals(target.name()) && "()Ljava/time/temporal/TemporalQuery;".equals(target.descriptor())) {
             return IrExpression.stringLiteral("zone");

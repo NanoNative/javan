@@ -744,6 +744,9 @@ final class RuntimeSourceMemorySections {
         static javan_simple_date_format_value* javan_simple_date_format_checked(void* value);
         static javan_uuid_value* javan_uuid_checked(void* value);
         static const char* javan_charsequence_string_value(void* value);
+        static int javan_ascii_is_digit(unsigned char value);
+        int javan_string_length(const char* value);
+        int javan_string_equals(const char* left, const char* right);
         static const char* javan_runtime_kind_binary_name(int runtime_kind);
         static void javan_runtime_run_shutdown_hooks(void);
         void* javan_printable_object_string(void* value);
@@ -3007,6 +3010,17 @@ final class RuntimeSourceMemorySections {
             return builder;
         }
 
+        static javan_datetime_formatter_value* javan_datetime_formatter_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported datetime formatter");
+            }
+            javan_datetime_formatter_value* formatter = (javan_datetime_formatter_value*) value;
+            if (formatter->magic != JAVAN_DATETIME_FORMATTER_MAGIC || formatter->patterns == NULL || formatter->locale == NULL) {
+                javan_panic("unsupported datetime formatter");
+            }
+            return formatter;
+        }
+
         static int javan_runtime_class_name_is_array(const char* binary_name) {
             return binary_name != NULL && binary_name[0] == '[';
         }
@@ -4606,6 +4620,21 @@ final class RuntimeSourceMemorySections {
             return javan_instant_new(millis);
         }
 
+        void* javan_instant_from_temporal(void* value) {
+            int runtime_kind = javan_runtime_kind_of(value);
+            if (runtime_kind == JAVAN_RUNTIME_KIND_INSTANT) {
+                return value;
+            }
+            if (runtime_kind == JAVAN_RUNTIME_KIND_ZONED_DATE_TIME) {
+                return javan_zoned_date_time_to_instant(value);
+            }
+            if (runtime_kind == JAVAN_RUNTIME_KIND_OFFSET_DATE_TIME) {
+                return javan_offset_date_time_to_instant(value);
+            }
+            javan_panic("unsupported Instant.from temporal");
+            return NULL;
+        }
+
         long long javan_instant_to_epoch_millis(void* value) {
             return javan_instant_checked(value)->epoch_millis;
         }
@@ -4896,6 +4925,24 @@ final class RuntimeSourceMemorySections {
 
         void* javan_zoned_date_time_to_instant(void* value) {
             return javan_instant_new(javan_zoned_date_time_checked(value)->epoch_millis);
+        }
+
+        void* javan_zoned_date_time_from_temporal(void* value) {
+            int runtime_kind = javan_runtime_kind_of(value);
+            if (runtime_kind == JAVAN_RUNTIME_KIND_ZONED_DATE_TIME) {
+                return value;
+            }
+            if (runtime_kind == JAVAN_RUNTIME_KIND_OFFSET_DATE_TIME) {
+                return javan_zoned_date_time_new(javan_offset_date_time_checked(value)->epoch_millis);
+            }
+            if (runtime_kind == JAVAN_RUNTIME_KIND_LOCAL_DATE_TIME) {
+                return javan_local_date_time_at_zone(value, javan_zone_id_system_default());
+            }
+            if (runtime_kind == JAVAN_RUNTIME_KIND_LOCAL_DATE) {
+                return javan_local_date_at_start_of_day_zone(value, javan_zone_id_system_default());
+            }
+            javan_panic("unsupported ZonedDateTime.from temporal");
+            return NULL;
         }
 
         void* javan_zoned_date_time_to_offset_date_time(void* value) {
@@ -5864,6 +5911,263 @@ final class RuntimeSourceMemorySections {
             javan_root_frame_pop(roots);
             return (void*) formatter;
         }
+
+        static int javan_ascii_parse_digits(const char* text, int begin, int count, int* result) {
+            int value = 0;
+            for (int index = 0; index < count; index++) {
+                unsigned char ch = (unsigned char) text[begin + index];
+                if (!javan_ascii_is_digit(ch)) {
+                    return 0;
+                }
+                value = (value * 10) + (int) (ch - '0');
+            }
+            *result = value;
+            return 1;
+        }
+
+        static int javan_is_leap_year(int year) {
+            return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
+        }
+
+        static int javan_days_in_month(int year, int month) {
+            switch (month) {
+                case 1:
+                case 3:
+                case 5:
+                case 7:
+                case 8:
+                case 10:
+                case 12:
+                    return 31;
+                case 4:
+                case 6:
+                case 9:
+                case 11:
+                    return 30;
+                case 2:
+                    return javan_is_leap_year(year) ? 29 : 28;
+                default:
+                    return 0;
+            }
+        }
+
+        static int javan_validate_local_date_components(int year, int month, int day) {
+            if (year < 1 || month < 1 || month > 12) {
+                return 0;
+            }
+            int days_in_month = javan_days_in_month(year, month);
+            return day >= 1 && day <= days_in_month;
+        }
+
+        static int javan_validate_local_time_components(int hour, int minute, int second, int millis) {
+            return hour >= 0 && hour <= 23
+                && minute >= 0 && minute <= 59
+                && second >= 0 && second <= 59
+                && millis >= 0 && millis <= 999;
+        }
+
+        static int javan_datetime_formatter_parse_fraction(
+            const char* text,
+            int begin,
+            int text_length,
+            int min_width,
+            int max_width,
+            int decimal_point,
+            int* millis,
+            int* consumed
+        ) {
+            int index = begin;
+            if (decimal_point != 0) {
+                if (index >= text_length || text[index] != '.') {
+                    return min_width == 0;
+                }
+                index++;
+            }
+            int digits = 0;
+            int value = 0;
+            while (index < text_length && digits < max_width) {
+                unsigned char ch = (unsigned char) text[index];
+                if (!javan_ascii_is_digit(ch)) {
+                    break;
+                }
+                if (digits < 3) {
+                    value = (value * 10) + (int) (ch - '0');
+                }
+                digits++;
+                index++;
+            }
+            if (digits < min_width) {
+                return 0;
+            }
+            if (digits == 1) {
+                value *= 100;
+            } else if (digits == 2) {
+                value *= 10;
+            }
+            while (index < text_length && javan_ascii_is_digit((unsigned char) text[index])) {
+                return 0;
+            }
+            *millis = value;
+            *consumed = index - begin;
+            return 1;
+        }
+
+        static void* javan_datetime_formatter_parse_local_date(const char* text) {
+            int length = javan_string_length(text);
+            int year = 0;
+            int month = 0;
+            int day = 0;
+            if (length != 10
+                || text[4] != '-'
+                || text[7] != '-'
+                || !javan_ascii_parse_digits(text, 0, 4, &year)
+                || !javan_ascii_parse_digits(text, 5, 2, &month)
+                || !javan_ascii_parse_digits(text, 8, 2, &day)
+                || !javan_validate_local_date_components(year, month, day)) {
+                javan_panic("unsupported datetime formatter parse text");
+            }
+            return javan_local_date_new(year, month, day);
+        }
+
+        static void* javan_datetime_formatter_parse_local_time(
+            const char* text,
+            int optional_nano_fraction,
+            int fraction_min_width,
+            int fraction_max_width,
+            int fraction_decimal_point
+        ) {
+            int text_length = javan_string_length(text);
+            int hour = 0;
+            int minute = 0;
+            int second = 0;
+            int millis = 0;
+            int consumed = 0;
+            if (text_length < 8
+                || text[2] != ':'
+                || text[5] != ':'
+                || !javan_ascii_parse_digits(text, 0, 2, &hour)
+                || !javan_ascii_parse_digits(text, 3, 2, &minute)
+                || !javan_ascii_parse_digits(text, 6, 2, &second)) {
+                javan_panic("unsupported datetime formatter parse text");
+            }
+            if (optional_nano_fraction != 0
+                && !javan_datetime_formatter_parse_fraction(
+                    text,
+                    8,
+                    text_length,
+                    fraction_min_width,
+                    fraction_max_width,
+                    fraction_decimal_point,
+                    &millis,
+                    &consumed
+                )) {
+                javan_panic("unsupported datetime formatter parse text");
+            }
+            if (!javan_validate_local_time_components(hour, minute, second, millis)
+                || 8 + consumed != text_length) {
+                javan_panic("unsupported datetime formatter parse text");
+            }
+            return javan_local_time_new(hour, minute, second, millis);
+        }
+
+        static void* javan_datetime_formatter_parse_local_date_time(
+            const char* text,
+            char separator,
+            int optional_nano_fraction,
+            int fraction_min_width,
+            int fraction_max_width,
+            int fraction_decimal_point
+        ) {
+            int text_length = javan_string_length(text);
+            int year = 0;
+            int month = 0;
+            int day = 0;
+            int hour = 0;
+            int minute = 0;
+            int second = 0;
+            int millis = 0;
+            int consumed = 0;
+            if (text_length < 19
+                || text[4] != '-'
+                || text[7] != '-'
+                || text[10] != separator
+                || text[13] != ':'
+                || text[16] != ':'
+                || !javan_ascii_parse_digits(text, 0, 4, &year)
+                || !javan_ascii_parse_digits(text, 5, 2, &month)
+                || !javan_ascii_parse_digits(text, 8, 2, &day)
+                || !javan_ascii_parse_digits(text, 11, 2, &hour)
+                || !javan_ascii_parse_digits(text, 14, 2, &minute)
+                || !javan_ascii_parse_digits(text, 17, 2, &second)) {
+                javan_panic("unsupported datetime formatter parse text");
+            }
+            if (optional_nano_fraction != 0
+                && !javan_datetime_formatter_parse_fraction(
+                    text,
+                    19,
+                    text_length,
+                    fraction_min_width,
+                    fraction_max_width,
+                    fraction_decimal_point,
+                    &millis,
+                    &consumed
+                )) {
+                javan_panic("unsupported datetime formatter parse text");
+            }
+            if (!javan_validate_local_date_components(year, month, day)
+                || !javan_validate_local_time_components(hour, minute, second, millis)
+                || 19 + consumed != text_length) {
+                javan_panic("unsupported datetime formatter parse text");
+            }
+            return javan_local_date_time_new(year, month, day, hour, minute, second, millis);
+        }
+
+        void* javan_datetime_formatter_parse(void* value, void* text) {
+            javan_datetime_formatter_value* formatter = javan_datetime_formatter_checked(value);
+            const char* source = javan_charsequence_string_value(text);
+            if (formatter->patterns->length != 1) {
+                javan_panic("unsupported datetime formatter parse shape");
+            }
+            const char* pattern = javan_charsequence_string_value(formatter->patterns->values[0]);
+            if (javan_string_equals(pattern, "yyyy-MM-dd")) {
+                return javan_datetime_formatter_parse_local_date(source);
+            }
+            if (javan_string_equals(pattern, "HH:mm:ss")) {
+                return javan_datetime_formatter_parse_local_time(
+                    source,
+                    formatter->optional_nano_fraction,
+                    formatter->fraction_min_width,
+                    formatter->fraction_max_width,
+                    formatter->fraction_decimal_point
+                );
+            }
+            if (javan_string_equals(pattern, "yyyy-MM-dd'T'HH:mm:ss")) {
+                return javan_datetime_formatter_parse_local_date_time(
+                    source,
+                    'T',
+                    formatter->optional_nano_fraction,
+                    formatter->fraction_min_width,
+                    formatter->fraction_max_width,
+                    formatter->fraction_decimal_point
+                );
+            }
+            if (javan_string_equals(pattern, "yyyy-MM-dd HH:mm:ss")) {
+                return javan_datetime_formatter_parse_local_date_time(
+                    source,
+                    ' ',
+                    formatter->optional_nano_fraction,
+                    formatter->fraction_min_width,
+                    formatter->fraction_max_width,
+                    formatter->fraction_decimal_point
+                );
+            }
+            javan_panic("unsupported datetime formatter parse shape");
+            return NULL;
+        }
+
+        """;
+
+    private static final String SOURCE_HEAP_ALLOC_TAIL_CONT_THREADS = """
 
         static unsigned long javan_count_threads(int started, int completed, int require_target, int exclude_current) {
             javan_runtime_lock_enter();
@@ -9608,6 +9912,7 @@ final class RuntimeSourceMemorySections {
         result = result + SOURCE_HEAP_ALLOC_TAIL;
         result = result + SOURCE_HEAP_ALLOC_TIME;
         result = result + SOURCE_HEAP_ALLOC_TAIL_CONT;
+        result = result + SOURCE_HEAP_ALLOC_TAIL_CONT_THREADS;
         return result;
     }
 

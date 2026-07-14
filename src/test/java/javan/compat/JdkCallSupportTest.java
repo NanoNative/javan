@@ -1649,6 +1649,33 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void dateTimeFormatterParseIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/time/format/DateTimeFormatter",
+            "parse",
+            "(Ljava/lang/CharSequence;)Ljava/time/temporal/TemporalAccessor;"
+        ))).isTrue();
+    }
+
+    @Test
+    void instantFromRequiresTimeRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/time/Instant",
+            "from",
+            "(Ljava/time/temporal/TemporalAccessor;)Ljava/time/Instant;"
+        ))).containsExactly("time");
+    }
+
+    @Test
+    void zonedDateTimeFromIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/time/ZonedDateTime",
+            "from",
+            "(Ljava/time/temporal/TemporalAccessor;)Ljava/time/ZonedDateTime;"
+        ))).isTrue();
+    }
+
+    @Test
     void zoneIdSystemDefaultIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/time/ZoneId",

@@ -922,6 +922,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksDateTimeFormatterParseAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/time/format/DateTimeFormatter", "parse", "(Ljava/lang/CharSequence;)Ljava/time/temporal/TemporalAccessor;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksDateTimeFormatterBuilderAppendPatternAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/time/format/DateTimeFormatterBuilder", "appendPattern", "(Ljava/lang/String;)Ljava/time/format/DateTimeFormatterBuilder;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
@@ -948,6 +954,18 @@ final class JdkCallableAccountingTest {
     @Test
     void marksInstantOfEpochMilliAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/time/Instant", "ofEpochMilli", "(J)Ljava/time/Instant;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksInstantFromAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/time/Instant", "from", "(Ljava/time/temporal/TemporalAccessor;)Ljava/time/Instant;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksZonedDateTimeFromAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/time/ZonedDateTime", "from", "(Ljava/time/temporal/TemporalAccessor;)Ljava/time/ZonedDateTime;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 

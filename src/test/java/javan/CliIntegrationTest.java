@@ -11270,8 +11270,8 @@ final class CliIntegrationTest {
         assertThat(run.exitCode()).isEqualTo(2);
         final String diagnostics = Files.readString(project.resolve(".javan/reports/diagnostics.md"));
         assertThat(diagnostics).contains(
-            "- diagnostics: `506`",
-            "- errors: `492`",
+            "- diagnostics: `499`",
+            "- errors: `485`",
             "- warnings: `14`",
             "error[JAVAN030] unsupported reachable bytecode",
             "`invokedynamic`"
@@ -11349,6 +11349,9 @@ final class CliIntegrationTest {
             "java/time/LocalTime.getNano()I",
             "java/time/ZonedDateTime.toOffsetDateTime()Ljava/time/OffsetDateTime;",
             "java/time/OffsetDateTime.toInstant()Ljava/time/Instant;",
+            "java/time/format/DateTimeFormatter.parse(Ljava/lang/CharSequence;)Ljava/time/temporal/TemporalAccessor;",
+            "java/time/Instant.from(Ljava/time/temporal/TemporalAccessor;)Ljava/time/Instant;",
+            "java/time/ZonedDateTime.from(Ljava/time/temporal/TemporalAccessor;)Ljava/time/ZonedDateTime;",
             "java/util/UUID.randomUUID()Ljava/util/UUID;",
             "java/util/UUID.toString()Ljava/lang/String;"
         );
@@ -13831,6 +13834,43 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void dateTimeFormatterParseTemporalBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("datetime-formatter-parse-temporal");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.time.format.DateTimeFormatter;
+            import java.time.format.DateTimeFormatterBuilder;
+            import java.time.temporal.ChronoField;
+            import java.time.temporal.TemporalAccessor;
+            import java.util.Locale;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final DateTimeFormatter formatter = new DateTimeFormatterBuilder()
+                        .parseCaseInsensitive()
+                        .appendPattern("yyyy-MM-dd'T'HH:mm:ss")
+                        .optionalStart()
+                        .appendFraction(ChronoField.NANO_OF_SECOND, 1, 9, true)
+                        .optionalEnd()
+                        .toFormatter(Locale.ROOT);
+                    final TemporalAccessor temporal = formatter.parse("2024-05-06T07:08:09.123");
+                    System.out.println(temporal.isSupported(ChronoField.NANO_OF_DAY));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/datetime-formatter-parse-temporal").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void zonedDateTimeOfBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("zoned-date-time-of");
         writeJava(project, "com.acme.Main", """
@@ -13857,6 +13897,60 @@ final class CliIntegrationTest {
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/zoned-date-time-of").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void instantFromTemporalBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("instant-from-temporal");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.time.Instant;
+            import java.time.ZoneId;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Instant.from(Instant.ofEpochMilli(987654321L).atZone(ZoneId.systemDefault())).toEpochMilli());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/instant-from-temporal").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void zonedDateTimeFromTemporalBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("zoned-date-time-from-temporal");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.time.Instant;
+            import java.time.ZoneId;
+            import java.time.ZonedDateTime;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final ZonedDateTime value = ZonedDateTime.from(Instant.ofEpochMilli(987654321L).atZone(ZoneId.systemDefault()).toOffsetDateTime());
+                    System.out.println(value.toInstant().toEpochMilli());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/zoned-date-time-from-temporal").toString())).stdout()).isEqualTo(jvmOutput);
     }
 
     @Test
