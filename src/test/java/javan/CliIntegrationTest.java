@@ -3706,6 +3706,42 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void checkSupportsHttpExchangeResponseAccessors() throws Exception {
+        final Path project = project("http-exchange-response-accessors");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import com.sun.net.httpserver.HttpExchange;
+
+            import java.io.OutputStream;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                static void access(final HttpExchange exchange) throws Exception {
+                    exchange.getResponseHeaders().put("Content-Type", List.of("text/plain"));
+                    exchange.sendResponseHeaders(200, 4L);
+                    final OutputStream out = exchange.getResponseBody();
+                    out.write(new byte[]{'p', 'o', 'n', 'g'});
+                    out.flush();
+                    out.close();
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(args.length);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stderr()).isEmpty();
+    }
+
+    @Test
     void httpClientGetStringBuildsAndMatchesJvmOutput() throws Exception {
         final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
             new java.net.InetSocketAddress("127.0.0.1", 0),
@@ -11497,8 +11533,8 @@ final class CliIntegrationTest {
         assertThat(run.exitCode()).isEqualTo(2);
         final String diagnostics = Files.readString(project.resolve(".javan/reports/diagnostics.md"));
         assertThat(diagnostics).contains(
-            "- diagnostics: `479`",
-            "- errors: `465`",
+            "- diagnostics: `471`",
+            "- errors: `457`",
             "- warnings: `14`",
             "error[JAVAN030] unsupported reachable bytecode",
             "`invokedynamic`"
@@ -11511,8 +11547,15 @@ final class CliIntegrationTest {
             "com/sun/net/httpserver/HttpExchange.getRequestMethod()Ljava/lang/String;",
             "com/sun/net/httpserver/HttpExchange.getRequestHeaders()Lcom/sun/net/httpserver/Headers;",
             "com/sun/net/httpserver/HttpExchange.getRequestBody()Ljava/io/InputStream;",
+            "com/sun/net/httpserver/HttpExchange.getResponseHeaders()Lcom/sun/net/httpserver/Headers;",
+            "com/sun/net/httpserver/HttpExchange.sendResponseHeaders(IJ)V",
+            "com/sun/net/httpserver/HttpExchange.getResponseBody()Ljava/io/OutputStream;",
             "com/sun/net/httpserver/Headers.getFirst(Ljava/lang/String;)Ljava/lang/String;",
+            "com/sun/net/httpserver/Headers.put(Ljava/lang/String;Ljava/util/List;)Ljava/util/List;",
             "java/io/InputStream.readAllBytes()[B",
+            "java/io/OutputStream.write([B)V",
+            "java/io/OutputStream.flush()V",
+            "java/io/OutputStream.close()V",
             "java/util/Collections.emptyList()Ljava/util/List;",
             "java/util/List.stream()Ljava/util/stream/Stream;",
             "java/util/Collection.stream()Ljava/util/stream/Stream;",

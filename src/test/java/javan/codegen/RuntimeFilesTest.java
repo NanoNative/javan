@@ -213,6 +213,7 @@ final class RuntimeFilesTest {
             "#define JAVAN_RUNTIME_KIND_SOCKET_INPUT_STREAM 13",
             "#define JAVAN_RUNTIME_KIND_SOCKET_OUTPUT_STREAM 14",
             "#define JAVAN_RUNTIME_KIND_HTTP_BODY_PUBLISHER 21",
+            "#define JAVAN_RUNTIME_KIND_HTTP_OUTPUT_STREAM 60",
             "#define JAVAN_TYPE_JAVA_LANG_THREAD -1008",
             "static unsigned long javan_total_allocations_value = 0;",
             "static unsigned long javan_live_allocated_bytes_value = 0;",
@@ -322,7 +323,7 @@ final class RuntimeFilesTest {
                 );
                 stream = javan_http_exchange_get_request_body(exchange);
                 body = javan_http_input_stream_read_all_bytes(stream);
-                printf("%d\\n", javan_byte_array_length(body));
+                printf("%d\\n", javan_array_length(body));
                 printf("%d\\n", (int) javan_byte_array_get(body, 0));
                 printf("%d\\n", (int) javan_byte_array_get(body, 4));
                 javan_root_frame_pop(roots);
@@ -333,6 +334,57 @@ final class RuntimeFilesTest {
         );
 
         assertThat(stdout).isEqualTo("5\n104\n111\n");
+    }
+
+    @Test
+    void runtimeHttpExchangeResponseHeadersStatusAndBodyAreStored() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                void* exchange = 0;
+                void* values = 0;
+                void* stream = 0;
+                void* body = 0;
+                signed char payload[] = {'p', 'o', 'n', 'g'};
+                javan_register_static_roots(0, 0);
+                void** roots[] = {
+                    (void**) &exchange,
+                    (void**) &values,
+                    (void**) &stream,
+                    (void**) &body
+                };
+                javan_root_frame_push(roots, 4);
+                exchange = javan_http_exchange_new(
+                    javan_uri_create("http://localhost/hello"),
+                    (void*) "GET",
+                    javan_hashmap_new(),
+                    javan_byte_array_new(0)
+                );
+                values = javan_list_of(1, (void*) "text/plain");
+                (void) javan_map_put(javan_http_exchange_get_response_headers(exchange), (void*) "Content-Type", values);
+                javan_http_exchange_send_response_headers(exchange, 200, 4);
+                stream = javan_http_exchange_get_response_body(exchange);
+                javan_http_output_stream_write_bytes(stream, javan_byte_array_from(payload, 4));
+                javan_http_output_stream_flush(stream);
+                javan_http_output_stream_close(stream);
+                body = javan_http_exchange_get_response_body_bytes(exchange);
+                printf("%d\\n", javan_http_exchange_get_response_status_code(exchange));
+                printf("%lld\\n", javan_http_exchange_get_response_content_length(exchange));
+                printf("%s\\n", (const char*) javan_http_headers_get_first(javan_http_exchange_get_response_headers(exchange), (void*) "Content-Type"));
+                printf("%d\\n", javan_array_length(body));
+                printf("%d\\n", (int) javan_byte_array_get(body, 0));
+                printf("%d\\n", (int) javan_byte_array_get(body, 3));
+                javan_root_frame_pop(roots);
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("200\n4\ntext/plain\n4\n112\n103\n");
     }
 
     @Test

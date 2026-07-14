@@ -3392,6 +3392,7 @@ public final class BytecodeToIR {
         SOCKET_INPUT_STREAM,
         SOCKET_OUTPUT_STREAM,
         HTTP_INPUT_STREAM,
+        HTTP_OUTPUT_STREAM,
         INT,
         LONG,
         FLOAT,
@@ -3592,6 +3593,10 @@ public final class BytecodeToIR {
 
         static StackValue httpInputStream(final IrExpression expression) {
             return new StackValue(StackKind.HTTP_INPUT_STREAM, Optional.empty(), Optional.of(expression), Optional.empty(), Optional.empty(), Optional.empty());
+        }
+
+        static StackValue httpOutputStream(final IrExpression expression) {
+            return new StackValue(StackKind.HTTP_OUTPUT_STREAM, Optional.empty(), Optional.of(expression), Optional.empty(), Optional.empty(), Optional.empty());
         }
 
         static StackValue intExpression(final IrExpression expression) {

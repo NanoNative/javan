@@ -378,11 +378,47 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void httpExchangeGetResponseHeadersIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "com/sun/net/httpserver/HttpExchange",
+            "getResponseHeaders",
+            "()Lcom/sun/net/httpserver/Headers;"
+        ))).isTrue();
+    }
+
+    @Test
+    void httpExchangeSendResponseHeadersIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "com/sun/net/httpserver/HttpExchange",
+            "sendResponseHeaders",
+            "(IJ)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void httpExchangeGetResponseBodyIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "com/sun/net/httpserver/HttpExchange",
+            "getResponseBody",
+            "()Ljava/io/OutputStream;"
+        ))).isTrue();
+    }
+
+    @Test
     void headersGetFirstIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "com/sun/net/httpserver/Headers",
             "getFirst",
             "(Ljava/lang/String;)Ljava/lang/String;"
+        ))).isTrue();
+    }
+
+    @Test
+    void headersPutIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "com/sun/net/httpserver/Headers",
+            "put",
+            "(Ljava/lang/String;Ljava/util/List;)Ljava/util/List;"
         ))).isTrue();
     }
 

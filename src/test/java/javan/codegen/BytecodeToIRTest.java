@@ -15327,14 +15327,111 @@ final class BytecodeToIRTest {
             plain(3, 176, "areturn")
         ));
 
-        assertThat(function.locals()).isEmpty();
+        assertThat(function.locals()).containsExactly(
+            new IrLocal(IrType.OBJECT, "object0")
+        );
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(
+            IrInstruction.assignObject(
+                "object0",
                 IrExpression.objectCall(
                     "javan_http_input_stream_read_all_bytes",
                     List.of(IrExpression.objectCall("javan_http_exchange_get_request_body", List.of(IrExpression.objectLocal("arg0"))))
                 )
-            )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersHttpExchangeResponseHeadersPutAndSendResponseHeadersToRuntimeCalls() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Lcom/sun/net/httpserver/HttpExchange;Ljava/util/List;)V",
+            4,
+            2,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("com/sun/net/httpserver/HttpExchange", "getResponseHeaders", "()Lcom/sun/net/httpserver/Headers;")),
+            stringConstant(2, "Content-Type"),
+            plain(3, 43, "aload_1"),
+            invokeVirtual(4, new MethodRef("com/sun/net/httpserver/Headers", "put", "(Ljava/lang/String;Ljava/util/List;)Ljava/util/List;")),
+            plain(5, 87, "pop"),
+            plain(6, 42, "aload_0"),
+            plainOperands(7, 16, "bipush", 100),
+            plain(8, 10, "lconst_1"),
+            invokeVirtual(9, new MethodRef("com/sun/net/httpserver/HttpExchange", "sendResponseHeaders", "(IJ)V")),
+            plain(10, 177, "return")
+        ));
+
+        assertThat(function.locals()).containsExactly(
+            new IrLocal(IrType.OBJECT, "object0")
+        );
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_map_put",
+                    List.of(
+                        IrExpression.objectCall("javan_http_exchange_get_response_headers", List.of(IrExpression.objectLocal("arg0"))),
+                        IrExpression.stringLiteral("Content-Type"),
+                        IrExpression.objectLocal("arg1")
+                    )
+                )
+            ),
+            IrInstruction.callStaticVoid(
+                "javan_http_exchange_send_response_headers",
+                List.of(
+                    IrExpression.objectLocal("arg0"),
+                    IrExpression.intLiteral(100),
+                    IrExpression.longLiteral(1)
+                )
+            ),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
+    void lowersHttpExchangeResponseBodyWriteAndFlushThroughStoredLocalToRuntimeCalls() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Lcom/sun/net/httpserver/HttpExchange;[B)V",
+            3,
+            3,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("com/sun/net/httpserver/HttpExchange", "getResponseBody", "()Ljava/io/OutputStream;")),
+            plain(2, 77, "astore_2"),
+            plain(3, 44, "aload_2"),
+            plain(4, 43, "aload_1"),
+            invokeVirtual(5, new MethodRef("java/io/OutputStream", "write", "([B)V")),
+            plain(6, 44, "aload_2"),
+            plainOperands(7, 16, "bipush", 7),
+            invokeVirtual(8, new MethodRef("java/io/OutputStream", "write", "(I)V")),
+            plain(9, 44, "aload_2"),
+            invokeVirtual(10, new MethodRef("java/io/OutputStream", "flush", "()V")),
+            plain(11, 44, "aload_2"),
+            invokeVirtual(12, new MethodRef("java/io/OutputStream", "close", "()V")),
+            plain(13, 177, "return")
+        ));
+
+        assertThat(function.locals()).containsExactly(
+            new IrLocal(IrType.OBJECT, "object0"),
+            new IrLocal(IrType.OBJECT, "local2_object_1")
+        );
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_http_exchange_get_response_body", List.of(IrExpression.objectLocal("arg0")))),
+            IrInstruction.assignObject("local2_object_1", IrExpression.objectLocal("object0")),
+            IrInstruction.callStaticVoid(
+                "javan_http_output_stream_write_bytes",
+                List.of(IrExpression.objectLocal("local2_object_1"), IrExpression.objectLocal("arg1"))
+            ),
+            IrInstruction.callStaticVoid(
+                "javan_http_output_stream_write",
+                List.of(IrExpression.objectLocal("local2_object_1"), IrExpression.intLiteral(7))
+            ),
+            IrInstruction.callStaticVoid("javan_http_output_stream_flush", List.of(IrExpression.objectLocal("local2_object_1"))),
+            IrInstruction.callStaticVoid("javan_http_output_stream_close", List.of(IrExpression.objectLocal("local2_object_1"))),
+            IrInstruction.returnVoid()
         );
     }
 

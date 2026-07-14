@@ -1036,6 +1036,9 @@ final class BytecodeToIRControlFlowSupport {
         if (kind == StackKind.HTTP_INPUT_STREAM) {
             return StackValue.httpInputStream(expression);
         }
+        if (kind == StackKind.HTTP_OUTPUT_STREAM) {
+            return StackValue.httpOutputStream(expression);
+        }
         if (kind == StackKind.SOCKET_OUTPUT_STREAM) {
             return StackValue.socketOutputStream(expression);
         }
@@ -1050,6 +1053,7 @@ final class BytecodeToIRControlFlowSupport {
             || kind == StackKind.ERROR_PRINT_STREAM
             || kind == StackKind.SOCKET_INPUT_STREAM
             || kind == StackKind.HTTP_INPUT_STREAM
+            || kind == StackKind.HTTP_OUTPUT_STREAM
             || kind == StackKind.SOCKET_OUTPUT_STREAM;
     }
     static void tableSwitch(

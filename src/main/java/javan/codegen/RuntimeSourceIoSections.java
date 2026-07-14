@@ -100,7 +100,10 @@ final class RuntimeSourceIoSections {
                 || exchange->request_uri == NULL
                 || exchange->request_method == NULL
                 || exchange->request_headers == NULL
-                || exchange->request_body == NULL) {
+                || exchange->request_body == NULL
+                || exchange->response_headers == NULL
+                || exchange->response_body == NULL
+                || exchange->response_content_length < -1) {
                 javan_panic("unsupported http exchange object");
             }
             return exchange;
@@ -115,6 +118,54 @@ final class RuntimeSourceIoSections {
                 javan_panic("unsupported http input stream object");
             }
             return stream;
+        }
+
+        static javan_http_output_stream_value* javan_http_output_stream_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("null http output stream");
+            }
+            javan_http_output_stream_value* stream = (javan_http_output_stream_value*) value;
+            if (stream->magic != JAVAN_HTTP_OUTPUT_STREAM_MAGIC || stream->exchange == NULL) {
+                javan_panic("unsupported http output stream object");
+            }
+            return stream;
+        }
+
+        static void javan_http_output_stream_range_checked(javan_byte_array* bytes, int offset, int length) {
+            if (offset < 0 || length < 0 || offset > bytes->length || length > bytes->length - offset) {
+                javan_panic("http output stream range out of bounds");
+            }
+        }
+
+        static void javan_http_exchange_append_response_bytes(javan_http_exchange_value* exchange, const signed char* data, int length) {
+            if (length < 0) {
+                javan_panic("negative http response body length");
+            }
+            if (length == 0) {
+                return;
+            }
+            void* exchange_root = (void*) exchange;
+            void* previous_body_root = exchange->response_body;
+            void* next_body_root = NULL;
+            void** roots[] = {
+                (void**) &exchange_root,
+                (void**) &previous_body_root,
+                (void**) &next_body_root
+            };
+            javan_root_frame_push(roots, 3);
+            exchange = javan_http_exchange_checked(exchange_root);
+            javan_byte_array* previous = (javan_byte_array*) javan_array_checked(previous_body_root);
+            javan_array_kind_checked((javan_array_header*) previous, JAVAN_ARRAY_KIND_BYTE);
+            int previous_length = previous->length;
+            next_body_root = javan_byte_array_new(previous_length + length);
+            javan_byte_array* next = (javan_byte_array*) javan_array_checked(next_body_root);
+            if (previous_length > 0) {
+                memcpy(next->values, previous->values, (unsigned long) previous_length);
+            }
+            memcpy(next->values + previous_length, data, (unsigned long) length);
+            exchange = (javan_http_exchange_value*) exchange_root;
+            exchange->response_body = next_body_root;
+            javan_root_frame_pop(roots);
         }
 
         static void javan_http_header_text_checked(const char* value, const char* kind) {
@@ -274,13 +325,17 @@ final class RuntimeSourceIoSections {
             void* method_root = method_value;
             void* headers_root = headers_value;
             void* body_root = body_value;
+            void* response_headers_root = NULL;
+            void* response_body_root = NULL;
             void** roots[] = {
                 (void**) &uri_root,
                 (void**) &method_root,
                 (void**) &headers_root,
-                (void**) &body_root
+                (void**) &body_root,
+                (void**) &response_headers_root,
+                (void**) &response_body_root
             };
-            javan_root_frame_push(roots, 4);
+            javan_root_frame_push(roots, 6);
             javan_uri_checked(uri_root);
             javan_http_header_text_checked((const char*) method_root, "null http method");
             if (headers_root == NULL) {
@@ -294,6 +349,8 @@ final class RuntimeSourceIoSections {
                 javan_byte_array* body = (javan_byte_array*) javan_array_checked(body_root);
                 javan_array_kind_checked((javan_array_header*) body, JAVAN_ARRAY_KIND_BYTE);
             }
+            response_headers_root = javan_hashmap_new();
+            response_body_root = javan_byte_array_new(0);
             javan_http_exchange_value* exchange = (javan_http_exchange_value*) javan_alloc(sizeof(javan_http_exchange_value));
             void* exchange_root = (void*) exchange;
             void** exchange_roots[] = {
@@ -301,18 +358,27 @@ final class RuntimeSourceIoSections {
                 (void**) &method_root,
                 (void**) &headers_root,
                 (void**) &body_root,
+                (void**) &response_headers_root,
+                (void**) &response_body_root,
                 (void**) &exchange_root
             };
-            javan_root_frame_push(exchange_roots, 5);
+            javan_root_frame_push(exchange_roots, 7);
             exchange = (javan_http_exchange_value*) exchange_root;
             exchange->magic = JAVAN_HTTP_EXCHANGE_MAGIC;
             exchange->reserved0 = 0;
             exchange->reserved1 = 0;
             exchange->reserved2 = 0;
+            exchange->reserved3 = 0;
+            exchange->reserved4 = 0;
             exchange->request_uri = (javan_uri_value*) uri_root;
             exchange->request_method = (char*) method_root;
             exchange->request_headers = (javan_object_map*) headers_root;
             exchange->request_body = body_root;
+            exchange->response_status_code = 0;
+            exchange->response_headers_sent = 0;
+            exchange->response_content_length = -1;
+            exchange->response_headers = (javan_object_map*) response_headers_root;
+            exchange->response_body = response_body_root;
             javan_update_runtime_allocation_kind(exchange_root, JAVAN_RUNTIME_KIND_HTTP_EXCHANGE);
             javan_root_frame_pop(exchange_roots);
             javan_root_frame_pop(roots);
@@ -334,6 +400,60 @@ final class RuntimeSourceIoSections {
         void* javan_http_exchange_get_request_body(void* value) {
             javan_http_exchange_value* exchange = javan_http_exchange_checked(value);
             return javan_http_input_stream_new(exchange->request_body);
+        }
+
+        void* javan_http_exchange_get_response_headers(void* value) {
+            return javan_http_exchange_checked(value)->response_headers;
+        }
+
+        void javan_http_exchange_send_response_headers(void* value, int status_code, long long content_length) {
+            javan_http_exchange_value* exchange = javan_http_exchange_checked(value);
+            if (status_code < 100 || status_code > 999) {
+                javan_panic("http response status code is out of range");
+            }
+            if (content_length < -1) {
+                javan_panic("http response content length is invalid");
+            }
+            exchange->response_status_code = status_code;
+            exchange->response_content_length = content_length;
+            exchange->response_headers_sent = 1;
+        }
+
+        static void* javan_http_output_stream_new(void* exchange_value) {
+            javan_http_exchange_checked(exchange_value);
+            javan_http_output_stream_value* stream = (javan_http_output_stream_value*) javan_alloc(sizeof(javan_http_output_stream_value));
+            void* stream_root = (void*) stream;
+            void* exchange_root = exchange_value;
+            void** roots[] = {
+                (void**) &exchange_root,
+                (void**) &stream_root
+            };
+            javan_root_frame_push(roots, 2);
+            stream = (javan_http_output_stream_value*) stream_root;
+            stream->magic = JAVAN_HTTP_OUTPUT_STREAM_MAGIC;
+            stream->closed = 0;
+            stream->reserved0 = 0;
+            stream->reserved1 = 0;
+            stream->exchange = (javan_http_exchange_value*) exchange_root;
+            javan_update_runtime_allocation_kind(stream_root, JAVAN_RUNTIME_KIND_HTTP_OUTPUT_STREAM);
+            javan_root_frame_pop(roots);
+            return stream_root;
+        }
+
+        void* javan_http_exchange_get_response_body(void* value) {
+            return javan_http_output_stream_new(value);
+        }
+
+        int javan_http_exchange_get_response_status_code(void* value) {
+            return javan_http_exchange_checked(value)->response_status_code;
+        }
+
+        long long javan_http_exchange_get_response_content_length(void* value) {
+            return javan_http_exchange_checked(value)->response_content_length;
+        }
+
+        void* javan_http_exchange_get_response_body_bytes(void* value) {
+            return javan_http_exchange_checked(value)->response_body;
         }
 
         void* javan_http_headers_get_first(void* value, void* name) {
@@ -421,6 +541,55 @@ final class RuntimeSourceIoSections {
 
         void javan_http_input_stream_close(void* value) {
             javan_http_input_stream_checked(value)->closed = 1;
+        }
+
+        void javan_http_output_stream_write(void* value, int byte_value) {
+            javan_http_output_stream_value* stream = javan_http_output_stream_checked(value);
+            if (stream->closed != 0) {
+                javan_panic("http output stream is closed");
+            }
+            javan_http_exchange_value* exchange = javan_http_exchange_checked((void*) stream->exchange);
+            if (exchange->response_headers_sent == 0) {
+                javan_panic("http response headers were not sent");
+            }
+            signed char byte = (signed char) (byte_value & 0xff);
+            javan_http_exchange_append_response_bytes(exchange, &byte, 1);
+        }
+
+        void javan_http_output_stream_write_bytes(void* value, void* bytes_value) {
+            javan_byte_array* bytes = (javan_byte_array*) javan_array_checked(bytes_value);
+            javan_array_kind_checked((javan_array_header*) bytes, JAVAN_ARRAY_KIND_BYTE);
+            javan_http_output_stream_write_bytes_range(value, bytes_value, 0, bytes->length);
+        }
+
+        void javan_http_output_stream_write_bytes_range(void* value, void* bytes_value, int offset, int length) {
+            javan_http_output_stream_value* stream = javan_http_output_stream_checked(value);
+            if (stream->closed != 0) {
+                javan_panic("http output stream is closed");
+            }
+            javan_http_exchange_value* exchange = javan_http_exchange_checked((void*) stream->exchange);
+            if (exchange->response_headers_sent == 0) {
+                javan_panic("http response headers were not sent");
+            }
+            javan_byte_array* bytes = (javan_byte_array*) javan_array_checked(bytes_value);
+            javan_array_kind_checked((javan_array_header*) bytes, JAVAN_ARRAY_KIND_BYTE);
+            javan_http_output_stream_range_checked(bytes, offset, length);
+            if (length == 0) {
+                return;
+            }
+            javan_http_exchange_append_response_bytes(exchange, bytes->values + offset, length);
+        }
+
+        void javan_http_output_stream_flush(void* value) {
+            javan_http_output_stream_value* stream = javan_http_output_stream_checked(value);
+            if (stream->closed != 0) {
+                javan_panic("http output stream is closed");
+            }
+            (void) javan_http_exchange_checked((void*) stream->exchange);
+        }
+
+        void javan_http_output_stream_close(void* value) {
+            javan_http_output_stream_checked(value)->closed = 1;
         }
 
         void* javan_charset_utf8(void) {

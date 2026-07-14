@@ -97,11 +97,47 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksHttpExchangeGetResponseHeadersAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef(
+            "com/sun/net/httpserver/HttpExchange",
+            "getResponseHeaders",
+            "()Lcom/sun/net/httpserver/Headers;"
+        ))).isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksHttpExchangeSendResponseHeadersAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef(
+            "com/sun/net/httpserver/HttpExchange",
+            "sendResponseHeaders",
+            "(IJ)V"
+        ))).isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksHttpExchangeGetResponseBodyAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef(
+            "com/sun/net/httpserver/HttpExchange",
+            "getResponseBody",
+            "()Ljava/io/OutputStream;"
+        ))).isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksHeadersGetFirstAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef(
             "com/sun/net/httpserver/Headers",
             "getFirst",
             "(Ljava/lang/String;)Ljava/lang/String;"
+        ))).isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksHeadersPutAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef(
+            "com/sun/net/httpserver/Headers",
+            "put",
+            "(Ljava/lang/String;Ljava/util/List;)Ljava/util/List;"
         ))).isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
