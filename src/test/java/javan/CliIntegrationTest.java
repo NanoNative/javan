@@ -527,6 +527,56 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void uuidRandomUuidToStringBuildsAndPrintsCanonicalV4Value() throws Exception {
+        final Path project = project("uuid-randomuuid-tostring");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.UUID;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(UUID.randomUUID().toString());
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/uuid-randomuuid-tostring").toString())).stdout())
+            .matches("[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\R");
+    }
+
+    @Test
+    void stringValueOfUuidBuildsAndPrintsCanonicalV4Value() throws Exception {
+        final Path project = project("string-valueof-uuid");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.UUID;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(String.valueOf(UUID.randomUUID()));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-valueof-uuid").toString())).stdout())
+            .matches("[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\R");
+    }
+
+    @Test
     void doubleValueOfStringBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("double-value-of-string");
         writeJava(project, "com.acme.Main", """
@@ -11220,8 +11270,8 @@ final class CliIntegrationTest {
         assertThat(run.exitCode()).isEqualTo(2);
         final String diagnostics = Files.readString(project.resolve(".javan/reports/diagnostics.md"));
         assertThat(diagnostics).contains(
-            "- diagnostics: `510`",
-            "- errors: `496`",
+            "- diagnostics: `506`",
+            "- errors: `492`",
             "- warnings: `14`",
             "error[JAVAN030] unsupported reachable bytecode",
             "`invokedynamic`"
@@ -11298,7 +11348,9 @@ final class CliIntegrationTest {
             "java/time/LocalTime.getSecond()I",
             "java/time/LocalTime.getNano()I",
             "java/time/ZonedDateTime.toOffsetDateTime()Ljava/time/OffsetDateTime;",
-            "java/time/OffsetDateTime.toInstant()Ljava/time/Instant;"
+            "java/time/OffsetDateTime.toInstant()Ljava/time/Instant;",
+            "java/util/UUID.randomUUID()Ljava/util/UUID;",
+            "java/util/UUID.toString()Ljava/lang/String;"
         );
         assertThat(diagnostics).doesNotContain(
             "berlin/yuna/typemap/model/FunctionOrNull.applyWithException(Ljava/lang/Object;)Ljava/lang/Object;",

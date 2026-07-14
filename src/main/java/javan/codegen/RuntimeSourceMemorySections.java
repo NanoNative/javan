@@ -92,6 +92,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_RUNTIME_KIND_CALENDAR 56
         #define JAVAN_RUNTIME_KIND_LOGGING_LEVEL 57
         #define JAVAN_RUNTIME_KIND_SIMPLE_DATE_FORMAT 58
+        #define JAVAN_RUNTIME_KIND_UUID 59
         #define JAVAN_LIST_VIEW_UNMODIFIABLE 1
         #define JAVAN_LIST_VIEW_REVERSED 2
 
@@ -526,6 +527,15 @@ final class RuntimeSourceMemorySections {
 
         typedef struct {
             int magic;
+            int reserved0;
+            int reserved1;
+            int reserved2;
+            unsigned long long most;
+            unsigned long long least;
+        } javan_uuid_value;
+
+        typedef struct {
+            int magic;
             int case_insensitive;
             int optional_depth;
             int optional_nano_fraction;
@@ -603,6 +613,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_CALENDAR_MAGIC 0x4a43414c
         #define JAVAN_LOGGING_LEVEL_MAGIC 0x4a4c4f47
         #define JAVAN_SIMPLE_DATE_FORMAT_MAGIC 0x4a534446
+        #define JAVAN_UUID_MAGIC 0x4a555549
         #define JAVAN_SIMPLE_DATE_FORMAT_PATTERN_NANO_LOG 1
         #define JAVAN_ZONE_KIND_SYSTEM_DEFAULT 1
         #define JAVAN_HTTP_METHOD_GET 1
@@ -731,6 +742,7 @@ final class RuntimeSourceMemorySections {
         static javan_calendar_value* javan_calendar_checked(void* value);
         static javan_logging_level_value* javan_logging_level_checked(void* value);
         static javan_simple_date_format_value* javan_simple_date_format_checked(void* value);
+        static javan_uuid_value* javan_uuid_checked(void* value);
         static const char* javan_charsequence_string_value(void* value);
         static const char* javan_runtime_kind_binary_name(int runtime_kind);
         static void javan_runtime_run_shutdown_hooks(void);
@@ -1890,6 +1902,9 @@ final class RuntimeSourceMemorySections {
             if (node->runtime_kind == JAVAN_RUNTIME_KIND_LOGGING_LEVEL) {
                 return javan_logging_level_to_string(value);
             }
+            if (node->runtime_kind == JAVAN_RUNTIME_KIND_UUID) {
+                return javan_uuid_to_string(value);
+            }
             if (node->runtime_kind == JAVAN_RUNTIME_KIND_INET_SOCKET_ADDRESS) {
                 return javan_inet_socket_address_to_string(value);
             }
@@ -2970,6 +2985,17 @@ final class RuntimeSourceMemorySections {
             return formatter;
         }
 
+        static javan_uuid_value* javan_uuid_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported uuid");
+            }
+            javan_uuid_value* uuid = (javan_uuid_value*) value;
+            if (uuid->magic != JAVAN_UUID_MAGIC) {
+                javan_panic("unsupported uuid");
+            }
+            return uuid;
+        }
+
         static javan_datetime_formatter_builder_value* javan_datetime_formatter_builder_checked(void* value) {
             if (value == NULL) {
                 javan_panic("unsupported datetime formatter builder");
@@ -3109,6 +3135,8 @@ final class RuntimeSourceMemorySections {
                     return "java.util.logging.Level";
                 case JAVAN_RUNTIME_KIND_SIMPLE_DATE_FORMAT:
                     return "java.text.SimpleDateFormat";
+                case JAVAN_RUNTIME_KIND_UUID:
+                    return "java.util.UUID";
                 case JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_BUILDER:
                     return "java.lang.ThreadBuilders$VirtualThreadBuilder";
                 case JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_FACTORY:
@@ -4512,6 +4540,7 @@ final class RuntimeSourceMemorySections {
                 default:
                     javan_panic("unsupported date");
             }
+            return 0;
         }
 
         static void javan_components_from_epoch_millis_local(
@@ -5105,6 +5134,65 @@ final class RuntimeSourceMemorySections {
                 &millis
             );
             snprintf(buffer, sizeof(buffer), "%04d-%02d-%02d %02d:%02d:%02d.%03d", year, month, day, hour, minute, second, millis);
+            return javan_string_from(buffer);
+        }
+
+        static void javan_uuid_fill_random(unsigned char* buffer, int length) {
+            if (buffer == NULL || length <= 0) {
+                javan_panic("uuid entropy unavailable");
+            }
+        #if defined(_WIN32)
+            if (SystemFunction036((PVOID) buffer, (ULONG) length) == 0) {
+                javan_panic("uuid entropy unavailable");
+            }
+        #elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+            arc4random_buf(buffer, (size_t) length);
+        #else
+            FILE* random_file = fopen("/dev/urandom", "rb");
+            if (random_file == NULL) {
+                javan_panic("uuid entropy unavailable");
+            }
+            size_t bytes_read = fread(buffer, 1, (size_t) length, random_file);
+            fclose(random_file);
+            if (bytes_read != (size_t) length) {
+                javan_panic("uuid entropy unavailable");
+            }
+        #endif
+        }
+
+        void* javan_uuid_random(void) {
+            unsigned char bytes[16];
+            unsigned long long most = 0;
+            unsigned long long least = 0;
+            javan_uuid_fill_random(bytes, 16);
+            bytes[6] = (unsigned char) ((bytes[6] & 0x0fU) | 0x40U);
+            bytes[8] = (unsigned char) ((bytes[8] & 0x3fU) | 0x80U);
+            for (int index = 0; index < 8; index++) {
+                most = (most << 8) | (unsigned long long) bytes[index];
+            }
+            for (int index = 8; index < 16; index++) {
+                least = (least << 8) | (unsigned long long) bytes[index];
+            }
+            javan_uuid_value* uuid = (javan_uuid_value*) javan_alloc(sizeof(javan_uuid_value));
+            uuid->magic = JAVAN_UUID_MAGIC;
+            uuid->reserved0 = 0;
+            uuid->reserved1 = 0;
+            uuid->reserved2 = 0;
+            uuid->most = most;
+            uuid->least = least;
+            javan_update_runtime_allocation_kind((void*) uuid, JAVAN_RUNTIME_KIND_UUID);
+            return (void*) uuid;
+        }
+
+        void* javan_uuid_to_string(void* value) {
+            char buffer[37];
+            javan_uuid_value* uuid = javan_uuid_checked(value);
+            unsigned int part1 = (unsigned int) ((uuid->most >> 32) & 0xffffffffULL);
+            unsigned int part2 = (unsigned int) ((uuid->most >> 16) & 0xffffULL);
+            unsigned int part3 = (unsigned int) (uuid->most & 0xffffULL);
+            unsigned int part4 = (unsigned int) ((uuid->least >> 48) & 0xffffULL);
+            unsigned long long part5 = uuid->least & 0xffffffffffffULL;
+            snprintf(buffer, sizeof(buffer), "%08x-%04x-%04x-%04x-%012llx", part1, part2, part3, part4, part5);
             return javan_string_from(buffer);
         }
 

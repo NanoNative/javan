@@ -378,6 +378,9 @@ final class BytecodeToIRInvokeSupport {
         if (lowerSimpleDateFormatInstanceCall(classFile, method, instruction, methodRef, stack)) {
             return;
         }
+        if (lowerUuidInstanceCall(classFile, method, instruction, methodRef, stack)) {
+            return;
+        }
         if (lowerPrintStreamCall(classFile, method, instruction, methodRef, instructions, stack)) {
             return;
         }
@@ -2217,6 +2220,12 @@ final class BytecodeToIRInvokeSupport {
                 "javan_string_format_exact",
                 List.of(format, arguments)
             )));
+            return true;
+        }
+        if ("java/util/UUID".equals(methodRef.owner())
+            && "randomUUID".equals(methodRef.name())
+            && "()Ljava/util/UUID;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_uuid_random", List.of())));
             return true;
         }
         if ("java/time/Duration".equals(methodRef.owner())
@@ -4573,6 +4582,26 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.objectExpression(IrExpression.objectCall(
                 "javan_simple_date_format_format",
                 List.of(receiver, argument)
+            )));
+            return true;
+        }
+        return false;
+    }
+
+    static boolean lowerUuidInstanceCall(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final MethodRef methodRef,
+        final List<StackValue> stack
+    ) {
+        if ("java/util/UUID".equals(methodRef.owner())
+            && "toString".equals(methodRef.name())
+            && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
+            final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_uuid_to_string",
+                List.of(receiver)
             )));
             return true;
         }

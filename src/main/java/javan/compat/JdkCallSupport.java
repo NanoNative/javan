@@ -220,6 +220,8 @@ public final class JdkCallSupport {
         ),
         runtime("SimpleDateFormat.<init>", "java/text/SimpleDateFormat", "<init>", "(Ljava/lang/String;)V"),
         runtime("SimpleDateFormat.format", "java/text/SimpleDateFormat", "format", "(Ljava/util/Date;)Ljava/lang/String;"),
+        runtime("UUID.randomUUID", "java/util/UUID", "randomUUID", "()Ljava/util/UUID;"),
+        runtime("UUID.toString", "java/util/UUID", "toString", "()Ljava/lang/String;"),
         intrinsic(
             "Arrays.copyOf",
             "java/util/Arrays",
@@ -1556,6 +1558,9 @@ public final class JdkCallSupport {
         }
         if ("java/text/SimpleDateFormat".equals(owner)) {
             return List.of("time", "strings");
+        }
+        if ("java/util/UUID".equals(owner)) {
+            return List.of("random", "strings");
         }
         if ("java/nio/file/attribute/FileTime".equals(owner)) {
             return List.of("filesystem", "time");

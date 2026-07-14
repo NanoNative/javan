@@ -108,6 +108,33 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void uuidRandomUuidIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/UUID",
+            "randomUUID",
+            "()Ljava/util/UUID;"
+        ))).isTrue();
+    }
+
+    @Test
+    void uuidToStringIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/UUID",
+            "toString",
+            "()Ljava/lang/String;"
+        ))).isTrue();
+    }
+
+    @Test
+    void uuidCallsRequireRandomAndStringsRuntimeModules() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/UUID",
+            "toString",
+            "()Ljava/lang/String;"
+        ))).containsExactly("random", "strings");
+    }
+
+    @Test
     void atomicLongCallsRequireThreadsRuntimeModule() {
         assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
             "java/util/concurrent/atomic/AtomicLong",
