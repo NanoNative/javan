@@ -15436,6 +15436,143 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersHttpServerCreateToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/InetSocketAddress;)Lcom/sun/net/httpserver/HttpServer;",
+            2,
+            1,
+            plain(0, 42, "aload_0"),
+            plain(1, 3, "iconst_0"),
+            invokeStatic(2, new MethodRef(
+                "com/sun/net/httpserver/HttpServer",
+                "create",
+                "(Ljava/net/InetSocketAddress;I)Lcom/sun/net/httpserver/HttpServer;"
+            )),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).isEmpty();
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(
+                IrExpression.objectCall(
+                    "javan_http_server_create",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.intLiteral(0))
+                )
+            )
+        );
+    }
+
+    @Test
+    void lowersHttpServerGetAddressToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Lcom/sun/net/httpserver/HttpServer;)Ljava/net/InetSocketAddress;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("com/sun/net/httpserver/HttpServer", "getAddress", "()Ljava/net/InetSocketAddress;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).isEmpty();
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall("javan_http_server_get_address", List.of(IrExpression.objectLocal("arg0"))))
+        );
+    }
+
+    @Test
+    void lowersHttpServerSetExecutorToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Lcom/sun/net/httpserver/HttpServer;Ljava/util/concurrent/Executor;)V",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef(
+                "com/sun/net/httpserver/HttpServer",
+                "setExecutor",
+                "(Ljava/util/concurrent/Executor;)V"
+            )),
+            plain(3, 177, "return")
+        ));
+
+        assertThat(function.locals()).isEmpty();
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid(
+                "javan_http_server_set_executor",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
+    void lowersHttpServerCreateContextToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Lcom/sun/net/httpserver/HttpServer;Ljava/lang/String;Lcom/sun/net/httpserver/HttpHandler;)Lcom/sun/net/httpserver/HttpContext;",
+            3,
+            3,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            plain(2, 44, "aload_2"),
+            invokeVirtual(3, new MethodRef(
+                "com/sun/net/httpserver/HttpServer",
+                "createContext",
+                "(Ljava/lang/String;Lcom/sun/net/httpserver/HttpHandler;)Lcom/sun/net/httpserver/HttpContext;"
+            )),
+            plain(4, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).isEmpty();
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(
+                IrExpression.objectCall(
+                    "javan_http_server_create_context",
+                    List.of(
+                        IrExpression.objectLocal("arg0"),
+                        IrExpression.objectLocal("arg1"),
+                        IrExpression.objectLocal("arg2")
+                    )
+                )
+            )
+        );
+    }
+
+    @Test
+    void lowersHttpServerStartAndStopToRuntimeCalls() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Lcom/sun/net/httpserver/HttpServer;)V",
+            2,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("com/sun/net/httpserver/HttpServer", "start", "()V")),
+            plain(2, 42, "aload_0"),
+            plain(3, 3, "iconst_0"),
+            invokeVirtual(4, new MethodRef("com/sun/net/httpserver/HttpServer", "stop", "(I)V")),
+            plain(5, 177, "return")
+        ));
+
+        assertThat(function.locals()).isEmpty();
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid("javan_http_server_start", List.of(IrExpression.objectLocal("arg0"))),
+            IrInstruction.callStaticVoid(
+                "javan_http_server_stop",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.intLiteral(0))
+            ),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
     void lowersSocketOutputStreamWriteAndFlushThroughStoredLocalToRuntimeCalls() {
         final IrFunction function = lowerMain(method(
             0x0008,

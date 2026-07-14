@@ -40,6 +40,11 @@ import java.util.Optional;
  * Lowers the initial supported bytecode subset to javan IR.
  */
 public final class BytecodeToIR {
+    private static final MethodRef HTTP_HANDLER_HANDLE = new MethodRef(
+        "com/sun/net/httpserver/HttpHandler",
+        "handle",
+        "(Lcom/sun/net/httpserver/HttpExchange;)V"
+    );
     static final int TYPE_JAVA_LANG_INTEGER = -1001;
     static final int TYPE_JAVA_LANG_LONG = -1002;
     static final int TYPE_JAVA_LANG_FLOAT = -1003;
@@ -89,10 +94,42 @@ public final class BytecodeToIR {
                 )
             );
         }
+        final List<EntryPoint> httpHandlerTargets = reachableInterfaceTargets(expandedClasses, reachableMethods, HTTP_HANDLER_HANDLE);
+        if (!httpHandlerTargets.isEmpty()) {
+            final String dispatchSymbol = dispatchSymbol(HTTP_HANDLER_HANDLE);
+            dispatches.putIfAbsent(
+                dispatchSymbol,
+                BytecodeToIRInvokeSupport.dispatch(
+                    dispatchSymbol,
+                    MethodDescriptor.parse(HTTP_HANDLER_HANDLE.descriptor()),
+                    httpHandlerTargets
+                )
+            );
+        }
         for (final EntryPoint reachable : reachableMethods) {
             functions.add(lowerFunction(expandedClasses, reachable, dispatches, sourceLines, lambdaRegistry));
         }
         return new IrProgram(BytecodeToIRMetadataSupport.lowerClasses(expandedClasses), List.copyOf(functions), List.copyOf(dispatches.values()), symbol(callGraph.entryPoint()));
+    }
+
+    private static List<EntryPoint> reachableInterfaceTargets(
+        final Map<String, ClassFile> classes,
+        final List<EntryPoint> reachableMethods,
+        final MethodRef methodRef
+    ) {
+        final List<EntryPoint> result = new ArrayList<>();
+        for (final EntryPoint reachable : reachableMethods) {
+            if (!reachable.methodName().equals(methodRef.name()) || !reachable.descriptor().equals(methodRef.descriptor())) {
+                continue;
+            }
+            if (!isAssignableTo(classes, reachable.className(), methodRef.owner())) {
+                continue;
+            }
+            if (!result.contains(reachable)) {
+                result.add(reachable);
+            }
+        }
+        return List.copyOf(result);
     }
 
     static IrFunction lowerFunction(

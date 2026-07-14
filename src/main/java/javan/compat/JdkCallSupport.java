@@ -636,6 +636,12 @@ public final class JdkCallSupport {
         runtime("HttpExchange.getResponseHeaders", "com/sun/net/httpserver/HttpExchange", "getResponseHeaders", "()Lcom/sun/net/httpserver/Headers;"),
         runtime("HttpExchange.sendResponseHeaders", "com/sun/net/httpserver/HttpExchange", "sendResponseHeaders", "(IJ)V"),
         runtime("HttpExchange.getResponseBody", "com/sun/net/httpserver/HttpExchange", "getResponseBody", "()Ljava/io/OutputStream;"),
+        runtime("HttpServer.create", "com/sun/net/httpserver/HttpServer", "create", "(Ljava/net/InetSocketAddress;I)Lcom/sun/net/httpserver/HttpServer;"),
+        runtime("HttpServer.getAddress", "com/sun/net/httpserver/HttpServer", "getAddress", "()Ljava/net/InetSocketAddress;"),
+        runtime("HttpServer.setExecutor", "com/sun/net/httpserver/HttpServer", "setExecutor", "(Ljava/util/concurrent/Executor;)V"),
+        runtime("HttpServer.createContext", "com/sun/net/httpserver/HttpServer", "createContext", "(Ljava/lang/String;Lcom/sun/net/httpserver/HttpHandler;)Lcom/sun/net/httpserver/HttpContext;"),
+        runtime("HttpServer.start", "com/sun/net/httpserver/HttpServer", "start", "()V"),
+        runtime("HttpServer.stop", "com/sun/net/httpserver/HttpServer", "stop", "(I)V"),
         runtime("Headers.getFirst", "com/sun/net/httpserver/Headers", "getFirst", "(Ljava/lang/String;)Ljava/lang/String;"),
         runtime("Headers.put", "com/sun/net/httpserver/Headers", "put", "(Ljava/lang/String;Ljava/util/List;)Ljava/util/List;"),
         runtime("HttpRequest.<init>", "java/net/http/HttpRequest", "<init>", "()V"),
@@ -856,6 +862,9 @@ public final class JdkCallSupport {
         if ("java/util/function/Supplier".equals(owner)) {
             return "get".equals(name) && "()Ljava/lang/Object;".equals(descriptor);
         }
+        if ("com/sun/net/httpserver/HttpHandler".equals(owner)) {
+            return "handle".equals(name) && "(Lcom/sun/net/httpserver/HttpExchange;)V".equals(descriptor);
+        }
         return false;
     }
 
@@ -972,6 +981,11 @@ public final class JdkCallSupport {
             && "updateAndGet".equals(name)
             && "(Ljava/util/function/IntUnaryOperator;)I".equals(descriptor)) {
             return List.of(new MethodRef("java/util/function/IntUnaryOperator", "applyAsInt", "(I)I"));
+        }
+        if ("com/sun/net/httpserver/HttpServer".equals(owner)
+            && "createContext".equals(name)
+            && "(Ljava/lang/String;Lcom/sun/net/httpserver/HttpHandler;)Lcom/sun/net/httpserver/HttpContext;".equals(descriptor)) {
+            return List.of(new MethodRef("com/sun/net/httpserver/HttpHandler", "handle", "(Lcom/sun/net/httpserver/HttpExchange;)V"));
         }
         return List.of();
     }

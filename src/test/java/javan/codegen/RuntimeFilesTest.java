@@ -388,6 +388,53 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void runtimeHttpServerCreateContextStartAndStopRoundTrip() throws Exception {
+        assumeTrue(!isWindowsHost(), "HttpServer runtime boundary probe requires POSIX host support");
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                void* server = 0;
+                void* address = 0;
+                void* path = 0;
+                void* handler = 0;
+                void* context = 0;
+                void* executor = 0;
+                javan_register_static_roots(0, 0);
+                void** roots[] = {
+                    (void**) &server,
+                    (void**) &address,
+                    (void**) &path,
+                    (void**) &handler,
+                    (void**) &context,
+                    (void**) &executor
+                };
+                javan_root_frame_push(roots, 6);
+                server = javan_http_server_create(0, 0);
+                address = javan_http_server_get_address(server);
+                path = javan_string_from("/");
+                handler = javan_hashmap_new();
+                executor = javan_hashmap_new();
+                context = javan_http_server_create_context(server, path, handler);
+                javan_http_server_set_executor(server, executor);
+                javan_http_server_start(server);
+                javan_http_server_stop(server, 0);
+                javan_wait_for_non_current_threads();
+                printf("%d\\n", context != 0);
+                printf("%d\\n", javan_inet_socket_address_get_port(address) > 0);
+                javan_root_frame_pop(roots);
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("1\n1\n");
+    }
+
+    @Test
     void writeRegistersObjectsAfterRegistryCapacityIsSafe() throws Exception {
         final Path runtime = new RuntimeFiles().write(tempDir);
         final String source = Files.readString(runtime);

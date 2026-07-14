@@ -23,6 +23,9 @@ import java.util.List;
  */
 public final class CCodegen {
     private static final String RUNNABLE_RUN_DISPATCH_SYMBOL = BytecodeToIR.dispatchSymbol(new MethodRef("java/lang/Runnable", "run", "()V"));
+    private static final String HTTP_HANDLER_HANDLE_DISPATCH_SYMBOL = BytecodeToIR.dispatchSymbol(
+        new MethodRef("com/sun/net/httpserver/HttpHandler", "handle", "(Lcom/sun/net/httpserver/HttpExchange;)V")
+    );
 
     /**
      * Writes the generated C program.
@@ -72,6 +75,7 @@ public final class CCodegen {
             c.append(";").append(System.lineSeparator());
         }
         c.append("void javan_thread_run_target(void* target);").append(System.lineSeparator());
+        c.append("void javan_http_handler_handle(void* handler, void* exchange);").append(System.lineSeparator());
         c.append(System.lineSeparator());
         emitAllocators(program, c);
         emitEnumOrdinalHelpers(program, c);
@@ -137,6 +141,7 @@ public final class CCodegen {
             c.append(";").append(System.lineSeparator());
         }
         c.append("void javan_thread_run_target(void* target);").append(System.lineSeparator());
+        c.append("void javan_http_handler_handle(void* handler, void* exchange);").append(System.lineSeparator());
         c.append(System.lineSeparator());
         emitAllocators(program, c);
         emitEnumOrdinalHelpers(program, c);
@@ -506,6 +511,20 @@ public final class CCodegen {
             c.append("    ").append(RUNNABLE_RUN_DISPATCH_SYMBOL).append("(target);").append(System.lineSeparator());
         } else {
             c.append("    javan_panic(\"Thread.start with Runnable target has no closed-world Runnable.run implementation\");").append(System.lineSeparator());
+        }
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+
+        c.append("void javan_http_handler_handle(void* handler, void* exchange) {").append(System.lineSeparator());
+        c.append("    if (handler == 0) {").append(System.lineSeparator());
+        c.append("        javan_panic(\"HttpServer.createContext handler is null\");").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        c.append("    if (exchange == 0) {").append(System.lineSeparator());
+        c.append("        javan_panic(\"HttpServer handler exchange is null\");").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        if (hasDispatch(program, HTTP_HANDLER_HANDLE_DISPATCH_SYMBOL)) {
+            c.append("    ").append(HTTP_HANDLER_HANDLE_DISPATCH_SYMBOL).append("(handler, exchange);").append(System.lineSeparator());
+        } else {
+            c.append("    javan_panic(\"HttpServer handler has no closed-world HttpHandler.handle implementation\");").append(System.lineSeparator());
         }
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
     }

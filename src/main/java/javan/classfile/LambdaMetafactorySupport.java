@@ -308,6 +308,9 @@ public final class LambdaMetafactorySupport {
         if ("java/lang/Runnable".equals(owner)) {
             return "run".equals(name) && "()V".equals(descriptor);
         }
+        if ("com/sun/net/httpserver/HttpHandler".equals(owner)) {
+            return "handle".equals(name) && "(Lcom/sun/net/httpserver/HttpExchange;)V".equals(descriptor);
+        }
         return false;
     }
 

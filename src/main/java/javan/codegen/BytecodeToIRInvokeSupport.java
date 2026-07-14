@@ -858,6 +858,13 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_uri_create", arguments)));
             return true;
         }
+        if ("com/sun/net/httpserver/HttpServer".equals(methodRef.owner())
+            && "create".equals(methodRef.name())
+            && "(Ljava/net/InetSocketAddress;I)Lcom/sun/net/httpserver/HttpServer;".equals(methodRef.descriptor())) {
+            final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_http_server_create", arguments)));
+            return true;
+        }
         if ("java/net/http/HttpClient".equals(methodRef.owner())
             && "newHttpClient".equals(methodRef.name())
             && "()Ljava/net/http/HttpClient;".equals(methodRef.descriptor())) {
@@ -959,6 +966,41 @@ final class BytecodeToIRInvokeSupport {
                 localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
                 instructions.add(IrInstruction.assignObject(localName, IrExpression.objectCall("javan_http_exchange_get_response_body", List.of(receiver))));
                 stack.add(StackValue.httpOutputStream(IrExpression.objectLocal(localName)));
+                return true;
+            }
+            return false;
+        }
+        if ("com/sun/net/httpserver/HttpServer".equals(methodRef.owner())) {
+            if ("start".equals(methodRef.name()) && "()V".equals(methodRef.descriptor())) {
+                final IrExpression receiver = popObject(classFile, method, instruction, stack);
+                instructions.add(IrInstruction.callStaticVoid("javan_http_server_start", List.of(receiver)));
+                return true;
+            }
+            if ("stop".equals(methodRef.name()) && "(I)V".equals(methodRef.descriptor())) {
+                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()), instruction);
+                final IrExpression receiver = popObject(classFile, method, instruction, stack);
+                instructions.add(IrInstruction.callStaticVoid("javan_http_server_stop", List.of(receiver, arguments.getFirst())));
+                return true;
+            }
+            if ("getAddress".equals(methodRef.name()) && "()Ljava/net/InetSocketAddress;".equals(methodRef.descriptor())) {
+                final IrExpression receiver = popObject(classFile, method, instruction, stack);
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_http_server_get_address", List.of(receiver))));
+                return true;
+            }
+            if ("setExecutor".equals(methodRef.name()) && "(Ljava/util/concurrent/Executor;)V".equals(methodRef.descriptor())) {
+                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()), instruction);
+                final IrExpression receiver = popObject(classFile, method, instruction, stack);
+                instructions.add(IrInstruction.callStaticVoid("javan_http_server_set_executor", List.of(receiver, arguments.getFirst())));
+                return true;
+            }
+            if ("createContext".equals(methodRef.name())
+                && "(Ljava/lang/String;Lcom/sun/net/httpserver/HttpHandler;)Lcom/sun/net/httpserver/HttpContext;".equals(methodRef.descriptor())) {
+                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
+                final IrExpression receiver = popObject(classFile, method, instruction, stack);
+                stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                    "javan_http_server_create_context",
+                    List.of(receiver, arguments.get(0), arguments.get(1))
+                )));
                 return true;
             }
             return false;

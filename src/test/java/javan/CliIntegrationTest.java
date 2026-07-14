@@ -3742,6 +3742,99 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void checkSupportsHttpServerLambdaHandler() throws Exception {
+        final Path project = project("http-server-lambda-handler");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import com.sun.net.httpserver.HttpExchange;
+            import com.sun.net.httpserver.HttpServer;
+
+            import java.net.InetSocketAddress;
+
+            public final class Main {
+                private Main() {
+                }
+
+                static void install(final HttpServer server) {
+                    server.createContext("/hello", (HttpExchange exchange) -> {
+                        exchange.sendResponseHeaders(204, 0L);
+                        exchange.getResponseBody().close();
+                    });
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+                    install(server);
+                    System.out.println(server.getAddress().getPort());
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stderr()).isEmpty();
+    }
+
+    @Test
+    void httpServerHelloHandlerBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("http-server-hello-handler");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import com.sun.net.httpserver.HttpExchange;
+            import com.sun.net.httpserver.HttpHandler;
+            import com.sun.net.httpserver.HttpServer;
+
+            import java.io.OutputStream;
+            import java.net.InetSocketAddress;
+            import java.net.URI;
+            import java.net.http.HttpClient;
+            import java.net.http.HttpRequest;
+            import java.net.http.HttpResponse;
+            import java.nio.charset.StandardCharsets;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+                    server.setExecutor(null);
+                    server.createContext("/hello", new HelloHandler());
+                    server.start();
+                    final int port = server.getAddress().getPort();
+                    final HttpClient client = HttpClient.newHttpClient();
+                    final HttpRequest request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/hello")).GET().build();
+                    final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+                    server.stop(0);
+                    System.out.println(response.statusCode());
+                    System.out.println(response.body());
+                }
+
+                private static final class HelloHandler implements HttpHandler {
+                    @Override
+                    public void handle(final HttpExchange exchange) throws java.io.IOException {
+                        final byte[] body = "pong".getBytes(StandardCharsets.UTF_8);
+                        exchange.getResponseHeaders().put("Content-Type", java.util.List.of("text/plain"));
+                        exchange.sendResponseHeaders(200, body.length);
+                        final OutputStream out = exchange.getResponseBody();
+                        out.write(body);
+                        out.close();
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/http-server-hello-handler").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void httpClientGetStringBuildsAndMatchesJvmOutput() throws Exception {
         final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
             new java.net.InetSocketAddress("127.0.0.1", 0),
@@ -5185,7 +5278,7 @@ final class CliIntegrationTest {
     }
 
     @Test
-    void checkRejectsReachableNanoStyleHttpServerDependencyAndReportsHttpRuntimeModules() throws Exception {
+    void checkSupportsReachableNanoStyleHttpServerDependencyAndReportsHttpRuntimeModules() throws Exception {
         final Path project = project("unsupported-nano-http-server-dependency");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -5214,14 +5307,8 @@ final class CliIntegrationTest {
 
         final CliRun run = run(tempDir, "check", project.toString());
 
-        assertThat(run.exitCode()).isEqualTo(2);
-        assertThat(run.stderr()).contains(
-            "error[JAVAN061]",
-            "org/nanonative/nano/services/http/HttpServer",
-            "create()Lcom/sun/net/httpserver/HttpServer;",
-            "com/sun/net/httpserver/HttpServer.create",
-            "network/http"
-        );
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stderr()).isEmpty();
         assertThat(Files.readString(project.resolve(".javan/reports/runtime-features.json"))).contains(
             "\"reachableRuntimeModules\": [\"core\", \"http\", \"network\"]",
             "\"status\": \"pass\""
@@ -11533,8 +11620,8 @@ final class CliIntegrationTest {
         assertThat(run.exitCode()).isEqualTo(2);
         final String diagnostics = Files.readString(project.resolve(".javan/reports/diagnostics.md"));
         assertThat(diagnostics).contains(
-            "- diagnostics: `471`",
-            "- errors: `457`",
+            "- diagnostics: `462`",
+            "- errors: `448`",
             "- warnings: `14`",
             "error[JAVAN030] unsupported reachable bytecode",
             "`invokedynamic`"
@@ -11627,6 +11714,12 @@ final class CliIntegrationTest {
             "java/time/ZonedDateTime.getOffset()Ljava/time/ZoneOffset;",
             "java/time/ZoneOffset.getTotalSeconds()I",
             "java/net/InetSocketAddress.<init>(I)V",
+            "com/sun/net/httpserver/HttpServer.create(Ljava/net/InetSocketAddress;I)Lcom/sun/net/httpserver/HttpServer;",
+            "com/sun/net/httpserver/HttpServer.getAddress()Ljava/net/InetSocketAddress;",
+            "com/sun/net/httpserver/HttpServer.setExecutor(Ljava/util/concurrent/Executor;)V",
+            "com/sun/net/httpserver/HttpServer.createContext(Ljava/lang/String;Lcom/sun/net/httpserver/HttpHandler;)Lcom/sun/net/httpserver/HttpContext;",
+            "com/sun/net/httpserver/HttpServer.start()V",
+            "com/sun/net/httpserver/HttpServer.stop(I)V",
             "java/util/UUID.randomUUID()Ljava/util/UUID;",
             "java/util/UUID.toString()Ljava/lang/String;"
         );

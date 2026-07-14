@@ -405,6 +405,60 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void httpServerCreateWithAddressAndBacklogIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "com/sun/net/httpserver/HttpServer",
+            "create",
+            "(Ljava/net/InetSocketAddress;I)Lcom/sun/net/httpserver/HttpServer;"
+        ))).isTrue();
+    }
+
+    @Test
+    void httpServerGetAddressIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "com/sun/net/httpserver/HttpServer",
+            "getAddress",
+            "()Ljava/net/InetSocketAddress;"
+        ))).isTrue();
+    }
+
+    @Test
+    void httpServerSetExecutorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "com/sun/net/httpserver/HttpServer",
+            "setExecutor",
+            "(Ljava/util/concurrent/Executor;)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void httpServerCreateContextIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "com/sun/net/httpserver/HttpServer",
+            "createContext",
+            "(Ljava/lang/String;Lcom/sun/net/httpserver/HttpHandler;)Lcom/sun/net/httpserver/HttpContext;"
+        ))).isTrue();
+    }
+
+    @Test
+    void httpServerStartIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "com/sun/net/httpserver/HttpServer",
+            "start",
+            "()V"
+        ))).isTrue();
+    }
+
+    @Test
+    void httpServerStopIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "com/sun/net/httpserver/HttpServer",
+            "stop",
+            "(I)V"
+        ))).isTrue();
+    }
+
+    @Test
     void headersGetFirstIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "com/sun/net/httpserver/Headers",
@@ -1107,6 +1161,19 @@ final class JdkCallSupportTest {
             "java/util/function/Consumer",
             "accept",
             "(Ljava/lang/Object;)V"
+        ));
+    }
+
+    @Test
+    void httpServerCreateContextExposesClosedWorldHttpHandlerDispatchTarget() {
+        assertThat(JdkCallSupport.closedWorldHigherOrderDispatchTargets(new javan.classfile.MethodRef(
+            "com/sun/net/httpserver/HttpServer",
+            "createContext",
+            "(Ljava/lang/String;Lcom/sun/net/httpserver/HttpHandler;)Lcom/sun/net/httpserver/HttpContext;"
+        ))).containsExactly(new javan.classfile.MethodRef(
+            "com/sun/net/httpserver/HttpHandler",
+            "handle",
+            "(Lcom/sun/net/httpserver/HttpExchange;)V"
         ));
     }
 
