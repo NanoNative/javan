@@ -755,6 +755,7 @@ final class BytecodeToIRTest {
             List.of(),
             Optional.empty(),
             List.of(),
+            List.of(),
             Optional.of(new BytecodeToIR.StreamToIntOperation(
                 IrExpression.objectLocal("mapper"),
                 new MethodRef("java/util/function/ToIntFunction", "applyAsInt", "(Ljava/lang/Object;)I")
@@ -17703,6 +17704,95 @@ final class BytecodeToIRTest {
             IrInstruction.label("label_stream_find_first_done_2_4"),
             IrInstruction.returnObject(IrExpression.objectLocal("object3"))
         );
+    }
+
+    @Test
+    void lowersStreamOfArrayToFindFirst() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "([Ljava/lang/Object;)Ljava/util/Optional;",
+            2,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeStatic(1, new MethodRef("java/util/stream/Stream", "of", "([Ljava/lang/Object;)Ljava/util/stream/Stream;")),
+            invokeInterface(2, new MethodRef("java/util/stream/Stream", "findFirst", "()Ljava/util/Optional;")),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall("javan_list_of_array", List.of(IrExpression.objectLocal("arg0")))
+            ),
+            IrInstruction.assignObject(
+                "object1",
+                IrExpression.objectCall("javan_list_iterator", List.of(IrExpression.objectLocal("object0")))
+            ),
+            IrInstruction.assignObject(
+                "object3",
+                IrExpression.objectCall("javan_optional_empty", List.of())
+            ),
+            IrInstruction.label("label_stream_find_first_next_2_4"),
+            IrInstruction.branchIf(
+                "label_stream_find_first_body_2_4",
+                IrExpression.intComparison(
+                    "!=",
+                    IrExpression.intCall("javan_iterator_has_next", List.of(IrExpression.objectLocal("object1"))),
+                    IrExpression.intLiteral(0)
+                )
+            ),
+            IrInstruction.jump("label_stream_find_first_done_2_4"),
+            IrInstruction.label("label_stream_find_first_body_2_4"),
+            IrInstruction.assignObject(
+                "object2",
+                IrExpression.objectCall("javan_iterator_next", List.of(IrExpression.objectLocal("object1")))
+            ),
+            IrInstruction.assignObject(
+                "object3",
+                IrExpression.objectCall("javan_optional_of_nullable", List.of(IrExpression.objectLocal("object2")))
+            ),
+            IrInstruction.jump("label_stream_find_first_done_2_4"),
+            IrInstruction.jump("label_stream_find_first_next_2_4"),
+            IrInstruction.label("label_stream_find_first_done_2_4"),
+            IrInstruction.returnObject(IrExpression.objectLocal("object3"))
+        );
+    }
+
+    @Test
+    void lowersIntStreamRangeToFindFirst() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/util/OptionalInt;",
+            2,
+            0,
+            plain(0, 4, "iconst_1"),
+            plain(1, 7, "iconst_4"),
+            invokeStatic(2, new MethodRef("java/util/stream/IntStream", "range", "(II)Ljava/util/stream/IntStream;")),
+            invokeInterface(3, new MethodRef("java/util/stream/IntStream", "findFirst", "()Ljava/util/OptionalInt;")),
+            plain(4, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).contains(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall("javan_intstream_range", List.of(IrExpression.intLiteral(1), IrExpression.intLiteral(4)))
+            ),
+            IrInstruction.assignObject(
+                "object1",
+                IrExpression.objectCall("javan_list_iterator", List.of(IrExpression.objectLocal("object0")))
+            )
+        );
+        assertThat(function.instructions()).anySatisfy(instruction -> {
+            assertThat(instruction.op()).isEqualTo(IrInstruction.Op.ASSIGN_OBJECT);
+            assertThat(instruction.value()).hasValue("object4");
+            assertThat(instruction.expression()).hasValueSatisfying(expression -> {
+                assertThat(expression.value()).isEqualTo("javan_optional_int_of");
+                assertThat(expression.arguments()).singleElement().satisfies(argument -> assertThat(argument.type()).isEqualTo(IrType.INT));
+            });
+        });
+        assertThat(function.instructions()).contains(IrInstruction.returnObject(IrExpression.objectLocal("object4")));
     }
 
     @Test

@@ -874,15 +874,27 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksStreamOfArrayAsExplicitRejected() {
+    void marksStreamOfArrayAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/stream/Stream", "of", "([Ljava/lang/Object;)Ljava/util/stream/Stream;")))
-            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
     @Test
-    void marksIntStreamRangeAsExplicitRejected() {
+    void marksIntStreamRangeAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/stream/IntStream", "range", "(II)Ljava/util/stream/IntStream;")))
-            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksIntStreamFilterAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/stream/IntStream", "filter", "(Ljava/util/function/IntPredicate;)Ljava/util/stream/IntStream;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksIntStreamFindFirstAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/stream/IntStream", "findFirst", "()Ljava/util/OptionalInt;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
     @Test

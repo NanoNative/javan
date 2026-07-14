@@ -3444,21 +3444,35 @@ public final class BytecodeToIR {
         List<StreamOperation> preSortOperations,
         Optional<ComparatorPlan> comparator,
         List<StreamOperation> postSortOperations,
+        List<StreamOperation> intOperations,
         Optional<StreamToIntOperation> intTerminal
     ) {
         StreamPlan append(final StreamOperation operation) {
             if (comparator.isPresent()) {
                 final List<StreamOperation> next = new ArrayList<>(postSortOperations);
                 next.add(operation);
-                return new StreamPlan(source, preSortOperations, comparator, List.copyOf(next), intTerminal);
+                return new StreamPlan(source, preSortOperations, comparator, List.copyOf(next), intOperations, intTerminal);
             }
             final List<StreamOperation> next = new ArrayList<>(preSortOperations);
             next.add(operation);
-            return new StreamPlan(source, List.copyOf(next), comparator, postSortOperations, intTerminal);
+            return new StreamPlan(source, List.copyOf(next), comparator, postSortOperations, intOperations, intTerminal);
         }
 
         StreamPlan sorted(final ComparatorPlan comparatorPlan) {
-            return new StreamPlan(source, preSortOperations, Optional.of(comparatorPlan), postSortOperations, intTerminal);
+            return new StreamPlan(source, preSortOperations, Optional.of(comparatorPlan), postSortOperations, intOperations, intTerminal);
+        }
+
+        StreamPlan intFilter(final IrExpression function, final MethodRef interfaceMethod) {
+            final List<StreamOperation> next = new ArrayList<>(intOperations);
+            next.add(new StreamOperation(StreamOperationKind.FILTER, function, interfaceMethod));
+            return new StreamPlan(
+                source,
+                preSortOperations,
+                comparator,
+                postSortOperations,
+                List.copyOf(next),
+                intTerminal
+            );
         }
 
         StreamPlan mapToInt(final IrExpression function, final MethodRef interfaceMethod) {
@@ -3467,6 +3481,7 @@ public final class BytecodeToIR {
                 preSortOperations,
                 comparator,
                 postSortOperations,
+                intOperations,
                 Optional.of(new StreamToIntOperation(function, interfaceMethod))
             );
         }

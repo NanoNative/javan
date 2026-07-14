@@ -1263,6 +1263,19 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void intStreamFilterExposesClosedWorldIntPredicateDispatchTarget() {
+        assertThat(JdkCallSupport.closedWorldHigherOrderDispatchTargets(new javan.classfile.MethodRef(
+            "java/util/stream/IntStream",
+            "filter",
+            "(Ljava/util/function/IntPredicate;)Ljava/util/stream/IntStream;"
+        ))).containsExactly(new javan.classfile.MethodRef(
+            "java/util/function/IntPredicate",
+            "test",
+            "(I)Z"
+        ));
+    }
+
+    @Test
     void comparatorReverseOrderIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Comparator",
@@ -1312,6 +1325,42 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void streamOfArrayIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/stream/Stream",
+            "of",
+            "([Ljava/lang/Object;)Ljava/util/stream/Stream;"
+        ))).isTrue();
+    }
+
+    @Test
+    void intStreamRangeIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/stream/IntStream",
+            "range",
+            "(II)Ljava/util/stream/IntStream;"
+        ))).isTrue();
+    }
+
+    @Test
+    void intStreamFilterIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/stream/IntStream",
+            "filter",
+            "(Ljava/util/function/IntPredicate;)Ljava/util/stream/IntStream;"
+        ))).isTrue();
+    }
+
+    @Test
+    void intStreamFindFirstIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/stream/IntStream",
+            "findFirst",
+            "()Ljava/util/OptionalInt;"
+        ))).isTrue();
+    }
+
+    @Test
     void threadRunnableNameConstructorIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/Thread",
@@ -1343,6 +1392,15 @@ final class JdkCallSupportTest {
         assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
             "java/util/stream/IntStream",
             "max",
+            "()Ljava/util/OptionalInt;"
+        ))).containsExactly("collections", "optional");
+    }
+
+    @Test
+    void intStreamFindFirstRequiresCollectionAndOptionalRuntimeModules() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/stream/IntStream",
+            "findFirst",
             "()Ljava/util/OptionalInt;"
         ))).containsExactly("collections", "optional");
     }

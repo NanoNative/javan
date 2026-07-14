@@ -8249,6 +8249,90 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void intStreamRangeFindFirstBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("intstream-range-find-first");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.stream.IntStream;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(IntStream.range(3, 7).findFirst().orElse(-1));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/intstream-range-find-first").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("3\n");
+    }
+
+    @Test
+    void filteredIntStreamRangeFindFirstBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("filtered-intstream-range-find-first");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.stream.IntStream;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(IntStream.range(3, 9)
+                        .filter(value -> value > 5)
+                        .findFirst()
+                        .orElse(-1));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/filtered-intstream-range-find-first").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("6\n");
+    }
+
+    @Test
+    void emptyFilteredIntStreamRangeFindFirstBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("empty-filtered-intstream-range-find-first");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.stream.IntStream;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(IntStream.range(3, 7)
+                        .filter(value -> value > 10)
+                        .findFirst()
+                        .orElse(-1));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/empty-filtered-intstream-range-find-first").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("-1\n");
+    }
+
+    @Test
     void listStreamMapToIntMaxPrintedAsObjectBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("list-stream-map-to-int-max-printed-as-object");
         writeJava(project, "com.acme.Main", """
@@ -8408,6 +8492,33 @@ final class CliIntegrationTest {
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/arrays-stream-find-first").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("aa\n");
+    }
+
+    @Test
+    void streamOfArrayFindFirstBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stream-of-array-find-first");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.stream.Stream;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String[] values = new String[]{"aa", "bbb", "cccc"};
+                    System.out.println(Stream.of(values).findFirst().orElse("missing"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stream-of-array-find-first").toString())).stdout()).isEqualTo(jvmOutput);
         assertThat(jvmOutput).isEqualTo("aa\n");
     }
 
@@ -11326,8 +11437,8 @@ final class CliIntegrationTest {
         assertThat(run.exitCode()).isEqualTo(2);
         final String diagnostics = Files.readString(project.resolve(".javan/reports/diagnostics.md"));
         assertThat(diagnostics).contains(
-            "- diagnostics: `497`",
-            "- errors: `483`",
+            "- diagnostics: `492`",
+            "- errors: `478`",
             "- warnings: `14`",
             "error[JAVAN030] unsupported reachable bytecode",
             "`invokedynamic`"
@@ -11444,6 +11555,7 @@ final class CliIntegrationTest {
             "java/util/stream/Collectors.toCollection(Ljava/util/function/Supplier;)Ljava/util/stream/Collector;",
             "java/util/stream/Collectors.toMap(Ljava/util/function/Function;Ljava/util/function/Function;Ljava/util/function/BinaryOperator;Ljava/util/function/Supplier;)Ljava/util/stream/Collector;",
             "java/util/stream/Collectors.toList()Ljava/util/stream/Collector;",
+            "java/util/stream/Stream.of([Ljava/lang/Object;)Ljava/util/stream/Stream;",
             "java/lang/CharSequence.length()I",
             "java/lang/CharSequence.charAt(I)C",
             "java/lang/Character.isWhitespace(C)Z",
@@ -11461,6 +11573,9 @@ final class CliIntegrationTest {
             "java/util/Set.size()I",
             "java/util/Set.toArray(Ljava/util/function/IntFunction;)[Ljava/lang/Object;",
             "java/util/stream/Stream.toArray(Ljava/util/function/IntFunction;)[Ljava/lang/Object;",
+            "java/util/stream/IntStream.range(II)Ljava/util/stream/IntStream;",
+            "java/util/stream/IntStream.filter(Ljava/util/function/IntPredicate;)Ljava/util/stream/IntStream;",
+            "java/util/stream/IntStream.findFirst()Ljava/util/OptionalInt;",
             "berlin/yuna/typemap/model/FunctionOrNull.apply(Ljava/lang/Object;)Ljava/lang/Object;",
             "berlin/yuna/typemap/model/ConcurrentTypeMap.put(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
             "berlin/yuna/typemap/model/TypeMapI.asOpt(Ljava/lang/Class;[Ljava/lang/Object;)Lberlin/yuna/typemap/model/Type;",

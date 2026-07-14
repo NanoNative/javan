@@ -9066,6 +9066,23 @@ final class RuntimeSourceMemorySections {
             return javan_list_new_with_capacity(0, 0);
         }
 
+        void* javan_intstream_range(int start_inclusive, int end_exclusive) {
+            javan_object_list* list = javan_list_checked(javan_arraylist_new());
+            void* list_root = (void*) list;
+            void* boxed_root = NULL;
+            void** roots[] = {
+                &list_root,
+                &boxed_root
+            };
+            javan_root_frame_push(roots, 2);
+            for (int value = start_inclusive; value < end_exclusive; value++) {
+                boxed_root = javan_integer_value_of(value);
+                javan_list_add_logical(list, javan_list_logical_length(list), boxed_root);
+            }
+            javan_root_frame_pop(roots);
+            return list_root;
+        }
+
         int javan_arraylist_add(void* value, void* element) {
             javan_object_list* list = javan_list_checked(value);
             javan_list_add_logical(list, javan_list_logical_length(list), element);

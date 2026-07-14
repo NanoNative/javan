@@ -838,6 +838,9 @@ public final class JdkCallSupport {
         if ("java/util/function/IntUnaryOperator".equals(owner)) {
             return "applyAsInt".equals(name) && "(I)I".equals(descriptor);
         }
+        if ("java/util/function/IntPredicate".equals(owner)) {
+            return "test".equals(name) && "(I)Z".equals(descriptor);
+        }
         if ("java/util/function/Predicate".equals(owner)) {
             return "test".equals(name) && "(Ljava/lang/Object;)Z".equals(descriptor);
         }
@@ -874,6 +877,9 @@ public final class JdkCallSupport {
             return List.of(new MethodRef("java/util/function/BiConsumer", "accept", "(Ljava/lang/Object;Ljava/lang/Object;)V"));
         }
         if ("java/util/stream/Stream".equals(owner)) {
+            if ("of".equals(name) && "([Ljava/lang/Object;)Ljava/util/stream/Stream;".equals(descriptor)) {
+                return List.of();
+            }
             if ("forEach".equals(name) && "(Ljava/util/function/Consumer;)V".equals(descriptor)) {
                 return List.of(new MethodRef("java/util/function/Consumer", "accept", "(Ljava/lang/Object;)V"));
             }
@@ -892,6 +898,11 @@ public final class JdkCallSupport {
             if ("noneMatch".equals(name) && "(Ljava/util/function/Predicate;)Z".equals(descriptor)) {
                 return List.of(new MethodRef("java/util/function/Predicate", "test", "(Ljava/lang/Object;)Z"));
             }
+        }
+        if ("java/util/stream/IntStream".equals(owner)
+            && "filter".equals(name)
+            && "(Ljava/util/function/IntPredicate;)Ljava/util/stream/IntStream;".equals(descriptor)) {
+            return List.of(new MethodRef("java/util/function/IntPredicate", "test", "(I)Z"));
         }
         if ("java/util/Comparator".equals(owner)
             && "comparing".equals(name)
@@ -1119,6 +1130,9 @@ public final class JdkCallSupport {
     }
 
     private static boolean isSupportedStreamCall(final String name, final String descriptor) {
+        if ("of".equals(name)) {
+            return "([Ljava/lang/Object;)Ljava/util/stream/Stream;".equals(descriptor);
+        }
         if ("forEach".equals(name)) {
             return "(Ljava/util/function/Consumer;)V".equals(descriptor);
         }
@@ -1164,6 +1178,15 @@ public final class JdkCallSupport {
     }
 
     private static boolean isSupportedIntStreamCall(final String name, final String descriptor) {
+        if ("range".equals(name)) {
+            return "(II)Ljava/util/stream/IntStream;".equals(descriptor);
+        }
+        if ("filter".equals(name)) {
+            return "(Ljava/util/function/IntPredicate;)Ljava/util/stream/IntStream;".equals(descriptor);
+        }
+        if ("findFirst".equals(name)) {
+            return "()Ljava/util/OptionalInt;".equals(descriptor);
+        }
         if ("max".equals(name)) {
             return "()Ljava/util/OptionalInt;".equals(descriptor);
         }
@@ -1571,8 +1594,8 @@ public final class JdkCallSupport {
             return List.of("filesystem", "time");
         }
         if ("java/util/stream/IntStream".equals(owner)
-            && "max".equals(name)
-            && "()Ljava/util/OptionalInt;".equals(methodRef.descriptor())) {
+            && (("max".equals(name) && "()Ljava/util/OptionalInt;".equals(methodRef.descriptor()))
+            || ("findFirst".equals(name) && "()Ljava/util/OptionalInt;".equals(methodRef.descriptor())))) {
             return List.of("collections", "optional");
         }
         if ("java/util/stream/Stream".equals(owner)

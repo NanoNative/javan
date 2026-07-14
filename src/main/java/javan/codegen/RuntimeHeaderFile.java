@@ -263,6 +263,7 @@ final class RuntimeHeaderFile {
         void* javan_string_substring(const char* value, int begin);
         void* javan_string_substring_range(const char* value, int begin, int end);
         void* javan_arraylist_new(void);
+        void* javan_intstream_range(int start_inclusive, int end_exclusive);
         int javan_arraylist_add(void* list, void* value);
         void javan_arraylist_add_at(void* list, int index, void* value);
         int javan_arraylist_add_all(void* list, void* collection);
