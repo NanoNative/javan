@@ -86,6 +86,11 @@ public final class JdkCallSupport {
         runtime("Runtime.exit", "java/lang/Runtime", "exit", "(I)V"),
         runtime("ManagementFactory.getThreadMXBean", "java/lang/management/ManagementFactory", "getThreadMXBean", "()Ljava/lang/management/ThreadMXBean;"),
         runtime("ThreadMXBean.getThreadCount", "java/lang/management/ThreadMXBean", "getThreadCount", "()I"),
+        runtime("ThreadMXBean.getAllThreadIds", "java/lang/management/ThreadMXBean", "getAllThreadIds", "()[J"),
+        runtime("ThreadMXBean.getThreadInfo", "java/lang/management/ThreadMXBean", "getThreadInfo", "([J)[Ljava/lang/management/ThreadInfo;"),
+        runtime("ThreadInfo.getThreadName", "java/lang/management/ThreadInfo", "getThreadName", "()Ljava/lang/String;"),
+        runtime("ThreadInfo.getLockName", "java/lang/management/ThreadInfo", "getLockName", "()Ljava/lang/String;"),
+        runtime("ThreadInfo.getLockOwnerName", "java/lang/management/ThreadInfo", "getLockOwnerName", "()Ljava/lang/String;"),
         runtime("ManagementFactory.getRuntimeMXBean", "java/lang/management/ManagementFactory", "getRuntimeMXBean", "()Ljava/lang/management/RuntimeMXBean;"),
         runtime("RuntimeMXBean.getUptime", "java/lang/management/RuntimeMXBean", "getUptime", "()J"),
         runtime("RuntimeMXBean.getStartTime", "java/lang/management/RuntimeMXBean", "getStartTime", "()J"),
@@ -128,8 +133,14 @@ public final class JdkCallSupport {
         runtime("ThreadFactory.getClass", "java/util/concurrent/ThreadFactory", "getClass", "()Ljava/lang/Class;"),
         runtime("Executor.execute", "java/util/concurrent/Executor", "execute", "(Ljava/lang/Runnable;)V"),
         runtime("ExecutorService.execute", "java/util/concurrent/ExecutorService", "execute", "(Ljava/lang/Runnable;)V"),
+        runtime("ExecutorService.submit", "java/util/concurrent/ExecutorService", "submit", "(Ljava/lang/Runnable;)Ljava/util/concurrent/Future;"),
         runtime("ExecutorService.shutdown", "java/util/concurrent/ExecutorService", "shutdown", "()V"),
         runtime("ExecutorService.close", "java/util/concurrent/ExecutorService", "close", "()V"),
+        runtime("Future.cancel", "java/util/concurrent/Future", "cancel", "(Z)Z"),
+        runtime("CountDownLatch.<init>", "java/util/concurrent/CountDownLatch", "<init>", "(I)V"),
+        runtime("CountDownLatch.await", "java/util/concurrent/CountDownLatch", "await", "(JLjava/util/concurrent/TimeUnit;)Z"),
+        runtime("CountDownLatch.countDown", "java/util/concurrent/CountDownLatch", "countDown", "()V"),
+        runtime("CountDownLatch.getCount", "java/util/concurrent/CountDownLatch", "getCount", "()J"),
         runtime("ExecutorService.toString", "java/util/concurrent/ExecutorService", "toString", "()Ljava/lang/String;"),
         runtime("ExecutorService.hashCode", "java/util/concurrent/ExecutorService", "hashCode", "()I"),
         runtime("ExecutorService.equals", "java/util/concurrent/ExecutorService", "equals", "(Ljava/lang/Object;)Z"),
@@ -1513,6 +1524,9 @@ public final class JdkCallSupport {
         if ("java/lang/management/ThreadMXBean".equals(owner)) {
             return List.of("management");
         }
+        if ("java/lang/management/ThreadInfo".equals(owner)) {
+            return List.of("management");
+        }
         if ("java/lang/management/RuntimeMXBean".equals(owner)) {
             return List.of("management");
         }
@@ -1547,6 +1561,12 @@ public final class JdkCallSupport {
             return List.of("threads");
         }
         if ("java/util/concurrent/ExecutorService".equals(owner)) {
+            return List.of("threads");
+        }
+        if ("java/util/concurrent/Future".equals(owner)) {
+            return List.of("threads");
+        }
+        if ("java/util/concurrent/CountDownLatch".equals(owner)) {
             return List.of("threads");
         }
         if ("java/util/concurrent/locks/LockSupport".equals(owner)) {

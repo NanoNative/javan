@@ -2829,7 +2829,26 @@ public final class BytecodeToIR {
         if (isLinkOptionNoFollowLinks(fieldRef)) {
             return true;
         }
+        if (isSupportedTimeUnit(fieldRef)) {
+            return true;
+        }
         return isSupportedChronoField(fieldRef);
+    }
+
+    static boolean isSupportedTimeUnit(final FieldRef fieldRef) {
+        if (!"java/util/concurrent/TimeUnit".equals(fieldRef.owner())) {
+            return false;
+        }
+        if (!"Ljava/util/concurrent/TimeUnit;".equals(fieldRef.descriptor())) {
+            return false;
+        }
+        return "MILLISECONDS".equals(fieldRef.name())
+            || "SECONDS".equals(fieldRef.name())
+            || "MINUTES".equals(fieldRef.name())
+            || "HOURS".equals(fieldRef.name())
+            || "DAYS".equals(fieldRef.name())
+            || "MICROSECONDS".equals(fieldRef.name())
+            || "NANOSECONDS".equals(fieldRef.name());
     }
 
     static boolean isStandardCopyReplaceExisting(final FieldRef fieldRef) {
@@ -3211,6 +3230,22 @@ public final class BytecodeToIR {
         return Optional.empty();
     }
 
+    static Optional<String> platformRuntimeInstanceOfHelper(final String target) {
+        if ("java/util/concurrent/atomic/AtomicBoolean".equals(target)) {
+            return Optional.of("javan_object_is_atomic_boolean");
+        }
+        if ("java/util/concurrent/atomic/AtomicInteger".equals(target)) {
+            return Optional.of("javan_object_is_atomic_integer");
+        }
+        if ("java/util/concurrent/atomic/AtomicLong".equals(target)) {
+            return Optional.of("javan_object_is_atomic_long");
+        }
+        if ("java/util/concurrent/atomic/AtomicReference".equals(target)) {
+            return Optional.of("javan_object_is_atomic_reference");
+        }
+        return Optional.empty();
+    }
+
     static List<Integer> platformWrapperSuperTypeIds(final String target) {
         if ("java/lang/Number".equals(target)) {
             return List.of(
@@ -3246,8 +3281,8 @@ public final class BytecodeToIR {
             classFile.name(),
             method.name() + method.descriptor(),
             instruction.mnemonic() + " " + target,
-            "The native runtime only has deterministic type metadata for application classes and supported boxed primitive wrappers.",
-            "Keep instanceof targets to application classes/interfaces, Object, or supported wrappers until this runtime model expands."
+            "The native runtime only has deterministic type metadata for application classes, supported boxed primitive wrappers, and a narrow set of runtime carrier types.",
+            "Keep instanceof targets to application classes/interfaces, Object, supported wrappers, or supported runtime carriers until this runtime model expands."
         ));
     }
 

@@ -5818,6 +5818,102 @@ final class RuntimeFilesTest {
         assertThat(output.stdout()).isEqualTo("before-exit\nhook=alpha\n");
     }
 
+    @Test
+    void runtimeThreadMxBeanThreadInfoAccessorsReturnStableValues() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                void* bean = 0;
+                void* ids = 0;
+                void* infos = 0;
+                void* first = 0;
+                void* name = 0;
+                void* lock_name = 0;
+                void* lock_owner = 0;
+                javan_register_static_roots(0, 0);
+                void** roots[] = {
+                    (void**) &bean,
+                    (void**) &ids,
+                    (void**) &infos,
+                    (void**) &first,
+                    (void**) &name,
+                    (void**) &lock_name,
+                    (void**) &lock_owner
+                };
+                javan_root_frame_push(roots, 7);
+                bean = javan_management_thread_mxbean();
+                ids = javan_thread_mxbean_get_all_thread_ids(bean);
+                infos = javan_thread_mxbean_get_thread_info(bean, ids);
+                first = javan_object_array_get(infos, 0);
+                name = javan_thread_info_get_thread_name(first);
+                lock_name = javan_thread_info_get_lock_name(first);
+                lock_owner = javan_thread_info_get_lock_owner_name(first);
+                printf("%d\\n", javan_array_length(ids) >= 1);
+                printf("%d\\n", javan_array_length(infos) == javan_array_length(ids));
+                printf("%d\\n", first != NULL);
+                printf("%d\\n", name != NULL);
+                printf("%d\\n", lock_name == NULL);
+                printf("%d\\n", lock_owner == NULL);
+                javan_root_frame_pop(roots);
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            1
+            1
+            1
+            1
+            1
+            1
+            """
+        );
+    }
+
+    @Test
+    void runtimeCountDownLatchAwaitCountAndCountdownStayConsistent() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                void* latch = 0;
+                javan_register_static_roots(0, 0);
+                void** roots[] = {
+                    (void**) &latch
+                };
+                javan_root_frame_push(roots, 1);
+                latch = javan_count_down_latch_new();
+                javan_count_down_latch_init(latch, 1);
+                printf("%lld\\n", javan_count_down_latch_get_count(latch));
+                printf("%d\\n", javan_count_down_latch_await_timeout(latch, 0LL));
+                javan_count_down_latch_count_down(latch);
+                printf("%lld\\n", javan_count_down_latch_get_count(latch));
+                printf("%d\\n", javan_count_down_latch_await_timeout(latch, 0LL));
+                javan_root_frame_pop(roots);
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            1
+            0
+            0
+            1
+            """
+        );
+    }
+
     private record RuntimeProbeOutput(String stdout, String stderr) {
     }
 

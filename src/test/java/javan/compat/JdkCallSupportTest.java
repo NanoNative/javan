@@ -923,11 +923,65 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void threadMxBeanGetAllThreadIdsIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/management/ThreadMXBean",
+            "getAllThreadIds",
+            "()[J"
+        ))).isTrue();
+    }
+
+    @Test
+    void threadMxBeanGetThreadInfoArrayIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/management/ThreadMXBean",
+            "getThreadInfo",
+            "([J)[Ljava/lang/management/ThreadInfo;"
+        ))).isTrue();
+    }
+
+    @Test
     void threadMxBeanCallsRequireManagementRuntimeModule() {
         assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
             "java/lang/management/ThreadMXBean",
             "getThreadCount",
             "()I"
+        ))).containsExactly("management");
+    }
+
+    @Test
+    void threadInfoGetThreadNameIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/management/ThreadInfo",
+            "getThreadName",
+            "()Ljava/lang/String;"
+        ))).isTrue();
+    }
+
+    @Test
+    void threadInfoGetLockNameIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/management/ThreadInfo",
+            "getLockName",
+            "()Ljava/lang/String;"
+        ))).isTrue();
+    }
+
+    @Test
+    void threadInfoGetLockOwnerNameIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/management/ThreadInfo",
+            "getLockOwnerName",
+            "()Ljava/lang/String;"
+        ))).isTrue();
+    }
+
+    @Test
+    void threadInfoCallsRequireManagementRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/lang/management/ThreadInfo",
+            "getThreadName",
+            "()Ljava/lang/String;"
         ))).containsExactly("management");
     }
 
@@ -956,6 +1010,74 @@ final class JdkCallSupportTest {
             "getUptime",
             "()J"
         ))).containsExactly("management");
+    }
+
+    @Test
+    void executorServiceSubmitRunnableIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/ExecutorService",
+            "submit",
+            "(Ljava/lang/Runnable;)Ljava/util/concurrent/Future;"
+        ))).isTrue();
+    }
+
+    @Test
+    void futureCancelIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/Future",
+            "cancel",
+            "(Z)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void countDownLatchConstructorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/CountDownLatch",
+            "<init>",
+            "(I)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void countDownLatchAwaitIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/CountDownLatch",
+            "await",
+            "(JLjava/util/concurrent/TimeUnit;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void countDownLatchCountDownIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/CountDownLatch",
+            "countDown",
+            "()V"
+        ))).isTrue();
+    }
+
+    @Test
+    void countDownLatchGetCountIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/CountDownLatch",
+            "getCount",
+            "()J"
+        ))).isTrue();
+    }
+
+    @Test
+    void futureAndCountDownLatchCallsRequireThreadsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/concurrent/Future",
+            "cancel",
+            "(Z)Z"
+        ))).containsExactly("threads");
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/concurrent/CountDownLatch",
+            "getCount",
+            "()J"
+        ))).containsExactly("threads");
     }
 
     @Test

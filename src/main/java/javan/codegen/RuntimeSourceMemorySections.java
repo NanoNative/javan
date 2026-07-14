@@ -96,6 +96,9 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_RUNTIME_KIND_HTTP_OUTPUT_STREAM 60
         #define JAVAN_RUNTIME_KIND_HTTP_SERVER 61
         #define JAVAN_RUNTIME_KIND_HTTP_CONTEXT 62
+        #define JAVAN_RUNTIME_KIND_COUNT_DOWN_LATCH 63
+        #define JAVAN_RUNTIME_KIND_FUTURE 64
+        #define JAVAN_RUNTIME_KIND_THREAD_INFO 65
         #define JAVAN_LIST_VIEW_UNMODIFIABLE 1
         #define JAVAN_LIST_VIEW_REVERSED 2
 
@@ -236,6 +239,32 @@ final class RuntimeSourceMemorySections {
             int reserved1;
             int reserved2;
         } javan_thread_mxbean_value;
+
+        typedef struct {
+            int magic;
+            int count;
+            int reserved0;
+            int reserved1;
+        } javan_count_down_latch_value;
+
+        typedef struct {
+            int magic;
+            int cancelled;
+            int reserved0;
+            int reserved1;
+            void* thread;
+        } javan_future_value;
+
+        typedef struct {
+            int magic;
+            int reserved0;
+            int reserved1;
+            int reserved2;
+            long long thread_id;
+            void* thread_name;
+            void* lock_name;
+            void* lock_owner_name;
+        } javan_thread_info_value;
 
         typedef struct {
             int magic;
@@ -635,6 +664,9 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_OPERATING_SYSTEM_MXBEAN_MAGIC 0x4a4f4d58
         #define JAVAN_MEMORY_MXBEAN_MAGIC 0x4a4d4d58
         #define JAVAN_MEMORY_USAGE_MAGIC 0x4a4d5553
+        #define JAVAN_COUNT_DOWN_LATCH_MAGIC 0x4a43444c
+        #define JAVAN_FUTURE_MAGIC 0x4a465554
+        #define JAVAN_THREAD_INFO_MAGIC 0x4a54494e
         #define JAVAN_PROCESS_HANDLE_MAGIC 0x4a505248
         #define JAVAN_HTTP_EXCHANGE_MAGIC 0x4a485845
         #define JAVAN_HTTP_INPUT_STREAM_MAGIC 0x4a484953
@@ -766,9 +798,14 @@ final class RuntimeSourceMemorySections {
         static const char* javan_runtime_profile_md_path_value = NULL;
         static javan_object_list* javan_list_new_with_capacity(int capacity, int immutable);
         static void javan_list_append_raw(javan_object_list* list, void* value);
+        static javan_thread* javan_require_thread(void* value);
+        static int javan_thread_current_interrupted_peek(void);
         static javan_locale_value* javan_locale_checked(void* value);
         static javan_runtime_value* javan_runtime_checked(void* value);
         static javan_thread_mxbean_value* javan_thread_mxbean_checked(void* value);
+        static javan_count_down_latch_value* javan_count_down_latch_checked(void* value);
+        static javan_future_value* javan_future_checked(void* value);
+        static javan_thread_info_value* javan_thread_info_checked(void* value);
         static javan_runtime_mxbean_value* javan_runtime_mxbean_checked(void* value);
         static javan_memory_mxbean_value* javan_memory_mxbean_checked(void* value);
         static javan_memory_usage_value* javan_memory_usage_checked(void* value);
@@ -1335,6 +1372,9 @@ final class RuntimeSourceMemorySections {
                 || runtime_kind == JAVAN_RUNTIME_KIND_CLASS
                 || runtime_kind == JAVAN_RUNTIME_KIND_RUNTIME
                 || runtime_kind == JAVAN_RUNTIME_KIND_THREAD_MXBEAN
+                || runtime_kind == JAVAN_RUNTIME_KIND_COUNT_DOWN_LATCH
+                || runtime_kind == JAVAN_RUNTIME_KIND_FUTURE
+                || runtime_kind == JAVAN_RUNTIME_KIND_THREAD_INFO
                 || runtime_kind == JAVAN_RUNTIME_KIND_RUNTIME_MXBEAN
                 || runtime_kind == JAVAN_RUNTIME_KIND_MEMORY_MXBEAN
                 || runtime_kind == JAVAN_RUNTIME_KIND_MEMORY_USAGE
@@ -1594,6 +1634,12 @@ final class RuntimeSourceMemorySections {
                 javan_runtime_checked(node->value);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_THREAD_MXBEAN) {
                 javan_thread_mxbean_checked(node->value);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_COUNT_DOWN_LATCH) {
+                javan_count_down_latch_checked(node->value);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_FUTURE) {
+                javan_future_checked(node->value);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_THREAD_INFO) {
+                javan_thread_info_checked(node->value);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_RUNTIME_MXBEAN) {
                 javan_runtime_mxbean_checked(node->value);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_MEMORY_MXBEAN) {
@@ -2010,6 +2056,9 @@ final class RuntimeSourceMemorySections {
             }
             if (node->runtime_kind == JAVAN_RUNTIME_KIND_RUNTIME
                 || node->runtime_kind == JAVAN_RUNTIME_KIND_THREAD_MXBEAN
+                || node->runtime_kind == JAVAN_RUNTIME_KIND_COUNT_DOWN_LATCH
+                || node->runtime_kind == JAVAN_RUNTIME_KIND_FUTURE
+                || node->runtime_kind == JAVAN_RUNTIME_KIND_THREAD_INFO
                 || node->runtime_kind == JAVAN_RUNTIME_KIND_RUNTIME_MXBEAN
                 || node->runtime_kind == JAVAN_RUNTIME_KIND_MEMORY_MXBEAN
                 || node->runtime_kind == JAVAN_RUNTIME_KIND_OPERATING_SYSTEM_MXBEAN
@@ -2104,6 +2153,9 @@ final class RuntimeSourceMemorySections {
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_CLASS
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_RUNTIME
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_THREAD_MXBEAN
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_COUNT_DOWN_LATCH
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_FUTURE
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_THREAD_INFO
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_RUNTIME_MXBEAN
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_MEMORY_MXBEAN
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_MEMORY_USAGE
@@ -2699,6 +2751,38 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        int javan_object_is_number(void* value) {
+            if (value == NULL) {
+                return 0;
+            }
+            int type_id = javan_registered_type_id(value);
+            if (type_id == JAVAN_TYPE_JAVA_LANG_INTEGER
+                || type_id == JAVAN_TYPE_JAVA_LANG_LONG
+                || type_id == JAVAN_TYPE_JAVA_LANG_FLOAT
+                || type_id == JAVAN_TYPE_JAVA_LANG_DOUBLE) {
+                return 1;
+            }
+            int runtime_kind = javan_runtime_kind_of(value);
+            return runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_INTEGER
+                || runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_LONG;
+        }
+
+        int javan_object_is_atomic_boolean(void* value) {
+            return javan_runtime_kind_of(value) == JAVAN_RUNTIME_KIND_ATOMIC_BOOLEAN;
+        }
+
+        int javan_object_is_atomic_integer(void* value) {
+            return javan_runtime_kind_of(value) == JAVAN_RUNTIME_KIND_ATOMIC_INTEGER;
+        }
+
+        int javan_object_is_atomic_long(void* value) {
+            return javan_runtime_kind_of(value) == JAVAN_RUNTIME_KIND_ATOMIC_LONG;
+        }
+
+        int javan_object_is_atomic_reference(void* value) {
+            return javan_runtime_kind_of(value) == JAVAN_RUNTIME_KIND_ATOMIC_REFERENCE;
+        }
+
         int javan_object_is_collection(void* value) {
             int runtime_kind = javan_runtime_kind_of(value);
             return runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_LIST
@@ -2891,6 +2975,39 @@ final class RuntimeSourceMemorySections {
             javan_thread_mxbean_value* state = (javan_thread_mxbean_value*) value;
             if (state->magic != JAVAN_THREAD_MXBEAN_MAGIC) {
                 javan_panic("unsupported thread mxbean");
+            }
+            return state;
+        }
+
+        static javan_count_down_latch_value* javan_count_down_latch_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported CountDownLatch");
+            }
+            javan_count_down_latch_value* state = (javan_count_down_latch_value*) value;
+            if (state->magic != JAVAN_COUNT_DOWN_LATCH_MAGIC || state->count < 0) {
+                javan_panic("unsupported CountDownLatch");
+            }
+            return state;
+        }
+
+        static javan_future_value* javan_future_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported Future");
+            }
+            javan_future_value* state = (javan_future_value*) value;
+            if (state->magic != JAVAN_FUTURE_MAGIC || (state->cancelled != 0 && state->cancelled != 1)) {
+                javan_panic("unsupported Future");
+            }
+            return state;
+        }
+
+        static javan_thread_info_value* javan_thread_info_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported ThreadInfo");
+            }
+            javan_thread_info_value* state = (javan_thread_info_value*) value;
+            if (state->magic != JAVAN_THREAD_INFO_MAGIC || state->thread_id < 0LL) {
+                javan_panic("unsupported ThreadInfo");
             }
             return state;
         }
@@ -3204,7 +3321,9 @@ final class RuntimeSourceMemorySections {
                     return NULL;
             }
         }
+        """;
 
+    private static final String SOURCE_HEAP_ALLOC_HEAD_CONT = """
         static const char* javan_runtime_kind_binary_name(int runtime_kind) {
             switch (runtime_kind) {
                 case JAVAN_RUNTIME_KIND_OBJECT_LIST:
@@ -3311,6 +3430,12 @@ final class RuntimeSourceMemorySections {
                     return "java.lang.Runtime";
                 case JAVAN_RUNTIME_KIND_THREAD_MXBEAN:
                     return "java.lang.management.ThreadMXBean";
+                case JAVAN_RUNTIME_KIND_COUNT_DOWN_LATCH:
+                    return "java.util.concurrent.CountDownLatch";
+                case JAVAN_RUNTIME_KIND_FUTURE:
+                    return "java.util.concurrent.FutureTask";
+                case JAVAN_RUNTIME_KIND_THREAD_INFO:
+                    return "java.lang.management.ThreadInfo";
                 case JAVAN_RUNTIME_KIND_RUNTIME_MXBEAN:
                     return "java.lang.management.RuntimeMXBean";
                 case JAVAN_RUNTIME_KIND_MEMORY_MXBEAN:
@@ -3398,15 +3523,24 @@ final class RuntimeSourceMemorySections {
                 return javan_value_is_string(value);
             }
             if (strcmp(binary_name, "java.lang.Number") == 0) {
-                return type_id == JAVAN_TYPE_JAVA_LANG_INTEGER
-                    || type_id == JAVAN_TYPE_JAVA_LANG_LONG
-                    || type_id == JAVAN_TYPE_JAVA_LANG_FLOAT
-                    || type_id == JAVAN_TYPE_JAVA_LANG_DOUBLE;
+                return javan_object_is_number(value);
             }
             if (strcmp(binary_name, "java.lang.Enum") == 0) {
                 return descriptor != NULL && descriptor->is_enum != 0;
             }
             int runtime_kind = javan_runtime_kind_of(value);
+            if (strcmp(binary_name, "java.util.concurrent.atomic.AtomicBoolean") == 0) {
+                return runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_BOOLEAN;
+            }
+            if (strcmp(binary_name, "java.util.concurrent.atomic.AtomicInteger") == 0) {
+                return runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_INTEGER;
+            }
+            if (strcmp(binary_name, "java.util.concurrent.atomic.AtomicLong") == 0) {
+                return runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_LONG;
+            }
+            if (strcmp(binary_name, "java.util.concurrent.atomic.AtomicReference") == 0) {
+                return runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_REFERENCE;
+            }
             if (strcmp(binary_name, "java.lang.CharSequence") == 0) {
                 return javan_value_is_string(value) != 0 || runtime_kind == JAVAN_RUNTIME_KIND_STRING_BUILDER;
             }
@@ -3449,7 +3583,9 @@ final class RuntimeSourceMemorySections {
                 return source->type_id == JAVAN_TYPE_JAVA_LANG_INTEGER
                     || source->type_id == JAVAN_TYPE_JAVA_LANG_LONG
                     || source->type_id == JAVAN_TYPE_JAVA_LANG_FLOAT
-                    || source->type_id == JAVAN_TYPE_JAVA_LANG_DOUBLE;
+                    || source->type_id == JAVAN_TYPE_JAVA_LANG_DOUBLE
+                    || strcmp(source->binary_name, "java.util.concurrent.atomic.AtomicInteger") == 0
+                    || strcmp(source->binary_name, "java.util.concurrent.atomic.AtomicLong") == 0;
             }
             if (strcmp(target->binary_name, "java.lang.Enum") == 0) {
                 return source->is_enum != 0;
@@ -4211,6 +4347,116 @@ final class RuntimeSourceMemorySections {
                     javan_thread_join(thread_value);
                 }
             }
+        }
+
+        """;
+
+    private static final String SOURCE_HEAP_ALLOC_EXECUTOR_CONT = """
+        void* javan_virtual_thread_executor_submit(void* value, void* runnable) {
+            void* executor_root = value;
+            void* runnable_root = runnable;
+            void* thread_value = NULL;
+            void* future_value = NULL;
+            void** roots[] = {
+                (void**) &executor_root,
+                (void**) &runnable_root,
+                (void**) &thread_value,
+                (void**) &future_value
+            };
+            javan_root_frame_push(roots, 4);
+            javan_virtual_thread_executor_state* state = javan_virtual_thread_executor_checked(executor_root);
+            if (state->closed != 0) {
+                javan_panic("virtual thread executor is closed");
+            }
+            javan_profile_executor_execute_calls_value++;
+            thread_value = javan_virtual_thread_factory_new_thread(state->factory, runnable_root);
+            future_value = javan_alloc(sizeof(javan_future_value));
+            javan_future_value* future = (javan_future_value*) future_value;
+            future->magic = JAVAN_FUTURE_MAGIC;
+            future->cancelled = 0;
+            future->reserved0 = 0;
+            future->reserved1 = 0;
+            future->thread = thread_value;
+            javan_update_runtime_allocation_kind(future_value, JAVAN_RUNTIME_KIND_FUTURE);
+            javan_thread_start(thread_value);
+            javan_list_append_raw(state->threads, thread_value);
+            javan_root_frame_pop(roots);
+            return future_value;
+        }
+
+        int javan_future_cancel(void* value, int may_interrupt_if_running) {
+            javan_future_value* future = javan_future_checked(value);
+            if (future->thread == NULL || future->cancelled != 0 || may_interrupt_if_running == 0) {
+                return 0;
+            }
+            javan_thread* thread = javan_require_thread(future->thread);
+            javan_runtime_lock_enter();
+            int cancellable = thread->completed == 0;
+            if (cancellable != 0) {
+                future->cancelled = 1;
+                thread->interrupted = 1;
+            }
+            javan_runtime_lock_leave();
+            return cancellable;
+        }
+
+        void* javan_count_down_latch_new(void) {
+            void* value = javan_alloc(sizeof(javan_count_down_latch_value));
+            javan_count_down_latch_value* latch = (javan_count_down_latch_value*) value;
+            latch->magic = JAVAN_COUNT_DOWN_LATCH_MAGIC;
+            latch->count = 0;
+            latch->reserved0 = 0;
+            latch->reserved1 = 0;
+            javan_update_runtime_allocation_kind(value, JAVAN_RUNTIME_KIND_COUNT_DOWN_LATCH);
+            return value;
+        }
+
+        void javan_count_down_latch_init(void* value, int count) {
+            if (count < 0) {
+                javan_panic("negative CountDownLatch count");
+            }
+            javan_count_down_latch_checked(value)->count = count;
+        }
+
+        int javan_count_down_latch_await_timeout(void* value, long long timeout_millis) {
+            javan_count_down_latch_value* latch = javan_count_down_latch_checked(value);
+            if (timeout_millis < 0LL) {
+                javan_panic("negative CountDownLatch timeout");
+            }
+            long long deadline = javan_system_current_time_millis() + timeout_millis;
+            while (1) {
+                javan_runtime_lock_enter();
+                int count = latch->count;
+                javan_runtime_lock_leave();
+                if (count <= 0) {
+                    return 1;
+                }
+                if (javan_thread_current_interrupted_peek() != 0) {
+                    (void) javan_thread_interrupted();
+                    return -1;
+                }
+                if (javan_system_current_time_millis() >= deadline) {
+                    return 0;
+                }
+                javan_sleep_micros(1000UL);
+            }
+        }
+
+        void javan_count_down_latch_count_down(void* value) {
+            javan_count_down_latch_value* latch = javan_count_down_latch_checked(value);
+            javan_runtime_lock_enter();
+            if (latch->count > 0) {
+                latch->count--;
+            }
+            javan_runtime_lock_leave();
+        }
+
+        long long javan_count_down_latch_get_count(void* value) {
+            javan_count_down_latch_value* latch = javan_count_down_latch_checked(value);
+            javan_runtime_lock_enter();
+            long long count = latch->count;
+            javan_runtime_lock_leave();
+            return count;
         }
 
         """;
@@ -5859,6 +6105,116 @@ final class RuntimeSourceMemorySections {
             return (int) active + 1;
         }
 
+        static long long javan_thread_numeric_id(void* thread_value) {
+            return thread_value == NULL ? 0LL : (long long) (uintptr_t) thread_value;
+        }
+
+        static void* javan_thread_from_numeric_id(long long thread_id) {
+            if (thread_id <= 0LL) {
+                return NULL;
+            }
+            void* candidate = (void*) (uintptr_t) thread_id;
+            javan_runtime_lock_enter();
+            int present = 0;
+            for (int index = 0; index < javan_thread_root_count_value; index++) {
+                if (javan_thread_roots_value[index] == candidate) {
+                    present = 1;
+                    break;
+                }
+            }
+            javan_runtime_lock_leave();
+            return present != 0 ? candidate : NULL;
+        }
+
+        static void* javan_thread_info_new(long long thread_id, void* thread_name, void* lock_name, void* lock_owner_name) {
+            void* thread_name_root = thread_name;
+            void* lock_name_root = lock_name;
+            void* lock_owner_name_root = lock_owner_name;
+            void* info_value = NULL;
+            void** roots[] = {
+                (void**) &thread_name_root,
+                (void**) &lock_name_root,
+                (void**) &lock_owner_name_root,
+                (void**) &info_value
+            };
+            javan_root_frame_push(roots, 4);
+            info_value = javan_alloc(sizeof(javan_thread_info_value));
+            javan_thread_info_value* info = (javan_thread_info_value*) info_value;
+            info->magic = JAVAN_THREAD_INFO_MAGIC;
+            info->reserved0 = 0;
+            info->reserved1 = 0;
+            info->reserved2 = 0;
+            info->thread_id = thread_id;
+            info->thread_name = thread_name_root;
+            info->lock_name = lock_name_root;
+            info->lock_owner_name = lock_owner_name_root;
+            javan_update_runtime_allocation_kind(info_value, JAVAN_RUNTIME_KIND_THREAD_INFO);
+            javan_root_frame_pop(roots);
+            return info_value;
+        }
+
+        void* javan_thread_mxbean_get_all_thread_ids(void* value) {
+            javan_thread_mxbean_checked(value);
+            javan_thread_current();
+            javan_runtime_lock_enter();
+            int count = javan_thread_root_count_value;
+            javan_runtime_lock_leave();
+            void* result = javan_long_array_new(count);
+            for (int index = 0; index < count; index++) {
+                javan_runtime_lock_enter();
+                void* thread_value = index < javan_thread_root_count_value ? javan_thread_roots_value[index] : NULL;
+                javan_runtime_lock_leave();
+                javan_long_array_set(result, index, javan_thread_numeric_id(thread_value));
+            }
+            return result;
+        }
+
+        void* javan_thread_mxbean_get_thread_info(void* value, void* thread_ids) {
+            javan_thread_mxbean_checked(value);
+            javan_thread_current();
+            void* ids_root = thread_ids;
+            void* result = NULL;
+            void* info_value = NULL;
+            void* thread_name = NULL;
+            int length = 0;
+            void** roots[] = {
+                (void**) &ids_root,
+                (void**) &result,
+                (void**) &info_value,
+                (void**) &thread_name
+            };
+            javan_root_frame_push(roots, 4);
+            length = javan_array_length(ids_root);
+            result = javan_object_array_new(length);
+            for (int index = 0; index < length; index++) {
+                long long thread_id = javan_long_array_get(ids_root, index);
+                void* thread_value = javan_thread_from_numeric_id(thread_id);
+                if (thread_value == NULL) {
+                    javan_object_array_set(result, index, NULL);
+                    continue;
+                }
+                thread_name = javan_thread_get_name(thread_value);
+                info_value = javan_thread_info_new(thread_id, thread_name, NULL, NULL);
+                javan_object_array_set(result, index, info_value);
+                info_value = NULL;
+                thread_name = NULL;
+            }
+            javan_root_frame_pop(roots);
+            return result;
+        }
+
+        void* javan_thread_info_get_thread_name(void* value) {
+            return javan_thread_info_checked(value)->thread_name;
+        }
+
+        void* javan_thread_info_get_lock_name(void* value) {
+            return javan_thread_info_checked(value)->lock_name;
+        }
+
+        void* javan_thread_info_get_lock_owner_name(void* value) {
+            return javan_thread_info_checked(value)->lock_owner_name;
+        }
+
         void* javan_management_runtime_mxbean(void) {
             if (javan_runtime_mxbean_root_value != NULL) {
                 return javan_runtime_mxbean_root_value;
@@ -7410,6 +7766,18 @@ final class RuntimeSourceMemorySections {
                 if (state != NULL && state->magic == JAVAN_VIRTUAL_THREAD_EXECUTOR_MAGIC) {
                     javan_gc_mark_value(state->factory);
                     javan_gc_mark_value((void*) state->threads);
+                }
+            } else if (runtime_kind == JAVAN_RUNTIME_KIND_FUTURE) {
+                javan_future_value* state = (javan_future_value*) value;
+                if (state != NULL && state->magic == JAVAN_FUTURE_MAGIC) {
+                    javan_gc_mark_value(state->thread);
+                }
+            } else if (runtime_kind == JAVAN_RUNTIME_KIND_THREAD_INFO) {
+                javan_thread_info_value* state = (javan_thread_info_value*) value;
+                if (state != NULL && state->magic == JAVAN_THREAD_INFO_MAGIC) {
+                    javan_gc_mark_value(state->thread_name);
+                    javan_gc_mark_value(state->lock_name);
+                    javan_gc_mark_value(state->lock_owner_name);
                 }
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_RUNTIME) {
                 javan_runtime_value* runtime = (javan_runtime_value*) value;
@@ -10205,7 +10573,9 @@ final class RuntimeSourceMemorySections {
 
     static String heapAlloc() {
         String result = SOURCE_HEAP_ALLOC_HEAD;
+        result = result + SOURCE_HEAP_ALLOC_HEAD_CONT;
         result = result + SOURCE_HEAP_ALLOC_EXECUTOR;
+        result = result + SOURCE_HEAP_ALLOC_EXECUTOR_CONT;
         result = result + SOURCE_HEAP_ALLOC_TAIL;
         result = result + SOURCE_HEAP_ALLOC_TIME;
         result = result + SOURCE_HEAP_ALLOC_TAIL_CONT;

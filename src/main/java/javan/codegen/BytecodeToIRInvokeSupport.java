@@ -59,6 +59,15 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.intExpression(IrExpression.intCall("javan_object_is_optional", List.of(value))));
             return;
         }
+        final Optional<String> runtimeHelper = platformRuntimeInstanceOfHelper(target);
+        if (runtimeHelper.isPresent()) {
+            stack.add(StackValue.intExpression(IrExpression.intCall(runtimeHelper.orElseThrow(), List.of(value))));
+            return;
+        }
+        if ("java/lang/Number".equals(target)) {
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_object_is_number", List.of(value))));
+            return;
+        }
         final Optional<Integer> wrapperTypeId = platformWrapperTypeId(target);
         final List<Integer> wrapperSuperTypeIds = platformWrapperSuperTypeIds(target);
         final List<IrExpression> arguments = new ArrayList<>();
@@ -761,6 +770,19 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if (lowerJdkPathInstanceCall(classFile, method, instruction, methodRef, stack)) {
+            return;
+        }
+        if (lowerConcurrentVirtualCall(
+            classFile,
+            method,
+            instruction,
+            methodRef,
+            instructions,
+            stack,
+            localDeclarations,
+            pendingExceptionHandlerStacks,
+            sourceLines
+        )) {
             return;
         }
         if (lowerRuntimeManagementInstanceCall(classFile, method, instruction, methodRef, instructions, stack, localDeclarations)) {
@@ -1720,6 +1742,9 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if (lowerAtomicConstructor(methodRef, instructions, arguments, receiver)) {
+            return;
+        }
+        if (lowerCountDownLatchConstructor(methodRef, instructions, arguments, receiver)) {
             return;
         }
         if (lowerDateConstructor(methodRef, instructions, arguments, receiver)) {
@@ -4641,6 +4666,21 @@ final class BytecodeToIRInvokeSupport {
         return false;
     }
 
+    static boolean lowerCountDownLatchConstructor(
+        final MethodRef methodRef,
+        final List<IrInstruction> instructions,
+        final List<IrExpression> arguments,
+        final IrExpression receiver
+    ) {
+        if (!"java/util/concurrent/CountDownLatch".equals(methodRef.owner())
+            || !"<init>".equals(methodRef.name())
+            || !"(I)V".equals(methodRef.descriptor())) {
+            return false;
+        }
+        instructions.add(IrInstruction.callStaticVoid("javan_count_down_latch_init", List.of(receiver, arguments.getFirst())));
+        return true;
+    }
+
     static boolean lowerDateConstructor(
         final MethodRef methodRef,
         final List<IrInstruction> instructions,
@@ -7497,6 +7537,65 @@ final class BytecodeToIRInvokeSupport {
         );
         instructions.add(IrInstruction.label(successLabel));
     }
+
+    static void lowerInterruptAwareBooleanWait(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines,
+        final boolean precheckInterrupt,
+        final IrExpression interruptedMessage,
+        final String symbol,
+        final List<IrExpression> arguments
+    ) {
+        final String continueLabel = "label_bool_wait_continue_" + instruction.offset() + "_" + localDeclarations.size();
+        final String interruptedLabel = "label_bool_wait_interrupted_" + instruction.offset() + "_" + localDeclarations.size();
+        if (precheckInterrupt) {
+            final int localIndex = localDeclarations.size();
+            final String interruptedLocalName = "int" + localIndex;
+            localDeclarations.put(Integer.MIN_VALUE + localIndex, new IrLocal(IrType.INT, interruptedLocalName));
+            instructions.add(IrInstruction.assignInt(
+                interruptedLocalName,
+                IrExpression.intCall("javan_thread_interrupted", List.of())
+            ));
+            instructions.add(IrInstruction.branchIf(
+                continueLabel,
+                IrExpression.intComparison("==", IrExpression.intLocal(interruptedLocalName), IrExpression.intLiteral(0))
+            ));
+            instructions.add(IrInstruction.jump(interruptedLabel));
+        }
+        instructions.add(IrInstruction.label(continueLabel));
+        final int statusLocalIndex = localDeclarations.size();
+        final String statusLocalName = "int" + statusLocalIndex;
+        localDeclarations.put(Integer.MIN_VALUE + statusLocalIndex, new IrLocal(IrType.INT, statusLocalName));
+        instructions.add(IrInstruction.assignInt(
+            statusLocalName,
+            IrExpression.intCall(symbol, arguments)
+        ));
+        final String successLabel = "label_bool_wait_success_" + instruction.offset() + "_" + statusLocalIndex;
+        instructions.add(IrInstruction.branchIf(
+            successLabel,
+            IrExpression.intComparison(">=", IrExpression.intLocal(statusLocalName), IrExpression.intLiteral(0))
+        ));
+        instructions.add(IrInstruction.label(interruptedLabel));
+        routePendingInterruptedException(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            pendingExceptionHandlerStacks,
+            sourceLines,
+            interruptedMessage
+        );
+        instructions.add(IrInstruction.label(successLabel));
+        stack.add(StackValue.intExpression(IrExpression.intLocal(statusLocalName)));
+    }
+
     static void routePendingInterruptedException(
         final ClassFile classFile,
         final MethodInfo method,
@@ -8316,7 +8415,8 @@ final class BytecodeToIRInvokeSupport {
                     || isVirtualThreadBuilderStart(methodRef.orElseThrow())
                     || isVirtualThreadBuilderUnstarted(methodRef.orElseThrow())
                     || isVirtualThreadFactoryNewThread(methodRef.orElseThrow())
-                    || VirtualThreadInvokePatterns.isExecutorExecute(methodRef.orElseThrow()))) {
+                    || VirtualThreadInvokePatterns.isExecutorExecute(methodRef.orElseThrow())
+                    || VirtualThreadInvokePatterns.isExecutorServiceSubmitRunnable(methodRef.orElseThrow()))) {
                     sawRunnableThreadConstruction = true;
                     final Optional<EntryPoint> resolved = inferVirtualThreadTarget(classes, instructions, index);
                     if (resolved.isPresent()) {
@@ -8399,7 +8499,8 @@ final class BytecodeToIRInvokeSupport {
                     || isVirtualThreadStart(methodRef.orElseThrow())
                     || isVirtualThreadBuilderStart(methodRef.orElseThrow())
                     || isRuntimeAddShutdownHook(methodRef.orElseThrow())
-                    || VirtualThreadInvokePatterns.isExecutorExecute(methodRef.orElseThrow()))) {
+                    || VirtualThreadInvokePatterns.isExecutorExecute(methodRef.orElseThrow())
+                    || VirtualThreadInvokePatterns.isExecutorServiceSubmitRunnable(methodRef.orElseThrow()))) {
                     return true;
                 }
             }
@@ -8485,7 +8586,8 @@ final class BytecodeToIRInvokeSupport {
                 && !supportedVirtualThreadFactoryReceiver(classes, instructions, startIndex)) {
                 return Optional.empty();
             }
-            if (VirtualThreadInvokePatterns.isExecutorExecute(startRef.orElseThrow())
+            if ((VirtualThreadInvokePatterns.isExecutorExecute(startRef.orElseThrow())
+                || VirtualThreadInvokePatterns.isExecutorServiceSubmitRunnable(startRef.orElseThrow()))
                 && !supportedVirtualThreadExecutorReceiver(classes, instructions, startIndex)) {
                 return Optional.empty();
             }
@@ -9118,6 +9220,9 @@ final class BytecodeToIRInvokeSupport {
         if (lowerVirtualThreadExecutorInterfaceCall(classFile, method, instruction, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
+        if (lowerConcurrentInterfaceCall(classFile, method, instruction, methodRef, instructions, stack, localDeclarations)) {
+            return;
+        }
         if (lowerJdkPathInstanceCall(classFile, method, instruction, methodRef, stack)) {
             return;
         }
@@ -9344,6 +9449,18 @@ final class BytecodeToIRInvokeSupport {
             ));
             return true;
         }
+        if (VirtualThreadInvokePatterns.isExecutorServiceSubmitRunnable(methodRef)) {
+            final IrExpression runnable = popObject(classFile, method, instruction, stack);
+            final StackValue executor = popVirtualThreadExecutor(classFile, method, instruction, stack);
+            pushObjectCall(
+                instructions,
+                stack,
+                localDeclarations,
+                "javan_virtual_thread_executor_submit",
+                List.of(executor.expression().orElse(IrExpression.objectNull()), runnable)
+            );
+            return true;
+        }
         if (VirtualThreadInvokePatterns.isExecutorServiceShutdown(methodRef)) {
             final StackValue executor = popVirtualThreadExecutor(classFile, method, instruction, stack);
             instructions.add(IrInstruction.callStaticVoid(
@@ -9359,6 +9476,182 @@ final class BytecodeToIRInvokeSupport {
                 List.of(executor.expression().orElse(IrExpression.objectNull()))
             ));
             return true;
+        }
+        return false;
+    }
+
+    private static boolean isTimeUnitConstant(final IrExpression expression, final String constantName) {
+        if (expression.kind() == IrExpression.Kind.STATIC_FIELD_OBJECT) {
+            return ("java/util/concurrent/TimeUnit#" + constantName).equals(expression.value());
+        }
+        return expression.kind() == IrExpression.Kind.STRING_LITERAL
+            && (constantName.equals(expression.value())
+            || ("java/util/concurrent/TimeUnit#" + constantName).equals(expression.value()));
+    }
+
+    private static Optional<IrExpression> timeUnitTimeoutMillis(
+        final IrExpression timeout,
+        final IrExpression unit
+    ) {
+        if (isTimeUnitConstant(unit, "MILLISECONDS")) {
+            return Optional.of(timeout);
+        }
+        if (isTimeUnitConstant(unit, "SECONDS")) {
+            return Optional.of(IrExpression.longBinary("*", timeout, IrExpression.longLiteral(1000L)));
+        }
+        if (isTimeUnitConstant(unit, "MINUTES")) {
+            return Optional.of(IrExpression.longBinary("*", timeout, IrExpression.longLiteral(60_000L)));
+        }
+        if (isTimeUnitConstant(unit, "HOURS")) {
+            return Optional.of(IrExpression.longBinary("*", timeout, IrExpression.longLiteral(3_600_000L)));
+        }
+        if (isTimeUnitConstant(unit, "DAYS")) {
+            return Optional.of(IrExpression.longBinary("*", timeout, IrExpression.longLiteral(86_400_000L)));
+        }
+        if (isTimeUnitConstant(unit, "MICROSECONDS")) {
+            return Optional.of(IrExpression.longBinary("/", timeout, IrExpression.longLiteral(1000L)));
+        }
+        if (isTimeUnitConstant(unit, "NANOSECONDS")) {
+            return Optional.of(IrExpression.longBinary("/", timeout, IrExpression.longLiteral(1_000_000L)));
+        }
+        return Optional.empty();
+    }
+
+    private static boolean lowerConcurrentInterfaceCall(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final MethodRef methodRef,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations
+    ) {
+        if ("java/lang/management/ThreadMXBean".equals(methodRef.owner())
+            && "getAllThreadIds".equals(methodRef.name())
+            && "()[J".equals(methodRef.descriptor())) {
+            pushObjectCall(
+                instructions,
+                stack,
+                localDeclarations,
+                "javan_thread_mxbean_get_all_thread_ids",
+                List.of(popObjectForJdkCall(classFile, method, instruction, stack))
+            );
+            return true;
+        }
+        if ("java/lang/management/ThreadMXBean".equals(methodRef.owner())
+            && "getThreadInfo".equals(methodRef.name())
+            && "([J)[Ljava/lang/management/ThreadInfo;".equals(methodRef.descriptor())) {
+            final IrExpression threadIds = popObjectForJdkCall(classFile, method, instruction, stack);
+            final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+            pushObjectCall(
+                instructions,
+                stack,
+                localDeclarations,
+                "javan_thread_mxbean_get_thread_info",
+                List.of(receiver, threadIds)
+            );
+            return true;
+        }
+        if ("java/util/concurrent/Future".equals(methodRef.owner())
+            && "cancel".equals(methodRef.name())
+            && "(Z)Z".equals(methodRef.descriptor())) {
+            final IrExpression mayInterrupt = popInt(classFile, method, stack);
+            final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+            pushIntCall(
+                instructions,
+                stack,
+                localDeclarations,
+                "javan_future_cancel",
+                List.of(receiver, mayInterrupt)
+            );
+            return true;
+        }
+        return false;
+    }
+
+    private static boolean lowerConcurrentVirtualCall(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final MethodRef methodRef,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
+    ) {
+        if ("java/util/concurrent/CountDownLatch".equals(methodRef.owner())) {
+            if ("countDown".equals(methodRef.name()) && "()V".equals(methodRef.descriptor())) {
+                instructions.add(IrInstruction.callStaticVoid(
+                    "javan_count_down_latch_count_down",
+                    List.of(popObjectForJdkCall(classFile, method, instruction, stack))
+                ));
+                return true;
+            }
+            if ("getCount".equals(methodRef.name()) && "()J".equals(methodRef.descriptor())) {
+                pushLongCall(
+                    instructions,
+                    stack,
+                    localDeclarations,
+                    "javan_count_down_latch_get_count",
+                    List.of(popObjectForJdkCall(classFile, method, instruction, stack))
+                );
+                return true;
+            }
+            if ("await".equals(methodRef.name())
+                && "(JLjava/util/concurrent/TimeUnit;)Z".equals(methodRef.descriptor())) {
+                if (stack.size() < 3) {
+                    return false;
+                }
+                final StackValue unitValue = stack.get(stack.size() - 1);
+                final StackValue timeoutValue = stack.get(stack.size() - 2);
+                if (unitValue.expression().isEmpty() || timeoutValue.expression().isEmpty()) {
+                    return false;
+                }
+                final Optional<IrExpression> timeoutMillis = timeUnitTimeoutMillis(
+                    timeoutValue.expression().orElseThrow(),
+                    unitValue.expression().orElseThrow()
+                );
+                if (timeoutMillis.isEmpty()) {
+                    return false;
+                }
+                popObjectForJdkCall(classFile, method, instruction, stack);
+                popLong(classFile, method, stack);
+                final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+                lowerInterruptAwareBooleanWait(
+                    classFile,
+                    method,
+                    instruction,
+                    instructions,
+                    stack,
+                    localDeclarations,
+                    pendingExceptionHandlerStacks,
+                    sourceLines,
+                    true,
+                    IrExpression.stringLiteral("await interrupted"),
+                    "javan_count_down_latch_await_timeout",
+                    List.of(receiver, timeoutMillis.orElseThrow())
+                );
+                return true;
+            }
+            return false;
+        }
+        if ("java/lang/management/ThreadInfo".equals(methodRef.owner())) {
+            final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+            if ("getThreadName".equals(methodRef.name()) && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
+                pushObjectCall(instructions, stack, localDeclarations, "javan_thread_info_get_thread_name", List.of(receiver));
+                return true;
+            }
+            if ("getLockName".equals(methodRef.name()) && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
+                pushObjectCall(instructions, stack, localDeclarations, "javan_thread_info_get_lock_name", List.of(receiver));
+                return true;
+            }
+            if ("getLockOwnerName".equals(methodRef.name()) && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
+                pushObjectCall(instructions, stack, localDeclarations, "javan_thread_info_get_lock_owner_name", List.of(receiver));
+                return true;
+            }
+            stack.add(StackValue.objectExpression(receiver));
+            return false;
         }
         return false;
     }
@@ -10125,6 +10418,14 @@ final class BytecodeToIRInvokeSupport {
             localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
             final IrExpression local = IrExpression.objectLocal(localName);
             instructions.add(IrInstruction.assignObject(localName, IrExpression.objectCall("javan_arraylist_new", List.of())));
+            stack.add(StackValue.objectExpression(local));
+            return;
+        }
+        if ("java/util/concurrent/CountDownLatch".equals(owner)) {
+            final String localName = "object" + localDeclarations.size();
+            localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
+            final IrExpression local = IrExpression.objectLocal(localName);
+            instructions.add(IrInstruction.assignObject(localName, IrExpression.objectCall("javan_count_down_latch_new", List.of())));
             stack.add(StackValue.objectExpression(local));
             return;
         }

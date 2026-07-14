@@ -146,7 +146,10 @@ public final class ReachabilityAnalyzer {
         if (isEnumIntrinsic(classes, target) || isSupportedEnumSynthetic(classes, target) || isSupportedArrayClone(target)) {
             return;
         }
-        if (isVirtualThreadStart(target) || isVirtualThreadBuilderStart(target) || isExecutorExecute(target)) {
+        if (isVirtualThreadStart(target)
+            || isVirtualThreadBuilderStart(target)
+            || isExecutorExecute(target)
+            || isExecutorServiceSubmitRunnable(target)) {
             final List<EntryPoint> targets = virtualThreadTargets(classes, current);
             if (!targets.isEmpty()) {
                 work.addAll(targets);
@@ -570,6 +573,10 @@ public final class ReachabilityAnalyzer {
         return VirtualThreadInvokePatterns.isExecutorExecute(target);
     }
 
+    private static boolean isExecutorServiceSubmitRunnable(final MethodRef target) {
+        return VirtualThreadInvokePatterns.isExecutorServiceSubmitRunnable(target);
+    }
+
     private static boolean isExecutorServiceShutdown(final MethodRef target) {
         return VirtualThreadInvokePatterns.isExecutorServiceShutdown(target);
     }
@@ -751,7 +758,8 @@ public final class ReachabilityAnalyzer {
                 || (!isVirtualThreadStart(methodRef.orElseThrow())
                 && !isVirtualThreadBuilderStart(methodRef.orElseThrow())
                 && !isThreadFactoryNewThread(methodRef.orElseThrow())
-                && !isExecutorExecute(methodRef.orElseThrow()))) {
+                && !isExecutorExecute(methodRef.orElseThrow())
+                && !isExecutorServiceSubmitRunnable(methodRef.orElseThrow()))) {
                 continue;
             }
             final Optional<EntryPoint> inferredTarget = inferVirtualThreadTarget(classes, instructions, index);
@@ -800,7 +808,8 @@ public final class ReachabilityAnalyzer {
                 && !supportedVirtualThreadFactoryReceiver(classes, instructions, startIndex)) {
                 return Optional.empty();
             }
-            if (isExecutorExecute(startRef.orElseThrow())
+            if ((isExecutorExecute(startRef.orElseThrow())
+                || isExecutorServiceSubmitRunnable(startRef.orElseThrow()))
                 && !supportedVirtualThreadExecutorReceiver(classes, instructions, startIndex)) {
                 return Optional.empty();
             }
@@ -950,7 +959,9 @@ public final class ReachabilityAnalyzer {
     ) {
         final Optional<MethodRef> methodRef = instructions.get(instructionIndex).methodRef();
         if (methodRef.isPresent()
-            && (isExecutorServiceShutdown(methodRef.orElseThrow()) || isExecutorServiceClose(methodRef.orElseThrow()))) {
+            && (isExecutorServiceShutdown(methodRef.orElseThrow())
+            || isExecutorServiceClose(methodRef.orElseThrow())
+            || isExecutorServiceSubmitRunnable(methodRef.orElseThrow()))) {
             return supportedVirtualThreadExecutorProducer(classes, instructions, instructionIndex - 1);
         }
         final int receiverIndex = VirtualThreadInvokePatterns.virtualThreadReceiverProducerIndex(instructions, instructionIndex);

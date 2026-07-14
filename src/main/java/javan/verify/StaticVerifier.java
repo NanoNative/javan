@@ -1725,6 +1725,9 @@ public final class StaticVerifier {
         if (isExecutorExecute(methodRef)) {
             return supportsVirtualThreadExecutorExecute(classes, instructions, instructionIndex);
         }
+        if (isExecutorServiceSubmitRunnable(methodRef)) {
+            return supportsVirtualThreadExecutorExecute(classes, instructions, instructionIndex);
+        }
         if (isExecutorServiceShutdown(methodRef) || isExecutorServiceClose(methodRef)) {
             return supportedVirtualThreadExecutorReceiver(classes, instructions, instructionIndex);
         }
@@ -2001,7 +2004,9 @@ public final class StaticVerifier {
             return false;
         }
         final Optional<MethodRef> executeRef = instructions.get(instructionIndex).methodRef();
-        if (executeRef.isEmpty() || !isExecutorExecute(executeRef.orElseThrow())) {
+        if (executeRef.isEmpty()
+            || (!isExecutorExecute(executeRef.orElseThrow())
+            && !isExecutorServiceSubmitRunnable(executeRef.orElseThrow()))) {
             return false;
         }
         if (!supportedVirtualThreadExecutorReceiver(classes, instructions, instructionIndex)) {
@@ -2196,7 +2201,8 @@ public final class StaticVerifier {
     ) {
         final Optional<MethodRef> methodRef = instructions.get(instructionIndex).methodRef();
         if (methodRef.isPresent()
-            && (isExecutorServiceShutdown(methodRef.orElseThrow()) || isExecutorServiceClose(methodRef.orElseThrow()))) {
+            && (isExecutorServiceShutdown(methodRef.orElseThrow())
+            || isExecutorServiceClose(methodRef.orElseThrow()))) {
             return supportedVirtualThreadExecutorProducer(classes, instructions, instructionIndex - 1);
         }
         final int receiverIndex = VirtualThreadInvokePatterns.virtualThreadReceiverProducerIndex(instructions, instructionIndex);
@@ -2351,6 +2357,10 @@ public final class StaticVerifier {
         return VirtualThreadInvokePatterns.isExecutorExecute(methodRef);
     }
 
+    private static boolean isExecutorServiceSubmitRunnable(final MethodRef methodRef) {
+        return VirtualThreadInvokePatterns.isExecutorServiceSubmitRunnable(methodRef);
+    }
+
     private static boolean isExecutorServiceShutdown(final MethodRef methodRef) {
         return VirtualThreadInvokePatterns.isExecutorServiceShutdown(methodRef);
     }
@@ -2496,6 +2506,10 @@ public final class StaticVerifier {
             }
         }
         if ("java/util/concurrent/ExecutorService".equals(owner)) {
+            if ("submit".equals(methodRef.name())
+                && "(Ljava/lang/Runnable;)Ljava/util/concurrent/Future;".equals(methodRef.descriptor())) {
+                return "ExecutorService.submit(Runnable)";
+            }
             if ("shutdown".equals(methodRef.name())) {
                 return "ExecutorService.shutdown()";
             }
@@ -2943,7 +2957,7 @@ public final class StaticVerifier {
         if ("java/util/Optional".equals(target)) {
             return false;
         }
-        if (isSupportedWrapperTarget(target)) {
+        if (isSupportedPlatformInstanceOfTarget(target)) {
             return false;
         }
         if (classes.containsKey(target)) {
@@ -2952,7 +2966,7 @@ public final class StaticVerifier {
         return !hasAssignableClass(classes, target);
     }
 
-    private static boolean isSupportedWrapperTarget(final String target) {
+    private static boolean isSupportedPlatformInstanceOfTarget(final String target) {
         if ("java/lang/Number".equals(target)) {
             return true;
         }
@@ -2971,7 +2985,19 @@ public final class StaticVerifier {
         if ("java/lang/Boolean".equals(target)) {
             return true;
         }
-        return "java/lang/Character".equals(target);
+        if ("java/lang/Character".equals(target)) {
+            return true;
+        }
+        if ("java/util/concurrent/atomic/AtomicBoolean".equals(target)) {
+            return true;
+        }
+        if ("java/util/concurrent/atomic/AtomicInteger".equals(target)) {
+            return true;
+        }
+        if ("java/util/concurrent/atomic/AtomicLong".equals(target)) {
+            return true;
+        }
+        return "java/util/concurrent/atomic/AtomicReference".equals(target);
     }
 
     private static boolean hasAssignableClass(final Map<String, ClassFile> classes, final String target) {
@@ -3290,8 +3316,8 @@ public final class StaticVerifier {
         final int reachable
     ) {
         final String target = instruction.className().orElse("unknown");
-        final String reason = "The current runtime only has deterministic type metadata for application classes and supported boxed primitive wrappers.";
-        final String fix = "Keep instanceof targets to application classes/interfaces, Object, or supported wrappers until this runtime model expands.";
+        final String reason = "The current runtime only has deterministic type metadata for application classes, supported boxed primitive wrappers, and a narrow set of runtime carrier types.";
+        final String fix = "Keep instanceof targets to application classes/interfaces, Object, supported wrappers, or supported runtime carriers until this runtime model expands.";
         if (reachable == 1) {
             return error(classFile, method, "JAVAN045", "unsupported instanceof target", target, reason, fix);
         }

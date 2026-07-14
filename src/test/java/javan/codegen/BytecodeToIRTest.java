@@ -4332,7 +4332,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowersInstanceOfNumberWrapperSuperTypeToTypeIntrinsic() {
+    void lowersInstanceOfNumberToRuntimeKindAwareIntrinsic() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -4346,15 +4346,92 @@ final class BytecodeToIRTest {
 
         assertThat(function.instructions()).containsExactly(
             IrInstruction.returnInt(IrExpression.intCall(
-                "javan_object_type_in",
-                List.of(
-                    IrExpression.objectLocal("arg0"),
-                    IrExpression.intLiteral(4),
-                    IrExpression.intLiteral(-1001),
-                    IrExpression.intLiteral(-1002),
-                    IrExpression.intLiteral(-1003),
-                    IrExpression.intLiteral(-1004)
-                )
+                "javan_object_is_number",
+                List.of(IrExpression.objectLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersInstanceOfAtomicBooleanToRuntimeKindIntrinsic() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Object;)I",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            classInstruction(1, 193, "instanceof", "java/util/concurrent/atomic/AtomicBoolean"),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_object_is_atomic_boolean",
+                List.of(IrExpression.objectLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersInstanceOfAtomicIntegerToRuntimeKindIntrinsic() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Object;)I",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            classInstruction(1, 193, "instanceof", "java/util/concurrent/atomic/AtomicInteger"),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_object_is_atomic_integer",
+                List.of(IrExpression.objectLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersInstanceOfAtomicLongToRuntimeKindIntrinsic() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Object;)I",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            classInstruction(1, 193, "instanceof", "java/util/concurrent/atomic/AtomicLong"),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_object_is_atomic_long",
+                List.of(IrExpression.objectLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersInstanceOfAtomicReferenceToRuntimeKindIntrinsic() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Object;)I",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            classInstruction(1, 193, "instanceof", "java/util/concurrent/atomic/AtomicReference"),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_object_is_atomic_reference",
+                List.of(IrExpression.objectLocal("arg0"))
             ))
         );
     }
@@ -6984,6 +7061,21 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersCountDownLatchConstructorToInitHelper() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+
+        assertThat(BytecodeToIRInvokeSupport.lowerCountDownLatchConstructor(
+            new MethodRef("java/util/concurrent/CountDownLatch", "<init>", "(I)V"),
+            instructions,
+            List.of(IrExpression.intLiteral(2)),
+            IrExpression.objectLocal("arg0")
+        )).isTrue();
+        assertThat(instructions).containsExactly(
+            IrInstruction.callStaticVoid("javan_count_down_latch_init", List.of(IrExpression.objectLocal("arg0"), IrExpression.intLiteral(2)))
+        );
+    }
+
+    @Test
     void lowersAtomicReferenceConstructorRejectsWrongOwner() {
         assertThat(BytecodeToIRInvokeSupport.lowerAtomicConstructor(
             new MethodRef("java/lang/Object", "<init>", "()V"),
@@ -8982,6 +9074,163 @@ final class BytecodeToIRTest {
             IrInstruction.assignInt("int0", IrExpression.intCall("javan_thread_mxbean_get_thread_count", List.of(IrExpression.objectLocal("bean"))))
         );
         assertThat(stack).containsExactly(BytecodeToIR.StackValue.intExpression(IrExpression.intLocal("int0")));
+    }
+
+    @Test
+    void lowerInterfaceCallRoutesThreadMxBeanThreadInfoHelpers() {
+        final List<IrInstruction> idsInstructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> idsStack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("bean"))
+        ));
+        final Map<Integer, IrLocal> idsLocals = new LinkedHashMap<>();
+
+        BytecodeToIRInvokeSupport.lowerInterfaceCall(
+            Map.of(),
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/lang/management/ThreadMXBean;)[J", 1, 1, plain(0, 176, "areturn")),
+            invokeInterface(0, new MethodRef("java/lang/management/ThreadMXBean", "getAllThreadIds", "()[J")),
+            idsInstructions,
+            idsStack,
+            idsLocals,
+            new LinkedHashMap<>()
+        );
+
+        assertThat(idsInstructions).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_thread_mxbean_get_all_thread_ids", List.of(IrExpression.objectLocal("bean"))))
+        );
+        assertThat(idsStack).containsExactly(BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("object0")));
+
+        final List<IrInstruction> infoInstructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> infoStack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("bean")),
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("ids"))
+        ));
+        final Map<Integer, IrLocal> infoLocals = new LinkedHashMap<>();
+
+        BytecodeToIRInvokeSupport.lowerInterfaceCall(
+            Map.of(),
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/lang/management/ThreadMXBean;[J)[Ljava/lang/management/ThreadInfo;", 2, 2, plain(0, 176, "areturn")),
+            invokeInterface(0, new MethodRef("java/lang/management/ThreadMXBean", "getThreadInfo", "([J)[Ljava/lang/management/ThreadInfo;")),
+            infoInstructions,
+            infoStack,
+            infoLocals,
+            new LinkedHashMap<>()
+        );
+
+        assertThat(infoInstructions).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall("javan_thread_mxbean_get_thread_info", List.of(IrExpression.objectLocal("bean"), IrExpression.objectLocal("ids")))
+            )
+        );
+        assertThat(infoStack).containsExactly(BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("object0")));
+    }
+
+    @Test
+    void lowerInterfaceCallRoutesExecutorSubmitAndFutureCancel() {
+        final List<IrInstruction> submitInstructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> submitStack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.virtualThreadExecutor(IrExpression.objectLocal("executor")),
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("task"))
+        ));
+        final Map<Integer, IrLocal> submitLocals = new LinkedHashMap<>();
+
+        BytecodeToIRInvokeSupport.lowerInterfaceCall(
+            Map.of(),
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/util/concurrent/ExecutorService;Ljava/lang/Runnable;)Ljava/util/concurrent/Future;", 2, 2, plain(0, 176, "areturn")),
+            invokeInterface(0, new MethodRef("java/util/concurrent/ExecutorService", "submit", "(Ljava/lang/Runnable;)Ljava/util/concurrent/Future;")),
+            submitInstructions,
+            submitStack,
+            submitLocals,
+            new LinkedHashMap<>()
+        );
+
+        assertThat(submitInstructions).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall("javan_virtual_thread_executor_submit", List.of(IrExpression.objectLocal("executor"), IrExpression.objectLocal("task")))
+            )
+        );
+        assertThat(submitStack).containsExactly(BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("object0")));
+
+        final List<IrInstruction> cancelInstructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> cancelStack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("future")),
+            BytecodeToIR.StackValue.intExpression(IrExpression.intLiteral(1))
+        ));
+        final Map<Integer, IrLocal> cancelLocals = new LinkedHashMap<>();
+
+        BytecodeToIRInvokeSupport.lowerInterfaceCall(
+            Map.of(),
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/util/concurrent/Future;)Z", 1, 1, plain(0, 172, "ireturn")),
+            invokeInterface(0, new MethodRef("java/util/concurrent/Future", "cancel", "(Z)Z")),
+            cancelInstructions,
+            cancelStack,
+            cancelLocals,
+            new LinkedHashMap<>()
+        );
+
+        assertThat(cancelInstructions).containsExactly(
+            IrInstruction.assignInt(
+                "int0",
+                IrExpression.intCall("javan_future_cancel", List.of(IrExpression.objectLocal("future"), IrExpression.intLiteral(1)))
+            )
+        );
+        assertThat(cancelStack).containsExactly(BytecodeToIR.StackValue.intExpression(IrExpression.intLocal("int0")));
+    }
+
+    @Test
+    void lowerVirtualCallRoutesCountDownLatchAndThreadInfoHelpers() {
+        final List<IrInstruction> countInstructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> countStack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("latch"))
+        ));
+        final Map<Integer, IrLocal> countLocals = new LinkedHashMap<>();
+
+        BytecodeToIRInvokeSupport.lowerVirtualCall(
+            Map.of(),
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/util/concurrent/CountDownLatch;)J", 1, 1, plain(0, 173, "lreturn")),
+            invokeVirtual(0, new MethodRef("java/util/concurrent/CountDownLatch", "getCount", "()J")),
+            countInstructions,
+            countStack,
+            countLocals,
+            new LinkedHashMap<>(),
+            new LinkedHashMap<>(),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(countInstructions).containsExactly(
+            IrInstruction.assignLong("long0", IrExpression.longCall("javan_count_down_latch_get_count", List.of(IrExpression.objectLocal("latch"))))
+        );
+        assertThat(countStack).containsExactly(BytecodeToIR.StackValue.longExpression(IrExpression.longLocal("long0")));
+
+        final List<IrInstruction> nameInstructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> nameStack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("info"))
+        ));
+        final Map<Integer, IrLocal> nameLocals = new LinkedHashMap<>();
+
+        BytecodeToIRInvokeSupport.lowerVirtualCall(
+            Map.of(),
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/lang/management/ThreadInfo;)Ljava/lang/String;", 1, 1, plain(0, 176, "areturn")),
+            invokeVirtual(0, new MethodRef("java/lang/management/ThreadInfo", "getThreadName", "()Ljava/lang/String;")),
+            nameInstructions,
+            nameStack,
+            nameLocals,
+            new LinkedHashMap<>(),
+            new LinkedHashMap<>(),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(nameInstructions).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_thread_info_get_thread_name", List.of(IrExpression.objectLocal("info"))))
+        );
+        assertThat(nameStack).containsExactly(BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("object0")));
     }
 
     @Test
@@ -14528,6 +14777,27 @@ final class BytecodeToIRTest {
 
         assertThat(function.instructions()).containsExactly(
             IrInstruction.returnObject(IrExpression.stringLiteral("EPOCH_DAY"))
+        );
+    }
+
+    @Test
+    void lowersSupportedTimeUnitFieldToStringLiteral() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/lang/Object;",
+            1,
+            0,
+            getStatic(0, new FieldRef(
+                "java/util/concurrent/TimeUnit",
+                "SECONDS",
+                "Ljava/util/concurrent/TimeUnit;"
+            )),
+            plain(1, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.stringLiteral("SECONDS"))
         );
     }
 

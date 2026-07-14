@@ -1831,6 +1831,51 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void managementThreadInfoBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("management-thread-info");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.lang.management.ManagementFactory;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final var bean = ManagementFactory.getThreadMXBean();
+                    final long[] ids = bean.getAllThreadIds();
+                    final var infos = bean.getThreadInfo(ids);
+                    final String currentName = Thread.currentThread().getName();
+                    boolean found = false;
+                    boolean lockNameNull = false;
+                    boolean lockOwnerNull = false;
+                    for (final var info : infos) {
+                        if (info != null && currentName.equals(info.getThreadName())) {
+                            found = true;
+                            lockNameNull = info.getLockName() == null;
+                            lockOwnerNull = info.getLockOwnerName() == null;
+                            break;
+                        }
+                    }
+                    System.out.println(ids.length >= 1);
+                    System.out.println(infos.length == ids.length);
+                    System.out.println(found);
+                    System.out.println(lockNameNull);
+                    System.out.println(lockOwnerNull);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/management-thread-info").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
     void managementMemoryMxBeanBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("management-memory-mxbean");
         writeJava(project, "com.acme.Main", """
@@ -10024,6 +10069,60 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void atomicLongInstanceOfAtomicLongBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("atomic-long-instanceof-atomic-long");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.atomic.AtomicLong;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Object value = new AtomicLong(7L);
+                    System.out.println(value instanceof AtomicLong);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/atomic-long-instanceof-atomic-long").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n");
+    }
+
+    @Test
+    void atomicLongInstanceOfNumberBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("atomic-long-instanceof-number");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.atomic.AtomicLong;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Object value = new AtomicLong(7L);
+                    System.out.println(value instanceof Number);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/atomic-long-instanceof-number").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n");
+    }
+
+    @Test
     void utilDateLongConstructorBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("util-date-long-constructor");
         writeJava(project, "com.acme.Main", """
@@ -11620,8 +11719,8 @@ final class CliIntegrationTest {
         assertThat(run.exitCode()).isEqualTo(2);
         final String diagnostics = Files.readString(project.resolve(".javan/reports/diagnostics.md"));
         assertThat(diagnostics).contains(
-            "- diagnostics: `462`",
-            "- errors: `448`",
+            "- diagnostics: `444`",
+            "- errors: `430`",
             "- warnings: `14`",
             "error[JAVAN030] unsupported reachable bytecode",
             "`invokedynamic`"
@@ -11662,12 +11761,15 @@ final class CliIntegrationTest {
             "java/util/logging/LogRecord.setLoggerName(Ljava/lang/String;)V",
             "java/util/logging/Formatter.format(Ljava/util/logging/LogRecord;)Ljava/lang/String;",
             "java/util/logging/Formatter.formatMessage(Ljava/util/logging/LogRecord;)Ljava/lang/String;",
+            "java/lang/management/ThreadInfo.getLockName()Ljava/lang/String;",
+            "java/lang/management/ThreadInfo.getLockOwnerName()Ljava/lang/String;",
             "java/util/concurrent/atomic/AtomicReference.<init>(Ljava/lang/Object;)V",
             "java/util/concurrent/atomic/AtomicReference.get()Ljava/lang/Object;",
             "java/util/concurrent/atomic/AtomicReference.set(Ljava/lang/Object;)V",
             "java/util/concurrent/atomic/AtomicLong.<init>(J)V",
             "java/util/concurrent/atomic/AtomicLong.incrementAndGet()J",
             "java/util/concurrent/atomic/AtomicLong.decrementAndGet()J",
+            "subject: `java/util/concurrent/atomic/AtomicLong`",
             "java/util/ArrayList.size()I",
             "java/util/ArrayList.stream()Ljava/util/stream/Stream;",
             "java/util/ArrayList.reversed()Ljava/util/List;",
@@ -20631,6 +20733,70 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void virtualThreadExecutorSubmitCancelAndLatchBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-executor-submit-cancel-latch");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.CountDownLatch;
+            import java.util.concurrent.Executors;
+            import java.util.concurrent.TimeUnit;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final CountDownLatch started = new CountDownLatch(1);
+                    final CountDownLatch finished = new CountDownLatch(1);
+                    Task.started = started;
+                    Task.finished = finished;
+                    final var executor = Executors.newVirtualThreadPerTaskExecutor();
+                    final var future = executor.submit(new Task());
+                    printFlag(started.await(5L, TimeUnit.SECONDS));
+                    printFlag(future.cancel(true));
+                    printFlag(finished.await(5L, TimeUnit.SECONDS));
+                    executor.close();
+                }
+
+                private static void printFlag(final boolean value) {
+                    if (value) {
+                        System.out.println("1");
+                        return;
+                    }
+                    System.out.println("0");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            import java.util.concurrent.CountDownLatch;
+
+            public final class Task implements Runnable {
+                public static CountDownLatch started;
+                public static CountDownLatch finished;
+
+                @Override
+                public void run() {
+                    started.countDown();
+                    while (!Thread.currentThread().isInterrupted()) {
+                        // wait for cancellation
+                    }
+                    finished.countDown();
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-executor-submit-cancel-latch").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
     void threadPerTaskExecutorWithVirtualFactoryBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("virtual-thread-factory-executor-execute");
         writeJava(project, "com.acme.Main", """
@@ -21070,6 +21236,58 @@ final class CliIntegrationTest {
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/class-is-instance-false").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void classIsInstanceAcceptsAtomicLongAsNumberBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("class-is-instance-number-atomic-long");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.atomic.AtomicLong;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Number.class.isInstance(new AtomicLong(7L)));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/class-is-instance-number-atomic-long").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void classIsInstanceAcceptsAtomicLongRuntimeTypeBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("class-is-instance-atomic-long");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.atomic.AtomicLong;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(AtomicLong.class.isInstance(new AtomicLong(7L)));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/class-is-instance-atomic-long").toString())).stdout())
             .isEqualTo(jvmOutput);
     }
 

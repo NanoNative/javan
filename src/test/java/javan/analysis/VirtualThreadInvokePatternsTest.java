@@ -127,6 +127,9 @@ final class VirtualThreadInvokePatternsTest {
         assertThat(VirtualThreadInvokePatterns.isExecutorExecute(
             new MethodRef("java/util/concurrent/ExecutorService", "execute", "(Ljava/lang/Runnable;)V")
         )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isExecutorServiceSubmitRunnable(
+            new MethodRef("java/util/concurrent/ExecutorService", "submit", "(Ljava/lang/Runnable;)Ljava/util/concurrent/Future;")
+        )).isTrue();
         assertThat(VirtualThreadInvokePatterns.isExecutorServiceShutdown(
             new MethodRef("java/util/concurrent/ExecutorService", "shutdown", "()V")
         )).isTrue();
@@ -213,6 +216,9 @@ final class VirtualThreadInvokePatternsTest {
         )).isFalse();
         assertThat(VirtualThreadInvokePatterns.isExecutorExecute(
             new MethodRef("java/util/concurrent/Executor", "execute", "()V")
+        )).isFalse();
+        assertThat(VirtualThreadInvokePatterns.isExecutorServiceSubmitRunnable(
+            new MethodRef("java/util/concurrent/ExecutorService", "submit", "()Ljava/util/concurrent/Future;")
         )).isFalse();
         assertThat(VirtualThreadInvokePatterns.isExecutorServiceShutdown(
             new MethodRef("java/lang/Object", "shutdown", "()V")

@@ -1238,6 +1238,13 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void staticVerifierAcceptsReachableInstanceofAtomicLongTarget() {
+        final List<Diagnostic> diagnostics = verifyInstanceOf(Map.of(), "java/util/concurrent/atomic/AtomicLong", true);
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
     void staticVerifierAcceptsReachableInstanceofCollectionTarget() {
         final List<Diagnostic> diagnostics = verifyInstanceOf(Map.of(), "java/util/Collection", true);
 
@@ -9208,6 +9215,150 @@ final class CoreBehaviorTest {
         );
 
         assertThat(graph.reachableMethods()).contains(new EntryPoint(task.name(), "run", "()V"));
+    }
+
+    @Test
+    void reachabilityConservativelyTracksExecutorSubmitTaskForUnknownExecutorReceiver() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final String descriptor = "(Ljava/util/concurrent/ExecutorService;)V";
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                descriptor,
+                Optional.of(new CodeAttribute(
+                    3,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 42, "aload_0"),
+                        classInstruction(1, 187, "new", "com/acme/Task"),
+                        instruction(2, 89, "dup"),
+                        instruction(3, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        instruction(4, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "submit", "(Ljava/lang/Runnable;)Ljava/util/concurrent/Future;")),
+                        instruction(5, 87, "pop"),
+                        instruction(6, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", descriptor))
+        );
+
+        assertThat(graph.reachableMethods()).contains(new EntryPoint(task.name(), "run", "()V"));
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableVirtualThreadExecutorSubmitAndClose() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    3,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/util/concurrent/Executors", "newVirtualThreadPerTaskExecutor", "()Ljava/util/concurrent/ExecutorService;")),
+                        instruction(1, 75, "astore_0"),
+                        instruction(2, 42, "aload_0"),
+                        classInstruction(3, 187, "new", "com/acme/Task"),
+                        instruction(4, 89, "dup"),
+                        instruction(5, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        instruction(6, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "submit", "(Ljava/lang/Runnable;)Ljava/util/concurrent/Future;")),
+                        instruction(7, 87, "pop"),
+                        instruction(8, 42, "aload_0"),
+                        instruction(9, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "close", "()V")),
+                        instruction(10, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierRejectsReachableExecutorServiceSubmitWithUnknownReceiver() {
+        final String descriptor = "(Ljava/util/concurrent/ExecutorService;)V";
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                descriptor,
+                Optional.of(new CodeAttribute(
+                    3,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 42, "aload_0"),
+                        classInstruction(1, 187, "new", "com/acme/Task"),
+                        instruction(2, 89, "dup"),
+                        instruction(3, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        instruction(4, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "submit", "(Ljava/lang/Runnable;)Ljava/util/concurrent/Future;")),
+                        instruction(5, 87, "pop"),
+                        instruction(6, 177, "return")
+                    )
+                ))
+            )
+        );
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", descriptor))
+        );
+
+        assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
+            assertThat(diagnostic.code()).isEqualTo("JAVAN077");
+            assertThat(diagnostic.subject()).isEqualTo("ExecutorService.submit(Runnable)");
+        });
     }
 
     @Test

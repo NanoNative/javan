@@ -90,6 +90,12 @@ public final class VirtualThreadInvokePatterns {
             && "(Ljava/lang/Runnable;)V".equals(methodRef.descriptor());
     }
 
+    public static boolean isExecutorServiceSubmitRunnable(final MethodRef methodRef) {
+        return "java/util/concurrent/ExecutorService".equals(methodRef.owner())
+            && "submit".equals(methodRef.name())
+            && "(Ljava/lang/Runnable;)Ljava/util/concurrent/Future;".equals(methodRef.descriptor());
+    }
+
     public static boolean isExecutorServiceShutdown(final MethodRef methodRef) {
         return "java/util/concurrent/ExecutorService".equals(methodRef.owner())
             && "shutdown".equals(methodRef.name())

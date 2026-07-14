@@ -394,6 +394,57 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksThreadMxBeanGetAllThreadIdsAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/management/ThreadMXBean", "getAllThreadIds", "()[J")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksThreadMxBeanGetThreadInfoArrayAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef(
+            "java/lang/management/ThreadMXBean",
+            "getThreadInfo",
+            "([J)[Ljava/lang/management/ThreadInfo;"
+        ))).isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksThreadInfoGetThreadNameAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef(
+            "java/lang/management/ThreadInfo",
+            "getThreadName",
+            "()Ljava/lang/String;"
+        ))).isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksExecutorServiceSubmitRunnableAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef(
+            "java/util/concurrent/ExecutorService",
+            "submit",
+            "(Ljava/lang/Runnable;)Ljava/util/concurrent/Future;"
+        ))).isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksFutureCancelAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef(
+            "java/util/concurrent/Future",
+            "cancel",
+            "(Z)Z"
+        ))).isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksCountDownLatchAwaitAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef(
+            "java/util/concurrent/CountDownLatch",
+            "await",
+            "(JLjava/util/concurrent/TimeUnit;)Z"
+        ))).isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksStringStringBufferConstructorAsExplicitRejected() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/String", "<init>", "(Ljava/lang/StringBuffer;)V")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
