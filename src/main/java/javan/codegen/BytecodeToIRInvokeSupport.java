@@ -2712,6 +2712,21 @@ final class BytecodeToIRInvokeSupport {
             return true;
         }
         if ("java/time/ZonedDateTime".equals(methodRef.owner())
+            && "now".equals(methodRef.name())
+            && "()Ljava/time/ZonedDateTime;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_zoned_date_time_now", List.of())));
+            return true;
+        }
+        if ("java/time/ZonedDateTime".equals(methodRef.owner())
+            && "now".equals(methodRef.name())
+            && "(Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_zoned_date_time_now_zone",
+                List.of(popObjectForJdkCall(classFile, method, instruction, stack))
+            )));
+            return true;
+        }
+        if ("java/time/ZonedDateTime".equals(methodRef.owner())
             && "from".equals(methodRef.name())
             && "(Ljava/time/temporal/TemporalAccessor;)Ljava/time/ZonedDateTime;".equals(methodRef.descriptor())) {
             stack.add(StackValue.objectExpression(IrExpression.objectCall(
@@ -7812,6 +7827,13 @@ final class BytecodeToIRInvokeSupport {
             return false;
         }
         if ("java/time/ZonedDateTime".equals(methodRef.owner())) {
+            if ("getOffset".equals(methodRef.name()) && "()Ljava/time/ZoneOffset;".equals(methodRef.descriptor())) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                    "javan_zoned_date_time_get_offset",
+                    List.of(popObjectForJdkCall(classFile, method, instruction, stack))
+                )));
+                return true;
+            }
             if ("toOffsetDateTime".equals(methodRef.name()) && "()Ljava/time/OffsetDateTime;".equals(methodRef.descriptor())) {
                 stack.add(StackValue.objectExpression(IrExpression.objectCall(
                     "javan_zoned_date_time_to_offset_date_time",
@@ -7855,6 +7877,18 @@ final class BytecodeToIRInvokeSupport {
                 "javan_offset_date_time_to_instant",
                 List.of(popObjectForJdkCall(classFile, method, instruction, stack))
             )));
+            return true;
+        }
+        if ("java/time/ZoneOffset".equals(methodRef.owner())
+            && "getTotalSeconds".equals(methodRef.name())
+            && "()I".equals(methodRef.descriptor())) {
+            pushIntCall(
+                instructions,
+                stack,
+                localDeclarations,
+                "javan_zone_offset_get_total_seconds",
+                List.of(popObjectForJdkCall(classFile, method, instruction, stack))
+            );
             return true;
         }
         if ("java/util/Calendar".equals(methodRef.owner())) {

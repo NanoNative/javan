@@ -20802,6 +20802,90 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersZonedDateTimeNowToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/time/ZonedDateTime;",
+            0,
+            0,
+            invokeStatic(0, new MethodRef("java/time/ZonedDateTime", "now", "()Ljava/time/ZonedDateTime;")),
+            plain(1, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall("javan_zoned_date_time_now", List.of()))
+        );
+    }
+
+    @Test
+    void lowersZonedDateTimeNowWithZoneToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeStatic(1, new MethodRef("java/time/ZonedDateTime", "now", "(Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_zoned_date_time_now_zone",
+                List.of(IrExpression.objectLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersZonedDateTimeGetOffsetToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/time/ZonedDateTime;)Ljava/time/ZoneOffset;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/time/ZonedDateTime", "getOffset", "()Ljava/time/ZoneOffset;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_zoned_date_time_get_offset",
+                List.of(IrExpression.objectLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersZoneOffsetGetTotalSecondsToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/time/ZoneOffset;)I",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/time/ZoneOffset", "getTotalSeconds", "()I")),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignInt(
+                "int0",
+                IrExpression.intCall(
+                    "javan_zone_offset_get_total_seconds",
+                    List.of(IrExpression.objectLocal("arg0"))
+                )
+            ),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
+        );
+    }
+
+    @Test
     void lowersZonedDateTimeToLocalDateTimeToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,

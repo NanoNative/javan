@@ -1806,6 +1806,51 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void zonedDateTimeNowIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/time/ZonedDateTime",
+            "now",
+            "()Ljava/time/ZonedDateTime;"
+        ))).isTrue();
+    }
+
+    @Test
+    void zonedDateTimeNowWithZoneIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/time/ZonedDateTime",
+            "now",
+            "(Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;"
+        ))).isTrue();
+    }
+
+    @Test
+    void zonedDateTimeGetOffsetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/time/ZonedDateTime",
+            "getOffset",
+            "()Ljava/time/ZoneOffset;"
+        ))).isTrue();
+    }
+
+    @Test
+    void zoneOffsetGetTotalSecondsIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/time/ZoneOffset",
+            "getTotalSeconds",
+            "()I"
+        ))).isTrue();
+    }
+
+    @Test
+    void zoneOffsetGetTotalSecondsRequiresTimeRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/time/ZoneOffset",
+            "getTotalSeconds",
+            "()I"
+        ))).containsExactly("time");
+    }
+
+    @Test
     void localTimeGetNanoIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/time/LocalTime",

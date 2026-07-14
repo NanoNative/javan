@@ -11437,8 +11437,8 @@ final class CliIntegrationTest {
         assertThat(run.exitCode()).isEqualTo(2);
         final String diagnostics = Files.readString(project.resolve(".javan/reports/diagnostics.md"));
         assertThat(diagnostics).contains(
-            "- diagnostics: `492`",
-            "- errors: `478`",
+            "- diagnostics: `487`",
+            "- errors: `473`",
             "- warnings: `14`",
             "error[JAVAN030] unsupported reachable bytecode",
             "`invokedynamic`"
@@ -11519,6 +11519,10 @@ final class CliIntegrationTest {
             "java/time/format/DateTimeFormatter.parse(Ljava/lang/CharSequence;)Ljava/time/temporal/TemporalAccessor;",
             "java/time/Instant.from(Ljava/time/temporal/TemporalAccessor;)Ljava/time/Instant;",
             "java/time/ZonedDateTime.from(Ljava/time/temporal/TemporalAccessor;)Ljava/time/ZonedDateTime;",
+            "java/time/ZonedDateTime.now()Ljava/time/ZonedDateTime;",
+            "java/time/ZonedDateTime.now(Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;",
+            "java/time/ZonedDateTime.getOffset()Ljava/time/ZoneOffset;",
+            "java/time/ZoneOffset.getTotalSeconds()I",
             "java/util/UUID.randomUUID()Ljava/util/UUID;",
             "java/util/UUID.toString()Ljava/lang/String;"
         );
@@ -14124,6 +14128,57 @@ final class CliIntegrationTest {
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/zoned-date-time-from-temporal").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void zonedDateTimeNowOffsetSecondsBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("zoned-date-time-now-offset-seconds");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.time.ZonedDateTime;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(ZonedDateTime.now().getOffset().getTotalSeconds());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/zoned-date-time-now-offset-seconds").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void zonedDateTimeNowWithZoneOffsetSecondsBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("zoned-date-time-now-zone-offset-seconds");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.time.ZoneId;
+            import java.time.ZonedDateTime;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(ZonedDateTime.now(ZoneId.systemDefault()).getOffset().getTotalSeconds());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/zoned-date-time-now-zone-offset-seconds").toString())).stdout()).isEqualTo(jvmOutput);
     }
 
     @Test

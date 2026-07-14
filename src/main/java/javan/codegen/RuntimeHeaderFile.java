@@ -483,12 +483,16 @@ final class RuntimeHeaderFile {
         void* javan_local_date_time_at_zone(void* value, void* zone);
         void* javan_local_date_time_to_local_date(void* value);
         void* javan_local_date_time_to_local_time(void* value);
+        void* javan_zoned_date_time_now(void);
+        void* javan_zoned_date_time_now_zone(void* zone);
         void* javan_zoned_date_time_of(void* date, void* time, void* zone);
+        void* javan_zoned_date_time_get_offset(void* value);
         void* javan_zoned_date_time_to_offset_date_time(void* value);
         void* javan_zoned_date_time_to_instant(void* value);
         void* javan_zoned_date_time_to_local_date(void* value);
         void* javan_zoned_date_time_to_local_time(void* value);
         void* javan_zoned_date_time_to_local_date_time(void* value);
+        int javan_zone_offset_get_total_seconds(void* value);
         void* javan_calendar_get_instance(void);
         void javan_calendar_set_time(void* value, void* date);
         void javan_calendar_set_time_in_millis(void* value, long long epoch_millis);

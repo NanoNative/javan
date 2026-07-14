@@ -616,6 +616,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_UUID_MAGIC 0x4a555549
         #define JAVAN_SIMPLE_DATE_FORMAT_PATTERN_NANO_LOG 1
         #define JAVAN_ZONE_KIND_SYSTEM_DEFAULT 1
+        #define JAVAN_ZONE_KIND_FIXED_OFFSET 2
         #define JAVAN_HTTP_METHOD_GET 1
         #define JAVAN_HTTP_METHOD_POST 2
         #define JAVAN_HTTP_METHOD_PUT 3
@@ -729,6 +730,7 @@ final class RuntimeSourceMemorySections {
         static javan_operating_system_mxbean_value* javan_operating_system_mxbean_checked(void* value);
         static javan_process_handle_value* javan_process_handle_checked(void* value);
         static javan_zone_id_value* javan_zone_id_checked(void* value);
+        static javan_zone_id_value* javan_zone_offset_checked(void* value);
         static javan_instant_value* javan_instant_checked(void* value);
         static javan_date_value* javan_date_checked(void* value);
         static javan_sql_date_value* javan_sql_date_checked(void* value);
@@ -2844,6 +2846,17 @@ final class RuntimeSourceMemorySections {
             return zone;
         }
 
+        static javan_zone_id_value* javan_zone_offset_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported zone offset");
+            }
+            javan_zone_id_value* zone = (javan_zone_id_value*) value;
+            if (zone->magic != JAVAN_ZONE_ID_MAGIC || zone->kind != JAVAN_ZONE_KIND_FIXED_OFFSET) {
+                javan_panic("unsupported zone offset");
+            }
+            return zone;
+        }
+
         static javan_instant_value* javan_instant_checked(void* value) {
             if (value == NULL) {
                 javan_panic("unsupported instant");
@@ -4408,11 +4421,54 @@ final class RuntimeSourceMemorySections {
             #endif
         }
 
+        static int javan_timegm_portable(struct tm* value, time_t* result) {
+            if (value == NULL || result == NULL) {
+                return 0;
+            }
+            #if defined(_WIN32)
+            time_t converted = _mkgmtime(value);
+            #else
+            time_t converted = timegm(value);
+            #endif
+            if (converted == (time_t) -1) {
+                return 0;
+            }
+            *result = converted;
+            return 1;
+        }
+
+        static int javan_system_default_offset_seconds(long long epoch_millis) {
+            time_t epoch_seconds = 0;
+            int millis_part = 0;
+            struct tm local_calendar;
+            time_t utc_as_local = 0;
+            if (javan_epoch_seconds_and_millis(epoch_millis, &epoch_seconds, &millis_part) == 0
+                || javan_localtime_portable(epoch_seconds, &local_calendar) == 0
+                || javan_timegm_portable(&local_calendar, &utc_as_local) == 0) {
+                javan_panic("time conversion failed");
+            }
+            long long offset = (long long) utc_as_local - (long long) epoch_seconds;
+            if (offset > INT_MAX || offset < INT_MIN) {
+                javan_panic("zone offset overflow");
+            }
+            return (int) offset;
+        }
+
         static void* javan_zone_id_new_system_default(void) {
             javan_zone_id_value* zone = (javan_zone_id_value*) javan_alloc(sizeof(javan_zone_id_value));
             zone->magic = JAVAN_ZONE_ID_MAGIC;
             zone->kind = JAVAN_ZONE_KIND_SYSTEM_DEFAULT;
             zone->reserved0 = 0;
+            zone->reserved1 = 0;
+            javan_update_runtime_allocation_kind((void*) zone, JAVAN_RUNTIME_KIND_ZONE_ID);
+            return (void*) zone;
+        }
+
+        static void* javan_zone_offset_new_fixed(int total_seconds) {
+            javan_zone_id_value* zone = (javan_zone_id_value*) javan_alloc(sizeof(javan_zone_id_value));
+            zone->magic = JAVAN_ZONE_ID_MAGIC;
+            zone->kind = JAVAN_ZONE_KIND_FIXED_OFFSET;
+            zone->reserved0 = total_seconds;
             zone->reserved1 = 0;
             javan_update_runtime_allocation_kind((void*) zone, JAVAN_RUNTIME_KIND_ZONE_ID);
             return (void*) zone;
@@ -4908,6 +4964,15 @@ final class RuntimeSourceMemorySections {
             return javan_local_time_new(date_time->hour, date_time->minute, date_time->second, date_time->millis);
         }
 
+        void* javan_zoned_date_time_now(void) {
+            return javan_zoned_date_time_new(javan_system_current_time_millis());
+        }
+
+        void* javan_zoned_date_time_now_zone(void* zone) {
+            javan_zone_id_checked(zone);
+            return javan_zoned_date_time_new(javan_system_current_time_millis());
+        }
+
         void* javan_zoned_date_time_of(void* date, void* time, void* zone) {
             javan_local_date_value* local_date = javan_local_date_checked(date);
             javan_local_time_value* local_time = javan_local_time_checked(time);
@@ -4921,6 +4986,12 @@ final class RuntimeSourceMemorySections {
                 local_time->second,
                 local_time->millis
             ));
+        }
+
+        void* javan_zoned_date_time_get_offset(void* value) {
+            return javan_zone_offset_new_fixed(
+                javan_system_default_offset_seconds(javan_zoned_date_time_checked(value)->epoch_millis)
+            );
         }
 
         void* javan_zoned_date_time_to_instant(void* value) {
@@ -5014,6 +5085,10 @@ final class RuntimeSourceMemorySections {
 
         void* javan_offset_date_time_to_instant(void* value) {
             return javan_instant_new(javan_offset_date_time_checked(value)->epoch_millis);
+        }
+
+        int javan_zone_offset_get_total_seconds(void* value) {
+            return javan_zone_offset_checked(value)->reserved0;
         }
 
         void* javan_calendar_get_instance(void) {

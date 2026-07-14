@@ -994,6 +994,30 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksZonedDateTimeNowAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/time/ZonedDateTime", "now", "()Ljava/time/ZonedDateTime;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksZonedDateTimeNowWithZoneAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/time/ZonedDateTime", "now", "(Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksZonedDateTimeGetOffsetAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/time/ZonedDateTime", "getOffset", "()Ljava/time/ZoneOffset;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksZoneOffsetGetTotalSecondsAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/time/ZoneOffset", "getTotalSeconds", "()I")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksDateFromInstantAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Date", "from", "(Ljava/time/Instant;)Ljava/util/Date;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

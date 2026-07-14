@@ -318,12 +318,15 @@ public final class JdkCallSupport {
         runtime("LocalDateTime.atZone", "java/time/LocalDateTime", "atZone", "(Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;"),
         runtime("LocalDateTime.toLocalDate", "java/time/LocalDateTime", "toLocalDate", "()Ljava/time/LocalDate;"),
         runtime("LocalDateTime.toLocalTime", "java/time/LocalDateTime", "toLocalTime", "()Ljava/time/LocalTime;"),
+        runtime("ZonedDateTime.now", "java/time/ZonedDateTime", "now", "()Ljava/time/ZonedDateTime;", "(Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;"),
         runtime("ZonedDateTime.of", "java/time/ZonedDateTime", "of", "(Ljava/time/LocalDate;Ljava/time/LocalTime;Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;"),
+        runtime("ZonedDateTime.getOffset", "java/time/ZonedDateTime", "getOffset", "()Ljava/time/ZoneOffset;"),
         runtime("ZonedDateTime.toOffsetDateTime", "java/time/ZonedDateTime", "toOffsetDateTime", "()Ljava/time/OffsetDateTime;"),
         runtime("ZonedDateTime.toInstant", "java/time/ZonedDateTime", "toInstant", "()Ljava/time/Instant;"),
         runtime("ZonedDateTime.toLocalDate", "java/time/ZonedDateTime", "toLocalDate", "()Ljava/time/LocalDate;"),
         runtime("ZonedDateTime.toLocalTime", "java/time/ZonedDateTime", "toLocalTime", "()Ljava/time/LocalTime;"),
         runtime("ZonedDateTime.toLocalDateTime", "java/time/ZonedDateTime", "toLocalDateTime", "()Ljava/time/LocalDateTime;"),
+        runtime("ZoneOffset.getTotalSeconds", "java/time/ZoneOffset", "getTotalSeconds", "()I"),
         runtime("TemporalQueries.zone", "java/time/temporal/TemporalQueries", "zone", "()Ljava/time/temporal/TemporalQuery;"),
         runtime("TemporalQueries.localDate", "java/time/temporal/TemporalQueries", "localDate", "()Ljava/time/temporal/TemporalQuery;"),
         runtime("TemporalQueries.localTime", "java/time/temporal/TemporalQueries", "localTime", "()Ljava/time/temporal/TemporalQuery;"),
@@ -1562,6 +1565,7 @@ public final class JdkCallSupport {
             || "java/time/LocalTime".equals(owner)
             || "java/time/LocalDateTime".equals(owner)
             || "java/time/ZonedDateTime".equals(owner)
+            || "java/time/ZoneOffset".equals(owner)
             || "java/util/Calendar".equals(owner)
             || "java/util/Date".equals(owner)
             || "java/sql/Date".equals(owner)

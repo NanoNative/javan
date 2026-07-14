@@ -677,6 +677,15 @@ public final class BytecodeToIR {
         if ("java/time/LocalDateTime".equals(target.owner()) && "toLocalTime".equals(target.name()) && "()Ljava/time/LocalTime;".equals(target.descriptor())) {
             return IrExpression.objectCall("javan_local_date_time_to_local_time", arguments);
         }
+        if ("java/time/ZonedDateTime".equals(target.owner()) && "now".equals(target.name()) && "()Ljava/time/ZonedDateTime;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_zoned_date_time_now", arguments);
+        }
+        if ("java/time/ZonedDateTime".equals(target.owner()) && "now".equals(target.name()) && "(Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_zoned_date_time_now_zone", arguments);
+        }
+        if ("java/time/ZonedDateTime".equals(target.owner()) && "getOffset".equals(target.name()) && "()Ljava/time/ZoneOffset;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_zoned_date_time_get_offset", arguments);
+        }
         if ("java/time/ZonedDateTime".equals(target.owner()) && "toInstant".equals(target.name()) && "()Ljava/time/Instant;".equals(target.descriptor())) {
             return IrExpression.objectCall("javan_zoned_date_time_to_instant", arguments);
         }
@@ -694,6 +703,9 @@ public final class BytecodeToIR {
         }
         if ("java/time/ZonedDateTime".equals(target.owner()) && "of".equals(target.name()) && "(Ljava/time/LocalDate;Ljava/time/LocalTime;Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;".equals(target.descriptor())) {
             return IrExpression.objectCall("javan_zoned_date_time_of", arguments);
+        }
+        if ("java/time/ZoneOffset".equals(target.owner()) && "getTotalSeconds".equals(target.name()) && "()I".equals(target.descriptor())) {
+            return IrExpression.intCall("javan_zone_offset_get_total_seconds", arguments);
         }
         if ("java/time/format/DateTimeFormatter".equals(target.owner()) && "parse".equals(target.name()) && "(Ljava/lang/CharSequence;)Ljava/time/temporal/TemporalAccessor;".equals(target.descriptor())) {
             return IrExpression.objectCall("javan_datetime_formatter_parse", arguments);
