@@ -445,6 +445,9 @@ public final class BytecodeToIR {
         if ("java/time/format/DateTimeFormatterBuilder".equals(owner)) {
             return Optional.of(IrExpression.objectCall("javan_datetime_formatter_builder_new", List.of()));
         }
+        if ("java/text/SimpleDateFormat".equals(owner)) {
+            return Optional.of(IrExpression.objectCall("javan_simple_date_format_new", List.of()));
+        }
         if ("java/lang/StackTraceElement".equals(owner)) {
             return Optional.of(IrExpression.objectAllocation(owner));
         }

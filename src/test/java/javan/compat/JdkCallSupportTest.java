@@ -81,6 +81,33 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void simpleDateFormatConstructorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/text/SimpleDateFormat",
+            "<init>",
+            "(Ljava/lang/String;)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void simpleDateFormatFormatIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/text/SimpleDateFormat",
+            "format",
+            "(Ljava/util/Date;)Ljava/lang/String;"
+        ))).isTrue();
+    }
+
+    @Test
+    void simpleDateFormatRequiresTimeAndStringsRuntimeModules() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/text/SimpleDateFormat",
+            "format",
+            "(Ljava/util/Date;)Ljava/lang/String;"
+        ))).containsExactly("time", "strings");
+    }
+
+    @Test
     void atomicLongCallsRequireThreadsRuntimeModule() {
         assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
             "java/util/concurrent/atomic/AtomicLong",

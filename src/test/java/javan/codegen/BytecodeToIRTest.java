@@ -6987,6 +6987,22 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersSimpleDateFormatConstructorToInitHelper() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+
+        assertThat(BytecodeToIRInvokeSupport.lowerSimpleDateFormatConstructor(
+            new MethodRef("java/text/SimpleDateFormat", "<init>", "(Ljava/lang/String;)V"),
+            instructions,
+            List.of(IrExpression.objectLocal("arg1")),
+            IrExpression.objectLocal("arg0")
+        )).isTrue();
+        assertThat(instructions).containsExactly(IrInstruction.callStaticVoid(
+            "javan_simple_date_format_init",
+            List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+        ));
+    }
+
+    @Test
     void lowersThreadLocalConstructorPredicateRejectsWrongOwner() {
         assertThat(BytecodeToIRInvokeSupport.lowerThreadLocalConstructor(new MethodRef("java/lang/Object", "<init>", "()V")))
             .isFalse();
@@ -12203,6 +12219,37 @@ final class BytecodeToIRTest {
                 "java/util/logging/LogRecord",
                 "millis",
                 IrExpression.objectLocal("object0")
+            ))
+        );
+    }
+
+    @Test
+    void lowersSimpleDateFormatFormatDateToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/Date;)Ljava/lang/String;",
+            4,
+            0,
+            classInstruction(0, 187, "new", "java/text/SimpleDateFormat"),
+            plain(1, 89, "dup"),
+            stringConstant(2, "yyyy-MM-dd HH:mm:ss.SSS"),
+            invokeSpecial(3, new MethodRef("java/text/SimpleDateFormat", "<init>", "(Ljava/lang/String;)V")),
+            plain(4, 42, "aload_0"),
+            invokeVirtual(5, new MethodRef("java/text/SimpleDateFormat", "format", "(Ljava/util/Date;)Ljava/lang/String;")),
+            plain(6, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_simple_date_format_new", List.of())),
+            IrInstruction.callStaticVoid(
+                "javan_simple_date_format_init",
+                List.of(IrExpression.objectLocal("object0"), IrExpression.stringLiteral("yyyy-MM-dd HH:mm:ss.SSS"))
+            ),
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_simple_date_format_format",
+                List.of(IrExpression.objectLocal("object0"), IrExpression.objectLocal("arg0"))
             ))
         );
     }

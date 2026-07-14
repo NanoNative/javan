@@ -473,6 +473,60 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void simpleDateFormatFormatBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("simple-date-format-format");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.text.SimpleDateFormat;
+            import java.util.Date;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS").format(new Date(1700000000123L)));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/simple-date-format-format").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void simpleDateFormatUnsupportedPatternFailsClearlyAtRuntime() throws Exception {
+        final Path project = project("simple-date-format-unsupported-pattern");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.text.SimpleDateFormat;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    new SimpleDateFormat("yyyy/MM/dd");
+                    System.out.println("unreachable");
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/simple-date-format-unsupported-pattern").toString()));
+        assertThat(nativeRun.exitCode()).isEqualTo(1);
+        assertThat(nativeRun.stdout()).isEmpty();
+        assertThat(nativeRun.stderr()).contains("unsupported SimpleDateFormat pattern");
+    }
+
+    @Test
     void doubleValueOfStringBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("double-value-of-string");
         writeJava(project, "com.acme.Main", """
@@ -11166,8 +11220,8 @@ final class CliIntegrationTest {
         assertThat(run.exitCode()).isEqualTo(2);
         final String diagnostics = Files.readString(project.resolve(".javan/reports/diagnostics.md"));
         assertThat(diagnostics).contains(
-            "- diagnostics: `512`",
-            "- errors: `498`",
+            "- diagnostics: `510`",
+            "- errors: `496`",
             "- warnings: `14`",
             "error[JAVAN030] unsupported reachable bytecode",
             "`invokedynamic`"
@@ -11229,6 +11283,8 @@ final class CliIntegrationTest {
             "java/util/Calendar.setTimeInMillis(J)V",
             "java/time/temporal/TemporalAccessor.isSupported(Ljava/time/temporal/TemporalField;)Z",
             "java/lang/Long.parseLong(Ljava/lang/String;)J",
+            "java/text/SimpleDateFormat.<init>(Ljava/lang/String;)V",
+            "java/text/SimpleDateFormat.format(Ljava/util/Date;)Ljava/lang/String;",
             "java/time/temporal/TemporalAccessor.query(Ljava/time/temporal/TemporalQuery;)Ljava/lang/Object;",
             "java/time/temporal/TemporalQueries.zone()Ljava/time/temporal/TemporalQuery;",
             "java/time/temporal/TemporalQueries.localDate()Ljava/time/temporal/TemporalQuery;",

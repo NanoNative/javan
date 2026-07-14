@@ -91,6 +91,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_RUNTIME_KIND_OFFSET_DATE_TIME 55
         #define JAVAN_RUNTIME_KIND_CALENDAR 56
         #define JAVAN_RUNTIME_KIND_LOGGING_LEVEL 57
+        #define JAVAN_RUNTIME_KIND_SIMPLE_DATE_FORMAT 58
         #define JAVAN_LIST_VIEW_UNMODIFIABLE 1
         #define JAVAN_LIST_VIEW_REVERSED 2
 
@@ -518,6 +519,13 @@ final class RuntimeSourceMemorySections {
 
         typedef struct {
             int magic;
+            int pattern_kind;
+            int reserved0;
+            int reserved1;
+        } javan_simple_date_format_value;
+
+        typedef struct {
+            int magic;
             int case_insensitive;
             int optional_depth;
             int optional_nano_fraction;
@@ -594,6 +602,8 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_OFFSET_DATE_TIME_MAGIC 0x4a4f4454
         #define JAVAN_CALENDAR_MAGIC 0x4a43414c
         #define JAVAN_LOGGING_LEVEL_MAGIC 0x4a4c4f47
+        #define JAVAN_SIMPLE_DATE_FORMAT_MAGIC 0x4a534446
+        #define JAVAN_SIMPLE_DATE_FORMAT_PATTERN_NANO_LOG 1
         #define JAVAN_ZONE_KIND_SYSTEM_DEFAULT 1
         #define JAVAN_HTTP_METHOD_GET 1
         #define JAVAN_HTTP_METHOD_POST 2
@@ -720,6 +730,7 @@ final class RuntimeSourceMemorySections {
         static javan_offset_date_time_value* javan_offset_date_time_checked(void* value);
         static javan_calendar_value* javan_calendar_checked(void* value);
         static javan_logging_level_value* javan_logging_level_checked(void* value);
+        static javan_simple_date_format_value* javan_simple_date_format_checked(void* value);
         static const char* javan_charsequence_string_value(void* value);
         static const char* javan_runtime_kind_binary_name(int runtime_kind);
         static void javan_runtime_run_shutdown_hooks(void);
@@ -1299,7 +1310,8 @@ final class RuntimeSourceMemorySections {
                 || runtime_kind == JAVAN_RUNTIME_KIND_ZONED_DATE_TIME
                 || runtime_kind == JAVAN_RUNTIME_KIND_OFFSET_DATE_TIME
                 || runtime_kind == JAVAN_RUNTIME_KIND_CALENDAR
-                || runtime_kind == JAVAN_RUNTIME_KIND_LOGGING_LEVEL;
+                || runtime_kind == JAVAN_RUNTIME_KIND_LOGGING_LEVEL
+                || runtime_kind == JAVAN_RUNTIME_KIND_SIMPLE_DATE_FORMAT;
             javan_heap_maybe_validate();
             javan_runtime_lock_leave();
         }
@@ -1529,6 +1541,8 @@ final class RuntimeSourceMemorySections {
                 javan_process_handle_checked(node->value);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_LOGGING_LEVEL) {
                 javan_logging_level_checked(node->value);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_SIMPLE_DATE_FORMAT) {
+                javan_simple_date_format_checked(node->value);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_BOOLEAN) {
                 javan_atomic_boolean* state = (javan_atomic_boolean*) node->value;
                 if (state->magic != JAVAN_ATOMIC_BOOLEAN_MAGIC || (state->value != 0 && state->value != 1)) {
@@ -1955,6 +1969,7 @@ final class RuntimeSourceMemorySections {
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_OPERATING_SYSTEM_MXBEAN
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_PROCESS_HANDLE
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_LOGGING_LEVEL
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_SIMPLE_DATE_FORMAT
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_ATOMIC_BOOLEAN
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_ATOMIC_INTEGER
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_ATOMIC_LONG
@@ -2943,6 +2958,18 @@ final class RuntimeSourceMemorySections {
             return level;
         }
 
+        static javan_simple_date_format_value* javan_simple_date_format_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported simple date format");
+            }
+            javan_simple_date_format_value* formatter = (javan_simple_date_format_value*) value;
+            if (formatter->magic != JAVAN_SIMPLE_DATE_FORMAT_MAGIC
+                || formatter->pattern_kind != JAVAN_SIMPLE_DATE_FORMAT_PATTERN_NANO_LOG) {
+                javan_panic("unsupported simple date format");
+            }
+            return formatter;
+        }
+
         static javan_datetime_formatter_builder_value* javan_datetime_formatter_builder_checked(void* value) {
             if (value == NULL) {
                 javan_panic("unsupported datetime formatter builder");
@@ -3080,6 +3107,8 @@ final class RuntimeSourceMemorySections {
                     return "java.util.Calendar";
                 case JAVAN_RUNTIME_KIND_LOGGING_LEVEL:
                     return "java.util.logging.Level";
+                case JAVAN_RUNTIME_KIND_SIMPLE_DATE_FORMAT:
+                    return "java.text.SimpleDateFormat";
                 case JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_BUILDER:
                     return "java.lang.ThreadBuilders$VirtualThreadBuilder";
                 case JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_FACTORY:
@@ -5031,6 +5060,52 @@ final class RuntimeSourceMemorySections {
 
         void* javan_logging_level_to_string(void* value) {
             return javan_string_from(javan_logging_level_checked(value)->name);
+        }
+
+        void* javan_simple_date_format_new(void) {
+            javan_simple_date_format_value* formatter = (javan_simple_date_format_value*) javan_alloc(sizeof(javan_simple_date_format_value));
+            formatter->magic = JAVAN_SIMPLE_DATE_FORMAT_MAGIC;
+            formatter->pattern_kind = 0;
+            formatter->reserved0 = 0;
+            formatter->reserved1 = 0;
+            javan_update_runtime_allocation_kind((void*) formatter, JAVAN_RUNTIME_KIND_SIMPLE_DATE_FORMAT);
+            return (void*) formatter;
+        }
+
+        void javan_simple_date_format_init(void* value, void* pattern) {
+            javan_simple_date_format_value* formatter = (javan_simple_date_format_value*) value;
+            if (formatter == NULL || formatter->magic != JAVAN_SIMPLE_DATE_FORMAT_MAGIC) {
+                javan_panic("unsupported simple date format");
+            }
+            const char* text = javan_charsequence_string_value(pattern);
+            if (text == NULL || strcmp(text, "yyyy-MM-dd HH:mm:ss.SSS") != 0) {
+                javan_panic("unsupported SimpleDateFormat pattern");
+            }
+            formatter->pattern_kind = JAVAN_SIMPLE_DATE_FORMAT_PATTERN_NANO_LOG;
+        }
+
+        void* javan_simple_date_format_format(void* value, void* date) {
+            char buffer[32];
+            int year = 0;
+            int month = 0;
+            int day = 0;
+            int hour = 0;
+            int minute = 0;
+            int second = 0;
+            int millis = 0;
+            javan_simple_date_format_checked(value);
+            javan_components_from_epoch_millis_local(
+                javan_date_like_epoch_millis(date),
+                &year,
+                &month,
+                &day,
+                &hour,
+                &minute,
+                &second,
+                &millis
+            );
+            snprintf(buffer, sizeof(buffer), "%04d-%02d-%02d %02d:%02d:%02d.%03d", year, month, day, hour, minute, second, millis);
+            return javan_string_from(buffer);
         }
 
         void* javan_date_from_instant(void* instant) {

@@ -503,6 +503,9 @@ final class RuntimeHeaderFile {
         void* javan_logging_level_all(void);
         int javan_logging_level_int_value(void* value);
         void* javan_logging_level_to_string(void* value);
+        void* javan_simple_date_format_new(void);
+        void javan_simple_date_format_init(void* value, void* pattern);
+        void* javan_simple_date_format_format(void* value, void* date);
         void* javan_date_alloc(void);
         void javan_date_init_now(void* value);
         void javan_date_init_millis(void* value, long long epoch_millis);

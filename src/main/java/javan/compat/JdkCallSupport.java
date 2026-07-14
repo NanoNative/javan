@@ -218,6 +218,8 @@ public final class JdkCallSupport {
             "formatMessage",
             "(Ljava/util/logging/LogRecord;)Ljava/lang/String;"
         ),
+        runtime("SimpleDateFormat.<init>", "java/text/SimpleDateFormat", "<init>", "(Ljava/lang/String;)V"),
+        runtime("SimpleDateFormat.format", "java/text/SimpleDateFormat", "format", "(Ljava/util/Date;)Ljava/lang/String;"),
         intrinsic(
             "Arrays.copyOf",
             "java/util/Arrays",
@@ -1551,6 +1553,9 @@ public final class JdkCallSupport {
         }
         if ("java/util/logging/Formatter".equals(owner)) {
             return List.of("strings");
+        }
+        if ("java/text/SimpleDateFormat".equals(owner)) {
+            return List.of("time", "strings");
         }
         if ("java/nio/file/attribute/FileTime".equals(owner)) {
             return List.of("filesystem", "time");

@@ -375,6 +375,9 @@ final class BytecodeToIRInvokeSupport {
         )) {
             return;
         }
+        if (lowerSimpleDateFormatInstanceCall(classFile, method, instruction, methodRef, stack)) {
+            return;
+        }
         if (lowerPrintStreamCall(classFile, method, instruction, methodRef, instructions, stack)) {
             return;
         }
@@ -1624,6 +1627,9 @@ final class BytecodeToIRInvokeSupport {
         if (lowerLoggingConstructor(methodRef, instructions, arguments, receiver)) {
             return;
         }
+        if (lowerSimpleDateFormatConstructor(methodRef, instructions, arguments, receiver)) {
+            return;
+        }
         if (lowerThreadConstructor(methodRef, instructions, arguments, receiver)) {
             return;
         }
@@ -2745,6 +2751,24 @@ final class BytecodeToIRInvokeSupport {
                 "javan_sql_timestamp_value_of_local_date_time",
                 List.of(popObjectForJdkCall(classFile, method, instruction, stack))
             )));
+            return true;
+        }
+        return false;
+    }
+
+    static boolean lowerSimpleDateFormatConstructor(
+        final MethodRef methodRef,
+        final List<IrInstruction> instructions,
+        final List<IrExpression> arguments,
+        final IrExpression receiver
+    ) {
+        if ("java/text/SimpleDateFormat".equals(methodRef.owner())
+            && "<init>".equals(methodRef.name())
+            && "(Ljava/lang/String;)V".equals(methodRef.descriptor())) {
+            instructions.add(IrInstruction.callStaticVoid(
+                "javan_simple_date_format_init",
+                List.of(receiver, arguments.getFirst())
+            ));
             return true;
         }
         return false;
@@ -4528,6 +4552,27 @@ final class BytecodeToIRInvokeSupport {
                 "java/util/logging/LogRecord",
                 "message",
                 record
+            )));
+            return true;
+        }
+        return false;
+    }
+
+    static boolean lowerSimpleDateFormatInstanceCall(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final MethodRef methodRef,
+        final List<StackValue> stack
+    ) {
+        if ("java/text/SimpleDateFormat".equals(methodRef.owner())
+            && "format".equals(methodRef.name())
+            && "(Ljava/util/Date;)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            final IrExpression argument = popObjectForJdkCall(classFile, method, instruction, stack);
+            final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_simple_date_format_format",
+                List.of(receiver, argument)
             )));
             return true;
         }
@@ -9531,6 +9576,14 @@ final class BytecodeToIRInvokeSupport {
             localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
             final IrExpression local = IrExpression.objectLocal(localName);
             instructions.add(IrInstruction.assignObject(localName, IrExpression.objectCall("javan_datetime_formatter_builder_new", List.of())));
+            stack.add(StackValue.objectExpression(local));
+            return;
+        }
+        if ("java/text/SimpleDateFormat".equals(owner)) {
+            final String localName = "object" + localDeclarations.size();
+            localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
+            final IrExpression local = IrExpression.objectLocal(localName);
+            instructions.add(IrInstruction.assignObject(localName, IrExpression.objectCall("javan_simple_date_format_new", List.of())));
             stack.add(StackValue.objectExpression(local));
             return;
         }
