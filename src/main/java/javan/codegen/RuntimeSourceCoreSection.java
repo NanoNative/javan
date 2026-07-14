@@ -3,6 +3,7 @@ package javan.codegen;
 final class RuntimeSourceCoreSection {
     private static final String MAIN = """
         #include "javan_runtime.h"
+        #include <ctype.h>
         #include <dirent.h>
         #include <errno.h>
         #include <limits.h>

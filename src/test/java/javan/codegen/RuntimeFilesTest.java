@@ -70,6 +70,52 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void runtimeNaturalObjectComparatorOrdersDoublesDescendingThroughReverseComparatorContract() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+
+            int main(void) {
+                void* left = 0;
+                void* right = 0;
+                javan_register_static_roots(0, 0);
+                void** roots[] = {
+                    (void**) &left,
+                    (void**) &right
+                };
+                javan_root_frame_push(roots, 2);
+                left = javan_double_value_of(1.0);
+                right = javan_double_value_of(5.0);
+                javan_println_int(javan_object_compare_natural(right, left));
+                javan_root_frame_pop(roots);
+                return 0;
+            }
+            """,
+            "256"
+        );
+
+        assertThat(stdout).isEqualTo("1\n");
+    }
+
+    @Test
+    void runtimeNaturalObjectComparatorOrdersStringsLexicographically() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                javan_println_int(javan_object_compare_natural((void*) "alpha", (void*) "beta"));
+                return 0;
+            }
+            """,
+            "256"
+        );
+
+        assertThat(stdout).isEqualTo("-1\n");
+    }
+
+    @Test
     void runtimeThrowableMessageLiteralSurvivesGcStress() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
@@ -154,6 +200,7 @@ final class RuntimeFilesTest {
             "#define JAVAN_HEAP_KIND_ARRAY 3",
             "#define JAVAN_HEAP_KIND_EXPORT 4",
             "#define JAVAN_RUNTIME_KIND_OBJECT_LIST 1",
+            "#define JAVAN_RUNTIME_KIND_OBJECT_SET 46",
             "#define JAVAN_RUNTIME_KIND_OBJECT_MAP 3",
             "#define JAVAN_RUNTIME_KIND_STRING 5",
             "#define JAVAN_RUNTIME_KIND_PROCESS_RESULT 6",
@@ -201,6 +248,91 @@ final class RuntimeFilesTest {
             "javan_directory_stream_insert_sorted(result, child);",
             "javan_root_frame_pop(javan_directory_child_roots);"
         );
+    }
+
+    @Test
+    void runtimeHttpExchangeRequestMetadataAccessorsReturnStoredValues() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+            #include <string.h>
+
+            int main(void) {
+                void* uri = 0;
+                void* headers = 0;
+                void* values = 0;
+                void* exchange = 0;
+                javan_register_static_roots(0, 0);
+                void** roots[] = {
+                    (void**) &uri,
+                    (void**) &headers,
+                    (void**) &values,
+                    (void**) &exchange
+                };
+                javan_root_frame_push(roots, 4);
+                uri = javan_uri_create("http://localhost/hello?name=yuna");
+                headers = javan_hashmap_new();
+                values = javan_list_of(1, (void*) "text/plain");
+                (void) javan_map_put(headers, (void*) "Content-Type", values);
+                exchange = javan_http_exchange_new(
+                    uri,
+                    (void*) "POST",
+                    headers,
+                    javan_byte_array_new(0)
+                );
+                printf("%s\\n", (const char*) javan_uri_get_path(javan_http_exchange_get_request_uri(exchange)));
+                printf("%s\\n", (const char*) javan_uri_get_query(javan_http_exchange_get_request_uri(exchange)));
+                printf("%s\\n", (const char*) javan_http_exchange_get_request_method(exchange));
+                printf("%s\\n", (const char*) javan_http_headers_get_first(javan_http_exchange_get_request_headers(exchange), (void*) "Content-Type"));
+                javan_root_frame_pop(roots);
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("/hello\nname=yuna\nPOST\ntext/plain\n");
+    }
+
+    @Test
+    void runtimeHttpExchangeRequestBodyReadAllBytesReturnsStoredPayload() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                void* exchange = 0;
+                void* stream = 0;
+                void* body = 0;
+                signed char payload[] = {'h', 'e', 'l', 'l', 'o'};
+                javan_register_static_roots(0, 0);
+                void** roots[] = {
+                    (void**) &exchange,
+                    (void**) &stream,
+                    (void**) &body
+                };
+                javan_root_frame_push(roots, 3);
+                exchange = javan_http_exchange_new(
+                    javan_uri_create("http://localhost/upload"),
+                    (void*) "POST",
+                    javan_hashmap_new(),
+                    javan_byte_array_from(payload, 5)
+                );
+                stream = javan_http_exchange_get_request_body(exchange);
+                body = javan_http_input_stream_read_all_bytes(stream);
+                printf("%d\\n", javan_byte_array_length(body));
+                printf("%d\\n", (int) javan_byte_array_get(body, 0));
+                printf("%d\\n", (int) javan_byte_array_get(body, 4));
+                javan_root_frame_pop(roots);
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("5\n104\n111\n");
     }
 
     @Test
@@ -444,6 +576,17 @@ final class RuntimeFilesTest {
             "javan_gc_sweep_unmarked();",
             "javan_gc_collected_allocations_value++;",
             "const char* value = getenv(\"JAVAN_GC_SAFEPOINT_INTERVAL\");"
+        );
+    }
+
+    @Test
+    void writeIncludesListToArrayRuntimeHelper() throws Exception {
+        final Path runtime = new RuntimeFiles().write(tempDir);
+
+        assertThat(Files.readString(runtime)).contains(
+            "void* javan_list_to_array(void* value) {",
+            "result = (javan_object_array*) javan_object_array_new(length);",
+            "return javan_list_to_array(value);"
         );
     }
 
@@ -4142,6 +4285,7 @@ final class RuntimeFilesTest {
 
         assertThat(Files.readString(runtime)).contains(
             "javan_update_runtime_allocation_kind((void*) list, JAVAN_RUNTIME_KIND_OBJECT_LIST);",
+            "javan_update_runtime_allocation_kind((void*) set, JAVAN_RUNTIME_KIND_OBJECT_SET);",
             "javan_update_runtime_allocation_kind((void*) iterator, JAVAN_RUNTIME_KIND_OBJECT_ITERATOR);",
             "javan_update_runtime_allocation_kind((void*) map, JAVAN_RUNTIME_KIND_OBJECT_MAP);",
             "javan_update_runtime_allocation_kind((void*) builder, JAVAN_RUNTIME_KIND_STRING_BUILDER);",
@@ -4222,6 +4366,30 @@ final class RuntimeFilesTest {
             "void** javan_map_values_roots[] = {",
             "javan_root_frame_push(javan_map_values_roots, 1);",
             "javan_root_frame_pop(javan_map_values_roots);"
+        );
+    }
+
+    @Test
+    void writeEmitsCollectionRuntimeDispatchHelpers() throws Exception {
+        final Path runtime = new RuntimeFiles().write(tempDir);
+
+        assertThat(Files.readString(runtime)).contains(
+            "int javan_object_is_collection(void* value) {",
+            "int javan_collection_add(void* value, void* element) {",
+            "return runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_LIST",
+            "|| runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_SET;",
+            "return \"java.util.HashSet\";",
+            "return javan_set_add(value, element);"
+        );
+    }
+
+    @Test
+    void writeEmitsOptionalRuntimeDispatchHelper() throws Exception {
+        final Path runtime = new RuntimeFiles().write(tempDir);
+
+        assertThat(Files.readString(runtime)).contains(
+            "int javan_object_is_optional(void* value) {",
+            "return javan_runtime_kind_of(value) == JAVAN_RUNTIME_KIND_OPTIONAL;"
         );
     }
 

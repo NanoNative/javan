@@ -25,6 +25,153 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksClassGetCanonicalNameAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Class", "getCanonicalName", "()Ljava/lang/String;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksClassIsEnumAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Class", "isEnum", "()Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksClassIsInstanceAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Class", "isInstance", "(Ljava/lang/Object;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksClassCastAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Class", "cast", "(Ljava/lang/Object;)Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksClassIsAssignableFromAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Class", "isAssignableFrom", "(Ljava/lang/Class;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksHttpExchangeGetRequestUriAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef(
+            "com/sun/net/httpserver/HttpExchange",
+            "getRequestURI",
+            "()Ljava/net/URI;"
+        ))).isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksHttpExchangeGetRequestMethodAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef(
+            "com/sun/net/httpserver/HttpExchange",
+            "getRequestMethod",
+            "()Ljava/lang/String;"
+        ))).isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksHttpExchangeGetRequestHeadersAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef(
+            "com/sun/net/httpserver/HttpExchange",
+            "getRequestHeaders",
+            "()Lcom/sun/net/httpserver/Headers;"
+        ))).isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksHttpExchangeGetRequestBodyAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef(
+            "com/sun/net/httpserver/HttpExchange",
+            "getRequestBody",
+            "()Ljava/io/InputStream;"
+        ))).isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksHeadersGetFirstAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef(
+            "com/sun/net/httpserver/Headers",
+            "getFirst",
+            "(Ljava/lang/String;)Ljava/lang/String;"
+        ))).isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksInputStreamReadAllBytesAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef(
+            "java/io/InputStream",
+            "readAllBytes",
+            "()[B"
+        ))).isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksStackTraceElementConstructorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef(
+            "java/lang/StackTraceElement",
+            "<init>",
+            "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;I)V"
+        ))).isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksStackTraceElementGetClassNameAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/StackTraceElement", "getClassName", "()Ljava/lang/String;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksStackTraceElementGetMethodNameAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/StackTraceElement", "getMethodName", "()Ljava/lang/String;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksStackTraceElementGetLineNumberAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/StackTraceElement", "getLineNumber", "()I")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksLinkedHashMapPutAllAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/LinkedHashMap", "putAll", "(Ljava/util/Map;)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksHashMapCopyConstructorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/HashMap", "<init>", "(Ljava/util/Map;)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksTreeMapCopyConstructorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/TreeMap", "<init>", "(Ljava/util/Map;)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksCollectionsEmptyMapAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Collections", "emptyMap", "()Ljava/util/Map;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksLinkedHashSetConstructorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/LinkedHashSet", "<init>", "()V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksEnumValueOfClassStringAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Enum", "valueOf", "(Ljava/lang/Class;Ljava/lang/String;)Ljava/lang/Enum;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksOptionalOrAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef(
             "java/util/Optional",
@@ -39,6 +186,15 @@ final class JdkCallableAccountingTest {
             "java/util/Optional",
             "flatMap",
             "(Ljava/util/function/Function;)Ljava/util/Optional;"
+        ))).isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksAtomicIntegerUpdateAndGetAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef(
+            "java/util/concurrent/atomic/AtomicInteger",
+            "updateAndGet",
+            "(Ljava/util/function/IntUnaryOperator;)I"
         ))).isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
@@ -121,9 +277,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksStringCharsetConstructorAsExplicitRejected() {
+    void marksStringCharsetConstructorAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/String", "<init>", "([BLjava/nio/charset/Charset;)V")))
-            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
     @Test
@@ -169,6 +325,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksThreadRunnableNameConstructorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Thread", "<init>", "(Ljava/lang/Runnable;Ljava/lang/String;)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksStringCodePointAtAsExplicitRejected() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/String", "codePointAt", "(I)I")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
@@ -187,9 +349,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksStringGetBytesCharsetAsExplicitRejected() {
+    void marksStringGetBytesCharsetAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/String", "getBytes", "(Ljava/nio/charset/Charset;)[B")))
-            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
     @Test
@@ -231,6 +393,12 @@ final class JdkCallableAccountingTest {
     @Test
     void marksStringEqualsIgnoreCaseAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/String", "equalsIgnoreCase", "(Ljava/lang/String;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksStringReplaceSequenceAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/String", "replace", "(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
@@ -613,6 +781,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksObjectsNonNullAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Objects", "nonNull", "(Ljava/lang/Object;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksToIntFunctionApplyAsIntAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/function/ToIntFunction", "applyAsInt", "(Ljava/lang/Object;)I")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
@@ -622,6 +796,57 @@ final class JdkCallableAccountingTest {
     void marksStreamMapToIntAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/stream/Stream", "mapToInt", "(Ljava/util/function/ToIntFunction;)Ljava/util/stream/IntStream;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksStreamToArrayAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/stream/Stream", "toArray", "(Ljava/util/function/IntFunction;)[Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksCollectionForEachAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Collection", "forEach", "(Ljava/util/function/Consumer;)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksListContainsAllAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/List", "containsAll", "(Ljava/util/Collection;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksListToArrayAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/List", "toArray", "(Ljava/util/function/IntFunction;)[Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksMapOfTwoEntriesAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef(
+            "java/util/Map",
+            "of",
+            "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;"
+        ))).isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksStreamCollectAsUnknown() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/stream/Stream", "collect", "(Ljava/util/stream/Collector;)Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
+    }
+
+    @Test
+    void marksCollectorsToListAsUnknown() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/stream/Collectors", "toList", "()Ljava/util/stream/Collector;")))
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
+    }
+
+    @Test
+    void marksCollectorsJoiningAsUnknown() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/stream/Collectors", "joining", "()Ljava/util/stream/Collector;")))
+            .isEqualTo(JdkCallableAccounting.Status.UNKNOWN);
     }
 
     @Test
@@ -651,12 +876,6 @@ final class JdkCallableAccountingTest {
     @Test
     void marksBaseStreamIteratorAsExplicitRejected() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/stream/BaseStream", "iterator", "()Ljava/util/Iterator;")))
-            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
-    }
-
-    @Test
-    void marksCollectorsToListAsExplicitRejected() {
-        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/stream/Collectors", "toList", "()Ljava/util/stream/Collector;")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
     }
 
@@ -715,6 +934,18 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksArrayListSizeAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "size", "()I")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksArrayListStreamAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "stream", "()Ljava/util/stream/Stream;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksInstantOfEpochMilliAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/time/Instant", "ofEpochMilli", "(J)Ljava/time/Instant;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
@@ -763,6 +994,24 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksNumberLongValueAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Number", "longValue", "()J")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksDoubleValueOfStringAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Double", "valueOf", "(Ljava/lang/String;)Ljava/lang/Double;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksDoubleParseDoubleAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Double", "parseDouble", "(Ljava/lang/String;)D")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksMathContextIntRoundingConstructorAsExplicitRejected() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/math/MathContext", "<init>", "(ILjava/math/RoundingMode;)V")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
@@ -775,9 +1024,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksCharsetDefaultCharsetAsExplicitRejected() {
+    void marksCharsetDefaultCharsetAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/nio/charset/Charset", "defaultCharset", "()Ljava/nio/charset/Charset;")))
-            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
     @Test
@@ -811,6 +1060,54 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksAtomicLongConstructorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/atomic/AtomicLong", "<init>", "()V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksAtomicLongIncrementAndGetAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/atomic/AtomicLong", "incrementAndGet", "()J")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksSqlDateValueOfAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/sql/Date", "valueOf", "(Ljava/time/LocalDate;)Ljava/sql/Date;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksSqlTimestampConstructorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/sql/Timestamp", "<init>", "(J)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksCollectionsSingletonListAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Collections", "singletonList", "(Ljava/lang/Object;)Ljava/util/List;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksCollectionsUnmodifiableListAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Collections", "unmodifiableList", "(Ljava/util/List;)Ljava/util/List;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksArrayListReversedAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "reversed", "()Ljava/util/List;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksCharacterIsWhitespaceAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Character", "isWhitespace", "(C)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksAtomicReferenceDefaultConstructorAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/atomic/AtomicReference", "<init>", "()V")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
@@ -835,9 +1132,21 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksObjectsEqualsAsExplicitRejected() {
+    void marksObjectsEqualsAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Objects", "equals", "(Ljava/lang/Object;Ljava/lang/Object;)Z")))
-            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksByteArrayOutputStreamCloseAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/io/ByteArrayOutputStream", "close", "()V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksByteArrayInputStreamCloseAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/io/ByteArrayInputStream", "close", "()V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
     @Test
@@ -850,6 +1159,33 @@ final class JdkCallableAccountingTest {
     void marksSetStreamAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Set", "stream", "()Ljava/util/stream/Stream;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksComparatorReverseOrderAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef(
+            "java/util/Comparator",
+            "reverseOrder",
+            "()Ljava/util/Comparator;"
+        ))).isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksComparatorComparingAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef(
+            "java/util/Comparator",
+            "comparing",
+            "(Ljava/util/function/Function;Ljava/util/Comparator;)Ljava/util/Comparator;"
+        ))).isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksStreamSortedComparatorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef(
+            "java/util/stream/Stream",
+            "sorted",
+            "(Ljava/util/Comparator;)Ljava/util/stream/Stream;"
+        ))).isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
     @Test
@@ -877,9 +1213,15 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksAtomicReferenceCompareAndSetAsExplicitRejected() {
+    void marksAtomicReferenceCompareAndSetAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/atomic/AtomicReference", "compareAndSet", "(Ljava/lang/Object;Ljava/lang/Object;)Z")))
-            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksAtomicReferenceGetAndSetAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/atomic/AtomicReference", "getAndSet", "(Ljava/lang/Object;)Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
     @Test
@@ -981,6 +1323,18 @@ final class JdkCallableAccountingTest {
     @Test
     void keepsThrowableGetSuppressedSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Throwable", "getSuppressed", "()[Ljava/lang/Throwable;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void keepsThrowableGetStackTraceSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Throwable", "getStackTrace", "()[Ljava/lang/StackTraceElement;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void keepsThrowableSetStackTraceSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Throwable", "setStackTrace", "([Ljava/lang/StackTraceElement;)V")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
@@ -1149,6 +1503,48 @@ final class JdkCallableAccountingTest {
     @Test
     void marksRuntimeGetRuntimeAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Runtime", "getRuntime", "()Ljava/lang/Runtime;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksProcessHandleCurrentAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/ProcessHandle", "current", "()Ljava/lang/ProcessHandle;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksProcessHandlePidAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/ProcessHandle", "pid", "()J")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksManagementFactoryGetMemoryMxBeanAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef(
+            "java/lang/management/ManagementFactory",
+            "getMemoryMXBean",
+            "()Ljava/lang/management/MemoryMXBean;"
+        ))).isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksMemoryMxBeanGetHeapMemoryUsageAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef(
+            "java/lang/management/MemoryMXBean",
+            "getHeapMemoryUsage",
+            "()Ljava/lang/management/MemoryUsage;"
+        ))).isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksMemoryUsageGetUsedAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/management/MemoryUsage", "getUsed", "()J")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksMemoryUsageGetMaxAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/management/MemoryUsage", "getMax", "()J")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 

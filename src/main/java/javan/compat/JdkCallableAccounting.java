@@ -41,9 +41,6 @@ final class JdkCallableAccounting {
             }
             return false;
         }
-        if ("java/util/Objects".equals(owner)) {
-            return "equals".equals(methodName) && "(Ljava/lang/Object;Ljava/lang/Object;)Z".equals(descriptor);
-        }
         if ("java/lang/String".equals(owner)) {
             if ("<init>".equals(methodName)) {
                 return "(Ljava/lang/StringBuffer;)V".equals(descriptor)
@@ -242,6 +239,23 @@ final class JdkCallableAccounting {
             return true;
         }
         if (owner.startsWith("java/util/stream/")) {
+            if ("java/util/stream/Stream".equals(owner)
+                && "collect".equals(methodName)
+                && "(Ljava/util/stream/Collector;)Ljava/lang/Object;".equals(descriptor)) {
+                return false;
+            }
+            if ("java/util/stream/Collectors".equals(owner)) {
+                if ("toList".equals(methodName)
+                    && "()Ljava/util/stream/Collector;".equals(descriptor)) {
+                    return false;
+                }
+                if ("joining".equals(methodName)
+                    && ("()Ljava/util/stream/Collector;".equals(descriptor)
+                    || "(Ljava/lang/CharSequence;)Ljava/util/stream/Collector;".equals(descriptor)
+                    || "(Ljava/lang/CharSequence;Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/util/stream/Collector;".equals(descriptor))) {
+                    return false;
+                }
+            }
             return true;
         }
         if (owner.startsWith("java/util/zip/")) {

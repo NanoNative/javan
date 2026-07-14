@@ -27,6 +27,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void atomicReferenceCompareAndSetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/atomic/AtomicReference",
+            "compareAndSet",
+            "(Ljava/lang/Object;Ljava/lang/Object;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void atomicReferenceGetAndSetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/atomic/AtomicReference",
+            "getAndSet",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
     void atomicReferenceCallsRequireThreadsRuntimeModule() {
         assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
             "java/util/concurrent/atomic/AtomicReference",
@@ -36,12 +54,66 @@ final class JdkCallSupportTest {
     }
 
     @Test
-    void objectsEqualsIsNotSupportedYet() {
+    void atomicLongGetIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
-            "java/util/Objects",
-            "equals",
-            "(Ljava/lang/Object;Ljava/lang/Object;)Z"
-        ))).isFalse();
+            "java/util/concurrent/atomic/AtomicLong",
+            "get",
+            "()J"
+        ))).isTrue();
+    }
+
+    @Test
+    void longParseLongIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Long",
+            "parseLong",
+            "(Ljava/lang/String;)J"
+        ))).isTrue();
+    }
+
+    @Test
+    void longParseLongRequiresStringsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/lang/Long",
+            "parseLong",
+            "(Ljava/lang/String;)J"
+        ))).containsExactly("strings");
+    }
+
+    @Test
+    void atomicLongCallsRequireThreadsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/concurrent/atomic/AtomicLong",
+            "incrementAndGet",
+            "()J"
+        ))).containsExactly("threads");
+    }
+
+    @Test
+    void atomicIntegerUpdateAndGetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/atomic/AtomicInteger",
+            "updateAndGet",
+            "(Ljava/util/function/IntUnaryOperator;)I"
+        ))).isTrue();
+    }
+
+    @Test
+    void sqlTimestampToLocalDateTimeIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/sql/Timestamp",
+            "toLocalDateTime",
+            "()Ljava/time/LocalDateTime;"
+        ))).isTrue();
+    }
+
+    @Test
+    void sqlDateCallsRequireTimeRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/sql/Date",
+            "valueOf",
+            "(Ljava/time/LocalDate;)Ljava/sql/Date;"
+        ))).containsExactly("time");
     }
 
     @Test
@@ -153,6 +225,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void classGetCanonicalNameIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Class",
+            "getCanonicalName",
+            "()Ljava/lang/String;"
+        ))).isTrue();
+    }
+
+    @Test
     void classGetSimpleNameIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/Class",
@@ -167,6 +248,357 @@ final class JdkCallSupportTest {
             "java/lang/Class",
             "isArray",
             "()Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void classIsEnumIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Class",
+            "isEnum",
+            "()Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void classIsInstanceIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Class",
+            "isInstance",
+            "(Ljava/lang/Object;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void httpExchangeGetRequestUriIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "com/sun/net/httpserver/HttpExchange",
+            "getRequestURI",
+            "()Ljava/net/URI;"
+        ))).isTrue();
+    }
+
+    @Test
+    void httpExchangeGetRequestMethodIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "com/sun/net/httpserver/HttpExchange",
+            "getRequestMethod",
+            "()Ljava/lang/String;"
+        ))).isTrue();
+    }
+
+    @Test
+    void httpExchangeGetRequestHeadersIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "com/sun/net/httpserver/HttpExchange",
+            "getRequestHeaders",
+            "()Lcom/sun/net/httpserver/Headers;"
+        ))).isTrue();
+    }
+
+    @Test
+    void httpExchangeGetRequestBodyIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "com/sun/net/httpserver/HttpExchange",
+            "getRequestBody",
+            "()Ljava/io/InputStream;"
+        ))).isTrue();
+    }
+
+    @Test
+    void headersGetFirstIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "com/sun/net/httpserver/Headers",
+            "getFirst",
+            "(Ljava/lang/String;)Ljava/lang/String;"
+        ))).isTrue();
+    }
+
+    @Test
+    void inputStreamReadAllBytesIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/io/InputStream",
+            "readAllBytes",
+            "()[B"
+        ))).isTrue();
+    }
+
+    @Test
+    void httpExchangeCallsRequireNetworkAndHttpRuntimeModules() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "com/sun/net/httpserver/HttpExchange",
+            "getRequestURI",
+            "()Ljava/net/URI;"
+        ))).containsExactly("network", "http");
+    }
+
+    @Test
+    void classCastIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Class",
+            "cast",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void uriGetPathIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/URI",
+            "getPath",
+            "()Ljava/lang/String;"
+        ))).isTrue();
+    }
+
+    @Test
+    void uriGetQueryIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/URI",
+            "getQuery",
+            "()Ljava/lang/String;"
+        ))).isTrue();
+    }
+
+    @Test
+    void httpRequestDefaultConstructorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/http/HttpRequest",
+            "<init>",
+            "()V"
+        ))).isTrue();
+    }
+
+    @Test
+    void charsetDefaultCharsetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/nio/charset/Charset",
+            "defaultCharset",
+            "()Ljava/nio/charset/Charset;"
+        ))).isTrue();
+    }
+
+    @Test
+    void charsetNameIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/nio/charset/Charset",
+            "name",
+            "()Ljava/lang/String;"
+        ))).isTrue();
+    }
+
+    @Test
+    void urlDecoderDecodeUtf8IsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/URLDecoder",
+            "decode",
+            "(Ljava/lang/String;Ljava/nio/charset/Charset;)Ljava/lang/String;"
+        ))).isTrue();
+    }
+
+    @Test
+    void stringGetBytesCharsetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/String",
+            "getBytes",
+            "(Ljava/nio/charset/Charset;)[B"
+        ))).isTrue();
+    }
+
+    @Test
+    void classIsAssignableFromIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Class",
+            "isAssignableFrom",
+            "(Ljava/lang/Class;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void stackTraceElementConstructorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/StackTraceElement",
+            "<init>",
+            "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;I)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void stackTraceElementGetClassNameIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/StackTraceElement",
+            "getClassName",
+            "()Ljava/lang/String;"
+        ))).isTrue();
+    }
+
+    @Test
+    void stackTraceElementGetMethodNameIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/StackTraceElement",
+            "getMethodName",
+            "()Ljava/lang/String;"
+        ))).isTrue();
+    }
+
+    @Test
+    void stackTraceElementGetLineNumberIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/StackTraceElement",
+            "getLineNumber",
+            "()I"
+        ))).isTrue();
+    }
+
+    @Test
+    void linkedHashMapPutAllIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/LinkedHashMap",
+            "putAll",
+            "(Ljava/util/Map;)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void hashMapCopyConstructorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/HashMap",
+            "<init>",
+            "(Ljava/util/Map;)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void treeMapCopyConstructorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/TreeMap",
+            "<init>",
+            "(Ljava/util/Map;)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void collectionsEmptyMapIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Collections",
+            "emptyMap",
+            "()Ljava/util/Map;"
+        ))).isTrue();
+    }
+
+    @Test
+    void mapOfTwoEntriesIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Map",
+            "of",
+            "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;"
+        ))).isTrue();
+    }
+
+    @Test
+    void collectionsUnmodifiableListIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Collections",
+            "unmodifiableList",
+            "(Ljava/util/List;)Ljava/util/List;"
+        ))).isTrue();
+    }
+
+    @Test
+    void linkedHashSetConstructorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/LinkedHashSet",
+            "<init>",
+            "()V"
+        ))).isTrue();
+    }
+
+    @Test
+    void linkedHashSetCollectionConstructorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/LinkedHashSet",
+            "<init>",
+            "(Ljava/util/Collection;)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void listClearIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/List",
+            "clear",
+            "()V"
+        ))).isTrue();
+    }
+
+    @Test
+    void enumValueOfClassStringIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Enum",
+            "valueOf",
+            "(Ljava/lang/Class;Ljava/lang/String;)Ljava/lang/Enum;"
+        ))).isTrue();
+    }
+
+    @Test
+    void objectsEqualsIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Objects",
+            "equals",
+            "(Ljava/lang/Object;Ljava/lang/Object;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void arrayListSizeIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/ArrayList",
+            "size",
+            "()I"
+        ))).isTrue();
+    }
+
+    @Test
+    void arrayListStreamIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/ArrayList",
+            "stream",
+            "()Ljava/util/stream/Stream;"
+        ))).isTrue();
+    }
+
+    @Test
+    void arrayListReversedIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/ArrayList",
+            "reversed",
+            "()Ljava/util/List;"
+        ))).isTrue();
+    }
+
+    @Test
+    void byteArrayOutputStreamCloseIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/io/ByteArrayOutputStream",
+            "close",
+            "()V"
+        ))).isTrue();
+    }
+
+    @Test
+    void byteArrayInputStreamCloseIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/io/ByteArrayInputStream",
+            "close",
+            "()V"
+        ))).isTrue();
+    }
+
+    @Test
+    void collectionSizeIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Collection",
+            "size",
+            "()I"
         ))).isTrue();
     }
 
@@ -284,6 +716,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void managementFactoryGetMemoryMxBeanIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/management/ManagementFactory",
+            "getMemoryMXBean",
+            "()Ljava/lang/management/MemoryMXBean;"
+        ))).isTrue();
+    }
+
+    @Test
     void managementFactoryGetOperatingSystemMxBeanIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/management/ManagementFactory",
@@ -347,6 +788,51 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void memoryMxBeanGetHeapMemoryUsageIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/management/MemoryMXBean",
+            "getHeapMemoryUsage",
+            "()Ljava/lang/management/MemoryUsage;"
+        ))).isTrue();
+    }
+
+    @Test
+    void memoryMxBeanCallsRequireManagementRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/lang/management/MemoryMXBean",
+            "getHeapMemoryUsage",
+            "()Ljava/lang/management/MemoryUsage;"
+        ))).containsExactly("management");
+    }
+
+    @Test
+    void memoryUsageGetUsedIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/management/MemoryUsage",
+            "getUsed",
+            "()J"
+        ))).isTrue();
+    }
+
+    @Test
+    void memoryUsageGetMaxIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/management/MemoryUsage",
+            "getMax",
+            "()J"
+        ))).isTrue();
+    }
+
+    @Test
+    void memoryUsageCallsRequireManagementRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/lang/management/MemoryUsage",
+            "getUsed",
+            "()J"
+        ))).containsExactly("management");
+    }
+
+    @Test
     void operatingSystemMxBeanSystemLoadAverageIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/management/OperatingSystemMXBean",
@@ -401,6 +887,33 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void processHandleCurrentIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/ProcessHandle",
+            "current",
+            "()Ljava/lang/ProcessHandle;"
+        ))).isTrue();
+    }
+
+    @Test
+    void processHandlePidIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/ProcessHandle",
+            "pid",
+            "()J"
+        ))).isTrue();
+    }
+
+    @Test
+    void processHandleCallsRequireProcessRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/lang/ProcessHandle",
+            "pid",
+            "()J"
+        ))).containsExactly("process");
+    }
+
+    @Test
     void collectionsEmptyListIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Collections",
@@ -428,9 +941,49 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void listContainsAllIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/List",
+            "containsAll",
+            "(Ljava/util/Collection;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void listToArrayIntFunctionIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/List",
+            "toArray",
+            "(Ljava/util/function/IntFunction;)[Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
     void listForEachExposesClosedWorldConsumerDispatchTarget() {
         assertThat(JdkCallSupport.closedWorldHigherOrderDispatchTargets(new javan.classfile.MethodRef(
             "java/util/List",
+            "forEach",
+            "(Ljava/util/function/Consumer;)V"
+        ))).containsExactly(new javan.classfile.MethodRef(
+            "java/util/function/Consumer",
+            "accept",
+            "(Ljava/lang/Object;)V"
+        ));
+    }
+
+    @Test
+    void collectionForEachIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Collection",
+            "forEach",
+            "(Ljava/util/function/Consumer;)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void collectionForEachExposesClosedWorldConsumerDispatchTarget() {
+        assertThat(JdkCallSupport.closedWorldHigherOrderDispatchTargets(new javan.classfile.MethodRef(
+            "java/util/Collection",
             "forEach",
             "(Ljava/util/function/Consumer;)V"
         ))).containsExactly(new javan.classfile.MethodRef(
@@ -485,6 +1038,62 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void collectorsGroupingByExposesClosedWorldFunctionDispatchTarget() {
+        assertThat(JdkCallSupport.closedWorldHigherOrderDispatchTargets(new javan.classfile.MethodRef(
+            "java/util/stream/Collectors",
+            "groupingBy",
+            "(Ljava/util/function/Function;Ljava/util/stream/Collector;)Ljava/util/stream/Collector;"
+        ))).containsExactly(new javan.classfile.MethodRef(
+            "java/util/function/Function",
+            "apply",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
+        ));
+    }
+
+    @Test
+    void collectorsToCollectionExposesClosedWorldSupplierDispatchTarget() {
+        assertThat(JdkCallSupport.closedWorldHigherOrderDispatchTargets(new javan.classfile.MethodRef(
+            "java/util/stream/Collectors",
+            "toCollection",
+            "(Ljava/util/function/Supplier;)Ljava/util/stream/Collector;"
+        ))).containsExactly(new javan.classfile.MethodRef(
+            "java/util/function/Supplier",
+            "get",
+            "()Ljava/lang/Object;"
+        ));
+    }
+
+    @Test
+    void collectorsToMapExposesClosedWorldCallbackDispatchTargets() {
+        assertThat(JdkCallSupport.closedWorldHigherOrderDispatchTargets(new javan.classfile.MethodRef(
+            "java/util/stream/Collectors",
+            "toMap",
+            "(Ljava/util/function/Function;Ljava/util/function/Function;Ljava/util/function/BinaryOperator;Ljava/util/function/Supplier;)Ljava/util/stream/Collector;"
+        ))).containsExactly(
+            new javan.classfile.MethodRef(
+                "java/util/function/Function",
+                "apply",
+                "(Ljava/lang/Object;)Ljava/lang/Object;"
+            ),
+            new javan.classfile.MethodRef(
+                "java/util/function/Function",
+                "apply",
+                "(Ljava/lang/Object;)Ljava/lang/Object;"
+            ),
+            new javan.classfile.MethodRef(
+                "java/util/function/BinaryOperator",
+                "apply",
+                "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"
+            ),
+            new javan.classfile.MethodRef(
+                "java/util/function/Supplier",
+                "get",
+                "()Ljava/lang/Object;"
+            )
+        );
+    }
+
+    @Test
     void streamMapExposesClosedWorldFunctionDispatchTarget() {
         assertThat(JdkCallSupport.closedWorldHigherOrderDispatchTargets(new javan.classfile.MethodRef(
             "java/util/stream/Stream",
@@ -520,6 +1129,42 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void streamCollectIsNotGenerallySupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/stream/Stream",
+            "collect",
+            "(Ljava/util/stream/Collector;)Ljava/lang/Object;"
+        ))).isFalse();
+    }
+
+    @Test
+    void objectsNonNullIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Objects",
+            "nonNull",
+            "(Ljava/lang/Object;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void collectorsToListIsNotGenerallySupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/stream/Collectors",
+            "toList",
+            "()Ljava/util/stream/Collector;"
+        ))).isFalse();
+    }
+
+    @Test
+    void collectorsJoiningIsNotGenerallySupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/stream/Collectors",
+            "joining",
+            "()Ljava/util/stream/Collector;"
+        ))).isFalse();
+    }
+
+    @Test
     void streamAnyMatchExposesClosedWorldPredicateDispatchTarget() {
         assertThat(JdkCallSupport.closedWorldHigherOrderDispatchTargets(new javan.classfile.MethodRef(
             "java/util/stream/Stream",
@@ -546,11 +1191,60 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void comparatorReverseOrderIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Comparator",
+            "reverseOrder",
+            "()Ljava/util/Comparator;"
+        ))).isTrue();
+    }
+
+    @Test
+    void comparatorComparingIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Comparator",
+            "comparing",
+            "(Ljava/util/function/Function;Ljava/util/Comparator;)Ljava/util/Comparator;"
+        ))).isTrue();
+    }
+
+    @Test
+    void streamSortedComparatorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/stream/Stream",
+            "sorted",
+            "(Ljava/util/Comparator;)Ljava/util/stream/Stream;"
+        ))).isTrue();
+    }
+
+    @Test
+    void comparatorComparingExposesClosedWorldFunctionDispatchTarget() {
+        assertThat(JdkCallSupport.closedWorldHigherOrderDispatchTargets(new javan.classfile.MethodRef(
+            "java/util/Comparator",
+            "comparing",
+            "(Ljava/util/function/Function;Ljava/util/Comparator;)Ljava/util/Comparator;"
+        ))).containsExactly(new javan.classfile.MethodRef(
+            "java/util/function/Function",
+            "apply",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
+        ));
+    }
+
+    @Test
     void intStreamMaxIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/stream/IntStream",
             "max",
             "()Ljava/util/OptionalInt;"
+        ))).isTrue();
+    }
+
+    @Test
+    void threadRunnableNameConstructorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Thread",
+            "<init>",
+            "(Ljava/lang/Runnable;Ljava/lang/String;)V"
         ))).isTrue();
     }
 
@@ -579,6 +1273,33 @@ final class JdkCallSupportTest {
             "max",
             "()Ljava/util/OptionalInt;"
         ))).containsExactly("collections", "optional");
+    }
+
+    @Test
+    void streamCollectRequiresCollectionsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/stream/Stream",
+            "collect",
+            "(Ljava/util/stream/Collector;)Ljava/lang/Object;"
+        ))).containsExactly("collections");
+    }
+
+    @Test
+    void streamSortedRequiresCollectionsManagedHeapAndStringsRuntimeModules() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/stream/Stream",
+            "sorted",
+            "(Ljava/util/Comparator;)Ljava/util/stream/Stream;"
+        ))).containsExactly("collections", "managed-heap", "strings");
+    }
+
+    @Test
+    void collectorsToListRequiresCollectionsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/stream/Collectors",
+            "toList",
+            "()Ljava/util/stream/Collector;"
+        ))).containsExactly("collections");
     }
 
     @Test
@@ -699,6 +1420,19 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void atomicIntegerUpdateAndGetExposesClosedWorldIntUnaryOperatorDispatchTarget() {
+        assertThat(JdkCallSupport.closedWorldHigherOrderDispatchTargets(new javan.classfile.MethodRef(
+            "java/util/concurrent/atomic/AtomicInteger",
+            "updateAndGet",
+            "(Ljava/util/function/IntUnaryOperator;)I"
+        ))).containsExactly(new javan.classfile.MethodRef(
+            "java/util/function/IntUnaryOperator",
+            "applyAsInt",
+            "(I)I"
+        ));
+    }
+
+    @Test
     void ordinarySupportedJdkCallHasNoClosedWorldHigherOrderDispatchTargets() {
         assertThat(JdkCallSupport.closedWorldHigherOrderDispatchTargets(new javan.classfile.MethodRef(
             "java/util/List",
@@ -713,6 +1447,24 @@ final class JdkCallSupportTest {
             "java/util/stream/Stream",
             "forEach",
             "(Ljava/util/function/Consumer;)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void collectionsSingletonListIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Collections",
+            "singletonList",
+            "(Ljava/lang/Object;)Ljava/util/List;"
+        ))).isTrue();
+    }
+
+    @Test
+    void characterIsWhitespaceIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Character",
+            "isWhitespace",
+            "(C)Z"
         ))).isTrue();
     }
 
@@ -807,6 +1559,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void stringReplaceSequenceIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/String",
+            "replace",
+            "(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;"
+        ))).isTrue();
+    }
+
+    @Test
     void stringToLowerCaseIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/String",
@@ -861,6 +1622,114 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void calendarGetInstanceIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Calendar",
+            "getInstance",
+            "()Ljava/util/Calendar;"
+        ))).isTrue();
+    }
+
+    @Test
+    void calendarToInstantRequiresTimeRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/Calendar",
+            "toInstant",
+            "()Ljava/time/Instant;"
+        ))).containsExactly("time");
+    }
+
+    @Test
+    void zonedDateTimeToOffsetDateTimeIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/time/ZonedDateTime",
+            "toOffsetDateTime",
+            "()Ljava/time/OffsetDateTime;"
+        ))).isTrue();
+    }
+
+    @Test
+    void localTimeGetNanoIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/time/LocalTime",
+            "getNano",
+            "()I"
+        ))).isTrue();
+    }
+
+    @Test
+    void temporalAccessorIsSupportedIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/time/temporal/TemporalAccessor",
+            "isSupported",
+            "(Ljava/time/temporal/TemporalField;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void temporalAccessorQueryIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/time/temporal/TemporalAccessor",
+            "query",
+            "(Ljava/time/temporal/TemporalQuery;)Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void temporalQueriesZoneIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/time/temporal/TemporalQueries",
+            "zone",
+            "()Ljava/time/temporal/TemporalQuery;"
+        ))).isTrue();
+    }
+
+    @Test
+    void localDateFromIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/time/LocalDate",
+            "from",
+            "(Ljava/time/temporal/TemporalAccessor;)Ljava/time/LocalDate;"
+        ))).isTrue();
+    }
+
+    @Test
+    void localDateNowRequiresTimeRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/time/LocalDate",
+            "now",
+            "(Ljava/time/ZoneId;)Ljava/time/LocalDate;"
+        ))).containsExactly("time");
+    }
+
+    @Test
+    void localTimeFromIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/time/LocalTime",
+            "from",
+            "(Ljava/time/temporal/TemporalAccessor;)Ljava/time/LocalTime;"
+        ))).isTrue();
+    }
+
+    @Test
+    void zonedDateTimeOfIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/time/ZonedDateTime",
+            "of",
+            "(Ljava/time/LocalDate;Ljava/time/LocalTime;Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;"
+        ))).isTrue();
+    }
+
+    @Test
+    void calendarSetTimeInMillisIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Calendar",
+            "setTimeInMillis",
+            "(J)V"
+        ))).isTrue();
+    }
+
+    @Test
     void characterValueOfIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/Character",
@@ -875,6 +1744,33 @@ final class JdkCallSupportTest {
             "java/lang/Number",
             "intValue",
             "()I"
+        ))).isTrue();
+    }
+
+    @Test
+    void numberLongValueIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Number",
+            "longValue",
+            "()J"
+        ))).isTrue();
+    }
+
+    @Test
+    void doubleValueOfStringIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Double",
+            "valueOf",
+            "(Ljava/lang/String;)Ljava/lang/Double;"
+        ))).isTrue();
+    }
+
+    @Test
+    void doubleParseDoubleIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Double",
+            "parseDouble",
+            "(Ljava/lang/String;)D"
         ))).isTrue();
     }
 
@@ -933,6 +1829,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void streamToArrayWithGeneratorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/stream/Stream",
+            "toArray",
+            "(Ljava/util/function/IntFunction;)[Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
     void concurrentHashMapNewKeySetIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/concurrent/ConcurrentHashMap",
@@ -963,6 +1868,15 @@ final class JdkCallSupportTest {
     void setAddIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Set",
+            "add",
+            "(Ljava/lang/Object;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void collectionAddIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Collection",
             "add",
             "(Ljava/lang/Object;)Z"
         ))).isTrue();
@@ -1077,6 +1991,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void throwableGetStackTraceIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Throwable",
+            "getStackTrace",
+            "()[Ljava/lang/StackTraceElement;"
+        ))).isTrue();
+    }
+
+    @Test
+    void throwableSetStackTraceIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Throwable",
+            "setStackTrace",
+            "([Ljava/lang/StackTraceElement;)V"
+        ))).isTrue();
+    }
+
+    @Test
     void throwableAddSuppressedWrongDescriptorIsNotSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/Throwable",
@@ -1091,6 +2023,24 @@ final class JdkCallSupportTest {
             "java/lang/Throwable",
             "getSuppressed",
             "()Ljava/lang/Throwable;"
+        ))).isFalse();
+    }
+
+    @Test
+    void throwableGetStackTraceWrongDescriptorIsNotSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Throwable",
+            "getStackTrace",
+            "()[Ljava/lang/Throwable;"
+        ))).isFalse();
+    }
+
+    @Test
+    void throwableSetStackTraceWrongDescriptorIsNotSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Throwable",
+            "setStackTrace",
+            "([Ljava/lang/Throwable;)V"
         ))).isFalse();
     }
 
@@ -1110,6 +2060,42 @@ final class JdkCallSupportTest {
             "get",
             "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;"
         ))).containsExactly("filesystem");
+    }
+
+    @Test
+    void loggingLevelIntValueIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/logging/Level",
+            "intValue",
+            "()I"
+        ))).isTrue();
+    }
+
+    @Test
+    void logRecordConstructorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/logging/LogRecord",
+            "<init>",
+            "(Ljava/util/logging/Level;Ljava/lang/String;)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void formatterFormatMessageIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/logging/Formatter",
+            "formatMessage",
+            "(Ljava/util/logging/LogRecord;)Ljava/lang/String;"
+        ))).isTrue();
+    }
+
+    @Test
+    void logRecordRequiresTimeStringsAndExceptionsRuntimeModules() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/logging/LogRecord",
+            "getMillis",
+            "()J"
+        ))).containsExactly("time", "strings", "exceptions");
     }
 
     @Test
@@ -1224,6 +2210,15 @@ final class JdkCallSupportTest {
             "map",
             "(Ljava/lang/Object;)Ljava/lang/Object;"
         ))).isFalse();
+    }
+
+    @Test
+    void closedWorldDispatchSupportsIntUnaryOperatorApplyAsInt() {
+        assertThat(JdkCallSupport.isSupportedClosedWorldDispatchCall(new javan.classfile.MethodRef(
+            "java/util/function/IntUnaryOperator",
+            "applyAsInt",
+            "(I)I"
+        ))).isTrue();
     }
 
     @Test

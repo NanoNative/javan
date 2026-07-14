@@ -1418,6 +1418,47 @@ final class RuntimeSourcePlatformSection {
         #endif
         }
 
+        void* javan_socket_input_stream_read_all_bytes(void* value) {
+        #if defined(_WIN32)
+            (void) value;
+            javan_socket_runtime_unsupported();
+            return NULL;
+        #else
+            javan_socket_input_stream_value* stream = javan_socket_input_stream_checked(value);
+            javan_socket* socket = javan_socket_open_checked((void*) stream->socket);
+            unsigned long capacity = 1024;
+            unsigned long length = 0;
+            signed char* buffer = (signed char*) malloc(capacity);
+            if (buffer == NULL) {
+                javan_panic("out of memory");
+            }
+            while (1) {
+                if (length == capacity) {
+                    unsigned long next_capacity = capacity * 2UL;
+                    signed char* next = (signed char*) realloc(buffer, next_capacity);
+                    if (next == NULL) {
+                        free(buffer);
+                        javan_panic("out of memory");
+                    }
+                    buffer = next;
+                    capacity = next_capacity;
+                }
+                ssize_t result = recv(socket->fd, buffer + length, (size_t) (capacity - length), 0);
+                if (result < 0) {
+                    free(buffer);
+                    javan_panic("socket read failed");
+                }
+                if (result == 0) {
+                    break;
+                }
+                length += (unsigned long) result;
+            }
+            void* bytes = javan_byte_array_from(buffer, (int) length);
+            free(buffer);
+            return bytes;
+        #endif
+        }
+
         void javan_socket_input_stream_close(void* value) {
             javan_socket_input_stream_value* stream = javan_socket_input_stream_checked(value);
             javan_socket_close((void*) stream->socket);

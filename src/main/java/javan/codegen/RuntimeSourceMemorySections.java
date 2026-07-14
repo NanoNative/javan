@@ -61,30 +61,48 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_RUNTIME_KIND_CLASS 25
         #define JAVAN_RUNTIME_KIND_ATOMIC_BOOLEAN 26
         #define JAVAN_RUNTIME_KIND_ATOMIC_INTEGER 27
-        #define JAVAN_RUNTIME_KIND_THROWABLE 28
-        #define JAVAN_RUNTIME_KIND_LOCALE 29
-        #define JAVAN_RUNTIME_KIND_DATETIME_FORMATTER_BUILDER 30
-        #define JAVAN_RUNTIME_KIND_DATETIME_FORMATTER 31
-        #define JAVAN_RUNTIME_KIND_ZONE_ID 32
-        #define JAVAN_RUNTIME_KIND_INSTANT 33
-        #define JAVAN_RUNTIME_KIND_DATE 34
-        #define JAVAN_RUNTIME_KIND_LOCAL_DATE 35
-        #define JAVAN_RUNTIME_KIND_LOCAL_TIME 36
-        #define JAVAN_RUNTIME_KIND_LOCAL_DATE_TIME 37
-        #define JAVAN_RUNTIME_KIND_ZONED_DATE_TIME 38
-        #define JAVAN_RUNTIME_KIND_ATOMIC_REFERENCE 39
-        #define JAVAN_RUNTIME_KIND_OPTIONAL_INT 40
-        #define JAVAN_RUNTIME_KIND_RUNTIME 41
-        #define JAVAN_RUNTIME_KIND_THREAD_MXBEAN 42
-        #define JAVAN_RUNTIME_KIND_RUNTIME_MXBEAN 43
-        #define JAVAN_RUNTIME_KIND_OPERATING_SYSTEM_MXBEAN 44
+        #define JAVAN_RUNTIME_KIND_ATOMIC_LONG 28
+        #define JAVAN_RUNTIME_KIND_THROWABLE 29
+        #define JAVAN_RUNTIME_KIND_LOCALE 30
+        #define JAVAN_RUNTIME_KIND_DATETIME_FORMATTER_BUILDER 31
+        #define JAVAN_RUNTIME_KIND_DATETIME_FORMATTER 32
+        #define JAVAN_RUNTIME_KIND_ZONE_ID 33
+        #define JAVAN_RUNTIME_KIND_INSTANT 34
+        #define JAVAN_RUNTIME_KIND_DATE 35
+        #define JAVAN_RUNTIME_KIND_LOCAL_DATE 36
+        #define JAVAN_RUNTIME_KIND_LOCAL_TIME 37
+        #define JAVAN_RUNTIME_KIND_LOCAL_DATE_TIME 38
+        #define JAVAN_RUNTIME_KIND_ZONED_DATE_TIME 39
+        #define JAVAN_RUNTIME_KIND_ATOMIC_REFERENCE 40
+        #define JAVAN_RUNTIME_KIND_OPTIONAL_INT 41
+        #define JAVAN_RUNTIME_KIND_RUNTIME 42
+        #define JAVAN_RUNTIME_KIND_THREAD_MXBEAN 43
+        #define JAVAN_RUNTIME_KIND_RUNTIME_MXBEAN 44
+        #define JAVAN_RUNTIME_KIND_OPERATING_SYSTEM_MXBEAN 45
+        #define JAVAN_RUNTIME_KIND_OBJECT_SET 46
+        #define JAVAN_RUNTIME_KIND_SQL_DATE 47
+        #define JAVAN_RUNTIME_KIND_SQL_TIME 48
+        #define JAVAN_RUNTIME_KIND_SQL_TIMESTAMP 49
+        #define JAVAN_RUNTIME_KIND_PROCESS_HANDLE 50
+        #define JAVAN_RUNTIME_KIND_MEMORY_MXBEAN 51
+        #define JAVAN_RUNTIME_KIND_MEMORY_USAGE 52
+        #define JAVAN_RUNTIME_KIND_HTTP_EXCHANGE 53
+        #define JAVAN_RUNTIME_KIND_HTTP_INPUT_STREAM 54
+        #define JAVAN_RUNTIME_KIND_OFFSET_DATE_TIME 55
+        #define JAVAN_RUNTIME_KIND_CALENDAR 56
+        #define JAVAN_RUNTIME_KIND_LOGGING_LEVEL 57
+        #define JAVAN_LIST_VIEW_UNMODIFIABLE 1
+        #define JAVAN_LIST_VIEW_REVERSED 2
 
-        typedef struct {
+        typedef struct javan_object_list {
             int magic;
             int length;
             int capacity;
             int immutable;
             int mod_count;
+            int view_flags;
+            int reserved;
+            struct javan_object_list* backing;
             void** values;
         } javan_object_list;
 
@@ -150,6 +168,12 @@ final class RuntimeSourceMemorySections {
         typedef struct {
             int magic;
             int reserved0;
+            long long value;
+        } javan_atomic_long;
+
+        typedef struct {
+            int magic;
+            int reserved0;
             int reserved1;
             int reserved2;
             void* value;
@@ -163,6 +187,7 @@ final class RuntimeSourceMemorySections {
             const char* binary_name;
             void* message;
             javan_object_list* suppressed;
+            void* stack_trace;
         } javan_throwable_value;
 
         typedef struct {
@@ -186,9 +211,9 @@ final class RuntimeSourceMemorySections {
 
         typedef struct {
             int magic;
+            int type_id;
+            int is_enum;
             int reserved0;
-            int reserved1;
-            int reserved2;
             const char* binary_name;
         } javan_runtime_class_state;
 
@@ -220,6 +245,31 @@ final class RuntimeSourceMemorySections {
             int reserved1;
             int reserved2;
         } javan_operating_system_mxbean_value;
+
+        typedef struct {
+            int magic;
+            int reserved0;
+            int reserved1;
+            int reserved2;
+        } javan_memory_mxbean_value;
+
+        typedef struct {
+            int magic;
+            int reserved0;
+            int reserved1;
+            int reserved2;
+            long long used;
+            long long committed;
+            long long max;
+        } javan_memory_usage_value;
+
+        typedef struct {
+            int magic;
+            int reserved0;
+            int reserved1;
+            int reserved2;
+            long long pid;
+        } javan_process_handle_value;
 
         typedef struct {
             int magic;
@@ -337,6 +387,25 @@ final class RuntimeSourceMemorySections {
 
         typedef struct {
             int magic;
+            int reserved0;
+            int reserved1;
+            int reserved2;
+            javan_uri_value* request_uri;
+            char* request_method;
+            javan_object_map* request_headers;
+            void* request_body;
+        } javan_http_exchange_value;
+
+        typedef struct {
+            int magic;
+            int offset;
+            int closed;
+            int reserved0;
+            void* bytes;
+        } javan_http_input_stream_value;
+
+        typedef struct {
+            int magic;
             int kind;
             int reserved0;
             int reserved1;
@@ -364,6 +433,30 @@ final class RuntimeSourceMemorySections {
             int reserved2;
             long long epoch_millis;
         } javan_date_value;
+
+        typedef struct {
+            int magic;
+            int reserved0;
+            int reserved1;
+            int reserved2;
+            long long epoch_millis;
+        } javan_sql_date_value;
+
+        typedef struct {
+            int magic;
+            int reserved0;
+            int reserved1;
+            int reserved2;
+            long long epoch_millis;
+        } javan_sql_time_value;
+
+        typedef struct {
+            int magic;
+            int reserved0;
+            int reserved1;
+            int reserved2;
+            long long epoch_millis;
+        } javan_sql_timestamp_value;
 
         typedef struct {
             int magic;
@@ -401,6 +494,30 @@ final class RuntimeSourceMemorySections {
 
         typedef struct {
             int magic;
+            int zone_kind;
+            int reserved0;
+            int reserved1;
+            long long epoch_millis;
+        } javan_offset_date_time_value;
+
+        typedef struct {
+            int magic;
+            int reserved0;
+            int reserved1;
+            int reserved2;
+            long long epoch_millis;
+        } javan_calendar_value;
+
+        typedef struct {
+            int magic;
+            int value;
+            int reserved0;
+            int reserved1;
+            const char* name;
+        } javan_logging_level_value;
+
+        typedef struct {
+            int magic;
             int case_insensitive;
             int optional_depth;
             int optional_nano_fraction;
@@ -432,6 +549,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_OPTIONAL_INT_MAGIC 0x4a4f5049
         #define JAVAN_ATOMIC_BOOLEAN_MAGIC 0x4a415442
         #define JAVAN_ATOMIC_INTEGER_MAGIC 0x4a415449
+        #define JAVAN_ATOMIC_LONG_MAGIC 0x4a41544c
         #define JAVAN_ATOMIC_REFERENCE_MAGIC 0x4a415452
         #define JAVAN_THROWABLE_MAGIC 0x4a545242
         #define JAVAN_INET_ADDRESS_MAGIC 0x4a494144
@@ -455,16 +573,27 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_THREAD_MXBEAN_MAGIC 0x4a544d58
         #define JAVAN_RUNTIME_MXBEAN_MAGIC 0x4a524d58
         #define JAVAN_OPERATING_SYSTEM_MXBEAN_MAGIC 0x4a4f4d58
+        #define JAVAN_MEMORY_MXBEAN_MAGIC 0x4a4d4d58
+        #define JAVAN_MEMORY_USAGE_MAGIC 0x4a4d5553
+        #define JAVAN_PROCESS_HANDLE_MAGIC 0x4a505248
+        #define JAVAN_HTTP_EXCHANGE_MAGIC 0x4a485845
+        #define JAVAN_HTTP_INPUT_STREAM_MAGIC 0x4a484953
         #define JAVAN_LOCALE_MAGIC 0x4a4c4f43
         #define JAVAN_DATETIME_FORMATTER_BUILDER_MAGIC 0x4a445446
         #define JAVAN_DATETIME_FORMATTER_MAGIC 0x4a44544d
         #define JAVAN_ZONE_ID_MAGIC 0x4a5a4f4e
         #define JAVAN_INSTANT_MAGIC 0x4a494e53
         #define JAVAN_DATE_MAGIC 0x4a444154
+        #define JAVAN_SQL_DATE_MAGIC 0x4a534441
+        #define JAVAN_SQL_TIME_MAGIC 0x4a535449
+        #define JAVAN_SQL_TIMESTAMP_MAGIC 0x4a535453
         #define JAVAN_LOCAL_DATE_MAGIC 0x4a4c4441
         #define JAVAN_LOCAL_TIME_MAGIC 0x4a4c544d
         #define JAVAN_LOCAL_DATE_TIME_MAGIC 0x4a4c4454
         #define JAVAN_ZONED_DATE_TIME_MAGIC 0x4a5a4454
+        #define JAVAN_OFFSET_DATE_TIME_MAGIC 0x4a4f4454
+        #define JAVAN_CALENDAR_MAGIC 0x4a43414c
+        #define JAVAN_LOGGING_LEVEL_MAGIC 0x4a4c4f47
         #define JAVAN_ZONE_KIND_SYSTEM_DEFAULT 1
         #define JAVAN_HTTP_METHOD_GET 1
         #define JAVAN_HTTP_METHOD_POST 2
@@ -517,10 +646,23 @@ final class RuntimeSourceMemorySections {
         static void* javan_runtime_root_value = NULL;
         static void* javan_thread_mxbean_root_value = NULL;
         static void* javan_runtime_mxbean_root_value = NULL;
+        static void* javan_memory_mxbean_root_value = NULL;
         static void* javan_operating_system_mxbean_root_value = NULL;
+        static void* javan_process_handle_root_value = NULL;
+        static void* javan_logging_level_off_root_value = NULL;
+        static void* javan_logging_level_severe_root_value = NULL;
+        static void* javan_logging_level_warning_root_value = NULL;
+        static void* javan_logging_level_info_root_value = NULL;
+        static void* javan_logging_level_fine_root_value = NULL;
+        static void* javan_logging_level_finer_root_value = NULL;
+        static void* javan_logging_level_all_root_value = NULL;
         static int javan_management_start_time_initialized_value = 0;
         static long long javan_management_start_time_millis_value = 0;
         static JavanTypeDescriptor* javan_type_descriptor_for(int type_id);
+        static int javan_type_descriptor_contains_assignable_name(
+            JavanTypeDescriptor* descriptor,
+            const char* binary_name
+        );
         static int javan_allocation_limit_initialized = 0;
         static unsigned long javan_max_allocation_bytes = 0;
         static unsigned long javan_heap_limit_bytes = 0;
@@ -561,14 +703,24 @@ final class RuntimeSourceMemorySections {
         static javan_runtime_value* javan_runtime_checked(void* value);
         static javan_thread_mxbean_value* javan_thread_mxbean_checked(void* value);
         static javan_runtime_mxbean_value* javan_runtime_mxbean_checked(void* value);
+        static javan_memory_mxbean_value* javan_memory_mxbean_checked(void* value);
+        static javan_memory_usage_value* javan_memory_usage_checked(void* value);
         static javan_operating_system_mxbean_value* javan_operating_system_mxbean_checked(void* value);
+        static javan_process_handle_value* javan_process_handle_checked(void* value);
         static javan_zone_id_value* javan_zone_id_checked(void* value);
         static javan_instant_value* javan_instant_checked(void* value);
         static javan_date_value* javan_date_checked(void* value);
+        static javan_sql_date_value* javan_sql_date_checked(void* value);
+        static javan_sql_time_value* javan_sql_time_checked(void* value);
+        static javan_sql_timestamp_value* javan_sql_timestamp_checked(void* value);
         static javan_local_date_value* javan_local_date_checked(void* value);
         static javan_local_time_value* javan_local_time_checked(void* value);
         static javan_local_date_time_value* javan_local_date_time_checked(void* value);
         static javan_zoned_date_time_value* javan_zoned_date_time_checked(void* value);
+        static javan_offset_date_time_value* javan_offset_date_time_checked(void* value);
+        static javan_calendar_value* javan_calendar_checked(void* value);
+        static javan_logging_level_value* javan_logging_level_checked(void* value);
+        static const char* javan_charsequence_string_value(void* value);
         static const char* javan_runtime_kind_binary_name(int runtime_kind);
         static void javan_runtime_run_shutdown_hooks(void);
         void* javan_printable_object_string(void* value);
@@ -1094,12 +1246,14 @@ final class RuntimeSourceMemorySections {
             node->collectible = runtime_kind == JAVAN_RUNTIME_KIND_STRING
                 || runtime_kind == JAVAN_RUNTIME_KIND_PROCESS_RESULT
                 || runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_LIST
+                || runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_SET
                 || runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_ITERATOR
                 || runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_MAP
                 || runtime_kind == JAVAN_RUNTIME_KIND_OPTIONAL
                 || runtime_kind == JAVAN_RUNTIME_KIND_OPTIONAL_INT
                 || runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_BOOLEAN
                 || runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_INTEGER
+                || runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_LONG
                 || runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_REFERENCE
                 || runtime_kind == JAVAN_RUNTIME_KIND_STRING_BUILDER
                 || runtime_kind == JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_BUILDER
@@ -1109,7 +1263,10 @@ final class RuntimeSourceMemorySections {
                 || runtime_kind == JAVAN_RUNTIME_KIND_RUNTIME
                 || runtime_kind == JAVAN_RUNTIME_KIND_THREAD_MXBEAN
                 || runtime_kind == JAVAN_RUNTIME_KIND_RUNTIME_MXBEAN
+                || runtime_kind == JAVAN_RUNTIME_KIND_MEMORY_MXBEAN
+                || runtime_kind == JAVAN_RUNTIME_KIND_MEMORY_USAGE
                 || runtime_kind == JAVAN_RUNTIME_KIND_OPERATING_SYSTEM_MXBEAN
+                || runtime_kind == JAVAN_RUNTIME_KIND_PROCESS_HANDLE
                 || runtime_kind == JAVAN_RUNTIME_KIND_THROWABLE
                 || runtime_kind == JAVAN_RUNTIME_KIND_OWNED_BUFFER
                 || runtime_kind == JAVAN_RUNTIME_KIND_INET_ADDRESS
@@ -1125,16 +1282,24 @@ final class RuntimeSourceMemorySections {
                 || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_BODY_PUBLISHER
                 || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_BODY_HANDLER
                 || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_RESPONSE
+                || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_EXCHANGE
+                || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_INPUT_STREAM
                 || runtime_kind == JAVAN_RUNTIME_KIND_LOCALE
                 || runtime_kind == JAVAN_RUNTIME_KIND_DATETIME_FORMATTER_BUILDER
                 || runtime_kind == JAVAN_RUNTIME_KIND_DATETIME_FORMATTER
                 || runtime_kind == JAVAN_RUNTIME_KIND_ZONE_ID
                 || runtime_kind == JAVAN_RUNTIME_KIND_INSTANT
                 || runtime_kind == JAVAN_RUNTIME_KIND_DATE
+                || runtime_kind == JAVAN_RUNTIME_KIND_SQL_DATE
+                || runtime_kind == JAVAN_RUNTIME_KIND_SQL_TIME
+                || runtime_kind == JAVAN_RUNTIME_KIND_SQL_TIMESTAMP
                 || runtime_kind == JAVAN_RUNTIME_KIND_LOCAL_DATE
                 || runtime_kind == JAVAN_RUNTIME_KIND_LOCAL_TIME
                 || runtime_kind == JAVAN_RUNTIME_KIND_LOCAL_DATE_TIME
-                || runtime_kind == JAVAN_RUNTIME_KIND_ZONED_DATE_TIME;
+                || runtime_kind == JAVAN_RUNTIME_KIND_ZONED_DATE_TIME
+                || runtime_kind == JAVAN_RUNTIME_KIND_OFFSET_DATE_TIME
+                || runtime_kind == JAVAN_RUNTIME_KIND_CALENDAR
+                || runtime_kind == JAVAN_RUNTIME_KIND_LOGGING_LEVEL;
             javan_heap_maybe_validate();
             javan_runtime_lock_leave();
         }
@@ -1288,6 +1453,19 @@ final class RuntimeSourceMemorySections {
                 if (list->magic != JAVAN_OBJECT_LIST_MAGIC || list->length < 0 || list->capacity < 0 || list->length > list->capacity) {
                     javan_panic("invalid runtime list metadata");
                 }
+                if (list->backing != NULL) {
+                    if (list->values != NULL || list->length != 0 || list->capacity != 0) {
+                        javan_panic("invalid runtime list view metadata");
+                    }
+                    javan_validate_runtime_managed_reference((void*) list->backing);
+                } else {
+                    javan_validate_owned_runtime_buffer_reference((void*) list->values);
+                }
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_SET) {
+                javan_object_list* list = (javan_object_list*) node->value;
+                if (list->magic != JAVAN_OBJECT_LIST_MAGIC || list->length < 0 || list->capacity < 0 || list->length > list->capacity) {
+                    javan_panic("invalid runtime set metadata");
+                }
                 javan_validate_owned_runtime_buffer_reference((void*) list->values);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_MAP) {
                 javan_object_map* map = (javan_object_map*) node->value;
@@ -1341,8 +1519,16 @@ final class RuntimeSourceMemorySections {
                 javan_thread_mxbean_checked(node->value);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_RUNTIME_MXBEAN) {
                 javan_runtime_mxbean_checked(node->value);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_MEMORY_MXBEAN) {
+                javan_memory_mxbean_checked(node->value);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_MEMORY_USAGE) {
+                javan_memory_usage_checked(node->value);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_OPERATING_SYSTEM_MXBEAN) {
                 javan_operating_system_mxbean_checked(node->value);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_PROCESS_HANDLE) {
+                javan_process_handle_checked(node->value);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_LOGGING_LEVEL) {
+                javan_logging_level_checked(node->value);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_BOOLEAN) {
                 javan_atomic_boolean* state = (javan_atomic_boolean*) node->value;
                 if (state->magic != JAVAN_ATOMIC_BOOLEAN_MAGIC || (state->value != 0 && state->value != 1)) {
@@ -1352,6 +1538,11 @@ final class RuntimeSourceMemorySections {
                 javan_atomic_integer* state = (javan_atomic_integer*) node->value;
                 if (state->magic != JAVAN_ATOMIC_INTEGER_MAGIC) {
                     javan_panic("invalid runtime atomic integer metadata");
+                }
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_LONG) {
+                javan_atomic_long* state = (javan_atomic_long*) node->value;
+                if (state->magic != JAVAN_ATOMIC_LONG_MAGIC) {
+                    javan_panic("invalid runtime atomic long metadata");
                 }
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_REFERENCE) {
                 javan_atomic_reference* state = (javan_atomic_reference*) node->value;
@@ -1366,6 +1557,7 @@ final class RuntimeSourceMemorySections {
                 }
                 javan_validate_runtime_managed_reference(throwable->message);
                 javan_validate_runtime_managed_reference((void*) throwable->suppressed);
+                javan_validate_runtime_managed_reference(throwable->stack_trace);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_LOCALE) {
                 javan_locale_value* locale = (javan_locale_value*) node->value;
                 if (locale->magic != JAVAN_LOCALE_MAGIC || locale->kind != 1) {
@@ -1396,6 +1588,12 @@ final class RuntimeSourceMemorySections {
                 javan_instant_checked(node->value);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_DATE) {
                 javan_date_checked(node->value);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_SQL_DATE) {
+                javan_sql_date_checked(node->value);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_SQL_TIME) {
+                javan_sql_time_checked(node->value);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_SQL_TIMESTAMP) {
+                javan_sql_timestamp_checked(node->value);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_LOCAL_DATE) {
                 javan_local_date_checked(node->value);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_LOCAL_TIME) {
@@ -1428,6 +1626,27 @@ final class RuntimeSourceMemorySections {
                     javan_panic("invalid runtime http body publisher metadata");
                 }
                 javan_validate_runtime_managed_reference(publisher->value);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_HTTP_EXCHANGE) {
+                javan_http_exchange_value* exchange = (javan_http_exchange_value*) node->value;
+                if (exchange->magic != JAVAN_HTTP_EXCHANGE_MAGIC
+                    || exchange->request_uri == NULL
+                    || exchange->request_method == NULL
+                    || exchange->request_headers == NULL
+                    || exchange->request_body == NULL) {
+                    javan_panic("invalid runtime http exchange metadata");
+                }
+                javan_validate_runtime_managed_reference((void*) exchange->request_uri);
+                javan_validate_runtime_managed_reference((void*) exchange->request_headers);
+                javan_validate_runtime_managed_reference(exchange->request_body);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_HTTP_INPUT_STREAM) {
+                javan_http_input_stream_value* stream = (javan_http_input_stream_value*) node->value;
+                if (stream->magic != JAVAN_HTTP_INPUT_STREAM_MAGIC
+                    || stream->offset < 0
+                    || stream->closed < 0
+                    || stream->bytes == NULL) {
+                    javan_panic("invalid runtime http input stream metadata");
+                }
+                javan_validate_runtime_managed_reference(stream->bytes);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_INET_ADDRESS) {
                 javan_inet_address* address = (javan_inet_address*) node->value;
                 if (address->magic != JAVAN_INET_ADDRESS_MAGIC || address->host_address == NULL || address->host_name == NULL) {
@@ -1521,6 +1740,23 @@ final class RuntimeSourceMemorySections {
                 if (response->magic != JAVAN_HTTP_RESPONSE_MAGIC || response->status_code < 0 || response->body == NULL) {
                     javan_panic("invalid runtime http response metadata");
                 }
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_HTTP_EXCHANGE) {
+                javan_http_exchange_value* exchange = (javan_http_exchange_value*) node->value;
+                if (exchange->magic != JAVAN_HTTP_EXCHANGE_MAGIC
+                    || exchange->request_uri == NULL
+                    || exchange->request_method == NULL
+                    || exchange->request_headers == NULL
+                    || exchange->request_body == NULL) {
+                    javan_panic("invalid runtime http exchange metadata");
+                }
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_HTTP_INPUT_STREAM) {
+                javan_http_input_stream_value* stream = (javan_http_input_stream_value*) node->value;
+                if (stream->magic != JAVAN_HTTP_INPUT_STREAM_MAGIC
+                    || stream->offset < 0
+                    || stream->closed < 0
+                    || stream->bytes == NULL) {
+                    javan_panic("invalid runtime http input stream metadata");
+                }
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_LOCALE) {
                 javan_locale_value* locale = (javan_locale_value*) node->value;
                 if (locale->magic != JAVAN_LOCALE_MAGIC || locale->kind != 1) {
@@ -1548,6 +1784,12 @@ final class RuntimeSourceMemorySections {
                 javan_instant_checked(node->value);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_DATE) {
                 javan_date_checked(node->value);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_SQL_DATE) {
+                javan_sql_date_checked(node->value);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_SQL_TIME) {
+                javan_sql_time_checked(node->value);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_SQL_TIMESTAMP) {
+                javan_sql_timestamp_checked(node->value);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_LOCAL_DATE) {
                 javan_local_date_checked(node->value);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_LOCAL_TIME) {
@@ -1586,6 +1828,25 @@ final class RuntimeSourceMemorySections {
             if (node->runtime_kind == JAVAN_RUNTIME_KIND_STRING_BUILDER) {
                 return javan_stringbuilder_to_string(value);
             }
+            int type_id = node->type_id;
+            if (type_id == JAVAN_TYPE_JAVA_LANG_INTEGER) {
+                return javan_string_value_of_int(javan_integer_int_value(value));
+            }
+            if (type_id == JAVAN_TYPE_JAVA_LANG_LONG) {
+                return javan_string_value_of_long(javan_long_long_value(value));
+            }
+            if (type_id == JAVAN_TYPE_JAVA_LANG_FLOAT) {
+                return javan_string_value_of_float(javan_float_float_value(value));
+            }
+            if (type_id == JAVAN_TYPE_JAVA_LANG_DOUBLE) {
+                return javan_string_value_of_double(javan_double_double_value(value));
+            }
+            if (type_id == JAVAN_TYPE_JAVA_LANG_BOOLEAN) {
+                return javan_string_value_of_bool(javan_boolean_boolean_value(value));
+            }
+            if (type_id == JAVAN_TYPE_JAVA_LANG_CHARACTER) {
+                return javan_string_value_of_char(javan_character_char_value(value));
+            }
             if (node->runtime_kind == JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_BUILDER) {
                 return javan_virtual_thread_builder_to_string(value);
             }
@@ -1601,7 +1862,9 @@ final class RuntimeSourceMemorySections {
             if (node->runtime_kind == JAVAN_RUNTIME_KIND_RUNTIME
                 || node->runtime_kind == JAVAN_RUNTIME_KIND_THREAD_MXBEAN
                 || node->runtime_kind == JAVAN_RUNTIME_KIND_RUNTIME_MXBEAN
-                || node->runtime_kind == JAVAN_RUNTIME_KIND_OPERATING_SYSTEM_MXBEAN) {
+                || node->runtime_kind == JAVAN_RUNTIME_KIND_MEMORY_MXBEAN
+                || node->runtime_kind == JAVAN_RUNTIME_KIND_OPERATING_SYSTEM_MXBEAN
+                || node->runtime_kind == JAVAN_RUNTIME_KIND_PROCESS_HANDLE) {
                 return javan_string_from(javan_runtime_kind_binary_name(node->runtime_kind));
             }
             if (node->runtime_kind == JAVAN_RUNTIME_KIND_THROWABLE) {
@@ -1609,6 +1872,9 @@ final class RuntimeSourceMemorySections {
             }
             if (node->runtime_kind == JAVAN_RUNTIME_KIND_OPTIONAL_INT) {
                 return javan_optional_int_to_string(value);
+            }
+            if (node->runtime_kind == JAVAN_RUNTIME_KIND_LOGGING_LEVEL) {
+                return javan_logging_level_to_string(value);
             }
             if (node->runtime_kind == JAVAN_RUNTIME_KIND_INET_SOCKET_ADDRESS) {
                 return javan_inet_socket_address_to_string(value);
@@ -1640,6 +1906,7 @@ final class RuntimeSourceMemorySections {
                 }
                 if (node->runtime_kind != JAVAN_RUNTIME_KIND_NONE
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_OBJECT_LIST
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_OBJECT_SET
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_OBJECT_ITERATOR
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_OBJECT_MAP
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_OPTIONAL
@@ -1661,12 +1928,17 @@ final class RuntimeSourceMemorySections {
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_HTTP_BODY_PUBLISHER
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_HTTP_BODY_HANDLER
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_HTTP_RESPONSE
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_HTTP_EXCHANGE
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_HTTP_INPUT_STREAM
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_LOCALE
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_DATETIME_FORMATTER_BUILDER
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_DATETIME_FORMATTER
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_ZONE_ID
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_INSTANT
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_DATE
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_SQL_DATE
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_SQL_TIME
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_SQL_TIMESTAMP
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_LOCAL_DATE
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_LOCAL_TIME
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_LOCAL_DATE_TIME
@@ -1678,9 +1950,14 @@ final class RuntimeSourceMemorySections {
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_RUNTIME
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_THREAD_MXBEAN
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_RUNTIME_MXBEAN
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_MEMORY_MXBEAN
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_MEMORY_USAGE
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_OPERATING_SYSTEM_MXBEAN
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_PROCESS_HANDLE
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_LOGGING_LEVEL
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_ATOMIC_BOOLEAN
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_ATOMIC_INTEGER
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_ATOMIC_LONG
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_ATOMIC_REFERENCE
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_THROWABLE) {
                     javan_panic("invalid runtime allocation kind");
@@ -2010,6 +2287,14 @@ final class RuntimeSourceMemorySections {
                     list->capacity = 0;
                     list->length = 0;
                 }
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_SET) {
+                javan_object_list* list = (javan_object_list*) node->value;
+                if (list != NULL && list->magic == JAVAN_OBJECT_LIST_MAGIC) {
+                    javan_free_owned_runtime_buffer((void*) list->values);
+                    list->values = NULL;
+                    list->capacity = 0;
+                    list->length = 0;
+                }
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_MAP) {
                 javan_object_map* map = (javan_object_map*) node->value;
                 if (map != NULL && map->magic == JAVAN_OBJECT_MAP_MAGIC) {
@@ -2239,6 +2524,37 @@ final class RuntimeSourceMemorySections {
             return value != NULL;
         }
 
+        static int javan_runtime_kind_of(void* value) {
+            if (value == NULL) {
+                return JAVAN_RUNTIME_KIND_NONE;
+            }
+            javan_runtime_lock_enter();
+            javan_allocation_node* node = javan_find_allocation(value, NULL);
+            int result = node == NULL ? JAVAN_RUNTIME_KIND_NONE : node->runtime_kind;
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        int javan_object_is_collection(void* value) {
+            int runtime_kind = javan_runtime_kind_of(value);
+            return runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_LIST
+                || runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_SET;
+        }
+
+        int javan_object_is_optional(void* value) {
+            return javan_runtime_kind_of(value) == JAVAN_RUNTIME_KIND_OPTIONAL;
+        }
+
+        int javan_object_is_string(void* value) {
+            if (value == NULL) {
+                return 0;
+            }
+            if (javan_runtime_kind_of(value) == JAVAN_RUNTIME_KIND_STRING) {
+                return 1;
+            }
+            return javan_registered_type_id(value) == 0 ? 1 : 0;
+        }
+
         int javan_object_type_in(void* value, int count, ...) {
             if (value == NULL || count <= 0) {
                 return 0;
@@ -2426,6 +2742,31 @@ final class RuntimeSourceMemorySections {
             return state;
         }
 
+        static javan_memory_mxbean_value* javan_memory_mxbean_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported memory mxbean");
+            }
+            javan_memory_mxbean_value* state = (javan_memory_mxbean_value*) value;
+            if (state->magic != JAVAN_MEMORY_MXBEAN_MAGIC) {
+                javan_panic("unsupported memory mxbean");
+            }
+            return state;
+        }
+
+        static javan_memory_usage_value* javan_memory_usage_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported memory usage");
+            }
+            javan_memory_usage_value* state = (javan_memory_usage_value*) value;
+            if (state->magic != JAVAN_MEMORY_USAGE_MAGIC
+                || state->used < 0
+                || state->committed < state->used
+                || state->max < state->committed) {
+                javan_panic("unsupported memory usage");
+            }
+            return state;
+        }
+
         static javan_operating_system_mxbean_value* javan_operating_system_mxbean_checked(void* value) {
             if (value == NULL) {
                 javan_panic("unsupported operating system mxbean");
@@ -2433,6 +2774,17 @@ final class RuntimeSourceMemorySections {
             javan_operating_system_mxbean_value* state = (javan_operating_system_mxbean_value*) value;
             if (state->magic != JAVAN_OPERATING_SYSTEM_MXBEAN_MAGIC) {
                 javan_panic("unsupported operating system mxbean");
+            }
+            return state;
+        }
+
+        static javan_process_handle_value* javan_process_handle_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported process handle");
+            }
+            javan_process_handle_value* state = (javan_process_handle_value*) value;
+            if (state->magic != JAVAN_PROCESS_HANDLE_MAGIC || state->pid <= 0) {
+                javan_panic("unsupported process handle");
             }
             return state;
         }
@@ -2481,6 +2833,39 @@ final class RuntimeSourceMemorySections {
             return date;
         }
 
+        static javan_sql_date_value* javan_sql_date_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported sql date");
+            }
+            javan_sql_date_value* date = (javan_sql_date_value*) value;
+            if (date->magic != JAVAN_SQL_DATE_MAGIC) {
+                javan_panic("unsupported sql date");
+            }
+            return date;
+        }
+
+        static javan_sql_time_value* javan_sql_time_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported sql time");
+            }
+            javan_sql_time_value* time = (javan_sql_time_value*) value;
+            if (time->magic != JAVAN_SQL_TIME_MAGIC) {
+                javan_panic("unsupported sql time");
+            }
+            return time;
+        }
+
+        static javan_sql_timestamp_value* javan_sql_timestamp_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported sql timestamp");
+            }
+            javan_sql_timestamp_value* timestamp = (javan_sql_timestamp_value*) value;
+            if (timestamp->magic != JAVAN_SQL_TIMESTAMP_MAGIC) {
+                javan_panic("unsupported sql timestamp");
+            }
+            return timestamp;
+        }
+
         static javan_local_date_value* javan_local_date_checked(void* value) {
             if (value == NULL) {
                 javan_panic("unsupported local date");
@@ -2523,6 +2908,39 @@ final class RuntimeSourceMemorySections {
                 javan_panic("unsupported zoned date time");
             }
             return date_time;
+        }
+
+        static javan_offset_date_time_value* javan_offset_date_time_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported offset date time");
+            }
+            javan_offset_date_time_value* date_time = (javan_offset_date_time_value*) value;
+            if (date_time->magic != JAVAN_OFFSET_DATE_TIME_MAGIC || date_time->zone_kind != JAVAN_ZONE_KIND_SYSTEM_DEFAULT) {
+                javan_panic("unsupported offset date time");
+            }
+            return date_time;
+        }
+
+        static javan_calendar_value* javan_calendar_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported calendar");
+            }
+            javan_calendar_value* calendar = (javan_calendar_value*) value;
+            if (calendar->magic != JAVAN_CALENDAR_MAGIC) {
+                javan_panic("unsupported calendar");
+            }
+            return calendar;
+        }
+
+        static javan_logging_level_value* javan_logging_level_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported logging level");
+            }
+            javan_logging_level_value* level = (javan_logging_level_value*) value;
+            if (level->magic != JAVAN_LOGGING_LEVEL_MAGIC || level->name == NULL || level->name[0] == '\\0') {
+                javan_panic("unsupported logging level");
+            }
+            return level;
         }
 
         static javan_datetime_formatter_builder_value* javan_datetime_formatter_builder_checked(void* value) {
@@ -2582,6 +3000,8 @@ final class RuntimeSourceMemorySections {
             switch (runtime_kind) {
                 case JAVAN_RUNTIME_KIND_OBJECT_LIST:
                     return "java.util.ArrayList";
+                case JAVAN_RUNTIME_KIND_OBJECT_SET:
+                    return "java.util.HashSet";
                 case JAVAN_RUNTIME_KIND_OBJECT_ITERATOR:
                     return "java.util.Iterator";
                 case JAVAN_RUNTIME_KIND_OBJECT_MAP:
@@ -2624,6 +3044,10 @@ final class RuntimeSourceMemorySections {
                     return "java.net.http.HttpResponse";
                 case JAVAN_RUNTIME_KIND_HTTP_BODY_PUBLISHER:
                     return "java.net.http.HttpRequest$BodyPublisher";
+                case JAVAN_RUNTIME_KIND_HTTP_EXCHANGE:
+                    return "com.sun.net.httpserver.HttpExchange";
+                case JAVAN_RUNTIME_KIND_HTTP_INPUT_STREAM:
+                    return "java.io.InputStream";
                 case JAVAN_RUNTIME_KIND_LOCALE:
                     return "java.util.Locale";
                 case JAVAN_RUNTIME_KIND_DATETIME_FORMATTER_BUILDER:
@@ -2636,6 +3060,12 @@ final class RuntimeSourceMemorySections {
                     return "java.time.Instant";
                 case JAVAN_RUNTIME_KIND_DATE:
                     return "java.util.Date";
+                case JAVAN_RUNTIME_KIND_SQL_DATE:
+                    return "java.sql.Date";
+                case JAVAN_RUNTIME_KIND_SQL_TIME:
+                    return "java.sql.Time";
+                case JAVAN_RUNTIME_KIND_SQL_TIMESTAMP:
+                    return "java.sql.Timestamp";
                 case JAVAN_RUNTIME_KIND_LOCAL_DATE:
                     return "java.time.LocalDate";
                 case JAVAN_RUNTIME_KIND_LOCAL_TIME:
@@ -2644,6 +3074,12 @@ final class RuntimeSourceMemorySections {
                     return "java.time.LocalDateTime";
                 case JAVAN_RUNTIME_KIND_ZONED_DATE_TIME:
                     return "java.time.ZonedDateTime";
+                case JAVAN_RUNTIME_KIND_OFFSET_DATE_TIME:
+                    return "java.time.OffsetDateTime";
+                case JAVAN_RUNTIME_KIND_CALENDAR:
+                    return "java.util.Calendar";
+                case JAVAN_RUNTIME_KIND_LOGGING_LEVEL:
+                    return "java.util.logging.Level";
                 case JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_BUILDER:
                     return "java.lang.ThreadBuilders$VirtualThreadBuilder";
                 case JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_FACTORY:
@@ -2658,12 +3094,20 @@ final class RuntimeSourceMemorySections {
                     return "java.lang.management.ThreadMXBean";
                 case JAVAN_RUNTIME_KIND_RUNTIME_MXBEAN:
                     return "java.lang.management.RuntimeMXBean";
+                case JAVAN_RUNTIME_KIND_MEMORY_MXBEAN:
+                    return "java.lang.management.MemoryMXBean";
+                case JAVAN_RUNTIME_KIND_MEMORY_USAGE:
+                    return "java.lang.management.MemoryUsage";
                 case JAVAN_RUNTIME_KIND_OPERATING_SYSTEM_MXBEAN:
                     return "com.sun.management.OperatingSystemMXBean";
+                case JAVAN_RUNTIME_KIND_PROCESS_HANDLE:
+                    return "java.lang.ProcessHandle";
                 case JAVAN_RUNTIME_KIND_ATOMIC_BOOLEAN:
                     return "java.util.concurrent.atomic.AtomicBoolean";
                 case JAVAN_RUNTIME_KIND_ATOMIC_INTEGER:
                     return "java.util.concurrent.atomic.AtomicInteger";
+                case JAVAN_RUNTIME_KIND_ATOMIC_LONG:
+                    return "java.util.concurrent.atomic.AtomicLong";
                 case JAVAN_RUNTIME_KIND_ATOMIC_REFERENCE:
                     return "java.util.concurrent.atomic.AtomicReference";
                 case JAVAN_RUNTIME_KIND_THROWABLE:
@@ -2671,6 +3115,144 @@ final class RuntimeSourceMemorySections {
                 default:
                     return NULL;
             }
+        }
+
+        static int javan_runtime_builtin_type_id(const char* binary_name) {
+            if (binary_name == NULL) {
+                return 0;
+            }
+            if (strcmp(binary_name, "java.lang.Integer") == 0) {
+                return JAVAN_TYPE_JAVA_LANG_INTEGER;
+            }
+            if (strcmp(binary_name, "java.lang.Long") == 0) {
+                return JAVAN_TYPE_JAVA_LANG_LONG;
+            }
+            if (strcmp(binary_name, "java.lang.Float") == 0) {
+                return JAVAN_TYPE_JAVA_LANG_FLOAT;
+            }
+            if (strcmp(binary_name, "java.lang.Double") == 0) {
+                return JAVAN_TYPE_JAVA_LANG_DOUBLE;
+            }
+            if (strcmp(binary_name, "java.lang.Boolean") == 0) {
+                return JAVAN_TYPE_JAVA_LANG_BOOLEAN;
+            }
+            if (strcmp(binary_name, "java.lang.Character") == 0) {
+                return JAVAN_TYPE_JAVA_LANG_CHARACTER;
+            }
+            if (strcmp(binary_name, "java.lang.Thread") == 0) {
+                return JAVAN_TYPE_JAVA_LANG_THREAD;
+            }
+            if (strcmp(binary_name, "java.nio.file.attribute.FileTime") == 0) {
+                return JAVAN_TYPE_JAVA_NIO_FILE_ATTRIBUTE_FILE_TIME;
+            }
+            return 0;
+        }
+
+        static int javan_value_is_string(void* value) {
+            if (value == NULL) {
+                return 0;
+            }
+            javan_runtime_lock_enter();
+            javan_allocation_node* node = javan_find_allocation(value, NULL);
+            int result = node == NULL || (node->kind == JAVAN_HEAP_KIND_RUNTIME && node->runtime_kind == JAVAN_RUNTIME_KIND_STRING);
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        static int javan_runtime_class_matches_value(javan_runtime_class_state* state, void* value) {
+            if (state == NULL || value == NULL) {
+                return 0;
+            }
+            const char* binary_name = state->binary_name;
+            if (strcmp(binary_name, "java.lang.Object") == 0) {
+                return 1;
+            }
+            int type_id = javan_registered_type_id(value);
+            JavanTypeDescriptor* descriptor = NULL;
+            if (type_id != 0) {
+                descriptor = javan_type_descriptor_for(type_id);
+                if (descriptor != NULL && javan_type_descriptor_contains_assignable_name(descriptor, binary_name) != 0) {
+                    return 1;
+                }
+            }
+            if (strcmp(binary_name, "java.lang.String") == 0) {
+                return javan_value_is_string(value);
+            }
+            if (strcmp(binary_name, "java.lang.Number") == 0) {
+                return type_id == JAVAN_TYPE_JAVA_LANG_INTEGER
+                    || type_id == JAVAN_TYPE_JAVA_LANG_LONG
+                    || type_id == JAVAN_TYPE_JAVA_LANG_FLOAT
+                    || type_id == JAVAN_TYPE_JAVA_LANG_DOUBLE;
+            }
+            if (strcmp(binary_name, "java.lang.Enum") == 0) {
+                return descriptor != NULL && descriptor->is_enum != 0;
+            }
+            int runtime_kind = javan_runtime_kind_of(value);
+            if (strcmp(binary_name, "java.lang.CharSequence") == 0) {
+                return javan_value_is_string(value) != 0 || runtime_kind == JAVAN_RUNTIME_KIND_STRING_BUILDER;
+            }
+            if (strcmp(binary_name, "java.util.List") == 0) {
+                return runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_LIST;
+            }
+            if (strcmp(binary_name, "java.util.Set") == 0) {
+                return runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_SET;
+            }
+            if (strcmp(binary_name, "java.util.Collection") == 0 || strcmp(binary_name, "java.lang.Iterable") == 0) {
+                return runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_LIST || runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_SET;
+            }
+            if (strcmp(binary_name, "java.util.Map") == 0) {
+                return runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_MAP;
+            }
+            if (state->is_enum != 0) {
+                javan_panic("enum instance runtime typing is not supported");
+            }
+            return 0;
+        }
+
+        static int javan_runtime_class_matches_class(javan_runtime_class_state* target, javan_runtime_class_state* source) {
+            if (target == NULL || source == NULL) {
+                return 0;
+            }
+            if (strcmp(target->binary_name, source->binary_name) == 0) {
+                return 1;
+            }
+            if (strcmp(target->binary_name, "java.lang.Object") == 0) {
+                return 1;
+            }
+            if (source->type_id != 0) {
+                JavanTypeDescriptor* source_descriptor = javan_type_descriptor_for(source->type_id);
+                if (source_descriptor != NULL
+                    && javan_type_descriptor_contains_assignable_name(source_descriptor, target->binary_name) != 0) {
+                    return 1;
+                }
+            }
+            if (strcmp(target->binary_name, "java.lang.Number") == 0) {
+                return source->type_id == JAVAN_TYPE_JAVA_LANG_INTEGER
+                    || source->type_id == JAVAN_TYPE_JAVA_LANG_LONG
+                    || source->type_id == JAVAN_TYPE_JAVA_LANG_FLOAT
+                    || source->type_id == JAVAN_TYPE_JAVA_LANG_DOUBLE;
+            }
+            if (strcmp(target->binary_name, "java.lang.Enum") == 0) {
+                return source->is_enum != 0;
+            }
+            if (strcmp(target->binary_name, "java.lang.CharSequence") == 0) {
+                return strcmp(source->binary_name, "java.lang.String") == 0
+                    || strcmp(source->binary_name, "java.lang.StringBuilder") == 0;
+            }
+            if (strcmp(target->binary_name, "java.util.List") == 0) {
+                return strcmp(source->binary_name, "java.util.ArrayList") == 0;
+            }
+            if (strcmp(target->binary_name, "java.util.Set") == 0) {
+                return strcmp(source->binary_name, "java.util.HashSet") == 0;
+            }
+            if (strcmp(target->binary_name, "java.util.Collection") == 0 || strcmp(target->binary_name, "java.lang.Iterable") == 0) {
+                return strcmp(source->binary_name, "java.util.ArrayList") == 0
+                    || strcmp(source->binary_name, "java.util.HashSet") == 0;
+            }
+            if (strcmp(target->binary_name, "java.util.Map") == 0) {
+                return strcmp(source->binary_name, "java.util.LinkedHashMap") == 0;
+            }
+            return 0;
         }
 
         static javan_atomic_boolean* javan_atomic_boolean_checked(void* value) {
@@ -2691,6 +3273,17 @@ final class RuntimeSourceMemorySections {
             javan_atomic_integer* state = (javan_atomic_integer*) value;
             if (state->magic != JAVAN_ATOMIC_INTEGER_MAGIC) {
                 javan_panic("unsupported atomic integer");
+            }
+            return state;
+        }
+
+        static javan_atomic_long* javan_atomic_long_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported atomic long");
+            }
+            javan_atomic_long* state = (javan_atomic_long*) value;
+            if (state->magic != JAVAN_ATOMIC_LONG_MAGIC) {
+                javan_panic("unsupported atomic long");
             }
             return state;
         }
@@ -2734,11 +3327,23 @@ final class RuntimeSourceMemorySections {
             if (binary_name == NULL || binary_name[0] == '\\0') {
                 javan_panic("invalid runtime class name");
             }
+            int type_id = javan_runtime_builtin_type_id(binary_name);
+            int is_enum = 0;
+            if (type_id == 0) {
+                for (int index = 0; index < javan_type_descriptor_count_value; index++) {
+                    JavanTypeDescriptor descriptor = javan_type_descriptors_value[index];
+                    if (descriptor.name != NULL && strcmp(descriptor.name, binary_name) == 0) {
+                        type_id = descriptor.type_id;
+                        is_enum = descriptor.is_enum;
+                        break;
+                    }
+                }
+            }
             javan_runtime_class_state* state = (javan_runtime_class_state*) javan_alloc(sizeof(javan_runtime_class_state));
             state->magic = JAVAN_RUNTIME_CLASS_MAGIC;
+            state->type_id = type_id;
+            state->is_enum = is_enum;
             state->reserved0 = 0;
-            state->reserved1 = 0;
-            state->reserved2 = 0;
             state->binary_name = binary_name;
             javan_update_runtime_allocation_kind((void*) state, JAVAN_RUNTIME_KIND_CLASS);
             return state;
@@ -2760,6 +3365,7 @@ final class RuntimeSourceMemorySections {
             throwable->binary_name = binary_name;
             throwable->message = NULL;
             throwable->suppressed = NULL;
+            throwable->stack_trace = NULL;
             javan_update_runtime_allocation_kind((void*) throwable, JAVAN_RUNTIME_KIND_THROWABLE);
             return (void*) throwable;
         }
@@ -2824,6 +3430,56 @@ final class RuntimeSourceMemorySections {
                 javan_object_array_set(result, index, throwable->suppressed->values[index]);
             }
             return result;
+        }
+
+        void* javan_throwable_get_stack_trace(void* throwable_value) {
+            void* throwable_root = throwable_value;
+            void* result_root = NULL;
+            void** javan_throwable_stack_trace_roots[] = {
+                (void**) &throwable_root,
+                (void**) &result_root
+            };
+            javan_root_frame_push(javan_throwable_stack_trace_roots, 2);
+            javan_throwable_value* throwable = javan_throwable_checked(throwable_root);
+            if (throwable->stack_trace == NULL) {
+                result_root = javan_object_array_new(0);
+                javan_root_frame_pop(javan_throwable_stack_trace_roots);
+                return result_root;
+            }
+            int length = javan_array_length(throwable->stack_trace);
+            result_root = javan_object_array_new(length);
+            for (int index = 0; index < length; index++) {
+                javan_object_array_set(result_root, index, javan_object_array_get(throwable->stack_trace, index));
+            }
+            javan_root_frame_pop(javan_throwable_stack_trace_roots);
+            return result_root;
+        }
+
+        void javan_throwable_set_stack_trace(void* throwable_value, void* stack_trace_value) {
+            if (stack_trace_value == NULL) {
+                javan_panic("Throwable.setStackTrace null");
+            }
+            void* throwable_root = throwable_value;
+            void* stack_trace_root = stack_trace_value;
+            void* copy_root = NULL;
+            void** javan_throwable_stack_trace_roots[] = {
+                (void**) &throwable_root,
+                (void**) &stack_trace_root,
+                (void**) &copy_root
+            };
+            javan_root_frame_push(javan_throwable_stack_trace_roots, 3);
+            int length = javan_array_length(stack_trace_root);
+            copy_root = javan_object_array_new(length);
+            for (int index = 0; index < length; index++) {
+                void* element = javan_object_array_get(stack_trace_root, index);
+                if (element == NULL) {
+                    javan_root_frame_pop(javan_throwable_stack_trace_roots);
+                    javan_panic("Throwable.setStackTrace null element");
+                }
+                javan_object_array_set(copy_root, index, element);
+            }
+            javan_throwable_checked(throwable_root)->stack_trace = copy_root;
+            javan_root_frame_pop(javan_throwable_stack_trace_roots);
         }
 
         const char* javan_panic_detail_object(void* value) {
@@ -2912,6 +3568,18 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        int javan_atomic_integer_compare_and_set(void* value, int expected_value, int next_value) {
+            javan_runtime_lock_enter();
+            javan_atomic_integer* state = javan_atomic_integer_checked(value);
+            if (state->value != expected_value) {
+                javan_runtime_lock_leave();
+                return 0;
+            }
+            state->value = next_value;
+            javan_runtime_lock_leave();
+            return 1;
+        }
+
         int javan_atomic_integer_get_and_increment(void* value) {
             javan_runtime_lock_enter();
             javan_atomic_integer* state = javan_atomic_integer_checked(value);
@@ -2935,6 +3603,46 @@ final class RuntimeSourceMemorySections {
             javan_atomic_integer* state = javan_atomic_integer_checked(value);
             state->value = (int) ((unsigned int) state->value - 1u);
             int result = state->value;
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        void* javan_atomic_long_new(void) {
+            javan_atomic_long* state = (javan_atomic_long*) javan_alloc(sizeof(javan_atomic_long));
+            state->magic = JAVAN_ATOMIC_LONG_MAGIC;
+            state->reserved0 = 0;
+            state->value = 0;
+            javan_update_runtime_allocation_kind((void*) state, JAVAN_RUNTIME_KIND_ATOMIC_LONG);
+            return state;
+        }
+
+        void javan_atomic_long_init(void* value, long long initial_value) {
+            javan_runtime_lock_enter();
+            javan_atomic_long_checked(value)->value = initial_value;
+            javan_runtime_lock_leave();
+        }
+
+        long long javan_atomic_long_get(void* value) {
+            javan_runtime_lock_enter();
+            long long result = javan_atomic_long_checked(value)->value;
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        long long javan_atomic_long_increment_and_get(void* value) {
+            javan_runtime_lock_enter();
+            javan_atomic_long* state = javan_atomic_long_checked(value);
+            state->value = (long long) ((unsigned long long) state->value + 1ull);
+            long long result = state->value;
+            javan_runtime_lock_leave();
+            return result;
+        }
+
+        long long javan_atomic_long_decrement_and_get(void* value) {
+            javan_runtime_lock_enter();
+            javan_atomic_long* state = javan_atomic_long_checked(value);
+            state->value = (long long) ((unsigned long long) state->value - 1ull);
+            long long result = state->value;
             javan_runtime_lock_leave();
             return result;
         }
@@ -2967,6 +3675,27 @@ final class RuntimeSourceMemorySections {
             javan_runtime_lock_enter();
             javan_atomic_reference_checked(value)->value = next_value;
             javan_runtime_lock_leave();
+        }
+
+        int javan_atomic_reference_compare_and_set(void* value, void* expected_value, void* next_value) {
+            javan_runtime_lock_enter();
+            javan_atomic_reference* state = javan_atomic_reference_checked(value);
+            if (state->value != expected_value) {
+                javan_runtime_lock_leave();
+                return 0;
+            }
+            state->value = next_value;
+            javan_runtime_lock_leave();
+            return 1;
+        }
+
+        void* javan_atomic_reference_get_and_set(void* value, void* next_value) {
+            javan_runtime_lock_enter();
+            javan_atomic_reference* state = javan_atomic_reference_checked(value);
+            void* previous = state->value;
+            state->value = next_value;
+            javan_runtime_lock_leave();
+            return previous;
         }
 
         void* javan_virtual_thread_builder_new(void) {
@@ -3150,6 +3879,31 @@ final class RuntimeSourceMemorySections {
 
         int javan_runtime_class_is_array(void* value) {
             return javan_runtime_class_name_is_array(javan_runtime_class_checked(value)->binary_name);
+        }
+
+        int javan_runtime_class_is_enum(void* value) {
+            return javan_runtime_class_checked(value)->is_enum != 0;
+        }
+
+        int javan_runtime_class_is_instance(void* type_value, void* value) {
+            return javan_runtime_class_matches_value(javan_runtime_class_checked(type_value), value);
+        }
+
+        void* javan_runtime_class_cast(void* type_value, void* value) {
+            if (value == NULL) {
+                return NULL;
+            }
+            if (javan_runtime_class_is_instance(type_value, value) != 0) {
+                return value;
+            }
+            javan_panic("Class.cast type mismatch");
+            return NULL;
+        }
+
+        int javan_runtime_class_is_assignable_from(void* target_type, void* source_type) {
+            javan_runtime_class_state* target = javan_runtime_class_checked(target_type);
+            javan_runtime_class_state* source = javan_runtime_class_checked(source_type);
+            return javan_runtime_class_matches_class(target, source);
         }
 
         """;
@@ -3359,6 +4113,24 @@ final class RuntimeSourceMemorySections {
             return 0;
         }
 
+        long long javan_number_long_value(void* value) {
+            int type_id = javan_registered_type_id(value);
+            if (type_id == JAVAN_TYPE_JAVA_LANG_INTEGER) {
+                return (long long) ((javan_boxed_int*) value)->value;
+            }
+            if (type_id == JAVAN_TYPE_JAVA_LANG_LONG) {
+                return ((javan_boxed_long*) value)->value;
+            }
+            if (type_id == JAVAN_TYPE_JAVA_LANG_FLOAT) {
+                return (long long) ((javan_boxed_float*) value)->value;
+            }
+            if (type_id == JAVAN_TYPE_JAVA_LANG_DOUBLE) {
+                return (long long) ((javan_boxed_double*) value)->value;
+            }
+            javan_panic("not a supported Number");
+            return 0;
+        }
+
         int javan_character_char_value(void* value) {
             if (javan_registered_type_id(value) != JAVAN_TYPE_JAVA_LANG_CHARACTER) {
                 javan_panic("not a Character");
@@ -3378,6 +4150,29 @@ final class RuntimeSourceMemorySections {
                 javan_panic("not a Long");
             }
             return ((javan_boxed_long*) value)->value;
+        }
+
+        long long javan_long_parse_long(void* value) {
+            if (value == NULL) {
+                javan_panic("null string");
+            }
+            const char* text = (const char*) value;
+            if (*text != '\\0' && isspace((unsigned char) *text) != 0) {
+                javan_panic("invalid long");
+            }
+            errno = 0;
+            char* end = NULL;
+            long long result = strtoll(text, &end, 10);
+            if (text == end) {
+                javan_panic("invalid long");
+            }
+            if (errno == ERANGE) {
+                javan_panic("long out of range");
+            }
+            if (end == NULL || *end != '\\0') {
+                javan_panic("invalid long");
+            }
+            return result;
         }
 
         void* javan_float_value_of(float value) {
@@ -3412,6 +4207,28 @@ final class RuntimeSourceMemorySections {
                 javan_panic("not a Double");
             }
             return ((javan_boxed_double*) value)->value;
+        }
+
+        double javan_double_parse_double(void* value) {
+            if (value == NULL) {
+                javan_panic("null string");
+            }
+            const char* text = (const char*) value;
+            while (*text != '\\0' && isspace((unsigned char) *text) != 0) {
+                text++;
+            }
+            char* end = NULL;
+            double result = strtod(text, &end);
+            if (text == end) {
+                javan_panic("invalid double");
+            }
+            while (end != NULL && *end != '\\0' && isspace((unsigned char) *end) != 0) {
+                end++;
+            }
+            if (end == NULL || *end != '\\0') {
+                javan_panic("invalid double");
+            }
+            return result;
         }
 
         double javan_double_long_bits_to_double(long long value) {
@@ -3552,6 +4369,39 @@ final class RuntimeSourceMemorySections {
             return (void*) date;
         }
 
+        static void* javan_sql_date_new(long long epoch_millis) {
+            javan_sql_date_value* date = (javan_sql_date_value*) javan_alloc(sizeof(javan_sql_date_value));
+            date->magic = JAVAN_SQL_DATE_MAGIC;
+            date->reserved0 = 0;
+            date->reserved1 = 0;
+            date->reserved2 = 0;
+            date->epoch_millis = epoch_millis;
+            javan_update_runtime_allocation_kind((void*) date, JAVAN_RUNTIME_KIND_SQL_DATE);
+            return (void*) date;
+        }
+
+        static void* javan_sql_time_new(long long epoch_millis) {
+            javan_sql_time_value* time = (javan_sql_time_value*) javan_alloc(sizeof(javan_sql_time_value));
+            time->magic = JAVAN_SQL_TIME_MAGIC;
+            time->reserved0 = 0;
+            time->reserved1 = 0;
+            time->reserved2 = 0;
+            time->epoch_millis = epoch_millis;
+            javan_update_runtime_allocation_kind((void*) time, JAVAN_RUNTIME_KIND_SQL_TIME);
+            return (void*) time;
+        }
+
+        static void* javan_sql_timestamp_new(long long epoch_millis) {
+            javan_sql_timestamp_value* timestamp = (javan_sql_timestamp_value*) javan_alloc(sizeof(javan_sql_timestamp_value));
+            timestamp->magic = JAVAN_SQL_TIMESTAMP_MAGIC;
+            timestamp->reserved0 = 0;
+            timestamp->reserved1 = 0;
+            timestamp->reserved2 = 0;
+            timestamp->epoch_millis = epoch_millis;
+            javan_update_runtime_allocation_kind((void*) timestamp, JAVAN_RUNTIME_KIND_SQL_TIMESTAMP);
+            return (void*) timestamp;
+        }
+
         static void* javan_local_date_new(int year, int month, int day) {
             javan_local_date_value* date = (javan_local_date_value*) javan_alloc(sizeof(javan_local_date_value));
             date->magic = JAVAN_LOCAL_DATE_MAGIC;
@@ -3596,6 +4446,43 @@ final class RuntimeSourceMemorySections {
             date_time->epoch_millis = epoch_millis;
             javan_update_runtime_allocation_kind((void*) date_time, JAVAN_RUNTIME_KIND_ZONED_DATE_TIME);
             return (void*) date_time;
+        }
+
+        static void* javan_offset_date_time_new(long long epoch_millis) {
+            javan_offset_date_time_value* date_time = (javan_offset_date_time_value*) javan_alloc(sizeof(javan_offset_date_time_value));
+            date_time->magic = JAVAN_OFFSET_DATE_TIME_MAGIC;
+            date_time->zone_kind = JAVAN_ZONE_KIND_SYSTEM_DEFAULT;
+            date_time->reserved0 = 0;
+            date_time->reserved1 = 0;
+            date_time->epoch_millis = epoch_millis;
+            javan_update_runtime_allocation_kind((void*) date_time, JAVAN_RUNTIME_KIND_OFFSET_DATE_TIME);
+            return (void*) date_time;
+        }
+
+        static void* javan_calendar_new(long long epoch_millis) {
+            javan_calendar_value* calendar = (javan_calendar_value*) javan_alloc(sizeof(javan_calendar_value));
+            calendar->magic = JAVAN_CALENDAR_MAGIC;
+            calendar->reserved0 = 0;
+            calendar->reserved1 = 0;
+            calendar->reserved2 = 0;
+            calendar->epoch_millis = epoch_millis;
+            javan_update_runtime_allocation_kind((void*) calendar, JAVAN_RUNTIME_KIND_CALENDAR);
+            return (void*) calendar;
+        }
+
+        static long long javan_date_like_epoch_millis(void* value) {
+            switch (javan_runtime_kind_of(value)) {
+                case JAVAN_RUNTIME_KIND_DATE:
+                    return javan_date_checked(value)->epoch_millis;
+                case JAVAN_RUNTIME_KIND_SQL_DATE:
+                    return javan_sql_date_checked(value)->epoch_millis;
+                case JAVAN_RUNTIME_KIND_SQL_TIME:
+                    return javan_sql_time_checked(value)->epoch_millis;
+                case JAVAN_RUNTIME_KIND_SQL_TIMESTAMP:
+                    return javan_sql_timestamp_checked(value)->epoch_millis;
+                default:
+                    javan_panic("unsupported date");
+            }
         }
 
         static void javan_components_from_epoch_millis_local(
@@ -3670,6 +4557,78 @@ final class RuntimeSourceMemorySections {
             return javan_zoned_date_time_new(javan_instant_checked(instant)->epoch_millis);
         }
 
+        int javan_temporal_accessor_is_supported(void* temporal, void* field) {
+            const char* field_name = javan_charsequence_string_value(field);
+            int runtime_kind = javan_runtime_kind_of(temporal);
+            if (strcmp(field_name, "INSTANT_SECONDS") == 0) {
+                return runtime_kind == JAVAN_RUNTIME_KIND_INSTANT
+                    || runtime_kind == JAVAN_RUNTIME_KIND_ZONED_DATE_TIME
+                    || runtime_kind == JAVAN_RUNTIME_KIND_OFFSET_DATE_TIME;
+            }
+            if (strcmp(field_name, "OFFSET_SECONDS") == 0) {
+                return runtime_kind == JAVAN_RUNTIME_KIND_ZONED_DATE_TIME
+                    || runtime_kind == JAVAN_RUNTIME_KIND_OFFSET_DATE_TIME;
+            }
+            if (strcmp(field_name, "EPOCH_DAY") == 0) {
+                return runtime_kind == JAVAN_RUNTIME_KIND_LOCAL_DATE
+                    || runtime_kind == JAVAN_RUNTIME_KIND_LOCAL_DATE_TIME
+                    || runtime_kind == JAVAN_RUNTIME_KIND_ZONED_DATE_TIME
+                    || runtime_kind == JAVAN_RUNTIME_KIND_OFFSET_DATE_TIME;
+            }
+            if (strcmp(field_name, "NANO_OF_DAY") == 0) {
+                return runtime_kind == JAVAN_RUNTIME_KIND_LOCAL_TIME
+                    || runtime_kind == JAVAN_RUNTIME_KIND_LOCAL_DATE_TIME
+                    || runtime_kind == JAVAN_RUNTIME_KIND_ZONED_DATE_TIME
+                    || runtime_kind == JAVAN_RUNTIME_KIND_OFFSET_DATE_TIME;
+            }
+            javan_panic("unsupported temporal field");
+            return 0;
+        }
+
+        void* javan_temporal_accessor_query(void* temporal, void* query) {
+            const char* query_name = javan_charsequence_string_value(query);
+            int runtime_kind = javan_runtime_kind_of(temporal);
+            if (strcmp(query_name, "zone") == 0) {
+                if (runtime_kind == JAVAN_RUNTIME_KIND_ZONED_DATE_TIME
+                    || runtime_kind == JAVAN_RUNTIME_KIND_OFFSET_DATE_TIME) {
+                    return javan_zone_id_new_system_default();
+                }
+                return NULL;
+            }
+            if (strcmp(query_name, "localDate") == 0) {
+                if (runtime_kind == JAVAN_RUNTIME_KIND_LOCAL_DATE) {
+                    return temporal;
+                }
+                if (runtime_kind == JAVAN_RUNTIME_KIND_LOCAL_DATE_TIME) {
+                    return javan_local_date_time_to_local_date(temporal);
+                }
+                if (runtime_kind == JAVAN_RUNTIME_KIND_ZONED_DATE_TIME) {
+                    return javan_zoned_date_time_to_local_date(temporal);
+                }
+                if (runtime_kind == JAVAN_RUNTIME_KIND_OFFSET_DATE_TIME) {
+                    return javan_local_date_from_temporal(temporal);
+                }
+                return NULL;
+            }
+            if (strcmp(query_name, "localTime") == 0) {
+                if (runtime_kind == JAVAN_RUNTIME_KIND_LOCAL_TIME) {
+                    return temporal;
+                }
+                if (runtime_kind == JAVAN_RUNTIME_KIND_LOCAL_DATE_TIME) {
+                    return javan_local_date_time_to_local_time(temporal);
+                }
+                if (runtime_kind == JAVAN_RUNTIME_KIND_ZONED_DATE_TIME) {
+                    return javan_zoned_date_time_to_local_time(temporal);
+                }
+                if (runtime_kind == JAVAN_RUNTIME_KIND_OFFSET_DATE_TIME) {
+                    return javan_local_time_from_temporal(temporal);
+                }
+                return NULL;
+            }
+            javan_panic("unsupported temporal query");
+            return NULL;
+        }
+
         void* javan_local_date_of_epoch_day(long long epoch_day) {
             if (epoch_day > LLONG_MAX / 86400LL || epoch_day < LLONG_MIN / 86400LL) {
                 javan_panic("epoch day overflow");
@@ -3683,6 +4642,63 @@ final class RuntimeSourceMemorySections {
                 javan_panic("time conversion failed");
             }
             return javan_local_date_new(calendar.tm_year + 1900, calendar.tm_mon + 1, calendar.tm_mday);
+        }
+
+        void* javan_local_date_from_temporal(void* temporal) {
+            int runtime_kind = javan_runtime_kind_of(temporal);
+            if (runtime_kind == JAVAN_RUNTIME_KIND_LOCAL_DATE) {
+                return temporal;
+            }
+            if (runtime_kind == JAVAN_RUNTIME_KIND_LOCAL_DATE_TIME) {
+                return javan_local_date_time_to_local_date(temporal);
+            }
+            if (runtime_kind == JAVAN_RUNTIME_KIND_ZONED_DATE_TIME) {
+                return javan_zoned_date_time_to_local_date(temporal);
+            }
+            if (runtime_kind == JAVAN_RUNTIME_KIND_OFFSET_DATE_TIME) {
+                int year = 0;
+                int month = 0;
+                int day = 0;
+                int hour = 0;
+                int minute = 0;
+                int second = 0;
+                int millis = 0;
+                javan_components_from_epoch_millis_local(
+                    javan_offset_date_time_checked(temporal)->epoch_millis,
+                    &year,
+                    &month,
+                    &day,
+                    &hour,
+                    &minute,
+                    &second,
+                    &millis
+                );
+                return javan_local_date_new(year, month, day);
+            }
+            javan_panic("unsupported LocalDate.from temporal");
+            return NULL;
+        }
+
+        void* javan_local_date_now(void* zone) {
+            javan_zone_id_checked(zone);
+            int year = 0;
+            int month = 0;
+            int day = 0;
+            int hour = 0;
+            int minute = 0;
+            int second = 0;
+            int millis = 0;
+            javan_components_from_epoch_millis_local(
+                javan_system_current_time_millis(),
+                &year,
+                &month,
+                &day,
+                &hour,
+                &minute,
+                &second,
+                &millis
+            );
+            return javan_local_date_new(year, month, day);
         }
 
         void* javan_local_date_at_start_of_day(void* value) {
@@ -3702,6 +4718,61 @@ final class RuntimeSourceMemorySections {
                 0,
                 0
             ));
+        }
+
+        void* javan_local_time_midnight(void) {
+            return javan_local_time_new(0, 0, 0, 0);
+        }
+
+        void* javan_local_time_from_temporal(void* temporal) {
+            int runtime_kind = javan_runtime_kind_of(temporal);
+            if (runtime_kind == JAVAN_RUNTIME_KIND_LOCAL_TIME) {
+                return temporal;
+            }
+            if (runtime_kind == JAVAN_RUNTIME_KIND_LOCAL_DATE_TIME) {
+                return javan_local_date_time_to_local_time(temporal);
+            }
+            if (runtime_kind == JAVAN_RUNTIME_KIND_ZONED_DATE_TIME) {
+                return javan_zoned_date_time_to_local_time(temporal);
+            }
+            if (runtime_kind == JAVAN_RUNTIME_KIND_OFFSET_DATE_TIME) {
+                int year = 0;
+                int month = 0;
+                int day = 0;
+                int hour = 0;
+                int minute = 0;
+                int second = 0;
+                int millis = 0;
+                javan_components_from_epoch_millis_local(
+                    javan_offset_date_time_checked(temporal)->epoch_millis,
+                    &year,
+                    &month,
+                    &day,
+                    &hour,
+                    &minute,
+                    &second,
+                    &millis
+                );
+                return javan_local_time_new(hour, minute, second, millis);
+            }
+            javan_panic("unsupported LocalTime.from temporal");
+            return NULL;
+        }
+
+        int javan_local_time_get_hour(void* value) {
+            return javan_local_time_checked(value)->hour;
+        }
+
+        int javan_local_time_get_minute(void* value) {
+            return javan_local_time_checked(value)->minute;
+        }
+
+        int javan_local_time_get_second(void* value) {
+            return javan_local_time_checked(value)->second;
+        }
+
+        int javan_local_time_get_nano(void* value) {
+            return javan_local_time_checked(value)->millis * 1000000;
         }
 
         void* javan_local_date_time_of_instant(void* instant, void* zone) {
@@ -3750,8 +4821,27 @@ final class RuntimeSourceMemorySections {
             return javan_local_time_new(date_time->hour, date_time->minute, date_time->second, date_time->millis);
         }
 
+        void* javan_zoned_date_time_of(void* date, void* time, void* zone) {
+            javan_local_date_value* local_date = javan_local_date_checked(date);
+            javan_local_time_value* local_time = javan_local_time_checked(time);
+            javan_zone_id_checked(zone);
+            return javan_zoned_date_time_new(javan_epoch_millis_from_local_components(
+                local_date->year,
+                local_date->month,
+                local_date->day,
+                local_time->hour,
+                local_time->minute,
+                local_time->second,
+                local_time->millis
+            ));
+        }
+
         void* javan_zoned_date_time_to_instant(void* value) {
             return javan_instant_new(javan_zoned_date_time_checked(value)->epoch_millis);
+        }
+
+        void* javan_zoned_date_time_to_offset_date_time(void* value) {
+            return javan_offset_date_time_new(javan_zoned_date_time_checked(value)->epoch_millis);
         }
 
         void* javan_zoned_date_time_to_local_date(void* value) {
@@ -3817,8 +4907,146 @@ final class RuntimeSourceMemorySections {
             return javan_local_date_time_new(year, month, day, hour, minute, second, millis);
         }
 
+        void* javan_offset_date_time_to_instant(void* value) {
+            return javan_instant_new(javan_offset_date_time_checked(value)->epoch_millis);
+        }
+
+        void* javan_calendar_get_instance(void) {
+            return javan_calendar_new(javan_system_current_time_millis());
+        }
+
+        void javan_calendar_set_time(void* value, void* date) {
+            javan_calendar_checked(value)->epoch_millis = javan_date_like_epoch_millis(date);
+        }
+
+        void javan_calendar_set_time_in_millis(void* value, long long epoch_millis) {
+            javan_calendar_checked(value)->epoch_millis = epoch_millis;
+        }
+
+        void javan_calendar_set_field(void* value, int field, int field_value) {
+            javan_calendar_value* calendar = javan_calendar_checked(value);
+            int year = 0;
+            int month = 0;
+            int day = 0;
+            int hour = 0;
+            int minute = 0;
+            int second = 0;
+            int millis = 0;
+            javan_components_from_epoch_millis_local(
+                calendar->epoch_millis,
+                &year,
+                &month,
+                &day,
+                &hour,
+                &minute,
+                &second,
+                &millis
+            );
+            switch (field) {
+                case 1:
+                    year = field_value;
+                    break;
+                case 2:
+                    month = field_value + 1;
+                    break;
+                case 5:
+                    day = field_value;
+                    break;
+                case 11:
+                    hour = field_value;
+                    break;
+                case 12:
+                    minute = field_value;
+                    break;
+                case 13:
+                    second = field_value;
+                    break;
+                case 14:
+                    millis = field_value;
+                    break;
+                default:
+                    javan_panic("unsupported calendar field");
+            }
+            calendar->epoch_millis = javan_epoch_millis_from_local_components(year, month, day, hour, minute, second, millis);
+        }
+
+        long long javan_calendar_get_time_in_millis(void* value) {
+            return javan_calendar_checked(value)->epoch_millis;
+        }
+
+        void* javan_calendar_to_instant(void* value) {
+            return javan_instant_new(javan_calendar_checked(value)->epoch_millis);
+        }
+
+        static void* javan_logging_level_new(int value, const char* name) {
+            javan_logging_level_value* level = (javan_logging_level_value*) javan_alloc(sizeof(javan_logging_level_value));
+            level->magic = JAVAN_LOGGING_LEVEL_MAGIC;
+            level->value = value;
+            level->reserved0 = 0;
+            level->reserved1 = 0;
+            level->name = name;
+            javan_update_runtime_allocation_kind((void*) level, JAVAN_RUNTIME_KIND_LOGGING_LEVEL);
+            return (void*) level;
+        }
+
+        static void* javan_logging_level_cached(void** root, int value, const char* name) {
+            if (*root != NULL) {
+                return *root;
+            }
+            *root = javan_logging_level_new(value, name);
+            return *root;
+        }
+
+        void* javan_logging_level_off(void) {
+            return javan_logging_level_cached(&javan_logging_level_off_root_value, 2147483647, "OFF");
+        }
+
+        void* javan_logging_level_severe(void) {
+            return javan_logging_level_cached(&javan_logging_level_severe_root_value, 1000, "SEVERE");
+        }
+
+        void* javan_logging_level_warning(void) {
+            return javan_logging_level_cached(&javan_logging_level_warning_root_value, 900, "WARNING");
+        }
+
+        void* javan_logging_level_info(void) {
+            return javan_logging_level_cached(&javan_logging_level_info_root_value, 800, "INFO");
+        }
+
+        void* javan_logging_level_fine(void) {
+            return javan_logging_level_cached(&javan_logging_level_fine_root_value, 500, "FINE");
+        }
+
+        void* javan_logging_level_finer(void) {
+            return javan_logging_level_cached(&javan_logging_level_finer_root_value, 400, "FINER");
+        }
+
+        void* javan_logging_level_all(void) {
+            return javan_logging_level_cached(&javan_logging_level_all_root_value, -2147483648, "ALL");
+        }
+
+        int javan_logging_level_int_value(void* value) {
+            return javan_logging_level_checked(value)->value;
+        }
+
+        void* javan_logging_level_to_string(void* value) {
+            return javan_string_from(javan_logging_level_checked(value)->name);
+        }
+
         void* javan_date_from_instant(void* instant) {
             return javan_date_new(javan_instant_checked(instant)->epoch_millis);
+        }
+
+        void* javan_date_alloc(void) {
+            return javan_date_new(0);
+        }
+
+        void javan_date_init_now(void* value) {
+            javan_date_checked(value)->epoch_millis = javan_system_current_time_millis();
+        }
+
+        void javan_date_init_millis(void* value, long long epoch_millis) {
+            javan_date_checked(value)->epoch_millis = epoch_millis;
         }
 
         void* javan_date_to_instant(void* value) {
@@ -3827,6 +5055,136 @@ final class RuntimeSourceMemorySections {
 
         long long javan_date_get_time(void* value) {
             return javan_date_checked(value)->epoch_millis;
+        }
+
+        void* javan_sql_date_alloc(void) {
+            return javan_sql_date_new(0);
+        }
+
+        void javan_sql_date_init_millis(void* value, long long epoch_millis) {
+            javan_sql_date_checked(value)->epoch_millis = epoch_millis;
+        }
+
+        void* javan_sql_date_value_of_local_date(void* value) {
+            javan_local_date_value* date = javan_local_date_checked(value);
+            return javan_sql_date_new(javan_epoch_millis_from_local_components(date->year, date->month, date->day, 0, 0, 0, 0));
+        }
+
+        long long javan_sql_date_get_time(void* value) {
+            return javan_sql_date_checked(value)->epoch_millis;
+        }
+
+        void* javan_sql_date_to_local_date(void* value) {
+            int year = 0;
+            int month = 0;
+            int day = 0;
+            int hour = 0;
+            int minute = 0;
+            int second = 0;
+            int millis = 0;
+            javan_components_from_epoch_millis_local(
+                javan_sql_date_checked(value)->epoch_millis,
+                &year,
+                &month,
+                &day,
+                &hour,
+                &minute,
+                &second,
+                &millis
+            );
+            return javan_local_date_new(year, month, day);
+        }
+
+        void* javan_sql_time_alloc(void) {
+            return javan_sql_time_new(0);
+        }
+
+        void javan_sql_time_init_millis(void* value, long long epoch_millis) {
+            javan_sql_time_checked(value)->epoch_millis = epoch_millis;
+        }
+
+        void* javan_sql_time_value_of_local_time(void* value) {
+            javan_local_time_value* time = javan_local_time_checked(value);
+            return javan_sql_time_new(javan_epoch_millis_from_local_components(1970, 1, 1, time->hour, time->minute, time->second, 0));
+        }
+
+        long long javan_sql_time_get_time(void* value) {
+            return javan_sql_time_checked(value)->epoch_millis;
+        }
+
+        void* javan_sql_time_to_local_time(void* value) {
+            int year = 0;
+            int month = 0;
+            int day = 0;
+            int hour = 0;
+            int minute = 0;
+            int second = 0;
+            int millis = 0;
+            javan_components_from_epoch_millis_local(
+                javan_sql_time_checked(value)->epoch_millis,
+                &year,
+                &month,
+                &day,
+                &hour,
+                &minute,
+                &second,
+                &millis
+            );
+            return javan_local_time_new(hour, minute, second, millis);
+        }
+
+        void* javan_sql_timestamp_alloc(void) {
+            return javan_sql_timestamp_new(0);
+        }
+
+        void javan_sql_timestamp_init_millis(void* value, long long epoch_millis) {
+            javan_sql_timestamp_checked(value)->epoch_millis = epoch_millis;
+        }
+
+        void* javan_sql_timestamp_from_instant(void* value) {
+            return javan_sql_timestamp_new(javan_instant_checked(value)->epoch_millis);
+        }
+
+        void* javan_sql_timestamp_value_of_local_date_time(void* value) {
+            javan_local_date_time_value* date_time = javan_local_date_time_checked(value);
+            return javan_sql_timestamp_new(javan_epoch_millis_from_local_components(
+                date_time->year,
+                date_time->month,
+                date_time->day,
+                date_time->hour,
+                date_time->minute,
+                date_time->second,
+                date_time->millis
+            ));
+        }
+
+        long long javan_sql_timestamp_get_time(void* value) {
+            return javan_sql_timestamp_checked(value)->epoch_millis;
+        }
+
+        void* javan_sql_timestamp_to_instant(void* value) {
+            return javan_instant_new(javan_sql_timestamp_checked(value)->epoch_millis);
+        }
+
+        void* javan_sql_timestamp_to_local_date_time(void* value) {
+            int year = 0;
+            int month = 0;
+            int day = 0;
+            int hour = 0;
+            int minute = 0;
+            int second = 0;
+            int millis = 0;
+            javan_components_from_epoch_millis_local(
+                javan_sql_timestamp_checked(value)->epoch_millis,
+                &year,
+                &month,
+                &day,
+                &hour,
+                &minute,
+                &second,
+                &millis
+            );
+            return javan_local_date_time_new(year, month, day, hour, minute, second, millis);
         }
         """;
 
@@ -4105,6 +5463,48 @@ final class RuntimeSourceMemorySections {
             return javan_management_start_time_millis();
         }
 
+        void* javan_management_memory_mxbean(void) {
+            if (javan_memory_mxbean_root_value != NULL) {
+                return javan_memory_mxbean_root_value;
+            }
+            javan_memory_mxbean_value* bean = (javan_memory_mxbean_value*) javan_alloc(sizeof(javan_memory_mxbean_value));
+            bean->magic = JAVAN_MEMORY_MXBEAN_MAGIC;
+            bean->reserved0 = 0;
+            bean->reserved1 = 0;
+            bean->reserved2 = 0;
+            javan_update_runtime_allocation_kind((void*) bean, JAVAN_RUNTIME_KIND_MEMORY_MXBEAN);
+            javan_memory_mxbean_root_value = (void*) bean;
+            return javan_memory_mxbean_root_value;
+        }
+
+        void* javan_memory_mxbean_get_heap_memory_usage(void* value) {
+            javan_memory_mxbean_checked(value);
+            void* runtime = javan_runtime_get_runtime();
+            long long used = javan_runtime_total_memory(runtime);
+            long long max = javan_runtime_max_memory(runtime);
+            if (max < used) {
+                max = used;
+            }
+            javan_memory_usage_value* usage = (javan_memory_usage_value*) javan_alloc(sizeof(javan_memory_usage_value));
+            usage->magic = JAVAN_MEMORY_USAGE_MAGIC;
+            usage->reserved0 = 0;
+            usage->reserved1 = 0;
+            usage->reserved2 = 0;
+            usage->used = used;
+            usage->committed = used;
+            usage->max = max;
+            javan_update_runtime_allocation_kind((void*) usage, JAVAN_RUNTIME_KIND_MEMORY_USAGE);
+            return (void*) usage;
+        }
+
+        long long javan_memory_usage_get_used(void* value) {
+            return javan_memory_usage_checked(value)->used;
+        }
+
+        long long javan_memory_usage_get_max(void* value) {
+            return javan_memory_usage_checked(value)->max;
+        }
+
         void* javan_management_operating_system_mxbean(void) {
             if (javan_operating_system_mxbean_root_value != NULL) {
                 return javan_operating_system_mxbean_root_value;
@@ -4133,6 +5533,29 @@ final class RuntimeSourceMemorySections {
         double javan_operating_system_mxbean_get_cpu_load(void* value) {
             javan_operating_system_mxbean_checked(value);
             return javan_management_cpu_load_unavailable();
+        }
+
+        void* javan_process_handle_current(void) {
+            if (javan_process_handle_root_value != NULL) {
+                return javan_process_handle_root_value;
+            }
+            javan_process_handle_value* handle = (javan_process_handle_value*) javan_alloc(sizeof(javan_process_handle_value));
+            handle->magic = JAVAN_PROCESS_HANDLE_MAGIC;
+            handle->reserved0 = 0;
+            handle->reserved1 = 0;
+            handle->reserved2 = 0;
+            #if defined(_WIN32)
+            handle->pid = (long long) _getpid();
+            #else
+            handle->pid = (long long) getpid();
+            #endif
+            javan_update_runtime_allocation_kind((void*) handle, JAVAN_RUNTIME_KIND_PROCESS_HANDLE);
+            javan_process_handle_root_value = (void*) handle;
+            return javan_process_handle_root_value;
+        }
+
+        long long javan_process_handle_pid(void* value) {
+            return javan_process_handle_checked(value)->pid;
         }
 
         void* javan_datetime_formatter_builder_new(void) {
@@ -4976,6 +6399,11 @@ final class RuntimeSourceMemorySections {
             javan_runtime_lock_enter();
             javan_profile_thread_start_calls_value++;
             javan_runtime_lock_leave();
+            if (thread->target == NULL) {
+                javan_thread_leave_live_root(value);
+                javan_thread_completion_signal(thread);
+                return;
+            }
             #if defined(_WIN32)
             thread->native_handle = (void*) _beginthreadex(NULL, 0, javan_thread_host_start, value, 0, NULL);
             if (thread->native_handle == NULL) {
@@ -5146,6 +6574,22 @@ final class RuntimeSourceMemorySections {
             return NULL;
         }
 
+        static int javan_type_descriptor_contains_assignable_name(
+            JavanTypeDescriptor* descriptor,
+            const char* binary_name
+        ) {
+            if (descriptor == NULL || binary_name == NULL) {
+                return 0;
+            }
+            for (int index = 0; index < descriptor->assignable_name_count; index++) {
+                const char* candidate = descriptor->assignable_names[index];
+                if (candidate != NULL && strcmp(candidate, binary_name) == 0) {
+                    return 1;
+                }
+            }
+            return 0;
+        }
+
         static void javan_gc_mark_value(void* value);
         static void javan_gc_mark_runtime_object_references(void);
 
@@ -5174,7 +6618,11 @@ final class RuntimeSourceMemorySections {
             if (list == NULL || list->magic != JAVAN_OBJECT_LIST_MAGIC) {
                 return;
             }
+            javan_gc_mark_value((void*) list->backing);
             javan_gc_mark_value((void*) list->values);
+            if (list->backing != NULL) {
+                return;
+            }
             for (int index = 0; index < list->length; index++) {
                 javan_gc_mark_value(list->values[index]);
             }
@@ -5196,7 +6644,8 @@ final class RuntimeSourceMemorySections {
             if (value == NULL) {
                 return;
             }
-            if (runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_LIST) {
+            if (runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_LIST
+                || runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_SET) {
                 javan_gc_mark_runtime_list((javan_object_list*) value);
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_ITERATOR) {
                 javan_object_iterator* iterator = (javan_object_iterator*) value;
@@ -5252,6 +6701,7 @@ final class RuntimeSourceMemorySections {
                 if (throwable != NULL && throwable->magic == JAVAN_THROWABLE_MAGIC) {
                     javan_gc_mark_value(throwable->message);
                     javan_gc_mark_value((void*) throwable->suppressed);
+                    javan_gc_mark_value(throwable->stack_trace);
                 }
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_DATETIME_FORMATTER_BUILDER) {
                 javan_datetime_formatter_builder_value* builder = (javan_datetime_formatter_builder_value*) value;
@@ -5326,6 +6776,18 @@ final class RuntimeSourceMemorySections {
                 javan_http_response_value* response = (javan_http_response_value*) value;
                 if (response != NULL && response->magic == JAVAN_HTTP_RESPONSE_MAGIC) {
                     javan_gc_mark_value((void*) response->body);
+                }
+            } else if (runtime_kind == JAVAN_RUNTIME_KIND_HTTP_EXCHANGE) {
+                javan_http_exchange_value* exchange = (javan_http_exchange_value*) value;
+                if (exchange != NULL && exchange->magic == JAVAN_HTTP_EXCHANGE_MAGIC) {
+                    javan_gc_mark_value((void*) exchange->request_uri);
+                    javan_gc_mark_value((void*) exchange->request_headers);
+                    javan_gc_mark_value(exchange->request_body);
+                }
+            } else if (runtime_kind == JAVAN_RUNTIME_KIND_HTTP_INPUT_STREAM) {
+                javan_http_input_stream_value* stream = (javan_http_input_stream_value*) value;
+                if (stream != NULL && stream->magic == JAVAN_HTTP_INPUT_STREAM_MAGIC) {
+                    javan_gc_mark_value(stream->bytes);
                 }
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_PROCESS_RESULT) {
                 javan_process_result* result = (javan_process_result*) value;
@@ -5416,7 +6878,16 @@ final class RuntimeSourceMemorySections {
             javan_gc_mark_value(javan_runtime_root_value);
             javan_gc_mark_value(javan_thread_mxbean_root_value);
             javan_gc_mark_value(javan_runtime_mxbean_root_value);
+            javan_gc_mark_value(javan_memory_mxbean_root_value);
             javan_gc_mark_value(javan_operating_system_mxbean_root_value);
+            javan_gc_mark_value(javan_process_handle_root_value);
+            javan_gc_mark_value(javan_logging_level_off_root_value);
+            javan_gc_mark_value(javan_logging_level_severe_root_value);
+            javan_gc_mark_value(javan_logging_level_warning_root_value);
+            javan_gc_mark_value(javan_logging_level_info_root_value);
+            javan_gc_mark_value(javan_logging_level_fine_root_value);
+            javan_gc_mark_value(javan_logging_level_finer_root_value);
+            javan_gc_mark_value(javan_logging_level_all_root_value);
             javan_allocation_node* node = javan_allocations;
             while (node != NULL) {
                 if (node->kind == JAVAN_HEAP_KIND_RUNTIME && node->mark != 0) {
@@ -5987,6 +7458,47 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        void* javan_string_get_bytes_charset(void* value, void* charset) {
+            if (value == NULL) {
+                javan_panic("null string");
+            }
+            if (charset == NULL || strcmp((const char*) charset, "UTF-8") != 0) {
+                javan_panic("unsupported charset");
+            }
+            void** javan_string_get_bytes_roots[] = {
+                (void**) &value,
+                (void**) &charset
+            };
+            javan_root_frame_push(javan_string_get_bytes_roots, 2);
+            const char* text = (const char*) value;
+            void* result = javan_byte_array_from((const signed char*) text, (int) strlen(text));
+            javan_root_frame_pop(javan_string_get_bytes_roots);
+            return result;
+        }
+
+        void* javan_string_from_utf8_bytes(void* array, int offset, int count, void* charset) {
+            javan_byte_array* bytes = (javan_byte_array*) javan_array_checked(array);
+            javan_array_kind_checked((javan_array_header*) bytes, JAVAN_ARRAY_KIND_BYTE);
+            if (charset == NULL || strcmp((const char*) charset, "UTF-8") != 0) {
+                javan_panic("unsupported charset");
+            }
+            if (offset < 0 || count < 0 || offset > bytes->length || count > bytes->length - offset) {
+                javan_panic("string index out of bounds");
+            }
+            void** javan_string_bytes_roots[] = {
+                (void**) &bytes,
+                (void**) &charset
+            };
+            javan_root_frame_push(javan_string_bytes_roots, 2);
+            char* result = javan_string_alloc((unsigned long) count + 1UL);
+            if (count > 0) {
+                memcpy(result, bytes->values + offset, (unsigned long) count);
+            }
+            result[count] = '\\0';
+            javan_root_frame_pop(javan_string_bytes_roots);
+            return result;
+        }
+
         int javan_string_length(const char* value) {
             if (value == NULL) {
                 javan_panic("null string");
@@ -6004,6 +7516,51 @@ final class RuntimeSourceMemorySections {
                 javan_panic("string index out of bounds");
             }
             return (unsigned char) value[index];
+        }
+
+        int javan_character_is_whitespace(int value) {
+            unsigned int ch = (unsigned int) (value & 0xff);
+            return ch == ' '
+                || ch == '\\t'
+                || ch == '\\n'
+                || ch == '\\r'
+                || ch == '\\f'
+                || ch == 0x0b;
+        }
+
+        static const char* javan_charsequence_string_value(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported CharSequence");
+            }
+            javan_runtime_lock_enter();
+            javan_allocation_node* node = javan_find_allocation(value, NULL);
+            if (node == NULL) {
+                javan_runtime_lock_leave();
+                return (const char*) value;
+            }
+            if (node->kind == JAVAN_HEAP_KIND_RUNTIME && node->runtime_kind == JAVAN_RUNTIME_KIND_STRING) {
+                javan_runtime_lock_leave();
+                return (const char*) value;
+            }
+            javan_runtime_lock_leave();
+            javan_panic("unsupported CharSequence");
+            return NULL;
+        }
+
+        int javan_charsequence_length(void* value) {
+            int runtime_kind = javan_runtime_kind_of(value);
+            if (runtime_kind == JAVAN_RUNTIME_KIND_STRING_BUILDER) {
+                return javan_stringbuilder_length(value);
+            }
+            return javan_string_length(javan_charsequence_string_value(value));
+        }
+
+        int javan_charsequence_char_at(void* value, int index) {
+            int runtime_kind = javan_runtime_kind_of(value);
+            if (runtime_kind == JAVAN_RUNTIME_KIND_STRING_BUILDER) {
+                return javan_stringbuilder_char_at(value, index);
+            }
+            return javan_string_char_at(javan_charsequence_string_value(value), index);
         }
 
         int javan_string_index_of_char(const char* value, int ch) {
@@ -6212,6 +7769,275 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        void* javan_string_replace_sequence(const char* value, void* old_value, void* new_value) {
+            if (value == NULL || old_value == NULL || new_value == NULL) {
+                javan_panic("null string");
+            }
+            void* source_root = (void*) value;
+            void* old_root = old_value;
+            void* new_root = new_value;
+            void** javan_string_replace_sequence_roots[] = {
+                (void**) &source_root,
+                (void**) &old_root,
+                (void**) &new_root
+            };
+            javan_root_frame_push(javan_string_replace_sequence_roots, 3);
+            int old_kind = javan_runtime_kind_of(old_root);
+            if (old_kind == JAVAN_RUNTIME_KIND_STRING_BUILDER) {
+                old_root = javan_stringbuilder_to_string(old_root);
+            } else {
+                old_root = (void*) javan_charsequence_string_value(old_root);
+            }
+            int new_kind = javan_runtime_kind_of(new_root);
+            if (new_kind == JAVAN_RUNTIME_KIND_STRING_BUILDER) {
+                new_root = javan_stringbuilder_to_string(new_root);
+            } else {
+                new_root = (void*) javan_charsequence_string_value(new_root);
+            }
+            const char* source = (const char*) source_root;
+            const char* old_string = (const char*) old_root;
+            const char* new_string = (const char*) new_root;
+            size_t source_length = strlen(source);
+            size_t old_length = strlen(old_string);
+            size_t new_length = strlen(new_string);
+            if (old_length == 0) {
+                if (new_length != 0 && source_length > (SIZE_MAX - new_length) / (new_length + 1)) {
+                    javan_root_frame_pop(javan_string_replace_sequence_roots);
+                    javan_panic("string length overflow");
+                }
+                size_t result_length = source_length + ((source_length + 1) * new_length);
+                if (result_length > INT_MAX) {
+                    javan_root_frame_pop(javan_string_replace_sequence_roots);
+                    javan_panic("string length overflow");
+                }
+                char* result = javan_string_alloc(result_length + 1);
+                char* cursor = result;
+                memcpy(cursor, new_string, new_length);
+                cursor += new_length;
+                for (size_t index = 0; index < source_length; index++) {
+                    *cursor++ = source[index];
+                    memcpy(cursor, new_string, new_length);
+                    cursor += new_length;
+                }
+                *cursor = '\\0';
+                javan_root_frame_pop(javan_string_replace_sequence_roots);
+                return result;
+            }
+            size_t match_count = 0;
+            const char* scan = source;
+            const char* match = strstr(scan, old_string);
+            while (match != NULL) {
+                match_count++;
+                scan = match + old_length;
+                match = strstr(scan, old_string);
+            }
+            if (match_count == 0) {
+                void* result = source_root;
+                javan_root_frame_pop(javan_string_replace_sequence_roots);
+                return result;
+            }
+            size_t result_length = source_length;
+            if (new_length >= old_length) {
+                size_t delta = new_length - old_length;
+                if (delta != 0 && match_count > (SIZE_MAX - result_length) / delta) {
+                    javan_root_frame_pop(javan_string_replace_sequence_roots);
+                    javan_panic("string length overflow");
+                }
+                result_length += match_count * delta;
+            } else {
+                result_length -= match_count * (old_length - new_length);
+            }
+            if (result_length > INT_MAX) {
+                javan_root_frame_pop(javan_string_replace_sequence_roots);
+                javan_panic("string length overflow");
+            }
+            char* result = javan_string_alloc(result_length + 1);
+            char* cursor = result;
+            const char* chunk = source;
+            match = strstr(chunk, old_string);
+            while (match != NULL) {
+                size_t chunk_length = (size_t) (match - chunk);
+                memcpy(cursor, chunk, chunk_length);
+                cursor += chunk_length;
+                memcpy(cursor, new_string, new_length);
+                cursor += new_length;
+                chunk = match + old_length;
+                match = strstr(chunk, old_string);
+            }
+            size_t tail_length = strlen(chunk);
+            memcpy(cursor, chunk, tail_length);
+            cursor += tail_length;
+            *cursor = '\\0';
+            javan_root_frame_pop(javan_string_replace_sequence_roots);
+            return result;
+        }
+
+        static int javan_ascii_is_digit(unsigned char value) {
+            return value >= '0' && value <= '9';
+        }
+
+        static int javan_ascii_is_alpha(unsigned char value) {
+            unsigned char lower = javan_ascii_to_lower(value);
+            return lower >= 'a' && lower <= 'z';
+        }
+
+        void* javan_string_replace_all_whitespace(const char* value) {
+            if (value == NULL) {
+                javan_panic("null string");
+            }
+            unsigned long length = strlen(value);
+            void* source_root = (void*) value;
+            void** roots[] = {
+                (void**) &source_root
+            };
+            javan_root_frame_push(roots, 1);
+            char* result = javan_string_alloc(length + 1);
+            unsigned long output = 0;
+            int changed = 0;
+            for (unsigned long index = 0; index < length; index++) {
+                unsigned char ch = (unsigned char) ((const char*) source_root)[index];
+                if (javan_character_is_whitespace(ch)) {
+                    changed = 1;
+                    continue;
+                }
+                result[output++] = (char) ch;
+            }
+            result[output] = '\\0';
+            if (!changed) {
+                javan_root_frame_pop(roots);
+                return source_root;
+            }
+            javan_root_frame_pop(roots);
+            return result;
+        }
+
+        void* javan_string_replace_all_non_digits(const char* value) {
+            if (value == NULL) {
+                javan_panic("null string");
+            }
+            unsigned long length = strlen(value);
+            void* source_root = (void*) value;
+            void** roots[] = {
+                (void**) &source_root
+            };
+            javan_root_frame_push(roots, 1);
+            char* result = javan_string_alloc(length + 1);
+            unsigned long output = 0;
+            int changed = 0;
+            for (unsigned long index = 0; index < length; index++) {
+                unsigned char ch = (unsigned char) ((const char*) source_root)[index];
+                if (!javan_ascii_is_digit(ch)) {
+                    changed = 1;
+                    continue;
+                }
+                result[output++] = (char) ch;
+            }
+            result[output] = '\\0';
+            if (!changed) {
+                javan_root_frame_pop(roots);
+                return source_root;
+            }
+            javan_root_frame_pop(roots);
+            return result;
+        }
+
+        void* javan_string_replace_all_non_alnum_dot_with_dot(const char* value) {
+            if (value == NULL) {
+                javan_panic("null string");
+            }
+            unsigned long length = strlen(value);
+            void* source_root = (void*) value;
+            void** roots[] = {
+                (void**) &source_root
+            };
+            javan_root_frame_push(roots, 1);
+            char* result = javan_string_alloc(length + 1);
+            int changed = 0;
+            for (unsigned long index = 0; index < length; index++) {
+                unsigned char ch = (unsigned char) ((const char*) source_root)[index];
+                if (javan_ascii_is_alpha(ch) || javan_ascii_is_digit(ch) || ch == '.') {
+                    result[index] = (char) ch;
+                    continue;
+                }
+                result[index] = '.';
+                changed = 1;
+            }
+            result[length] = '\\0';
+            if (!changed) {
+                javan_root_frame_pop(roots);
+                return source_root;
+            }
+            javan_root_frame_pop(roots);
+            return result;
+        }
+
+        void* javan_string_trim_dot_edges(const char* value) {
+            if (value == NULL) {
+                javan_panic("null string");
+            }
+            unsigned long length = strlen(value);
+            unsigned long start = 0;
+            while (start < length && value[start] == '.') {
+                start++;
+            }
+            unsigned long end = length;
+            while (end > start && value[end - 1] == '.') {
+                end--;
+            }
+            if (start == 0 && end == length) {
+                return (void*) value;
+            }
+            unsigned long result_length = end - start;
+            char* result = javan_string_alloc(result_length + 1);
+            if (result_length > 0) {
+                memcpy(result, value + start, result_length);
+            }
+            result[result_length] = '\\0';
+            return result;
+        }
+
+        void* javan_string_remove_pem_markers(const char* value) {
+            if (value == NULL) {
+                javan_panic("null string");
+            }
+            unsigned long length = strlen(value);
+            void* source_root = (void*) value;
+            void** roots[] = {
+                (void**) &source_root
+            };
+            javan_root_frame_push(roots, 1);
+            char* result = javan_string_alloc(length + 1);
+            unsigned long output = 0;
+            unsigned long index = 0;
+            int changed = 0;
+            while (index < length) {
+                if (index + 5 <= length
+                    && strncmp(((const char*) source_root) + index, "-----", 5) == 0) {
+                    unsigned long close = index + 5;
+                    while (close + 5 <= length) {
+                        if (strncmp(((const char*) source_root) + close, "-----", 5) == 0) {
+                            index = close + 5;
+                            changed = 1;
+                            break;
+                        }
+                        close++;
+                    }
+                    if (changed && index == close + 5) {
+                        continue;
+                    }
+                }
+                result[output++] = ((const char*) source_root)[index];
+                index++;
+            }
+            result[output] = '\\0';
+            if (!changed) {
+                javan_root_frame_pop(roots);
+                return source_root;
+            }
+            javan_root_frame_pop(roots);
+            return result;
+        }
+
         void* javan_string_repeat(const char* value, int count) {
             if (value == NULL) {
                 javan_panic("null string");
@@ -6242,6 +8068,19 @@ final class RuntimeSourceMemorySections {
             result[repeated_length] = '\\0';
             javan_root_frame_pop(javan_string_repeat_roots);
             return result;
+        }
+
+        int javan_string_is_blank(const char* value) {
+            if (value == NULL) {
+                javan_panic("null string");
+            }
+            int length = javan_string_length(value);
+            for (int index = 0; index < length; index++) {
+                if (javan_character_is_whitespace((unsigned char) value[index]) == 0) {
+                    return 0;
+                }
+            }
+            return 1;
         }
 
         void* javan_string_to_lower_case(const char* value) {
@@ -6303,6 +8142,96 @@ final class RuntimeSourceMemorySections {
             javan_root_frame_pop(javan_string_substring_roots);
             return result;
         }
+
+        void* javan_string_split_literal_char(const char* value, int delimiter) {
+            if (value == NULL) {
+                javan_panic("null string");
+            }
+            int length = javan_string_length(value);
+            int count = 1;
+            for (int index = 0; index < length; index++) {
+                if ((unsigned char) value[index] == (unsigned char) delimiter) {
+                    count++;
+                }
+            }
+            while (count > 0 && length > 0 && (unsigned char) value[length - 1] == (unsigned char) delimiter) {
+                count--;
+                length--;
+            }
+            javan_object_array* result = NULL;
+            void** javan_split_literal_roots[] = {
+                (void**) &result
+            };
+            javan_root_frame_push(javan_split_literal_roots, 1);
+            result = (javan_object_array*) javan_object_array_new(count);
+            int token_start = 0;
+            int token_index = 0;
+            for (int index = 0; index <= length; index++) {
+                if (index == length || (unsigned char) value[index] == (unsigned char) delimiter) {
+                    result->values[token_index++] = javan_string_substring_range(value, token_start, index);
+                    token_start = index + 1;
+                }
+            }
+            javan_root_frame_pop(javan_split_literal_roots);
+            return result;
+        }
+
+        void* javan_string_split_whitespace_keep_all(const char* value) {
+            if (value == NULL) {
+                javan_panic("null string");
+            }
+            int length = javan_string_length(value);
+            int count = 0;
+            int token_start = 0;
+            while (1) {
+                int delimiter_start = token_start;
+                while (delimiter_start < length && !javan_character_is_whitespace((unsigned char) value[delimiter_start])) {
+                    delimiter_start++;
+                }
+                count++;
+                if (delimiter_start >= length) {
+                    break;
+                }
+                int next_start = delimiter_start;
+                while (next_start < length && javan_character_is_whitespace((unsigned char) value[next_start])) {
+                    next_start++;
+                }
+                if (next_start >= length) {
+                    count++;
+                    break;
+                }
+                token_start = next_start;
+            }
+            javan_object_array* result = NULL;
+            void** javan_split_whitespace_roots[] = {
+                (void**) &result
+            };
+            javan_root_frame_push(javan_split_whitespace_roots, 1);
+            result = (javan_object_array*) javan_object_array_new(count);
+            int token_index = 0;
+            token_start = 0;
+            while (1) {
+                int delimiter_start = token_start;
+                while (delimiter_start < length && !javan_character_is_whitespace((unsigned char) value[delimiter_start])) {
+                    delimiter_start++;
+                }
+                result->values[token_index++] = javan_string_substring_range(value, token_start, delimiter_start);
+                if (delimiter_start >= length) {
+                    break;
+                }
+                int next_start = delimiter_start;
+                while (next_start < length && javan_character_is_whitespace((unsigned char) value[next_start])) {
+                    next_start++;
+                }
+                if (next_start >= length) {
+                    result->values[token_index++] = javan_string_substring_range(value, length, length);
+                    break;
+                }
+                token_start = next_start;
+            }
+            javan_root_frame_pop(javan_split_whitespace_roots);
+            return result;
+        }
         """;
     private static final String SOURCE_COLLECTIONS = """
         static int javan_probably_string_key(void* value) {
@@ -6358,6 +8287,68 @@ final class RuntimeSourceMemorySections {
             return 0;
         }
 
+        int javan_objects_equals(void* left, void* right) {
+            return javan_object_equals(left, right);
+        }
+
+        int javan_object_compare_natural(void* left, void* right) {
+            javan_objects_require_non_null(left);
+            javan_objects_require_non_null(right);
+            int left_type = javan_registered_type_id(left);
+            int right_type = javan_registered_type_id(right);
+            if (left_type == JAVAN_TYPE_JAVA_LANG_INTEGER && right_type == JAVAN_TYPE_JAVA_LANG_INTEGER) {
+                int left_value = ((javan_boxed_int*) left)->value;
+                int right_value = ((javan_boxed_int*) right)->value;
+                if (left_value < right_value) {
+                    return -1;
+                }
+                if (left_value > right_value) {
+                    return 1;
+                }
+                return 0;
+            }
+            if (left_type == JAVAN_TYPE_JAVA_LANG_LONG && right_type == JAVAN_TYPE_JAVA_LANG_LONG) {
+                long long left_value = ((javan_boxed_long*) left)->value;
+                long long right_value = ((javan_boxed_long*) right)->value;
+                if (left_value < right_value) {
+                    return -1;
+                }
+                if (left_value > right_value) {
+                    return 1;
+                }
+                return 0;
+            }
+            if (left_type == JAVAN_TYPE_JAVA_LANG_FLOAT && right_type == JAVAN_TYPE_JAVA_LANG_FLOAT) {
+                return javan_float_compare(((javan_boxed_float*) left)->value, ((javan_boxed_float*) right)->value, 1);
+            }
+            if (left_type == JAVAN_TYPE_JAVA_LANG_DOUBLE && right_type == JAVAN_TYPE_JAVA_LANG_DOUBLE) {
+                return javan_double_compare(((javan_boxed_double*) left)->value, ((javan_boxed_double*) right)->value, 1);
+            }
+            if (left_type == JAVAN_TYPE_JAVA_LANG_CHARACTER && right_type == JAVAN_TYPE_JAVA_LANG_CHARACTER) {
+                int left_value = ((javan_boxed_character*) left)->value;
+                int right_value = ((javan_boxed_character*) right)->value;
+                if (left_value < right_value) {
+                    return -1;
+                }
+                if (left_value > right_value) {
+                    return 1;
+                }
+                return 0;
+            }
+            if (left_type == 0 && right_type == 0 && javan_probably_string_key(left) != 0 && javan_probably_string_key(right) != 0) {
+                int compared = strcmp((const char*) left, (const char*) right);
+                if (compared < 0) {
+                    return -1;
+                }
+                if (compared > 0) {
+                    return 1;
+                }
+                return 0;
+            }
+            javan_panic("unsupported natural comparator operand");
+            return 0;
+        }
+
         static javan_object_list* javan_list_new_with_capacity(int capacity, int immutable) {
             if (capacity < 0) {
                 javan_panic("negative list capacity");
@@ -6368,6 +8359,9 @@ final class RuntimeSourceMemorySections {
             list->capacity = capacity;
             list->immutable = immutable;
             list->mod_count = 0;
+            list->view_flags = 0;
+            list->reserved = 0;
+            list->backing = NULL;
             list->values = NULL;
             javan_update_runtime_allocation_kind((void*) list, JAVAN_RUNTIME_KIND_OBJECT_LIST);
             if (capacity > 0) {
@@ -6379,6 +8373,29 @@ final class RuntimeSourceMemorySections {
                 javan_update_runtime_allocation_kind((void*) list->values, JAVAN_RUNTIME_KIND_OWNED_BUFFER);
                 javan_root_frame_pop(javan_list_owner_roots);
             }
+            return list;
+        }
+
+        static javan_object_list* javan_list_new_view(javan_object_list* backing, int immutable, int view_flags) {
+            if (backing == NULL) {
+                javan_panic("null list backing");
+            }
+            void** roots[] = {
+                (void**) &backing
+            };
+            javan_root_frame_push(roots, 1);
+            javan_object_list* list = (javan_object_list*) javan_alloc(sizeof(javan_object_list));
+            list->magic = JAVAN_OBJECT_LIST_MAGIC;
+            list->length = 0;
+            list->capacity = 0;
+            list->immutable = immutable;
+            list->mod_count = 0;
+            list->view_flags = view_flags;
+            list->reserved = 0;
+            list->backing = backing;
+            list->values = NULL;
+            javan_update_runtime_allocation_kind((void*) list, JAVAN_RUNTIME_KIND_OBJECT_LIST);
+            javan_root_frame_pop(roots);
             return list;
         }
 
@@ -6404,6 +8421,32 @@ final class RuntimeSourceMemorySections {
             return iterator;
         }
 
+        static int javan_list_is_reversed(javan_object_list* list) {
+            return list != NULL && (list->view_flags & JAVAN_LIST_VIEW_REVERSED) != 0;
+        }
+
+        static int javan_list_logical_length(javan_object_list* list) {
+            if (list->backing != NULL) {
+                return javan_list_logical_length(list->backing);
+            }
+            return list->length;
+        }
+
+        static int javan_list_observed_mod_count(javan_object_list* list) {
+            if (list->backing != NULL) {
+                return javan_list_observed_mod_count(list->backing);
+            }
+            return list->mod_count;
+        }
+
+        static int javan_list_backing_index(javan_object_list* list, int index) {
+            int length = javan_list_logical_length(list);
+            if (javan_list_is_reversed(list) != 0) {
+                return length - 1 - index;
+            }
+            return index;
+        }
+
         static void javan_list_mutable_checked(javan_object_list* list) {
             if (list->immutable != 0) {
                 javan_panic("unsupported operation on immutable list");
@@ -6411,7 +8454,8 @@ final class RuntimeSourceMemorySections {
         }
 
         static void javan_list_bounds_checked(javan_object_list* list, int index) {
-            if (index < 0 || index >= list->length) {
+            int length = javan_list_logical_length(list);
+            if (index < 0 || index >= length) {
                 javan_panic("list index out of bounds");
             }
         }
@@ -6459,102 +8503,153 @@ final class RuntimeSourceMemorySections {
             javan_root_frame_pop(javan_list_append_roots);
         }
 
-        void* javan_arraylist_new(void) {
-            return javan_list_new_with_capacity(0, 0);
-        }
-
-        int javan_arraylist_add(void* value, void* element) {
-            javan_object_list* list = javan_list_checked(value);
-            javan_list_mutable_checked(list);
-            javan_list_append_raw(list, element);
-            list->mod_count++;
-            return 1;
-        }
-
-        void javan_arraylist_add_at(void* value, int index, void* element) {
-            javan_object_list* list = javan_list_checked(value);
-            javan_list_mutable_checked(list);
-            if (index < 0 || index > list->length) {
-                javan_panic("list index out of bounds");
+        static void* javan_list_get_unchecked(javan_object_list* list, int index) {
+            if (list->backing != NULL) {
+                return javan_list_get_unchecked(list->backing, javan_list_backing_index(list, index));
             }
+            return list->values[index];
+        }
+
+        static void javan_list_insert_base(javan_object_list* list, int index, void* element) {
             void* element_root = element;
-            void** javan_list_insert_roots[] = {
+            void** roots[] = {
                 (void**) &list,
                 (void**) &element_root
             };
-            javan_root_frame_push(javan_list_insert_roots, 2);
+            javan_root_frame_push(roots, 2);
             javan_list_ensure_capacity(list, list->length + 1);
             if (index < list->length) {
                 memmove(list->values + index + 1, list->values + index, (unsigned long) (list->length - index) * sizeof(void*));
             }
             list->values[index] = element_root;
             list->length++;
-            javan_root_frame_pop(javan_list_insert_roots);
+            javan_root_frame_pop(roots);
             list->mod_count++;
+        }
+
+        static void* javan_list_set_base(javan_object_list* list, int index, void* element) {
+            void* previous = list->values[index];
+            list->values[index] = element;
+            return previous;
+        }
+
+        static void* javan_list_remove_base(javan_object_list* list, int index) {
+            void* previous = list->values[index];
+            for (int cursor = index + 1; cursor < list->length; cursor++) {
+                list->values[cursor - 1] = list->values[cursor];
+            }
+            list->length--;
+            list->values[list->length] = NULL;
+            list->mod_count++;
+            return previous;
+        }
+
+        static void javan_list_clear_base(javan_object_list* list) {
+            for (int index = 0; index < list->length; index++) {
+                list->values[index] = NULL;
+            }
+            list->length = 0;
+            list->mod_count++;
+        }
+
+        static void javan_list_add_logical(javan_object_list* list, int index, void* element) {
+            javan_list_mutable_checked(list);
+            int length = javan_list_logical_length(list);
+            if (index < 0 || index > length) {
+                javan_panic("list index out of bounds");
+            }
+            if (list->backing != NULL) {
+                int backing_index = javan_list_is_reversed(list) != 0
+                    ? javan_list_logical_length(list->backing) - index
+                    : index;
+                javan_list_add_logical(list->backing, backing_index, element);
+                return;
+            }
+            javan_list_insert_base(list, index, element);
+        }
+
+        static void* javan_list_set_logical(javan_object_list* list, int index, void* element) {
+            javan_list_mutable_checked(list);
+            javan_list_bounds_checked(list, index);
+            if (list->backing != NULL) {
+                return javan_list_set_logical(list->backing, javan_list_backing_index(list, index), element);
+            }
+            return javan_list_set_base(list, index, element);
+        }
+
+        static void* javan_list_remove_logical(javan_object_list* list, int index) {
+            javan_list_mutable_checked(list);
+            javan_list_bounds_checked(list, index);
+            if (list->backing != NULL) {
+                return javan_list_remove_logical(list->backing, javan_list_backing_index(list, index));
+            }
+            return javan_list_remove_base(list, index);
+        }
+
+        static void javan_list_clear_logical(javan_object_list* list) {
+            javan_list_mutable_checked(list);
+            if (list->backing != NULL) {
+                javan_list_clear_logical(list->backing);
+                return;
+            }
+            javan_list_clear_base(list);
+        }
+
+        void* javan_arraylist_new(void) {
+            return javan_list_new_with_capacity(0, 0);
+        }
+
+        int javan_arraylist_add(void* value, void* element) {
+            javan_object_list* list = javan_list_checked(value);
+            javan_list_add_logical(list, javan_list_logical_length(list), element);
+            return 1;
+        }
+
+        void javan_arraylist_add_at(void* value, int index, void* element) {
+            javan_object_list* list = javan_list_checked(value);
+            javan_list_add_logical(list, index, element);
         }
 
         int javan_arraylist_add_all(void* value, void* collection) {
             javan_object_list* list = javan_list_checked(value);
             javan_object_list* source = javan_list_checked(collection);
             javan_list_mutable_checked(list);
-            int copied = source->length;
+            int copied = javan_list_logical_length(source);
             if (copied == 0) {
                 return 0;
             }
-            void** javan_list_add_all_roots[] = {
-                (void**) &list,
-                (void**) &source
-            };
-            javan_root_frame_push(javan_list_add_all_roots, 2);
-            javan_list_ensure_capacity(list, list->length + copied);
+            void* copied_values[copied > 0 ? copied : 1];
+            void** roots[copied + 2];
+            roots[0] = (void**) &list;
+            roots[1] = (void**) &source;
             for (int index = 0; index < copied; index++) {
-                list->values[list->length + index] = source->values[index];
+                copied_values[index] = javan_list_get_unchecked(source, index);
+                roots[index + 2] = &copied_values[index];
             }
-            list->length += copied;
-            javan_root_frame_pop(javan_list_add_all_roots);
-            list->mod_count++;
+            javan_root_frame_push(roots, copied + 2);
+            for (int index = 0; index < copied; index++) {
+                javan_list_add_logical(list, javan_list_logical_length(list), copied_values[index]);
+            }
+            javan_root_frame_pop(roots);
             return 1;
         }
 
         void javan_arraylist_add_first(void* value, void* element) {
             javan_object_list* list = javan_list_checked(value);
-            javan_list_mutable_checked(list);
-            void* element_root = element;
-            void** javan_list_add_first_roots[] = {
-                (void**) &list,
-                (void**) &element_root
-            };
-            javan_root_frame_push(javan_list_add_first_roots, 2);
-            javan_list_ensure_capacity(list, list->length + 1);
-            if (list->length > 0) {
-                memmove(list->values + 1, list->values, (unsigned long) list->length * sizeof(void*));
-            }
-            list->values[0] = element_root;
-            list->length++;
-            javan_root_frame_pop(javan_list_add_first_roots);
-            list->mod_count++;
+            javan_list_add_logical(list, 0, element);
         }
 
         void* javan_arraylist_set(void* value, int index, void* element) {
-            javan_object_list* list = javan_list_checked(value);
-            javan_list_mutable_checked(list);
-            javan_list_bounds_checked(list, index);
-            void* previous = list->values[index];
-            list->values[index] = element;
-            return previous;
+            return javan_list_set_logical(javan_list_checked(value), index, element);
         }
 
         void* javan_arraylist_remove_last(void* value) {
             javan_object_list* list = javan_list_checked(value);
-            javan_list_mutable_checked(list);
-            if (list->length == 0) {
+            int length = javan_list_logical_length(list);
+            if (length == 0) {
                 javan_panic("list is empty");
             }
-            list->length--;
-            void* previous = list->values[list->length];
-            list->values[list->length] = NULL;
-            list->mod_count++;
-            return previous;
+            return javan_list_remove_logical(list, length - 1);
         }
 
         void* javan_list_of(int count, ...) {
@@ -6605,36 +8700,92 @@ final class RuntimeSourceMemorySections {
                 (void**) &source
             };
             javan_root_frame_push(javan_list_copy_roots, 1);
-            javan_object_list* list = javan_list_new_with_capacity(source->length, 1);
-            for (int index = 0; index < source->length; index++) {
-                javan_list_append_raw(list, source->values[index]);
+            int length = javan_list_logical_length(source);
+            javan_object_list* list = javan_list_new_with_capacity(length, 1);
+            for (int index = 0; index < length; index++) {
+                javan_list_append_raw(list, javan_list_get_unchecked(source, index));
             }
             javan_root_frame_pop(javan_list_copy_roots);
             return list;
         }
 
+        void* javan_list_unmodifiable(void* value) {
+            javan_object_list* list = javan_list_checked(value);
+            if (list->immutable != 0 && (list->view_flags & JAVAN_LIST_VIEW_REVERSED) == 0) {
+                return list;
+            }
+            return javan_list_new_view(list, 1, JAVAN_LIST_VIEW_UNMODIFIABLE);
+        }
+
+        void* javan_list_reversed(void* value) {
+            javan_object_list* list = javan_list_checked(value);
+            return javan_list_new_view(list, list->immutable, JAVAN_LIST_VIEW_REVERSED);
+        }
+
+        void* javan_list_to_array(void* value) {
+            javan_object_list* list = javan_list_checked(value);
+            javan_object_array* result = NULL;
+            void** javan_list_to_array_roots[] = {
+                (void**) &list,
+                (void**) &result
+            };
+            javan_root_frame_push(javan_list_to_array_roots, 2);
+            int length = javan_list_logical_length(list);
+            result = (javan_object_array*) javan_object_array_new(length);
+            for (int index = 0; index < length; index++) {
+                result->values[index] = javan_list_get_unchecked(list, index);
+            }
+            javan_root_frame_pop(javan_list_to_array_roots);
+            return result;
+        }
+
         int javan_list_size(void* value) {
-            return javan_list_checked(value)->length;
+            return javan_list_logical_length(javan_list_checked(value));
         }
 
         int javan_list_is_empty(void* value) {
-            return javan_list_checked(value)->length == 0;
+            return javan_list_logical_length(javan_list_checked(value)) == 0;
         }
 
         int javan_list_contains(void* value, void* element) {
             javan_object_list* list = javan_list_checked(value);
-            for (int index = 0; index < list->length; index++) {
-                if (javan_object_equals(list->values[index], element) != 0) {
+            int length = javan_list_logical_length(list);
+            for (int index = 0; index < length; index++) {
+                if (javan_object_equals(javan_list_get_unchecked(list, index), element) != 0) {
                     return 1;
                 }
             }
             return 0;
         }
 
+        int javan_list_contains_all(void* value, void* other) {
+            javan_object_list* list = javan_list_checked(value);
+            javan_object_list* other_list = javan_list_checked(other);
+            void* iterator = NULL;
+            void* element = NULL;
+            void** javan_list_contains_all_roots[] = {
+                (void**) &list,
+                (void**) &other_list,
+                (void**) &iterator,
+                (void**) &element
+            };
+            javan_root_frame_push(javan_list_contains_all_roots, 4);
+            iterator = javan_list_iterator(other_list);
+            while (javan_iterator_has_next(iterator) != 0) {
+                element = javan_iterator_next(iterator);
+                if (javan_list_contains(list, element) == 0) {
+                    javan_root_frame_pop(javan_list_contains_all_roots);
+                    return 0;
+                }
+            }
+            javan_root_frame_pop(javan_list_contains_all_roots);
+            return 1;
+        }
+
         void* javan_list_get(void* value, int index) {
             javan_object_list* list = javan_list_checked(value);
             javan_list_bounds_checked(list, index);
-            return list->values[index];
+            return javan_list_get_unchecked(list, index);
         }
 
         void* javan_list_get_first(void* value) {
@@ -6643,28 +8794,29 @@ final class RuntimeSourceMemorySections {
 
         void* javan_list_get_last(void* value) {
             javan_object_list* list = javan_list_checked(value);
-            if (list->length == 0) {
+            int length = javan_list_logical_length(list);
+            if (length == 0) {
                 javan_panic("list is empty");
             }
-            return list->values[list->length - 1];
+            return javan_list_get_unchecked(list, length - 1);
         }
 
         int javan_list_remove(void* value, void* element) {
             javan_object_list* list = javan_list_checked(value);
             javan_list_mutable_checked(list);
-            for (int index = 0; index < list->length; index++) {
-                if (javan_object_equals(list->values[index], element) == 0) {
+            int length = javan_list_logical_length(list);
+            for (int index = 0; index < length; index++) {
+                if (javan_object_equals(javan_list_get_unchecked(list, index), element) == 0) {
                     continue;
                 }
-                for (int cursor = index + 1; cursor < list->length; cursor++) {
-                    list->values[cursor - 1] = list->values[cursor];
-                }
-                list->length--;
-                list->values[list->length] = NULL;
-                list->mod_count++;
+                javan_list_remove_logical(list, index);
                 return 1;
             }
             return 0;
+        }
+
+        void javan_list_clear(void* value) {
+            javan_list_clear_logical(javan_list_checked(value));
         }
 
         void* javan_list_iterator(void* value) {
@@ -6676,7 +8828,7 @@ final class RuntimeSourceMemorySections {
             javan_object_iterator* iterator = (javan_object_iterator*) javan_alloc(sizeof(javan_object_iterator));
             iterator->magic = JAVAN_OBJECT_ITERATOR_MAGIC;
             iterator->index = 0;
-            iterator->expected_mod_count = list->mod_count;
+            iterator->expected_mod_count = javan_list_observed_mod_count(list);
             iterator->reserved = 0;
             iterator->list = list;
             javan_update_runtime_allocation_kind((void*) iterator, JAVAN_RUNTIME_KIND_OBJECT_ITERATOR);
@@ -6685,7 +8837,21 @@ final class RuntimeSourceMemorySections {
         }
 
         void* javan_hashset_new(void) {
-            return javan_list_new_with_capacity(0, 0);
+            javan_object_list* set = javan_list_new_with_capacity(0, 0);
+            javan_update_runtime_allocation_kind((void*) set, JAVAN_RUNTIME_KIND_OBJECT_SET);
+            return set;
+        }
+
+        int javan_collection_add(void* value, void* element) {
+            int runtime_kind = javan_runtime_kind_of(value);
+            if (runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_LIST) {
+                return javan_arraylist_add(value, element);
+            }
+            if (runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_SET) {
+                return javan_set_add(value, element);
+            }
+            javan_panic("unsupported collection object");
+            return 0;
         }
 
         int javan_set_add(void* value, void* element) {
@@ -6719,36 +8885,51 @@ final class RuntimeSourceMemorySections {
             return 0;
         }
 
-        void* javan_set_to_array(void* value) {
-            javan_object_list* list = javan_list_checked(value);
-            javan_object_array* result = NULL;
-            void** javan_set_to_array_roots[] = {
-                (void**) &list,
-                (void**) &result
-            };
-            javan_root_frame_push(javan_set_to_array_roots, 2);
-            result = (javan_object_array*) javan_object_array_new(list->length);
-            for (int index = 0; index < list->length; index++) {
-                result->values[index] = list->values[index];
+        int javan_set_add_all(void* value, void* collection) {
+            javan_object_list* set = javan_list_checked(value);
+            javan_object_list* source = javan_list_checked(collection);
+            javan_list_mutable_checked(set);
+            int copied = javan_list_logical_length(source);
+            if (copied == 0) {
+                return 0;
             }
-            javan_root_frame_pop(javan_set_to_array_roots);
-            return result;
+            void* copied_values[copied > 0 ? copied : 1];
+            void** roots[copied + 2];
+            roots[0] = (void**) &set;
+            roots[1] = (void**) &source;
+            for (int index = 0; index < copied; index++) {
+                copied_values[index] = javan_list_get_unchecked(source, index);
+                roots[index + 2] = &copied_values[index];
+            }
+            javan_root_frame_push(roots, copied + 2);
+            int changed = 0;
+            for (int index = 0; index < copied; index++) {
+                if (javan_set_add(set, copied_values[index]) != 0) {
+                    changed = 1;
+                }
+            }
+            javan_root_frame_pop(roots);
+            return changed;
+        }
+
+        void* javan_set_to_array(void* value) {
+            return javan_list_to_array(value);
         }
 
         int javan_iterator_has_next(void* value) {
             javan_object_iterator* iterator = javan_iterator_checked(value);
-            return iterator->index < iterator->list->length;
+            return iterator->index < javan_list_logical_length(iterator->list);
         }
 
         void* javan_iterator_next(void* value) {
             javan_object_iterator* iterator = javan_iterator_checked(value);
-            if (iterator->expected_mod_count != iterator->list->mod_count) {
+            if (iterator->expected_mod_count != javan_list_observed_mod_count(iterator->list)) {
                 javan_panic("concurrent list modification");
             }
-            if (iterator->index >= iterator->list->length) {
+            if (iterator->index >= javan_list_logical_length(iterator->list)) {
                 javan_panic("iterator exhausted");
             }
-            void* result = iterator->list->values[iterator->index];
+            void* result = javan_list_get_unchecked(iterator->list, iterator->index);
             iterator->index++;
             return result;
         }
@@ -6865,6 +9046,12 @@ final class RuntimeSourceMemorySections {
             return javan_map_new_with_capacity(0, 0);
         }
 
+        void* javan_hashmap_new_typed(int type_id) {
+            void* map = javan_map_new_with_capacity(0, 0);
+            javan_register_object(map, type_id);
+            return map;
+        }
+
         void* javan_map_copy_of(void* value) {
             javan_object_map* source = javan_map_checked(value);
             void** javan_map_copy_roots[] = {
@@ -6879,6 +9066,27 @@ final class RuntimeSourceMemorySections {
             result->length = source->length;
             javan_root_frame_pop(javan_map_copy_roots);
             return result;
+        }
+
+        void javan_map_put_all(void* target_value, void* source_value) {
+            javan_object_map* target = javan_map_checked(target_value);
+            javan_object_map* source = javan_map_checked(source_value);
+            javan_map_mutable_checked(target);
+            void* key_root = NULL;
+            void* value_root = NULL;
+            void** javan_map_put_all_roots[] = {
+                (void**) &target,
+                (void**) &source,
+                (void**) &key_root,
+                (void**) &value_root
+            };
+            javan_root_frame_push(javan_map_put_all_roots, 4);
+            for (int index = 0; index < source->length; index++) {
+                key_root = source->keys[index];
+                value_root = source->values[index];
+                javan_map_put(target, key_root, value_root);
+            }
+            javan_root_frame_pop(javan_map_put_all_roots);
         }
 
         void* javan_map_get(void* value, void* key) {

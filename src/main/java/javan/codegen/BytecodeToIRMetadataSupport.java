@@ -12,6 +12,7 @@ import javan.ir.IrType;
 import javan.util.Strings2;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -28,10 +29,35 @@ final class BytecodeToIRMetadataSupport {
                 classSymbol(classFile.name()),
                 fields(classFile, false),
                 fields(classFile, true),
-                enumConstants(classFile)
+                enumConstants(classFile),
+                classFile.isEnum(),
+                assignableTypes(classes, classFile)
             ));
         }
         return List.copyOf(result);
+    }
+    static List<String> assignableTypes(final Map<String, ClassFile> classes, final ClassFile classFile) {
+        final LinkedHashSet<String> names = new LinkedHashSet<>();
+        collectAssignableTypes(classes, classFile.name(), names);
+        return List.copyOf(names);
+    }
+
+    private static void collectAssignableTypes(
+        final Map<String, ClassFile> classes,
+        final String className,
+        final LinkedHashSet<String> names
+    ) {
+        if (className == null || className.isEmpty() || !names.add(className)) {
+            return;
+        }
+        final ClassFile classFile = classes.get(className);
+        if (classFile == null) {
+            return;
+        }
+        collectAssignableTypes(classes, classFile.superName(), names);
+        for (final String interfaceName : classFile.interfaces()) {
+            collectAssignableTypes(classes, interfaceName, names);
+        }
     }
     static List<EntryPoint> sortedEntryPoints(final List<EntryPoint> entries) {
         final List<EntryPoint> result = new ArrayList<>();

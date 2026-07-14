@@ -318,6 +318,7 @@ final class CoreBehaviorTest {
     void bytecodeSupportClassifiesNativeRejectedAndUnknownOpcodes() {
         assertThat(BytecodeSupport.classify(190)).isEqualTo(BytecodeSupport.Status.NATIVE_SUPPORTED);
         assertThat(BytecodeSupport.classify(188)).isEqualTo(BytecodeSupport.Status.NATIVE_SUPPORTED);
+        assertThat(BytecodeSupport.classify(88)).isEqualTo(BytecodeSupport.Status.NATIVE_SUPPORTED);
         assertThat(BytecodeSupport.classify(197)).isEqualTo(BytecodeSupport.Status.RECOGNIZED_REJECTED);
         assertThat(BytecodeSupport.classify(255)).isEqualTo(BytecodeSupport.Status.UNKNOWN_FATAL);
         assertThat(BytecodeSupport.mnemonic(190)).isEqualTo("arraylength");
@@ -325,7 +326,7 @@ final class CoreBehaviorTest {
         assertThat(BytecodeSupport.mnemonic(-1)).isEqualTo("opcode_-1");
         assertThat(BytecodeSupport.knownOpcodes()).contains(0, 201).doesNotContain(255);
         assertThat(BytecodeSupport.nativeSupportedOpcodes())
-            .contains(47, 48, 49, 80, 81, 82, 126, 146, 165, 166, 170, 171, 186, 188, 190)
+            .contains(47, 48, 49, 80, 81, 82, 88, 126, 146, 165, 166, 170, 171, 186, 188, 190)
             .doesNotContain(197);
         assertThat(BytecodeSupport.knownOpcodes()).containsExactlyElementsOf(BytecodeSupport.knownOpcodes());
     }
@@ -489,6 +490,20 @@ final class CoreBehaviorTest {
         );
 
         assertThat(diagnostics).extracting(Diagnostic::code).contains("JAVAN031");
+    }
+
+    @Test
+    void staticVerifierAcceptsRuntimeBackedStringFormatCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 184, "invokestatic", new MethodRef(
+                "java/lang/String",
+                "format",
+                "(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;"
+            )),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
     }
 
     @Test
@@ -987,14 +1002,13 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void staticVerifierStillWarnsForEnumValueOf() {
+    void staticVerifierAcceptsEnumValueOf() {
         final List<Diagnostic> diagnostics = verifyInstruction(
             instruction(0, 184, "invokestatic", new MethodRef("java/lang/Enum", "valueOf", "(Ljava/lang/Class;Ljava/lang/String;)Ljava/lang/Enum;")),
             false
         );
 
-        assertThat(diagnostics).hasSize(1);
-        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN131");
+        assertThat(diagnostics).isEmpty();
     }
 
     @Test
@@ -1018,7 +1032,7 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void staticVerifierWarnsForReachableGeneratedEnumValueOfBody() {
+    void staticVerifierAcceptsReachableGeneratedEnumValueOfBody() {
         final MethodInfo method = generatedEnumValueOfMethod(0x0008, instruction(0, 18, "ldc"));
         final ClassFile enumClass = classWithMethods("com/acme/Color", "java/lang/Enum", 0x4000, List.of(), method);
 
@@ -1027,8 +1041,7 @@ final class CoreBehaviorTest {
             List.of(new EntryPoint("com/acme/Color", "valueOf", "(Ljava/lang/String;)Lcom/acme/Color;"))
         );
 
-        assertThat(diagnostics).hasSize(1);
-        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN031");
+        assertThat(diagnostics).isEmpty();
     }
 
     @Test
@@ -1085,6 +1098,11 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void jdkCallSupportAcceptsFormatterNoopConstructor() {
+        assertThat(JdkCallSupport.isNoopPlatformConstructor(new MethodRef("java/util/logging/Formatter", "<init>", "()V"))).isTrue();
+    }
+
+    @Test
     void staticVerifierAcceptsAssignableSuperclassInstanceofTarget() {
         final List<Diagnostic> diagnostics = verifyInstanceOf(
             Map.of("com/acme/Child", typeClass("com/acme/Child", "com/acme/MissingBase", 0, List.of())),
@@ -1130,6 +1148,13 @@ final class CoreBehaviorTest {
     @Test
     void staticVerifierAcceptsBooleanWrapperInstanceofTarget() {
         final List<Diagnostic> diagnostics = verifyInstanceOf(Map.of(), "java/lang/Boolean", true);
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsStringInstanceofTarget() {
+        final List<Diagnostic> diagnostics = verifyInstanceOf(Map.of(), "java/lang/String", true);
 
         assertThat(diagnostics).isEmpty();
     }
@@ -1208,6 +1233,20 @@ final class CoreBehaviorTest {
     @Test
     void staticVerifierAcceptsReachableInstanceofNumberTarget() {
         final List<Diagnostic> diagnostics = verifyInstanceOf(Map.of(), "java/lang/Number", true);
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableInstanceofCollectionTarget() {
+        final List<Diagnostic> diagnostics = verifyInstanceOf(Map.of(), "java/util/Collection", true);
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableInstanceofOptionalTarget() {
+        final List<Diagnostic> diagnostics = verifyInstanceOf(Map.of(), "java/util/Optional", true);
 
         assertThat(diagnostics).isEmpty();
     }
@@ -1450,6 +1489,118 @@ final class CoreBehaviorTest {
 
         assertThat(graph.diagnostics()).isEmpty();
         assertThat(graph.reachableMethods()).contains(new EntryPoint("com/acme/TypeInfo", "isPresent", "([Ljava/lang/Object;)Z"));
+    }
+
+    @Test
+    void reachabilityResolvesVirtualCallToInheritedDefaultMethodOnNonFinalConcreteOwnerWithSubtype() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo(
+                        "main",
+                        "([Ljava/lang/String;)V",
+                        instruction(
+                            0,
+                            182,
+                            "invokevirtual",
+                            new MethodRef("com/acme/Type", "isPresent", "([Ljava/lang/Object;)Z")
+                        )
+                    )
+                ),
+                "com/acme/TypeInfo", classWithMethods(
+                    "com/acme/TypeInfo",
+                    "java/lang/Object",
+                    0x0200,
+                    List.of(),
+                    methodInfo(
+                        "isPresent",
+                        "([Ljava/lang/Object;)Z",
+                        instruction(0, 4, "iconst_1"),
+                        instruction(1, 172, "ireturn")
+                    )
+                ),
+                "com/acme/Type", classWithMethods(
+                    "com/acme/Type",
+                    "java/lang/Object",
+                    0,
+                    List.of("com/acme/TypeInfo")
+                ),
+                "com/acme/DerivedType", classWithMethods(
+                    "com/acme/DerivedType",
+                    "com/acme/Type",
+                    0,
+                    List.of()
+                )
+            ),
+            List.of(new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+        assertThat(graph.reachableMethods()).contains(new EntryPoint("com/acme/TypeInfo", "isPresent", "([Ljava/lang/Object;)Z"));
+    }
+
+    @Test
+    void reachabilityRejectsVirtualCallWhenChildInterfaceRedeclaresParentDefaultAbstractly() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo(
+                        "main",
+                        "([Ljava/lang/String;)V",
+                        instruction(
+                            0,
+                            182,
+                            "invokevirtual",
+                            new MethodRef("com/acme/Type", "isPresent", "([Ljava/lang/Object;)Z")
+                        )
+                    )
+                ),
+                "com/acme/TypeInfo", classWithMethods(
+                    "com/acme/TypeInfo",
+                    "java/lang/Object",
+                    0x0200,
+                    List.of(),
+                    methodInfo(
+                        "isPresent",
+                        "([Ljava/lang/Object;)Z",
+                        instruction(0, 4, "iconst_1"),
+                        instruction(1, 172, "ireturn")
+                    )
+                ),
+                "com/acme/ChildTypeInfo", classWithMethods(
+                    "com/acme/ChildTypeInfo",
+                    "java/lang/Object",
+                    0x0200,
+                    List.of("com/acme/TypeInfo"),
+                    new MethodInfo(0, "isPresent", "([Ljava/lang/Object;)Z", Optional.empty())
+                ),
+                "com/acme/Type", classWithMethods(
+                    "com/acme/Type",
+                    "java/lang/Object",
+                    0,
+                    List.of("com/acme/ChildTypeInfo")
+                ),
+                "com/acme/DerivedType", classWithMethods(
+                    "com/acme/DerivedType",
+                    "com/acme/Type",
+                    0,
+                    List.of()
+                )
+            ),
+            List.of(new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"))
+        );
+
+        assertThat(graph.reachableMethods()).doesNotContain(new EntryPoint("com/acme/TypeInfo", "isPresent", "([Ljava/lang/Object;)Z"));
+        assertThat(graph.diagnostics()).extracting(Diagnostic::code, Diagnostic::subject)
+            .contains(tuple("JAVAN012", "com/acme/Type.isPresent([Ljava/lang/Object;)Z"));
     }
 
     @Test
@@ -2027,6 +2178,46 @@ final class CoreBehaviorTest {
                         instruction(5, 183, "invokespecial", new MethodRef("java/lang/Thread", "<init>", "(Ljava/lang/Runnable;)V")),
                         instruction(6, 182, "invokevirtual", new MethodRef("java/lang/Thread", "start", "()V")),
                         instruction(7, 177, "return")
+                    )
+                ),
+                "com/acme/Task", classWithMethods(
+                    "com/acme/Task",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/lang/Runnable"),
+                    methodInfo("<init>", "()V"),
+                    methodInfo("run", "()V")
+                )
+            ),
+            List.of(main)
+        );
+
+        assertThat(graph.callEdges()).contains(new CallEdge(main, run, CallEdge.Kind.THREAD_START_TASK));
+    }
+
+    @Test
+    void reachabilityRecordsThreadStartTaskEdgeForNamedThreadConstructor() {
+        final EntryPoint main = new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V");
+        final EntryPoint run = new EntryPoint("com/acme/Task", "run", "()V");
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo(
+                        "main",
+                        "([Ljava/lang/String;)V",
+                        classInstruction(0, 187, "new", "java/lang/Thread"),
+                        instruction(1, 89, "dup"),
+                        classInstruction(2, 187, "new", "com/acme/Task"),
+                        instruction(3, 89, "dup"),
+                        instruction(4, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        stringInstruction(5, "worker"),
+                        instruction(6, 183, "invokespecial", new MethodRef("java/lang/Thread", "<init>", "(Ljava/lang/Runnable;Ljava/lang/String;)V")),
+                        instruction(7, 182, "invokevirtual", new MethodRef("java/lang/Thread", "start", "()V")),
+                        instruction(8, 177, "return")
                     )
                 ),
                 "com/acme/Task", classWithMethods(

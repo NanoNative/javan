@@ -349,7 +349,17 @@ public final class StaticVerifier {
                 && unsupportedConcurrencyApi == 0
                 && unsupportedJdkCall(target)
                 && !supportedExactCollectorsJoiningCall(instructions, instructionIndex)
+                && !supportedExactCollectorsCountingCall(instructions, instructionIndex)
+                && !supportedExactCollectorsGroupingByCountingCall(instructions, instructionIndex)
+                && !supportedExactCollectorsToCollectionCall(instructions, instructionIndex)
+                && !supportedExactCollectorsToMapCall(instructions, instructionIndex)
+                && !supportedExactCollectorsToListCall(instructions, instructionIndex)
                 && !supportedExactStreamCollectCall(instructions, instructionIndex)
+                && !supportedExactStringFormatCall(target)
+                && !supportedExactReplaceAllCall(instructions, instructionIndex)
+                && !supportedExactLiteralSplitCall(instructions, instructionIndex)
+                && !supportedExactWhitespaceSplitCall(instructions, instructionIndex)
+                && !supportedExactCharSequenceCall(target)
                 && !ignoredGeneratedEnumValueOfCall(classFile, method, target, reachable)) {
                 diagnostics.add(jdkCallDiagnostic(classFile, method, target, reachable));
             }
@@ -2564,7 +2574,92 @@ public final class StaticVerifier {
             return false;
         }
         final Optional<MethodRef> methodRef = instructions.get(instructionIndex - 1).methodRef();
-        return methodRef.isPresent() && isSupportedCollectorsJoining(methodRef.orElseThrow());
+        return methodRef.isPresent()
+            && (isSupportedCollectorsJoining(methodRef.orElseThrow())
+            || isSupportedCollectorsToList(methodRef.orElseThrow())
+            || isSupportedCollectorsCounting(methodRef.orElseThrow())
+            || isSupportedCollectorsToCollection(methodRef.orElseThrow())
+            || isSupportedCollectorsToMap(methodRef.orElseThrow())
+            || isSupportedCollectorsGroupingByCounting(instructions, instructionIndex - 1));
+    }
+
+    private static boolean supportedExactCollectorsToListCall(final List<Instruction> instructions, final int instructionIndex) {
+        if (instructionIndex < 0 || instructionIndex >= instructions.size()) {
+            return false;
+        }
+        final Optional<MethodRef> methodRef = instructions.get(instructionIndex).methodRef();
+        if (methodRef.isEmpty() || !isSupportedCollectorsToList(methodRef.orElseThrow())) {
+            return false;
+        }
+        if (instructionIndex + 1 >= instructions.size()) {
+            return false;
+        }
+        return isSupportedDirectStreamCollect(instructions.get(instructionIndex + 1));
+    }
+
+    private static boolean supportedExactCollectorsCountingCall(final List<Instruction> instructions, final int instructionIndex) {
+        if (instructionIndex < 0 || instructionIndex >= instructions.size()) {
+            return false;
+        }
+        final Optional<MethodRef> methodRef = instructions.get(instructionIndex).methodRef();
+        if (methodRef.isEmpty() || !isSupportedCollectorsCounting(methodRef.orElseThrow())) {
+            return false;
+        }
+        if (instructionIndex + 1 >= instructions.size()) {
+            return false;
+        }
+        final Instruction nextInstruction = instructions.get(instructionIndex + 1);
+        if (isSupportedDirectStreamCollect(nextInstruction)) {
+            return true;
+        }
+        return supportedExactCollectorsGroupingByCountingCall(instructions, instructionIndex + 1);
+    }
+
+    private static boolean supportedExactCollectorsToCollectionCall(final List<Instruction> instructions, final int instructionIndex) {
+        if (instructionIndex < 0 || instructionIndex >= instructions.size()) {
+            return false;
+        }
+        final Optional<MethodRef> methodRef = instructions.get(instructionIndex).methodRef();
+        if (methodRef.isEmpty() || !isSupportedCollectorsToCollection(methodRef.orElseThrow())) {
+            return false;
+        }
+        if (instructionIndex + 1 >= instructions.size()) {
+            return false;
+        }
+        return isSupportedDirectStreamCollect(instructions.get(instructionIndex + 1));
+    }
+
+    private static boolean supportedExactCollectorsToMapCall(final List<Instruction> instructions, final int instructionIndex) {
+        if (instructionIndex < 0 || instructionIndex >= instructions.size()) {
+            return false;
+        }
+        final Optional<MethodRef> methodRef = instructions.get(instructionIndex).methodRef();
+        if (methodRef.isEmpty() || !isSupportedCollectorsToMap(methodRef.orElseThrow())) {
+            return false;
+        }
+        if (instructionIndex + 1 >= instructions.size()) {
+            return false;
+        }
+        return isSupportedDirectStreamCollect(instructions.get(instructionIndex + 1));
+    }
+
+    private static boolean supportedExactCollectorsGroupingByCountingCall(final List<Instruction> instructions, final int instructionIndex) {
+        if (instructionIndex < 0 || instructionIndex >= instructions.size()) {
+            return false;
+        }
+        if (!isSupportedCollectorsGroupingByCounting(instructions, instructionIndex)) {
+            return false;
+        }
+        if (instructionIndex + 1 >= instructions.size()) {
+            return false;
+        }
+        return isSupportedDirectStreamCollect(instructions.get(instructionIndex + 1));
+    }
+
+    private static boolean supportedExactStringFormatCall(final MethodRef methodRef) {
+        return "java/lang/String".equals(methodRef.owner())
+            && "format".equals(methodRef.name())
+            && "(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;".equals(methodRef.descriptor());
     }
 
     private static boolean isSupportedDirectStreamCollect(final Instruction instruction) {
@@ -2590,6 +2685,148 @@ public final class StaticVerifier {
         }
         return "(Ljava/lang/CharSequence;Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/util/stream/Collector;"
             .equals(methodRef.descriptor());
+    }
+
+    private static boolean isSupportedCollectorsToList(final MethodRef methodRef) {
+        return "java/util/stream/Collectors".equals(methodRef.owner())
+            && "toList".equals(methodRef.name())
+            && "()Ljava/util/stream/Collector;".equals(methodRef.descriptor());
+    }
+
+    private static boolean isSupportedCollectorsCounting(final MethodRef methodRef) {
+        return "java/util/stream/Collectors".equals(methodRef.owner())
+            && "counting".equals(methodRef.name())
+            && "()Ljava/util/stream/Collector;".equals(methodRef.descriptor());
+    }
+
+    private static boolean isSupportedCollectorsToCollection(final MethodRef methodRef) {
+        return "java/util/stream/Collectors".equals(methodRef.owner())
+            && "toCollection".equals(methodRef.name())
+            && "(Ljava/util/function/Supplier;)Ljava/util/stream/Collector;".equals(methodRef.descriptor());
+    }
+
+    private static boolean isSupportedCollectorsToMap(final MethodRef methodRef) {
+        return "java/util/stream/Collectors".equals(methodRef.owner())
+            && "toMap".equals(methodRef.name())
+            && "(Ljava/util/function/Function;Ljava/util/function/Function;Ljava/util/function/BinaryOperator;Ljava/util/function/Supplier;)Ljava/util/stream/Collector;"
+            .equals(methodRef.descriptor());
+    }
+
+    private static boolean isSupportedCollectorsGroupingByCounting(final List<Instruction> instructions, final int instructionIndex) {
+        if (instructionIndex < 1 || instructionIndex >= instructions.size()) {
+            return false;
+        }
+        final Optional<MethodRef> methodRef = instructions.get(instructionIndex).methodRef();
+        if (methodRef.isEmpty()) {
+            return false;
+        }
+        final MethodRef target = methodRef.orElseThrow();
+        if (!"java/util/stream/Collectors".equals(target.owner())
+            || !"groupingBy".equals(target.name())
+            || !"(Ljava/util/function/Function;Ljava/util/stream/Collector;)Ljava/util/stream/Collector;".equals(target.descriptor())) {
+            return false;
+        }
+        final Optional<MethodRef> previousMethodRef = instructions.get(instructionIndex - 1).methodRef();
+        return previousMethodRef.isPresent() && isSupportedCollectorsCounting(previousMethodRef.orElseThrow());
+    }
+
+    private static boolean supportedExactWhitespaceSplitCall(final List<Instruction> instructions, final int instructionIndex) {
+        if (instructionIndex < 2 || instructionIndex >= instructions.size()) {
+            return false;
+        }
+        final Optional<MethodRef> methodRef = instructions.get(instructionIndex).methodRef();
+        if (methodRef.isEmpty()) {
+            return false;
+        }
+        final MethodRef target = methodRef.orElseThrow();
+        if (!"java/lang/String".equals(target.owner())
+            || !"split".equals(target.name())
+            || !"(Ljava/lang/String;I)[Ljava/lang/String;".equals(target.descriptor())) {
+            return false;
+        }
+        final Instruction regexInstruction = instructions.get(instructionIndex - 2);
+        final Instruction limitInstruction = instructions.get(instructionIndex - 1);
+        return regexInstruction.stringValue().isPresent()
+            && "\\s+".equals(regexInstruction.stringValue().orElseThrow())
+            && matchesIntLiteral(limitInstruction, -1);
+    }
+
+    private static boolean supportedExactLiteralSplitCall(final List<Instruction> instructions, final int instructionIndex) {
+        if (instructionIndex < 1 || instructionIndex >= instructions.size()) {
+            return false;
+        }
+        final Optional<MethodRef> methodRef = instructions.get(instructionIndex).methodRef();
+        if (methodRef.isEmpty()) {
+            return false;
+        }
+        final MethodRef target = methodRef.orElseThrow();
+        if (!"java/lang/String".equals(target.owner())
+            || !"split".equals(target.name())
+            || !"(Ljava/lang/String;)[Ljava/lang/String;".equals(target.descriptor())) {
+            return false;
+        }
+        final Optional<String> regex = instructions.get(instructionIndex - 1).stringValue();
+        if (regex.isEmpty()) {
+            return false;
+        }
+        final String value = regex.orElseThrow();
+        return value.length() == 1 && ",:=&;/".indexOf(value.charAt(0)) >= 0;
+    }
+
+    private static boolean supportedExactReplaceAllCall(final List<Instruction> instructions, final int instructionIndex) {
+        if (instructionIndex < 2 || instructionIndex >= instructions.size()) {
+            return false;
+        }
+        final Optional<MethodRef> methodRef = instructions.get(instructionIndex).methodRef();
+        if (methodRef.isEmpty()) {
+            return false;
+        }
+        final MethodRef target = methodRef.orElseThrow();
+        if (!"java/lang/String".equals(target.owner())
+            || !"replaceAll".equals(target.name())
+            || !"(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;".equals(target.descriptor())) {
+            return false;
+        }
+        final Instruction regexInstruction = instructions.get(instructionIndex - 2);
+        final Instruction replacementInstruction = instructions.get(instructionIndex - 1);
+        if (regexInstruction.stringValue().isEmpty() || replacementInstruction.stringValue().isEmpty()) {
+            return false;
+        }
+        final String regex = regexInstruction.stringValue().orElseThrow();
+        final String replacement = replacementInstruction.stringValue().orElseThrow();
+        if ("".equals(replacement)) {
+            return "\\s+".equals(regex)
+                || "\\s".equals(regex)
+                || "\\D".equals(regex)
+                || "^\\.|\\.$".equals(regex)
+                || "-----.*?-----".equals(regex);
+        }
+        return "[^a-zA-Z0-9.]".equals(regex) && ".".equals(replacement);
+    }
+
+    private static boolean supportedExactCharSequenceCall(final MethodRef methodRef) {
+        if (!"java/lang/CharSequence".equals(methodRef.owner())) {
+            return false;
+        }
+        if ("length".equals(methodRef.name())) {
+            return "()I".equals(methodRef.descriptor());
+        }
+        return "charAt".equals(methodRef.name())
+            && "(I)C".equals(methodRef.descriptor());
+    }
+
+    private static boolean matchesIntLiteral(final Instruction instruction, final int value) {
+        return switch (instruction.opcode()) {
+            case 2 -> value == -1;
+            case 3 -> value == 0;
+            case 4 -> value == 1;
+            case 5 -> value == 2;
+            case 6 -> value == 3;
+            case 7 -> value == 4;
+            case 8 -> value == 5;
+            case 16, 17, 18, 19 -> instruction.intValue().isPresent() && instruction.intValue().orElseThrow() == value;
+            default -> false;
+        };
     }
 
     private static boolean ignoredGeneratedEnumValueOfCall(
@@ -2695,6 +2932,15 @@ public final class StaticVerifier {
         }
         final String target = instruction.className().orElseThrow();
         if ("java/lang/Object".equals(target)) {
+            return false;
+        }
+        if ("java/lang/String".equals(target)) {
+            return false;
+        }
+        if ("java/util/Collection".equals(target)) {
+            return false;
+        }
+        if ("java/util/Optional".equals(target)) {
             return false;
         }
         if (isSupportedWrapperTarget(target)) {

@@ -76,12 +76,12 @@ final class CompatibilityReportsTest {
         assertThat(summary).contains(
             "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 5, \"leftCallables\": 3, \"coveragePercent\": \"40.0\"}",
             "\"exactJdkCallableAccounting\": {\"supportedCallables\": 2, \"explicitRejectedCallables\": 3, \"doneCallables\": 5, \"unknownCallables\": 0, \"totalCallables\": 5, \"donePercent\": \"100.0\"}",
-            "\"supportRows\": 113",
-            "\"passRows\": 113",
+            "\"supportRows\": 115",
+            "\"passRows\": 115",
             "\"scopedRows\": 0",
             "\"targetRows\": 0",
             "\"rejectedRows\": 0",
-            "\"accountedRows\": 113",
+            "\"accountedRows\": 115",
             "\"unaccountedRows\": 0"
         );
     }
@@ -146,7 +146,9 @@ final class CompatibilityReportsTest {
             "| `management-runtime-module-rejection` | pass |",
             "| `management-runtime-memory-processors` | pass |",
             "| `management-thread-runtime-mxbeans` | pass |",
+            "| `management-memory-mxbean` | pass |",
             "| `management-operating-system-mxbean` | pass |",
+            "| `process-handle-current-pid` | pass |",
             "| `network-socket-rejection` | pass |",
             "| `network-http-rejection` | pass |",
             "| `network-runtime-feature-reporting` | pass |",
@@ -191,7 +193,9 @@ final class CompatibilityReportsTest {
             "\"feature\": \"management-runtime-module-rejection\"",
             "\"feature\": \"management-runtime-memory-processors\"",
             "\"feature\": \"management-thread-runtime-mxbeans\"",
+            "\"feature\": \"management-memory-mxbean\"",
             "\"feature\": \"management-operating-system-mxbean\"",
+            "\"feature\": \"process-handle-current-pid\"",
             "\"feature\": \"network-socket-rejection\"",
             "\"feature\": \"network-http-rejection\"",
             "\"feature\": \"network-runtime-feature-reporting\"",

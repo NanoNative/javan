@@ -19,6 +19,7 @@ public final class LambdaMetafactorySupport {
     private static final int ACC_FINAL = 0x0010;
     private static final int REF_INVOKE_VIRTUAL = 5;
     private static final int REF_INVOKE_STATIC = 6;
+    private static final int REF_INVOKE_SPECIAL = 7;
     private static final int REF_NEW_INVOKE_SPECIAL = 8;
     private static final int REF_INVOKE_INTERFACE = 9;
 
@@ -116,6 +117,7 @@ public final class LambdaMetafactorySupport {
         if (referenceKind != REF_INVOKE_STATIC
             && referenceKind != REF_INVOKE_VIRTUAL
             && referenceKind != REF_INVOKE_INTERFACE
+            && !(referenceKind == REF_INVOKE_SPECIAL && classes.containsKey(implementationTarget.owner()))
             && !(referenceKind == REF_NEW_INVOKE_SPECIAL && "<init>".equals(implementationTarget.name()))) {
             return Optional.empty();
         }
@@ -135,7 +137,7 @@ public final class LambdaMetafactorySupport {
             if (!implementationMatches(binding, captureDescriptors, implementationParameters, instantiatedSamParameters)) {
                 return Optional.empty();
             }
-            if (returnIrType(implementationTarget.descriptor()) != returnIrType(instantiatedSam.value())) {
+            if (!applicationBridgeReturnMatches(referenceKind, implementationTarget, instantiatedSam.value())) {
                 return Optional.empty();
             }
         } else if (supportedFunctionalBridgeTarget(implementationTarget)) {
@@ -169,6 +171,23 @@ public final class LambdaMetafactorySupport {
             classFile.source(),
             classFile.application()
         ));
+    }
+
+    private static boolean applicationBridgeReturnMatches(
+        final int referenceKind,
+        final MethodRef implementationTarget,
+        final String instantiatedSamDescriptor
+    ) {
+        if ("V".equals(returnDescriptor(instantiatedSamDescriptor))) {
+            return true;
+        }
+        if (referenceKind == REF_NEW_INVOKE_SPECIAL && "<init>".equals(implementationTarget.name())) {
+            return jdkBridgeReturnMatches(
+                "L" + implementationTarget.owner() + ";",
+                returnDescriptor(instantiatedSamDescriptor)
+            );
+        }
+        return returnIrType(implementationTarget.descriptor()) == returnIrType(instantiatedSamDescriptor);
     }
 
     private static boolean implementationMatches(
@@ -208,7 +227,9 @@ public final class LambdaMetafactorySupport {
         if (referenceKind == REF_INVOKE_STATIC || referenceKind == REF_NEW_INVOKE_SPECIAL) {
             return Optional.of(ReceiverBinding.NONE);
         }
-        if (referenceKind != REF_INVOKE_VIRTUAL && referenceKind != REF_INVOKE_INTERFACE) {
+        if (referenceKind != REF_INVOKE_VIRTUAL
+            && referenceKind != REF_INVOKE_SPECIAL
+            && referenceKind != REF_INVOKE_INTERFACE) {
             return Optional.empty();
         }
         if (!captureDescriptors.isEmpty()) {
@@ -408,6 +429,9 @@ public final class LambdaMetafactorySupport {
     }
 
     private static boolean jdkBridgeReturnMatches(final String implementationDescriptor, final String instantiatedDescriptor) {
+        if ("V".equals(instantiatedDescriptor)) {
+            return true;
+        }
         if (implementationDescriptor.equals(instantiatedDescriptor)) {
             return true;
         }
@@ -810,7 +834,7 @@ public final class LambdaMetafactorySupport {
             for (final LambdaClosurePlan plan : bySyntheticOwner.values()) {
                 result.put(plan.syntheticOwner(), plan.syntheticClass());
             }
-            return Map.copyOf(result);
+            return PlatformClassModels.expandedClasses(result);
         }
     }
 

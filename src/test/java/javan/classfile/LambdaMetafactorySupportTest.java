@@ -239,6 +239,29 @@ final class LambdaMetafactorySupportTest {
     }
 
     @Test
+    void scanCreatesPlanForCapturedInvokeSpecialReceiver() {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/TypeList",
+            classWithMethods(
+                "com/acme/TypeList",
+                "java/lang/Object",
+                0,
+                List.of(),
+                method("<init>", "(Ljava/util/Collection;)V", invokeDynamic(7, capturedInvokeSpecialConsumerLambda())),
+                method("lambda$new$0", "(Ljava/util/Collection;)V")
+            )
+        );
+
+        final LambdaMetafactorySupport.LambdaClosurePlan plan = LambdaMetafactorySupport.scan(classes)
+            .planForSite("com/acme/TypeList", "<init>", "(Ljava/util/Collection;)V", 7)
+            .orElseThrow();
+
+        assertThat(plan.receiverBinding()).isEqualTo(LambdaMetafactorySupport.ReceiverBinding.CAPTURE0);
+        assertThat(plan.captureDescriptors()).containsExactly("Lcom/acme/TypeList;");
+        assertThat(plan.implementationTarget()).isEqualTo(new MethodRef("com/acme/TypeList", "lambda$new$0", "(Ljava/util/Collection;)V"));
+    }
+
+    @Test
     void scanCreatesPlanForFirstParameterVirtualReceiver() {
         final Map<String, ClassFile> classes = Map.of(
             "com/acme/Main",
@@ -359,6 +382,61 @@ final class LambdaMetafactorySupportTest {
     }
 
     @Test
+    void scanCreatesPlanForApplicationConstructorBridgeTarget() {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                method(
+                    "main",
+                    "()Ljava/util/function/Function;",
+                    invokeDynamic(11, new DynamicRef(
+                        "apply",
+                        "()Ljava/util/function/Function;",
+                        "java/lang/invoke/LambdaMetafactory",
+                        "metafactory",
+                        "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;",
+                        List.of(
+                            "(Ljava/lang/Object;)Ljava/lang/Object;",
+                            "com/acme/Box.<init>(Ljava/lang/String;)V",
+                            "(Ljava/lang/String;)Lcom/acme/Box;"
+                        ),
+                        List.of(
+                            new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "(Ljava/lang/Object;)Ljava/lang/Object;"),
+                            BootstrapValue.methodHandle(
+                                "com/acme/Box.<init>(Ljava/lang/String;)V",
+                                new MethodRef("com/acme/Box", "<init>", "(Ljava/lang/String;)V"),
+                                8
+                            ),
+                            new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "(Ljava/lang/String;)Lcom/acme/Box;")
+                        )
+                    ))
+                )
+            ),
+            "com/acme/Box",
+            classWithMethods(
+                "com/acme/Box",
+                "java/lang/Object",
+                0,
+                List.of(),
+                method("<init>", "(Ljava/lang/String;)V")
+            )
+        );
+
+        final LambdaMetafactorySupport.LambdaClosurePlan plan = LambdaMetafactorySupport.scan(classes)
+            .planForSite("com/acme/Main", "main", "()Ljava/util/function/Function;", 11)
+            .orElseThrow();
+
+        assertThat(plan.instantiatedMethodDescriptor()).isEqualTo("(Ljava/lang/String;)Lcom/acme/Box;");
+        assertThat(plan.implementationTarget()).isEqualTo(new MethodRef("com/acme/Box", "<init>", "(Ljava/lang/String;)V"));
+        assertThat(plan.implementationReferenceKind()).isEqualTo(8);
+        assertThat(plan.receiverBinding()).isEqualTo(LambdaMetafactorySupport.ReceiverBinding.NONE);
+    }
+
+    @Test
     void scanCreatesPlanForSupportedSupplierBridgeTarget() {
         final Map<String, ClassFile> classes = Map.of(
             "com/acme/Main",
@@ -448,6 +526,47 @@ final class LambdaMetafactorySupportTest {
     }
 
     @Test
+    void scanCreatesPlanForStaticObjectsNonNullPredicateBridge() {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                method(
+                    "main",
+                    "()Ljava/util/function/Predicate;",
+                    invokeDynamic(6, new DynamicRef(
+                        "test",
+                        "()Ljava/util/function/Predicate;",
+                        "java/lang/invoke/LambdaMetafactory",
+                        "metafactory",
+                        "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;",
+                        List.of("(Ljava/lang/Object;)Z", "java/util/Objects.nonNull(Ljava/lang/Object;)Z", "(Ljava/lang/Object;)Z"),
+                        List.of(
+                            new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "(Ljava/lang/Object;)Z"),
+                            BootstrapValue.methodHandle(
+                                "java/util/Objects.nonNull(Ljava/lang/Object;)Z",
+                                new MethodRef("java/util/Objects", "nonNull", "(Ljava/lang/Object;)Z"),
+                                6
+                            ),
+                            new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "(Ljava/lang/Object;)Z")
+                        )
+                    ))
+                )
+            )
+        );
+
+        final LambdaMetafactorySupport.LambdaClosurePlan plan = LambdaMetafactorySupport.scan(classes)
+            .planForSite("com/acme/Main", "main", "()Ljava/util/function/Predicate;", 6)
+            .orElseThrow();
+
+        assertThat(plan.implementationTarget()).isEqualTo(new MethodRef("java/util/Objects", "nonNull", "(Ljava/lang/Object;)Z"));
+        assertThat(plan.receiverBinding()).isEqualTo(LambdaMetafactorySupport.ReceiverBinding.NONE);
+    }
+
+    @Test
     void scanCreatesPlanForSupportedFunctionBridgeTarget() {
         final Map<String, ClassFile> classes = Map.of(
             "com/acme/Main",
@@ -502,6 +621,56 @@ final class LambdaMetafactorySupportTest {
             .orElseThrow();
 
         assertThat(plan.implementationTarget()).isEqualTo(new MethodRef("java/util/function/BiConsumer", "accept", "(Ljava/lang/Object;Ljava/lang/Object;)V"));
+        assertThat(plan.receiverBinding()).isEqualTo(LambdaMetafactorySupport.ReceiverBinding.FIRST_PARAMETER);
+    }
+
+    @Test
+    void scanCreatesPlanForJdkConsumerBridgeThatDiscardsBooleanReturn() {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                method("main", "()Ljava/util/function/Consumer;", invokeDynamic(6, consumerCollectionAddDiscardReturnLambda()))
+            )
+        );
+
+        final LambdaMetafactorySupport.LambdaClosurePlan plan = LambdaMetafactorySupport.scan(classes)
+            .planForSite("com/acme/Main", "main", "()Ljava/util/function/Consumer;", 6)
+            .orElseThrow();
+
+        assertThat(plan.implementationTarget()).isEqualTo(new MethodRef("java/util/Collection", "add", "(Ljava/lang/Object;)Z"));
+        assertThat(plan.receiverBinding()).isEqualTo(LambdaMetafactorySupport.ReceiverBinding.FIRST_PARAMETER);
+    }
+
+    @Test
+    void scanCreatesPlanForApplicationConsumerBridgeThatDiscardsObjectReturn() {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                method("main", "()Ljava/util/function/Consumer;", invokeDynamic(6, consumerFluentDiscardReturnLambda()))
+            ),
+            "com/acme/Recorder",
+            classWithMethods(
+                "com/acme/Recorder",
+                "java/lang/Object",
+                0,
+                List.of(),
+                method("record", "(Ljava/lang/String;)Lcom/acme/Recorder;", plain(0, 42, "aload_0"), plain(1, 176, "areturn"))
+            )
+        );
+
+        final LambdaMetafactorySupport.LambdaClosurePlan plan = LambdaMetafactorySupport.scan(classes)
+            .planForSite("com/acme/Main", "main", "()Ljava/util/function/Consumer;", 6)
+            .orElseThrow();
+
+        assertThat(plan.implementationTarget()).isEqualTo(new MethodRef("com/acme/Recorder", "record", "(Ljava/lang/String;)Lcom/acme/Recorder;"));
         assertThat(plan.receiverBinding()).isEqualTo(LambdaMetafactorySupport.ReceiverBinding.FIRST_PARAMETER);
     }
 
@@ -1503,12 +1672,16 @@ final class LambdaMetafactorySupportTest {
     void receiverBindingCoversStaticUnsupportedCapturedAndPrimitiveSamCases() throws Exception {
         assertThat(receiverBinding(6, List.of(), List.of())).contains(LambdaMetafactorySupport.ReceiverBinding.NONE);
         assertThat(receiverBinding(8, List.of(), List.of())).contains(LambdaMetafactorySupport.ReceiverBinding.NONE);
-        assertThat(receiverBinding(7, List.of(), List.of())).isEmpty();
+        assertThat(receiverBinding(7, List.of("Ljava/lang/Object;"), List.of(IrType.OBJECT)))
+            .contains(LambdaMetafactorySupport.ReceiverBinding.CAPTURE0);
+        assertThat(receiverBinding(7, List.of(), List.of(IrType.OBJECT)))
+            .contains(LambdaMetafactorySupport.ReceiverBinding.FIRST_PARAMETER);
         assertThat(receiverBinding(5, List.of("Ljava/lang/Object;"), List.of(IrType.OBJECT)))
             .contains(LambdaMetafactorySupport.ReceiverBinding.CAPTURE0);
         assertThat(receiverBinding(5, List.of(), List.of(IrType.OBJECT)))
             .contains(LambdaMetafactorySupport.ReceiverBinding.FIRST_PARAMETER);
         assertThat(receiverBinding(5, List.of(), List.of(IrType.INT))).isEmpty();
+        assertThat(receiverBinding(7, List.of(), List.of(IrType.INT))).isEmpty();
     }
 
     @Test
@@ -2299,6 +2472,26 @@ final class LambdaMetafactorySupportTest {
         );
     }
 
+    private static DynamicRef capturedInvokeSpecialConsumerLambda() {
+        return new DynamicRef(
+            "accept",
+            "(Lcom/acme/TypeList;)Ljava/util/function/Consumer;",
+            "java/lang/invoke/LambdaMetafactory",
+            "metafactory",
+            "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;",
+            List.of("(Ljava/lang/Object;)V", "com/acme/TypeList.lambda$new$0(Ljava/util/Collection;)V", "(Ljava/util/Collection;)V"),
+            List.of(
+                new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "(Ljava/lang/Object;)V"),
+                BootstrapValue.methodHandle(
+                    "com/acme/TypeList.lambda$new$0(Ljava/util/Collection;)V",
+                    new MethodRef("com/acme/TypeList", "lambda$new$0", "(Ljava/util/Collection;)V"),
+                    7
+                ),
+                new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "(Ljava/util/Collection;)V")
+            )
+        );
+    }
+
     private static DynamicRef consumerVirtualLambda() {
         return new DynamicRef(
             "accept",
@@ -2415,6 +2608,54 @@ final class LambdaMetafactorySupportTest {
                     9
                 ),
                 new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "(Ljava/util/function/BiConsumer;Ljava/lang/Object;Ljava/lang/Object;)V")
+            )
+        );
+    }
+
+    private static DynamicRef consumerCollectionAddDiscardReturnLambda() {
+        return new DynamicRef(
+            "accept",
+            "()Ljava/util/function/Consumer;",
+            "java/lang/invoke/LambdaMetafactory",
+            "metafactory",
+            "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;",
+            List.of(
+                "(Ljava/lang/Object;Ljava/lang/Object;)V",
+                "java/util/Collection.add(Ljava/lang/Object;)Z",
+                "(Ljava/util/Collection;Ljava/lang/String;)V"
+            ),
+            List.of(
+                new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "(Ljava/lang/Object;Ljava/lang/Object;)V"),
+                BootstrapValue.methodHandle(
+                    "java/util/Collection.add(Ljava/lang/Object;)Z",
+                    new MethodRef("java/util/Collection", "add", "(Ljava/lang/Object;)Z"),
+                    9
+                ),
+                new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "(Ljava/util/Collection;Ljava/lang/String;)V")
+            )
+        );
+    }
+
+    private static DynamicRef consumerFluentDiscardReturnLambda() {
+        return new DynamicRef(
+            "accept",
+            "()Ljava/util/function/Consumer;",
+            "java/lang/invoke/LambdaMetafactory",
+            "metafactory",
+            "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;",
+            List.of(
+                "(Ljava/lang/Object;Ljava/lang/Object;)V",
+                "com/acme/Recorder.record(Ljava/lang/String;)Lcom/acme/Recorder;",
+                "(Lcom/acme/Recorder;Ljava/lang/String;)V"
+            ),
+            List.of(
+                new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "(Ljava/lang/Object;Ljava/lang/Object;)V"),
+                BootstrapValue.methodHandle(
+                    "com/acme/Recorder.record(Ljava/lang/String;)Lcom/acme/Recorder;",
+                    new MethodRef("com/acme/Recorder", "record", "(Ljava/lang/String;)Lcom/acme/Recorder;"),
+                    5
+                ),
+                new BootstrapValue(BootstrapValue.Kind.METHOD_TYPE, "(Lcom/acme/Recorder;Ljava/lang/String;)V")
             )
         );
     }

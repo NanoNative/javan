@@ -183,6 +183,20 @@ public final class CCodegen {
     private static void emitTypeDescriptors(final IrProgram program, final StringBuilder c) {
         final java.util.Map<String, Integer> ids = typeIds(program);
         for (final IrClass classInfo : program.classes()) {
+            c.append("static const char* ")
+                .append(typeAssignableNamesSymbol(classInfo.jvmName()))
+                .append("[] = {")
+                .append(System.lineSeparator());
+            for (int index = 0; index < classInfo.assignableJvmNames().size(); index++) {
+                c.append("    \"")
+                    .append(escapeCString(displayClassName(classInfo.assignableJvmNames().get(index))))
+                    .append("\"");
+                if (index < classInfo.assignableJvmNames().size() - 1) {
+                    c.append(',');
+                }
+                c.append(System.lineSeparator());
+            }
+            c.append("};").append(System.lineSeparator());
             final List<javan.ir.IrField> objectFields = objectFields(classInfo.fields());
             if (objectFields.isEmpty()) {
                 continue;
@@ -214,6 +228,12 @@ public final class CCodegen {
                     .append(", \"")
                     .append(escapeCString(displayClassName(classInfo.jvmName())))
                     .append("\", ")
+                    .append(classInfo.enumType() ? "1" : "0")
+                    .append(", ")
+                    .append(classInfo.assignableJvmNames().size())
+                    .append(", ")
+                    .append(typeAssignableNamesSymbol(classInfo.jvmName()))
+                    .append(", ")
                     .append(objectFields.size())
                     .append(", ");
                 if (objectFields.isEmpty()) {
@@ -336,25 +356,46 @@ public final class CCodegen {
                 .append(allocatorSymbol(classInfo.jvmName()))
                 .append("(void) {")
                 .append(System.lineSeparator());
-            c.append("    struct ")
-                .append(classInfo.symbol())
-                .append("* object = (struct ")
-                .append(classInfo.symbol())
-                .append("*) javan_alloc(sizeof(struct ")
-                .append(classInfo.symbol())
-                .append("));")
-                .append(System.lineSeparator());
-            c.append("    object->_javan_type_id = ")
-                .append(typeIds.get(classInfo.jvmName()).intValue())
-                .append(";")
-                .append(System.lineSeparator());
-            c.append("    javan_register_object((void*) object, ")
-                .append(typeIds.get(classInfo.jvmName()).intValue())
-                .append(");")
-                .append(System.lineSeparator());
-            c.append("    return (void*) object;").append(System.lineSeparator());
+            if (usesRuntimeMapAllocator(classInfo)) {
+                c.append("    return javan_hashmap_new_typed(")
+                    .append(typeIds.get(classInfo.jvmName()).intValue())
+                    .append(");")
+                    .append(System.lineSeparator());
+            } else {
+                c.append("    struct ")
+                    .append(classInfo.symbol())
+                    .append("* object = (struct ")
+                    .append(classInfo.symbol())
+                    .append("*) javan_alloc(sizeof(struct ")
+                    .append(classInfo.symbol())
+                    .append("));")
+                    .append(System.lineSeparator());
+                c.append("    object->_javan_type_id = ")
+                    .append(typeIds.get(classInfo.jvmName()).intValue())
+                    .append(";")
+                    .append(System.lineSeparator());
+                c.append("    javan_register_object((void*) object, ")
+                    .append(typeIds.get(classInfo.jvmName()).intValue())
+                    .append(");")
+                    .append(System.lineSeparator());
+                c.append("    return (void*) object;").append(System.lineSeparator());
+            }
             c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
         }
+    }
+
+    private static boolean usesRuntimeMapAllocator(final IrClass classInfo) {
+        if (!classInfo.fields().isEmpty() || classInfo.enumType()) {
+            return false;
+        }
+        return classInfo.assignableJvmNames().stream().anyMatch(CCodegen::isRuntimeMapAssignableName);
+    }
+
+    private static boolean isRuntimeMapAssignableName(final String jvmName) {
+        return "java/util/HashMap".equals(jvmName)
+            || "java/util/LinkedHashMap".equals(jvmName)
+            || "java/util/TreeMap".equals(jvmName)
+            || "java/util/concurrent/ConcurrentHashMap".equals(jvmName);
     }
 
     private static void emitEnumOrdinalHelpers(final IrProgram program, final StringBuilder c) {
@@ -404,6 +445,31 @@ public final class CCodegen {
             c.append("    return 0;").append(System.lineSeparator());
             c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
         }
+        c.append("static void* ")
+            .append(BytecodeToIRInvokeSupport.enumRuntimeValueOfSymbol())
+            .append("(void* type_value, void* value) {")
+            .append(System.lineSeparator());
+        c.append("    if (type_value == 0) {").append(System.lineSeparator());
+        c.append("        javan_panic(\"null enum type\");").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        c.append("    if (javan_runtime_class_is_enum(type_value) == 0) {").append(System.lineSeparator());
+        c.append("        javan_panic(\"invalid enum class\");").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        c.append("    void* class_name = javan_runtime_class_get_name(type_value);").append(System.lineSeparator());
+        for (final IrClass classInfo : program.classes()) {
+            if (classInfo.enumConstants().isEmpty()) {
+                continue;
+            }
+            c.append("    if (javan_string_equals((const char*) class_name, ")
+                .append(emitCStringLiteral(displayClassName(classInfo.jvmName())))
+                .append(")) { return ")
+                .append(enumValueOfSymbol(classInfo.jvmName()))
+                .append("(value); }")
+                .append(System.lineSeparator());
+        }
+        c.append("    javan_panic(\"unsupported enum class\");").append(System.lineSeparator());
+        c.append("    return 0;").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
     }
 
     private static void emitDispatch(final IrProgram program, final IrDispatch dispatch, final StringBuilder c) {
@@ -2234,6 +2300,10 @@ public final class CCodegen {
 
     private static String typeFieldOffsetsSymbol(final String className) {
         return "javan_type_fields_" + sanitize(className);
+    }
+
+    private static String typeAssignableNamesSymbol(final String className) {
+        return "javan_type_assignable_names_" + sanitize(className);
     }
 
     private static String allocatorSymbol(final String className) {

@@ -11,8 +11,8 @@
     "rule": "done = supported variants + rejected variants; unknown leftovers must be 0 for a release-gated JDK"
   },
   "counts": {
-    "rows": 113,
-    "pass": 113,
+    "rows": 115,
+    "pass": 115,
     "scoped": 0,
     "target": 0,
     "rejected": 0
@@ -124,7 +124,9 @@
     {"feature": "management-runtime-module-rejection", "jdk25": "pass"},
     {"feature": "management-runtime-memory-processors", "jdk25": "pass"},
     {"feature": "management-thread-runtime-mxbeans", "jdk25": "pass"},
+    {"feature": "management-memory-mxbean", "jdk25": "pass"},
     {"feature": "management-operating-system-mxbean", "jdk25": "pass"},
+    {"feature": "process-handle-current-pid", "jdk25": "pass"},
     {"feature": "network-socket-rejection", "jdk25": "pass"},
     {"feature": "network-http-rejection", "jdk25": "pass"},
     {"feature": "network-runtime-feature-reporting", "jdk25": "pass"},

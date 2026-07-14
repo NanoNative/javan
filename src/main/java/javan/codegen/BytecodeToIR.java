@@ -352,11 +352,10 @@ public final class BytecodeToIR {
         final MethodRef target = plan.implementationTarget();
         if (plan.implementationReferenceKind() != 8
             || !"<init>".equals(target.name())
-            || erasedReturnType != IrType.OBJECT
-            || !JdkCallSupport.isSupported(target)) {
+            || erasedReturnType != IrType.OBJECT) {
             return false;
         }
-        final Optional<IrExpression> receiverAllocation = jdkConstructorReceiverAllocation(target.owner());
+        final Optional<IrExpression> receiverAllocation = constructorReceiverAllocation(classes, target);
         if (receiverAllocation.isEmpty()) {
             return false;
         }
@@ -373,19 +372,46 @@ public final class BytecodeToIR {
                 implementationParameters.get(index)
             ));
         }
-        if (BytecodeToIRInvokeSupport.lowerThreadConstructor(target, instructions, implementationArguments, receiver)
-            || BytecodeToIRInvokeSupport.lowerAtomicConstructor(target, instructions, implementationArguments, receiver)
-            || BytecodeToIRInvokeSupport.lowerThreadLocalConstructor(target)
-            || BytecodeToIRInvokeSupport.lowerStringConstructor(target, instructions, implementationArguments, receiver)
-            || BytecodeToIRInvokeSupport.lowerInetSocketAddressConstructor(target, instructions, implementationArguments, receiver)
-            || BytecodeToIRInvokeSupport.lowerSocketConstructor(target, instructions, implementationArguments, receiver)
-            || BytecodeToIRInvokeSupport.lowerStringBuilderConstructor(target, instructions, new ArrayList<>(), implementationArguments, receiver)
-            || BytecodeToIRInvokeSupport.lowerDateTimeFormatterBuilderConstructor(target)
-            || BytecodeToIRInvokeSupport.lowerJdkCollectionConstructorCall(target, instructions, implementationArguments, receiver)) {
+        if (JdkCallSupport.isSupported(target)) {
+            if (BytecodeToIRInvokeSupport.lowerThreadConstructor(target, instructions, implementationArguments, receiver)
+                || BytecodeToIRInvokeSupport.lowerAtomicConstructor(target, instructions, implementationArguments, receiver)
+                || BytecodeToIRInvokeSupport.lowerThreadLocalConstructor(target)
+                || BytecodeToIRInvokeSupport.lowerStringConstructor(target, instructions, implementationArguments, receiver)
+                || BytecodeToIRInvokeSupport.lowerInetSocketAddressConstructor(target, instructions, implementationArguments, receiver)
+                || BytecodeToIRInvokeSupport.lowerSocketConstructor(target, instructions, implementationArguments, receiver)
+                || BytecodeToIRInvokeSupport.lowerStringBuilderConstructor(target, instructions, new ArrayList<>(), implementationArguments, receiver)
+                || BytecodeToIRInvokeSupport.lowerDateTimeFormatterBuilderConstructor(target)
+                || BytecodeToIRInvokeSupport.lowerJdkCollectionConstructorCall(target, instructions, implementationArguments, receiver)) {
+                instructions.add(IrInstruction.returnObject(receiver));
+                return true;
+            }
+            return false;
+        }
+        if (classes.containsKey(target.owner())) {
+            final List<IrExpression> constructorArguments = new ArrayList<>();
+            constructorArguments.add(receiver);
+            constructorArguments.addAll(implementationArguments);
+            instructions.add(IrInstruction.callStaticVoid(
+                symbol(new EntryPoint(target.owner(), target.name(), target.descriptor())),
+                constructorArguments
+            ));
             instructions.add(IrInstruction.returnObject(receiver));
             return true;
         }
         return false;
+    }
+
+    private static Optional<IrExpression> constructorReceiverAllocation(
+        final Map<String, ClassFile> classes,
+        final MethodRef target
+    ) {
+        if (JdkCallSupport.isSupported(target)) {
+            return jdkConstructorReceiverAllocation(target.owner());
+        }
+        if (!classes.containsKey(target.owner()) || isAssignableTo(classes, target.owner(), "java/lang/Thread")) {
+            return Optional.empty();
+        }
+        return Optional.of(IrExpression.objectAllocation(target.owner()));
     }
 
     private static Optional<IrExpression> jdkConstructorReceiverAllocation(final String owner) {
@@ -404,6 +430,9 @@ public final class BytecodeToIR {
         if ("java/util/concurrent/atomic/AtomicInteger".equals(owner)) {
             return Optional.of(IrExpression.objectCall("javan_atomic_integer_new", List.of()));
         }
+        if ("java/util/concurrent/atomic/AtomicLong".equals(owner)) {
+            return Optional.of(IrExpression.objectCall("javan_atomic_long_new", List.of()));
+        }
         if ("java/util/concurrent/atomic/AtomicReference".equals(owner)) {
             return Optional.of(IrExpression.objectCall("javan_atomic_reference_new", List.of()));
         }
@@ -416,8 +445,14 @@ public final class BytecodeToIR {
         if ("java/time/format/DateTimeFormatterBuilder".equals(owner)) {
             return Optional.of(IrExpression.objectCall("javan_datetime_formatter_builder_new", List.of()));
         }
+        if ("java/lang/StackTraceElement".equals(owner)) {
+            return Optional.of(IrExpression.objectAllocation(owner));
+        }
         if ("java/util/ArrayList".equals(owner) || "java/util/concurrent/CopyOnWriteArrayList".equals(owner)) {
             return Optional.of(IrExpression.objectCall("javan_arraylist_new", List.of()));
+        }
+        if ("java/util/HashSet".equals(owner) || "java/util/LinkedHashSet".equals(owner)) {
+            return Optional.of(IrExpression.objectCall("javan_hashset_new", List.of()));
         }
         return Optional.empty();
     }
@@ -549,6 +584,9 @@ public final class BytecodeToIR {
         if ("java/io/PrintStream".equals(target.owner()) && "print".equals(target.name()) && "(Ljava/lang/Object;)V".equals(target.descriptor())) {
             return new IrExpression(IrExpression.Kind.CALL, IrType.VOID, "javan_printstream_print_object", arguments);
         }
+        if ("java/util/Objects".equals(target.owner()) && "nonNull".equals(target.name()) && "(Ljava/lang/Object;)Z".equals(target.descriptor())) {
+            return IrExpression.intCall("javan_object_non_null", arguments);
+        }
         if ("java/lang/String".equals(target.owner()) && "length".equals(target.name()) && "()I".equals(target.descriptor())) {
             return IrExpression.intCall("javan_string_length", arguments);
         }
@@ -606,11 +644,20 @@ public final class BytecodeToIR {
         if ("java/time/LocalDate".equals(target.owner()) && "ofEpochDay".equals(target.name()) && "(J)Ljava/time/LocalDate;".equals(target.descriptor())) {
             return IrExpression.objectCall("javan_local_date_of_epoch_day", arguments);
         }
+        if ("java/time/LocalDate".equals(target.owner()) && "from".equals(target.name()) && "(Ljava/time/temporal/TemporalAccessor;)Ljava/time/LocalDate;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_local_date_from_temporal", arguments);
+        }
+        if ("java/time/LocalDate".equals(target.owner()) && "now".equals(target.name()) && "(Ljava/time/ZoneId;)Ljava/time/LocalDate;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_local_date_now", arguments);
+        }
         if ("java/time/LocalDate".equals(target.owner()) && "atStartOfDay".equals(target.name()) && "()Ljava/time/LocalDateTime;".equals(target.descriptor())) {
             return IrExpression.objectCall("javan_local_date_at_start_of_day", arguments);
         }
         if ("java/time/LocalDate".equals(target.owner()) && "atStartOfDay".equals(target.name()) && "(Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;".equals(target.descriptor())) {
             return IrExpression.objectCall("javan_local_date_at_start_of_day_zone", arguments);
+        }
+        if ("java/time/LocalTime".equals(target.owner()) && "from".equals(target.name()) && "(Ljava/time/temporal/TemporalAccessor;)Ljava/time/LocalTime;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_local_time_from_temporal", arguments);
         }
         if ("java/time/LocalDateTime".equals(target.owner()) && "ofInstant".equals(target.name()) && "(Ljava/time/Instant;Ljava/time/ZoneId;)Ljava/time/LocalDateTime;".equals(target.descriptor())) {
             return IrExpression.objectCall("javan_local_date_time_of_instant", arguments);
@@ -636,6 +683,18 @@ public final class BytecodeToIR {
         if ("java/time/ZonedDateTime".equals(target.owner()) && "toLocalDateTime".equals(target.name()) && "()Ljava/time/LocalDateTime;".equals(target.descriptor())) {
             return IrExpression.objectCall("javan_zoned_date_time_to_local_date_time", arguments);
         }
+        if ("java/time/ZonedDateTime".equals(target.owner()) && "of".equals(target.name()) && "(Ljava/time/LocalDate;Ljava/time/LocalTime;Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_zoned_date_time_of", arguments);
+        }
+        if ("java/time/temporal/TemporalQueries".equals(target.owner()) && "zone".equals(target.name()) && "()Ljava/time/temporal/TemporalQuery;".equals(target.descriptor())) {
+            return IrExpression.stringLiteral("zone");
+        }
+        if ("java/time/temporal/TemporalQueries".equals(target.owner()) && "localDate".equals(target.name()) && "()Ljava/time/temporal/TemporalQuery;".equals(target.descriptor())) {
+            return IrExpression.stringLiteral("localDate");
+        }
+        if ("java/time/temporal/TemporalQueries".equals(target.owner()) && "localTime".equals(target.name()) && "()Ljava/time/temporal/TemporalQuery;".equals(target.descriptor())) {
+            return IrExpression.stringLiteral("localTime");
+        }
         if ("java/util/Date".equals(target.owner()) && "from".equals(target.name()) && "(Ljava/time/Instant;)Ljava/util/Date;".equals(target.descriptor())) {
             return IrExpression.objectCall("javan_date_from_instant", arguments);
         }
@@ -645,11 +704,47 @@ public final class BytecodeToIR {
         if ("java/util/Date".equals(target.owner()) && "getTime".equals(target.name()) && "()J".equals(target.descriptor())) {
             return IrExpression.longCall("javan_date_get_time", arguments);
         }
+        if ("java/sql/Date".equals(target.owner()) && "valueOf".equals(target.name()) && "(Ljava/time/LocalDate;)Ljava/sql/Date;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_sql_date_value_of_local_date", arguments);
+        }
+        if ("java/sql/Date".equals(target.owner()) && "getTime".equals(target.name()) && "()J".equals(target.descriptor())) {
+            return IrExpression.longCall("javan_sql_date_get_time", arguments);
+        }
+        if ("java/sql/Date".equals(target.owner()) && "toLocalDate".equals(target.name()) && "()Ljava/time/LocalDate;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_sql_date_to_local_date", arguments);
+        }
+        if ("java/sql/Time".equals(target.owner()) && "valueOf".equals(target.name()) && "(Ljava/time/LocalTime;)Ljava/sql/Time;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_sql_time_value_of_local_time", arguments);
+        }
+        if ("java/sql/Time".equals(target.owner()) && "getTime".equals(target.name()) && "()J".equals(target.descriptor())) {
+            return IrExpression.longCall("javan_sql_time_get_time", arguments);
+        }
+        if ("java/sql/Time".equals(target.owner()) && "toLocalTime".equals(target.name()) && "()Ljava/time/LocalTime;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_sql_time_to_local_time", arguments);
+        }
+        if ("java/sql/Timestamp".equals(target.owner()) && "from".equals(target.name()) && "(Ljava/time/Instant;)Ljava/sql/Timestamp;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_sql_timestamp_from_instant", arguments);
+        }
+        if ("java/sql/Timestamp".equals(target.owner()) && "valueOf".equals(target.name()) && "(Ljava/time/LocalDateTime;)Ljava/sql/Timestamp;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_sql_timestamp_value_of_local_date_time", arguments);
+        }
+        if ("java/sql/Timestamp".equals(target.owner()) && "getTime".equals(target.name()) && "()J".equals(target.descriptor())) {
+            return IrExpression.longCall("javan_sql_timestamp_get_time", arguments);
+        }
+        if ("java/sql/Timestamp".equals(target.owner()) && "toInstant".equals(target.name()) && "()Ljava/time/Instant;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_sql_timestamp_to_instant", arguments);
+        }
+        if ("java/sql/Timestamp".equals(target.owner()) && "toLocalDateTime".equals(target.name()) && "()Ljava/time/LocalDateTime;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_sql_timestamp_to_local_date_time", arguments);
+        }
         if ("java/util/concurrent/atomic/AtomicBoolean".equals(target.owner()) && "get".equals(target.name()) && "()Z".equals(target.descriptor())) {
             return IrExpression.intCall("javan_atomic_boolean_get", arguments);
         }
         if ("java/util/concurrent/atomic/AtomicInteger".equals(target.owner()) && "get".equals(target.name()) && "()I".equals(target.descriptor())) {
             return IrExpression.intCall("javan_atomic_integer_get", arguments);
+        }
+        if ("java/util/concurrent/atomic/AtomicLong".equals(target.owner()) && "get".equals(target.name()) && "()J".equals(target.descriptor())) {
+            return IrExpression.longCall("javan_atomic_long_get", arguments);
         }
         if ("java/util/concurrent/atomic/AtomicReference".equals(target.owner()) && "get".equals(target.name()) && "()Ljava/lang/Object;".equals(target.descriptor())) {
             return IrExpression.objectCall("javan_atomic_reference_get", arguments);
@@ -658,6 +753,21 @@ public final class BytecodeToIR {
             && "set".equals(target.name())
             && "(Ljava/lang/Object;)V".equals(target.descriptor())) {
             return new IrExpression(IrExpression.Kind.CALL, IrType.VOID, "javan_atomic_reference_set", arguments);
+        }
+        if ("java/util/concurrent/atomic/AtomicReference".equals(target.owner())
+            && "compareAndSet".equals(target.name())
+            && "(Ljava/lang/Object;Ljava/lang/Object;)Z".equals(target.descriptor())) {
+            return IrExpression.intCall("javan_atomic_reference_compare_and_set", arguments);
+        }
+        if ("java/util/concurrent/atomic/AtomicReference".equals(target.owner())
+            && "getAndSet".equals(target.name())
+            && "(Ljava/lang/Object;)Ljava/lang/Object;".equals(target.descriptor())) {
+            return IrExpression.objectCall("javan_atomic_reference_get_and_set", arguments);
+        }
+        if ("java/util/Collection".equals(target.owner())
+            && "add".equals(target.name())
+            && "(Ljava/lang/Object;)Z".equals(target.descriptor())) {
+            return IrExpression.intCall("javan_collection_add", arguments);
         }
         if ("java/nio/file/Path".equals(target.owner()) && "toString".equals(target.name()) && "()Ljava/lang/String;".equals(target.descriptor())) {
             return arguments.getFirst();
@@ -697,6 +807,9 @@ public final class BytecodeToIR {
         final String instantiatedReturnDescriptor,
         final IrType erasedReturnType
     ) {
+        if (erasedReturnType == IrType.VOID || "V".equals(instantiatedReturnDescriptor)) {
+            return implementationResult;
+        }
         if (erasedReturnType == IrType.OBJECT) {
             if (isPrimitiveDescriptor(implementationReturnDescriptor)) {
                 return boxPrimitiveExpression(instantiatedReturnDescriptor, implementationReturnDescriptor.charAt(0), implementationResult);
@@ -1024,6 +1137,11 @@ public final class BytecodeToIR {
             case 87:
                 if (!stack.isEmpty()) {
                     discardTop(instructions, stack);
+                }
+                break;
+            case 88:
+                if (!stack.isEmpty()) {
+                    discardTopTwo(instructions, stack);
                 }
                 break;
             case 96:
@@ -1612,12 +1730,14 @@ public final class BytecodeToIR {
         if (!BytecodeToIRControlFlowSupport.isObjectLike(value.kind())
             && value.kind() != StackKind.OBJECT_STREAM
             && value.kind() != StackKind.INT_STREAM
-            && value.kind() != StackKind.STREAM_COLLECTOR) {
+            && value.kind() != StackKind.STREAM_COLLECTOR
+            && value.kind() != StackKind.COMPARATOR) {
             throw invalidStack(classFile, method, instruction, wrongStackTypeReason("object", value.kind()));
         }
         if (value.kind() == StackKind.OBJECT_STREAM
             || value.kind() == StackKind.INT_STREAM
-            || value.kind() == StackKind.STREAM_COLLECTOR) {
+            || value.kind() == StackKind.STREAM_COLLECTOR
+            || value.kind() == StackKind.COMPARATOR) {
             localOrCreate(locals, localDeclarations, slot, IrType.OBJECT);
             specialObjectLocals.put(slot, value);
             updateObjectLocalKind(objectLocalKinds, slot, value.kind());
@@ -2078,6 +2198,21 @@ public final class BytecodeToIR {
 
     static void discardTop(final List<IrInstruction> instructions, final List<StackValue> stack) {
         final StackValue value = pop(stack);
+        emitDiscardedValue(instructions, value);
+    }
+
+    static void discardTopTwo(final List<IrInstruction> instructions, final List<StackValue> stack) {
+        final StackValue top = pop(stack);
+        if (top.kind() == StackKind.LONG || top.kind() == StackKind.DOUBLE) {
+            emitDiscardedValue(instructions, top);
+            return;
+        }
+        final StackValue next = pop(stack);
+        emitDiscardedValue(instructions, next);
+        emitDiscardedValue(instructions, top);
+    }
+
+    private static void emitDiscardedValue(final List<IrInstruction> instructions, final StackValue value) {
         if (value.expression().isPresent()) {
             final IrExpression expression = value.expression().orElseThrow();
             if (expression.kind() == IrExpression.Kind.CALL) {
@@ -2633,7 +2768,7 @@ public final class BytecodeToIR {
         if (isLinkOptionNoFollowLinks(fieldRef)) {
             return true;
         }
-        return isChronoFieldNanoOfSecond(fieldRef);
+        return isSupportedChronoField(fieldRef);
     }
 
     static boolean isStandardCopyReplaceExisting(final FieldRef fieldRef) {
@@ -2656,14 +2791,18 @@ public final class BytecodeToIR {
         return "Ljava/nio/file/LinkOption;".equals(fieldRef.descriptor());
     }
 
-    static boolean isChronoFieldNanoOfSecond(final FieldRef fieldRef) {
+    static boolean isSupportedChronoField(final FieldRef fieldRef) {
         if (!"java/time/temporal/ChronoField".equals(fieldRef.owner())) {
             return false;
         }
-        if (!"NANO_OF_SECOND".equals(fieldRef.name())) {
+        if (!"Ljava/time/temporal/ChronoField;".equals(fieldRef.descriptor())) {
             return false;
         }
-        return "Ljava/time/temporal/ChronoField;".equals(fieldRef.descriptor());
+        return "NANO_OF_SECOND".equals(fieldRef.name())
+            || "INSTANT_SECONDS".equals(fieldRef.name())
+            || "OFFSET_SECONDS".equals(fieldRef.name())
+            || "EPOCH_DAY".equals(fieldRef.name())
+            || "NANO_OF_DAY".equals(fieldRef.name());
     }
 
     static boolean isEnumIntrinsic(final Map<String, ClassFile> classes, final MethodRef methodRef) {
@@ -3061,6 +3200,9 @@ public final class BytecodeToIR {
         if ("java/lang/Record".equals(methodRef.owner())) {
             return "()V".equals(methodRef.descriptor());
         }
+        if ("java/net/http/HttpRequest".equals(methodRef.owner())) {
+            return "()V".equals(methodRef.descriptor());
+        }
         if ("java/lang/Enum".equals(methodRef.owner())) {
             return "(Ljava/lang/String;I)V".equals(methodRef.descriptor());
         }
@@ -3112,6 +3254,26 @@ public final class BytecodeToIR {
             return false;
         }
         if (!"()[Ljava/lang/Throwable;".equals(methodRef.descriptor())) {
+            return false;
+        }
+        return isKnownPlatformThrowable(methodRef.owner());
+    }
+
+    static boolean isPlatformThrowableGetStackTrace(final MethodRef methodRef) {
+        if (!"getStackTrace".equals(methodRef.name())) {
+            return false;
+        }
+        if (!"()[Ljava/lang/StackTraceElement;".equals(methodRef.descriptor())) {
+            return false;
+        }
+        return isKnownPlatformThrowable(methodRef.owner());
+    }
+
+    static boolean isPlatformThrowableSetStackTrace(final MethodRef methodRef) {
+        if (!"setStackTrace".equals(methodRef.name())) {
+            return false;
+        }
+        if (!"([Ljava/lang/StackTraceElement;)V".equals(methodRef.descriptor())) {
             return false;
         }
         return isKnownPlatformThrowable(methodRef.owner());
@@ -3197,6 +3359,7 @@ public final class BytecodeToIR {
         OBJECT_STREAM,
         INT_STREAM,
         STREAM_COLLECTOR,
+        COMPARATOR,
         VIRTUAL_THREAD_BUILDER,
         VIRTUAL_THREAD_FACTORY,
         VIRTUAL_THREAD_EXECUTOR,
@@ -3204,6 +3367,7 @@ public final class BytecodeToIR {
         ERROR_PRINT_STREAM,
         SOCKET_INPUT_STREAM,
         SOCKET_OUTPUT_STREAM,
+        HTTP_INPUT_STREAM,
         INT,
         LONG,
         FLOAT,
@@ -3216,11 +3380,45 @@ public final class BytecodeToIR {
         MAP
     }
 
+    enum ComparatorKind {
+        REVERSE_NATURAL,
+        COMPARING
+    }
+
     record StreamOperation(
         StreamOperationKind kind,
         IrExpression function,
         MethodRef interfaceMethod
     ) {
+    }
+
+    record ComparatorPlan(
+        ComparatorKind kind,
+        Optional<IrExpression> function,
+        Optional<MethodRef> interfaceMethod,
+        Optional<ComparatorPlan> downstream
+    ) {
+        static ComparatorPlan reverseNatural() {
+            return new ComparatorPlan(
+                ComparatorKind.REVERSE_NATURAL,
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty()
+            );
+        }
+
+        static ComparatorPlan comparing(
+            final IrExpression function,
+            final MethodRef interfaceMethod,
+            final ComparatorPlan downstream
+        ) {
+            return new ComparatorPlan(
+                ComparatorKind.COMPARING,
+                Optional.of(function),
+                Optional.of(interfaceMethod),
+                Optional.of(downstream)
+            );
+        }
     }
 
     record StreamToIntOperation(
@@ -3231,24 +3429,56 @@ public final class BytecodeToIR {
 
     record StreamPlan(
         IrExpression source,
-        List<StreamOperation> operations,
+        List<StreamOperation> preSortOperations,
+        Optional<ComparatorPlan> comparator,
+        List<StreamOperation> postSortOperations,
         Optional<StreamToIntOperation> intTerminal
     ) {
         StreamPlan append(final StreamOperation operation) {
-            final List<StreamOperation> next = new ArrayList<>(operations);
+            if (comparator.isPresent()) {
+                final List<StreamOperation> next = new ArrayList<>(postSortOperations);
+                next.add(operation);
+                return new StreamPlan(source, preSortOperations, comparator, List.copyOf(next), intTerminal);
+            }
+            final List<StreamOperation> next = new ArrayList<>(preSortOperations);
             next.add(operation);
-            return new StreamPlan(source, List.copyOf(next), intTerminal);
+            return new StreamPlan(source, List.copyOf(next), comparator, postSortOperations, intTerminal);
+        }
+
+        StreamPlan sorted(final ComparatorPlan comparatorPlan) {
+            return new StreamPlan(source, preSortOperations, Optional.of(comparatorPlan), postSortOperations, intTerminal);
         }
 
         StreamPlan mapToInt(final IrExpression function, final MethodRef interfaceMethod) {
-            return new StreamPlan(source, operations, Optional.of(new StreamToIntOperation(function, interfaceMethod)));
+            return new StreamPlan(
+                source,
+                preSortOperations,
+                comparator,
+                postSortOperations,
+                Optional.of(new StreamToIntOperation(function, interfaceMethod))
+            );
         }
     }
 
+    enum CollectorKind {
+        JOINING,
+        TO_LIST,
+        COUNTING,
+        GROUPING_BY_COUNTING,
+        TO_COLLECTION,
+        TO_MAP
+    }
+
     record CollectorPlan(
+        CollectorKind kind,
         IrExpression delimiter,
         IrExpression prefix,
-        IrExpression suffix
+        IrExpression suffix,
+        IrExpression classifier,
+        IrExpression keyMapper,
+        IrExpression valueMapper,
+        IrExpression mergeFunction,
+        IrExpression supplier
     ) {
     }
 
@@ -3260,74 +3490,83 @@ public final class BytecodeToIR {
         Optional<String> throwableType,
         Optional<IrExpression> expression,
         Optional<StreamPlan> streamPlan,
-        Optional<CollectorPlan> collectorPlan
+        Optional<CollectorPlan> collectorPlan,
+        Optional<ComparatorPlan> comparatorPlan
     ) {
         static StackValue virtualThreadBuilder() {
-            return new StackValue(StackKind.VIRTUAL_THREAD_BUILDER, Optional.empty(), Optional.of(IrExpression.objectNull()), Optional.empty(), Optional.empty());
+            return new StackValue(StackKind.VIRTUAL_THREAD_BUILDER, Optional.empty(), Optional.of(IrExpression.objectNull()), Optional.empty(), Optional.empty(), Optional.empty());
         }
 
         static StackValue virtualThreadBuilder(final IrExpression expression) {
-            return new StackValue(StackKind.VIRTUAL_THREAD_BUILDER, Optional.empty(), Optional.of(expression), Optional.empty(), Optional.empty());
+            return new StackValue(StackKind.VIRTUAL_THREAD_BUILDER, Optional.empty(), Optional.of(expression), Optional.empty(), Optional.empty(), Optional.empty());
         }
 
         static StackValue virtualThreadFactory(final IrExpression expression) {
-            return new StackValue(StackKind.VIRTUAL_THREAD_FACTORY, Optional.empty(), Optional.of(expression), Optional.empty(), Optional.empty());
+            return new StackValue(StackKind.VIRTUAL_THREAD_FACTORY, Optional.empty(), Optional.of(expression), Optional.empty(), Optional.empty(), Optional.empty());
         }
 
         static StackValue virtualThreadExecutor(final IrExpression expression) {
-            return new StackValue(StackKind.VIRTUAL_THREAD_EXECUTOR, Optional.empty(), Optional.of(expression), Optional.empty(), Optional.empty());
+            return new StackValue(StackKind.VIRTUAL_THREAD_EXECUTOR, Optional.empty(), Optional.of(expression), Optional.empty(), Optional.empty(), Optional.empty());
         }
 
         static StackValue objectStream(final StreamPlan streamPlan) {
-            return new StackValue(StackKind.OBJECT_STREAM, Optional.empty(), Optional.empty(), Optional.of(streamPlan), Optional.empty());
+            return new StackValue(StackKind.OBJECT_STREAM, Optional.empty(), Optional.empty(), Optional.of(streamPlan), Optional.empty(), Optional.empty());
         }
 
         static StackValue intStream(final StreamPlan streamPlan) {
-            return new StackValue(StackKind.INT_STREAM, Optional.empty(), Optional.empty(), Optional.of(streamPlan), Optional.empty());
+            return new StackValue(StackKind.INT_STREAM, Optional.empty(), Optional.empty(), Optional.of(streamPlan), Optional.empty(), Optional.empty());
         }
 
         static StackValue streamCollector(final CollectorPlan collectorPlan) {
-            return new StackValue(StackKind.STREAM_COLLECTOR, Optional.empty(), Optional.empty(), Optional.empty(), Optional.of(collectorPlan));
+            return new StackValue(StackKind.STREAM_COLLECTOR, Optional.empty(), Optional.empty(), Optional.empty(), Optional.of(collectorPlan), Optional.empty());
+        }
+
+        static StackValue comparator(final ComparatorPlan comparatorPlan) {
+            return new StackValue(StackKind.COMPARATOR, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.of(comparatorPlan));
         }
 
         static StackValue printStream() {
-            return new StackValue(StackKind.PRINT_STREAM, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+            return new StackValue(StackKind.PRINT_STREAM, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
         }
 
         static StackValue errorPrintStream() {
-            return new StackValue(StackKind.ERROR_PRINT_STREAM, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+            return new StackValue(StackKind.ERROR_PRINT_STREAM, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
         }
 
         static StackValue socketInputStream(final IrExpression expression) {
-            return new StackValue(StackKind.SOCKET_INPUT_STREAM, Optional.empty(), Optional.of(expression), Optional.empty(), Optional.empty());
+            return new StackValue(StackKind.SOCKET_INPUT_STREAM, Optional.empty(), Optional.of(expression), Optional.empty(), Optional.empty(), Optional.empty());
         }
 
         static StackValue socketOutputStream(final IrExpression expression) {
-            return new StackValue(StackKind.SOCKET_OUTPUT_STREAM, Optional.empty(), Optional.of(expression), Optional.empty(), Optional.empty());
+            return new StackValue(StackKind.SOCKET_OUTPUT_STREAM, Optional.empty(), Optional.of(expression), Optional.empty(), Optional.empty(), Optional.empty());
+        }
+
+        static StackValue httpInputStream(final IrExpression expression) {
+            return new StackValue(StackKind.HTTP_INPUT_STREAM, Optional.empty(), Optional.of(expression), Optional.empty(), Optional.empty(), Optional.empty());
         }
 
         static StackValue intExpression(final IrExpression expression) {
-            return new StackValue(StackKind.INT, Optional.empty(), Optional.of(expression), Optional.empty(), Optional.empty());
+            return new StackValue(StackKind.INT, Optional.empty(), Optional.of(expression), Optional.empty(), Optional.empty(), Optional.empty());
         }
 
         static StackValue longExpression(final IrExpression expression) {
-            return new StackValue(StackKind.LONG, Optional.empty(), Optional.of(expression), Optional.empty(), Optional.empty());
+            return new StackValue(StackKind.LONG, Optional.empty(), Optional.of(expression), Optional.empty(), Optional.empty(), Optional.empty());
         }
 
         static StackValue floatExpression(final IrExpression expression) {
-            return new StackValue(StackKind.FLOAT, Optional.empty(), Optional.of(expression), Optional.empty(), Optional.empty());
+            return new StackValue(StackKind.FLOAT, Optional.empty(), Optional.of(expression), Optional.empty(), Optional.empty(), Optional.empty());
         }
 
         static StackValue doubleExpression(final IrExpression expression) {
-            return new StackValue(StackKind.DOUBLE, Optional.empty(), Optional.of(expression), Optional.empty(), Optional.empty());
+            return new StackValue(StackKind.DOUBLE, Optional.empty(), Optional.of(expression), Optional.empty(), Optional.empty(), Optional.empty());
         }
 
         static StackValue objectExpression(final IrExpression expression) {
-            return new StackValue(StackKind.OBJECT, Optional.empty(), Optional.of(expression), Optional.empty(), Optional.empty());
+            return new StackValue(StackKind.OBJECT, Optional.empty(), Optional.of(expression), Optional.empty(), Optional.empty(), Optional.empty());
         }
 
         static StackValue platformThrowable(final String throwableType, final IrExpression message) {
-            return new StackValue(StackKind.OBJECT, Optional.of(throwableType), Optional.of(message), Optional.empty(), Optional.empty());
+            return new StackValue(StackKind.OBJECT, Optional.of(throwableType), Optional.of(message), Optional.empty(), Optional.empty(), Optional.empty());
         }
     }
 }

@@ -581,7 +581,8 @@ public final class ReachabilityAnalyzer {
     private static boolean isRunnableThreadConstructor(final MethodRef target) {
         return "java/lang/Thread".equals(target.owner())
             && "<init>".equals(target.name())
-            && "(Ljava/lang/Runnable;)V".equals(target.descriptor());
+            && ("(Ljava/lang/Runnable;)V".equals(target.descriptor())
+            || "(Ljava/lang/Runnable;Ljava/lang/String;)V".equals(target.descriptor()));
     }
 
     private static List<EntryPoint> interfaceTargets(
@@ -679,7 +680,7 @@ public final class ReachabilityAnalyzer {
             if (!isSubtypeOf(classes, candidate.name(), target.owner())) {
                 continue;
             }
-            final Optional<EntryPoint> resolved = lowerableResolvedVirtualTarget(classes, candidate.name(), target);
+            final Optional<EntryPoint> resolved = lowerableResolvedInvokeVirtualTarget(classes, candidate.name(), target);
             if (resolved.isPresent()) {
                 final EntryPoint entryPoint = resolved.orElseThrow();
                 if (!containsEntry(targets, entryPoint)) {
@@ -1137,10 +1138,23 @@ public final class ReachabilityAnalyzer {
             || isVirtualThreadBuilderUnstarted(targetRef.orElseThrow()))) {
             return inferVirtualThreadTarget(classes, instructions, threadConstructorIndex);
         }
-        if (threadConstructorIndex < 3) {
+        final Optional<MethodRef> threadConstructorRef = instructions.get(threadConstructorIndex).methodRef();
+        if (threadConstructorRef.isEmpty()) {
             return Optional.empty();
         }
-        final Instruction runnableConstructor = instructions.get(threadConstructorIndex - 1);
+        final String threadConstructorDescriptor = threadConstructorRef.orElseThrow().descriptor();
+        final int runnableConstructorIndex;
+        if ("(Ljava/lang/Runnable;)V".equals(threadConstructorDescriptor)) {
+            runnableConstructorIndex = threadConstructorIndex - 1;
+        } else if ("(Ljava/lang/Runnable;Ljava/lang/String;)V".equals(threadConstructorDescriptor)) {
+            runnableConstructorIndex = threadConstructorIndex - 2;
+        } else {
+            runnableConstructorIndex = -1;
+        }
+        if (runnableConstructorIndex < 2) {
+            return Optional.empty();
+        }
+        final Instruction runnableConstructor = instructions.get(runnableConstructorIndex);
         final Optional<MethodRef> runnableConstructorRef = runnableConstructor.methodRef();
         if (runnableConstructorRef.isEmpty()) {
             return Optional.empty();
@@ -1151,10 +1165,10 @@ public final class ReachabilityAnalyzer {
             || isAssignableTo(classes, target.owner(), "java/lang/Thread")) {
             return Optional.empty();
         }
-        if (instructions.get(threadConstructorIndex - 2).opcode() != 89) {
+        if (instructions.get(runnableConstructorIndex - 1).opcode() != 89) {
             return Optional.empty();
         }
-        final Instruction allocation = instructions.get(threadConstructorIndex - 3);
+        final Instruction allocation = instructions.get(runnableConstructorIndex - 2);
         final Optional<String> className = allocation.className();
         if (allocation.opcode() != 187
             || className.isEmpty()

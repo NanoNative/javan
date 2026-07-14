@@ -91,6 +91,32 @@ final class RuntimeSourceIoSections {
             return response;
         }
 
+        static javan_http_exchange_value* javan_http_exchange_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("null http exchange");
+            }
+            javan_http_exchange_value* exchange = (javan_http_exchange_value*) value;
+            if (exchange->magic != JAVAN_HTTP_EXCHANGE_MAGIC
+                || exchange->request_uri == NULL
+                || exchange->request_method == NULL
+                || exchange->request_headers == NULL
+                || exchange->request_body == NULL) {
+                javan_panic("unsupported http exchange object");
+            }
+            return exchange;
+        }
+
+        static javan_http_input_stream_value* javan_http_input_stream_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("null http input stream");
+            }
+            javan_http_input_stream_value* stream = (javan_http_input_stream_value*) value;
+            if (stream->magic != JAVAN_HTTP_INPUT_STREAM_MAGIC || stream->bytes == NULL) {
+                javan_panic("unsupported http input stream object");
+            }
+            return stream;
+        }
+
         static void javan_http_header_text_checked(const char* value, const char* kind) {
             if (value == NULL) {
                 javan_panic(kind);
@@ -201,6 +227,266 @@ final class RuntimeSourceIoSections {
             javan_root_frame_pop(javan_uri_owner_roots);
             javan_root_frame_pop(javan_uri_parse_roots);
             return uri;
+        }
+
+        void* javan_uri_get_path(void* value) {
+            javan_uri_value* uri = javan_uri_checked(value);
+            const char* target = uri->target;
+            const char* query = strchr(target, '?');
+            unsigned long length = query == NULL ? strlen(target) : (unsigned long) (query - target);
+            return javan_http_copy_range(target, length);
+        }
+
+        void* javan_uri_get_query(void* value) {
+            javan_uri_value* uri = javan_uri_checked(value);
+            const char* target = uri->target;
+            const char* query = strchr(target, '?');
+            if (query == NULL || query[1] == '\\0') {
+                return NULL;
+            }
+            return javan_string_copy(query + 1);
+        }
+
+        static void* javan_http_input_stream_new(void* bytes_value) {
+            javan_byte_array* bytes = (javan_byte_array*) javan_array_checked(bytes_value);
+            javan_array_kind_checked((javan_array_header*) bytes, JAVAN_ARRAY_KIND_BYTE);
+            javan_http_input_stream_value* stream = (javan_http_input_stream_value*) javan_alloc(sizeof(javan_http_input_stream_value));
+            void* stream_root = (void*) stream;
+            void* bytes_root = bytes_value;
+            void** roots[] = {
+                (void**) &stream_root,
+                (void**) &bytes_root
+            };
+            javan_root_frame_push(roots, 2);
+            stream = (javan_http_input_stream_value*) stream_root;
+            stream->magic = JAVAN_HTTP_INPUT_STREAM_MAGIC;
+            stream->offset = 0;
+            stream->closed = 0;
+            stream->reserved0 = 0;
+            stream->bytes = bytes_root;
+            javan_update_runtime_allocation_kind(stream_root, JAVAN_RUNTIME_KIND_HTTP_INPUT_STREAM);
+            javan_root_frame_pop(roots);
+            return stream_root;
+        }
+
+        void* javan_http_exchange_new(void* uri_value, void* method_value, void* headers_value, void* body_value) {
+            void* uri_root = uri_value;
+            void* method_root = method_value;
+            void* headers_root = headers_value;
+            void* body_root = body_value;
+            void** roots[] = {
+                (void**) &uri_root,
+                (void**) &method_root,
+                (void**) &headers_root,
+                (void**) &body_root
+            };
+            javan_root_frame_push(roots, 4);
+            javan_uri_checked(uri_root);
+            javan_http_header_text_checked((const char*) method_root, "null http method");
+            if (headers_root == NULL) {
+                headers_root = javan_hashmap_new();
+            } else {
+                javan_map_size(headers_root);
+            }
+            if (body_root == NULL) {
+                body_root = javan_byte_array_new(0);
+            } else {
+                javan_byte_array* body = (javan_byte_array*) javan_array_checked(body_root);
+                javan_array_kind_checked((javan_array_header*) body, JAVAN_ARRAY_KIND_BYTE);
+            }
+            javan_http_exchange_value* exchange = (javan_http_exchange_value*) javan_alloc(sizeof(javan_http_exchange_value));
+            void* exchange_root = (void*) exchange;
+            void** exchange_roots[] = {
+                (void**) &uri_root,
+                (void**) &method_root,
+                (void**) &headers_root,
+                (void**) &body_root,
+                (void**) &exchange_root
+            };
+            javan_root_frame_push(exchange_roots, 5);
+            exchange = (javan_http_exchange_value*) exchange_root;
+            exchange->magic = JAVAN_HTTP_EXCHANGE_MAGIC;
+            exchange->reserved0 = 0;
+            exchange->reserved1 = 0;
+            exchange->reserved2 = 0;
+            exchange->request_uri = (javan_uri_value*) uri_root;
+            exchange->request_method = (char*) method_root;
+            exchange->request_headers = (javan_object_map*) headers_root;
+            exchange->request_body = body_root;
+            javan_update_runtime_allocation_kind(exchange_root, JAVAN_RUNTIME_KIND_HTTP_EXCHANGE);
+            javan_root_frame_pop(exchange_roots);
+            javan_root_frame_pop(roots);
+            return exchange_root;
+        }
+
+        void* javan_http_exchange_get_request_uri(void* value) {
+            return javan_http_exchange_checked(value)->request_uri;
+        }
+
+        void* javan_http_exchange_get_request_method(void* value) {
+            return javan_http_exchange_checked(value)->request_method;
+        }
+
+        void* javan_http_exchange_get_request_headers(void* value) {
+            return javan_http_exchange_checked(value)->request_headers;
+        }
+
+        void* javan_http_exchange_get_request_body(void* value) {
+            javan_http_exchange_value* exchange = javan_http_exchange_checked(value);
+            return javan_http_input_stream_new(exchange->request_body);
+        }
+
+        void* javan_http_headers_get_first(void* value, void* name) {
+            if (name == NULL) {
+                javan_panic("null http header name");
+            }
+            void* header_values = javan_map_get(value, name);
+            if (header_values == NULL) {
+                return NULL;
+            }
+            if (javan_object_is_collection(header_values) != 0) {
+                if (javan_list_is_empty(header_values) != 0) {
+                    return NULL;
+                }
+                return javan_list_get_first(header_values);
+            }
+            return header_values;
+        }
+
+        int javan_http_input_stream_read(void* value) {
+            javan_http_input_stream_value* stream = javan_http_input_stream_checked(value);
+            if (stream->closed != 0) {
+                javan_panic("http input stream is closed");
+            }
+            javan_byte_array* bytes = (javan_byte_array*) javan_array_checked(stream->bytes);
+            javan_array_kind_checked((javan_array_header*) bytes, JAVAN_ARRAY_KIND_BYTE);
+            if (stream->offset >= bytes->length) {
+                return -1;
+            }
+            int result = bytes->values[stream->offset] & 0xff;
+            stream->offset++;
+            return result;
+        }
+
+        int javan_http_input_stream_read_bytes(void* value, void* bytes_value) {
+            javan_byte_array* bytes = (javan_byte_array*) javan_array_checked(bytes_value);
+            javan_array_kind_checked((javan_array_header*) bytes, JAVAN_ARRAY_KIND_BYTE);
+            return javan_http_input_stream_read_bytes_range(value, bytes_value, 0, bytes->length);
+        }
+
+        int javan_http_input_stream_read_bytes_range(void* value, void* bytes_value, int offset, int length) {
+            javan_http_input_stream_value* stream = javan_http_input_stream_checked(value);
+            if (stream->closed != 0) {
+                javan_panic("http input stream is closed");
+            }
+            javan_byte_array* target = (javan_byte_array*) javan_array_checked(bytes_value);
+            javan_array_kind_checked((javan_array_header*) target, JAVAN_ARRAY_KIND_BYTE);
+            if (offset < 0 || length < 0 || offset > target->length || length > target->length - offset) {
+                javan_panic("http input stream range out of bounds");
+            }
+            if (length == 0) {
+                return 0;
+            }
+            javan_byte_array* source = (javan_byte_array*) javan_array_checked(stream->bytes);
+            javan_array_kind_checked((javan_array_header*) source, JAVAN_ARRAY_KIND_BYTE);
+            if (stream->offset >= source->length) {
+                return -1;
+            }
+            int remaining = source->length - stream->offset;
+            int copied = remaining < length ? remaining : length;
+            memcpy(target->values + offset, source->values + stream->offset, (unsigned long) copied);
+            stream->offset += copied;
+            return copied;
+        }
+
+        void* javan_http_input_stream_read_all_bytes(void* value) {
+            javan_http_input_stream_value* stream = javan_http_input_stream_checked(value);
+            if (stream->closed != 0) {
+                javan_panic("http input stream is closed");
+            }
+            javan_byte_array* source = (javan_byte_array*) javan_array_checked(stream->bytes);
+            javan_array_kind_checked((javan_array_header*) source, JAVAN_ARRAY_KIND_BYTE);
+            int remaining = source->length - stream->offset;
+            if (remaining < 0) {
+                remaining = 0;
+            }
+            void* result = javan_byte_array_new(remaining);
+            javan_byte_array* copy = (javan_byte_array*) javan_array_checked(result);
+            if (remaining > 0) {
+                memcpy(copy->values, source->values + stream->offset, (unsigned long) remaining);
+            }
+            stream->offset = source->length;
+            return result;
+        }
+
+        void javan_http_input_stream_close(void* value) {
+            javan_http_input_stream_checked(value)->closed = 1;
+        }
+
+        void* javan_charset_utf8(void) {
+            return javan_string_from("UTF-8");
+        }
+
+        void* javan_charset_name(void* value) {
+            if (value == NULL) {
+                javan_panic("null charset");
+            }
+            if (strcmp((const char*) value, "UTF-8") != 0) {
+                javan_panic("unsupported charset");
+            }
+            return value;
+        }
+
+        static int javan_hex_digit_value(char value) {
+            if (value >= '0' && value <= '9') {
+                return value - '0';
+            }
+            if (value >= 'a' && value <= 'f') {
+                return value - 'a' + 10;
+            }
+            if (value >= 'A' && value <= 'F') {
+                return value - 'A' + 10;
+            }
+            return -1;
+        }
+
+        void* javan_url_decode_utf8(void* value, void* charset) {
+            if (value == NULL) {
+                javan_panic("null string");
+            }
+            if (charset == NULL || strcmp((const char*) charset, "UTF-8") != 0) {
+                javan_panic("unsupported charset");
+            }
+            const char* text = (const char*) value;
+            unsigned long length = strlen(text);
+            void** javan_url_decode_roots[] = {
+                (void**) &value,
+                (void**) &charset
+            };
+            javan_root_frame_push(javan_url_decode_roots, 2);
+            char* result = javan_string_alloc(length + 1UL);
+            text = (const char*) value;
+            unsigned long write = 0;
+            for (unsigned long read = 0; read < length; read++) {
+                char ch = text[read];
+                if (ch == '+') {
+                    result[write++] = ' ';
+                    continue;
+                }
+                if (ch == '%' && read + 2UL < length) {
+                    int high = javan_hex_digit_value(text[read + 1UL]);
+                    int low = javan_hex_digit_value(text[read + 2UL]);
+                    if (high >= 0 && low >= 0) {
+                        result[write++] = (char) ((high << 4) | low);
+                        read += 2UL;
+                        continue;
+                    }
+                }
+                result[write++] = ch;
+            }
+            result[write] = '\\0';
+            javan_root_frame_pop(javan_url_decode_roots);
+            return result;
         }
 
         void* javan_http_client_new(void) {
@@ -1138,6 +1424,108 @@ final class RuntimeSourceIoSections {
             if (argc > 0) {
                 javan_root_frame_pop(javan_concat_roots);
             }
+            return result;
+        }
+
+        void* javan_string_format_exact(void* format_value, void* args_value) {
+            if (format_value == NULL) {
+                javan_panic("null string format");
+            }
+            if (args_value == NULL) {
+                javan_panic("null string format arguments");
+            }
+            void* format_root = format_value;
+            void* args_root = args_value;
+            void* builder_value = NULL;
+            void* arg_value = NULL;
+            void* arg_string = NULL;
+            void* padding_value = NULL;
+            void* result = NULL;
+            void** javan_format_roots[] = {
+                (void**) &format_root,
+                (void**) &args_root,
+                (void**) &builder_value,
+                (void**) &arg_value,
+                (void**) &arg_string,
+                (void**) &padding_value,
+                (void**) &result
+            };
+            javan_root_frame_push(javan_format_roots, 7);
+            builder_value = javan_stringbuilder_new();
+            const char* format = (const char*) format_root;
+            int arg_count = javan_array_length(args_root);
+            int arg_index = 0;
+            for (int index = 0; format[index] != '\\0'; index++) {
+                if (format[index] != '%') {
+                    builder_value = javan_stringbuilder_append_char(builder_value, (unsigned char) format[index]);
+                    continue;
+                }
+                index++;
+                if (format[index] == '\\0') {
+                    javan_panic("unterminated string format specifier");
+                }
+                int left_align = 0;
+                int width = 0;
+                int precision = -1;
+                if (format[index] == '-') {
+                    left_align = 1;
+                    index++;
+                }
+                while (format[index] >= '0' && format[index] <= '9') {
+                    width = (width * 10) + (format[index] - '0');
+                    index++;
+                }
+                if (format[index] == '.') {
+                    precision = 0;
+                    index++;
+                    if (format[index] < '0' || format[index] > '9') {
+                        javan_panic("unsupported string format precision");
+                    }
+                    while (format[index] >= '0' && format[index] <= '9') {
+                        precision = (precision * 10) + (format[index] - '0');
+                        index++;
+                    }
+                }
+                if (format[index] == '\\0') {
+                    javan_panic("unterminated string format conversion");
+                }
+                if (arg_index >= arg_count) {
+                    javan_panic("missing string format argument");
+                }
+                arg_value = javan_object_array_get(args_root, arg_index++);
+                if (format[index] == 's') {
+                    if (precision == 0) {
+                        arg_string = javan_string_from("");
+                    } else {
+                        arg_string = javan_printable_object_string(arg_value);
+                        if (precision > 0) {
+                            int length = javan_string_length((const char*) arg_string);
+                            int end = precision < length ? precision : length;
+                            arg_string = javan_string_substring_range((const char*) arg_string, 0, end);
+                        }
+                    }
+                } else if (format[index] == 'd') {
+                    if (precision >= 0) {
+                        javan_panic("unsupported numeric format precision");
+                    }
+                    arg_string = javan_string_value_of_long(javan_number_long_value(arg_value));
+                } else {
+                    javan_panic("unsupported string format conversion");
+                }
+                int value_length = javan_string_length((const char*) arg_string);
+                int padding = width > value_length ? width - value_length : 0;
+                if (padding > 0 && left_align == 0) {
+                    padding_value = javan_string_repeat(" ", padding);
+                    builder_value = javan_stringbuilder_append_string(builder_value, padding_value);
+                }
+                builder_value = javan_stringbuilder_append_string(builder_value, arg_string);
+                if (padding > 0 && left_align != 0) {
+                    padding_value = javan_string_repeat(" ", padding);
+                    builder_value = javan_stringbuilder_append_string(builder_value, padding_value);
+                }
+            }
+            result = javan_stringbuilder_to_string(builder_value);
+            javan_root_frame_pop(javan_format_roots);
             return result;
         }
 

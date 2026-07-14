@@ -49,8 +49,6 @@ Status mapping:
 | `polymorphic-virtual` | pass |
 | `interface-polymorphic` | pass |
 | `string-intrinsics` | pass |
-| `lambda-constructor-reference-stringbuilder` | pass |
-| `lambda-constructor-reference-atomicboolean` | pass |
 | `non-ascii-string-semantic-rejection` | pass |
 | `operand-object-compare-temporary-root` | pass |
 | `operand-field-load-temporary-root` | pass |
@@ -131,7 +129,9 @@ Status mapping:
 | `management-runtime-module-rejection` | pass |
 | `management-runtime-memory-processors` | pass |
 | `management-thread-runtime-mxbeans` | pass |
+| `management-memory-mxbean` | pass |
 | `management-operating-system-mxbean` | pass |
+| `process-handle-current-pid` | pass |
 | `network-socket-rejection` | pass |
 | `network-http-rejection` | pass |
 | `network-runtime-feature-reporting` | pass |

@@ -753,6 +753,8 @@ final class BytecodeToIRTest {
         final BytecodeToIR.StreamPlan streamPlan = new BytecodeToIR.StreamPlan(
             IrExpression.objectLocal("source"),
             List.of(),
+            Optional.empty(),
+            List.of(),
             Optional.of(new BytecodeToIR.StreamToIntOperation(
                 IrExpression.objectLocal("mapper"),
                 new MethodRef("java/util/function/ToIntFunction", "applyAsInt", "(Ljava/lang/Object;)I")
@@ -797,9 +799,15 @@ final class BytecodeToIRTest {
         final List<IrInstruction> instructions = new ArrayList<>();
         final List<BytecodeToIR.StackValue> stack = new ArrayList<>();
         final BytecodeToIR.CollectorPlan collectorPlan = new BytecodeToIR.CollectorPlan(
+            BytecodeToIR.CollectorKind.JOINING,
             IrExpression.stringLiteral(", "),
             IrExpression.stringLiteral("["),
-            IrExpression.stringLiteral("]")
+            IrExpression.stringLiteral("]"),
+            IrExpression.objectNull(),
+            IrExpression.objectNull(),
+            IrExpression.objectNull(),
+            IrExpression.objectNull(),
+            IrExpression.objectNull()
         );
         stack.add(BytecodeToIR.StackValue.streamCollector(collectorPlan));
 
@@ -1067,6 +1075,22 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void implementationBridgeCallLowersLocalDateFromTemporal() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/time/LocalDate", "from", "(Ljava/time/temporal/TemporalAccessor;)Ljava/time/LocalDate;"),
+            List.of(IrExpression.objectLocal("temporal"))
+        )).isEqualTo(IrExpression.objectCall("javan_local_date_from_temporal", List.of(IrExpression.objectLocal("temporal"))));
+    }
+
+    @Test
+    void implementationBridgeCallLowersLocalDateNow() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/time/LocalDate", "now", "(Ljava/time/ZoneId;)Ljava/time/LocalDate;"),
+            List.of(IrExpression.objectLocal("zone"))
+        )).isEqualTo(IrExpression.objectCall("javan_local_date_now", List.of(IrExpression.objectLocal("zone"))));
+    }
+
+    @Test
     void implementationBridgeCallLowersLocalDateAtStartOfDay() throws Exception {
         assertThat(implementationBridgeCall(
             new MethodRef("java/time/LocalDate", "atStartOfDay", "()Ljava/time/LocalDateTime;"),
@@ -1118,6 +1142,52 @@ final class BytecodeToIRTest {
             new MethodRef("java/time/LocalDateTime", "toLocalTime", "()Ljava/time/LocalTime;"),
             List.of(IrExpression.objectLocal("dateTime"))
         )).isEqualTo(IrExpression.objectCall("javan_local_date_time_to_local_time", List.of(IrExpression.objectLocal("dateTime"))));
+    }
+
+    @Test
+    void implementationBridgeCallLowersLocalTimeFromTemporal() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/time/LocalTime", "from", "(Ljava/time/temporal/TemporalAccessor;)Ljava/time/LocalTime;"),
+            List.of(IrExpression.objectLocal("temporal"))
+        )).isEqualTo(IrExpression.objectCall("javan_local_time_from_temporal", List.of(IrExpression.objectLocal("temporal"))));
+    }
+
+    @Test
+    void implementationBridgeCallLowersZonedDateTimeOf() throws Exception {
+        final List<IrExpression> arguments = List.of(
+            IrExpression.objectLocal("date"),
+            IrExpression.objectLocal("time"),
+            IrExpression.objectLocal("zone")
+        );
+
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/time/ZonedDateTime", "of", "(Ljava/time/LocalDate;Ljava/time/LocalTime;Ljava/time/ZoneId;)Ljava/time/ZonedDateTime;"),
+            arguments
+        )).isEqualTo(IrExpression.objectCall("javan_zoned_date_time_of", arguments));
+    }
+
+    @Test
+    void implementationBridgeCallLowersTemporalQueriesZone() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/time/temporal/TemporalQueries", "zone", "()Ljava/time/temporal/TemporalQuery;"),
+            List.of()
+        )).isEqualTo(IrExpression.stringLiteral("zone"));
+    }
+
+    @Test
+    void implementationBridgeCallLowersTemporalQueriesLocalDate() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/time/temporal/TemporalQueries", "localDate", "()Ljava/time/temporal/TemporalQuery;"),
+            List.of()
+        )).isEqualTo(IrExpression.stringLiteral("localDate"));
+    }
+
+    @Test
+    void implementationBridgeCallLowersTemporalQueriesLocalTime() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/time/temporal/TemporalQueries", "localTime", "()Ljava/time/temporal/TemporalQuery;"),
+            List.of()
+        )).isEqualTo(IrExpression.stringLiteral("localTime"));
     }
 
     @Test
@@ -1235,6 +1305,14 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void implementationBridgeCallLowersAtomicLongGet() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/util/concurrent/atomic/AtomicLong", "get", "()J"),
+            List.of(IrExpression.objectLocal("count"))
+        )).isEqualTo(IrExpression.longCall("javan_atomic_long_get", List.of(IrExpression.objectLocal("count"))));
+    }
+
+    @Test
     void implementationBridgeCallLowersAtomicReferenceGet() throws Exception {
         assertThat(implementationBridgeCall(
             new MethodRef("java/util/concurrent/atomic/AtomicReference", "get", "()Ljava/lang/Object;"),
@@ -1251,6 +1329,28 @@ final class BytecodeToIRTest {
             IrExpression.Kind.CALL,
             IrType.VOID,
             "javan_atomic_reference_set",
+            List.of(IrExpression.objectLocal("ref"), IrExpression.objectLocal("value"))
+        ));
+    }
+
+    @Test
+    void implementationBridgeCallLowersAtomicReferenceCompareAndSet() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/util/concurrent/atomic/AtomicReference", "compareAndSet", "(Ljava/lang/Object;Ljava/lang/Object;)Z"),
+            List.of(IrExpression.objectLocal("ref"), IrExpression.objectLocal("expected"), IrExpression.objectLocal("next"))
+        )).isEqualTo(IrExpression.intCall(
+            "javan_atomic_reference_compare_and_set",
+            List.of(IrExpression.objectLocal("ref"), IrExpression.objectLocal("expected"), IrExpression.objectLocal("next"))
+        ));
+    }
+
+    @Test
+    void implementationBridgeCallLowersAtomicReferenceGetAndSet() throws Exception {
+        assertThat(implementationBridgeCall(
+            new MethodRef("java/util/concurrent/atomic/AtomicReference", "getAndSet", "(Ljava/lang/Object;)Ljava/lang/Object;"),
+            List.of(IrExpression.objectLocal("ref"), IrExpression.objectLocal("value"))
+        )).isEqualTo(IrExpression.objectCall(
+            "javan_atomic_reference_get_and_set",
             List.of(IrExpression.objectLocal("ref"), IrExpression.objectLocal("value"))
         ));
     }
@@ -1398,6 +1498,22 @@ final class BytecodeToIRTest {
             .cause()
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("unsupported lambda bridge return adaptation");
+    }
+
+    @Test
+    void adaptBridgeReturnReturnsImplementationResultForVoidErasedType() throws Exception {
+        final IrExpression expression = IrExpression.intCall(
+            "javan_collection_add",
+            List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+        );
+
+        assertThat(adaptBridgeReturn(
+            new MethodRef("java/util/Collection", "add", "(Ljava/lang/Object;)Z"),
+            expression,
+            "Z",
+            "V",
+            IrType.VOID
+        )).isEqualTo(expression);
     }
 
     @Test
@@ -2917,8 +3033,8 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void rejectsUnsupportedCollectionSizeInstanceCall() {
-        assertThatThrownBy(() -> lowerMain(method(
+    void lowersCollectionSizeToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
             0x0008,
             "main",
             "(Ljava/util/Collection;)I",
@@ -2927,10 +3043,11 @@ final class BytecodeToIRTest {
             plain(0, 42, "aload_0"),
             invokeInterface(1, new MethodRef("java/util/Collection", "size", "()I")),
             plain(2, 172, "ireturn")
-        )))
-            .isInstanceOf(DiagnosticException.class)
-            .hasMessageContaining("error[JAVAN040]: bytecode is not implemented by native code generation")
-            .hasMessageContaining("invokeinterface java/util/Collection.size()I");
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall("javan_list_size", List.of(IrExpression.objectLocal("arg0"))))
+        );
     }
 
     @Test
@@ -3070,6 +3187,78 @@ final class BytecodeToIRTest {
                 IrExpression.objectCall(
                     "javan_string_from_chars",
                     List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"), IrExpression.intLocal("arg2"))
+                )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersStringByteCharsetConstructorToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "([BLjava/nio/charset/Charset;)Ljava/lang/String;",
+            3,
+            2,
+            classInstruction(0, 187, "new", "java/lang/String"),
+            plain(1, 89, "dup"),
+            plain(2, 42, "aload_0"),
+            plain(3, 43, "aload_1"),
+            invokeSpecial(4, new MethodRef("java/lang/String", "<init>", "([BLjava/nio/charset/Charset;)V")),
+            plain(5, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectNull()),
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_string_from_utf8_bytes",
+                    List.of(
+                        IrExpression.objectLocal("arg0"),
+                        IrExpression.intLiteral(0),
+                        IrExpression.intCall("javan_array_length", List.of(IrExpression.objectLocal("arg0"))),
+                        IrExpression.objectLocal("arg1")
+                    )
+                )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersStringByteRangeCharsetConstructorToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "([BIILjava/nio/charset/Charset;)Ljava/lang/String;",
+            5,
+            4,
+            classInstruction(0, 187, "new", "java/lang/String"),
+            plain(1, 89, "dup"),
+            plain(2, 42, "aload_0"),
+            plain(3, 27, "iload_1"),
+            plain(4, 28, "iload_2"),
+            plain(5, 45, "aload_3"),
+            invokeSpecial(6, new MethodRef("java/lang/String", "<init>", "([BIILjava/nio/charset/Charset;)V")),
+            plain(7, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectNull()),
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_string_from_utf8_bytes",
+                    List.of(
+                        IrExpression.objectLocal("arg0"),
+                        IrExpression.intLocal("arg1"),
+                        IrExpression.intLocal("arg2"),
+                        IrExpression.objectLocal("arg3")
+                    )
                 )
             ),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
@@ -4171,6 +4360,42 @@ final class BytecodeToIRTest {
                 "javan_object_type_in",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.intLiteral(1), IrExpression.intLiteral(-1005))
             ))
+        );
+    }
+
+    @Test
+    void lowersInstanceOfCollectionToRuntimeIntrinsic() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Object;)I",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            classInstruction(1, 193, "instanceof", "java/util/Collection"),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall("javan_object_is_collection", List.of(IrExpression.objectLocal("arg0"))))
+        );
+    }
+
+    @Test
+    void lowersInstanceOfOptionalToRuntimeIntrinsic() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Object;)I",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            classInstruction(1, 193, "instanceof", "java/util/Optional"),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall("javan_object_is_optional", List.of(IrExpression.objectLocal("arg0"))))
         );
     }
 
@@ -6690,6 +6915,32 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersAtomicLongConstructorPredicateForDefaultSignature() {
+        assertThat(BytecodeToIRInvokeSupport.lowerAtomicConstructor(
+            new MethodRef("java/util/concurrent/atomic/AtomicLong", "<init>", "()V"),
+            new ArrayList<>(),
+            List.of(),
+            IrExpression.objectLocal("arg0")
+        )).isTrue();
+    }
+
+    @Test
+    void lowersAtomicLongConstructorValueSignatureToInitHelper() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+
+        assertThat(BytecodeToIRInvokeSupport.lowerAtomicConstructor(
+            new MethodRef("java/util/concurrent/atomic/AtomicLong", "<init>", "(J)V"),
+            instructions,
+            List.of(IrExpression.longLocal("arg1")),
+            IrExpression.objectLocal("arg0")
+        )).isTrue();
+        assertThat(instructions).containsExactly(IrInstruction.callStaticVoid(
+            "javan_atomic_long_init",
+            List.of(IrExpression.objectLocal("arg0"), IrExpression.longLocal("arg1"))
+        ));
+    }
+
+    @Test
     void lowersAtomicReferenceConstructorValueSignatureToInitHelper() {
         final List<IrInstruction> instructions = new ArrayList<>();
 
@@ -6823,6 +7074,29 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersAtomicLongGetToRuntimeHelperWithTemporaryLocal() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/concurrent/atomic/AtomicLong;)J",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/util/concurrent/atomic/AtomicLong", "get", "()J")),
+            plain(2, 173, "lreturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.LONG, "long0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignLong(
+                "long0",
+                IrExpression.longCall("javan_atomic_long_get", List.of(IrExpression.objectLocal("arg0")))
+            ),
+            IrInstruction.returnLong(IrExpression.longLocal("long0"))
+        );
+    }
+
+    @Test
     void lowersAtomicReferenceSetToRuntimeHelper() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -6842,6 +7116,142 @@ final class BytecodeToIRTest {
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
             ),
             IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
+    void lowersAtomicReferenceCompareAndSetToRuntimeHelper() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/concurrent/atomic/AtomicReference;Ljava/lang/Object;Ljava/lang/Object;)Z",
+            3,
+            3,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            plain(2, 44, "aload_2"),
+            invokeVirtual(3, new MethodRef("java/util/concurrent/atomic/AtomicReference", "compareAndSet", "(Ljava/lang/Object;Ljava/lang/Object;)Z")),
+            plain(4, 172, "ireturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.INT, "int0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignInt(
+                "int0",
+                IrExpression.intCall(
+                    "javan_atomic_reference_compare_and_set",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.objectLocal("arg2"))
+                )
+            ),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
+        );
+    }
+
+    @Test
+    void lowersAtomicIntegerUpdateAndGetToCasLoop() {
+        final ClassFile incrementer = classFile(
+            "com/acme/Incrementer",
+            "java/lang/Object",
+            0,
+            List.of("java/util/function/IntUnaryOperator"),
+            List.of(),
+            List.of(method(
+                0x0001,
+                "applyAsInt",
+                "(I)I",
+                2,
+                2,
+                plain(0, 27, "iload_1"),
+                plain(1, 4, "iconst_1"),
+                plain(2, 96, "iadd"),
+                plain(3, 172, "ireturn")
+            ))
+        );
+
+        final IrFunction function = lower(method(
+            0x0008,
+            "main",
+            "(Ljava/util/concurrent/atomic/AtomicInteger;Ljava/util/function/IntUnaryOperator;)I",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef(
+                "java/util/concurrent/atomic/AtomicInteger",
+                "updateAndGet",
+                "(Ljava/util/function/IntUnaryOperator;)I"
+            )),
+            plain(3, 172, "ireturn")
+        ), incrementer);
+
+        assertThat(function.locals()).containsExactly(
+            new IrLocal(IrType.OBJECT, "object0"),
+            new IrLocal(IrType.OBJECT, "object1"),
+            new IrLocal(IrType.INT, "int2"),
+            new IrLocal(IrType.INT, "int3"),
+            new IrLocal(IrType.INT, "int4")
+        );
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(IrExpression.objectLocal("arg1"))),
+            IrInstruction.assignObject("object0", IrExpression.objectLocal("arg0")),
+            IrInstruction.assignObject("object1", IrExpression.objectLocal("arg1")),
+            IrInstruction.label("label_atomic_integer_update_and_get_compare_2_5"),
+            IrInstruction.assignInt(
+                "int2",
+                IrExpression.intCall("javan_atomic_integer_get", List.of(IrExpression.objectLocal("object0")))
+            ),
+            IrInstruction.assignInt(
+                "int3",
+                IrExpression.intCall(
+                    symbol("com/acme/Incrementer", "applyAsInt", "(I)I"),
+                    List.of(IrExpression.objectLocal("object1"), IrExpression.intLocal("int2"))
+                )
+            ),
+            IrInstruction.assignInt(
+                "int4",
+                IrExpression.intCall(
+                    "javan_atomic_integer_compare_and_set",
+                    List.of(
+                        IrExpression.objectLocal("object0"),
+                        IrExpression.intLocal("int2"),
+                        IrExpression.intLocal("int3")
+                    )
+                )
+            ),
+            IrInstruction.branchIf(
+                "label_atomic_integer_update_and_get_done_2_5",
+                IrExpression.intComparison("!=", IrExpression.intLocal("int4"), IrExpression.intLiteral(0))
+            ),
+            IrInstruction.jump("label_atomic_integer_update_and_get_compare_2_5"),
+            IrInstruction.label("label_atomic_integer_update_and_get_done_2_5"),
+            IrInstruction.returnInt(IrExpression.intLocal("int3"))
+        );
+    }
+
+    @Test
+    void lowersAtomicReferenceGetAndSetToRuntimeHelper() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/concurrent/atomic/AtomicReference;Ljava/lang/Object;)Ljava/lang/Object;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/util/concurrent/atomic/AtomicReference", "getAndSet", "(Ljava/lang/Object;)Ljava/lang/Object;")),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_atomic_reference_get_and_set",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+                )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
 
@@ -6910,7 +7320,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowerObjectsIntrinsicRejectsEqualsForNow() {
+    void lowerObjectsIntrinsicLowersEqualsToRuntimeCall() {
         final MethodInfo method = method(0x0008, "main", "(Ljava/lang/Object;Ljava/lang/Object;)Z", 2, 2, plain(0, 172, "ireturn"));
         final List<IrInstruction> instructions = new ArrayList<>();
         final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
@@ -6926,12 +7336,72 @@ final class BytecodeToIRTest {
             instructions,
             stack,
             locals
-        )).isFalse();
+        )).isTrue();
         assertThat(instructions).isEmpty();
         assertThat(stack).containsExactly(
-            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("arg0")),
-            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("arg1"))
+            BytecodeToIR.StackValue.intExpression(IrExpression.intCall(
+                "javan_objects_equals",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ))
         );
+    }
+
+    @Test
+    void lowerObjectsIntrinsicLowersNonNullToRuntimeCall() {
+        final MethodInfo method = method(0x0008, "main", "(Ljava/lang/Object;)Z", 1, 1, plain(0, 172, "ireturn"));
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("arg0"))
+        ));
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        assertThat(BytecodeToIRInvokeSupport.lowerObjectsIntrinsic(
+            classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(method)),
+            method,
+            new MethodRef("java/util/Objects", "nonNull", "(Ljava/lang/Object;)Z"),
+            instructions,
+            stack,
+            locals
+        )).isTrue();
+        assertThat(instructions).isEmpty();
+        assertThat(stack).containsExactly(
+            BytecodeToIR.StackValue.intExpression(IrExpression.intCall(
+                "javan_object_non_null",
+                List.of(IrExpression.objectLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersByteArrayOutputStreamCloseToNoop() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/io/ByteArrayOutputStream;)V",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/io/ByteArrayOutputStream", "close", "()V")),
+            plain(2, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(IrInstruction.returnVoid());
+    }
+
+    @Test
+    void lowersByteArrayInputStreamCloseToNoop() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/io/ByteArrayInputStream;)V",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/io/ByteArrayInputStream", "close", "()V")),
+            plain(2, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(IrInstruction.returnVoid());
     }
 
     @Test
@@ -6961,11 +7431,11 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowerAtomicInstanceCallReturnsFalseForAtomicReferenceUnsupportedMethod() {
+    void lowerAtomicInstanceCallReturnsFalseForAtomicReferenceWrongDescriptor() {
         final boolean lowered = BytecodeToIRInvokeSupport.lowerAtomicInstanceCall(
             sinkClass(),
             method(0x0008, "main", "(Ljava/util/concurrent/atomic/AtomicReference;Ljava/lang/Object;Ljava/lang/Object;)V", 3, 3, plain(0, 177, "return")),
-            new MethodRef("java/util/concurrent/atomic/AtomicReference", "compareAndSet", "(Ljava/lang/Object;Ljava/lang/Object;)Z"),
+            new MethodRef("java/util/concurrent/atomic/AtomicReference", "compareAndSet", "(Ljava/lang/Object;)Z"),
             new ArrayList<>(),
             new ArrayList<>(List.of(
                 BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("arg0")),
@@ -6996,6 +7466,353 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowerAtomicInstanceCallReturnsFalseForAtomicLongMatchingNameWrongDescriptor() {
+        final boolean lowered = BytecodeToIRInvokeSupport.lowerAtomicInstanceCall(
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/util/concurrent/atomic/AtomicLong;J)V", 3, 3, plain(0, 177, "return")),
+            new MethodRef("java/util/concurrent/atomic/AtomicLong", "get", "(J)J"),
+            new ArrayList<>(),
+            new ArrayList<>(List.of(
+                BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("arg0")),
+                BytecodeToIR.StackValue.longExpression(IrExpression.longLocal("arg1"))
+            )),
+            new LinkedHashMap<>()
+        );
+
+        assertThat(lowered).isFalse();
+    }
+
+    @Test
+    void lowersPop2ForCategory2CallResult() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()V",
+            0,
+            0,
+            invokeStatic(0, new MethodRef("java/lang/System", "nanoTime", "()J")),
+            plain(1, 88, "pop2"),
+            plain(2, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid("javan_system_nano_time", List.of()),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
+    void discardTopTwoPreservesCallOrderForTwoCategory1Values() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.intExpression(IrExpression.intCall("first", List.of())),
+            BytecodeToIR.StackValue.intExpression(IrExpression.intCall("second", List.of()))
+        ));
+
+        BytecodeToIR.discardTopTwo(instructions, stack);
+
+        assertThat(instructions).containsExactly(
+            IrInstruction.callStaticVoid("first", List.of()),
+            IrInstruction.callStaticVoid("second", List.of())
+        );
+        assertThat(stack).isEmpty();
+    }
+
+    @Test
+    void lowerCharacterIntrinsicLowersIsWhitespace() {
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.intExpression(IrExpression.intLiteral(32))
+        ));
+
+        assertThat(BytecodeToIRInvokeSupport.lowerCharacterIntrinsic(
+            sinkClass(),
+            method(0x0008, "main", "(C)Z", 1, 1, plain(0, 172, "ireturn")),
+            new MethodRef("java/lang/Character", "isWhitespace", "(C)Z"),
+            stack
+        )).isTrue();
+
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.intExpression(
+            IrExpression.intCall("javan_character_is_whitespace", List.of(IrExpression.intLiteral(32)))
+        ));
+    }
+
+    @Test
+    void lowerJdkCollectionStaticCallLowersCollectionsSingletonList() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("value"))
+        ));
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        assertThat(BytecodeToIRInvokeSupport.lowerJdkCollectionStaticCall(
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/lang/Object;)Ljava/util/List;", 1, 1, plain(0, 176, "areturn")),
+            new MethodRef("java/util/Collections", "singletonList", "(Ljava/lang/Object;)Ljava/util/List;"),
+            instructions,
+            stack,
+            locals
+        )).isTrue();
+
+        assertThat(instructions).isEmpty();
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.objectExpression(
+            IrExpression.objectCall("javan_list_of", List.of(IrExpression.intLiteral(1), IrExpression.objectLocal("value")))
+        ));
+    }
+
+    @Test
+    void lowerCollectorsIntrinsicLowersToListCollector() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>();
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        assertThat(BytecodeToIRInvokeSupport.lowerCollectorsIntrinsic(
+            sinkClass(),
+            method(0x0008, "main", "()Ljava/util/stream/Collector;", 1, 1, plain(0, 176, "areturn")),
+            invokeStatic(0, new MethodRef("java/util/stream/Collectors", "toList", "()Ljava/util/stream/Collector;")),
+            new MethodRef("java/util/stream/Collectors", "toList", "()Ljava/util/stream/Collector;"),
+            instructions,
+            stack,
+            locals
+        )).isTrue();
+
+        assertThat(instructions).isEmpty();
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.streamCollector(
+            new BytecodeToIR.CollectorPlan(
+                BytecodeToIR.CollectorKind.TO_LIST,
+                IrExpression.objectNull(),
+                IrExpression.objectNull(),
+                IrExpression.objectNull(),
+                IrExpression.objectNull(),
+                IrExpression.objectNull(),
+                IrExpression.objectNull(),
+                IrExpression.objectNull(),
+                IrExpression.objectNull()
+            )
+        ));
+    }
+
+    @Test
+    void lowerCollectorsIntrinsicLowersCountingCollector() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>();
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        assertThat(BytecodeToIRInvokeSupport.lowerCollectorsIntrinsic(
+            sinkClass(),
+            method(0x0008, "main", "()Ljava/util/stream/Collector;", 1, 1, plain(0, 176, "areturn")),
+            invokeStatic(0, new MethodRef("java/util/stream/Collectors", "counting", "()Ljava/util/stream/Collector;")),
+            new MethodRef("java/util/stream/Collectors", "counting", "()Ljava/util/stream/Collector;"),
+            instructions,
+            stack,
+            locals
+        )).isTrue();
+
+        assertThat(instructions).isEmpty();
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.streamCollector(
+            new BytecodeToIR.CollectorPlan(
+                BytecodeToIR.CollectorKind.COUNTING,
+                IrExpression.objectNull(),
+                IrExpression.objectNull(),
+                IrExpression.objectNull(),
+                IrExpression.objectNull(),
+                IrExpression.objectNull(),
+                IrExpression.objectNull(),
+                IrExpression.objectNull(),
+                IrExpression.objectNull()
+            )
+        ));
+    }
+
+    @Test
+    void lowerCollectorsIntrinsicLowersGroupingByCountingCollector() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("classifier")),
+            BytecodeToIR.StackValue.streamCollector(new BytecodeToIR.CollectorPlan(
+                BytecodeToIR.CollectorKind.COUNTING,
+                IrExpression.objectNull(),
+                IrExpression.objectNull(),
+                IrExpression.objectNull(),
+                IrExpression.objectNull(),
+                IrExpression.objectNull(),
+                IrExpression.objectNull(),
+                IrExpression.objectNull(),
+                IrExpression.objectNull()
+            ))
+        ));
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        assertThat(BytecodeToIRInvokeSupport.lowerCollectorsIntrinsic(
+            sinkClass(),
+            method(0x0008, "main", "()Ljava/util/stream/Collector;", 2, 2, plain(0, 176, "areturn")),
+            invokeStatic(0, new MethodRef(
+                "java/util/stream/Collectors",
+                "groupingBy",
+                "(Ljava/util/function/Function;Ljava/util/stream/Collector;)Ljava/util/stream/Collector;"
+            )),
+            new MethodRef(
+                "java/util/stream/Collectors",
+                "groupingBy",
+                "(Ljava/util/function/Function;Ljava/util/stream/Collector;)Ljava/util/stream/Collector;"
+            ),
+            instructions,
+            stack,
+            locals
+        )).isTrue();
+
+        assertThat(instructions).isEmpty();
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.streamCollector(
+            new BytecodeToIR.CollectorPlan(
+                BytecodeToIR.CollectorKind.GROUPING_BY_COUNTING,
+                IrExpression.objectNull(),
+                IrExpression.objectNull(),
+                IrExpression.objectNull(),
+                IrExpression.objectLocal("classifier"),
+                IrExpression.objectNull(),
+                IrExpression.objectNull(),
+                IrExpression.objectNull(),
+                IrExpression.objectNull()
+            )
+        ));
+    }
+
+    @Test
+    void lowerCollectorsIntrinsicLowersToCollectionCollector() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("supplier"))
+        ));
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        assertThat(BytecodeToIRInvokeSupport.lowerCollectorsIntrinsic(
+            sinkClass(),
+            method(0x0008, "main", "()Ljava/util/stream/Collector;", 1, 1, plain(0, 176, "areturn")),
+            invokeStatic(0, new MethodRef(
+                "java/util/stream/Collectors",
+                "toCollection",
+                "(Ljava/util/function/Supplier;)Ljava/util/stream/Collector;"
+            )),
+            new MethodRef(
+                "java/util/stream/Collectors",
+                "toCollection",
+                "(Ljava/util/function/Supplier;)Ljava/util/stream/Collector;"
+            ),
+            instructions,
+            stack,
+            locals
+        )).isTrue();
+
+        assertThat(instructions).isEmpty();
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.streamCollector(
+            new BytecodeToIR.CollectorPlan(
+                BytecodeToIR.CollectorKind.TO_COLLECTION,
+                IrExpression.objectNull(),
+                IrExpression.objectNull(),
+                IrExpression.objectNull(),
+                IrExpression.objectNull(),
+                IrExpression.objectNull(),
+                IrExpression.objectNull(),
+                IrExpression.objectNull(),
+                IrExpression.objectLocal("supplier")
+            )
+        ));
+    }
+
+    @Test
+    void lowerCollectorsIntrinsicLowersToMapCollector() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("keyMapper")),
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("valueMapper")),
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("merge")),
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("supplier"))
+        ));
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        assertThat(BytecodeToIRInvokeSupport.lowerCollectorsIntrinsic(
+            sinkClass(),
+            method(0x0008, "main", "()Ljava/util/stream/Collector;", 4, 4, plain(0, 176, "areturn")),
+            invokeStatic(0, new MethodRef(
+                "java/util/stream/Collectors",
+                "toMap",
+                "(Ljava/util/function/Function;Ljava/util/function/Function;Ljava/util/function/BinaryOperator;Ljava/util/function/Supplier;)Ljava/util/stream/Collector;"
+            )),
+            new MethodRef(
+                "java/util/stream/Collectors",
+                "toMap",
+                "(Ljava/util/function/Function;Ljava/util/function/Function;Ljava/util/function/BinaryOperator;Ljava/util/function/Supplier;)Ljava/util/stream/Collector;"
+            ),
+            instructions,
+            stack,
+            locals
+        )).isTrue();
+
+        assertThat(instructions).isEmpty();
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.streamCollector(
+            new BytecodeToIR.CollectorPlan(
+                BytecodeToIR.CollectorKind.TO_MAP,
+                IrExpression.objectNull(),
+                IrExpression.objectNull(),
+                IrExpression.objectNull(),
+                IrExpression.objectNull(),
+                IrExpression.objectLocal("keyMapper"),
+                IrExpression.objectLocal("valueMapper"),
+                IrExpression.objectLocal("merge"),
+                IrExpression.objectLocal("supplier")
+            )
+        ));
+    }
+
+    @Test
+    void lowerJdkCollectionStaticCallLowersCollectionsUnmodifiableList() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("list"))
+        ));
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        assertThat(BytecodeToIRInvokeSupport.lowerJdkCollectionStaticCall(
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/util/List;)Ljava/util/List;", 1, 1, plain(0, 176, "areturn")),
+            new MethodRef("java/util/Collections", "unmodifiableList", "(Ljava/util/List;)Ljava/util/List;"),
+            instructions,
+            stack,
+            locals
+        )).isTrue();
+
+        assertThat(instructions).isEmpty();
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.objectExpression(
+            IrExpression.objectCall("javan_list_unmodifiable", List.of(IrExpression.objectLocal("list")))
+        ));
+    }
+
+    @Test
+    void lowerJdkCollectionInstanceCallLowersArrayListReversed() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("list"))
+        ));
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        assertThat(BytecodeToIRInvokeSupport.lowerJdkCollectionInstanceCall(
+            Map.of(),
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/util/ArrayList;)Ljava/util/List;", 1, 1, plain(0, 176, "areturn")),
+            invokeVirtual(0, new MethodRef("java/util/ArrayList", "reversed", "()Ljava/util/List;")),
+            new MethodRef("java/util/ArrayList", "reversed", "()Ljava/util/List;"),
+            instructions,
+            stack,
+            locals,
+            Map.of()
+        )).isTrue();
+
+        assertThat(instructions).isEmpty();
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.objectExpression(
+            IrExpression.objectCall("javan_list_reversed", List.of(IrExpression.objectLocal("list")))
+        ));
+    }
+
+    @Test
     void lowerJdkTimeInstanceCallLowersLocalDateTimeToLocalDate() {
         final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
             BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("dateTime"))
@@ -7006,7 +7823,9 @@ final class BytecodeToIRTest {
             method(0x0008, "main", "(Ljava/time/LocalDateTime;)Ljava/time/LocalDate;", 1, 1, plain(0, 176, "areturn")),
             invokeVirtual(0, new MethodRef("java/time/LocalDateTime", "toLocalDate", "()Ljava/time/LocalDate;")),
             new MethodRef("java/time/LocalDateTime", "toLocalDate", "()Ljava/time/LocalDate;"),
-            stack
+            new ArrayList<>(),
+            stack,
+            new HashMap<>()
         )).isTrue();
         assertThat(stack).containsExactly(BytecodeToIR.StackValue.objectExpression(
             IrExpression.objectCall("javan_local_date_time_to_local_date", List.of(IrExpression.objectLocal("dateTime")))
@@ -7024,7 +7843,9 @@ final class BytecodeToIRTest {
             method(0x0008, "main", "(Ljava/time/LocalDateTime;)Ljava/time/LocalTime;", 1, 1, plain(0, 176, "areturn")),
             invokeVirtual(0, new MethodRef("java/time/LocalDateTime", "toLocalTime", "()Ljava/time/LocalTime;")),
             new MethodRef("java/time/LocalDateTime", "toLocalTime", "()Ljava/time/LocalTime;"),
-            stack
+            new ArrayList<>(),
+            stack,
+            new HashMap<>()
         )).isTrue();
         assertThat(stack).containsExactly(BytecodeToIR.StackValue.objectExpression(
             IrExpression.objectCall("javan_local_date_time_to_local_time", List.of(IrExpression.objectLocal("dateTime")))
@@ -7042,7 +7863,9 @@ final class BytecodeToIRTest {
             method(0x0008, "main", "(Ljava/time/ZonedDateTime;)Ljava/time/LocalDate;", 1, 1, plain(0, 176, "areturn")),
             invokeVirtual(0, new MethodRef("java/time/ZonedDateTime", "toLocalDate", "()Ljava/time/LocalDate;")),
             new MethodRef("java/time/ZonedDateTime", "toLocalDate", "()Ljava/time/LocalDate;"),
-            stack
+            new ArrayList<>(),
+            stack,
+            new HashMap<>()
         )).isTrue();
         assertThat(stack).containsExactly(BytecodeToIR.StackValue.objectExpression(
             IrExpression.objectCall("javan_zoned_date_time_to_local_date", List.of(IrExpression.objectLocal("value")))
@@ -7060,7 +7883,9 @@ final class BytecodeToIRTest {
             method(0x0008, "main", "(Ljava/time/ZonedDateTime;)Ljava/time/LocalTime;", 1, 1, plain(0, 176, "areturn")),
             invokeVirtual(0, new MethodRef("java/time/ZonedDateTime", "toLocalTime", "()Ljava/time/LocalTime;")),
             new MethodRef("java/time/ZonedDateTime", "toLocalTime", "()Ljava/time/LocalTime;"),
-            stack
+            new ArrayList<>(),
+            stack,
+            new HashMap<>()
         )).isTrue();
         assertThat(stack).containsExactly(BytecodeToIR.StackValue.objectExpression(
             IrExpression.objectCall("javan_zoned_date_time_to_local_time", List.of(IrExpression.objectLocal("value")))
@@ -7078,11 +7903,163 @@ final class BytecodeToIRTest {
             method(0x0008, "main", "(Ljava/time/ZonedDateTime;)Ljava/time/LocalDateTime;", 1, 1, plain(0, 176, "areturn")),
             invokeVirtual(0, new MethodRef("java/time/ZonedDateTime", "toLocalDateTime", "()Ljava/time/LocalDateTime;")),
             new MethodRef("java/time/ZonedDateTime", "toLocalDateTime", "()Ljava/time/LocalDateTime;"),
-            stack
+            new ArrayList<>(),
+            stack,
+            new HashMap<>()
         )).isTrue();
         assertThat(stack).containsExactly(BytecodeToIR.StackValue.objectExpression(
             IrExpression.objectCall("javan_zoned_date_time_to_local_date_time", List.of(IrExpression.objectLocal("value")))
         ));
+    }
+
+    @Test
+    void lowerJdkTimeInstanceCallLowersLocalTimeGetHour() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("time"))
+        ));
+
+        assertThat(BytecodeToIRInvokeSupport.lowerJdkTimeInstanceCall(
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/time/LocalTime;)I", 1, 1, plain(0, 172, "ireturn")),
+            invokeVirtual(0, new MethodRef("java/time/LocalTime", "getHour", "()I")),
+            new MethodRef("java/time/LocalTime", "getHour", "()I"),
+            instructions,
+            stack,
+            new HashMap<>()
+        )).isTrue();
+        assertThat(instructions).containsExactly(
+            IrInstruction.assignInt(
+                "int0",
+                IrExpression.intCall("javan_local_time_get_hour", List.of(IrExpression.objectLocal("time")))
+            )
+        );
+        assertThat(stack).singleElement().isEqualTo(BytecodeToIR.StackValue.intExpression(
+            IrExpression.intLocal("int0")
+        ));
+    }
+
+    @Test
+    void lowerJdkTimeInstanceCallLowersZonedDateTimeToOffsetDateTime() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("value"))
+        ));
+
+        assertThat(BytecodeToIRInvokeSupport.lowerJdkTimeInstanceCall(
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/time/ZonedDateTime;)Ljava/time/OffsetDateTime;", 1, 1, plain(0, 176, "areturn")),
+            invokeVirtual(0, new MethodRef("java/time/ZonedDateTime", "toOffsetDateTime", "()Ljava/time/OffsetDateTime;")),
+            new MethodRef("java/time/ZonedDateTime", "toOffsetDateTime", "()Ljava/time/OffsetDateTime;"),
+            instructions,
+            stack,
+            new HashMap<>()
+        )).isTrue();
+        assertThat(instructions).isEmpty();
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.objectExpression(
+            IrExpression.objectCall("javan_zoned_date_time_to_offset_date_time", List.of(IrExpression.objectLocal("value")))
+        ));
+    }
+
+    @Test
+    void lowerJdkTimeInstanceCallLowersOffsetDateTimeToInstant() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("value"))
+        ));
+
+        assertThat(BytecodeToIRInvokeSupport.lowerJdkTimeInstanceCall(
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/time/OffsetDateTime;)Ljava/time/Instant;", 1, 1, plain(0, 176, "areturn")),
+            invokeVirtual(0, new MethodRef("java/time/OffsetDateTime", "toInstant", "()Ljava/time/Instant;")),
+            new MethodRef("java/time/OffsetDateTime", "toInstant", "()Ljava/time/Instant;"),
+            instructions,
+            stack,
+            new HashMap<>()
+        )).isTrue();
+        assertThat(instructions).isEmpty();
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.objectExpression(
+            IrExpression.objectCall("javan_offset_date_time_to_instant", List.of(IrExpression.objectLocal("value")))
+        ));
+    }
+
+    @Test
+    void lowerJdkTimeInstanceCallLowersCalendarSetTime() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("calendar")),
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("date"))
+        ));
+
+        assertThat(BytecodeToIRInvokeSupport.lowerJdkTimeInstanceCall(
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/util/Calendar;Ljava/util/Date;)V", 2, 2, plain(0, 177, "return")),
+            invokeVirtual(0, new MethodRef("java/util/Calendar", "setTime", "(Ljava/util/Date;)V")),
+            new MethodRef("java/util/Calendar", "setTime", "(Ljava/util/Date;)V"),
+            instructions,
+            stack,
+            new HashMap<>()
+        )).isTrue();
+        assertThat(instructions).containsExactly(
+            IrInstruction.callStaticVoid(
+                "javan_calendar_set_time",
+                List.of(IrExpression.objectLocal("calendar"), IrExpression.objectLocal("date"))
+            )
+        );
+        assertThat(stack).isEmpty();
+    }
+
+    @Test
+    void lowerJdkTimeInstanceCallLowersCalendarSetField() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("calendar")),
+            BytecodeToIR.StackValue.intExpression(IrExpression.intLiteral(11)),
+            BytecodeToIR.StackValue.intExpression(IrExpression.intLiteral(22))
+        ));
+
+        assertThat(BytecodeToIRInvokeSupport.lowerJdkTimeInstanceCall(
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/util/Calendar;II)V", 3, 3, plain(0, 177, "return")),
+            invokeVirtual(0, new MethodRef("java/util/Calendar", "set", "(II)V")),
+            new MethodRef("java/util/Calendar", "set", "(II)V"),
+            instructions,
+            stack,
+            new HashMap<>()
+        )).isTrue();
+        assertThat(instructions).containsExactly(
+            IrInstruction.callStaticVoid(
+                "javan_calendar_set_field",
+                List.of(IrExpression.objectLocal("calendar"), IrExpression.intLiteral(11), IrExpression.intLiteral(22))
+            )
+        );
+        assertThat(stack).isEmpty();
+    }
+
+    @Test
+    void lowerJdkTimeInstanceCallLowersCalendarSetTimeInMillis() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("calendar")),
+            BytecodeToIR.StackValue.longExpression(IrExpression.longLiteral(1700000000123L))
+        ));
+
+        assertThat(BytecodeToIRInvokeSupport.lowerJdkTimeInstanceCall(
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/util/Calendar;J)V", 3, 3, plain(0, 177, "return")),
+            invokeVirtual(0, new MethodRef("java/util/Calendar", "setTimeInMillis", "(J)V")),
+            new MethodRef("java/util/Calendar", "setTimeInMillis", "(J)V"),
+            instructions,
+            stack,
+            new HashMap<>()
+        )).isTrue();
+        assertThat(instructions).containsExactly(
+            IrInstruction.callStaticVoid(
+                "javan_calendar_set_time_in_millis",
+                List.of(IrExpression.objectLocal("calendar"), IrExpression.longLiteral(1700000000123L))
+            )
+        );
+        assertThat(stack).isEmpty();
     }
 
     @Test
@@ -7096,7 +8073,9 @@ final class BytecodeToIRTest {
             method(0x0008, "main", "(Ljava/time/LocalDateTime;)Ljava/time/LocalDate;", 1, 1, plain(0, 176, "areturn")),
             invokeVirtual(0, new MethodRef("java/time/LocalDateTime", "toLocalDate", "(I)Ljava/time/LocalDate;")),
             new MethodRef("java/time/LocalDateTime", "toLocalDate", "(I)Ljava/time/LocalDate;"),
-            stack
+            new ArrayList<>(),
+            stack,
+            new HashMap<>()
         )).isFalse();
     }
 
@@ -7155,6 +8134,22 @@ final class BytecodeToIRTest {
         );
         assertThat(runtimeStack).containsExactly(BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("object0")));
 
+        final List<IrInstruction> memoryInstructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> memoryStack = new ArrayList<>();
+        final Map<Integer, IrLocal> memoryLocals = new LinkedHashMap<>();
+        assertThat(BytecodeToIRInvokeSupport.lowerRuntimeManagementStaticCall(
+            sinkClass(),
+            method(0x0008, "main", "()Ljava/lang/management/MemoryMXBean;", 0, 0, plain(0, 176, "areturn")),
+            new MethodRef("java/lang/management/ManagementFactory", "getMemoryMXBean", "()Ljava/lang/management/MemoryMXBean;"),
+            memoryInstructions,
+            memoryStack,
+            memoryLocals
+        )).isTrue();
+        assertThat(memoryInstructions).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_management_memory_mxbean", List.of()))
+        );
+        assertThat(memoryStack).containsExactly(BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("object0")));
+
         final List<IrInstruction> osInstructions = new ArrayList<>();
         final List<BytecodeToIR.StackValue> osStack = new ArrayList<>();
         final Map<Integer, IrLocal> osLocals = new LinkedHashMap<>();
@@ -7177,6 +8172,27 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowerRuntimeManagementStaticCallLowersProcessHandleCurrent() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>();
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        assertThat(BytecodeToIRInvokeSupport.lowerRuntimeManagementStaticCall(
+            sinkClass(),
+            method(0x0008, "main", "()Ljava/lang/ProcessHandle;", 0, 0, plain(0, 176, "areturn")),
+            new MethodRef("java/lang/ProcessHandle", "current", "()Ljava/lang/ProcessHandle;"),
+            instructions,
+            stack,
+            locals
+        )).isTrue();
+
+        assertThat(instructions).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_process_handle_current", List.of()))
+        );
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("object0")));
+    }
+
+    @Test
     void lowerRuntimeManagementStaticCallReturnsFalseForUnsupportedShape() {
         final List<IrInstruction> instructions = new ArrayList<>();
         final List<BytecodeToIR.StackValue> stack = new ArrayList<>();
@@ -7185,7 +8201,7 @@ final class BytecodeToIRTest {
         assertThat(BytecodeToIRInvokeSupport.lowerRuntimeManagementStaticCall(
             sinkClass(),
             method(0x0008, "main", "()Ljava/lang/Object;", 0, 0, plain(0, 176, "areturn")),
-            new MethodRef("java/lang/management/ManagementFactory", "getMemoryMXBean", "()Ljava/lang/management/MemoryMXBean;"),
+            new MethodRef("java/lang/management/ManagementFactory", "getClassLoadingMXBean", "()Ljava/lang/management/ClassLoadingMXBean;"),
             instructions,
             stack,
             locals
@@ -7301,6 +8317,33 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowerJdkStaticIntrinsicRoutesManagementFactoryGetMemoryMxBean() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>();
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        assertThat(BytecodeToIRInvokeSupport.lowerJdkStaticIntrinsic(
+            sinkClass(),
+            method(0x0008, "main", "()Ljava/lang/management/MemoryMXBean;", 0, 0, plain(0, 176, "areturn")),
+            invokeStatic(
+                0,
+                new MethodRef("java/lang/management/ManagementFactory", "getMemoryMXBean", "()Ljava/lang/management/MemoryMXBean;")
+            ),
+            new MethodRef("java/lang/management/ManagementFactory", "getMemoryMXBean", "()Ljava/lang/management/MemoryMXBean;"),
+            instructions,
+            stack,
+            locals,
+            new LinkedHashMap<>(),
+            SourceLineIndex.empty()
+        )).isTrue();
+
+        assertThat(instructions).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_management_memory_mxbean", List.of()))
+        );
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("object0")));
+    }
+
+    @Test
     void lowerJdkStaticIntrinsicRoutesManagementFactoryGetOperatingSystemMxBean() {
         final List<IrInstruction> instructions = new ArrayList<>();
         final List<BytecodeToIR.StackValue> stack = new ArrayList<>();
@@ -7331,6 +8374,30 @@ final class BytecodeToIRTest {
 
         assertThat(instructions).containsExactly(
             IrInstruction.assignObject("object0", IrExpression.objectCall("javan_management_operating_system_mxbean", List.of()))
+        );
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("object0")));
+    }
+
+    @Test
+    void lowerJdkStaticIntrinsicRoutesProcessHandleCurrent() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>();
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        assertThat(BytecodeToIRInvokeSupport.lowerJdkStaticIntrinsic(
+            sinkClass(),
+            method(0x0008, "main", "()Ljava/lang/ProcessHandle;", 0, 0, plain(0, 176, "areturn")),
+            invokeStatic(0, new MethodRef("java/lang/ProcessHandle", "current", "()Ljava/lang/ProcessHandle;")),
+            new MethodRef("java/lang/ProcessHandle", "current", "()Ljava/lang/ProcessHandle;"),
+            instructions,
+            stack,
+            locals,
+            new LinkedHashMap<>(),
+            SourceLineIndex.empty()
+        )).isTrue();
+
+        assertThat(instructions).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_process_handle_current", List.of()))
         );
         assertThat(stack).containsExactly(BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("object0")));
     }
@@ -7410,6 +8477,66 @@ final class BytecodeToIRTest {
         )).isTrue();
         assertThat(maxInstructions).containsExactly(
             IrInstruction.assignLong("long0", IrExpression.longCall("javan_runtime_max_memory", List.of(IrExpression.objectLocal("runtime"))))
+        );
+        assertThat(maxStack).containsExactly(BytecodeToIR.StackValue.longExpression(IrExpression.longLocal("long0")));
+    }
+
+    @Test
+    void lowerRuntimeManagementInstanceCallLowersMemoryMxBeanMetrics() {
+        final List<IrInstruction> usageInstructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> usageStack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("bean"))
+        ));
+        final Map<Integer, IrLocal> usageLocals = new LinkedHashMap<>();
+        assertThat(BytecodeToIRInvokeSupport.lowerRuntimeManagementInstanceCall(
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/lang/management/MemoryMXBean;)Ljava/lang/management/MemoryUsage;", 1, 1, plain(0, 176, "areturn")),
+            invokeInterface(0, new MethodRef("java/lang/management/MemoryMXBean", "getHeapMemoryUsage", "()Ljava/lang/management/MemoryUsage;")),
+            new MethodRef("java/lang/management/MemoryMXBean", "getHeapMemoryUsage", "()Ljava/lang/management/MemoryUsage;"),
+            usageInstructions,
+            usageStack,
+            usageLocals
+        )).isTrue();
+        assertThat(usageInstructions).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_memory_mxbean_get_heap_memory_usage", List.of(IrExpression.objectLocal("bean"))))
+        );
+        assertThat(usageStack).containsExactly(BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("object0")));
+
+        final List<IrInstruction> usedInstructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> usedStack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("usage"))
+        ));
+        final Map<Integer, IrLocal> usedLocals = new LinkedHashMap<>();
+        assertThat(BytecodeToIRInvokeSupport.lowerRuntimeManagementInstanceCall(
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/lang/management/MemoryUsage;)J", 1, 1, plain(0, 173, "lreturn")),
+            invokeVirtual(0, new MethodRef("java/lang/management/MemoryUsage", "getUsed", "()J")),
+            new MethodRef("java/lang/management/MemoryUsage", "getUsed", "()J"),
+            usedInstructions,
+            usedStack,
+            usedLocals
+        )).isTrue();
+        assertThat(usedInstructions).containsExactly(
+            IrInstruction.assignLong("long0", IrExpression.longCall("javan_memory_usage_get_used", List.of(IrExpression.objectLocal("usage"))))
+        );
+        assertThat(usedStack).containsExactly(BytecodeToIR.StackValue.longExpression(IrExpression.longLocal("long0")));
+
+        final List<IrInstruction> maxInstructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> maxStack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("usage"))
+        ));
+        final Map<Integer, IrLocal> maxLocals = new LinkedHashMap<>();
+        assertThat(BytecodeToIRInvokeSupport.lowerRuntimeManagementInstanceCall(
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/lang/management/MemoryUsage;)J", 1, 1, plain(0, 173, "lreturn")),
+            invokeVirtual(0, new MethodRef("java/lang/management/MemoryUsage", "getMax", "()J")),
+            new MethodRef("java/lang/management/MemoryUsage", "getMax", "()J"),
+            maxInstructions,
+            maxStack,
+            maxLocals
+        )).isTrue();
+        assertThat(maxInstructions).containsExactly(
+            IrInstruction.assignLong("long0", IrExpression.longCall("javan_memory_usage_get_max", List.of(IrExpression.objectLocal("usage"))))
         );
         assertThat(maxStack).containsExactly(BytecodeToIR.StackValue.longExpression(IrExpression.longLocal("long0")));
     }
@@ -7803,6 +8930,240 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowerInterfaceCallRoutesCharSequenceLength() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("text"))
+        ));
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        BytecodeToIRInvokeSupport.lowerInterfaceCall(
+            Map.of(),
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/lang/CharSequence;)I", 1, 1, plain(0, 172, "ireturn")),
+            invokeInterface(0, new MethodRef("java/lang/CharSequence", "length", "()I")),
+            instructions,
+            stack,
+            locals,
+            new LinkedHashMap<>()
+        );
+
+        assertThat(instructions).isEmpty();
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.intExpression(
+            IrExpression.intCall("javan_charsequence_length", List.of(IrExpression.objectLocal("text")))
+        ));
+    }
+
+    @Test
+    void lowerInterfaceCallRoutesCharSequenceCharAt() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("text")),
+            BytecodeToIR.StackValue.intExpression(IrExpression.intLiteral(2))
+        ));
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        BytecodeToIRInvokeSupport.lowerInterfaceCall(
+            Map.of(),
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/lang/CharSequence;)C", 1, 1, plain(0, 172, "ireturn")),
+            invokeInterface(0, new MethodRef("java/lang/CharSequence", "charAt", "(I)C")),
+            instructions,
+            stack,
+            locals,
+            new LinkedHashMap<>()
+        );
+
+        assertThat(instructions).isEmpty();
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.intExpression(
+            IrExpression.intCall("javan_charsequence_char_at", List.of(IrExpression.objectLocal("text"), IrExpression.intLiteral(2)))
+        ));
+    }
+
+    @Test
+    void lowerInterfaceCallRoutesTemporalAccessorIsSupported() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("temporal")),
+            BytecodeToIR.StackValue.objectExpression(IrExpression.stringLiteral("EPOCH_DAY"))
+        ));
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        BytecodeToIRInvokeSupport.lowerInterfaceCall(
+            Map.of(),
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/time/temporal/TemporalAccessor;)Z", 2, 2, plain(0, 172, "ireturn")),
+            invokeInterface(0, new MethodRef("java/time/temporal/TemporalAccessor", "isSupported", "(Ljava/time/temporal/TemporalField;)Z")),
+            instructions,
+            stack,
+            locals,
+            new LinkedHashMap<>()
+        );
+
+        assertThat(instructions).isEmpty();
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.intExpression(
+            IrExpression.intCall("javan_temporal_accessor_is_supported", List.of(
+                IrExpression.objectLocal("temporal"),
+                IrExpression.stringLiteral("EPOCH_DAY")
+            ))
+        ));
+    }
+
+    @Test
+    void lowerInterfaceCallRoutesTemporalAccessorQuery() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("temporal")),
+            BytecodeToIR.StackValue.objectExpression(IrExpression.stringLiteral("localDate"))
+        ));
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        BytecodeToIRInvokeSupport.lowerInterfaceCall(
+            Map.of(),
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/time/temporal/TemporalAccessor;)Ljava/lang/Object;", 2, 2, plain(0, 176, "areturn")),
+            invokeInterface(0, new MethodRef("java/time/temporal/TemporalAccessor", "query", "(Ljava/time/temporal/TemporalQuery;)Ljava/lang/Object;")),
+            instructions,
+            stack,
+            locals,
+            new LinkedHashMap<>()
+        );
+
+        assertThat(instructions).isEmpty();
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.objectExpression(
+            IrExpression.objectCall("javan_temporal_accessor_query", List.of(
+                IrExpression.objectLocal("temporal"),
+                IrExpression.stringLiteral("localDate")
+            ))
+        ));
+    }
+
+    @Test
+    void lowerVirtualCallRoutesExactWhitespaceSplit() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("text")),
+            BytecodeToIR.StackValue.objectExpression(IrExpression.stringLiteral("\\s+")),
+            BytecodeToIR.StackValue.intExpression(IrExpression.intLiteral(-1))
+        ));
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        BytecodeToIRInvokeSupport.lowerVirtualCall(
+            Map.of(),
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/lang/String;)[Ljava/lang/String;", 1, 1, plain(0, 176, "areturn")),
+            invokeVirtual(0, new MethodRef("java/lang/String", "split", "(Ljava/lang/String;I)[Ljava/lang/String;")),
+            instructions,
+            stack,
+            locals,
+            new LinkedHashMap<>(),
+            new LinkedHashMap<>(),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(instructions).isEmpty();
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.objectExpression(
+            IrExpression.objectCall("javan_string_split_whitespace_keep_all", List.of(IrExpression.objectLocal("text")))
+        ));
+    }
+
+    @Test
+    void lowerVirtualCallRoutesExactReplaceAllWhitespace() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("text")),
+            BytecodeToIR.StackValue.objectExpression(IrExpression.stringLiteral("\\s+")),
+            BytecodeToIR.StackValue.objectExpression(IrExpression.stringLiteral(""))
+        ));
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        BytecodeToIRInvokeSupport.lowerVirtualCall(
+            Map.of(),
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/lang/String;)Ljava/lang/String;", 1, 1, plain(0, 176, "areturn")),
+            invokeVirtual(0, new MethodRef("java/lang/String", "replaceAll", "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;")),
+            instructions,
+            stack,
+            locals,
+            new LinkedHashMap<>(),
+            new LinkedHashMap<>(),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(instructions).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall("javan_string_replace_all_whitespace", List.of(IrExpression.objectLocal("text")))
+            )
+        );
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("object0")));
+    }
+
+    @Test
+    void lowerVirtualCallRoutesExactReplaceAllNonDigits() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("text")),
+            BytecodeToIR.StackValue.objectExpression(IrExpression.stringLiteral("\\D")),
+            BytecodeToIR.StackValue.objectExpression(IrExpression.stringLiteral(""))
+        ));
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        BytecodeToIRInvokeSupport.lowerVirtualCall(
+            Map.of(),
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/lang/String;)Ljava/lang/String;", 1, 1, plain(0, 176, "areturn")),
+            invokeVirtual(0, new MethodRef("java/lang/String", "replaceAll", "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;")),
+            instructions,
+            stack,
+            locals,
+            new LinkedHashMap<>(),
+            new LinkedHashMap<>(),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(instructions).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall("javan_string_replace_all_non_digits", List.of(IrExpression.objectLocal("text")))
+            )
+        );
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("object0")));
+    }
+
+    @Test
+    void lowerVirtualCallRoutesExactReplaceAllSanitizeToken() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("text")),
+            BytecodeToIR.StackValue.objectExpression(IrExpression.stringLiteral("[^a-zA-Z0-9.]")),
+            BytecodeToIR.StackValue.objectExpression(IrExpression.stringLiteral("."))
+        ));
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        BytecodeToIRInvokeSupport.lowerVirtualCall(
+            Map.of(),
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/lang/String;)Ljava/lang/String;", 1, 1, plain(0, 176, "areturn")),
+            invokeVirtual(0, new MethodRef("java/lang/String", "replaceAll", "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;")),
+            instructions,
+            stack,
+            locals,
+            new LinkedHashMap<>(),
+            new LinkedHashMap<>(),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(instructions).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall("javan_string_replace_all_non_alnum_dot_with_dot", List.of(IrExpression.objectLocal("text")))
+            )
+        );
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("object0")));
+    }
+
+    @Test
     void lowerInterfaceCallRoutesRuntimeMxBeanGetStartTime() {
         final List<IrInstruction> instructions = new ArrayList<>();
         final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
@@ -8098,6 +9459,30 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowerRuntimeManagementInstanceCallLowersProcessHandlePid() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("handle"))
+        ));
+        final Map<Integer, IrLocal> locals = new LinkedHashMap<>();
+
+        assertThat(BytecodeToIRInvokeSupport.lowerRuntimeManagementInstanceCall(
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/lang/ProcessHandle;)J", 1, 1, plain(0, 173, "lreturn")),
+            invokeInterface(0, new MethodRef("java/lang/ProcessHandle", "pid", "()J")),
+            new MethodRef("java/lang/ProcessHandle", "pid", "()J"),
+            instructions,
+            stack,
+            locals
+        )).isTrue();
+
+        assertThat(instructions).containsExactly(
+            IrInstruction.assignLong("long0", IrExpression.longCall("javan_process_handle_pid", List.of(IrExpression.objectLocal("handle"))))
+        );
+        assertThat(stack).containsExactly(BytecodeToIR.StackValue.longExpression(IrExpression.longLocal("long0")));
+    }
+
+    @Test
     void lowerThreadLocalInstanceCallRejectsWrongOwner() {
         assertThat(BytecodeToIRInvokeSupport.lowerThreadLocalInstanceCall(
             new MethodRef("java/lang/Object", "get", "()Ljava/lang/Object;"),
@@ -8128,6 +9513,23 @@ final class BytecodeToIRTest {
             IrInstruction.callStaticVoid("javan_thread_set_target", List.of(IrExpression.objectLocal("object0"), IrExpression.objectLocal("arg0"))),
             IrInstruction.callStaticVoid("javan_thread_start", List.of(IrExpression.objectLocal("object0"))),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersThreadRunnableNameConstructor() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+
+        assertThat(BytecodeToIRInvokeSupport.lowerThreadConstructor(
+            new MethodRef("java/lang/Thread", "<init>", "(Ljava/lang/Runnable;Ljava/lang/String;)V"),
+            instructions,
+            List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")),
+            IrExpression.objectLocal("thread")
+        )).isTrue();
+
+        assertThat(instructions).containsExactly(
+            IrInstruction.callStaticVoid("javan_thread_set_target", List.of(IrExpression.objectLocal("thread"), IrExpression.objectLocal("arg0"))),
+            IrInstruction.callStaticVoid("javan_thread_set_name", List.of(IrExpression.objectLocal("thread"), IrExpression.objectLocal("arg1")))
         );
     }
 
@@ -9297,6 +10699,39 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void inferRunnableThreadTargetResolvesNamedThreadConstructorTarget() {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Task", classFile(
+                "com/acme/Task",
+                "java/lang/Object",
+                0,
+                List.of("java/lang/Runnable"),
+                List.of(),
+                List.of(
+                    method(0, "<init>", "()V", 0, 0, plain(0, 177, "return")),
+                    method(0, "run", "()V", 0, 0, plain(0, 177, "return"))
+                )
+            )
+        );
+
+        final Optional<EntryPoint> target = BytecodeToIRInvokeSupport.inferRunnableThreadTarget(
+            classes,
+            List.of(
+                classInstruction(0, 187, "new", "java/lang/Thread"),
+                plain(1, 89, "dup"),
+                classInstruction(2, 187, "new", "com/acme/Task"),
+                plain(3, 89, "dup"),
+                invokeSpecial(4, new MethodRef("com/acme/Task", "<init>", "()V")),
+                stringConstant(5, "worker"),
+                invokeSpecial(6, new MethodRef("java/lang/Thread", "<init>", "(Ljava/lang/Runnable;Ljava/lang/String;)V"))
+            ),
+            6
+        );
+
+        assertThat(target).contains(new EntryPoint("com/acme/Task", "run", "()V"));
+    }
+
+    @Test
     void inferRunnableThreadTargetRejectsMismatchedAllocationOwner() {
         final Map<String, ClassFile> classes = Map.ofEntries(
             Map.entry("com/acme/TaskA", classFile(
@@ -9976,6 +11411,44 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersDirectJdkEnumValueOfToRuntimeClassHelperCall() {
+        final ClassFile color = classFile(
+            "com/acme/Color",
+            "java/lang/Enum",
+            0x4000,
+            List.of(),
+            List.of(
+                new FieldInfo(0x4008, "RED", "Lcom/acme/Color;"),
+                new FieldInfo(0x4008, "BLUE", "Lcom/acme/Color;")
+            ),
+            List.of()
+        );
+
+        final IrFunction function = lower(method(
+            0x0008,
+            "main",
+            "()Ljava/lang/String;",
+            2,
+            0,
+            classInstruction(0, 18, "ldc", "com/acme/Color"),
+            stringConstant(1, "BLUE"),
+            invokeStatic(2, new MethodRef("java/lang/Enum", "valueOf", "(Ljava/lang/Class;Ljava/lang/String;)Ljava/lang/Enum;")),
+            invokeVirtual(3, new MethodRef("java/lang/Enum", "name", "()Ljava/lang/String;")),
+            plain(4, 176, "areturn")
+        ), color);
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_enum_value_of_runtime_class",
+                List.of(
+                    IrExpression.objectCall("javan_runtime_class_literal", List.of(IrExpression.stringLiteral("com.acme.Color"))),
+                    IrExpression.stringLiteral("BLUE")
+                )
+            ))
+        );
+    }
+
+    @Test
     void lowersMultipleTargetInterfaceIntReturnToDispatchCall() {
         final MethodInfo main = method(
             0x0008,
@@ -10251,6 +11724,571 @@ final class BytecodeToIRTest {
                 List.of(IrExpression.objectLocal("arg0"))
             ))
         );
+    }
+
+    @Test
+    void lowersClassIsEnumToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Class;)Z",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/Class", "isEnum", "()Z")),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_runtime_class_is_enum",
+                List.of(IrExpression.objectLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersClassGetCanonicalNameToRuntimeNameCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Class;)Ljava/lang/String;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/Class", "getCanonicalName", "()Ljava/lang/String;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_runtime_class_get_name",
+                List.of(IrExpression.objectLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersClassIsInstanceToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Class;Ljava/lang/Object;)Z",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/lang/Class", "isInstance", "(Ljava/lang/Object;)Z")),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_runtime_class_is_instance",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersClassCastToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Class;Ljava/lang/Object;)Ljava/lang/Object;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/lang/Class", "cast", "(Ljava/lang/Object;)Ljava/lang/Object;")),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_runtime_class_cast",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersClassIsAssignableFromToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Class;Ljava/lang/Class;)Z",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/lang/Class", "isAssignableFrom", "(Ljava/lang/Class;)Z")),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_runtime_class_is_assignable_from",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersStackTraceElementGetClassNameToFieldRead() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/StackTraceElement;)Ljava/lang/String;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/StackTraceElement", "getClassName", "()Ljava/lang/String;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectField(
+                "java/lang/StackTraceElement",
+                "declaringClass",
+                IrExpression.objectLocal("arg0")
+            ))
+        );
+    }
+
+    @Test
+    void lowersStackTraceElementGetMethodNameToFieldRead() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/StackTraceElement;)Ljava/lang/String;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/StackTraceElement", "getMethodName", "()Ljava/lang/String;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectField(
+                "java/lang/StackTraceElement",
+                "methodName",
+                IrExpression.objectLocal("arg0")
+            ))
+        );
+    }
+
+    @Test
+    void lowersStackTraceElementGetLineNumberToFieldRead() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/StackTraceElement;)I",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/StackTraceElement", "getLineNumber", "()I")),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intField(
+                "java/lang/StackTraceElement",
+                "lineNumber",
+                IrExpression.objectLocal("arg0")
+            ))
+        );
+    }
+
+    @Test
+    void lowersThrowableGetStackTraceToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Throwable;)[Ljava/lang/StackTraceElement;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/Throwable", "getStackTrace", "()[Ljava/lang/StackTraceElement;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_throwable_get_stack_trace",
+                List.of(IrExpression.objectLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersThrowableSetStackTraceToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Throwable;[Ljava/lang/StackTraceElement;)V",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/lang/Throwable", "setStackTrace", "([Ljava/lang/StackTraceElement;)V")),
+            plain(3, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid(
+                "javan_throwable_set_stack_trace",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
+    void lowersUriGetPathToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/URI;)Ljava/lang/String;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/net/URI", "getPath", "()Ljava/lang/String;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall("javan_uri_get_path", List.of(IrExpression.objectLocal("arg0"))))
+        );
+    }
+
+    @Test
+    void lowersUriGetQueryToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/URI;)Ljava/lang/String;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/net/URI", "getQuery", "()Ljava/lang/String;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall("javan_uri_get_query", List.of(IrExpression.objectLocal("arg0"))))
+        );
+    }
+
+    @Test
+    void lowersCharsetNameToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/nio/charset/Charset;)Ljava/lang/String;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/nio/charset/Charset", "name", "()Ljava/lang/String;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall("javan_charset_name", List.of(IrExpression.objectLocal("arg0"))))
+        );
+    }
+
+    @Test
+    void lowersUrlDecoderDecodeUtf8ToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/String;Ljava/nio/charset/Charset;)Ljava/lang/String;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeStatic(2, new MethodRef("java/net/URLDecoder", "decode", "(Ljava/lang/String;Ljava/nio/charset/Charset;)Ljava/lang/String;")),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_url_decode_utf8",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersStringSplitLiteralCommaToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/String;)[Ljava/lang/String;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            stringConstant(1, ","),
+            invokeVirtual(2, new MethodRef("java/lang/String", "split", "(Ljava/lang/String;)[Ljava/lang/String;")),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_string_split_literal_char",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.intLiteral((int) ','))
+            ))
+        );
+    }
+
+    @Test
+    void lowersStackTraceElementConstructorToFieldAssignments() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()I",
+            6,
+            1,
+            classInstruction(0, 187, "new", "java/lang/StackTraceElement"),
+            plain(1, 89, "dup"),
+            stringConstant(2, "com.acme.Main"),
+            stringConstant(3, "demo"),
+            stringConstant(4, "Main.java"),
+            plainOperands(5, 16, "bipush", 42),
+            invokeSpecial(6, new MethodRef("java/lang/StackTraceElement", "<init>", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;I)V")),
+            invokeVirtual(7, new MethodRef("java/lang/StackTraceElement", "getLineNumber", "()I")),
+            plain(8, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectAllocation("java/lang/StackTraceElement")),
+            IrInstruction.assignFieldObject(
+                "java/lang/StackTraceElement",
+                "declaringClass",
+                IrExpression.objectLocal("object0"),
+                IrExpression.stringLiteral("com.acme.Main")
+            ),
+            IrInstruction.assignFieldObject(
+                "java/lang/StackTraceElement",
+                "methodName",
+                IrExpression.objectLocal("object0"),
+                IrExpression.stringLiteral("demo")
+            ),
+            IrInstruction.assignFieldObject(
+                "java/lang/StackTraceElement",
+                "fileName",
+                IrExpression.objectLocal("object0"),
+                IrExpression.stringLiteral("Main.java")
+            ),
+            IrInstruction.assignFieldInt(
+                "java/lang/StackTraceElement",
+                "lineNumber",
+                IrExpression.objectLocal("object0"),
+                IrExpression.intLiteral(42)
+            ),
+            IrInstruction.returnInt(IrExpression.intField(
+                "java/lang/StackTraceElement",
+                "lineNumber",
+                IrExpression.objectLocal("object0")
+            ))
+        );
+    }
+
+    @Test
+    void lowerProgramAddsStackTraceElementSyntheticClassMetadata() {
+        final IrProgram program = lowerProgram(method(
+            0x0008,
+            "main",
+            "()I",
+            6,
+            1,
+            classInstruction(0, 187, "new", "java/lang/StackTraceElement"),
+            plain(1, 89, "dup"),
+            stringConstant(2, "com.acme.Main"),
+            stringConstant(3, "demo"),
+            stringConstant(4, "Main.java"),
+            plainOperands(5, 16, "bipush", 42),
+            invokeSpecial(6, new MethodRef("java/lang/StackTraceElement", "<init>", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;I)V")),
+            invokeVirtual(7, new MethodRef("java/lang/StackTraceElement", "getLineNumber", "()I")),
+            plain(8, 172, "ireturn")
+        ));
+
+        assertThat(program.classes())
+            .filteredOn(classInfo -> "java/lang/StackTraceElement".equals(classInfo.jvmName()))
+            .singleElement()
+            .satisfies(classInfo -> {
+                assertThat(classInfo.fields()).containsExactly(
+                    new IrField(IrType.OBJECT, "declaringClass", "field_declaringClass"),
+                    new IrField(IrType.OBJECT, "methodName", "field_methodName"),
+                    new IrField(IrType.OBJECT, "fileName", "field_fileName"),
+                    new IrField(IrType.INT, "lineNumber", "field_lineNumber")
+                );
+            });
+    }
+
+    @Test
+    void lowersLoggingLevelInfoFieldToRuntimeSingletonCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/util/logging/Level;",
+            1,
+            0,
+            getStatic(0, new FieldRef("java/util/logging/Level", "INFO", "Ljava/util/logging/Level;")),
+            plain(1, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall("javan_logging_level_info", List.of()))
+        );
+    }
+
+    @Test
+    void lowersLogRecordConstructorAndGetMillisToSyntheticFields() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()J",
+            4,
+            1,
+            classInstruction(0, 187, "new", "java/util/logging/LogRecord"),
+            plain(1, 89, "dup"),
+            getStatic(2, new FieldRef("java/util/logging/Level", "INFO", "Ljava/util/logging/Level;")),
+            stringConstant(3, "hello"),
+            invokeSpecial(4, new MethodRef("java/util/logging/LogRecord", "<init>", "(Ljava/util/logging/Level;Ljava/lang/String;)V")),
+            invokeVirtual(5, new MethodRef("java/util/logging/LogRecord", "getMillis", "()J")),
+            plain(6, 173, "lreturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectAllocation("java/util/logging/LogRecord")),
+            IrInstruction.assignFieldObject(
+                "java/util/logging/LogRecord",
+                "level",
+                IrExpression.objectLocal("object0"),
+                IrExpression.objectCall("javan_logging_level_info", List.of())
+            ),
+            IrInstruction.assignFieldObject(
+                "java/util/logging/LogRecord",
+                "message",
+                IrExpression.objectLocal("object0"),
+                IrExpression.stringLiteral("hello")
+            ),
+            IrInstruction.assignFieldLong(
+                "java/util/logging/LogRecord",
+                "millis",
+                IrExpression.objectLocal("object0"),
+                IrExpression.longCall("javan_system_current_time_millis", List.of())
+            ),
+            IrInstruction.assignFieldObject(
+                "java/util/logging/LogRecord",
+                "parameters",
+                IrExpression.objectLocal("object0"),
+                IrExpression.objectNull()
+            ),
+            IrInstruction.assignFieldObject(
+                "java/util/logging/LogRecord",
+                "thrown",
+                IrExpression.objectLocal("object0"),
+                IrExpression.objectNull()
+            ),
+            IrInstruction.assignFieldObject(
+                "java/util/logging/LogRecord",
+                "loggerName",
+                IrExpression.objectLocal("object0"),
+                IrExpression.objectNull()
+            ),
+            IrInstruction.returnLong(IrExpression.longField(
+                "java/util/logging/LogRecord",
+                "millis",
+                IrExpression.objectLocal("object0")
+            ))
+        );
+    }
+
+    @Test
+    void lowersLogRecordSetLoggerNameAndGetterToSyntheticField() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/logging/LogRecord;)Ljava/lang/String;",
+            2,
+            1,
+            plain(0, 42, "aload_0"),
+            stringConstant(1, "demo"),
+            invokeVirtual(2, new MethodRef("java/util/logging/LogRecord", "setLoggerName", "(Ljava/lang/String;)V")),
+            plain(3, 42, "aload_0"),
+            invokeVirtual(4, new MethodRef("java/util/logging/LogRecord", "getLoggerName", "()Ljava/lang/String;")),
+            plain(5, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignFieldObject(
+                "java/util/logging/LogRecord",
+                "loggerName",
+                IrExpression.objectLocal("arg0"),
+                IrExpression.stringLiteral("demo")
+            ),
+            IrInstruction.returnObject(IrExpression.objectField(
+                "java/util/logging/LogRecord",
+                "loggerName",
+                IrExpression.objectLocal("arg0")
+            ))
+        );
+    }
+
+    @Test
+    void lowersFormatterFormatMessageToLogRecordMessageField() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/logging/Formatter;Ljava/util/logging/LogRecord;)Ljava/lang/String;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/util/logging/Formatter", "formatMessage", "(Ljava/util/logging/LogRecord;)Ljava/lang/String;")),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectField(
+                "java/util/logging/LogRecord",
+                "message",
+                IrExpression.objectLocal("arg1")
+            ))
+        );
+    }
+
+    @Test
+    void lowerProgramAddsLogRecordSyntheticClassMetadata() {
+        final IrProgram program = lowerProgram(method(
+            0x0008,
+            "main",
+            "()J",
+            4,
+            1,
+            classInstruction(0, 187, "new", "java/util/logging/LogRecord"),
+            plain(1, 89, "dup"),
+            getStatic(2, new FieldRef("java/util/logging/Level", "INFO", "Ljava/util/logging/Level;")),
+            stringConstant(3, "hello"),
+            invokeSpecial(4, new MethodRef("java/util/logging/LogRecord", "<init>", "(Ljava/util/logging/Level;Ljava/lang/String;)V")),
+            invokeVirtual(5, new MethodRef("java/util/logging/LogRecord", "getMillis", "()J")),
+            plain(6, 173, "lreturn")
+        ));
+
+        assertThat(program.classes())
+            .filteredOn(classInfo -> "java/util/logging/LogRecord".equals(classInfo.jvmName()))
+            .singleElement()
+            .satisfies(classInfo -> assertThat(classInfo.fields()).containsExactly(
+                new IrField(IrType.OBJECT, "level", "field_level"),
+                new IrField(IrType.OBJECT, "message", "field_message"),
+                new IrField(IrType.LONG, "millis", "field_millis"),
+                new IrField(IrType.OBJECT, "parameters", "field_parameters"),
+                new IrField(IrType.OBJECT, "thrown", "field_thrown"),
+                new IrField(IrType.OBJECT, "loggerName", "field_loggerName")
+            ));
     }
 
     @Test
@@ -10819,8 +12857,8 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void rejectsUnsupportedStringReplaceSequenceDescriptor() {
-        assertThatThrownBy(() -> lowerMain(method(
+    void lowersStringReplaceSequenceToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
             0x0008,
             "main",
             "(Ljava/lang/String;Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;",
@@ -10831,13 +12869,23 @@ final class BytecodeToIRTest {
             plain(2, 44, "aload_2"),
             invokeVirtual(3, new MethodRef("java/lang/String", "replace", "(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;")),
             plain(4, 176, "areturn")
-        )))
-            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
-                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
-                assertThat(exception.diagnostic().subject()).isEqualTo(
-                    "invokevirtual java/lang/String.replace(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;"
-                );
-            });
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_string_replace_sequence",
+                    List.of(
+                        IrExpression.objectLocal("arg0"),
+                        IrExpression.objectLocal("arg1"),
+                        IrExpression.objectLocal("arg2")
+                    )
+                )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
     }
 
     @Test
@@ -11077,6 +13125,24 @@ final class BytecodeToIRTest {
                 assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
                 assertThat(exception.diagnostic().subject()).isEqualTo("invokevirtual java/lang/Number.longValue()I");
             });
+    }
+
+    @Test
+    void lowersNumberLongValueToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Number;)J",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/Number", "longValue", "()J")),
+            plain(2, 173, "lreturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnLong(IrExpression.longCall("javan_number_long_value", List.of(IrExpression.objectLocal("arg0"))))
+        );
     }
 
     @Test
@@ -12295,6 +14361,44 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersSupportedChronoFieldEpochDayFieldToStringLiteral() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/lang/Object;",
+            1,
+            0,
+            getStatic(0, new FieldRef(
+                "java/time/temporal/ChronoField",
+                "EPOCH_DAY",
+                "Ljava/time/temporal/ChronoField;"
+            )),
+            plain(1, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.stringLiteral("EPOCH_DAY"))
+        );
+    }
+
+    @Test
+    void lowersLocalTimeMidnightFieldToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/time/LocalTime;",
+            1,
+            0,
+            getStatic(0, new FieldRef("java/time/LocalTime", "MIDNIGHT", "Ljava/time/LocalTime;")),
+            plain(1, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall("javan_local_time_midnight", List.of()))
+        );
+    }
+
+    @Test
     void lowersLocaleRootFieldToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -12919,6 +15023,104 @@ final class BytecodeToIRTest {
                 )
             ),
             IrInstruction.returnInt(IrExpression.intLocal("int1"))
+        );
+    }
+
+    @Test
+    void lowersHttpExchangeGetRequestUriPathToRuntimeCalls() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Lcom/sun/net/httpserver/HttpExchange;)Ljava/lang/String;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("com/sun/net/httpserver/HttpExchange", "getRequestURI", "()Ljava/net/URI;")),
+            invokeVirtual(2, new MethodRef("java/net/URI", "getPath", "()Ljava/lang/String;")),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).isEmpty();
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(
+                IrExpression.objectCall(
+                    "javan_uri_get_path",
+                    List.of(IrExpression.objectCall("javan_http_exchange_get_request_uri", List.of(IrExpression.objectLocal("arg0"))))
+                )
+            )
+        );
+    }
+
+    @Test
+    void lowersHttpExchangeGetRequestMethodToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Lcom/sun/net/httpserver/HttpExchange;)Ljava/lang/String;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("com/sun/net/httpserver/HttpExchange", "getRequestMethod", "()Ljava/lang/String;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).isEmpty();
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall("javan_http_exchange_get_request_method", List.of(IrExpression.objectLocal("arg0"))))
+        );
+    }
+
+    @Test
+    void lowersHttpExchangeGetRequestHeadersGetFirstToRuntimeCalls() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Lcom/sun/net/httpserver/HttpExchange;)Ljava/lang/String;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("com/sun/net/httpserver/HttpExchange", "getRequestHeaders", "()Lcom/sun/net/httpserver/Headers;")),
+            stringConstant(2, "Content-Type"),
+            invokeVirtual(3, new MethodRef("com/sun/net/httpserver/Headers", "getFirst", "(Ljava/lang/String;)Ljava/lang/String;")),
+            plain(4, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).isEmpty();
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(
+                IrExpression.objectCall(
+                    "javan_http_headers_get_first",
+                    List.of(
+                        IrExpression.objectCall("javan_http_exchange_get_request_headers", List.of(IrExpression.objectLocal("arg0"))),
+                        IrExpression.stringLiteral("Content-Type")
+                    )
+                )
+            )
+        );
+    }
+
+    @Test
+    void lowersHttpExchangeRequestBodyReadAllBytesToRuntimeCalls() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Lcom/sun/net/httpserver/HttpExchange;)[B",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("com/sun/net/httpserver/HttpExchange", "getRequestBody", "()Ljava/io/InputStream;")),
+            invokeVirtual(2, new MethodRef("java/io/InputStream", "readAllBytes", "()[B")),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).isEmpty();
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(
+                IrExpression.objectCall(
+                    "javan_http_input_stream_read_all_bytes",
+                    List.of(IrExpression.objectCall("javan_http_exchange_get_request_body", List.of(IrExpression.objectLocal("arg0"))))
+                )
+            )
         );
     }
 
@@ -14363,6 +16565,137 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersStringFormatToRuntimeHelper() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/String;I)Ljava/lang/String;",
+            2,
+            2,
+            stringConstant(0, "%s:%d_at_%s"),
+            plain(1, 5, "iconst_2"),
+            classInstruction(2, 189, "anewarray", "java/lang/Object"),
+            plain(3, 89, "dup"),
+            plain(4, 3, "iconst_0"),
+            plain(5, 42, "aload_0"),
+            plain(6, 83, "aastore"),
+            plain(7, 89, "dup"),
+            plain(8, 4, "iconst_1"),
+            plain(9, 27, "iload_1"),
+            invokeStatic(10, new MethodRef("java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;")),
+            plain(11, 83, "aastore"),
+            invokeStatic(12, new MethodRef("java/lang/String", "format", "(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;")),
+            plain(13, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectArrayAllocation(IrExpression.intLiteral(2))),
+            IrInstruction.assignArrayObject(IrExpression.objectLocal("object0"), IrExpression.intLiteral(0), IrExpression.objectLocal("arg0")),
+            IrInstruction.assignArrayObject(
+                IrExpression.objectLocal("object0"),
+                IrExpression.intLiteral(1),
+                IrExpression.objectCall("javan_integer_value_of", List.of(IrExpression.intLocal("arg1")))
+            ),
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_string_format_exact",
+                List.of(
+                    IrExpression.stringLiteral("%s:%d_at_%s"),
+                    IrExpression.objectLocal("object0")
+                )
+            ))
+        );
+    }
+
+    @Test
+    void lowersStringFormatWithWidthConcatToRuntimeHelper() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(ILjava/lang/String;Ljava/lang/String;)Ljava/lang/String;",
+            3,
+            3,
+            plain(0, 26, "iload_0"),
+            invokeDynamic(1, new DynamicRef(
+                "makeConcatWithConstants",
+                "(I)Ljava/lang/String;",
+                "java/lang/invoke/StringConcatFactory",
+                "makeConcatWithConstants",
+                "",
+                List.of("%-\u0001s  %s")
+            )),
+            plain(2, 5, "iconst_2"),
+            classInstruction(3, 189, "anewarray", "java/lang/Object"),
+            plain(4, 89, "dup"),
+            plain(5, 3, "iconst_0"),
+            plain(6, 43, "aload_1"),
+            plain(7, 83, "aastore"),
+            plain(8, 89, "dup"),
+            plain(9, 4, "iconst_1"),
+            plain(10, 44, "aload_2"),
+            plain(11, 83, "aastore"),
+            invokeStatic(12, new MethodRef("java/lang/String", "format", "(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;")),
+            plain(13, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectArrayAllocation(IrExpression.intLiteral(2))),
+            IrInstruction.assignArrayObject(IrExpression.objectLocal("object0"), IrExpression.intLiteral(0), IrExpression.objectLocal("arg1")),
+            IrInstruction.assignArrayObject(IrExpression.objectLocal("object0"), IrExpression.intLiteral(1), IrExpression.objectLocal("arg2")),
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_string_format_exact",
+                List.of(
+                    IrExpression.stringConcat(
+                        "%-\u0001s  %s",
+                        List.of(IrExpression.objectCall("javan_string_value_of_int", List.of(IrExpression.intLocal("arg0"))))
+                    ),
+                    IrExpression.objectLocal("object0")
+                )
+            ))
+        );
+    }
+
+    @Test
+    void lowersStringIsBlankToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/String;)Z",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/String", "isBlank", "()Z")),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall("javan_string_is_blank", List.of(IrExpression.objectLocal("arg0"))))
+        );
+    }
+
+    @Test
+    void lowersCharacterToStringToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Character;)Ljava/lang/String;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/Character", "toString", "()Ljava/lang/String;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_string_value_of_char",
+                List.of(IrExpression.intCall("javan_character_char_value", List.of(IrExpression.objectLocal("arg0"))))
+            ))
+        );
+    }
+
+    @Test
     void lowersStringValueOfCharArrayToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -14632,8 +16965,8 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void rejectsUnsupportedDoubleParseDoubleIntrinsic() {
-        assertThatThrownBy(() -> lowerMain(method(
+    void lowersDoubleParseDoubleIntrinsic() {
+        final IrFunction function = lowerMain(method(
             0x0008,
             "main",
             "()D",
@@ -14642,11 +16975,50 @@ final class BytecodeToIRTest {
             stringConstant(0, "1.25"),
             invokeStatic(1, new MethodRef("java/lang/Double", "parseDouble", "(Ljava/lang/String;)D")),
             plain(2, 175, "dreturn")
-        )))
-            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
-                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
-                assertThat(exception.diagnostic().subject()).isEqualTo("invokestatic java/lang/Double.parseDouble(Ljava/lang/String;)D");
-            });
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnDouble(IrExpression.doubleCall("javan_double_parse_double", List.of(IrExpression.stringLiteral("1.25"))))
+        );
+    }
+
+    @Test
+    void lowersLongParseLongIntrinsic() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()J",
+            1,
+            0,
+            stringConstant(0, " 123 "),
+            invokeStatic(1, new MethodRef("java/lang/Long", "parseLong", "(Ljava/lang/String;)J")),
+            plain(2, 173, "lreturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnLong(IrExpression.longCall("javan_long_parse_long", List.of(IrExpression.stringLiteral(" 123 "))))
+        );
+    }
+
+    @Test
+    void lowersDoubleValueOfStringIntrinsic() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/lang/Double;",
+            1,
+            0,
+            stringConstant(0, "1.25"),
+            invokeStatic(1, new MethodRef("java/lang/Double", "valueOf", "(Ljava/lang/String;)Ljava/lang/Double;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_double_value_of",
+                List.of(IrExpression.doubleCall("javan_double_parse_double", List.of(IrExpression.stringLiteral("1.25"))))
+            ))
+        );
     }
 
     @Test
@@ -15591,6 +17963,32 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersLinkedHashSetCollectionConstructorToRuntimePopulation() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/Collection;)Ljava/util/LinkedHashSet;",
+            3,
+            1,
+            classInstruction(0, 187, "new", "java/util/LinkedHashSet"),
+            plain(1, 89, "dup"),
+            plain(2, 42, "aload_0"),
+            invokeSpecial(3, new MethodRef("java/util/LinkedHashSet", "<init>", "(Ljava/util/Collection;)V")),
+            plain(4, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_hashset_new", List.of())),
+            IrInstruction.callStaticVoid(
+                "javan_set_add_all",
+                List.of(IrExpression.objectLocal("object0"), IrExpression.objectLocal("arg0"))
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
     void rejectsArrayListConstructorWithWrongDescriptor() {
         assertThatThrownBy(() -> lowerMain(method(
             0x0008,
@@ -15982,6 +18380,49 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersListClearToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/List;)V",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/util/List", "clear", "()V")),
+            plain(2, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid("javan_list_clear", List.of(IrExpression.objectLocal("arg0"))),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
+    void lowersArrayListAddAllInvokeSpecialToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/ArrayList;Ljava/util/Collection;)Z",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeSpecial(2, new MethodRef("java/util/ArrayList", "addAll", "(Ljava/util/Collection;)Z")),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.INT, "int0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignInt(
+                "int0",
+                IrExpression.intCall("javan_arraylist_add_all", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
+            ),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
+        );
+    }
+
+    @Test
     void lowersListAddFirstToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -16160,6 +18601,31 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersListToArrayIntFunctionToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/List;Ljava/util/function/IntFunction;)[Ljava/lang/Object;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/util/List", "toArray", "(Ljava/util/function/IntFunction;)[Ljava/lang/Object;")),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(IrExpression.objectLocal("arg1"))),
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall("javan_list_to_array", List.of(IrExpression.objectLocal("arg0")))
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
     void lowersListIsEmptyToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -16174,6 +18640,27 @@ final class BytecodeToIRTest {
 
         assertThat(function.instructions()).containsExactly(
             IrInstruction.returnInt(IrExpression.intCall("javan_list_is_empty", List.of(IrExpression.objectLocal("arg0"))))
+        );
+    }
+
+    @Test
+    void lowersListContainsAllToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/List;Ljava/util/Collection;)Z",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/util/List", "containsAll", "(Ljava/util/Collection;)Z")),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.INT, "int0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignInt("int0", IrExpression.intCall("javan_list_contains_all", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
         );
     }
 
@@ -16218,6 +18705,30 @@ final class BytecodeToIRTest {
                 "javan_list_contains",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
             ))
+        );
+    }
+
+    @Test
+    void lowersCollectionAddToRuntimeDispatch() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/Collection;Ljava/lang/Object;)Z",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeInterface(2, new MethodRef("java/util/Collection", "add", "(Ljava/lang/Object;)Z")),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.INT, "int0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignInt(
+                "int0",
+                IrExpression.intCall("javan_collection_add", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
+            ),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
         );
     }
 
@@ -16479,6 +18990,42 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersMapPutAllToEntrySetSnapshotLoop() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/Map;Ljava/util/Map;)V",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/util/Map", "putAll", "(Ljava/util/Map;)V")),
+            plain(3, 177, "return")
+        ));
+
+        assertThat(function.instructions()).contains(IrInstruction.callStaticVoid(
+            "javan_objects_require_non_null",
+            List.of(IrExpression.objectLocal("arg1"))
+        ));
+        assertThat(function.instructions()).contains(IrInstruction.assignObject(
+            "object2",
+            IrExpression.objectCall("javan_map_entry_set", List.of(IrExpression.objectLocal("object1")))
+        ));
+        assertThat(function.instructions()).contains(IrInstruction.assignObject(
+            "object3",
+            IrExpression.objectCall("javan_list_iterator", List.of(IrExpression.objectLocal("object2")))
+        ));
+        assertThat(function.instructions()).contains(IrInstruction.assignObject(
+            "object7",
+            IrExpression.objectCall(
+                "javan_map_put",
+                List.of(IrExpression.objectLocal("object0"), IrExpression.objectLocal("object5"), IrExpression.objectLocal("object6"))
+            )
+        ));
+        assertThat(function.instructions().getLast()).isEqualTo(IrInstruction.returnVoid());
+    }
+
+    @Test
     void lowersMapRemoveToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -16542,6 +19089,64 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersCollectionsEmptyMapToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/util/Map;",
+            0,
+            0,
+            invokeStatic(0, new MethodRef("java/util/Collections", "emptyMap", "()Ljava/util/Map;")),
+            plain(1, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_map_copy_of",
+                List.of(IrExpression.objectCall("javan_hashmap_new", List.of()))
+            ))
+        );
+    }
+
+    @Test
+    void lowersMapOfTwoEntriesToRuntimeCalls() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;",
+            4,
+            4,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            plain(2, 44, "aload_2"),
+            plain(3, 45, "aload_3"),
+            invokeStatic(4, new MethodRef("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;")),
+            plain(5, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_hashmap_new", List.of())),
+            IrInstruction.assignObject(
+                "object1",
+                IrExpression.objectCall("javan_map_put", List.of(
+                    IrExpression.objectLocal("object0"),
+                    IrExpression.objectLocal("arg0"),
+                    IrExpression.objectLocal("arg1")
+                ))
+            ),
+            IrInstruction.assignObject(
+                "object2",
+                IrExpression.objectCall("javan_map_put", List.of(
+                    IrExpression.objectLocal("object0"),
+                    IrExpression.objectLocal("arg2"),
+                    IrExpression.objectLocal("arg3")
+                ))
+            ),
+            IrInstruction.returnObject(IrExpression.objectCall("javan_map_copy_of", List.of(IrExpression.objectLocal("object0"))))
+        );
+    }
+
+    @Test
     void lowersListRemoveObjectToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -16593,6 +19198,34 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersCollectionForEachToIteratorLoop() {
+        final IrFunction function = lowerProgram(
+            method(
+                0x0008,
+                "main",
+                "(Ljava/util/Collection;Ljava/util/function/Consumer;)V",
+                2,
+                2,
+                plain(0, 42, "aload_0"),
+                plain(1, 43, "aload_1"),
+                invokeInterface(2, new MethodRef("java/util/Collection", "forEach", "(Ljava/util/function/Consumer;)V")),
+                plain(3, 177, "return")
+            ),
+            interfaceType("java/util/function/Consumer", "accept", "(Ljava/lang/Object;)V"),
+            implementationType("com/acme/LinePrinter", "java/util/function/Consumer", "accept", "(Ljava/lang/Object;)V")
+        ).functions().getFirst();
+
+        assertThat(function.instructions()).contains(IrInstruction.callStaticVoid(
+            "javan_objects_require_non_null",
+            List.of(IrExpression.objectLocal("arg1"))
+        ));
+        assertThat(function.instructions()).contains(IrInstruction.assignObject(
+            "object1",
+            IrExpression.objectCall("javan_list_iterator", List.of(IrExpression.objectLocal("arg0")))
+        ));
+    }
+
+    @Test
     void lowersStreamForEachToIteratorLoop() {
         final IrFunction function = lowerProgram(
             method(
@@ -16619,6 +19252,81 @@ final class BytecodeToIRTest {
             "object2",
             IrExpression.objectCall("javan_list_iterator", List.of(IrExpression.objectLocal("object0")))
         ));
+    }
+
+    @Test
+    void lowersStreamToArrayToIteratorLoopAndArrayConversion() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/List;Ljava/util/function/IntFunction;)[Ljava/lang/Object;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            invokeInterface(1, new MethodRef("java/util/List", "stream", "()Ljava/util/stream/Stream;")),
+            plain(2, 43, "aload_1"),
+            invokeInterface(3, new MethodRef("java/util/stream/Stream", "toArray", "(Ljava/util/function/IntFunction;)[Ljava/lang/Object;")),
+            plain(4, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).contains(IrInstruction.callStaticVoid(
+            "javan_objects_require_non_null",
+            List.of(IrExpression.objectLocal("arg1"))
+        ));
+        assertThat(function.instructions()).anySatisfy(instruction -> {
+            assertThat(instruction.op()).isEqualTo(IrInstruction.Op.ASSIGN_OBJECT);
+            assertThat(instruction.expression()).contains(IrExpression.objectCall(
+                "javan_list_to_array",
+                List.of(IrExpression.objectLocal("object2"))
+            ));
+        });
+    }
+
+    @Test
+    void lowersStreamSortedComparatorToNativeListSort() {
+        final IrFunction function = lowerProgram(
+            method(
+                0x0008,
+                "main",
+                "(Ljava/util/List;Ljava/util/function/Function;)Ljava/util/List;",
+                4,
+                2,
+                plain(0, 42, "aload_0"),
+                invokeInterface(1, new MethodRef("java/util/List", "stream", "()Ljava/util/stream/Stream;")),
+                plain(2, 43, "aload_1"),
+                invokeStatic(3, new MethodRef("java/util/Comparator", "reverseOrder", "()Ljava/util/Comparator;")),
+                invokeStatic(4, new MethodRef(
+                    "java/util/Comparator",
+                    "comparing",
+                    "(Ljava/util/function/Function;Ljava/util/Comparator;)Ljava/util/Comparator;"
+                )),
+                invokeInterface(5, new MethodRef(
+                    "java/util/stream/Stream",
+                    "sorted",
+                    "(Ljava/util/Comparator;)Ljava/util/stream/Stream;"
+                )),
+                invokeInterface(6, new MethodRef("java/util/stream/Stream", "toList", "()Ljava/util/List;")),
+                plain(7, 176, "areturn")
+            ),
+            interfaceType("java/util/function/Function", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;"),
+            implementationType("com/acme/ScoreExtractor", "java/util/function/Function", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;")
+        ).functions().getFirst();
+
+        assertThat(function.instructions()).anySatisfy(instruction -> {
+            assertThat(instruction.op()).isEqualTo(IrInstruction.Op.ASSIGN_INT);
+            assertThat(instruction.expression()).containsInstanceOf(IrExpression.class);
+            assertThat(instruction.expression().orElseThrow().value()).isEqualTo("javan_list_size");
+        });
+        assertThat(function.instructions()).anySatisfy(instruction -> {
+            assertThat(instruction.op()).isEqualTo(IrInstruction.Op.ASSIGN_INT);
+            assertThat(instruction.expression()).containsInstanceOf(IrExpression.class);
+            assertThat(instruction.expression().orElseThrow().value()).isEqualTo("javan_object_compare_natural");
+        });
+        assertThat(function.instructions()).anySatisfy(instruction -> {
+            assertThat(instruction.op()).isEqualTo(IrInstruction.Op.ASSIGN_OBJECT);
+            assertThat(instruction.expression()).containsInstanceOf(IrExpression.class);
+            assertThat(instruction.expression().orElseThrow().value()).isEqualTo("javan_arraylist_set");
+        });
     }
 
     @Test
@@ -16728,6 +19436,58 @@ final class BytecodeToIRTest {
 
         assertThat(function.instructions()).containsExactly(
             IrInstruction.returnInt(IrExpression.intCall("javan_map_size", List.of(IrExpression.objectLocal("arg0"))))
+        );
+    }
+
+    @Test
+    void lowersTreeMapMapConstructorToRuntimePopulation() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/Map;)Ljava/util/TreeMap;",
+            3,
+            1,
+            classInstruction(0, 187, "new", "java/util/TreeMap"),
+            plain(1, 89, "dup"),
+            plain(2, 42, "aload_0"),
+            invokeSpecial(3, new MethodRef("java/util/TreeMap", "<init>", "(Ljava/util/Map;)V")),
+            plain(4, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_hashmap_new", List.of())),
+            IrInstruction.callStaticVoid(
+                "javan_map_put_all",
+                List.of(IrExpression.objectLocal("object0"), IrExpression.objectLocal("arg0"))
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersHashMapMapConstructorToRuntimePopulation() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/Map;)Ljava/util/HashMap;",
+            3,
+            1,
+            classInstruction(0, 187, "new", "java/util/HashMap"),
+            plain(1, 89, "dup"),
+            plain(2, 42, "aload_0"),
+            invokeSpecial(3, new MethodRef("java/util/HashMap", "<init>", "(Ljava/util/Map;)V")),
+            plain(4, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_hashmap_new", List.of())),
+            IrInstruction.callStaticVoid(
+                "javan_map_put_all",
+                List.of(IrExpression.objectLocal("object0"), IrExpression.objectLocal("arg0"))
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
 
@@ -18387,6 +21147,68 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersLambdaMetafactoryCollectionAddBridgeWrapper() throws Exception {
+        final String syntheticOwner = "com/acme/Main$$javan$lambda$main$apply$1";
+        final IrFunction function = lowerLambdaClosureFunction(
+            Map.of(),
+            Map.of(),
+            new LambdaMetafactorySupport.LambdaClosurePlan(
+                syntheticOwner,
+                "java/util/function/BiFunction",
+                "apply",
+                "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+                "(Ljava/util/Collection;Ljava/lang/String;)Ljava/lang/Boolean;",
+                List.of(),
+                new MethodRef("java/util/Collection", "add", "(Ljava/lang/Object;)Z"),
+                9,
+                LambdaMetafactorySupport.ReceiverBinding.FIRST_PARAMETER,
+                Path.of("com/acme/Main.class"),
+                true
+            )
+        );
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_boolean_value_of",
+                List.of(IrExpression.intCall(
+                    "javan_collection_add",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+                ))
+            ))
+        );
+    }
+
+    @Test
+    void lowersLambdaMetafactoryCollectionAddConsumerDiscardReturnWrapper() throws Exception {
+        final String syntheticOwner = "com/acme/Main$$javan$lambda$main$accept$1";
+        final IrFunction function = lowerLambdaClosureFunction(
+            Map.of(),
+            Map.of(),
+            new LambdaMetafactorySupport.LambdaClosurePlan(
+                syntheticOwner,
+                "java/util/function/Consumer",
+                "accept",
+                "(Ljava/lang/Object;)V",
+                "(Ljava/util/Collection;Ljava/lang/String;)V",
+                List.of(),
+                new MethodRef("java/util/Collection", "add", "(Ljava/lang/Object;)Z"),
+                9,
+                LambdaMetafactorySupport.ReceiverBinding.FIRST_PARAMETER,
+                Path.of("com/acme/Main.class"),
+                true
+            )
+        );
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid(
+                "javan_collection_add",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
     void lowersLambdaMetafactoryStringBuilderConstructorBridgeWrapper() throws Exception {
         final String syntheticOwner = "com/acme/Main$$javan$lambda$main$apply$1";
         final IrFunction function = lowerLambdaClosureFunction(
@@ -18452,6 +21274,49 @@ final class BytecodeToIRTest {
                     IrExpression.objectLocal("object0"),
                     IrExpression.intCall("javan_boolean_boolean_value", List.of(IrExpression.objectLocal("arg0")))
                 )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersLambdaMetafactoryApplicationConstructorBridgeWrapper() throws Exception {
+        final String syntheticOwner = "com/acme/Main$$javan$lambda$main$apply$1";
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Box",
+            classFile(
+                "com/acme/Box",
+                "java/lang/Object",
+                0,
+                List.of(),
+                List.of(),
+                List.of(method(0, "<init>", "(Ljava/lang/String;)V", 0, 1, plain(0, 177, "return")))
+            )
+        );
+        final IrFunction function = lowerLambdaClosureFunction(
+            classes,
+            Map.of(),
+            new LambdaMetafactorySupport.LambdaClosurePlan(
+                syntheticOwner,
+                "java/util/function/Function",
+                "apply",
+                "(Ljava/lang/Object;)Ljava/lang/Object;",
+                "(Ljava/lang/String;)Lcom/acme/Box;",
+                List.of(),
+                new MethodRef("com/acme/Box", "<init>", "(Ljava/lang/String;)V"),
+                8,
+                LambdaMetafactorySupport.ReceiverBinding.NONE,
+                Path.of("com/acme/Main.class"),
+                true
+            )
+        );
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectAllocation("com/acme/Box")),
+            IrInstruction.callStaticVoid(
+                symbol("com/acme/Box", "<init>", "(Ljava/lang/String;)V"),
+                List.of(IrExpression.objectLocal("object0"), IrExpression.objectLocal("arg0"))
             ),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
@@ -18573,6 +21438,12 @@ final class BytecodeToIRTest {
     void jdkConstructorReceiverAllocationReturnsAtomicIntegerAllocation() throws Exception {
         assertThat(jdkConstructorReceiverAllocation("java/util/concurrent/atomic/AtomicInteger"))
             .contains(IrExpression.objectCall("javan_atomic_integer_new", List.of()));
+    }
+
+    @Test
+    void jdkConstructorReceiverAllocationReturnsAtomicLongAllocation() throws Exception {
+        assertThat(jdkConstructorReceiverAllocation("java/util/concurrent/atomic/AtomicLong"))
+            .contains(IrExpression.objectCall("javan_atomic_long_new", List.of()));
     }
 
     @Test
@@ -18715,6 +21586,52 @@ final class BytecodeToIRTest {
             IrInstruction.callStaticVoid(
                 symbol("com/acme/Greeter", "runTask", "()V"),
                 List.of(IrExpression.objectField(syntheticOwner, "capture0", IrExpression.objectLocal("self")))
+            ),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
+    void lowersLambdaMetafactoryCapturedInvokeSpecialReceiverWrapper() throws Exception {
+        final String syntheticOwner = "com/acme/TypeList$$javan$lambda$$init$$accept$7";
+        final Map<String, ClassFile> classes = new LinkedHashMap<>();
+        classes.put(
+            "com/acme/TypeList",
+            classFile(
+                "com/acme/TypeList",
+                "java/lang/Object",
+                0,
+                List.of(),
+                List.of(),
+                List.of(method(0, "lambda$new$0", "(Ljava/util/Collection;)V", 0, 2, plain(0, 177, "return")))
+            )
+        );
+
+        final IrFunction function = lowerLambdaClosureFunction(
+            classes,
+            Map.of(),
+            new LambdaMetafactorySupport.LambdaClosurePlan(
+                syntheticOwner,
+                "java/util/function/Consumer",
+                "accept",
+                "(Ljava/lang/Object;)V",
+                "(Ljava/util/Collection;)V",
+                List.of("Lcom/acme/TypeList;"),
+                new MethodRef("com/acme/TypeList", "lambda$new$0", "(Ljava/util/Collection;)V"),
+                7,
+                LambdaMetafactorySupport.ReceiverBinding.CAPTURE0,
+                Path.of("com/acme/TypeList.class"),
+                true
+            )
+        );
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid(
+                symbol("com/acme/TypeList", "lambda$new$0", "(Ljava/util/Collection;)V"),
+                List.of(
+                    IrExpression.objectField(syntheticOwner, "capture0", IrExpression.objectLocal("self")),
+                    IrExpression.objectLocal("arg0")
+                )
             ),
             IrInstruction.returnVoid()
         );
