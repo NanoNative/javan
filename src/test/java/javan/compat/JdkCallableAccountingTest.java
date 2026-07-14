@@ -19,6 +19,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksObjectEqualsAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Object", "equals", "(Ljava/lang/Object;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksClassGetSimpleNameAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Class", "getSimpleName", "()Ljava/lang/String;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
@@ -156,6 +162,12 @@ final class JdkCallableAccountingTest {
     @Test
     void marksCollectionsEmptyMapAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Collections", "emptyMap", "()Ljava/util/Map;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksCollectionIsEmptyAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Collection", "isEmpty", "()Z")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 

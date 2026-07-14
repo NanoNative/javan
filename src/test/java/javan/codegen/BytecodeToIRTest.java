@@ -7405,6 +7405,28 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersObjectEqualsToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Object;Ljava/lang/Object;)Z",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/lang/Object", "equals", "(Ljava/lang/Object;)Z")),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_objects_equals",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
     void lowersByteArrayOutputStreamCloseToNoop() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -18800,6 +18822,24 @@ final class BytecodeToIRTest {
             1,
             plain(0, 42, "aload_0"),
             invokeVirtual(1, new MethodRef("java/util/List", "isEmpty", "()Z")),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall("javan_list_is_empty", List.of(IrExpression.objectLocal("arg0"))))
+        );
+    }
+
+    @Test
+    void lowersCollectionIsEmptyToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/Collection;)Z",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/util/Collection", "isEmpty", "()Z")),
             plain(2, 172, "ireturn")
         ));
 

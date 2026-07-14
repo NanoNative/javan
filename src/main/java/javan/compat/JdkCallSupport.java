@@ -273,6 +273,7 @@ public final class JdkCallSupport {
         runtime("Character.valueOf", "java/lang/Character", "valueOf", "(C)Ljava/lang/Character;"),
         runtime("Character.charValue", "java/lang/Character", "charValue", "()C"),
         runtime("Character.toString", "java/lang/Character", "toString", "()Ljava/lang/String;"),
+        runtime("Object.equals", "java/lang/Object", "equals", "(Ljava/lang/Object;)Z"),
         runtime("Number.longValue", "java/lang/Number", "longValue", "()J"),
         intrinsic(
             "String.valueOf",
@@ -459,6 +460,7 @@ public final class JdkCallSupport {
         runtime("List.clear", "java/util/List", "clear", "()V"),
         runtime("List.size", "java/util/List", "size", "()I"),
         runtime("List.isEmpty", "java/util/List", "isEmpty", "()Z"),
+        runtime("Collection.isEmpty", "java/util/Collection", "isEmpty", "()Z"),
         runtime("List.contains", "java/util/List", "contains", "(Ljava/lang/Object;)Z"),
         runtime("List.containsAll", "java/util/List", "containsAll", "(Ljava/util/Collection;)Z"),
         runtime("Collection.contains", "java/util/Collection", "contains", "(Ljava/lang/Object;)Z"),

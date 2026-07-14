@@ -10070,6 +10070,62 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void objectEqualsBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("object-equals");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Object left = Integer.valueOf(200);
+                    final Object right = Integer.valueOf(200);
+                    System.out.println(left.equals(right));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/object-equals").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n");
+    }
+
+    @Test
+    void collectionIsEmptyBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("collection-is-empty");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.Collection;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Collection<String> values = new ArrayList<>();
+                    System.out.println(values.isEmpty());
+                    values.add("left");
+                    System.out.println(values.isEmpty());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/collection-is-empty").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\nfalse\n");
+    }
+
+    @Test
     void arrayListSizeExactOwnerBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("arraylist-size-exact-owner");
         writeJava(project, "com.acme.Main", """
@@ -11270,8 +11326,8 @@ final class CliIntegrationTest {
         assertThat(run.exitCode()).isEqualTo(2);
         final String diagnostics = Files.readString(project.resolve(".javan/reports/diagnostics.md"));
         assertThat(diagnostics).contains(
-            "- diagnostics: `499`",
-            "- errors: `485`",
+            "- diagnostics: `497`",
+            "- errors: `483`",
             "- warnings: `14`",
             "error[JAVAN030] unsupported reachable bytecode",
             "`invokedynamic`"
@@ -11392,6 +11448,7 @@ final class CliIntegrationTest {
             "java/lang/CharSequence.charAt(I)C",
             "java/lang/Character.isWhitespace(C)Z",
             "java/util/Collection.forEach(Ljava/util/function/Consumer;)V",
+            "java/util/Collection.isEmpty()Z",
             "java/util/List.remove(Ljava/lang/Object;)Z",
             "java/util/List.forEach(Ljava/util/function/Consumer;)V",
             "java/lang/String.split(Ljava/lang/String;)[Ljava/lang/String;",
@@ -11409,6 +11466,7 @@ final class CliIntegrationTest {
             "berlin/yuna/typemap/model/TypeMapI.asOpt(Ljava/lang/Class;[Ljava/lang/Object;)Lberlin/yuna/typemap/model/Type;",
             "berlin/yuna/typemap/model/TypeMapI.asStringOpt([Ljava/lang/Object;)Lberlin/yuna/typemap/model/Type;",
             "java/lang/Enum.valueOf(Ljava/lang/Class;Ljava/lang/String;)Ljava/lang/Enum;",
+            "java/lang/Object.equals(Ljava/lang/Object;)Z",
             "java/util/Objects.equals(Ljava/lang/Object;Ljava/lang/Object;)Z",
             "java/io/ByteArrayOutputStream.close()V",
             "java/io/ByteArrayInputStream.close()V",

@@ -63,6 +63,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void objectEqualsIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Object",
+            "equals",
+            "(Ljava/lang/Object;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void collectionIsEmptyIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Collection",
+            "isEmpty",
+            "()Z"
+        ))).isTrue();
+    }
+
+    @Test
     void longParseLongIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/Long",

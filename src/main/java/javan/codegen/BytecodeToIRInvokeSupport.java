@@ -337,6 +337,14 @@ final class BytecodeToIRInvokeSupport {
             )));
             return;
         }
+        if ("java/lang/Object".equals(methodRef.owner())
+            && "equals".equals(methodRef.name())
+            && "(Ljava/lang/Object;)Z".equals(methodRef.descriptor())) {
+            final IrExpression other = popObject(classFile, method, instruction, stack);
+            final IrExpression receiver = popObject(classFile, method, instruction, stack);
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_objects_equals", List.of(receiver, other))));
+            return;
+        }
         if (isStackTraceElementGetClassName(methodRef)) {
             final IrExpression receiver = popObject(classFile, method, instruction, stack);
             stack.add(StackValue.objectExpression(IrExpression.objectField(
@@ -4894,6 +4902,10 @@ final class BytecodeToIRInvokeSupport {
             }
             if ("java/util/Collection".equals(methodRef.owner()) && "size()I".equals(signature)) {
                 stack.add(StackValue.intExpression(IrExpression.intCall("javan_list_size", List.of(receiver))));
+                return true;
+            }
+            if ("java/util/Collection".equals(methodRef.owner()) && "isEmpty()Z".equals(signature)) {
+                stack.add(StackValue.intExpression(IrExpression.intCall("javan_list_is_empty", List.of(receiver))));
                 return true;
             }
             if ("java/util/Collection".equals(methodRef.owner()) && "forEach(Ljava/util/function/Consumer;)V".equals(signature)) {
