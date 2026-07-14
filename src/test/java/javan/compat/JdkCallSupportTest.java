@@ -1294,11 +1294,29 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void mapEntryComparingByKeyIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Map$Entry",
+            "comparingByKey",
+            "()Ljava/util/Comparator;"
+        ))).isTrue();
+    }
+
+    @Test
     void streamSortedComparatorIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/stream/Stream",
             "sorted",
             "(Ljava/util/Comparator;)Ljava/util/stream/Stream;"
+        ))).isTrue();
+    }
+
+    @Test
+    void streamReduceIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/stream/Stream",
+            "reduce",
+            "(Ljava/util/function/BinaryOperator;)Ljava/util/Optional;"
         ))).isTrue();
     }
 
@@ -1312,6 +1330,19 @@ final class JdkCallSupportTest {
             "java/util/function/Function",
             "apply",
             "(Ljava/lang/Object;)Ljava/lang/Object;"
+        ));
+    }
+
+    @Test
+    void streamReduceExposesClosedWorldBinaryOperatorDispatchTarget() {
+        assertThat(JdkCallSupport.closedWorldHigherOrderDispatchTargets(new javan.classfile.MethodRef(
+            "java/util/stream/Stream",
+            "reduce",
+            "(Ljava/util/function/BinaryOperator;)Ljava/util/Optional;"
+        ))).containsExactly(new javan.classfile.MethodRef(
+            "java/util/function/BinaryOperator",
+            "apply",
+            "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"
         ));
     }
 

@@ -1018,6 +1018,18 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksMapEntryComparingByKeyAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map$Entry", "comparingByKey", "()Ljava/util/Comparator;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksStreamReduceAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/stream/Stream", "reduce", "(Ljava/util/function/BinaryOperator;)Ljava/util/Optional;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksDateFromInstantAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Date", "from", "(Ljava/time/Instant;)Ljava/util/Date;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

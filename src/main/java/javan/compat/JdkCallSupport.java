@@ -509,6 +509,7 @@ public final class JdkCallSupport {
         runtime("Stream.forEach", "java/util/stream/Stream", "forEach", "(Ljava/util/function/Consumer;)V"),
         runtime("Stream.toList", "java/util/stream/Stream", "toList", "()Ljava/util/List;"),
         runtime("Stream.findFirst", "java/util/stream/Stream", "findFirst", "()Ljava/util/Optional;"),
+        runtime("Stream.reduce", "java/util/stream/Stream", "reduce", "(Ljava/util/function/BinaryOperator;)Ljava/util/Optional;"),
         runtime("Stream.anyMatch", "java/util/stream/Stream", "anyMatch", "(Ljava/util/function/Predicate;)Z"),
         runtime("Stream.noneMatch", "java/util/stream/Stream", "noneMatch", "(Ljava/util/function/Predicate;)Z"),
         runtime("HashMap.<init>", "java/util/HashMap", "<init>", "()V", "(Ljava/util/Map;)V"),
@@ -566,6 +567,7 @@ public final class JdkCallSupport {
         runtime("LinkedHashMap.values", "java/util/LinkedHashMap", "values", "()Ljava/util/Collection;"),
         runtime("TreeMap.values", "java/util/TreeMap", "values", "()Ljava/util/Collection;"),
         runtime("ConcurrentHashMap.values", "java/util/concurrent/ConcurrentHashMap", "values", "()Ljava/util/Collection;"),
+        runtime("Map.Entry.comparingByKey", "java/util/Map$Entry", "comparingByKey", "()Ljava/util/Comparator;"),
         runtime("Map.Entry.getKey", "java/util/Map$Entry", "getKey", "()Ljava/lang/Object;"),
         runtime("Map.Entry.getValue", "java/util/Map$Entry", "getValue", "()Ljava/lang/Object;"),
         runtime("HashMap.getOrDefault", "java/util/HashMap", "getOrDefault", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
@@ -895,6 +897,9 @@ public final class JdkCallSupport {
             if ("mapToInt".equals(name) && "(Ljava/util/function/ToIntFunction;)Ljava/util/stream/IntStream;".equals(descriptor)) {
                 return List.of(new MethodRef("java/util/function/ToIntFunction", "applyAsInt", "(Ljava/lang/Object;)I"));
             }
+            if ("reduce".equals(name) && "(Ljava/util/function/BinaryOperator;)Ljava/util/Optional;".equals(descriptor)) {
+                return List.of(new MethodRef("java/util/function/BinaryOperator", "apply", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"));
+            }
             if ("anyMatch".equals(name) && "(Ljava/util/function/Predicate;)Z".equals(descriptor)) {
                 return List.of(new MethodRef("java/util/function/Predicate", "test", "(Ljava/lang/Object;)Z"));
             }
@@ -1157,6 +1162,9 @@ public final class JdkCallSupport {
         if ("findFirst".equals(name)) {
             return "()Ljava/util/Optional;".equals(descriptor);
         }
+        if ("reduce".equals(name)) {
+            return "(Ljava/util/function/BinaryOperator;)Ljava/util/Optional;".equals(descriptor);
+        }
         if ("anyMatch".equals(name) || "noneMatch".equals(name)) {
             return "(Ljava/util/function/Predicate;)Z".equals(descriptor);
         }
@@ -1260,6 +1268,9 @@ public final class JdkCallSupport {
     }
 
     private static boolean isSupportedMapEntryCall(final String name, final String descriptor) {
+        if ("comparingByKey".equals(name)) {
+            return "()Ljava/util/Comparator;".equals(descriptor);
+        }
         if ("getKey".equals(name) || "getValue".equals(name)) {
             return "()Ljava/lang/Object;".equals(descriptor);
         }
@@ -1603,6 +1614,11 @@ public final class JdkCallSupport {
             return List.of("collections", "optional");
         }
         if ("java/util/stream/Stream".equals(owner)
+            && "reduce".equals(name)
+            && "(Ljava/util/function/BinaryOperator;)Ljava/util/Optional;".equals(descriptor)) {
+            return List.of("collections", "optional");
+        }
+        if ("java/util/stream/Stream".equals(owner)
             && "sorted".equals(name)
             && "(Ljava/util/Comparator;)Ljava/util/stream/Stream;".equals(descriptor)) {
             return List.of("collections", "managed-heap", "strings");
@@ -1615,6 +1631,11 @@ public final class JdkCallSupport {
                 && "(Ljava/util/function/Function;Ljava/util/Comparator;)Ljava/util/Comparator;".equals(descriptor)) {
                 return List.of("collections", "managed-heap", "strings");
             }
+        }
+        if ("java/util/Map$Entry".equals(owner)
+            && "comparingByKey".equals(name)
+            && "()Ljava/util/Comparator;".equals(descriptor)) {
+            return List.of("collections", "managed-heap", "strings");
         }
         if ("java/util/stream/Collectors".equals(owner)) {
             return List.of("collections");

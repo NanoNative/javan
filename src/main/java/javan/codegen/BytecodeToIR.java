@@ -3406,6 +3406,7 @@ public final class BytecodeToIR {
 
     enum ComparatorKind {
         REVERSE_NATURAL,
+        ENTRY_KEY_NATURAL,
         COMPARING
     }
 
@@ -3425,6 +3426,15 @@ public final class BytecodeToIR {
         static ComparatorPlan reverseNatural() {
             return new ComparatorPlan(
                 ComparatorKind.REVERSE_NATURAL,
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty()
+            );
+        }
+
+        static ComparatorPlan entryKeyNatural() {
+            return new ComparatorPlan(
+                ComparatorKind.ENTRY_KEY_NATURAL,
                 Optional.empty(),
                 Optional.empty(),
                 Optional.empty()

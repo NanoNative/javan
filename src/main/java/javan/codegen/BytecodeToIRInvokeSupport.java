@@ -1863,6 +1863,14 @@ final class BytecodeToIRInvokeSupport {
         final MethodRef methodRef,
         final List<StackValue> stack
     ) {
+        if ("java/util/Map$Entry".equals(methodRef.owner())) {
+            if ("comparingByKey".equals(methodRef.name())
+                && "()Ljava/util/Comparator;".equals(methodRef.descriptor())) {
+                stack.add(StackValue.comparator(ComparatorPlan.entryKeyNatural()));
+                return true;
+            }
+            return false;
+        }
         if (!"java/util/Comparator".equals(methodRef.owner())) {
             return false;
         }
@@ -4336,6 +4344,25 @@ final class BytecodeToIRInvokeSupport {
             return true;
         }
         if ("java/util/stream/Stream".equals(methodRef.owner())
+            && "reduce".equals(methodRef.name())
+            && "(Ljava/util/function/BinaryOperator;)Ljava/util/Optional;".equals(methodRef.descriptor())) {
+            final IrExpression reducer = popObject(classFile, method, instruction, stack);
+            final StreamPlan streamPlan = popObjectStream(classFile, method, instruction, stack);
+            materializeReferenceStreamReduce(
+                classes,
+                classFile,
+                method,
+                instruction,
+                dispatches,
+                streamPlan,
+                reducer,
+                instructions,
+                localDeclarations,
+                stack
+            );
+            return true;
+        }
+        if ("java/util/stream/Stream".equals(methodRef.owner())
             && "forEach".equals(methodRef.name())
             && "(Ljava/util/function/Consumer;)V".equals(methodRef.descriptor())) {
             final IrExpression consumer = popObject(classFile, method, instruction, stack);
@@ -5577,6 +5604,14 @@ final class BytecodeToIRInvokeSupport {
                 Optional.empty()
             );
         }
+        if (comparatorPlan.kind() == ComparatorKind.ENTRY_KEY_NATURAL) {
+            return new BoundComparatorPlan(
+                ComparatorKind.ENTRY_KEY_NATURAL,
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty()
+            );
+        }
         final String functionLocal = declareLocal(localDeclarations, IrType.OBJECT);
         instructions.add(IrInstruction.assignObject(functionLocal, comparatorPlan.function().orElseThrow()));
         instructions.add(IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(IrExpression.objectLocal(functionLocal))));
@@ -5607,6 +5642,17 @@ final class BytecodeToIRInvokeSupport {
             instructions.add(IrInstruction.assignInt(
                 resultLocal,
                 IrExpression.intCall("javan_object_compare_natural", List.of(right, left))
+            ));
+            return;
+        }
+        if (comparatorPlan.kind() == ComparatorKind.ENTRY_KEY_NATURAL) {
+            final IrExpression leftKey = IrExpression.objectCall("javan_object_array_get", List.of(left, IrExpression.intLiteral(0)));
+            final IrExpression rightKey = IrExpression.objectCall("javan_object_array_get", List.of(right, IrExpression.intLiteral(0)));
+            instructions.add(IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(leftKey)));
+            instructions.add(IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(rightKey)));
+            instructions.add(IrInstruction.assignInt(
+                resultLocal,
+                IrExpression.intCall("javan_object_compare_natural", List.of(leftKey, rightKey))
             ));
             return;
         }
@@ -5829,6 +5875,106 @@ final class BytecodeToIRInvokeSupport {
         instructions.add(IrInstruction.jump(nextLabel));
         instructions.add(IrInstruction.label(doneLabel));
         stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
+    }
+
+    private static void materializeReferenceStreamReduce(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final Map<String, IrDispatch> dispatches,
+        final StreamPlan streamPlan,
+        final IrExpression reducer,
+        final List<IrInstruction> instructions,
+        final Map<Integer, IrLocal> localDeclarations,
+        final List<StackValue> stack
+    ) {
+        instructions.add(IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(reducer)));
+        final String sourceLocal;
+        final List<BoundStreamOperation> operations;
+        if (streamPlan.comparator().isPresent()) {
+            final PreparedReferenceStream prepared = prepareSortedReferenceStream(
+                classes,
+                classFile,
+                method,
+                instruction,
+                dispatches,
+                streamPlan,
+                instructions,
+                localDeclarations
+            );
+            sourceLocal = prepared.sourceLocal();
+            operations = prepared.operations();
+        } else {
+            sourceLocal = declareLocal(localDeclarations, IrType.OBJECT);
+            instructions.add(IrInstruction.assignObject(sourceLocal, streamPlan.source()));
+            operations = bindStreamOperations(streamPlan.preSortOperations(), instructions, localDeclarations);
+        }
+        final String reducerLocal = declareLocal(localDeclarations, IrType.OBJECT);
+        final String iteratorLocal = declareLocal(localDeclarations, IrType.OBJECT);
+        final String candidateLocal = declareLocal(localDeclarations, IrType.OBJECT);
+        final String accumulatorLocal = declareLocal(localDeclarations, IrType.OBJECT);
+        final String reducedLocal = declareLocal(localDeclarations, IrType.OBJECT);
+        final String seenLocal = declareLocal(localDeclarations, IrType.INT);
+        final String nextLabel = "label_stream_reduce_next_" + instruction.offset() + "_" + localDeclarations.size();
+        final String bodyLabel = "label_stream_reduce_body_" + instruction.offset() + "_" + localDeclarations.size();
+        final String combineLabel = "label_stream_reduce_combine_" + instruction.offset() + "_" + localDeclarations.size();
+        final String doneLabel = "label_stream_reduce_done_" + instruction.offset() + "_" + localDeclarations.size();
+        instructions.add(IrInstruction.assignObject(reducerLocal, reducer));
+        instructions.add(IrInstruction.assignObject(iteratorLocal, IrExpression.objectCall("javan_list_iterator", List.of(IrExpression.objectLocal(sourceLocal)))));
+        instructions.add(IrInstruction.assignObject(accumulatorLocal, IrExpression.objectNull()));
+        instructions.add(IrInstruction.assignInt(seenLocal, IrExpression.intLiteral(0)));
+        instructions.add(IrInstruction.label(nextLabel));
+        instructions.add(IrInstruction.branchIf(
+            bodyLabel,
+            IrExpression.intComparison("!=", IrExpression.intCall("javan_iterator_has_next", List.of(IrExpression.objectLocal(iteratorLocal))), IrExpression.intLiteral(0))
+        ));
+        instructions.add(IrInstruction.jump(doneLabel));
+        instructions.add(IrInstruction.label(bodyLabel));
+        instructions.add(IrInstruction.assignObject(candidateLocal, IrExpression.objectCall("javan_iterator_next", List.of(IrExpression.objectLocal(iteratorLocal)))));
+        final Optional<IrExpression> current = applyReferenceStreamOperations(
+            classes,
+            classFile,
+            method,
+            instruction,
+            dispatches,
+            operations,
+            instructions,
+            localDeclarations,
+            IrExpression.objectLocal(candidateLocal),
+            nextLabel
+        );
+        if (current.isPresent()) {
+            instructions.add(IrInstruction.branchIf(
+                combineLabel,
+                IrExpression.intComparison("!=", IrExpression.intLocal(seenLocal), IrExpression.intLiteral(0))
+            ));
+            instructions.add(IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(current.orElseThrow())));
+            instructions.add(IrInstruction.assignObject(accumulatorLocal, current.orElseThrow()));
+            instructions.add(IrInstruction.assignInt(seenLocal, IrExpression.intLiteral(1)));
+            instructions.add(IrInstruction.jump(nextLabel));
+            instructions.add(IrInstruction.label(combineLabel));
+            appendInterfaceObjectCall(
+                classes,
+                classFile,
+                method,
+                instruction,
+                dispatches,
+                new MethodRef("java/util/function/BinaryOperator", "apply", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+                List.of(IrExpression.objectLocal(reducerLocal), IrExpression.objectLocal(accumulatorLocal), current.orElseThrow()),
+                instructions,
+                reducedLocal
+            );
+            instructions.add(IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(IrExpression.objectLocal(reducedLocal))));
+            instructions.add(IrInstruction.assignObject(accumulatorLocal, IrExpression.objectLocal(reducedLocal)));
+            instructions.add(IrInstruction.jump(nextLabel));
+        }
+        instructions.add(IrInstruction.jump(nextLabel));
+        instructions.add(IrInstruction.label(doneLabel));
+        stack.add(StackValue.objectExpression(IrExpression.objectCall(
+            "javan_optional_of_nullable",
+            List.of(IrExpression.objectLocal(accumulatorLocal))
+        )));
     }
 
     private static void materializeReferenceStreamFindFirst(

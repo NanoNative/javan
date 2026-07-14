@@ -8523,6 +8523,41 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void streamSortedMapEntryComparingByKeyReduceBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("stream-sorted-map-entry-comparing-by-key-reduce");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.LinkedHashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, Integer> values = new LinkedHashMap<>();
+                    values.put("c", 3);
+                    values.put("a", 1);
+                    values.put("b", 2);
+                    System.out.println(values.entrySet().stream()
+                        .sorted(Map.Entry.comparingByKey())
+                        .map(entry -> entry.getKey())
+                        .reduce((left, right) -> left + right)
+                        .orElse("missing"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/stream-sorted-map-entry-comparing-by-key-reduce").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("abc\n");
+    }
+
+    @Test
     void streamCollectJoiningBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("stream-collect-joining");
         writeJava(project, "com.acme.Main", """

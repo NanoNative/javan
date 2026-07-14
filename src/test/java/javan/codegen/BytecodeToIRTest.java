@@ -19625,6 +19625,55 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersMapEntryComparingByKeySortedToNativeKeyComparison() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/List;)Ljava/util/List;",
+            3,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeInterface(1, new MethodRef("java/util/List", "stream", "()Ljava/util/stream/Stream;")),
+            invokeStatic(2, new MethodRef("java/util/Map$Entry", "comparingByKey", "()Ljava/util/Comparator;")),
+            invokeInterface(3, new MethodRef("java/util/stream/Stream", "sorted", "(Ljava/util/Comparator;)Ljava/util/stream/Stream;")),
+            invokeInterface(4, new MethodRef("java/util/stream/Stream", "toList", "()Ljava/util/List;")),
+            plain(5, 176, "areturn")
+        ));
+
+        assertThat(function.instructions().stream()
+            .flatMap(instruction -> instruction.expression().stream())
+            .map(IrExpression::value))
+            .contains("javan_object_compare_natural");
+    }
+
+    @Test
+    void lowersStreamReduceToBinaryOperatorDispatch() {
+        final IrProgram program = lowerProgram(
+            method(
+                0x0008,
+                "main",
+                "(Ljava/util/List;Ljava/util/function/BinaryOperator;)Ljava/util/Optional;",
+                3,
+                2,
+                plain(0, 42, "aload_0"),
+                invokeInterface(1, new MethodRef("java/util/List", "stream", "()Ljava/util/stream/Stream;")),
+                plain(2, 43, "aload_1"),
+                invokeInterface(3, new MethodRef("java/util/stream/Stream", "reduce", "(Ljava/util/function/BinaryOperator;)Ljava/util/Optional;")),
+                plain(4, 176, "areturn")
+            ),
+            interfaceType("java/util/function/BinaryOperator", "apply", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+            implementationType("com/acme/Reducer", "java/util/function/BinaryOperator", "apply", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")
+        );
+
+        final IrFunction function = program.functions().getFirst();
+        assertThat(function.instructions().stream()
+            .flatMap(instruction -> instruction.expression().stream())
+            .map(IrExpression::value))
+            .contains("javan_optional_of_nullable", "javan_com_acme_Reducer_apply__Ljava_lang_Object_Ljava_lang_Object__Ljava_lang_Object_");
+        assertThat(program.dispatches()).isEmpty();
+    }
+
+    @Test
     void lowersHashMapPutIfAbsentToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
