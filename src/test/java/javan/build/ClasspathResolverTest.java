@@ -356,7 +356,7 @@ final class ClasspathResolverTest {
         Files.writeString(root.resolve("javan.mod"), """
             module com.acme.app
             java 25
-            require org.nanonative:nano:2026.1
+            require com.example:native-lib:2026.1
             """);
 
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> resolverWithRepository(repository).resolveDeclaredDependencies(new ProjectLayout(
@@ -374,7 +374,7 @@ final class ClasspathResolverTest {
         )))
             .isInstanceOf(java.io.IOException.class)
             .hasMessageContaining("Missing javan.mod dependency")
-            .hasMessageContaining("org.nanonative:nano:2026.1");
+            .hasMessageContaining("com.example:native-lib:2026.1");
         assertThat(Files.readString(root.resolve("javan.lock"))).contains(
             "\"status\": \"missing-coordinate\"",
             "\"artifactKind\": \"missing-jar\""

@@ -1,13 +1,14 @@
 # javan Support Matrix
 
 This matrix tracks named javan/JDK behavior scenarios. It is not a claim that every class or method in the scanned JDK is native-supported.
+Real external project probes are tracked separately in `doc/status/real-project-readiness.md`.
 
 ## Current Counts
 
 | Measure | Count |
 | --- | ---: |
-| rows | 111 |
-| pass | 111 |
+| rows | 106 |
+| pass | 106 |
 | scoped | 0 |
 | target | 0 |
 | rejected | 0 |
@@ -129,12 +130,6 @@ Status mapping:
 | `network-socket-rejection` | pass |
 | `network-http-rejection` | pass |
 | `network-runtime-feature-reporting` | pass |
-| `typemap-pair` | pass |
-| `nano-metric` | pass |
-| `nano-duration` | pass |
-| `nano-scheduler` | pass |
-| `nano-scheduler-fixed-rate` | pass |
-
 `pass` means covered by the current deterministic verification suite for the active JDK.
 `scoped` means a supported subset exists and unsupported shapes must be rejected clearly.
 `target` means tracked for the milestone but not claimed as native-supported by this matrix.

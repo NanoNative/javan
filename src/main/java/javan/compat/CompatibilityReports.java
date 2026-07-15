@@ -523,12 +523,7 @@ public final class CompatibilityReports {
             pass("platform-thread-duplicate-start-build-reject"),
             pass("network-socket-rejection"),
             pass("network-http-rejection"),
-            pass("network-runtime-feature-reporting"),
-            pass("typemap-pair"),
-            pass("nano-metric"),
-            pass("nano-duration"),
-            pass("nano-scheduler"),
-            pass("nano-scheduler-fixed-rate")
+            pass("network-runtime-feature-reporting")
         );
     }
 

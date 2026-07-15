@@ -10,6 +10,9 @@ Status summary:
 | Nano scheduler lifecycle | Partial | `nano-scheduler` and `nano-scheduler-fixed-rate` build natively against the pinned Maven artifact and are exercised by required CI acceptance plus focused CLI integration. | Broader Nano service graph and scheduler-adjacent runtime coverage beyond the current lifecycle slice. |
 | Nano HTTP service | Planned | Nano-style `HttpServer` dependency now fails clearly with `JAVAN061` and reports `network/http`. | Broader HTTP service runtime, resources, thread/blocking model, and dev-console/reflection exclusion. |
 
+These external probes are intentionally excluded from `doc/status/support-matrix.*` so the
+JDK support ledger stays limited to synthetic/compiler-owned scenarios.
+
 Current compatibility probes:
 
 - TypeMap: `src/test/resources/projects/real-probes/typemap-pair` builds against the pinned Maven-cache TypeMap jar by default and prints `value`.

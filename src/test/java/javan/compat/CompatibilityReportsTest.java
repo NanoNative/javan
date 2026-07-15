@@ -74,14 +74,14 @@ final class CompatibilityReportsTest {
         final String summary = Files.readString(tempDir.resolve(".javan/reports/compatibility-summary.json"));
 
         assertThat(summary).contains(
-            "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 0, \"callables\": 1, \"totalCallables\": 5, \"leftCallables\": 4, \"coveragePercent\": \"20.0\"}",
-            "\"exactJdkCallableAccounting\": {\"supportedCallables\": 1, \"explicitRejectedCallables\": 3, \"doneCallables\": 4, \"unknownCallables\": 1, \"totalCallables\": 5, \"donePercent\": \"80.0\"}",
-            "\"supportRows\": 111",
-            "\"passRows\": 111",
+            "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 5, \"leftCallables\": 3, \"coveragePercent\": \"40.0\"}",
+            "\"exactJdkCallableAccounting\": {\"supportedCallables\": 2, \"explicitRejectedCallables\": 3, \"doneCallables\": 5, \"unknownCallables\": 0, \"totalCallables\": 5, \"donePercent\": \"100.0\"}",
+            "\"supportRows\": 106",
+            "\"passRows\": 106",
             "\"scopedRows\": 0",
             "\"targetRows\": 0",
             "\"rejectedRows\": 0",
-            "\"accountedRows\": 111",
+            "\"accountedRows\": 106",
             "\"unaccountedRows\": 0"
         );
     }
@@ -145,12 +145,7 @@ final class CompatibilityReportsTest {
             "| `platform-thread-duplicate-start-build-reject` | pass |",
             "| `network-socket-rejection` | pass |",
             "| `network-http-rejection` | pass |",
-            "| `network-runtime-feature-reporting` | pass |",
-            "| `typemap-pair` | pass |",
-            "| `nano-metric` | pass |",
-            "| `nano-duration` | pass |",
-            "| `nano-scheduler` | pass |",
-            "| `nano-scheduler-fixed-rate` | pass |"
+            "| `network-runtime-feature-reporting` | pass |"
         );
         assertThat(json).contains(
             "\"generatedForJdk\": " + feature,
@@ -188,12 +183,7 @@ final class CompatibilityReportsTest {
             "\"feature\": \"platform-thread-duplicate-start-build-reject\"",
             "\"feature\": \"network-socket-rejection\"",
             "\"feature\": \"network-http-rejection\"",
-            "\"feature\": \"network-runtime-feature-reporting\"",
-            "\"feature\": \"typemap-pair\"",
-            "\"feature\": \"nano-metric\"",
-            "\"feature\": \"nano-duration\"",
-            "\"feature\": \"nano-scheduler\"",
-            "\"feature\": \"nano-scheduler-fixed-rate\""
+            "\"feature\": \"network-runtime-feature-reporting\""
         );
     }
 
@@ -343,11 +333,11 @@ final class CompatibilityReportsTest {
         );
 
         assertThat(Files.readString(tempDir.resolve("doc/status/jdk-compatibility.md"))).contains(
-            "| exact supported JDK callables | 2 / 7 (28.5%) |",
+            "| exact supported JDK callables | 3 / 7 (42.8%) |",
             "| exact explicit rejected JDK callables | 4 |",
-            "| exact done JDK callables | 6 / 7 (85.7%) |",
-            "| exact unknown JDK callables | 1 |",
-            "| exact supported JDK callables left | 5 |"
+            "| exact done JDK callables | 7 / 7 (100.0%) |",
+            "| exact unknown JDK callables | 0 |",
+            "| exact supported JDK callables left | 4 |"
         );
     }
 

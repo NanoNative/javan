@@ -11,8 +11,8 @@
     "rule": "done = supported variants + rejected variants; unknown leftovers must be 0 for a release-gated JDK"
   },
   "counts": {
-    "rows": 111,
-    "pass": 111,
+    "rows": 106,
+    "pass": 106,
     "scoped": 0,
     "target": 0,
     "rejected": 0
@@ -123,11 +123,6 @@
     {"feature": "platform-thread-duplicate-start-build-reject", "jdk25": "pass"},
     {"feature": "network-socket-rejection", "jdk25": "pass"},
     {"feature": "network-http-rejection", "jdk25": "pass"},
-    {"feature": "network-runtime-feature-reporting", "jdk25": "pass"},
-    {"feature": "typemap-pair", "jdk25": "pass"},
-    {"feature": "nano-metric", "jdk25": "pass"},
-    {"feature": "nano-duration", "jdk25": "pass"},
-    {"feature": "nano-scheduler", "jdk25": "pass"},
-    {"feature": "nano-scheduler-fixed-rate", "jdk25": "pass"}
+    {"feature": "network-runtime-feature-reporting", "jdk25": "pass"}
   ]
 }
