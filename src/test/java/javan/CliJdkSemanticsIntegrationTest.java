@@ -907,6 +907,158 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void optionalFilterWithStaticPredicateBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-filter-static-predicate");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Optional.of("value").filter(Main::hasText).orElse("missing"));
+                    System.out.println(Optional.of(" ").filter(Main::hasText).orElse("missing"));
+                }
+
+                private static boolean hasText(final String value) {
+                    return value != null && !value.isBlank();
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-filter-static-predicate").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("value\nmissing\n");
+    }
+
+    @Test
+    void optionalMapWithStaticFunctionBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-map-static-function");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Optional.of("value").map(Main::decorate).orElse("missing"));
+                }
+
+                private static String decorate(final String value) {
+                    return "[" + value + "]";
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-map-static-function").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("[value]\n");
+    }
+
+    @Test
+    void optionalMapWithCapturedLambdaBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-map-captured-lambda");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String suffix = "-native";
+                    System.out.println(Optional.of("value").map(value -> value + suffix).orElse("missing"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-map-captured-lambda").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("value-native\n");
+    }
+
+    @Test
+    void mapComputeIfAbsentWithCapturedLambdaBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-compute-if-absent-captured-lambda");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String suffix = "-value";
+                    final Map<String, String> values = new HashMap<>();
+                    System.out.println(values.computeIfAbsent("demo", key -> key + suffix));
+                    System.out.println(values.computeIfAbsent("demo", key -> "other"));
+                    System.out.println(values.get("demo"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-compute-if-absent-captured-lambda").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("demo-value\ndemo-value\ndemo-value\n");
+    }
+
+    @Test
+    void customFunctionalInterfaceLambdaFailsClearlyAtBuildTime() throws Exception {
+        final Path project = project("custom-functional-interface-lambda");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Mapper mapper = value -> value + "!";
+                    System.out.println(mapper.apply("demo"));
+                }
+
+                @FunctionalInterface
+                interface Mapper {
+                    String apply(String value);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains("error[JAVAN040]", "invokedynamic");
+        assertThat(project.resolve(".javan/bin/custom-functional-interface-lambda")).doesNotExist();
+    }
+
+    @Test
     void optionalEmptyOrElseThrowFailsAtRuntime() throws Exception {
         final Path project = project("optional-empty-or-else-throw");
         writeJava(project, "com.acme.Main", """

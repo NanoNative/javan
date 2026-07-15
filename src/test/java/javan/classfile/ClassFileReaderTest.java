@@ -150,6 +150,8 @@ final class ClassFileReaderTest {
                 assertThat(dynamicRef.bootstrapName()).isEqualTo("bootstrap");
                 assertThat(dynamicRef.bootstrapDescriptor()).isEqualTo("()V");
                 assertThat(dynamicRef.bootstrapArguments()).containsExactly("hello", "I", "7", "1.5", "9", "2.5");
+                assertThat(dynamicRef.bootstrapArgumentDetails()).extracting(BootstrapArgument::text)
+                    .containsExactly("hello", "I", "7", "1.5", "9", "2.5");
             });
     }
 

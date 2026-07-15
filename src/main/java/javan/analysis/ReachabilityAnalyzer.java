@@ -4,6 +4,7 @@ import javan.classfile.ClassFile;
 import javan.classfile.CodeAttribute;
 import javan.classfile.FieldRef;
 import javan.classfile.Instruction;
+import javan.classfile.LambdaMetafactoryCall;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
 import javan.compat.JdkCallSupport;
@@ -81,6 +82,7 @@ public final class ReachabilityAnalyzer {
                     for (final Instruction instruction : code.orElseThrow().instructions()) {
                         enqueueClassInitializer(classes, instruction, work, current, callEdges);
                         enqueueApplicationCall(classes, instruction, work, diagnostics, current, callEdges);
+                        enqueueLambdaApplicationCall(classes, instruction, work, current, callEdges);
                     }
                 }
             }
@@ -239,6 +241,33 @@ public final class ReachabilityAnalyzer {
             "The current native profile could not resolve a closed-world dispatch target.",
             "Make sure at least one concrete application class implements the invoked method."
         ));
+    }
+
+    private static void enqueueLambdaApplicationCall(
+        final Map<String, ClassFile> classes,
+        final Instruction instruction,
+        final List<EntryPoint> work,
+        final EntryPoint current,
+        final List<CallEdge> callEdges
+    ) {
+        if (instruction.dynamicRef().isEmpty()) {
+            return;
+        }
+        final Optional<LambdaMetafactoryCall> lambdaCall = LambdaMetafactoryCall.resolve(instruction.dynamicRef().orElseThrow());
+        if (lambdaCall.isEmpty() || !lambdaCall.orElseThrow().isDirectlyLowerable()) {
+            return;
+        }
+        final MethodRef implementation = lambdaCall.orElseThrow().implementation();
+        if (JdkCallSupport.isJdkCall(implementation) || NetworkApiSupport.isNetworkCall(implementation)) {
+            return;
+        }
+        if (!classes.containsKey(implementation.owner())) {
+            return;
+        }
+        final EntryPoint callee = new EntryPoint(implementation.owner(), implementation.name(), implementation.descriptor());
+        work.add(callee);
+        addEdge(callEdges, current, callee, CallEdge.Kind.CALL);
+        enqueueClassInitializer(classes, implementation.owner(), work, current, callEdges);
     }
 
     private static void enqueueClassInitializer(

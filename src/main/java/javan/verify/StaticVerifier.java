@@ -8,6 +8,7 @@ import javan.classfile.CodeException;
 import javan.classfile.DynamicRef;
 import javan.classfile.FieldRef;
 import javan.classfile.Instruction;
+import javan.classfile.LambdaMetafactoryCall;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
 import javan.compat.BytecodeSupport;
@@ -2504,6 +2505,9 @@ public final class StaticVerifier {
         if (supportedStringConcat(dynamicRef.orElseThrow())) {
             return false;
         }
+        if (supportedLambdaMetafactory(dynamicRef.orElseThrow())) {
+            return false;
+        }
         if (supportedRecordEqualsDynamic(classFile, method, instruction)) {
             return false;
         }
@@ -2560,6 +2564,11 @@ public final class StaticVerifier {
         return "makeConcatWithConstants".equals(dynamicRef.bootstrapName())
             && !dynamicRef.bootstrapArguments().isEmpty()
             && dynamicRef.bootstrapArguments().getFirst().indexOf(2) < 0;
+    }
+
+    private static boolean supportedLambdaMetafactory(final DynamicRef dynamicRef) {
+        final Optional<LambdaMetafactoryCall> lambdaCall = LambdaMetafactoryCall.resolve(dynamicRef);
+        return lambdaCall.isPresent() && lambdaCall.orElseThrow().isDirectlyLowerable();
     }
 
     private static boolean supportedStringConcatParameters(final String descriptor) {
@@ -2759,8 +2768,10 @@ public final class StaticVerifier {
         final Instruction instruction,
         final int reachable
     ) {
-        final String reason = "Only StringConcatFactory makeConcat and makeConcatWithConstants without secondary constants are implemented.";
-        final String fix = "Keep invokedynamic limited to javac string concatenation or wait for dynamic-call expansion.";
+        final String reason =
+            "Only StringConcatFactory string concatenation, record ObjectMethods equals, and exact LambdaMetafactory Function/Predicate shapes are implemented.";
+        final String fix =
+            "Keep invokedynamic limited to supported javac string concatenation, supported record equals, or the admitted LambdaMetafactory subset.";
         if (reachable == 1) {
             return error(classFile, method, "JAVAN030", "unsupported reachable bytecode", instruction.mnemonic(), reason, fix);
         }

@@ -91,6 +91,40 @@ final class CliRealProbeAcceptanceIntegrationTest extends CliIntegrationSupport 
     }
 
     @Test
+    void nanoConfigRegisterProbeNowFailsAtTypeMapFunctionOrNullFrontier() throws Exception {
+        final Path nanoArtifact = pinnedMavenArtifact("org.nanonative", "nano", "2025.11.3131219");
+        final Path typeMapArtifact = pinnedMavenArtifact("berlin.yuna", "type-map", "2025.06.1521025");
+        Assumptions.assumeTrue(Files.isRegularFile(nanoArtifact), "Pinned Nano artifact is not available in the local Maven cache");
+        Assumptions.assumeTrue(Files.isRegularFile(typeMapArtifact), "Pinned TypeMap artifact is not available in the local Maven cache");
+        final Path project = project("nano-config-register-frontier");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import org.nanonative.nano.helper.config.ConfigRegister;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(ConfigRegister.registerConfig(" demo.key ", "demo"));
+                    System.out.println(ConfigRegister.configDescriptionOf("demo.key"));
+                }
+            }
+            """);
+
+        final String classpath = nanoArtifact + java.io.File.pathSeparator + typeMapArtifact;
+        final CliRun run = run(tempDir, "build", project.toString(), "--classpath", classpath, "--output", "nano-config-register-frontier");
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains(
+            "error[JAVAN012]",
+            "berlin/yuna/typemap/model/FunctionOrNull.apply(Ljava/lang/Object;)Ljava/lang/Object;"
+        );
+        assertThat(project.resolve(".javan/bin/nano-config-register-frontier")).doesNotExist();
+    }
+
+    @Test
     void acceptanceRealProbesFailWhenRequiredArtifactsAreMissing() throws Exception {
         final Path repo = tempDir.resolve("empty-maven-repo");
         Files.createDirectories(repo);

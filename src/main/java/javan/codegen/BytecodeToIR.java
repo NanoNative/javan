@@ -2433,6 +2433,8 @@ public final class BytecodeToIR {
         VIRTUAL_THREAD_FACTORY,
         VIRTUAL_THREAD_EXECUTOR,
         SCHEDULED_THREAD_POOL_EXECUTOR,
+        LAMBDA_FUNCTION,
+        LAMBDA_PREDICATE,
         PRINT_STREAM,
         ERROR_PRINT_STREAM,
         SOCKET_INPUT_STREAM,
@@ -2447,65 +2449,93 @@ public final class BytecodeToIR {
     record BlockResult(List<IrInstruction> instructions, List<StackValue> stack) {
     }
 
-    record StackValue(StackKind kind, Optional<String> throwableType, Optional<IrExpression> expression) {
+    record DynamicLambda(
+        String interfaceOwner,
+        String interfaceMethodName,
+        String implementationOwner,
+        String implementationName,
+        String implementationDescriptor,
+        int implementationReferenceKind,
+        String instantiatedMethodDescriptor,
+        List<IrExpression> captures
+    ) {
+        MethodRef implementationMethodRef() {
+            return new MethodRef(implementationOwner, implementationName, implementationDescriptor);
+        }
+    }
+
+    record StackValue(
+        StackKind kind,
+        Optional<String> throwableType,
+        Optional<IrExpression> expression,
+        Optional<DynamicLambda> dynamicLambda
+    ) {
         static StackValue virtualThreadBuilder() {
-            return new StackValue(StackKind.VIRTUAL_THREAD_BUILDER, Optional.empty(), Optional.of(IrExpression.objectNull()));
+            return new StackValue(StackKind.VIRTUAL_THREAD_BUILDER, Optional.empty(), Optional.of(IrExpression.objectNull()), Optional.empty());
         }
 
         static StackValue virtualThreadBuilder(final IrExpression expression) {
-            return new StackValue(StackKind.VIRTUAL_THREAD_BUILDER, Optional.empty(), Optional.of(expression));
+            return new StackValue(StackKind.VIRTUAL_THREAD_BUILDER, Optional.empty(), Optional.of(expression), Optional.empty());
         }
 
         static StackValue virtualThreadFactory(final IrExpression expression) {
-            return new StackValue(StackKind.VIRTUAL_THREAD_FACTORY, Optional.empty(), Optional.of(expression));
+            return new StackValue(StackKind.VIRTUAL_THREAD_FACTORY, Optional.empty(), Optional.of(expression), Optional.empty());
         }
 
         static StackValue virtualThreadExecutor(final IrExpression expression) {
-            return new StackValue(StackKind.VIRTUAL_THREAD_EXECUTOR, Optional.empty(), Optional.of(expression));
+            return new StackValue(StackKind.VIRTUAL_THREAD_EXECUTOR, Optional.empty(), Optional.of(expression), Optional.empty());
         }
 
         static StackValue scheduledThreadPoolExecutor(final IrExpression expression) {
-            return new StackValue(StackKind.SCHEDULED_THREAD_POOL_EXECUTOR, Optional.empty(), Optional.of(expression));
+            return new StackValue(StackKind.SCHEDULED_THREAD_POOL_EXECUTOR, Optional.empty(), Optional.of(expression), Optional.empty());
+        }
+
+        static StackValue lambdaFunction(final DynamicLambda dynamicLambda) {
+            return new StackValue(StackKind.LAMBDA_FUNCTION, Optional.empty(), Optional.empty(), Optional.of(dynamicLambda));
+        }
+
+        static StackValue lambdaPredicate(final DynamicLambda dynamicLambda) {
+            return new StackValue(StackKind.LAMBDA_PREDICATE, Optional.empty(), Optional.empty(), Optional.of(dynamicLambda));
         }
 
         static StackValue printStream() {
-            return new StackValue(StackKind.PRINT_STREAM, Optional.empty(), Optional.empty());
+            return new StackValue(StackKind.PRINT_STREAM, Optional.empty(), Optional.empty(), Optional.empty());
         }
 
         static StackValue errorPrintStream() {
-            return new StackValue(StackKind.ERROR_PRINT_STREAM, Optional.empty(), Optional.empty());
+            return new StackValue(StackKind.ERROR_PRINT_STREAM, Optional.empty(), Optional.empty(), Optional.empty());
         }
 
         static StackValue socketInputStream(final IrExpression expression) {
-            return new StackValue(StackKind.SOCKET_INPUT_STREAM, Optional.empty(), Optional.of(expression));
+            return new StackValue(StackKind.SOCKET_INPUT_STREAM, Optional.empty(), Optional.of(expression), Optional.empty());
         }
 
         static StackValue socketOutputStream(final IrExpression expression) {
-            return new StackValue(StackKind.SOCKET_OUTPUT_STREAM, Optional.empty(), Optional.of(expression));
+            return new StackValue(StackKind.SOCKET_OUTPUT_STREAM, Optional.empty(), Optional.of(expression), Optional.empty());
         }
 
         static StackValue intExpression(final IrExpression expression) {
-            return new StackValue(StackKind.INT, Optional.empty(), Optional.of(expression));
+            return new StackValue(StackKind.INT, Optional.empty(), Optional.of(expression), Optional.empty());
         }
 
         static StackValue longExpression(final IrExpression expression) {
-            return new StackValue(StackKind.LONG, Optional.empty(), Optional.of(expression));
+            return new StackValue(StackKind.LONG, Optional.empty(), Optional.of(expression), Optional.empty());
         }
 
         static StackValue floatExpression(final IrExpression expression) {
-            return new StackValue(StackKind.FLOAT, Optional.empty(), Optional.of(expression));
+            return new StackValue(StackKind.FLOAT, Optional.empty(), Optional.of(expression), Optional.empty());
         }
 
         static StackValue doubleExpression(final IrExpression expression) {
-            return new StackValue(StackKind.DOUBLE, Optional.empty(), Optional.of(expression));
+            return new StackValue(StackKind.DOUBLE, Optional.empty(), Optional.of(expression), Optional.empty());
         }
 
         static StackValue objectExpression(final IrExpression expression) {
-            return new StackValue(StackKind.OBJECT, Optional.empty(), Optional.of(expression));
+            return new StackValue(StackKind.OBJECT, Optional.empty(), Optional.of(expression), Optional.empty());
         }
 
         static StackValue platformThrowable(final String throwableType, final IrExpression message) {
-            return new StackValue(StackKind.OBJECT, Optional.of(throwableType), Optional.of(message));
+            return new StackValue(StackKind.OBJECT, Optional.of(throwableType), Optional.of(message), Optional.empty());
         }
     }
 }

@@ -322,6 +322,7 @@ public final class JdkCallSupport {
         runtime("Map.getOrDefault", "java/util/Map", "getOrDefault", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Map.put", "java/util/Map", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Map.putIfAbsent", "java/util/Map", "putIfAbsent", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("Map.computeIfAbsent", "java/util/Map", "computeIfAbsent", "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;"),
         runtime("HashMap.put", "java/util/HashMap", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("LinkedHashMap.put", "java/util/LinkedHashMap", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("TreeMap.put", "java/util/TreeMap", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
@@ -429,7 +430,9 @@ public final class JdkCallSupport {
         runtime("Optional.isEmpty", "java/util/Optional", "isEmpty", "()Z"),
         runtime("Optional.get", "java/util/Optional", "get", "()Ljava/lang/Object;"),
         runtime("Optional.orElse", "java/util/Optional", "orElse", "(Ljava/lang/Object;)Ljava/lang/Object;"),
-        runtime("Optional.orElseThrow", "java/util/Optional", "orElseThrow", "()Ljava/lang/Object;")
+        runtime("Optional.orElseThrow", "java/util/Optional", "orElseThrow", "()Ljava/lang/Object;"),
+        runtime("Optional.filter", "java/util/Optional", "filter", "(Ljava/util/function/Predicate;)Ljava/util/Optional;"),
+        runtime("Optional.map", "java/util/Optional", "map", "(Ljava/util/function/Function;)Ljava/util/Optional;")
     );
 
     private JdkCallSupport() {
