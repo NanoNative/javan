@@ -8,7 +8,9 @@ package javan.ir;
  * @param interfaceMethodName SAM method name
  * @param interfaceMethodDescriptor instantiated callable descriptor used at dispatch time
  * @param functionSymbol generated C symbol for the implementation method
+ * @param captureCount number of object captures stored on the runtime lambda object
  * @param booleanResult true when the callable returns a boolean
+ * @param voidResult true when the callable returns void
  */
 public record IrMaterializedLambdaTarget(
     int targetId,
@@ -16,6 +18,8 @@ public record IrMaterializedLambdaTarget(
     String interfaceMethodName,
     String interfaceMethodDescriptor,
     String functionSymbol,
-    boolean booleanResult
+    int captureCount,
+    boolean booleanResult,
+    boolean voidResult
 ) {
 }

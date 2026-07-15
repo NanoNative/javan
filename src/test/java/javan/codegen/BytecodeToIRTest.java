@@ -828,6 +828,73 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersCapturedConsumerLambdaMetafactoryToMaterializedLambdaObjectWithCaptures() {
+        final EntryPoint entryPoint = new EntryPoint("com/acme/Main", "build", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/function/Consumer;");
+        final EntryPoint invokeEntry = new EntryPoint("com/acme/Main", "invoke", "(Ljava/util/function/Consumer;Ljava/lang/Object;)V");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    capturedConsumerBuildMethod(),
+                    consumerInvokeMethod(),
+                    capturedConsumerImplementationMethod()
+                ))
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint, invokeEntry), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.materializedLambdaTargets()).singleElement().satisfies(target -> {
+            assertThat(target.interfaceOwner()).isEqualTo("java/util/function/Consumer");
+            assertThat(target.interfaceMethodName()).isEqualTo("accept");
+            assertThat(target.captureCount()).isEqualTo(2);
+            assertThat(target.voidResult()).isTrue();
+            assertThat(target.booleanResult()).isFalse();
+        });
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("build")).singleElement().satisfies(function ->
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.returnObject(IrExpression.objectCall(
+                    "javan_materialized_lambda_new_with_captures",
+                    List.of(
+                        IrExpression.intLiteral(1),
+                        IrExpression.intLiteral(2),
+                        IrExpression.objectLocal("arg0"),
+                        IrExpression.objectLocal("arg1")
+                    )
+                ))
+            )
+        );
+    }
+
+    @Test
+    void lowersMaterializedConsumerAcceptToVoidHelperCall() {
+        final EntryPoint buildEntry = new EntryPoint("com/acme/Main", "build", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/function/Consumer;");
+        final EntryPoint invokeEntry = new EntryPoint("com/acme/Main", "invoke", "(Ljava/util/function/Consumer;Ljava/lang/Object;)V");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    capturedConsumerBuildMethod(),
+                    consumerInvokeMethod(),
+                    capturedConsumerImplementationMethod()
+                ))
+            ),
+            new CallGraph(buildEntry, List.of(buildEntry, invokeEntry), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("invoke")).singleElement().satisfies(function ->
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.callStaticVoid(
+                    "javan_materialized_lambda_apply_void",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+                ),
+                IrInstruction.returnVoid()
+            )
+        );
+    }
+
+    @Test
     void lowersExactUnsupportedTemporalConversionLambdaToExplicitUnsupportedRuntimeBridge() {
         final EntryPoint entryPoint = new EntryPoint(
             "berlin/yuna/typemap/config/TypeConversionRegister",
@@ -16128,6 +16195,70 @@ final class BytecodeToIRTest {
             invokeVirtual(5, new MethodRef("java/sql/Timestamp", "getTime", "()J")),
             invokeSpecial(8, new MethodRef("java/util/Date", "<init>", "(J)V")),
             plain(11, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo capturedConsumerBuildMethod() {
+        return method(
+            0x0008,
+            "build",
+            "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/function/Consumer;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeDynamic(2, new DynamicRef(
+                "accept",
+                "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/function/Consumer;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;)V",
+                    "invokestatic com/acme/Main.lambda$consumer$0:(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)V",
+                    "(Ljava/lang/Object;)V"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)V"),
+                    BootstrapArgument.methodHandle(
+                        6,
+                        new MethodRef(
+                            "com/acme/Main",
+                            "lambda$consumer$0",
+                            "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)V"
+                        )
+                    ),
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)V")
+                )
+            )),
+            plain(7, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo consumerInvokeMethod() {
+        return method(
+            0x0008,
+            "invoke",
+            "(Ljava/util/function/Consumer;Ljava/lang/Object;)V",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeInterface(2, new MethodRef("java/util/function/Consumer", "accept", "(Ljava/lang/Object;)V")),
+            plain(7, 177, "return")
+        );
+    }
+
+    private static MethodInfo capturedConsumerImplementationMethod() {
+        return method(
+            0x0008,
+            "lambda$consumer$0",
+            "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)V",
+            1,
+            3,
+            plain(0, 177, "return")
         );
     }
 

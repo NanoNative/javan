@@ -545,6 +545,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void consumerAcceptIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/function/Consumer",
+            "accept",
+            "(Ljava/lang/Object;)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void zonedDateTimeToInstantIsUnsupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/time/ZonedDateTime",
+            "toInstant",
+            "()Ljava/time/Instant;"
+        ))).isFalse();
+    }
+
+    @Test
     void mapKeySetIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Map",

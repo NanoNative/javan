@@ -1890,6 +1890,46 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void capturedConsumerOverObjectArrayBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("captured-consumer-object-array");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Consumer;
+
+            public final class Main {
+                private Main() {
+                }
+
+                private static final class Sink {
+                    private Object last;
+                }
+
+                private static void iterate(final Object[] values, final Consumer<Object> consumer) {
+                    for (final Object value : values) {
+                        consumer.accept(value);
+                    }
+                }
+
+                public static void main(final String[] args) {
+                    final Sink sink = new Sink();
+                    final Consumer<Object> consumer = value -> sink.last = value;
+                    iterate(new Object[]{"first", "second"}, consumer);
+                    System.out.println(sink.last);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/captured-consumer-object-array").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("second\n");
+    }
+
+    @Test
     void mathToIntExactOverflowFailsAtRuntime() throws Exception {
         final Path project = project("math-to-int-exact-overflow");
         writeJava(project, "com.acme.Main", """

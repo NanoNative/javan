@@ -66,6 +66,7 @@ public record LambdaMetafactoryCall(
         }
         if (!"Ljava/util/function/Function;".equals(returnDescriptor.orElseThrow())
             && !"Ljava/util/function/Predicate;".equals(returnDescriptor.orElseThrow())
+            && !"Ljava/util/function/Consumer;".equals(returnDescriptor.orElseThrow())
             && !"Lberlin/yuna/typemap/model/FunctionOrNull;".equals(returnDescriptor.orElseThrow())) {
             return Optional.empty();
         }
@@ -76,6 +77,7 @@ public record LambdaMetafactoryCall(
         final String interfaceOwner = objectOwner(returnDescriptor.orElseThrow()).orElse("");
         if (!"java/util/function/Function".equals(interfaceOwner)
             && !"java/util/function/Predicate".equals(interfaceOwner)
+            && !"java/util/function/Consumer".equals(interfaceOwner)
             && !"berlin/yuna/typemap/model/FunctionOrNull".equals(interfaceOwner)) {
             return Optional.empty();
         }
@@ -120,6 +122,20 @@ public record LambdaMetafactoryCall(
     }
 
     /**
+     * Returns whether this is a supported {@code java.util.function.Consumer} shape.
+     *
+     * @return true when the lambda is a direct one-argument consumer
+     */
+    public boolean isConsumer() {
+        if (!"java/util/function/Consumer".equals(interfaceOwner) || !"accept".equals(interfaceMethodName)) {
+            return false;
+        }
+        return singleObjectInput(instantiatedMethodDescriptor)
+            && voidReturn(instantiatedMethodDescriptor)
+            && "(Ljava/lang/Object;)V".equals(samMethodDescriptor);
+    }
+
+    /**
      * Returns the single instantiated input descriptor.
      *
      * @return input descriptor when this is a one-argument shape
@@ -145,6 +161,26 @@ public record LambdaMetafactoryCall(
             return false;
         }
         return inputDescriptor().isPresent();
+    }
+
+    /**
+     * Returns whether this is a materializable {@code Consumer} lambda with object captures only.
+     *
+     * @return true when the current runtime can materialize the consumer as a lambda object
+     */
+    public boolean isMaterializedConsumerLambda() {
+        if (!isConsumer()) {
+            return false;
+        }
+        if (implementationReferenceKind != 6) {
+            return false;
+        }
+        for (final String capture : capturedParameterDescriptors) {
+            if (!capture.startsWith("L") && !capture.startsWith("[")) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -225,6 +261,11 @@ public record LambdaMetafactoryCall(
         }
         final String descriptorValue = value.orElseThrow();
         return descriptorValue.startsWith("L") || descriptorValue.startsWith("[");
+    }
+
+    private static boolean voidReturn(final String descriptor) {
+        final Optional<String> value = returnDescriptor(descriptor);
+        return value.isPresent() && "V".equals(value.orElseThrow());
     }
 
     private static Optional<String> objectOwner(final String descriptor) {

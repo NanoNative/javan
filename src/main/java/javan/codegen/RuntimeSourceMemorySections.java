@@ -201,8 +201,8 @@ final class RuntimeSourceMemorySections {
         typedef struct {
             int magic;
             int target_id;
-            int reserved0;
-            int reserved1;
+            int capture_count;
+            void** captures;
         } javan_materialized_lambda_state;
 
         typedef struct {
@@ -1385,9 +1385,13 @@ final class RuntimeSourceMemorySections {
                 }
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA) {
                 javan_materialized_lambda_state* state = (javan_materialized_lambda_state*) node->value;
-                if (state->magic != JAVAN_MATERIALIZED_LAMBDA_MAGIC || state->target_id <= 0) {
+                if (state->magic != JAVAN_MATERIALIZED_LAMBDA_MAGIC
+                    || state->target_id <= 0
+                    || state->capture_count < 0
+                    || (state->capture_count > 0 && state->captures == NULL)) {
                     javan_panic("invalid materialized lambda metadata");
                 }
+                javan_validate_owned_runtime_buffer_reference((void*) state->captures);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_MAP_ENTRY) {
                 javan_map_entry_state* state = (javan_map_entry_state*) node->value;
                 if (state->magic != JAVAN_MAP_ENTRY_MAGIC) {
@@ -4678,6 +4682,14 @@ final class RuntimeSourceMemorySections {
                 if (optional != NULL && optional->magic == JAVAN_OPTIONAL_MAGIC && optional->present != 0) {
                     javan_gc_mark_value(optional->value);
                 }
+            } else if (runtime_kind == JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA) {
+                javan_materialized_lambda_state* state = (javan_materialized_lambda_state*) value;
+                if (state != NULL && state->magic == JAVAN_MATERIALIZED_LAMBDA_MAGIC) {
+                    javan_gc_mark_value((void*) state->captures);
+                    for (int index = 0; index < state->capture_count; index++) {
+                        javan_gc_mark_value(state->captures[index]);
+                    }
+                }
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_STRING_BUILDER) {
                 javan_string_builder* builder = (javan_string_builder*) value;
                 if (builder != NULL && builder->magic == JAVAN_STRING_BUILDER_MAGIC) {
@@ -6590,12 +6602,45 @@ final class RuntimeSourceMemorySections {
             javan_materialized_lambda_state* state = (javan_materialized_lambda_state*) state_value;
             state->magic = JAVAN_MATERIALIZED_LAMBDA_MAGIC;
             state->target_id = target_id;
-            state->reserved0 = 0;
-            state->reserved1 = 0;
+            state->capture_count = 0;
+            state->captures = NULL;
             javan_update_runtime_allocation_kind(state_value, JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA);
             header->_javan_runtime_state = state_value;
             header->_javan_runtime_kind = JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA;
             header->_javan_runtime_reserved = 0;
+            javan_root_frame_pop(roots);
+            return object_value;
+        }
+
+        void* javan_materialized_lambda_new_with_captures(int target_id, int capture_count, ...) {
+            if (capture_count < 0) {
+                javan_panic("invalid materialized lambda capture count");
+            }
+            void* object_value = NULL;
+            void* state_value = NULL;
+            void* captures_value = NULL;
+            void** roots[] = {
+                (void**) &object_value,
+                (void**) &state_value,
+                (void**) &captures_value
+            };
+            javan_root_frame_push(roots, 3);
+            object_value = javan_materialized_lambda_new(target_id);
+            struct javan_object_header* header = (struct javan_object_header*) object_value;
+            state_value = header->_javan_runtime_state;
+            javan_materialized_lambda_state* state = (javan_materialized_lambda_state*) state_value;
+            state->capture_count = capture_count;
+            if (capture_count > 0) {
+                captures_value = javan_alloc(sizeof(void*) * (unsigned long) capture_count);
+                javan_update_runtime_allocation_kind(captures_value, JAVAN_RUNTIME_KIND_OWNED_BUFFER);
+                state->captures = (void**) captures_value;
+                va_list args;
+                va_start(args, capture_count);
+                for (int index = 0; index < capture_count; index++) {
+                    state->captures[index] = va_arg(args, void*);
+                }
+                va_end(args);
+            }
             javan_root_frame_pop(roots);
             return object_value;
         }
@@ -6607,6 +6652,19 @@ final class RuntimeSourceMemorySections {
                 javan_panic("invalid materialized lambda target");
             }
             return state->target_id;
+        }
+
+        void* javan_materialized_lambda_capture(void* value, int capture_index) {
+            javan_materialized_lambda_state* state =
+                (javan_materialized_lambda_state*) javan_generated_object_runtime_state(value, JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA);
+            if (state == NULL
+                || state->magic != JAVAN_MATERIALIZED_LAMBDA_MAGIC
+                || capture_index < 0
+                || capture_index >= state->capture_count
+                || (state->capture_count > 0 && state->captures == NULL)) {
+                javan_panic("invalid materialized lambda capture");
+            }
+            return state->captures == NULL ? NULL : state->captures[capture_index];
         }
 
         static void* javan_string_copy(const char* value) {

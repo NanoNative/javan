@@ -278,7 +278,9 @@ final class RuntimeHeaderFile {
         void* javan_map_values(void* map);
         int javan_object_equals(void* left, void* right);
         void* javan_materialized_lambda_new(int target_id);
+        void* javan_materialized_lambda_new_with_captures(int target_id, int capture_count, ...);
         int javan_materialized_lambda_target_id(void* value);
+        void* javan_materialized_lambda_capture(void* value, int capture_index);
         void* javan_path_of(void* first, void* more);
         void* javan_path_resolve(void* path, void* child);
         void* javan_path_to_absolute(void* path);

@@ -36,7 +36,10 @@ final class BytecodeToIRInvokeSupport {
     private static final MethodRef RUNNABLE_RUN = new MethodRef("java/lang/Runnable", "run", "()V");
     private static final String MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL = "javan_materialized_lambda_apply_object";
     private static final String MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL = "javan_materialized_lambda_apply_boolean";
+    private static final String MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL = "javan_materialized_lambda_apply_void";
     private static final String MATERIALIZED_LAMBDA_NEW_SYMBOL = "javan_materialized_lambda_new";
+    private static final String MATERIALIZED_LAMBDA_NEW_WITH_CAPTURES_SYMBOL = "javan_materialized_lambda_new_with_captures";
+    private static final String MATERIALIZED_LAMBDA_CAPTURE_SYMBOL = "javan_materialized_lambda_capture";
     private static final String DATE_TIME_FORMATTER_BUILDER_OWNER = "java/time/format/DateTimeFormatterBuilder";
     private static final String DATE_TIME_FORMATTER_OWNER = "java/time/format/DateTimeFormatter";
     private static final String TEXT_STYLE_OWNER = "java/time/format/TextStyle";
@@ -47,8 +50,16 @@ final class BytecodeToIRInvokeSupport {
         String interfaceMethodName,
         String interfaceMethodDescriptor,
         MethodRef implementation,
-        boolean booleanResult
+        int captureCount,
+        boolean booleanResult,
+        boolean voidResult
     ) {
+    }
+
+    enum MaterializedLambdaDispatchKind {
+        OBJECT,
+        BOOLEAN,
+        VOID
     }
 
     static void lowerInstanceOf(
@@ -4576,7 +4587,7 @@ final class BytecodeToIRInvokeSupport {
         final List<StackValue> stack,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
-        final Map<MethodRef, Boolean> materializedLambdaMethods
+        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods
     ) {
         final MethodRef methodRef = instruction.methodRef().orElseThrow();
         if (lowerVirtualThreadObservationInterfaceCall(classFile, method, instruction, methodRef, instructions, stack, localDeclarations)) {
@@ -4625,8 +4636,13 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if (materializedLambdaMethods.containsKey(methodRef)) {
-            if (Boolean.TRUE.equals(materializedLambdaMethods.get(methodRef))) {
+            final MaterializedLambdaDispatchKind dispatchKind = materializedLambdaMethods.get(methodRef);
+            if (dispatchKind == MaterializedLambdaDispatchKind.BOOLEAN) {
                 stack.add(StackValue.intExpression(IrExpression.intCall(MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL, List.of(receiver, arguments.getFirst()))));
+                return;
+            }
+            if (dispatchKind == MaterializedLambdaDispatchKind.VOID) {
+                instructions.add(IrInstruction.callStaticVoid(MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL, List.of(receiver, arguments.getFirst())));
                 return;
             }
             stack.add(StackValue.objectExpression(IrExpression.objectCall(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL, List.of(receiver, arguments.getFirst()))));
@@ -5272,7 +5288,9 @@ final class BytecodeToIRInvokeSupport {
                     key.implementation().name(),
                     key.implementation().descriptor()
                 )),
-                key.booleanResult()
+                key.captureCount(),
+                key.booleanResult(),
+                key.voidResult()
             ));
         }
         return List.copyOf(result);
@@ -5290,16 +5308,18 @@ final class BytecodeToIRInvokeSupport {
         return Map.copyOf(result);
     }
 
-    static Map<MethodRef, Boolean> materializedLambdaMethods(
+    static Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods(
         final Map<String, ClassFile> classes,
         final List<EntryPoint> reachableMethods
     ) {
-        final Map<MethodRef, Boolean> result = new LinkedHashMap<>();
+        final Map<MethodRef, MaterializedLambdaDispatchKind> result = new LinkedHashMap<>();
         final Map<MaterializedLambdaKey, Integer> targetIds = materializedLambdaTargetIds(classes, reachableMethods);
         for (final MaterializedLambdaKey key : targetIds.keySet()) {
             result.put(
                 new MethodRef(key.interfaceOwner(), key.interfaceMethodName(), key.interfaceMethodDescriptor()),
-                Boolean.valueOf(key.booleanResult())
+                key.voidResult()
+                    ? MaterializedLambdaDispatchKind.VOID
+                    : (key.booleanResult() ? MaterializedLambdaDispatchKind.BOOLEAN : MaterializedLambdaDispatchKind.OBJECT)
             );
         }
         return Map.copyOf(result);
@@ -5329,7 +5349,9 @@ final class BytecodeToIRInvokeSupport {
                     continue;
                 }
                 final LambdaMetafactoryCall resolved = lambdaCall.orElseThrow();
-                if (!resolved.isZeroCaptureMaterializedObjectLambda() && !resolved.isZeroCaptureMaterializedBooleanLambda()) {
+                if (!resolved.isZeroCaptureMaterializedObjectLambda()
+                    && !resolved.isZeroCaptureMaterializedBooleanLambda()
+                    && !resolved.isMaterializedConsumerLambda()) {
                     continue;
                 }
                 if (!classes.containsKey(resolved.implementation().owner())) {
@@ -5340,7 +5362,9 @@ final class BytecodeToIRInvokeSupport {
                     resolved.interfaceMethodName(),
                     resolved.samMethodDescriptor(),
                     resolved.implementation(),
-                    resolved.isZeroCaptureMaterializedBooleanLambda()
+                    resolved.capturedParameterDescriptors().size(),
+                    resolved.isZeroCaptureMaterializedBooleanLambda(),
+                    resolved.isMaterializedConsumerLambda()
                 );
                 if (!result.containsKey(key)) {
                     result.put(key, Integer.valueOf(nextId));
@@ -5356,7 +5380,9 @@ final class BytecodeToIRInvokeSupport {
             + "#" + key.interfaceMethodName()
             + "#" + key.interfaceMethodDescriptor()
             + "#" + key.implementation().display()
-            + "#" + (key.booleanResult() ? "1" : "0");
+            + "#" + key.captureCount()
+            + "#" + (key.booleanResult() ? "1" : "0")
+            + "#" + (key.voidResult() ? "1" : "0");
     }
 
     private static String materializedLambdaKey(final LambdaMetafactoryCall lambdaCall) {
@@ -5364,7 +5390,9 @@ final class BytecodeToIRInvokeSupport {
             + "#" + lambdaCall.interfaceMethodName()
             + "#" + lambdaCall.samMethodDescriptor()
             + "#" + lambdaCall.implementation().display()
-            + "#" + (lambdaCall.isZeroCaptureMaterializedBooleanLambda() ? "1" : "0");
+            + "#" + lambdaCall.capturedParameterDescriptors().size()
+            + "#" + (lambdaCall.isZeroCaptureMaterializedBooleanLambda() ? "1" : "0")
+            + "#" + (lambdaCall.isMaterializedConsumerLambda() ? "1" : "0");
     }
 
     static void lowerDynamicCall(
@@ -5420,14 +5448,40 @@ final class BytecodeToIRInvokeSupport {
         }
         final LambdaMetafactoryCall resolved = lambdaCall.orElseThrow();
         final MethodRef implementation = resolved.implementation();
-        if (resolved.isZeroCaptureMaterializedObjectLambda() || resolved.isZeroCaptureMaterializedBooleanLambda()) {
+        if (resolved.isZeroCaptureMaterializedObjectLambda()
+            || resolved.isZeroCaptureMaterializedBooleanLambda()
+            || resolved.isMaterializedConsumerLambda()) {
             final Integer targetId = materializedLambdaTargetIds.get(materializedLambdaKey(resolved));
             if (targetId == null) {
                 return false;
             }
+            final Optional<List<String>> captureDescriptors = parameterDescriptors(dynamicRef.descriptor());
+            if (captureDescriptors.isEmpty()) {
+                return false;
+            }
+            final MethodDescriptor captureDescriptor = MethodDescriptor.parse(dynamicRef.descriptor());
+            final List<IrExpression> captures = new ArrayList<>();
+            final List<IrType> captureTypes = captureDescriptor.parameterTypes();
+            for (int index = captureTypes.size() - 1; index >= 0; index--) {
+                if (captureTypes.get(index) != IrType.OBJECT) {
+                    return false;
+                }
+                captures.addFirst(popValue(classFile, method, stack, captureTypes.get(index), instruction));
+            }
+            if (captures.isEmpty()) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                    MATERIALIZED_LAMBDA_NEW_SYMBOL,
+                    List.of(IrExpression.intLiteral(targetId.intValue()))
+                )));
+                return true;
+            }
+            final List<IrExpression> newArguments = new ArrayList<>();
+            newArguments.add(IrExpression.intLiteral(targetId.intValue()));
+            newArguments.add(IrExpression.intLiteral(captures.size()));
+            newArguments.addAll(captures);
             stack.add(StackValue.objectExpression(IrExpression.objectCall(
-                MATERIALIZED_LAMBDA_NEW_SYMBOL,
-                List.of(IrExpression.intLiteral(targetId.intValue()))
+                MATERIALIZED_LAMBDA_NEW_WITH_CAPTURES_SYMBOL,
+                newArguments
             )));
             return true;
         }

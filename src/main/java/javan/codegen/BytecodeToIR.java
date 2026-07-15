@@ -78,7 +78,7 @@ public final class BytecodeToIR {
             BytecodeToIRInvokeSupport.functionOrNullTargets(classes, reachableMethods);
         final Map<String, Integer> functionOrNullTargetIds =
             BytecodeToIRInvokeSupport.functionOrNullTargetIds(classes, reachableMethods);
-        final Map<MethodRef, Boolean> materializedLambdaMethods =
+        final Map<MethodRef, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods =
             BytecodeToIRInvokeSupport.materializedLambdaMethods(classes, reachableMethods);
         final List<EntryPoint> runnableThreadTargets = BytecodeToIRInvokeSupport.runnableThreadTargets(classes, reachableMethods);
         if (!runnableThreadTargets.isEmpty()) {
@@ -110,7 +110,7 @@ public final class BytecodeToIR {
         final EntryPoint entryPoint,
         final Map<String, IrDispatch> dispatches,
         final Map<String, Integer> functionOrNullTargetIds,
-        final Map<MethodRef, Boolean> materializedLambdaMethods,
+        final Map<MethodRef, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final SourceLineIndex sourceLines
     ) {
         final ClassFile classFile = classes.get(entryPoint.className());
@@ -475,7 +475,7 @@ public final class BytecodeToIR {
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
         final Map<String, Integer> functionOrNullTargetIds,
-        final Map<MethodRef, Boolean> materializedLambdaMethods,
+        final Map<MethodRef, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final SourceLineIndex sourceLines
     ) {
         switch (instruction.opcode()) {

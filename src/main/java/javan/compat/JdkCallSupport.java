@@ -481,6 +481,7 @@ public final class JdkCallSupport {
         runtime("Optional.get", "java/util/Optional", "get", "()Ljava/lang/Object;"),
         runtime("Optional.orElse", "java/util/Optional", "orElse", "(Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Optional.orElseThrow", "java/util/Optional", "orElseThrow", "()Ljava/lang/Object;"),
+        runtime("Consumer.accept", "java/util/function/Consumer", "accept", "(Ljava/lang/Object;)V"),
         runtime("Optional.filter", "java/util/Optional", "filter", "(Ljava/util/function/Predicate;)Ljava/util/Optional;"),
         runtime("Optional.map", "java/util/Optional", "map", "(Ljava/util/function/Function;)Ljava/util/Optional;")
     );

@@ -295,7 +295,9 @@ public final class ReachabilityAnalyzer {
             return;
         }
         final LambdaMetafactoryCall resolved = lambdaCall.orElseThrow();
-        if (resolved.isZeroCaptureMaterializedObjectLambda() || resolved.isZeroCaptureMaterializedBooleanLambda()) {
+        if (resolved.isZeroCaptureMaterializedObjectLambda()
+            || resolved.isZeroCaptureMaterializedBooleanLambda()
+            || resolved.isMaterializedConsumerLambda()) {
             final MethodRef interfaceMethod = new MethodRef(
                 resolved.interfaceOwner(),
                 resolved.interfaceMethodName(),
@@ -307,7 +309,8 @@ public final class ReachabilityAnalyzer {
         }
         if (!resolved.isDirectlyLowerable()
             && !resolved.isZeroCaptureMaterializedObjectLambda()
-            && !resolved.isZeroCaptureMaterializedBooleanLambda()) {
+            && !resolved.isZeroCaptureMaterializedBooleanLambda()
+            && !resolved.isMaterializedConsumerLambda()) {
             return;
         }
         final MethodRef implementation = resolved.implementation();

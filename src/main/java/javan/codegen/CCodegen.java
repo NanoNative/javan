@@ -25,6 +25,7 @@ public final class CCodegen {
     private static final String RUNNABLE_RUN_DISPATCH_SYMBOL = BytecodeToIR.dispatchSymbol(new MethodRef("java/lang/Runnable", "run", "()V"));
     private static final String MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL = "javan_materialized_lambda_apply_object";
     private static final String MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL = "javan_materialized_lambda_apply_boolean";
+    private static final String MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL = "javan_materialized_lambda_apply_void";
     private static final String TYPEMAP_ENUM_OF_SYMBOL = "javan_typemap_enum_of";
     private static final String TYPEMAP_FUNCTION_OR_NULL_APPLY_SYMBOL = "javan_typemap_function_or_null_apply";
     private static final String TYPEMAP_TEMPORAL_OF_UNSUPPORTED_SYMBOL = "javan_typemap_temporal_of_unsupported";
@@ -91,6 +92,7 @@ public final class CCodegen {
         if (!program.materializedLambdaTargets().isEmpty()) {
             c.append("static void* ").append(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
             c.append("static int ").append(MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
+            c.append("static void ").append(MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
         }
         c.append(System.lineSeparator());
         emitAllocators(program, c);
@@ -581,7 +583,8 @@ public final class CCodegen {
         c.append("static void* ").append(TEMPORAL_CONVERSION_LAMBDA_UNSUPPORTED_SYMBOL)
             .append("(void* method_display) {").append(System.lineSeparator());
         c.append("    char message[512];").append(System.lineSeparator());
-        c.append("    snprintf(message, sizeof(message), \"unsupported temporal conversion lambda runtime: %s\", javan_string_chars(method_display));")
+        c.append("    const char* method_text = (const char*) javan_printable_object_string(method_display);").append(System.lineSeparator());
+        c.append("    snprintf(message, sizeof(message), \"unsupported temporal conversion lambda runtime: %s\", method_text);")
             .append(System.lineSeparator());
         c.append("    javan_panic(message);").append(System.lineSeparator());
         c.append("    return 0;").append(System.lineSeparator());
@@ -703,11 +706,12 @@ public final class CCodegen {
             .append(System.lineSeparator());
         c.append("    switch (javan_materialized_lambda_target_id(self)) {").append(System.lineSeparator());
         for (final IrMaterializedLambdaTarget target : program.materializedLambdaTargets()) {
-            if (target.booleanResult()) {
+            if (target.booleanResult() || target.voidResult()) {
                 continue;
             }
-            c.append("        case ").append(target.targetId()).append(": return ").append(target.functionSymbol()).append("(arg);")
-                .append(System.lineSeparator());
+            c.append("        case ").append(target.targetId()).append(": return ");
+            emitMaterializedLambdaInvocation(c, target, "self", "arg");
+            c.append(";").append(System.lineSeparator());
         }
         c.append("        default: javan_panic(\"unsupported materialized object lambda target\");").append(System.lineSeparator());
         c.append("    }").append(System.lineSeparator());
@@ -718,16 +722,53 @@ public final class CCodegen {
             .append(System.lineSeparator());
         c.append("    switch (javan_materialized_lambda_target_id(self)) {").append(System.lineSeparator());
         for (final IrMaterializedLambdaTarget target : program.materializedLambdaTargets()) {
-            if (!target.booleanResult()) {
+            if (!target.booleanResult() || target.voidResult()) {
                 continue;
             }
-            c.append("        case ").append(target.targetId()).append(": return ").append(target.functionSymbol()).append("(arg);")
-                .append(System.lineSeparator());
+            c.append("        case ").append(target.targetId()).append(": return ");
+            emitMaterializedLambdaInvocation(c, target, "self", "arg");
+            c.append(";").append(System.lineSeparator());
         }
         c.append("        default: javan_panic(\"unsupported materialized boolean lambda target\");").append(System.lineSeparator());
         c.append("    }").append(System.lineSeparator());
         c.append("    return 0;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+
+        c.append("static void ").append(MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL).append("(void* self, void* arg) {")
+            .append(System.lineSeparator());
+        c.append("    switch (javan_materialized_lambda_target_id(self)) {").append(System.lineSeparator());
+        for (final IrMaterializedLambdaTarget target : program.materializedLambdaTargets()) {
+            if (!target.voidResult()) {
+                continue;
+            }
+            c.append("        case ").append(target.targetId()).append(": ");
+            emitMaterializedLambdaInvocation(c, target, "self", "arg");
+            c.append("; return;").append(System.lineSeparator());
+        }
+        c.append("        default: javan_panic(\"unsupported materialized void lambda target\");").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+    }
+
+    private static void emitMaterializedLambdaInvocation(
+        final StringBuilder c,
+        final IrMaterializedLambdaTarget target,
+        final String selfExpression,
+        final String argumentExpression
+    ) {
+        c.append(target.functionSymbol()).append("(");
+        boolean first = true;
+        for (int index = 0; index < target.captureCount(); index++) {
+            if (!first) {
+                c.append(", ");
+            }
+            c.append("javan_materialized_lambda_capture(").append(selfExpression).append(", ").append(index).append(")");
+            first = false;
+        }
+        if (!first) {
+            c.append(", ");
+        }
+        c.append(argumentExpression).append(")");
     }
 
     private static void emitFunction(
