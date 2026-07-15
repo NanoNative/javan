@@ -611,12 +611,54 @@ accepts_optional_nano_duration_probe() {
   pass "src/test/resources/projects/real-probes/nano-duration native probe"
 }
 
+accepts_optional_nano_scheduler_probe() {
+  MAVEN_REPO=${JAVAN_MAVEN_REPO:-${MAVEN_REPO_LOCAL:-$HOME/.m2/repository}}
+  if [ -z "${NANO_JAR:-}" ] && [ -f "$MAVEN_REPO/org/nanonative/nano/2025.11.3131219/nano-2025.11.3131219.jar" ]; then
+    NANO_JAR=$MAVEN_REPO/org/nanonative/nano/2025.11.3131219/nano-2025.11.3131219.jar
+    export NANO_JAR
+  fi
+  if [ -z "${NANO_JAR:-}" ]; then
+    if [ "${JAVAN_REQUIRE_REAL_PROBES:-}" = "true" ]; then
+      fail "src/test/resources/projects/real-probes/nano-scheduler missing NANO_JAR"
+    fi
+    pass "src/test/resources/projects/real-probes/nano-scheduler skipped without NANO_JAR"
+    return 0
+  fi
+  (cd "$ROOT/src/test/resources/projects/real-probes/nano-scheduler" && JAVAN="$JAVAN_BIN" ./build-example.sh) \
+    >"$TMP/nano-scheduler.out" 2>"$TMP/nano-scheduler.err" || fail "src/test/resources/projects/real-probes/nano-scheduler"
+  assert_contains "$TMP/nano-scheduler.out" "tick"
+  assert_contains "$TMP/nano-scheduler.out" "true"
+  pass "src/test/resources/projects/real-probes/nano-scheduler native probe"
+}
+
+accepts_optional_nano_fixed_rate_scheduler_probe() {
+  MAVEN_REPO=${JAVAN_MAVEN_REPO:-${MAVEN_REPO_LOCAL:-$HOME/.m2/repository}}
+  if [ -z "${NANO_JAR:-}" ] && [ -f "$MAVEN_REPO/org/nanonative/nano/2025.11.3131219/nano-2025.11.3131219.jar" ]; then
+    NANO_JAR=$MAVEN_REPO/org/nanonative/nano/2025.11.3131219/nano-2025.11.3131219.jar
+    export NANO_JAR
+  fi
+  if [ -z "${NANO_JAR:-}" ]; then
+    if [ "${JAVAN_REQUIRE_REAL_PROBES:-}" = "true" ]; then
+      fail "src/test/resources/projects/real-probes/nano-scheduler-fixed-rate missing NANO_JAR"
+    fi
+    pass "src/test/resources/projects/real-probes/nano-scheduler-fixed-rate skipped without NANO_JAR"
+    return 0
+  fi
+  (cd "$ROOT/src/test/resources/projects/real-probes/nano-scheduler-fixed-rate" && JAVAN="$JAVAN_BIN" ./build-example.sh) \
+    >"$TMP/nano-scheduler-fixed-rate.out" 2>"$TMP/nano-scheduler-fixed-rate.err" || fail "src/test/resources/projects/real-probes/nano-scheduler-fixed-rate"
+  assert_contains "$TMP/nano-scheduler-fixed-rate.out" "true"
+  assert_contains "$TMP/nano-scheduler-fixed-rate.out" "done"
+  pass "src/test/resources/projects/real-probes/nano-scheduler-fixed-rate native probe"
+}
+
 cd "$ROOT"
 
 if [ "${JAVAN_ACCEPTANCE_ONLY:-}" = "real-probes" ]; then
   accepts_optional_typemap_probe
   accepts_optional_nano_probe
   accepts_optional_nano_duration_probe
+  accepts_optional_nano_scheduler_probe
+  accepts_optional_nano_fixed_rate_scheduler_probe
   printf '%s\n' "Acceptance passed: $PASS_COUNT checks"
   exit 0
 fi

@@ -76,12 +76,12 @@ final class CompatibilityReportsTest {
         assertThat(summary).contains(
             "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 0, \"callables\": 1, \"totalCallables\": 5, \"leftCallables\": 4, \"coveragePercent\": \"20.0\"}",
             "\"exactJdkCallableAccounting\": {\"supportedCallables\": 1, \"explicitRejectedCallables\": 3, \"doneCallables\": 4, \"unknownCallables\": 1, \"totalCallables\": 5, \"donePercent\": \"80.0\"}",
-            "\"supportRows\": 109",
-            "\"passRows\": 109",
+            "\"supportRows\": 111",
+            "\"passRows\": 111",
             "\"scopedRows\": 0",
             "\"targetRows\": 0",
             "\"rejectedRows\": 0",
-            "\"accountedRows\": 109",
+            "\"accountedRows\": 111",
             "\"unaccountedRows\": 0"
         );
     }
@@ -148,7 +148,9 @@ final class CompatibilityReportsTest {
             "| `network-runtime-feature-reporting` | pass |",
             "| `typemap-pair` | pass |",
             "| `nano-metric` | pass |",
-            "| `nano-duration` | pass |"
+            "| `nano-duration` | pass |",
+            "| `nano-scheduler` | pass |",
+            "| `nano-scheduler-fixed-rate` | pass |"
         );
         assertThat(json).contains(
             "\"generatedForJdk\": " + feature,
@@ -189,7 +191,9 @@ final class CompatibilityReportsTest {
             "\"feature\": \"network-runtime-feature-reporting\"",
             "\"feature\": \"typemap-pair\"",
             "\"feature\": \"nano-metric\"",
-            "\"feature\": \"nano-duration\""
+            "\"feature\": \"nano-duration\"",
+            "\"feature\": \"nano-scheduler\"",
+            "\"feature\": \"nano-scheduler-fixed-rate\""
         );
     }
 

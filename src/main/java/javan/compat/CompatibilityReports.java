@@ -526,7 +526,9 @@ public final class CompatibilityReports {
             pass("network-runtime-feature-reporting"),
             pass("typemap-pair"),
             pass("nano-metric"),
-            pass("nano-duration")
+            pass("nano-duration"),
+            pass("nano-scheduler"),
+            pass("nano-scheduler-fixed-rate")
         );
     }
 

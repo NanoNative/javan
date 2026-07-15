@@ -6,10 +6,10 @@ This matrix tracks named javan/JDK behavior scenarios. It is not a claim that ev
 
 | Measure | Count |
 | --- | ---: |
-| rows | 108 |
-| done (`pass` + `rejected`) | 108 |
+| rows | 111 |
+| done (`pass` + `rejected`) | 111 |
 | left (`scoped` + `target`) | 0 |
-| pass | 108 |
+| pass | 111 |
 | scoped | 0 |
 | target | 0 |
 | rejected | 0 |
@@ -134,6 +134,8 @@ Status mapping:
 | `typemap-pair` | pass |
 | `nano-metric` | pass |
 | `nano-duration` | pass |
+| `nano-scheduler` | pass |
+| `nano-scheduler-fixed-rate` | pass |
 
 `pass` means covered by the current deterministic verification suite for the active JDK.
 `scoped` means a supported subset exists and unsupported shapes must be rejected clearly.

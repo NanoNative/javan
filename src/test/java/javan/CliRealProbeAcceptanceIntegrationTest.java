@@ -66,83 +66,28 @@ final class CliRealProbeAcceptanceIntegrationTest extends CliIntegrationSupport 
     void nanoSchedulerProbeBuildsAgainstPinnedMavenArtifactAndMatchesJvmOutput() throws Exception {
         final Path artifact = pinnedMavenArtifact("org.nanonative", "nano", "2025.11.3131219");
         Assumptions.assumeTrue(Files.isRegularFile(artifact), "Pinned Nano artifact is not available in the local Maven cache");
-        final Path project = project("nano-scheduler");
-        writeJava(project, "com.acme.Main", """
-            package com.acme;
-
-            import java.util.concurrent.TimeUnit;
-
-            public final class Main {
-                private Main() {
-                }
-
-                public static void main(final String[] args) throws Exception {
-                    final var scheduler = new org.nanonative.nano.core.model.Scheduler("probe");
-                    scheduler.schedule(new Task(), 10L, TimeUnit.MILLISECONDS);
-                    Thread.sleep(30L);
-                    scheduler.shutdown();
-                    System.out.println(scheduler.awaitTermination(1L, TimeUnit.SECONDS));
-                }
-            }
-            """);
-        writeJava(project, "com.acme.Task", """
-            package com.acme;
-
-            public final class Task implements Runnable {
-                @Override
-                public void run() {
-                    System.out.println("tick");
-                }
-            }
-            """);
+        final Path project = copyResourceProject("real-probes/nano-scheduler", "nano-scheduler");
 
         final String jvmOutput = runJvm(project, "com.acme.Main", List.of(artifact));
         final CliRun run = run(tempDir, "build", project.toString(), "--classpath", artifact.toString(), "--output", "nano-scheduler");
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/nano-scheduler").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("tick\ntrue\n");
     }
 
     @Test
     void nanoFixedRateSchedulerProbeBuildsAgainstPinnedMavenArtifactAndMatchesJvmOutput() throws Exception {
         final Path artifact = pinnedMavenArtifact("org.nanonative", "nano", "2025.11.3131219");
         Assumptions.assumeTrue(Files.isRegularFile(artifact), "Pinned Nano artifact is not available in the local Maven cache");
-        final Path project = project("nano-scheduler-fixed-rate");
-        writeJava(project, "com.acme.Main", """
-            package com.acme;
-
-            import java.util.concurrent.TimeUnit;
-
-            public final class Main {
-                private Main() {
-                }
-
-                public static void main(final String[] args) throws Exception {
-                    final var scheduler = new org.nanonative.nano.core.model.Scheduler("probe");
-                    scheduler.scheduleAtFixedRate(new Task(), 200L, 50L, TimeUnit.MILLISECONDS);
-                    Thread.sleep(20L);
-                    scheduler.shutdown();
-                    System.out.println(scheduler.awaitTermination(1L, TimeUnit.SECONDS));
-                    System.out.println("done");
-                }
-            }
-            """);
-        writeJava(project, "com.acme.Task", """
-            package com.acme;
-
-            public final class Task implements Runnable {
-                @Override
-                public void run() {
-                    System.out.println("tick");
-                }
-            }
-            """);
+        final Path project = copyResourceProject("real-probes/nano-scheduler-fixed-rate", "nano-scheduler-fixed-rate");
 
         final String jvmOutput = runJvm(project, "com.acme.Main", List.of(artifact));
         final CliRun run = run(tempDir, "build", project.toString(), "--classpath", artifact.toString(), "--output", "nano-scheduler-fixed-rate");
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/nano-scheduler-fixed-rate").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\ndone\n");
     }
 
     @Test
@@ -212,6 +157,17 @@ final class CliRealProbeAcceptanceIntegrationTest extends CliIntegrationSupport 
                         return "1m 5s";
                     }
                 }
+                """,
+            "org.nanonative.nano.core.model.Scheduler", """
+                package org.nanonative.nano.core.model;
+
+                import java.util.concurrent.ScheduledThreadPoolExecutor;
+
+                public final class Scheduler extends ScheduledThreadPoolExecutor {
+                    public Scheduler(final String name) {
+                        super(1);
+                    }
+                }
                 """
         ));
         installMavenCoordinate(repo, "berlin.yuna", "type-map", "2025.06.1521025", typeMapJar);
@@ -236,7 +192,9 @@ final class CliRealProbeAcceptanceIntegrationTest extends CliIntegrationSupport 
             "ok 1 - src/test/resources/projects/real-probes/typemap-pair native probe",
             "ok 2 - src/test/resources/projects/real-probes/nano-metric native probe",
             "ok 3 - src/test/resources/projects/real-probes/nano-duration native probe",
-            "Acceptance passed: 3 checks"
+            "ok 4 - src/test/resources/projects/real-probes/nano-scheduler native probe",
+            "ok 5 - src/test/resources/projects/real-probes/nano-scheduler-fixed-rate native probe",
+            "Acceptance passed: 5 checks"
         );
     }
 }
