@@ -91,7 +91,7 @@ final class CliRealProbeAcceptanceIntegrationTest extends CliIntegrationSupport 
     }
 
     @Test
-    void nanoConfigRegisterProbeNowFailsAtTypeMapFunctionOrNullFrontier() throws Exception {
+    void nanoConfigRegisterProbeNowFailsClearlyWithinKnownDependencyFrontiers() throws Exception {
         final Path nanoArtifact = pinnedMavenArtifact("org.nanonative", "nano", "2025.11.3131219");
         final Path typeMapArtifact = pinnedMavenArtifact("berlin.yuna", "type-map", "2025.06.1521025");
         Assumptions.assumeTrue(Files.isRegularFile(nanoArtifact), "Pinned Nano artifact is not available in the local Maven cache");
@@ -118,8 +118,10 @@ final class CliRealProbeAcceptanceIntegrationTest extends CliIntegrationSupport 
 
         assertThat(run.exitCode()).isEqualTo(2);
         assertThat(run.stderr()).contains(
-            "error[JAVAN012]",
-            "berlin/yuna/typemap/model/FunctionOrNull.apply(Ljava/lang/Object;)Ljava/lang/Object;"
+            "error[JAVAN031]",
+            "berlin/yuna/typemap/logic/TypeConverter",
+            "iterateOverArray(Ljava/lang/Object;Ljava/util/function/Consumer;)V",
+            "java/util/function/Consumer.accept(Ljava/lang/Object;)V"
         );
         assertThat(project.resolve(".javan/bin/nano-config-register-frontier")).doesNotExist();
     }

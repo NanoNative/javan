@@ -39,6 +39,20 @@ public final class ConstantPool {
     }
 
     /**
+     * Resolves a class literal entry.
+     *
+     * @param index constant pool index
+     * @return class internal name when the index points at a class literal
+     */
+    public Optional<String> classLiteralName(final int index) {
+        final Object entry = entries[index];
+        if (entry instanceof ClassEntry) {
+            return Optional.of(className(index));
+        }
+        return Optional.empty();
+    }
+
+    /**
      * Resolves a string literal.
      *
      * @param index constant pool index
@@ -146,13 +160,17 @@ public final class ConstantPool {
         }
         final MethodRef bootstrap = methodRef(handle.referenceIndex());
         final List<BootstrapArgument> bootstrapArgumentDetails = bootstrapArgumentDetails(bootstrapMethod.argumentIndexes());
+        final java.util.ArrayList<String> bootstrapArguments = new java.util.ArrayList<>();
+        for (final BootstrapArgument bootstrapArgument : bootstrapArgumentDetails) {
+            bootstrapArguments.add(bootstrapArgument.text());
+        }
         return Optional.of(new DynamicRef(
             utf8(nameAndType.nameIndex()),
             utf8(nameAndType.descriptorIndex()),
             bootstrap.owner(),
             bootstrap.name(),
             bootstrap.descriptor(),
-            bootstrapArgumentDetails.stream().map(BootstrapArgument::text).toList(),
+            List.copyOf(bootstrapArguments),
             bootstrapArgumentDetails
         ));
     }

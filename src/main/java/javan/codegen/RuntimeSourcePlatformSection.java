@@ -311,6 +311,40 @@ final class RuntimeSourcePlatformSection {
             return (unsigned char) builder->values[index];
         }
 
+        int javan_char_sequence_length(void* value) {
+            if (value == NULL) {
+                javan_panic("null CharSequence");
+            }
+            javan_allocation_node* node = javan_find_allocation(value, NULL);
+            if (node == NULL || node->runtime_kind == JAVAN_RUNTIME_KIND_STRING) {
+                return javan_string_length((const char*) value);
+            }
+            if (node->runtime_kind == JAVAN_RUNTIME_KIND_STRING_BUILDER) {
+                return javan_stringbuilder_length(value);
+            }
+            javan_panic("unsupported CharSequence runtime");
+        }
+
+        int javan_char_sequence_char_at(void* value, int index) {
+            if (value == NULL) {
+                javan_panic("null CharSequence");
+            }
+            javan_allocation_node* node = javan_find_allocation(value, NULL);
+            if (node == NULL || node->runtime_kind == JAVAN_RUNTIME_KIND_STRING) {
+                return javan_string_char_at((const char*) value, index);
+            }
+            if (node->runtime_kind == JAVAN_RUNTIME_KIND_STRING_BUILDER) {
+                return javan_stringbuilder_char_at(value, index);
+            }
+            javan_panic("unsupported CharSequence runtime");
+        }
+
+        int javan_character_is_whitespace(int value) {
+            return value == 0x20
+                || (value >= 0x09 && value <= 0x0d)
+                || (value >= 0x1c && value <= 0x1f);
+        }
+
         void* javan_stringbuilder_substring(void* builder_value, int begin) {
             javan_string_builder* builder = javan_stringbuilder_checked(builder_value);
             void** javan_builder_substring_roots[] = {

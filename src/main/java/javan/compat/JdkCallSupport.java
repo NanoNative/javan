@@ -11,6 +11,11 @@ import java.util.Optional;
  * Single source of truth for exact JDK calls that the native backend accepts.
  */
 public final class JdkCallSupport {
+    public static final int BUILTIN_INSTANCEOF_COLLECTION = 1;
+    public static final int BUILTIN_INSTANCEOF_MAP = 2;
+    public static final int BUILTIN_INSTANCEOF_MAP_ENTRY = 3;
+    public static final int BUILTIN_INSTANCEOF_OBJECT_ARRAY = 4;
+
     private static final String[][] PLATFORM_THROWABLE_PARENTS = new String[][]{
         {"java/lang/Exception", "java/lang/Throwable"},
         {"java/lang/Error", "java/lang/Throwable"},
@@ -70,6 +75,14 @@ public final class JdkCallSupport {
         intrinsic("System.getProperty", "java/lang/System", "getProperty", "(Ljava/lang/String;)Ljava/lang/String;", "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;"),
         intrinsic("System.arraycopy", "java/lang/System", "arraycopy", "(Ljava/lang/Object;ILjava/lang/Object;II)V"),
         intrinsic("System.exit", "java/lang/System", "exit", "(I)V"),
+        runtime("Object.equals", "java/lang/Object", "equals", "(Ljava/lang/Object;)Z"),
+        runtime("Object.getClass", "java/lang/Object", "getClass", "()Ljava/lang/Class;"),
+        runtime("Class.isInstance", "java/lang/Class", "isInstance", "(Ljava/lang/Object;)Z"),
+        runtime("Class.cast", "java/lang/Class", "cast", "(Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("Class.isEnum", "java/lang/Class", "isEnum", "()Z"),
+        runtime("Class.isArray", "java/lang/Class", "isArray", "()Z"),
+        runtime("Class.isAssignableFrom", "java/lang/Class", "isAssignableFrom", "(Ljava/lang/Class;)Z"),
+        runtime("Class.getName", "java/lang/Class", "getName", "()Ljava/lang/String;"),
         runtime("Thread.<init>", "java/lang/Thread", "<init>", "()V", "(Ljava/lang/Runnable;)V"),
         runtime("Thread.ofVirtual", "java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;"),
         runtime("Thread.startVirtualThread", "java/lang/Thread", "startVirtualThread", "(Ljava/lang/Runnable;)Ljava/lang/Thread;"),
@@ -119,6 +132,11 @@ public final class JdkCallSupport {
         runtime("ThreadPoolExecutor.CallerRunsPolicy.<init>", "java/util/concurrent/ThreadPoolExecutor$CallerRunsPolicy", "<init>", "()V"),
         runtime("AtomicBoolean.<init>", "java/util/concurrent/atomic/AtomicBoolean", "<init>", "()V", "(Z)V"),
         runtime("AtomicBoolean.get", "java/util/concurrent/atomic/AtomicBoolean", "get", "()Z"),
+        runtime("AtomicInteger.<init>", "java/util/concurrent/atomic/AtomicInteger", "<init>", "()V", "(I)V"),
+        runtime("AtomicInteger.get", "java/util/concurrent/atomic/AtomicInteger", "get", "()I"),
+        runtime("AtomicInteger.getAndIncrement", "java/util/concurrent/atomic/AtomicInteger", "getAndIncrement", "()I"),
+        runtime("AtomicInteger.incrementAndGet", "java/util/concurrent/atomic/AtomicInteger", "incrementAndGet", "()I"),
+        runtime("AtomicInteger.decrementAndGet", "java/util/concurrent/atomic/AtomicInteger", "decrementAndGet", "()I"),
         runtime("AtomicLong.<init>", "java/util/concurrent/atomic/AtomicLong", "<init>", "(J)V"),
         runtime("AtomicLong.get", "java/util/concurrent/atomic/AtomicLong", "get", "()J"),
         runtime("AtomicLong.incrementAndGet", "java/util/concurrent/atomic/AtomicLong", "incrementAndGet", "()J"),
@@ -143,7 +161,12 @@ public final class JdkCallSupport {
         runtime("ThreadLocal.get", "java/lang/ThreadLocal", "get", "()Ljava/lang/Object;"),
         runtime("ThreadLocal.set", "java/lang/ThreadLocal", "set", "(Ljava/lang/Object;)V"),
         runtime("ThreadLocal.remove", "java/lang/ThreadLocal", "remove", "()V"),
+        runtime("CharSequence.length", "java/lang/CharSequence", "length", "()I"),
+        runtime("CharSequence.charAt", "java/lang/CharSequence", "charAt", "(I)C"),
+        intrinsic("Character.isWhitespace", "java/lang/Character", "isWhitespace", "(C)Z"),
         runtime("Collections.unmodifiableSet", "java/util/Collections", "unmodifiableSet", "(Ljava/util/Set;)Ljava/util/Set;"),
+        runtime("Collections.emptyMap", "java/util/Collections", "emptyMap", "()Ljava/util/Map;"),
+        runtime("Map.of", "java/util/Map", "of", "()Ljava/util/Map;"),
         intrinsic(
             "Arrays.copyOf",
             "java/util/Arrays",
@@ -182,6 +205,7 @@ public final class JdkCallSupport {
         intrinsic("Boolean.toString", "java/lang/Boolean", "toString", "(Z)Ljava/lang/String;"),
         runtime("Boolean.valueOf", "java/lang/Boolean", "valueOf", "(Z)Ljava/lang/Boolean;"),
         runtime("Boolean.booleanValue", "java/lang/Boolean", "booleanValue", "()Z"),
+        runtime("Boolean.equals", "java/lang/Boolean", "equals", "(Ljava/lang/Object;)Z"),
         intrinsic(
             "String.valueOf",
             "java/lang/String",
@@ -203,6 +227,11 @@ public final class JdkCallSupport {
             "([C)Ljava/lang/String;",
             "([CII)Ljava/lang/String;"
         ),
+        runtime("DateTimeFormatterBuilder.<init>", "java/time/format/DateTimeFormatterBuilder", "<init>", "()V"),
+        runtime("DateTimeFormatterBuilder.parseCaseInsensitive", "java/time/format/DateTimeFormatterBuilder", "parseCaseInsensitive", "()Ljava/time/format/DateTimeFormatterBuilder;"),
+        runtime("DateTimeFormatterBuilder.appendPattern", "java/time/format/DateTimeFormatterBuilder", "appendPattern", "(Ljava/lang/String;)Ljava/time/format/DateTimeFormatterBuilder;"),
+        runtime("DateTimeFormatterBuilder.appendZoneText", "java/time/format/DateTimeFormatterBuilder", "appendZoneText", "(Ljava/time/format/TextStyle;)Ljava/time/format/DateTimeFormatterBuilder;"),
+        runtime("DateTimeFormatterBuilder.toFormatter", "java/time/format/DateTimeFormatterBuilder", "toFormatter", "(Ljava/util/Locale;)Ljava/time/format/DateTimeFormatter;"),
         runtime("Duration.ofMillis", "java/time/Duration", "ofMillis", "(J)Ljava/time/Duration;"),
         runtime("Duration.ofSeconds", "java/time/Duration", "ofSeconds", "(J)Ljava/time/Duration;"),
         runtime("Duration.toMillis", "java/time/Duration", "toMillis", "()J"),
@@ -229,6 +258,8 @@ public final class JdkCallSupport {
         runtime("String.intern", "java/lang/String", "intern", "()Ljava/lang/String;"),
         runtime("String.toString", "java/lang/String", "toString", "()Ljava/lang/String;"),
         runtime("String.concat", "java/lang/String", "concat", "(Ljava/lang/String;)Ljava/lang/String;"),
+        runtime("String.toLowerCase", "java/lang/String", "toLowerCase", "()Ljava/lang/String;"),
+        runtime("String.toUpperCase", "java/lang/String", "toUpperCase", "()Ljava/lang/String;"),
         runtime("String.describeConstable", "java/lang/String", "describeConstable", "()Ljava/util/Optional;"),
         runtime(
             "String.resolveConstantDesc",
@@ -238,6 +269,9 @@ public final class JdkCallSupport {
             "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Object;"
         ),
         runtime("String.trim", "java/lang/String", "trim", "()Ljava/lang/String;"),
+        runtime("String.strip", "java/lang/String", "strip", "()Ljava/lang/String;"),
+        runtime("String.stripLeading", "java/lang/String", "stripLeading", "()Ljava/lang/String;"),
+        runtime("String.stripTrailing", "java/lang/String", "stripTrailing", "()Ljava/lang/String;"),
         runtime("String.substring", "java/lang/String", "substring", "(I)Ljava/lang/String;"),
         runtime("String.substring", "java/lang/String", "substring", "(II)Ljava/lang/String;"),
         runtime("String.subSequence", "java/lang/String", "subSequence", "(II)Ljava/lang/CharSequence;"),
@@ -292,11 +326,14 @@ public final class JdkCallSupport {
         runtime("List.size", "java/util/List", "size", "()I"),
         runtime("List.isEmpty", "java/util/List", "isEmpty", "()Z"),
         runtime("List.contains", "java/util/List", "contains", "(Ljava/lang/Object;)Z"),
+        runtime("Collection.size", "java/util/Collection", "size", "()I"),
+        runtime("Collection.isEmpty", "java/util/Collection", "isEmpty", "()Z"),
         runtime("Collection.contains", "java/util/Collection", "contains", "(Ljava/lang/Object;)Z"),
         runtime("Set.add", "java/util/Set", "add", "(Ljava/lang/Object;)Z"),
         runtime("Set.contains", "java/util/Set", "contains", "(Ljava/lang/Object;)Z"),
         runtime("Set.size", "java/util/Set", "size", "()I"),
         runtime("Set.isEmpty", "java/util/Set", "isEmpty", "()Z"),
+        runtime("Set.iterator", "java/util/Set", "iterator", "()Ljava/util/Iterator;"),
         runtime("List.get", "java/util/List", "get", "(I)Ljava/lang/Object;"),
         runtime("List.getFirst", "java/util/List", "getFirst", "()Ljava/lang/Object;"),
         runtime("List.getLast", "java/util/List", "getLast", "()Ljava/lang/Object;"),
@@ -311,14 +348,18 @@ public final class JdkCallSupport {
         runtime("LinkedHashSet.add", "java/util/LinkedHashSet", "add", "(Ljava/lang/Object;)Z"),
         runtime("Iterator.hasNext", "java/util/Iterator", "hasNext", "()Z"),
         runtime("Iterator.next", "java/util/Iterator", "next", "()Ljava/lang/Object;"),
+        runtime("Map.Entry.getKey", "java/util/Map$Entry", "getKey", "()Ljava/lang/Object;"),
+        runtime("Map.Entry.getValue", "java/util/Map$Entry", "getValue", "()Ljava/lang/Object;"),
         runtime("HashMap.<init>", "java/util/HashMap", "<init>", "()V"),
         runtime("LinkedHashMap.<init>", "java/util/LinkedHashMap", "<init>", "()V"),
         runtime("TreeMap.<init>", "java/util/TreeMap", "<init>", "()V"),
+        runtime("ConcurrentHashMap.<init>", "java/util/concurrent/ConcurrentHashMap", "<init>", "()V"),
         runtime("Map.copyOf", "java/util/Map", "copyOf", "(Ljava/util/Map;)Ljava/util/Map;"),
         runtime("Map.get", "java/util/Map", "get", "(Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("HashMap.get", "java/util/HashMap", "get", "(Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("LinkedHashMap.get", "java/util/LinkedHashMap", "get", "(Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("TreeMap.get", "java/util/TreeMap", "get", "(Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("ConcurrentHashMap.get", "java/util/concurrent/ConcurrentHashMap", "get", "(Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Map.getOrDefault", "java/util/Map", "getOrDefault", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Map.put", "java/util/Map", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Map.putIfAbsent", "java/util/Map", "putIfAbsent", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
@@ -326,28 +367,37 @@ public final class JdkCallSupport {
         runtime("HashMap.put", "java/util/HashMap", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("LinkedHashMap.put", "java/util/LinkedHashMap", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("TreeMap.put", "java/util/TreeMap", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("ConcurrentHashMap.put", "java/util/concurrent/ConcurrentHashMap", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("HashMap.putIfAbsent", "java/util/HashMap", "putIfAbsent", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("LinkedHashMap.putIfAbsent", "java/util/LinkedHashMap", "putIfAbsent", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("TreeMap.putIfAbsent", "java/util/TreeMap", "putIfAbsent", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("ConcurrentHashMap.putIfAbsent", "java/util/concurrent/ConcurrentHashMap", "putIfAbsent", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Map.containsKey", "java/util/Map", "containsKey", "(Ljava/lang/Object;)Z"),
         runtime("HashMap.containsKey", "java/util/HashMap", "containsKey", "(Ljava/lang/Object;)Z"),
         runtime("LinkedHashMap.containsKey", "java/util/LinkedHashMap", "containsKey", "(Ljava/lang/Object;)Z"),
         runtime("TreeMap.containsKey", "java/util/TreeMap", "containsKey", "(Ljava/lang/Object;)Z"),
+        runtime("ConcurrentHashMap.containsKey", "java/util/concurrent/ConcurrentHashMap", "containsKey", "(Ljava/lang/Object;)Z"),
         runtime("Map.size", "java/util/Map", "size", "()I"),
         runtime("HashMap.size", "java/util/HashMap", "size", "()I"),
         runtime("LinkedHashMap.size", "java/util/LinkedHashMap", "size", "()I"),
         runtime("TreeMap.size", "java/util/TreeMap", "size", "()I"),
+        runtime("ConcurrentHashMap.size", "java/util/concurrent/ConcurrentHashMap", "size", "()I"),
         runtime("Map.isEmpty", "java/util/Map", "isEmpty", "()Z"),
+        runtime("Map.keySet", "java/util/Map", "keySet", "()Ljava/util/Set;"),
+        runtime("Map.entrySet", "java/util/Map", "entrySet", "()Ljava/util/Set;"),
         runtime("HashMap.isEmpty", "java/util/HashMap", "isEmpty", "()Z"),
         runtime("LinkedHashMap.isEmpty", "java/util/LinkedHashMap", "isEmpty", "()Z"),
         runtime("TreeMap.isEmpty", "java/util/TreeMap", "isEmpty", "()Z"),
+        runtime("ConcurrentHashMap.isEmpty", "java/util/concurrent/ConcurrentHashMap", "isEmpty", "()Z"),
         runtime("Map.values", "java/util/Map", "values", "()Ljava/util/Collection;"),
         runtime("HashMap.values", "java/util/HashMap", "values", "()Ljava/util/Collection;"),
         runtime("LinkedHashMap.values", "java/util/LinkedHashMap", "values", "()Ljava/util/Collection;"),
         runtime("TreeMap.values", "java/util/TreeMap", "values", "()Ljava/util/Collection;"),
+        runtime("ConcurrentHashMap.values", "java/util/concurrent/ConcurrentHashMap", "values", "()Ljava/util/Collection;"),
         runtime("HashMap.getOrDefault", "java/util/HashMap", "getOrDefault", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("LinkedHashMap.getOrDefault", "java/util/LinkedHashMap", "getOrDefault", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("TreeMap.getOrDefault", "java/util/TreeMap", "getOrDefault", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("ConcurrentHashMap.getOrDefault", "java/util/concurrent/ConcurrentHashMap", "getOrDefault", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Path.of", "java/nio/file/Path", "of", "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;"),
         runtime("Paths.get", "java/nio/file/Paths", "get", "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;"),
         runtime("Path.resolve", "java/nio/file/Path", "resolve", "(Ljava/lang/String;)Ljava/nio/file/Path;"),
@@ -498,6 +548,9 @@ public final class JdkCallSupport {
         if ("java/util/TreeMap".equals(methodRef.owner())) {
             return isSupportedHashMapCall(methodRef.name(), methodRef.descriptor());
         }
+        if ("java/util/concurrent/ConcurrentHashMap".equals(methodRef.owner())) {
+            return isSupportedHashMapCall(methodRef.name(), methodRef.descriptor());
+        }
         if ("java/nio/file/Path".equals(methodRef.owner())) {
             return isSupportedPathCall(methodRef.name(), methodRef.descriptor());
         }
@@ -583,6 +636,12 @@ public final class JdkCallSupport {
     }
 
     private static boolean isSupportedCollectionCall(final String name, final String descriptor) {
+        if ("size".equals(name)) {
+            return "()I".equals(descriptor);
+        }
+        if ("isEmpty".equals(name)) {
+            return "()Z".equals(descriptor);
+        }
         if ("contains".equals(name)) {
             return "(Ljava/lang/Object;)Z".equals(descriptor);
         }
@@ -788,6 +847,22 @@ public final class JdkCallSupport {
         return Optional.empty();
     }
 
+    public static Optional<Integer> builtinInstanceOfTargetId(final String target) {
+        if ("java/util/Collection".equals(target)) {
+            return Optional.of(BUILTIN_INSTANCEOF_COLLECTION);
+        }
+        if ("java/util/Map".equals(target)) {
+            return Optional.of(BUILTIN_INSTANCEOF_MAP);
+        }
+        if ("java/util/Map$Entry".equals(target)) {
+            return Optional.of(BUILTIN_INSTANCEOF_MAP_ENTRY);
+        }
+        if ("[Ljava/lang/Object;".equals(target)) {
+            return Optional.of(BUILTIN_INSTANCEOF_OBJECT_ARRAY);
+        }
+        return Optional.empty();
+    }
+
     /**
      * Returns runtime modules required by a reachable JDK call.
      *
@@ -856,6 +931,9 @@ public final class JdkCallSupport {
             return List.of("managed-heap");
         }
         if ("java/time/Duration".equals(owner)) {
+            return List.of("time");
+        }
+        if ("java/time/format/DateTimeFormatterBuilder".equals(owner)) {
             return List.of("time");
         }
         if ("java/nio/file/attribute/FileTime".equals(owner)) {
@@ -1054,7 +1132,10 @@ public final class JdkCallSupport {
         if ("java/util/LinkedHashMap".equals(owner)) {
             return true;
         }
-        return "java/util/TreeMap".equals(owner);
+        if ("java/util/TreeMap".equals(owner)) {
+            return true;
+        }
+        return "java/util/concurrent/ConcurrentHashMap".equals(owner);
     }
 
     private static boolean endsWithAscii(final String value, final String suffix) {

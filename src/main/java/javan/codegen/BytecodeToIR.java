@@ -12,10 +12,12 @@ import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
 import javan.compat.JdkCallSupport;
 import javan.compat.JavanNativeSubstitutions;
+import javan.compat.ExactMethodSupport;
 import javan.ir.IrClass;
 import javan.ir.IrDispatch;
 import javan.ir.IrDispatchTarget;
 import javan.ir.IrFunction;
+import javan.ir.IrMaterializedLambdaTarget;
 import javan.ir.IrExpression;
 import javan.ir.IrField;
 import javan.ir.IrInstruction;
@@ -72,6 +74,12 @@ public final class BytecodeToIR {
         final List<IrFunction> functions = new ArrayList<>();
         final Map<String, IrDispatch> dispatches = new LinkedHashMap<>();
         final List<EntryPoint> reachableMethods = BytecodeToIRMetadataSupport.sortedEntryPoints(callGraph.reachableMethods());
+        final List<IrMaterializedLambdaTarget> materializedLambdaTargets =
+            BytecodeToIRInvokeSupport.functionOrNullTargets(classes, reachableMethods);
+        final Map<String, Integer> functionOrNullTargetIds =
+            BytecodeToIRInvokeSupport.functionOrNullTargetIds(classes, reachableMethods);
+        final Map<MethodRef, Boolean> materializedLambdaMethods =
+            BytecodeToIRInvokeSupport.materializedLambdaMethods(classes, reachableMethods);
         final List<EntryPoint> runnableThreadTargets = BytecodeToIRInvokeSupport.runnableThreadTargets(classes, reachableMethods);
         if (!runnableThreadTargets.isEmpty()) {
             final MethodRef runnableRun = BytecodeToIRInvokeSupport.runnableRunMethodRef();
@@ -86,21 +94,56 @@ public final class BytecodeToIR {
             );
         }
         for (final EntryPoint reachable : reachableMethods) {
-            functions.add(lowerFunction(classes, reachable, dispatches, sourceLines));
+            functions.add(lowerFunction(classes, reachable, dispatches, functionOrNullTargetIds, materializedLambdaMethods, sourceLines));
         }
-        return new IrProgram(BytecodeToIRMetadataSupport.lowerClasses(classes), List.copyOf(functions), List.copyOf(dispatches.values()), symbol(callGraph.entryPoint()));
+        return new IrProgram(
+            BytecodeToIRMetadataSupport.lowerClasses(classes),
+            List.copyOf(functions),
+            List.copyOf(dispatches.values()),
+            symbol(callGraph.entryPoint()),
+            List.copyOf(materializedLambdaTargets)
+        );
     }
 
     static IrFunction lowerFunction(
         final Map<String, ClassFile> classes,
         final EntryPoint entryPoint,
         final Map<String, IrDispatch> dispatches,
+        final Map<String, Integer> functionOrNullTargetIds,
+        final Map<MethodRef, Boolean> materializedLambdaMethods,
         final SourceLineIndex sourceLines
     ) {
         final ClassFile classFile = classes.get(entryPoint.className());
         final MethodInfo method = classFile.method(entryPoint.methodName(), entryPoint.descriptor()).orElseThrow();
         final MethodDescriptor descriptor = MethodDescriptor.parse(method.descriptor());
         final List<IrParameter> parameters = BytecodeToIRMetadataSupport.parameters(method, descriptor);
+        if (ExactMethodSupport.isExactCatchNullEnumLookupMethod(classFile, method)) {
+            return lowerExactCatchNullEnumLookupFunction(entryPoint, descriptor, parameters);
+        }
+        if (ExactMethodSupport.isExactCatchNullFunctionOrNullApplyMethod(classFile, method)) {
+            return lowerExactCatchNullFunctionOrNullApplyFunction(entryPoint, descriptor, parameters);
+        }
+        if (ExactMethodSupport.isExactTemporalOfLoopFallbackMethod(classFile, method)) {
+            return lowerExactTemporalOfFunction(entryPoint, descriptor, parameters);
+        }
+        if (ExactMethodSupport.isExactTemporalStringBridgeMethod(classFile, method)) {
+            return lowerExactTemporalStringBridgeFunction(classFile, method, entryPoint, descriptor, parameters);
+        }
+        if (ExactMethodSupport.isExactCalendarOfEpochMillisMethod(classFile, method)) {
+            return lowerExactCalendarOfEpochMillisFunction(entryPoint, descriptor, parameters);
+        }
+        if (ExactMethodSupport.isExactCalendarOfDateMethod(classFile, method)) {
+            return lowerExactCalendarOfDateFunction(entryPoint, descriptor, parameters);
+        }
+        if (ExactMethodSupport.isExactCalendarOfLocalTimeMethod(classFile, method)) {
+            return lowerExactCalendarOfLocalTimeFunction(entryPoint, descriptor, parameters);
+        }
+        if (ExactMethodSupport.isExactThrowableStringOfMethod(classFile, method)) {
+            return lowerExactThrowableStringOfFunction(entryPoint, descriptor, parameters);
+        }
+        if (ExactMethodSupport.isExactUnsupportedTemporalConversionLambdaMethod(classFile, method)) {
+            return lowerExactUnsupportedTemporalConversionLambdaFunction(entryPoint, descriptor, parameters);
+        }
         final List<IrInstruction> instructions = new ArrayList<>();
         final List<StackValue> stack = new ArrayList<>();
         final Map<Integer, IrExpression> locals = new HashMap<>();
@@ -192,6 +235,8 @@ public final class BytecodeToIR {
                 objectLocalThrowableTypes,
                 localDeclarations,
                 dispatches,
+                functionOrNullTargetIds,
+                materializedLambdaMethods,
                 sourceLines
             );
             BytecodeToIRControlFlowSupport.annotateNewInstructions(instructions, instructionStart, sourceLocation);
@@ -205,6 +250,205 @@ public final class BytecodeToIR {
             parameters,
             List.copyOf(localDeclarations.values()),
             List.copyOf(instructions)
+        );
+    }
+
+    private static IrFunction lowerExactCatchNullEnumLookupFunction(
+        final EntryPoint entryPoint,
+        final MethodDescriptor descriptor,
+        final List<IrParameter> parameters
+    ) {
+        return new IrFunction(
+            entryPoint.className(),
+            entryPoint.methodName(),
+            entryPoint.descriptor(),
+            symbol(entryPoint),
+            descriptor.returnType(),
+            parameters,
+            List.of(),
+            List.of(IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_typemap_enum_of",
+                List.of(
+                    IrExpression.objectLocal(parameters.get(0).name()),
+                    IrExpression.objectLocal(parameters.get(1).name())
+                )
+            )))
+        );
+    }
+
+    private static IrFunction lowerExactCatchNullFunctionOrNullApplyFunction(
+        final EntryPoint entryPoint,
+        final MethodDescriptor descriptor,
+        final List<IrParameter> parameters
+    ) {
+        return new IrFunction(
+            entryPoint.className(),
+            entryPoint.methodName(),
+            entryPoint.descriptor(),
+            symbol(entryPoint),
+            descriptor.returnType(),
+            parameters,
+            List.of(),
+            List.of(IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_typemap_function_or_null_apply",
+                List.of(
+                    IrExpression.objectLocal(parameters.get(0).name()),
+                    IrExpression.objectLocal(parameters.get(1).name())
+                )
+            )))
+        );
+    }
+
+    private static IrFunction lowerExactTemporalOfFunction(
+        final EntryPoint entryPoint,
+        final MethodDescriptor descriptor,
+        final List<IrParameter> parameters
+    ) {
+        return new IrFunction(
+            entryPoint.className(),
+            entryPoint.methodName(),
+            entryPoint.descriptor(),
+            symbol(entryPoint),
+            descriptor.returnType(),
+            parameters,
+            List.of(),
+            List.of(IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_typemap_temporal_of_unsupported",
+                List.of(
+                    IrExpression.objectLocal(parameters.get(0).name()),
+                    IrExpression.objectLocal(parameters.get(1).name()),
+                    IrExpression.objectLocal(parameters.get(2).name())
+                )
+            )))
+        );
+    }
+
+    private static IrFunction lowerExactTemporalStringBridgeFunction(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final EntryPoint entryPoint,
+        final MethodDescriptor descriptor,
+        final List<IrParameter> parameters
+    ) {
+        final Optional<String> targetOwner = ExactMethodSupport.exactTemporalStringBridgeTargetInternalName(classFile, method);
+        if (targetOwner.isEmpty()) {
+            throw new IllegalArgumentException("exact temporal string bridge target is missing");
+        }
+        return new IrFunction(
+            entryPoint.className(),
+            entryPoint.methodName(),
+            entryPoint.descriptor(),
+            symbol(entryPoint),
+            descriptor.returnType(),
+            parameters,
+            List.of(),
+            List.of(IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_typemap_temporal_string_bridge_unsupported",
+                List.of(
+                    IrExpression.objectLocal(parameters.getFirst().name()),
+                    IrExpression.stringLiteral(targetOwner.orElseThrow().replace('/', '.'))
+                )
+            )))
+        );
+    }
+
+    private static IrFunction lowerExactCalendarOfEpochMillisFunction(
+        final EntryPoint entryPoint,
+        final MethodDescriptor descriptor,
+        final List<IrParameter> parameters
+    ) {
+        return new IrFunction(
+            entryPoint.className(),
+            entryPoint.methodName(),
+            entryPoint.descriptor(),
+            symbol(entryPoint),
+            descriptor.returnType(),
+            parameters,
+            List.of(),
+            List.of(IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_typemap_calendar_of_millis_unsupported",
+                List.of(IrExpression.longLocal(parameters.getFirst().name()))
+            )))
+        );
+    }
+
+    private static IrFunction lowerExactCalendarOfDateFunction(
+        final EntryPoint entryPoint,
+        final MethodDescriptor descriptor,
+        final List<IrParameter> parameters
+    ) {
+        return new IrFunction(
+            entryPoint.className(),
+            entryPoint.methodName(),
+            entryPoint.descriptor(),
+            symbol(entryPoint),
+            descriptor.returnType(),
+            parameters,
+            List.of(),
+            List.of(IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_typemap_calendar_of_date_unsupported",
+                List.of(IrExpression.objectLocal(parameters.getFirst().name()))
+            )))
+        );
+    }
+
+    private static IrFunction lowerExactCalendarOfLocalTimeFunction(
+        final EntryPoint entryPoint,
+        final MethodDescriptor descriptor,
+        final List<IrParameter> parameters
+    ) {
+        return new IrFunction(
+            entryPoint.className(),
+            entryPoint.methodName(),
+            entryPoint.descriptor(),
+            symbol(entryPoint),
+            descriptor.returnType(),
+            parameters,
+            List.of(),
+            List.of(IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_typemap_calendar_of_local_time_unsupported",
+                List.of(IrExpression.objectLocal(parameters.getFirst().name()))
+            )))
+        );
+    }
+
+    private static IrFunction lowerExactThrowableStringOfFunction(
+        final EntryPoint entryPoint,
+        final MethodDescriptor descriptor,
+        final List<IrParameter> parameters
+    ) {
+        return new IrFunction(
+            entryPoint.className(),
+            entryPoint.methodName(),
+            entryPoint.descriptor(),
+            symbol(entryPoint),
+            descriptor.returnType(),
+            parameters,
+            List.of(),
+            List.of(IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_typemap_throwable_string_of_unsupported",
+                List.of(IrExpression.objectLocal(parameters.getFirst().name()))
+            )))
+        );
+    }
+
+    private static IrFunction lowerExactUnsupportedTemporalConversionLambdaFunction(
+        final EntryPoint entryPoint,
+        final MethodDescriptor descriptor,
+        final List<IrParameter> parameters
+    ) {
+        return new IrFunction(
+            entryPoint.className(),
+            entryPoint.methodName(),
+            entryPoint.descriptor(),
+            symbol(entryPoint),
+            descriptor.returnType(),
+            parameters,
+            List.of(),
+            List.of(IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_temporal_conversion_lambda_unsupported",
+                List.of(IrExpression.stringLiteral(entryPoint.display()))
+            )))
         );
     }
 
@@ -230,6 +474,8 @@ public final class BytecodeToIR {
         final Map<Integer, String> objectLocalThrowableTypes,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
+        final Map<String, Integer> functionOrNullTargetIds,
+        final Map<MethodRef, Boolean> materializedLambdaMethods,
         final SourceLineIndex sourceLines
     ) {
         switch (instruction.opcode()) {
@@ -608,7 +854,7 @@ public final class BytecodeToIR {
             case 18:
             case 19:
             case 20:
-                BytecodeToIRInvokeSupport.pushConstant(classFile, method, instruction, stack);
+                BytecodeToIRInvokeSupport.pushConstant(classes, classFile, method, instruction, stack);
                 break;
             case 180:
                 BytecodeToIRInvokeSupport.pushInstanceField(classFile, method, instruction, stack);
@@ -647,10 +893,20 @@ public final class BytecodeToIR {
                 );
                 break;
             case 185:
-                BytecodeToIRInvokeSupport.lowerInterfaceCall(classes, classFile, method, instruction, instructions, stack, localDeclarations, dispatches);
+                BytecodeToIRInvokeSupport.lowerInterfaceCall(
+                    classes,
+                    classFile,
+                    method,
+                    instruction,
+                    instructions,
+                    stack,
+                    localDeclarations,
+                    dispatches,
+                    materializedLambdaMethods
+                );
                 break;
             case 186:
-                BytecodeToIRInvokeSupport.lowerDynamicCall(classes, classFile, method, instruction, stack);
+                BytecodeToIRInvokeSupport.lowerDynamicCall(classes, classFile, method, instruction, stack, functionOrNullTargetIds);
                 break;
             case 187:
                 BytecodeToIRInvokeSupport.newObject(classes, classFile, method, instruction, instructions, stack, localDeclarations);
@@ -2290,8 +2546,8 @@ public final class BytecodeToIR {
             classFile.name(),
             method.name() + method.descriptor(),
             instruction.mnemonic() + " " + target,
-            "The native runtime only has deterministic type metadata for application classes and supported boxed primitive wrappers.",
-            "Keep instanceof targets to application classes/interfaces, Object, or supported wrappers until this runtime model expands."
+            "The native runtime only has deterministic instanceof support for application classes, supported boxed primitive wrappers, and the built-in Collection/Map runtime objects.",
+            "Keep instanceof targets to application classes/interfaces, Object, supported wrappers, or the currently admitted Collection/Map runtime targets."
         ));
     }
 

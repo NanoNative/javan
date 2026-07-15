@@ -12,8 +12,6 @@
   },
   "counts": {
     "rows": 111,
-    "done": 111,
-    "left": 0,
     "pass": 111,
     "scoped": 0,
     "target": 0,

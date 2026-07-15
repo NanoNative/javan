@@ -7,6 +7,7 @@ import javan.classfile.Instruction;
 import javan.classfile.LambdaMetafactoryCall;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
+import javan.compat.ExactMethodSupport;
 import javan.compat.JdkCallSupport;
 import javan.compat.NetworkApiSupport;
 import javan.compat.JavanNativeSubstitutions;
@@ -50,6 +51,7 @@ public final class ReachabilityAnalyzer {
         final List<Diagnostic> diagnostics = new ArrayList<>();
         final List<CallEdge> callEdges = new ArrayList<>();
         final List<EntryPoint> work = new ArrayList<>(entries);
+        final List<MethodRef> materializedLambdaMethods = new ArrayList<>();
         int workIndex = 0;
 
         while (true) {
@@ -79,10 +81,13 @@ public final class ReachabilityAnalyzer {
                 }
                 final Optional<CodeAttribute> code = method.orElseThrow().code();
                 if (code.isPresent()) {
+                    if (ExactMethodSupport.isExactLoweredMethod(classes.get(current.className()), method.orElseThrow())) {
+                        continue;
+                    }
                     for (final Instruction instruction : code.orElseThrow().instructions()) {
                         enqueueClassInitializer(classes, instruction, work, current, callEdges);
-                        enqueueApplicationCall(classes, instruction, work, diagnostics, current, callEdges);
-                        enqueueLambdaApplicationCall(classes, instruction, work, current, callEdges);
+                        enqueueLambdaApplicationCall(classes, instruction, work, current, callEdges, materializedLambdaMethods);
+                        enqueueApplicationCall(classes, instruction, work, diagnostics, current, callEdges, materializedLambdaMethods);
                     }
                 }
             }
@@ -129,7 +134,8 @@ public final class ReachabilityAnalyzer {
         final List<EntryPoint> work,
         final List<Diagnostic> diagnostics,
         final EntryPoint current,
-        final List<CallEdge> callEdges
+        final List<CallEdge> callEdges,
+        final List<MethodRef> materializedLambdaMethods
     ) {
         final Optional<MethodRef> methodRef = instruction.methodRef();
         if (methodRef.isEmpty()) {
@@ -166,6 +172,36 @@ public final class ReachabilityAnalyzer {
             return;
         }
         if (instruction.opcode() == 185) {
+            final Optional<EntryPoint> defaultTarget = defaultInterfaceTarget(classes, target);
+            if (defaultTarget.isPresent()) {
+                final EntryPoint callee = defaultTarget.orElseThrow();
+                work.add(callee);
+                addEdge(callEdges, current, callee, CallEdge.Kind.CALL);
+                return;
+            }
+            if (isFunctionOrNullInterfaceCall(target)) {
+                final List<EntryPoint> targetMethods = interfaceTargets(classes, target);
+                if (!targetMethods.isEmpty()) {
+                    work.addAll(targetMethods);
+                    addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
+                }
+                if (containsMethodRef(materializedLambdaMethods, target) || !targetMethods.isEmpty()) {
+                    return;
+                }
+                diagnostics.add(Diagnostic.error(
+                    "JAVAN012",
+                    "unsupported reachable application method call",
+                    current.className(),
+                    current.methodName() + current.descriptor(),
+                    target.display(),
+                    "FunctionOrNull dispatch requires either a closed-world implementation class or a supported materialized lambda target.",
+                    "Provide a reachable implementation class or keep this FunctionOrNull flow on the JVM until broader interface receiver support lands."
+                ));
+                return;
+            }
+            if (containsMethodRef(materializedLambdaMethods, target)) {
+                return;
+            }
             final List<EntryPoint> targetMethods = interfaceTargets(classes, target);
             if (!targetMethods.isEmpty()) {
                 work.addAll(targetMethods);
@@ -248,16 +284,33 @@ public final class ReachabilityAnalyzer {
         final Instruction instruction,
         final List<EntryPoint> work,
         final EntryPoint current,
-        final List<CallEdge> callEdges
+        final List<CallEdge> callEdges,
+        final List<MethodRef> materializedLambdaMethods
     ) {
         if (instruction.dynamicRef().isEmpty()) {
             return;
         }
         final Optional<LambdaMetafactoryCall> lambdaCall = LambdaMetafactoryCall.resolve(instruction.dynamicRef().orElseThrow());
-        if (lambdaCall.isEmpty() || !lambdaCall.orElseThrow().isDirectlyLowerable()) {
+        if (lambdaCall.isEmpty()) {
             return;
         }
-        final MethodRef implementation = lambdaCall.orElseThrow().implementation();
+        final LambdaMetafactoryCall resolved = lambdaCall.orElseThrow();
+        if (resolved.isZeroCaptureMaterializedObjectLambda() || resolved.isZeroCaptureMaterializedBooleanLambda()) {
+            final MethodRef interfaceMethod = new MethodRef(
+                resolved.interfaceOwner(),
+                resolved.interfaceMethodName(),
+                resolved.samMethodDescriptor()
+            );
+            if (!containsMethodRef(materializedLambdaMethods, interfaceMethod)) {
+                materializedLambdaMethods.add(interfaceMethod);
+            }
+        }
+        if (!resolved.isDirectlyLowerable()
+            && !resolved.isZeroCaptureMaterializedObjectLambda()
+            && !resolved.isZeroCaptureMaterializedBooleanLambda()) {
+            return;
+        }
+        final MethodRef implementation = resolved.implementation();
         if (JdkCallSupport.isJdkCall(implementation) || NetworkApiSupport.isNetworkCall(implementation)) {
             return;
         }
@@ -268,6 +321,40 @@ public final class ReachabilityAnalyzer {
         work.add(callee);
         addEdge(callEdges, current, callee, CallEdge.Kind.CALL);
         enqueueClassInitializer(classes, implementation.owner(), work, current, callEdges);
+    }
+
+    private static Optional<EntryPoint> defaultInterfaceTarget(
+        final Map<String, ClassFile> classes,
+        final MethodRef target
+    ) {
+        final ClassFile owner = classes.get(target.owner());
+        if (owner == null || !owner.isInterface()) {
+            return Optional.empty();
+        }
+        final Optional<MethodInfo> method = owner.method(target.name(), target.descriptor());
+        if (method.isEmpty() || method.orElseThrow().code().isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(new EntryPoint(target.owner(), target.name(), target.descriptor()));
+    }
+
+    private static boolean isFunctionOrNullInterfaceCall(final MethodRef target) {
+        if (!"berlin/yuna/typemap/model/FunctionOrNull".equals(target.owner())) {
+            return false;
+        }
+        if ("apply".equals(target.name()) && "(Ljava/lang/Object;)Ljava/lang/Object;".equals(target.descriptor())) {
+            return true;
+        }
+        return "applyWithException".equals(target.name()) && "(Ljava/lang/Object;)Ljava/lang/Object;".equals(target.descriptor());
+    }
+
+    private static boolean containsMethodRef(final List<MethodRef> values, final MethodRef target) {
+        for (final MethodRef value : values) {
+            if (value.equals(target)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void enqueueClassInitializer(

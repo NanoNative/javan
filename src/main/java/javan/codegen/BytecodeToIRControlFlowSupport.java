@@ -478,6 +478,8 @@ final class BytecodeToIRControlFlowSupport {
                     workingObjectLocalThrowableTypes,
                     workingDeclarations,
                     dispatches,
+                    Map.of(),
+                    Map.of(),
                     SourceLineIndex.empty()
                 );
             }
@@ -573,6 +575,8 @@ final class BytecodeToIRControlFlowSupport {
                 blockObjectLocalThrowableTypes,
                 localDeclarations,
                 dispatches,
+                Map.of(),
+                Map.of(),
                 SourceLineIndex.empty()
             );
         }

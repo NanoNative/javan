@@ -70,6 +70,30 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void builtinCollectionInstanceOfTargetIsSupported() {
+        assertThat(JdkCallSupport.builtinInstanceOfTargetId("java/util/Collection"))
+            .contains(JdkCallSupport.BUILTIN_INSTANCEOF_COLLECTION);
+    }
+
+    @Test
+    void builtinMapInstanceOfTargetIsSupported() {
+        assertThat(JdkCallSupport.builtinInstanceOfTargetId("java/util/Map"))
+            .contains(JdkCallSupport.BUILTIN_INSTANCEOF_MAP);
+    }
+
+    @Test
+    void builtinMapEntryInstanceOfTargetIsSupported() {
+        assertThat(JdkCallSupport.builtinInstanceOfTargetId("java/util/Map$Entry"))
+            .contains(JdkCallSupport.BUILTIN_INSTANCEOF_MAP_ENTRY);
+    }
+
+    @Test
+    void builtinObjectArrayInstanceOfTargetIsSupported() {
+        assertThat(JdkCallSupport.builtinInstanceOfTargetId("[Ljava/lang/Object;"))
+            .contains(JdkCallSupport.BUILTIN_INSTANCEOF_OBJECT_ARRAY);
+    }
+
+    @Test
     void virtualThreadPerTaskExecutorIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/concurrent/Executors",
@@ -112,6 +136,24 @@ final class JdkCallSupportTest {
             "close",
             "()V"
         ))).isTrue();
+    }
+
+    @Test
+    void dateTimeFormatterBuilderAppendPatternIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/time/format/DateTimeFormatterBuilder",
+            "appendPattern",
+            "(Ljava/lang/String;)Ljava/time/format/DateTimeFormatterBuilder;"
+        ))).isTrue();
+    }
+
+    @Test
+    void dateTimeFormatterBuilderToFormatterRequiresTimeRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/time/format/DateTimeFormatterBuilder",
+            "toFormatter",
+            "(Ljava/util/Locale;)Ljava/time/format/DateTimeFormatter;"
+        ))).containsExactly("time");
     }
 
     @Test
@@ -255,6 +297,24 @@ final class JdkCallSupportTest {
             "java/util/concurrent/atomic/AtomicBoolean",
             "get",
             "()Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void atomicIntegerConstructorWithInitialValueIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/atomic/AtomicInteger",
+            "<init>",
+            "(I)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void atomicIntegerGetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/atomic/AtomicInteger",
+            "get",
+            "()I"
         ))).isTrue();
     }
 
@@ -464,6 +524,33 @@ final class JdkCallSupportTest {
             "unpark",
             "(Ljava/lang/Thread;)V"
         ))).containsExactly("threads");
+    }
+
+    @Test
+    void mapOfEmptyIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Map",
+            "of",
+            "()Ljava/util/Map;"
+        ))).isTrue();
+    }
+
+    @Test
+    void booleanEqualsIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Boolean",
+            "equals",
+            "(Ljava/lang/Object;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void mapKeySetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Map",
+            "keySet",
+            "()Ljava/util/Set;"
+        ))).isTrue();
     }
 
     @Test

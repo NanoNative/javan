@@ -4100,4 +4100,87 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
         assertThat(process(project, List.of(project.resolve(".javan/bin/instanceof-interface").toString())).stdout()).isEqualTo(jvmOutput);
     }
 
+    @Test
+    void instanceOfCollectionBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("instanceof-collection");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.Collection;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Object value = new ArrayList<>();
+                    System.out.println(value instanceof Collection);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/instanceof-collection").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void instanceOfMapBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("instanceof-map");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Object value = new HashMap<>();
+                    System.out.println(value instanceof Map);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/instanceof-map").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void instanceOfMapEntryBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("instanceof-map-entry");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, String> map = new HashMap<>();
+                    map.put("k", "v");
+                    final Object value = map.entrySet().iterator().next();
+                    System.out.println(value instanceof Map.Entry);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/instanceof-map-entry").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
 }

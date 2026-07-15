@@ -1174,6 +1174,36 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void collectionIsEmptyBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("collection-is-empty");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.Collection;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final ArrayList<String> values = new ArrayList<>();
+                    final Collection<String> view = values;
+                    System.out.println(view.isEmpty());
+                    values.add("x");
+                    System.out.println(view.isEmpty());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/collection-is-empty").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void intShiftLeftBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("int-shift-left");
         writeJava(project, "com.acme.Main", """

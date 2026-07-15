@@ -129,7 +129,17 @@ jobs:
           rustc --version
 
       - name: Install Linux native toolchain
-        run: sudo apt-get update && sudo apt-get install -y build-essential
+        run: |
+          for attempt in 1 2 3; do
+            if sudo apt-get -o Acquire::ForceIPv4=true update \
+              && sudo apt-get -o Acquire::ForceIPv4=true install -y --fix-missing build-essential; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            sleep 15
+          done
 
       - name: Set release version
         shell: sh

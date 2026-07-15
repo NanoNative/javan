@@ -175,9 +175,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksStringToLowerCaseAsExplicitRejected() {
+    void marksStringToLowerCaseAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/String", "toLowerCase", "()Ljava/lang/String;")))
-            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
     @Test
@@ -187,15 +187,51 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksStringStripAsExplicitRejected() {
+    void marksStringStripAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/String", "strip", "()Ljava/lang/String;")))
-            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksMapOfEmptyAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "of", "()Ljava/util/Map;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksBooleanEqualsAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Boolean", "equals", "(Ljava/lang/Object;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksMapKeySetAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "keySet", "()Ljava/util/Set;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksClassIsInstanceAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Class", "isInstance", "(Ljava/lang/Object;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
     @Test
     void marksStringIsBlankAsExplicitRejected() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/String", "isBlank", "()Z")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksCharSequenceLengthAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/CharSequence", "length", "()I")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksCharacterIsWhitespaceAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Character", "isWhitespace", "(C)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
     @Test
@@ -619,9 +655,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksDateTimeFormatterBuilderAppendPatternAsExplicitRejected() {
+    void marksDateTimeFormatterBuilderAppendPatternAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/time/format/DateTimeFormatterBuilder", "appendPattern", "(Ljava/lang/String;)Ljava/time/format/DateTimeFormatterBuilder;")))
-            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
     @Test
@@ -697,15 +733,27 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksAtomicIntegerConstructorAsExplicitRejected() {
+    void marksAtomicIntegerDefaultConstructorAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/atomic/AtomicInteger", "<init>", "()V")))
-            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
     @Test
-    void marksAtomicIntegerGetAndIncrementAsExplicitRejected() {
+    void marksAtomicIntegerGetAndIncrementAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/atomic/AtomicInteger", "getAndIncrement", "()I")))
-            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksAtomicIntegerConstructorWithInitialValueAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/atomic/AtomicInteger", "<init>", "(I)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksAtomicIntegerGetAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/atomic/AtomicInteger", "get", "()I")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
     @Test

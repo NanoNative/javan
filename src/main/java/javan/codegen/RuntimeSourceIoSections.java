@@ -1182,6 +1182,9 @@ final class RuntimeSourceIoSections {
                 fputc('\\n', stderr);
             }
             javan_runtime_lock_reset_for_panic();
+            if (target != NULL && javan_panic_scope_recover_current(target) != 0) {
+                longjmp(*target, 1);
+            }
             javan_source_context_top = NULL;
             javan_native_resource_cleanup_all();
             javan_root_frame_cleanup();
@@ -1246,6 +1249,9 @@ final class RuntimeSourceIoSections {
                 fflush(stderr);
             }
             javan_runtime_lock_reset_for_panic();
+            if (target != NULL && javan_panic_scope_recover_current(target) != 0) {
+                longjmp(*target, 1);
+            }
             javan_source_context_top = NULL;
             javan_native_resource_cleanup_all();
             javan_root_frame_cleanup();

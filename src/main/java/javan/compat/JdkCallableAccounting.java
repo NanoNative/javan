@@ -90,8 +90,7 @@ final class JdkCallableAccounting {
                     || "()[B".equals(descriptor);
             }
             if ("toLowerCase".equals(methodName) || "toUpperCase".equals(methodName)) {
-                return "()Ljava/lang/String;".equals(descriptor)
-                    || "(Ljava/util/Locale;)Ljava/lang/String;".equals(descriptor);
+                return "(Ljava/util/Locale;)Ljava/lang/String;".equals(descriptor);
             }
             if ("strip".equals(methodName)
                 || "stripLeading".equals(methodName)
@@ -103,6 +102,12 @@ final class JdkCallableAccounting {
                 || "toCharArray".equals(methodName)
                 || "stripIndent".equals(methodName)
                 || "translateEscapes".equals(methodName)) {
+                if (("strip".equals(methodName)
+                    || "stripLeading".equals(methodName)
+                    || "stripTrailing".equals(methodName))
+                    && "()Ljava/lang/String;".equals(descriptor)) {
+                    return false;
+                }
                 return descriptor.startsWith("()");
             }
             return "indent".equals(methodName) && "(I)Ljava/lang/String;".equals(descriptor);

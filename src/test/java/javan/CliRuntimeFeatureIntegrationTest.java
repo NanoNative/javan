@@ -993,6 +993,32 @@ final class CliRuntimeFeatureIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void checkAcceptsReachableAtomicIntegerConstructorsAndGet() throws Exception {
+        final Path project = project("atomic-integer-runtime");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final var eventCount = new java.util.concurrent.atomic.AtomicInteger(3);
+                    final var ids = new java.util.concurrent.atomic.AtomicInteger();
+                    if (eventCount.get() == 3 && ids.get() == 0) {
+                        System.out.println("ok");
+                    }
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stderr()).isEmpty();
+    }
+
+    @Test
     void checkRejectsReachableNanoStyleHttpServerDependencyAndReportsHttpRuntimeModules() throws Exception {
         final Path project = project("unsupported-nano-http-server-dependency");
         writeJava(project, "com.acme.Main", """

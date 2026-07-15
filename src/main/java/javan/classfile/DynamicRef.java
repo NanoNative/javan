@@ -47,7 +47,15 @@ public record DynamicRef(
             bootstrapName,
             bootstrapDescriptor,
             List.copyOf(bootstrapArguments),
-            bootstrapArguments.stream().map(BootstrapArgument::unknown).toList()
+            unknownArguments(bootstrapArguments)
         );
+    }
+
+    private static List<BootstrapArgument> unknownArguments(final List<String> bootstrapArguments) {
+        final java.util.ArrayList<BootstrapArgument> result = new java.util.ArrayList<>();
+        for (final String bootstrapArgument : bootstrapArguments) {
+            result.add(BootstrapArgument.unknown(bootstrapArgument));
+        }
+        return List.copyOf(result);
     }
 }

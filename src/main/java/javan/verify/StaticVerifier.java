@@ -12,6 +12,7 @@ import javan.classfile.LambdaMetafactoryCall;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
 import javan.compat.BytecodeSupport;
+import javan.compat.ExactMethodSupport;
 import javan.compat.JdkCallSupport;
 import javan.compat.JavanHostOnlyMethods;
 import javan.compat.JavanNativeSubstitutions;
@@ -97,6 +98,9 @@ public final class StaticVerifier {
         final Optional<CodeAttribute> code = method.code();
         if (code.isPresent()) {
             final CodeAttribute methodCode = code.orElseThrow();
+            if (ExactMethodSupport.isExactLoweredMethod(classFile, method)) {
+                return diagnostics;
+            }
             final int hasMonitorInstructions = containsMonitorInstructions(methodCode) ? 1 : 0;
             final int exactVirtualThreadWrapperMethod = isSupportedExactVirtualThreadWrapperMethod(classes, classFile, method) ? 1 : 0;
             if (hasMonitorInstructions == 1) {
@@ -2405,6 +2409,9 @@ public final class StaticVerifier {
         if (isSupportedWrapperTarget(target)) {
             return false;
         }
+        if (JdkCallSupport.builtinInstanceOfTargetId(target).isPresent()) {
+            return false;
+        }
         if (classes.containsKey(target)) {
             return false;
         }
@@ -2568,7 +2575,10 @@ public final class StaticVerifier {
 
     private static boolean supportedLambdaMetafactory(final DynamicRef dynamicRef) {
         final Optional<LambdaMetafactoryCall> lambdaCall = LambdaMetafactoryCall.resolve(dynamicRef);
-        return lambdaCall.isPresent() && lambdaCall.orElseThrow().isDirectlyLowerable();
+        return lambdaCall.isPresent()
+            && (lambdaCall.orElseThrow().isDirectlyLowerable()
+            || lambdaCall.orElseThrow().isZeroCaptureMaterializedObjectLambda()
+            || lambdaCall.orElseThrow().isZeroCaptureMaterializedBooleanLambda());
     }
 
     private static boolean supportedStringConcatParameters(final String descriptor) {
@@ -2769,7 +2779,7 @@ public final class StaticVerifier {
         final int reachable
     ) {
         final String reason =
-            "Only StringConcatFactory string concatenation, record ObjectMethods equals, and exact LambdaMetafactory Function/Predicate shapes are implemented.";
+            "Only StringConcatFactory string concatenation, record ObjectMethods equals, exact LambdaMetafactory Function/Predicate shapes, and the current zero-capture custom-SAM materialization slice are implemented.";
         final String fix =
             "Keep invokedynamic limited to supported javac string concatenation, supported record equals, or the admitted LambdaMetafactory subset.";
         if (reachable == 1) {
@@ -2785,8 +2795,8 @@ public final class StaticVerifier {
         final int reachable
     ) {
         final String target = instruction.className().orElse("unknown");
-        final String reason = "The current runtime only has deterministic type metadata for application classes and supported boxed primitive wrappers.";
-        final String fix = "Keep instanceof targets to application classes/interfaces, Object, or supported wrappers until this runtime model expands.";
+        final String reason = "The current runtime only has deterministic instanceof support for application classes, supported boxed primitive wrappers, Object[], and the built-in Collection/Map runtime objects.";
+        final String fix = "Keep instanceof targets to application classes/interfaces, Object, Object[], supported wrappers, or the currently admitted Collection/Map runtime targets.";
         if (reachable == 1) {
             return error(classFile, method, "JAVAN045", "unsupported instanceof target", target, reason, fix);
         }

@@ -65,7 +65,8 @@ public record LambdaMetafactoryCall(
             return Optional.empty();
         }
         if (!"Ljava/util/function/Function;".equals(returnDescriptor.orElseThrow())
-            && !"Ljava/util/function/Predicate;".equals(returnDescriptor.orElseThrow())) {
+            && !"Ljava/util/function/Predicate;".equals(returnDescriptor.orElseThrow())
+            && !"Lberlin/yuna/typemap/model/FunctionOrNull;".equals(returnDescriptor.orElseThrow())) {
             return Optional.empty();
         }
         final List<String> captured = parameterDescriptors(dynamicRef.descriptor());
@@ -74,7 +75,8 @@ public record LambdaMetafactoryCall(
         }
         final String interfaceOwner = objectOwner(returnDescriptor.orElseThrow()).orElse("");
         if (!"java/util/function/Function".equals(interfaceOwner)
-            && !"java/util/function/Predicate".equals(interfaceOwner)) {
+            && !"java/util/function/Predicate".equals(interfaceOwner)
+            && !"berlin/yuna/typemap/model/FunctionOrNull".equals(interfaceOwner)) {
             return Optional.empty();
         }
         return Optional.of(new LambdaMetafactoryCall(
@@ -145,6 +147,66 @@ public record LambdaMetafactoryCall(
         return inputDescriptor().isPresent();
     }
 
+    /**
+     * Returns whether this is the exact zero-capture TypeMap FunctionOrNull materialization shape.
+     *
+     * @return true when the lambda matches the current FunctionOrNull runtime slice
+     */
+    public boolean isExactFunctionOrNullMaterialization() {
+        if (!"berlin/yuna/typemap/model/FunctionOrNull".equals(interfaceOwner)) {
+            return false;
+        }
+        if (!"applyWithException".equals(interfaceMethodName)) {
+            return false;
+        }
+        if (!"(Ljava/lang/Object;)Ljava/lang/Object;".equals(samMethodDescriptor)) {
+            return false;
+        }
+        if (!singleObjectInput(instantiatedMethodDescriptor) || !objectReturn(instantiatedMethodDescriptor)) {
+            return false;
+        }
+        if (implementationReferenceKind != 6) {
+            return false;
+        }
+        return capturedParameterDescriptors.isEmpty();
+    }
+
+    /**
+     * Returns whether this is a zero-capture custom SAM object-return materialization.
+     *
+     * @return true when the current native profile can materialize the lambda as an object
+     */
+    public boolean isZeroCaptureMaterializedObjectLambda() {
+        if (isDirectlyLowerable()) {
+            return false;
+        }
+        if (implementationReferenceKind != 6) {
+            return false;
+        }
+        if (!capturedParameterDescriptors.isEmpty()) {
+            return false;
+        }
+        return singleObjectInput(instantiatedMethodDescriptor) && objectReturn(instantiatedMethodDescriptor);
+    }
+
+    /**
+     * Returns whether this is a zero-capture custom SAM boolean-return materialization.
+     *
+     * @return true when the current native profile can materialize the lambda as an object
+     */
+    public boolean isZeroCaptureMaterializedBooleanLambda() {
+        if (isDirectlyLowerable()) {
+            return false;
+        }
+        if (implementationReferenceKind != 6) {
+            return false;
+        }
+        if (!capturedParameterDescriptors.isEmpty()) {
+            return false;
+        }
+        return singleObjectInput(instantiatedMethodDescriptor) && booleanReturn(instantiatedMethodDescriptor);
+    }
+
     private static boolean singleObjectInput(final String descriptor) {
         final Optional<String> input = new LambdaMetafactoryCall("", "", "", "", new MethodRef("", "", ""), -1, descriptor, List.of())
             .inputDescriptor();
@@ -152,11 +214,17 @@ public record LambdaMetafactoryCall(
     }
 
     private static boolean booleanReturn(final String descriptor) {
-        return returnDescriptor(descriptor).filter("Z"::equals).isPresent();
+        final Optional<String> value = returnDescriptor(descriptor);
+        return value.isPresent() && "Z".equals(value.orElseThrow());
     }
 
     private static boolean objectReturn(final String descriptor) {
-        return returnDescriptor(descriptor).filter(value -> value.startsWith("L") || value.startsWith("[")).isPresent();
+        final Optional<String> value = returnDescriptor(descriptor);
+        if (value.isEmpty()) {
+            return false;
+        }
+        final String descriptorValue = value.orElseThrow();
+        return descriptorValue.startsWith("L") || descriptorValue.startsWith("[");
     }
 
     private static Optional<String> objectOwner(final String descriptor) {

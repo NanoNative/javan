@@ -139,6 +139,9 @@ final class ClassFileReaderTest {
             .contains(9L);
         assertThat(instructions.stream().filter(instruction -> instruction.doubleValue().isPresent()).findFirst().orElseThrow().doubleValue())
             .contains(2.5d);
+        assertThat(instructions.stream().filter(instruction -> instruction.mnemonic().equals("ldc") && instruction.className().isPresent()))
+            .singleElement()
+            .satisfies(instruction -> assertThat(instruction.className()).contains("java/lang/String"));
         assertThat(instructions.stream().filter(instruction -> instruction.className().isPresent()).map(instruction -> instruction.className().orElseThrow()))
             .containsOnly("java/lang/String");
         assertThat(instructions.stream().filter(instruction -> instruction.dynamicRef().isPresent()).findFirst().orElseThrow().dynamicRef())
@@ -260,6 +263,7 @@ final class ClassFileReaderTest {
             18, 5,
             18, 6,
             18, 7,
+            18, 13,
             20, 0, 8,
             20, 0, 10,
             (byte) 187, 0, 13,

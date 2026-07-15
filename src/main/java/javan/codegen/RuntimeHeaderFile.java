@@ -25,6 +25,18 @@ final class RuntimeHeaderFile {
             const char* fix;
             struct JavanSourceContext* previous;
         } JavanSourceContext;
+        typedef struct JavanPanicScope {
+            jmp_buf* target;
+            jmp_buf* previous_target;
+            JavanSourceContext* source_context_top;
+            void* root_frame_head;
+            int root_frame_depth;
+            int frame_root_count;
+            void* native_resource_frame_head;
+            struct JavanPanicScope* previous;
+        } JavanPanicScope;
+
+        #define JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA 29
 
         void javan_println(const char* value);
         void javan_print(const char* value);
@@ -154,6 +166,7 @@ final class RuntimeHeaderFile {
         unsigned long javan_heap_threads_with_target(void);
         int javan_heap_current_thread_root_present(void);
         int javan_object_non_null(void* value);
+        int javan_object_builtin_instance_of(void* value, int target);
         int javan_object_type_in(void* value, int count, ...);
         void* javan_object_array_new(int length);
         void* javan_object_array_get(void* array, int index);
@@ -216,6 +229,13 @@ final class RuntimeHeaderFile {
         void* javan_string_replace_char(const char* value, int old_ch, int new_ch);
         void* javan_string_repeat(const char* value, int count);
         void* javan_string_trim(const char* value);
+        void* javan_string_strip_leading(const char* value);
+        void* javan_string_strip_trailing(const char* value);
+        void* javan_string_to_lower_case(const char* value);
+        void* javan_string_to_upper_case(const char* value);
+        int javan_char_sequence_length(void* value);
+        int javan_char_sequence_char_at(void* value, int index);
+        int javan_character_is_whitespace(int value);
         void* javan_string_substring(const char* value, int begin);
         void* javan_string_substring_range(const char* value, int begin, int end);
         void* javan_arraylist_new(void);
@@ -250,7 +270,15 @@ final class RuntimeHeaderFile {
         int javan_map_contains_key(void* map, void* key);
         int javan_map_size(void* map);
         int javan_map_is_empty(void* map);
+        void* javan_map_empty(void);
+        void* javan_map_key_set(void* map);
+        void* javan_map_entry_set(void* map);
+        void* javan_map_entry_get_key(void* value);
+        void* javan_map_entry_get_value(void* value);
         void* javan_map_values(void* map);
+        int javan_object_equals(void* left, void* right);
+        void* javan_materialized_lambda_new(int target_id);
+        int javan_materialized_lambda_target_id(void* value);
         void* javan_path_of(void* first, void* more);
         void* javan_path_resolve(void* path, void* child);
         void* javan_path_to_absolute(void* path);
@@ -348,13 +376,30 @@ final class RuntimeHeaderFile {
         double javan_double_long_bits_to_double(long long value);
         void* javan_boolean_value_of(int value);
         int javan_boolean_boolean_value(void* value);
+        int javan_is_supported_number(void* value);
+        int javan_number_int_value(void* value);
+        int javan_boolean_equals(void* left, void* right);
         void* javan_duration_of_millis(long long millis);
         void* javan_duration_of_seconds(long long seconds);
         long long javan_duration_to_millis(void* value);
+        void* javan_datetime_formatter_builtin(int kind);
+        void* javan_datetime_formatter_builder_new(void);
+        void* javan_datetime_formatter_builder_parse_case_insensitive(void* value);
+        void* javan_datetime_formatter_builder_append_pattern(void* value, void* pattern);
+        void* javan_datetime_formatter_builder_append_zone_text(void* value, void* style);
+        void* javan_datetime_formatter_builder_to_formatter(void* value, void* locale);
+        void* javan_text_style_short(void);
+        void* javan_locale_english(void);
         void* javan_caller_runs_policy_new(void);
         void* javan_atomic_boolean_new(void);
         void javan_atomic_boolean_init(void* value, int initial_value);
         int javan_atomic_boolean_get(void* value);
+        void* javan_atomic_integer_new(void);
+        void javan_atomic_integer_init(void* value, int initial_value);
+        int javan_atomic_integer_get(void* value);
+        int javan_atomic_integer_get_and_increment(void* value);
+        int javan_atomic_integer_increment_and_get(void* value);
+        int javan_atomic_integer_decrement_and_get(void* value);
         void* javan_atomic_long_new(void);
         void javan_atomic_long_init(void* value, long long initial_value);
         long long javan_atomic_long_get(void* value);
@@ -390,7 +435,16 @@ final class RuntimeHeaderFile {
         void* javan_virtual_thread_builder_get_class(void* value);
         void* javan_virtual_thread_factory_get_class(void* value);
         void* javan_virtual_thread_executor_get_class(void* value);
+        void* javan_runtime_class_literal(const char* binary_name, int exact_type_id, int is_enum, int is_array, int assignable_count, ...);
         void* javan_runtime_class_get_name(void* value);
+        int javan_class_exact_type_id(void* class_value);
+        int javan_class_is_instance(void* class_value, void* object_value);
+        void* javan_class_cast(void* class_value, void* object_value);
+        int javan_class_is_enum(void* class_value);
+        int javan_class_is_array(void* class_value);
+        int javan_class_is_assignable_from(void* target, void* source);
+        void* javan_object_get_class(void* value);
+        void* javan_generated_object_get_class(void* value);
         int javan_virtual_thread_object_equals(void* left, void* right);
         int javan_virtual_thread_object_hash_code(void* value);
         void* javan_thread_current(void);
@@ -491,6 +545,8 @@ final class RuntimeHeaderFile {
         void javan_clear_error(void);
         void javan_panic_set_target(jmp_buf* target);
         void javan_panic_clear_target(jmp_buf* target);
+        void javan_panic_scope_push(JavanPanicScope* scope, jmp_buf* target);
+        void javan_panic_scope_pop(JavanPanicScope* scope);
         void javan_source_enter(
             JavanSourceContext* context,
             const char* code,

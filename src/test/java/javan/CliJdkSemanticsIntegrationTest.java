@@ -125,6 +125,319 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void classLiteralGetNameBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("class-literal-get-name");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(String.class.getName());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/class-literal-get-name").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("java.lang.String\n");
+    }
+
+    @Test
+    void classIsInstanceAndCastBuildAndMatchJvmOutput() throws Exception {
+        final Path project = project("class-is-instance-cast");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Class<?> target = String.class;
+                    final Object value = "value";
+                    System.out.println(target.isInstance(value));
+                    System.out.println(target.isInstance(42));
+                    System.out.println(target.cast(value));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/class-is-instance-cast").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\nfalse\nvalue\n");
+    }
+
+    @Test
+    void generatedObjectGetClassNameBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("generated-object-get-class-name");
+        writeJava(project, "com.acme.Widget", """
+            package com.acme;
+
+            public final class Widget {
+            }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Object value = new Widget();
+                    System.out.println(value.getClass().getName());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/generated-object-get-class-name").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("com.acme.Widget\n");
+    }
+
+    @Test
+    void generatedClassLiteralGetNameBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("generated-class-literal-get-name");
+        writeJava(project, "com.acme.Widget", """
+            package com.acme;
+
+            public final class Widget {
+            }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Widget.class.getName());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/generated-class-literal-get-name").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("com.acme.Widget\n");
+    }
+
+    @Test
+    void dateTimeFormatterBuilderStaticInitBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("datetime-formatter-builder-static-init");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.time.format.DateTimeFormatter;
+            import java.time.format.DateTimeFormatterBuilder;
+            import java.time.format.TextStyle;
+            import java.util.Locale;
+
+            public final class Main {
+                private static final DateTimeFormatter[] FORMATTERS = {
+                    DateTimeFormatter.ISO_ZONED_DATE_TIME,
+                    DateTimeFormatter.ISO_OFFSET_DATE_TIME,
+                    new DateTimeFormatterBuilder()
+                        .parseCaseInsensitive()
+                        .appendPattern("EEE MMM dd HH:mm:ss")
+                        .appendZoneText(TextStyle.SHORT)
+                        .appendPattern(" yyyy")
+                        .toFormatter(Locale.ENGLISH)
+                };
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(FORMATTERS.length);
+                    System.out.println(FORMATTERS[0] != null);
+                    System.out.println(FORMATTERS[1] != null);
+                    System.out.println(FORMATTERS[2] != null);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/datetime-formatter-builder-static-init").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("3\ntrue\ntrue\ntrue\n");
+    }
+
+    @Test
+    void collectionsEmptyMapAndEntrySetBuildAndMatchJvmOutput() throws Exception {
+        final Path project = project("collections-empty-map-entry-set");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Collections;
+            import java.util.HashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<Class<?>, String> values = new HashMap<>();
+                    values.put(Object.class, "object");
+                    for (final Map.Entry<Class<?>, String> entry : values.entrySet()) {
+                        System.out.println(entry.getKey().isAssignableFrom(String.class));
+                        System.out.println(entry.getValue());
+                    }
+                    System.out.println(Collections.emptyMap().isEmpty());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/collections-empty-map-entry-set").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\nobject\ntrue\n");
+    }
+
+    @Test
+    void mapOfEmptyBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-of-empty");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Map.of().isEmpty());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-of-empty").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n");
+    }
+
+    @Test
+    void booleanEqualsBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("boolean-equals");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Boolean.TRUE.equals(Boolean.valueOf(true)));
+                    System.out.println(Boolean.TRUE.equals(Boolean.FALSE));
+                    System.out.println(Boolean.TRUE.equals("true"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/boolean-equals").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\nfalse\nfalse\n");
+    }
+
+    @Test
+    void mapKeySetBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-key-set");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.LinkedHashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, String> values = new LinkedHashMap<>();
+                    values.put("left", "1");
+                    values.put("right", "2");
+                    System.out.println(values.keySet().contains("left"));
+                    for (final String key : values.keySet()) {
+                        System.out.println(key);
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-key-set").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\nleft\nright\n");
+    }
+
+    @Test
+    void atomicIntegerBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("atomic-integer");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final var counter = new java.util.concurrent.atomic.AtomicInteger(4);
+                    System.out.println(counter.get());
+                    System.out.println(counter.getAndIncrement());
+                    System.out.println(counter.incrementAndGet());
+                    System.out.println(counter.decrementAndGet());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/atomic-integer").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("4\n4\n6\n5\n");
+    }
+
+    @Test
     void stringStartsWithBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("string-starts-with");
         writeJava(project, "com.acme.Main", """
@@ -490,6 +803,129 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/string-trim").toString())).stdout()).isEqualTo(jvmOutput);
         assertThat(jvmOutput).isEqualTo("javan\n");
+    }
+
+    @Test
+    void stringStripBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-strip");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("\\t javan \\n".strip());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-strip").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("javan\n");
+    }
+
+    @Test
+    void stringToLowerCaseBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-to-lower-case");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("JaVaN_123".toLowerCase());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-to-lower-case").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("javan_123\n");
+    }
+
+    @Test
+    void charSequenceLengthBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("char-sequence-length");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final CharSequence value = "nano";
+                    System.out.println(value.length());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/char-sequence-length").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("4\n");
+    }
+
+    @Test
+    void charSequenceCharAtBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("char-sequence-char-at");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final CharSequence value = "nano";
+                    System.out.println((int) value.charAt(1));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/char-sequence-char-at").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("97\n");
+    }
+
+    @Test
+    void characterIsWhitespaceBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("character-is-whitespace");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Character.isWhitespace('\\t'));
+                    System.out.println(Character.isWhitespace('x'));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/character-is-whitespace").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\nfalse\n");
     }
 
     @Test
@@ -924,7 +1360,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                 }
 
                 private static boolean hasText(final String value) {
-                    return value != null && !value.isBlank();
+                    return value != null && value.length() > 1;
                 }
             }
             """);
@@ -1054,8 +1490,88 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).isEqualTo(2);
-        assertThat(run.stderr()).contains("error[JAVAN040]", "invokedynamic");
+        assertThat(run.stderr()).contains(
+            "error[JAVAN012]",
+            "com/acme/Main$Mapper.apply(Ljava/lang/String;)Ljava/lang/String;"
+        );
         assertThat(project.resolve(".javan/bin/custom-functional-interface-lambda")).doesNotExist();
+    }
+
+    @Test
+    void capturedCustomFunctionalInterfaceLambdaFailsClearlyAtBuildTime() throws Exception {
+        final Path project = project("captured-custom-functional-interface-lambda");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String suffix = "!";
+                    final Mapper mapper = value -> value + suffix;
+                    System.out.println(mapper.apply("demo"));
+                }
+
+                @FunctionalInterface
+                interface Mapper {
+                    String apply(String value);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains("error[JAVAN012]");
+        assertThat(project.resolve(".javan/bin/captured-custom-functional-interface-lambda")).doesNotExist();
+    }
+
+    @Test
+    void defaultMethodFunctionalInterfaceLambdaFailsClearlyAtBuildTime() throws Exception {
+        final Path project = project("default-method-functional-interface-lambda");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final ThrowingMapper trim = Main::trimOrFail;
+                    System.out.println(trim.apply(" demo "));
+                    System.out.println(trim.apply(null));
+                }
+
+                private static String trimOrFail(final String value) throws Exception {
+                    if (value == null) {
+                        throw new Exception("missing");
+                    }
+                    return value.trim();
+                }
+
+                interface ThrowingMapper {
+                    String applyWithException(String value) throws Exception;
+
+                    default String apply(final String value) {
+                        try {
+                            return applyWithException(value);
+                        } catch (final Exception ignored) {
+                            return null;
+                        }
+                    }
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains(
+            "error[JAVAN012]",
+            "com/acme/Main$ThrowingMapper.applyWithException(Ljava/lang/String;)Ljava/lang/String;"
+        );
+        assertThat(project.resolve(".javan/bin/default-method-functional-interface-lambda")).doesNotExist();
     }
 
     @Test
@@ -1263,6 +1779,114 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/math-to-int-exact").toString())).stdout()).isEqualTo(jvmOutput);
         assertThat(jvmOutput).isEqualTo("123456789\n");
+    }
+
+    @Test
+    void exactCatchNullEnumLookupBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("exact-catch-null-enum-lookup");
+        writeJava(project, "com.acme.Color", """
+            package com.acme;
+
+            public enum Color {
+                RED,
+                BLUE,
+                GREEN
+            }
+            """);
+        writeJava(project, "com.acme.TypeConverter", """
+            package com.acme;
+
+            public final class TypeConverter {
+                private TypeConverter() {
+                }
+
+                public static <T extends Enum<T>> T enumOf(final Object value, final Class<T> type) {
+                    try {
+                        if (value instanceof Number) {
+                            final int ordinal = ((Number) value).intValue();
+                            final T[] enums = type.getEnumConstants();
+                            return ordinal >= 0 && ordinal < enums.length ? enums[ordinal] : null;
+                        }
+                        return Enum.valueOf(type, String.valueOf(value));
+                    } catch (final IllegalArgumentException ignored) {
+                        return null;
+                    }
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(TypeConverter.enumOf("RED", Color.class));
+                    System.out.println(TypeConverter.enumOf("MISSING", Color.class));
+                    System.out.println(TypeConverter.enumOf(1, Color.class));
+                    System.out.println(TypeConverter.enumOf(4L, Color.class));
+                    System.out.println(TypeConverter.enumOf(null, Color.class));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/exact-catch-null-enum-lookup").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("RED\nnull\nBLUE\nnull\nnull\n");
+    }
+
+    @Test
+    void exactCatchNullFunctionOrNullApplyBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("exact-catch-null-function-or-null-apply");
+        writeJava(project, "berlin.yuna.typemap.model.FunctionOrNull", """
+            package berlin.yuna.typemap.model;
+
+            @FunctionalInterface
+            public interface FunctionOrNull<T, R> {
+                R applyWithException(T value) throws Exception;
+
+                default R apply(T value) {
+                    try {
+                        return applyWithException(value);
+                    } catch (final Exception ignored) {
+                        return null;
+                    }
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import berlin.yuna.typemap.model.FunctionOrNull;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final FunctionOrNull<String, String> trimOrNull = value -> {
+                        if (value == null) {
+                            throw new IllegalArgumentException("missing");
+                        }
+                        return value.trim();
+                    };
+                    System.out.println(trimOrNull.apply("  ok  "));
+                    System.out.println(trimOrNull.apply(null));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/exact-catch-null-function-or-null-apply").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("ok\nnull\n");
     }
 
     @Test

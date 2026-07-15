@@ -4993,6 +4993,111 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void runtimeRecoverablePanicScopeRestoresOuterRootFrameSnapshot() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <setjmp.h>
+            #include <stdio.h>
+
+            void* javan_generated_object_get_class(void* value) {
+                (void) value;
+                return 0;
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* outer_root = NULL;
+                void** roots[] = { &outer_root };
+                javan_root_frame_push(roots, 1);
+                JavanPanicScope scope;
+                jmp_buf target;
+                javan_panic_scope_push(&scope, &target);
+                if (setjmp(target) != 0) {
+                    printf("%d,%d\\n", javan_heap_root_frame_depth(), javan_heap_frame_root_count());
+                    return 0;
+                }
+                void* inner_root = NULL;
+                void** inner_roots[] = { &inner_root, &outer_root };
+                javan_root_frame_push(inner_roots, 2);
+                javan_panic("recover");
+                return 2;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("1,1\n");
+    }
+
+    @Test
+    void runtimeRecoverablePanicScopeRestoresOuterSourceContextAndTarget() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <setjmp.h>
+            #include <stdio.h>
+
+            void* javan_generated_object_get_class(void* value) {
+                (void) value;
+                return 0;
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                jmp_buf outer;
+                javan_panic_set_target(&outer);
+                if (setjmp(outer) != 0) {
+                    printf("%s\\n", javan_last_error());
+                    return 0;
+                }
+                JavanSourceContext outer_context;
+                javan_source_enter(
+                    &outer_context,
+                    "JAVAN-RUNTIME-PANIC",
+                    "outer failure",
+                    "com.acme.Main",
+                    "main()V",
+                    "Main.java",
+                    11,
+                    4,
+                    "",
+                    "why",
+                    "fix"
+                );
+                JavanPanicScope scope;
+                jmp_buf inner;
+                javan_panic_scope_push(&scope, &inner);
+                if (setjmp(inner) != 0) {
+                    javan_panic("after recover");
+                    return 3;
+                }
+                JavanSourceContext inner_context;
+                javan_source_enter(
+                    &inner_context,
+                    "JAVAN-RUNTIME-PANIC",
+                    "inner failure",
+                    "com.acme.Helper",
+                    "run()V",
+                    "Helper.java",
+                    21,
+                    8,
+                    "",
+                    "why",
+                    "fix"
+                );
+                javan_panic("inner panic");
+                return 2;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).contains("outer failure", "com.acme.Main.main()V(Main.java:11)", "detail:after recover");
+        assertThat(stdout).doesNotContain("Helper.java");
+    }
+
+    @Test
     void runtimePanicAndSourceContextStateStayThreadLocalAcrossHostThreads() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
