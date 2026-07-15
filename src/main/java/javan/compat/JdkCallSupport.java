@@ -93,11 +93,13 @@ public final class JdkCallSupport {
         runtime("ThreadFactory.equals", "java/util/concurrent/ThreadFactory", "equals", "(Ljava/lang/Object;)Z"),
         runtime("Executor.execute", "java/util/concurrent/Executor", "execute", "(Ljava/lang/Runnable;)V"),
         runtime("ExecutorService.execute", "java/util/concurrent/ExecutorService", "execute", "(Ljava/lang/Runnable;)V"),
+        runtime("ExecutorService.submit", "java/util/concurrent/ExecutorService", "submit", "(Ljava/lang/Runnable;)Ljava/util/concurrent/Future;"),
         runtime("ExecutorService.shutdown", "java/util/concurrent/ExecutorService", "shutdown", "()V"),
         runtime("ExecutorService.close", "java/util/concurrent/ExecutorService", "close", "()V"),
         runtime("ExecutorService.toString", "java/util/concurrent/ExecutorService", "toString", "()Ljava/lang/String;"),
         runtime("ExecutorService.hashCode", "java/util/concurrent/ExecutorService", "hashCode", "()I"),
         runtime("ExecutorService.equals", "java/util/concurrent/ExecutorService", "equals", "(Ljava/lang/Object;)Z"),
+        runtime("Future.cancel", "java/util/concurrent/Future", "cancel", "(Z)Z"),
         runtime("ScheduledThreadPoolExecutor.<init>", "java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V"),
         runtime("ScheduledThreadPoolExecutor.<init>", "java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(ILjava/util/concurrent/ThreadFactory;Ljava/util/concurrent/RejectedExecutionHandler;)V"),
         runtime("ThreadPoolExecutor.CallerRunsPolicy.<init>", "java/util/concurrent/ThreadPoolExecutor$CallerRunsPolicy", "<init>", "()V"),
@@ -767,6 +769,9 @@ public final class JdkCallSupport {
             return List.of("threads");
         }
         if ("java/util/concurrent/ExecutorService".equals(owner)) {
+            return List.of("threads");
+        }
+        if ("java/util/concurrent/Future".equals(owner)) {
             return List.of("threads");
         }
         if ("java/util/concurrent/locks/LockSupport".equals(owner)) {

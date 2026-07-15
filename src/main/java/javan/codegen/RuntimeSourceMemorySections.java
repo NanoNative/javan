@@ -2453,6 +2453,28 @@ final class RuntimeSourceMemorySections {
             javan_root_frame_pop(roots);
         }
 
+        void* javan_virtual_thread_executor_submit(void* value, void* runnable) {
+            void* executor_root = value;
+            void* runnable_root = runnable;
+            void* thread_value = NULL;
+            void** roots[] = {
+                (void**) &executor_root,
+                (void**) &runnable_root,
+                (void**) &thread_value
+            };
+            javan_root_frame_push(roots, 3);
+            javan_virtual_thread_executor_state* state = javan_virtual_thread_executor_checked(executor_root);
+            if (state->closed != 0) {
+                javan_panic("virtual thread executor is closed");
+            }
+            javan_profile_executor_execute_calls_value++;
+            thread_value = javan_virtual_thread_factory_new_thread(state->factory, runnable_root);
+            javan_thread_start(thread_value);
+            javan_list_append_raw(state->threads, thread_value);
+            javan_root_frame_pop(roots);
+            return thread_value;
+        }
+
         void javan_virtual_thread_executor_shutdown(void* value) {
             javan_virtual_thread_executor_checked(value)->closed = 1;
         }
@@ -3265,6 +3287,21 @@ final class RuntimeSourceMemorySections {
             javan_profile_thread_interrupt_calls_value++;
             javan_require_thread(value)->interrupted = 1;
             javan_runtime_lock_leave();
+        }
+
+        int javan_future_cancel(void* value, int may_interrupt_if_running) {
+            javan_thread* thread = javan_require_thread(value);
+            javan_runtime_lock_enter();
+            int already_done = thread->started == 0 || thread->completed != 0;
+            javan_runtime_lock_leave();
+            if (already_done != 0) {
+                return 0;
+            }
+            if (may_interrupt_if_running == 0) {
+                return 0;
+            }
+            javan_thread_interrupt(value);
+            return 1;
         }
 
         void javan_thread_park(void) {

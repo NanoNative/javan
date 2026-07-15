@@ -372,8 +372,10 @@ final class RuntimeHeaderFile {
         void* javan_virtual_thread_executor_new(void);
         void* javan_virtual_thread_executor_from_factory(void* value);
         void javan_virtual_thread_executor_execute(void* value, void* runnable);
+        void* javan_virtual_thread_executor_submit(void* value, void* runnable);
         void javan_virtual_thread_executor_shutdown(void* value);
         void javan_virtual_thread_executor_close(void* value);
+        int javan_future_cancel(void* value, int may_interrupt_if_running);
         void* javan_virtual_thread_builder_to_string(void* value);
         void* javan_virtual_thread_factory_to_string(void* value);
         void* javan_virtual_thread_executor_to_string(void* value);

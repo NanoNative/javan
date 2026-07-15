@@ -133,6 +133,12 @@ final class VirtualThreadInvokePatternsTest {
         assertThat(VirtualThreadInvokePatterns.isExecutorServiceClose(
             new MethodRef("java/util/concurrent/ExecutorService", "close", "()V")
         )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isExecutorServiceSubmit(
+            new MethodRef("java/util/concurrent/ExecutorService", "submit", "(Ljava/lang/Runnable;)Ljava/util/concurrent/Future;")
+        )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isFutureCancel(
+            new MethodRef("java/util/concurrent/Future", "cancel", "(Z)Z")
+        )).isTrue();
         assertThat(VirtualThreadInvokePatterns.isExecutorServiceClose(
             new MethodRef("java/util/concurrent/ExecutorService", "shutdown", "()V")
         )).isFalse();
@@ -189,6 +195,12 @@ final class VirtualThreadInvokePatternsTest {
         assertThat(VirtualThreadInvokePatterns.isExecutorServiceShutdown(
             new MethodRef("java/util/concurrent/ExecutorService", "shutdown", "(J)V")
         )).isFalse();
+        assertThat(VirtualThreadInvokePatterns.isExecutorServiceSubmit(
+            new MethodRef("java/util/concurrent/ExecutorService", "submit", "()Ljava/util/concurrent/Future;")
+        )).isFalse();
+        assertThat(VirtualThreadInvokePatterns.isFutureCancel(
+            new MethodRef("java/util/concurrent/Future", "cancel", "()Z")
+        )).isFalse();
     }
 
     @Test
@@ -219,6 +231,12 @@ final class VirtualThreadInvokePatternsTest {
         )).isFalse();
         assertThat(VirtualThreadInvokePatterns.isExecutorServiceClose(
             new MethodRef("java/util/concurrent/ExecutorService", "close", "(I)V")
+        )).isFalse();
+        assertThat(VirtualThreadInvokePatterns.isExecutorServiceSubmit(
+            new MethodRef("java/lang/Object", "submit", "(Ljava/lang/Runnable;)Ljava/util/concurrent/Future;")
+        )).isFalse();
+        assertThat(VirtualThreadInvokePatterns.isFutureCancel(
+            new MethodRef("java/lang/Object", "cancel", "(Z)Z")
         )).isFalse();
     }
 

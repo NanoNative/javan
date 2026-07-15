@@ -117,6 +117,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void executorSubmitRunnableIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/ExecutorService",
+            "submit",
+            "(Ljava/lang/Runnable;)Ljava/util/concurrent/Future;"
+        ))).isTrue();
+    }
+
+    @Test
+    void futureCancelRequiresThreadsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/concurrent/Future",
+            "cancel",
+            "(Z)Z"
+        ))).containsExactly("threads");
+    }
+
+    @Test
     void lockSupportParkIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/concurrent/locks/LockSupport",

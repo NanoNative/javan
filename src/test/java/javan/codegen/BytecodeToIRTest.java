@@ -4870,6 +4870,50 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowerProgramAddsRunnableDispatchForVirtualThreadExecutorSubmit() {
+        final MethodInfo main = method(
+            0x0008,
+            "main",
+            "()V",
+            3,
+            1,
+            invokeStatic(0, new MethodRef("java/util/concurrent/Executors", "newVirtualThreadPerTaskExecutor", "()Ljava/util/concurrent/ExecutorService;")),
+            plain(1, 75, "astore_0"),
+            plain(2, 42, "aload_0"),
+            classInstruction(3, 187, "new", "com/acme/Task"),
+            plain(4, 89, "dup"),
+            invokeSpecial(5, new MethodRef("com/acme/Task", "<init>", "()V")),
+            invokeInterface(6, new MethodRef("java/util/concurrent/ExecutorService", "submit", "(Ljava/lang/Runnable;)Ljava/util/concurrent/Future;")),
+            plain(7, 87, "pop"),
+            plain(8, 177, "return")
+        );
+        final ClassFile task = classFile(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            List.of(),
+            List.of(
+                method(0, "<init>", "()V", 0, 1, plain(0, 177, "return")),
+                method(0, "run", "()V", 0, 1, plain(0, 177, "return"))
+            )
+        );
+        final EntryPoint entryPoint = new EntryPoint("com/acme/Main", "main", "()V");
+        final EntryPoint taskRun = new EntryPoint("com/acme/Task", "run", "()V");
+        final Map<String, ClassFile> classes = new LinkedHashMap<>();
+        classes.put("com/acme/Main", classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(main)));
+        classes.put(task.name(), task);
+
+        final IrProgram program = new BytecodeToIR().lower(
+            classes,
+            new CallGraph(entryPoint, List.of(entryPoint, taskRun), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.dispatches()).extracting(IrDispatch::symbol).contains("javan_dispatch_java_lang_Runnable_run___V");
+    }
+
+    @Test
     void deduplicatesInheritedInterfaceDispatchTargetsThatResolveToSameMethod() {
         final MethodInfo main = method(
             0x0008,

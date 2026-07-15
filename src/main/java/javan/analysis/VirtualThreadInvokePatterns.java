@@ -96,10 +96,22 @@ public final class VirtualThreadInvokePatterns {
             && "()V".equals(methodRef.descriptor());
     }
 
+    public static boolean isExecutorServiceSubmit(final MethodRef methodRef) {
+        return "java/util/concurrent/ExecutorService".equals(methodRef.owner())
+            && "submit".equals(methodRef.name())
+            && "(Ljava/lang/Runnable;)Ljava/util/concurrent/Future;".equals(methodRef.descriptor());
+    }
+
     public static boolean isExecutorServiceClose(final MethodRef methodRef) {
         return "java/util/concurrent/ExecutorService".equals(methodRef.owner())
             && "close".equals(methodRef.name())
             && "()V".equals(methodRef.descriptor());
+    }
+
+    public static boolean isFutureCancel(final MethodRef methodRef) {
+        return "java/util/concurrent/Future".equals(methodRef.owner())
+            && "cancel".equals(methodRef.name())
+            && "(Z)Z".equals(methodRef.descriptor());
     }
 
     public static int virtualThreadReceiverProducerIndex(

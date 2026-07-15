@@ -1328,11 +1328,14 @@ public final class StaticVerifier {
         if (isExecutorsNewThreadPerTaskExecutor(methodRef)) {
             return supportsVirtualThreadExecutorFactory(classes, instructions, instructionIndex);
         }
-        if (isExecutorExecute(methodRef)) {
-            return supportsVirtualThreadExecutorExecute(classes, instructions, instructionIndex);
+        if (isExecutorExecute(methodRef) || isExecutorServiceSubmit(methodRef)) {
+            return supportsVirtualThreadExecutorTaskSubmission(classes, instructions, instructionIndex);
         }
         if (isExecutorServiceShutdown(methodRef) || isExecutorServiceClose(methodRef)) {
             return supportedVirtualThreadExecutorReceiver(classes, instructions, instructionIndex);
+        }
+        if (isFutureCancel(methodRef)) {
+            return true;
         }
         if (isVirtualThreadExecutorObservationMethod(methodRef)) {
             return supportedVirtualThreadExecutorObservationReceiver(classes, instructions, instructionIndex, methodRef);
@@ -1549,7 +1552,7 @@ public final class StaticVerifier {
             && supportedVirtualThreadFactoryProducer(classes, instructions, instructionIndex - 1, rootProducerIndex);
     }
 
-    private static boolean supportsVirtualThreadExecutorExecute(
+    private static boolean supportsVirtualThreadExecutorTaskSubmission(
         final Map<String, ClassFile> classes,
         final List<Instruction> instructions,
         final int instructionIndex
@@ -1558,7 +1561,8 @@ public final class StaticVerifier {
             return false;
         }
         final Optional<MethodRef> executeRef = instructions.get(instructionIndex).methodRef();
-        if (executeRef.isEmpty() || !isExecutorExecute(executeRef.orElseThrow())) {
+        if (executeRef.isEmpty()
+            || (!isExecutorExecute(executeRef.orElseThrow()) && !isExecutorServiceSubmit(executeRef.orElseThrow()))) {
             return false;
         }
         if (!supportedVirtualThreadExecutorReceiver(classes, instructions, instructionIndex)) {
@@ -1968,12 +1972,20 @@ public final class StaticVerifier {
         return VirtualThreadInvokePatterns.isExecutorExecute(methodRef);
     }
 
+    private static boolean isExecutorServiceSubmit(final MethodRef methodRef) {
+        return VirtualThreadInvokePatterns.isExecutorServiceSubmit(methodRef);
+    }
+
     private static boolean isExecutorServiceShutdown(final MethodRef methodRef) {
         return VirtualThreadInvokePatterns.isExecutorServiceShutdown(methodRef);
     }
 
     private static boolean isExecutorServiceClose(final MethodRef methodRef) {
         return VirtualThreadInvokePatterns.isExecutorServiceClose(methodRef);
+    }
+
+    private static boolean isFutureCancel(final MethodRef methodRef) {
+        return VirtualThreadInvokePatterns.isFutureCancel(methodRef);
     }
 
     private static boolean isVirtualThreadBuilderOwner(final String owner) {
@@ -2103,12 +2115,18 @@ public final class StaticVerifier {
             }
         }
         if ("java/util/concurrent/ExecutorService".equals(owner)) {
+            if ("submit".equals(methodRef.name())) {
+                return "ExecutorService.submit(Runnable)";
+            }
             if ("shutdown".equals(methodRef.name())) {
                 return "ExecutorService.shutdown()";
             }
             if ("close".equals(methodRef.name())) {
                 return "ExecutorService.close()";
             }
+        }
+        if ("java/util/concurrent/Future".equals(owner) && "cancel".equals(methodRef.name())) {
+            return "Future.cancel(boolean)";
         }
         return methodRef.display();
     }

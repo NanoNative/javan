@@ -3197,7 +3197,8 @@ final class BytecodeToIRInvokeSupport {
                     || isVirtualThreadBuilderStart(methodRef.orElseThrow())
                     || isVirtualThreadBuilderUnstarted(methodRef.orElseThrow())
                     || isVirtualThreadFactoryNewThread(methodRef.orElseThrow())
-                    || VirtualThreadInvokePatterns.isExecutorExecute(methodRef.orElseThrow()))) {
+                    || VirtualThreadInvokePatterns.isExecutorExecute(methodRef.orElseThrow())
+                    || VirtualThreadInvokePatterns.isExecutorServiceSubmit(methodRef.orElseThrow()))) {
                     sawRunnableThreadConstruction = true;
                     final Optional<EntryPoint> resolved = inferVirtualThreadTarget(classes, instructions, index);
                     if (resolved.isPresent()) {
@@ -3249,7 +3250,8 @@ final class BytecodeToIRInvokeSupport {
                 if (methodRef.isPresent() && (isThreadStart(methodRef.orElseThrow())
                     || isVirtualThreadStart(methodRef.orElseThrow())
                     || isVirtualThreadBuilderStart(methodRef.orElseThrow())
-                    || VirtualThreadInvokePatterns.isExecutorExecute(methodRef.orElseThrow()))) {
+                    || VirtualThreadInvokePatterns.isExecutorExecute(methodRef.orElseThrow())
+                    || VirtualThreadInvokePatterns.isExecutorServiceSubmit(methodRef.orElseThrow()))) {
                     return true;
                 }
             }
@@ -3328,7 +3330,8 @@ final class BytecodeToIRInvokeSupport {
                 && !supportedVirtualThreadFactoryReceiver(classes, instructions, startIndex)) {
                 return Optional.empty();
             }
-            if (VirtualThreadInvokePatterns.isExecutorExecute(startRef.orElseThrow())
+            if ((VirtualThreadInvokePatterns.isExecutorExecute(startRef.orElseThrow())
+                || VirtualThreadInvokePatterns.isExecutorServiceSubmit(startRef.orElseThrow()))
                 && !supportedVirtualThreadExecutorReceiver(classes, instructions, startIndex)) {
                 return Optional.empty();
             }
@@ -4114,6 +4117,18 @@ final class BytecodeToIRInvokeSupport {
             ));
             return true;
         }
+        if (VirtualThreadInvokePatterns.isExecutorServiceSubmit(methodRef)) {
+            final IrExpression runnable = popObject(classFile, method, instruction, stack);
+            final StackValue executor = popVirtualThreadExecutor(classFile, method, instruction, stack);
+            pushObjectCall(
+                instructions,
+                stack,
+                localDeclarations,
+                "javan_virtual_thread_executor_submit",
+                List.of(executor.expression().orElse(IrExpression.objectNull()), runnable)
+            );
+            return true;
+        }
         if (VirtualThreadInvokePatterns.isExecutorServiceShutdown(methodRef)) {
             final StackValue executor = popVirtualThreadExecutor(classFile, method, instruction, stack);
             instructions.add(IrInstruction.callStaticVoid(
@@ -4241,6 +4256,18 @@ final class BytecodeToIRInvokeSupport {
                 localDeclarations,
                 "javan_virtual_thread_object_equals",
                 List.of(executor.expression().orElse(IrExpression.objectNull()), other)
+            );
+            return true;
+        }
+        if (VirtualThreadInvokePatterns.isFutureCancel(methodRef)) {
+            final IrExpression mayInterruptIfRunning = popInt(classFile, method, stack);
+            final IrExpression future = popObject(classFile, method, stack);
+            pushIntCall(
+                instructions,
+                stack,
+                localDeclarations,
+                "javan_future_cancel",
+                List.of(future, mayInterruptIfRunning)
             );
             return true;
         }
