@@ -214,6 +214,8 @@ public final class JdkCallSupport {
         runtime("Boolean.valueOf", "java/lang/Boolean", "valueOf", "(Z)Ljava/lang/Boolean;"),
         runtime("Boolean.booleanValue", "java/lang/Boolean", "booleanValue", "()Z"),
         runtime("Boolean.equals", "java/lang/Boolean", "equals", "(Ljava/lang/Object;)Z"),
+        runtime("Character.valueOf", "java/lang/Character", "valueOf", "(C)Ljava/lang/Character;"),
+        runtime("Character.charValue", "java/lang/Character", "charValue", "()C"),
         intrinsic(
             "String.valueOf",
             "java/lang/String",

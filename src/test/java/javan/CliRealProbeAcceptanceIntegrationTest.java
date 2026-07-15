@@ -119,9 +119,9 @@ final class CliRealProbeAcceptanceIntegrationTest extends CliIntegrationSupport 
         assertThat(run.exitCode()).isEqualTo(2);
         assertThat(run.stderr()).contains(
             "error[JAVAN031]",
-            "berlin/yuna/typemap/logic/TypeConverter",
-            "iterateOverArray(Ljava/lang/Object;Ljava/util/function/Consumer;)V",
-            "java/lang/Character.valueOf(C)Ljava/lang/Character;"
+            "berlin/yuna/typemap/config/TypeConversionRegister",
+            "lambda$static$79(Ljava/time/LocalTime;)Ljava/sql/Date;",
+            "java/sql/Date.valueOf(Ljava/time/LocalDate;)Ljava/sql/Date;"
         );
         assertThat(project.resolve(".javan/bin/nano-config-register-frontier")).doesNotExist();
     }

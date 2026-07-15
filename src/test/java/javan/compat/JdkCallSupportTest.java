@@ -142,6 +142,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void characterValueOfIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Character",
+            "valueOf",
+            "(C)Ljava/lang/Character;"
+        ))).isTrue();
+    }
+
+    @Test
+    void characterCharValueIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Character",
+            "charValue",
+            "()C"
+        ))).isTrue();
+    }
+
+    @Test
     void virtualThreadPerTaskExecutorIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/concurrent/Executors",

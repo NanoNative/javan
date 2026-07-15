@@ -2431,7 +2431,10 @@ public final class StaticVerifier {
         if ("java/lang/Double".equals(target)) {
             return true;
         }
-        return "java/lang/Boolean".equals(target);
+        if ("java/lang/Boolean".equals(target)) {
+            return true;
+        }
+        return "java/lang/Character".equals(target);
     }
 
     private static boolean hasAssignableClass(final Map<String, ClassFile> classes, final String target) {

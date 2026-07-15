@@ -1040,6 +1040,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_TYPE_JAVA_LANG_FLOAT -1003
         #define JAVAN_TYPE_JAVA_LANG_DOUBLE -1004
         #define JAVAN_TYPE_JAVA_LANG_BOOLEAN -1005
+        #define JAVAN_TYPE_JAVA_LANG_CHARACTER -1014
         #define JAVAN_TYPE_JAVA_NIO_FILE_ATTRIBUTE_FILE_TIME -1006
         #define JAVAN_TYPE_JAVA_TIME_DURATION -1007
         #define JAVAN_TYPE_JAVA_LANG_THREAD -1008
@@ -1068,6 +1069,7 @@ final class RuntimeSourceMemorySections {
                 || type_id == JAVAN_TYPE_JAVA_LANG_FLOAT
                 || type_id == JAVAN_TYPE_JAVA_LANG_DOUBLE
                 || type_id == JAVAN_TYPE_JAVA_LANG_BOOLEAN
+                || type_id == JAVAN_TYPE_JAVA_LANG_CHARACTER
                 || type_id == JAVAN_TYPE_JAVA_NIO_FILE_ATTRIBUTE_FILE_TIME
                 || type_id == JAVAN_TYPE_JAVA_TIME_DURATION
                 || type_id == JAVAN_TYPE_JAVA_LANG_THREAD
@@ -2294,6 +2296,10 @@ final class RuntimeSourceMemorySections {
         } javan_boxed_boolean;
 
         typedef struct {
+            int value;
+        } javan_boxed_character;
+
+        typedef struct {
             long long millis;
         } javan_file_time;
 
@@ -2845,6 +2851,9 @@ final class RuntimeSourceMemorySections {
             if (type_id == JAVAN_TYPE_JAVA_LANG_BOOLEAN) {
                 return javan_runtime_class_literal("java.lang.Boolean", JAVAN_TYPE_JAVA_LANG_BOOLEAN, 0, 0, 0);
             }
+            if (type_id == JAVAN_TYPE_JAVA_LANG_CHARACTER) {
+                return javan_runtime_class_literal("java.lang.Character", JAVAN_TYPE_JAVA_LANG_CHARACTER, 0, 0, 0);
+            }
             if (type_id == JAVAN_TYPE_JAVA_LANG_THREAD) {
                 return javan_runtime_class_literal("java.lang.Thread", JAVAN_TYPE_JAVA_LANG_THREAD, 0, 0, 0);
             }
@@ -3388,6 +3397,20 @@ final class RuntimeSourceMemorySections {
                 javan_panic("not a Boolean");
             }
             return ((javan_boxed_boolean*) value)->value;
+        }
+
+        void* javan_character_value_of(int value) {
+            javan_boxed_character* object = (javan_boxed_character*) javan_alloc(sizeof(javan_boxed_character));
+            object->value = value & 0xFFFF;
+            javan_register_object((void*) object, JAVAN_TYPE_JAVA_LANG_CHARACTER);
+            return object;
+        }
+
+        int javan_character_char_value(void* value) {
+            if (javan_registered_type_id(value) != JAVAN_TYPE_JAVA_LANG_CHARACTER) {
+                javan_panic("not a Character");
+            }
+            return ((javan_boxed_character*) value)->value;
         }
 
         static int javan_float_to_int(float value) {
@@ -5875,6 +5898,9 @@ final class RuntimeSourceMemorySections {
             }
             if (left_type == right_type && left_type == JAVAN_TYPE_JAVA_LANG_BOOLEAN) {
                 return ((javan_boxed_boolean*) left)->value == ((javan_boxed_boolean*) right)->value;
+            }
+            if (left_type == right_type && left_type == JAVAN_TYPE_JAVA_LANG_CHARACTER) {
+                return ((javan_boxed_character*) left)->value == ((javan_boxed_character*) right)->value;
             }
             javan_allocation_node* left_node = javan_find_allocation(left, NULL);
             javan_allocation_node* right_node = javan_find_allocation(right, NULL);

@@ -206,6 +206,7 @@ final class RuntimeFilesTest {
             "|| type_id == JAVAN_TYPE_JAVA_LANG_INTEGER",
             "|| type_id == JAVAN_TYPE_JAVA_LANG_DOUBLE",
             "|| type_id == JAVAN_TYPE_JAVA_LANG_BOOLEAN",
+            "|| type_id == JAVAN_TYPE_JAVA_LANG_CHARACTER",
             "|| type_id == JAVAN_TYPE_JAVA_NIO_FILE_ATTRIBUTE_FILE_TIME",
             "|| type_id == JAVAN_TYPE_JAVA_TIME_DURATION",
             "|| type_id == JAVAN_TYPE_JAVA_LANG_THREAD",

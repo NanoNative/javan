@@ -1078,6 +1078,30 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void boxedCharacterUnboxBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("boxed-character-unbox");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Character value = Character.valueOf('A');
+                    System.out.println(value.charValue());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/boxed-character-unbox").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void boxedLongUnboxBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("boxed-long-unbox");
         writeJava(project, "com.acme.Main", """
@@ -1171,6 +1195,30 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/boxed-integer-instanceof").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void boxedCharacterInstanceOfBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("boxed-character-instanceof");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Object value = Character.valueOf('A');
+                    System.out.println(value instanceof Character);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/boxed-character-instanceof").toString())).stdout()).isEqualTo(jvmOutput);
     }
 
     @Test

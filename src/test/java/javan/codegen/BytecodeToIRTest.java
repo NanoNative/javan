@@ -9307,6 +9307,27 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersCharacterCharValueToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Character;)C",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/Character", "charValue", "()C")),
+            plain(4, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_character_char_value",
+                List.of(IrExpression.objectLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
     void rejectsMalformedBooleanBooleanValueDescriptor() {
         assertThatThrownBy(() -> lowerMain(method(
             0x0008,
@@ -12745,6 +12766,24 @@ final class BytecodeToIRTest {
 
         assertThat(function.instructions()).containsExactly(
             IrInstruction.returnObject(IrExpression.objectCall("javan_boolean_value_of", List.of(IrExpression.intLiteral(1))))
+        );
+    }
+
+    @Test
+    void lowersCharacterValueOfToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/lang/Character;",
+            1,
+            0,
+            plainOperands(0, 16, "bipush", 65),
+            invokeStatic(2, new MethodRef("java/lang/Character", "valueOf", "(C)Ljava/lang/Character;")),
+            plain(5, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall("javan_character_value_of", List.of(IrExpression.intLiteral(65))))
         );
     }
 

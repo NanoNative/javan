@@ -1359,6 +1359,10 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.intExpression(IrExpression.intCall("javan_boolean_boolean_value", List.of(popObject(classFile, method, stack)))));
             return true;
         }
+        if ("java/lang/Character".equals(methodRef.owner()) && "charValue".equals(methodRef.name()) && "()C".equals(methodRef.descriptor())) {
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_character_char_value", List.of(popObject(classFile, method, stack)))));
+            return true;
+        }
         if ("java/lang/Boolean".equals(methodRef.owner()) && "equals".equals(methodRef.name()) && "(Ljava/lang/Object;)Z".equals(methodRef.descriptor())) {
             final IrExpression argument = popObject(classFile, method, stack);
             final IrExpression receiver = popObject(classFile, method, stack);
@@ -1656,14 +1660,8 @@ final class BytecodeToIRInvokeSupport {
         if ("java/lang/Boolean".equals(methodRef.owner())) {
             return lowerBooleanIntrinsic(classFile, method, methodRef, stack);
         }
-        if ("java/lang/Character".equals(methodRef.owner())
-            && "isWhitespace".equals(methodRef.name())
-            && "(C)Z".equals(methodRef.descriptor())) {
-            stack.add(StackValue.intExpression(IrExpression.intCall(
-                "javan_character_is_whitespace",
-                List.of(popInt(classFile, method, stack))
-            )));
-            return true;
+        if ("java/lang/Character".equals(methodRef.owner())) {
+            return lowerCharacterIntrinsic(classFile, method, methodRef, stack);
         }
         if ("java/lang/String".equals(methodRef.owner())
             && "valueOf".equals(methodRef.name())
@@ -1938,6 +1936,25 @@ final class BytecodeToIRInvokeSupport {
             final IrExpression argument = popObject(classFile, method, stack);
             final IrExpression receiver = popObject(classFile, method, stack);
             stack.add(StackValue.intExpression(IrExpression.intCall("javan_boolean_equals", List.of(receiver, argument))));
+            return true;
+        }
+        return false;
+    }
+    static boolean lowerCharacterIntrinsic(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final MethodRef methodRef,
+        final List<StackValue> stack
+    ) {
+        if ("valueOf".equals(methodRef.name()) && "(C)Ljava/lang/Character;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_character_value_of", List.of(popInt(classFile, method, stack)))));
+            return true;
+        }
+        if ("isWhitespace".equals(methodRef.name()) && "(C)Z".equals(methodRef.descriptor())) {
+            stack.add(StackValue.intExpression(IrExpression.intCall(
+                "javan_character_is_whitespace",
+                List.of(popInt(classFile, method, stack))
+            )));
             return true;
         }
         return false;
