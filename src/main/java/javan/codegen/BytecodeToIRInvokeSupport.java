@@ -523,6 +523,9 @@ final class BytecodeToIRInvokeSupport {
         if (lowerJdkFileInstanceCall(classFile, method, instruction, methodRef, stack)) {
             return;
         }
+        if (lowerAtomicBooleanInstanceCall(classFile, method, methodRef, instructions, stack, localDeclarations)) {
+            return;
+        }
         if (lowerAtomicLongInstanceCall(classFile, method, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
@@ -1246,6 +1249,9 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if (lowerScheduledThreadPoolExecutorConstructor(methodRef, instructions, arguments, receiver)) {
+            return;
+        }
+        if (lowerAtomicBooleanConstructor(methodRef, instructions, arguments, receiver)) {
             return;
         }
         if (lowerAtomicLongConstructor(methodRef, instructions, arguments, receiver)) {
@@ -2601,6 +2607,35 @@ final class BytecodeToIRInvokeSupport {
         return false;
     }
 
+    static boolean lowerAtomicBooleanConstructor(
+        final MethodRef methodRef,
+        final List<IrInstruction> instructions,
+        final List<IrExpression> arguments,
+        final IrExpression receiver
+    ) {
+        if (!"java/util/concurrent/atomic/AtomicBoolean".equals(methodRef.owner())) {
+            return false;
+        }
+        if (!"<init>".equals(methodRef.name())) {
+            return false;
+        }
+        if ("()V".equals(methodRef.descriptor())) {
+            instructions.add(IrInstruction.callStaticVoid(
+                "javan_atomic_boolean_init",
+                List.of(receiver, IrExpression.intLiteral(0))
+            ));
+            return true;
+        }
+        if ("(Z)V".equals(methodRef.descriptor())) {
+            instructions.add(IrInstruction.callStaticVoid(
+                "javan_atomic_boolean_init",
+                List.of(receiver, arguments.getFirst())
+            ));
+            return true;
+        }
+        return false;
+    }
+
     static boolean lowerThreadLocalConstructor(final MethodRef methodRef) {
         return "java/lang/ThreadLocal".equals(methodRef.owner())
             && "<init>".equals(methodRef.name())
@@ -2646,6 +2681,25 @@ final class BytecodeToIRInvokeSupport {
         }
         if ("decrementAndGet".equals(methodRef.name()) && "()J".equals(methodRef.descriptor())) {
             stack.add(StackValue.longExpression(IrExpression.longCall("javan_atomic_long_decrement_and_get", List.of(receiver))));
+            return true;
+        }
+        return false;
+    }
+
+    static boolean lowerAtomicBooleanInstanceCall(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final MethodRef methodRef,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations
+    ) {
+        if (!"java/util/concurrent/atomic/AtomicBoolean".equals(methodRef.owner()) || !JdkCallSupport.isSupported(methodRef)) {
+            return false;
+        }
+        final IrExpression receiver = popObject(classFile, method, stack);
+        if ("get".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor())) {
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_atomic_boolean_get", List.of(receiver))));
             return true;
         }
         return false;
@@ -5060,6 +5114,14 @@ final class BytecodeToIRInvokeSupport {
             localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
             final IrExpression local = IrExpression.objectLocal(localName);
             instructions.add(IrInstruction.assignObject(localName, IrExpression.objectCall("javan_atomic_long_new", List.of())));
+            stack.add(StackValue.objectExpression(local));
+            return;
+        }
+        if ("java/util/concurrent/atomic/AtomicBoolean".equals(owner)) {
+            final String localName = "object" + localDeclarations.size();
+            localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
+            final IrExpression local = IrExpression.objectLocal(localName);
+            instructions.add(IrInstruction.assignObject(localName, IrExpression.objectCall("javan_atomic_boolean_new", List.of())));
             stack.add(StackValue.objectExpression(local));
             return;
         }

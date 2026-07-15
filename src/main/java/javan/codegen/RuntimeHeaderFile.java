@@ -352,6 +352,9 @@ final class RuntimeHeaderFile {
         void* javan_duration_of_seconds(long long seconds);
         long long javan_duration_to_millis(void* value);
         void* javan_caller_runs_policy_new(void);
+        void* javan_atomic_boolean_new(void);
+        void javan_atomic_boolean_init(void* value, int initial_value);
+        int javan_atomic_boolean_get(void* value);
         void* javan_atomic_long_new(void);
         void javan_atomic_long_init(void* value, long long initial_value);
         long long javan_atomic_long_get(void* value);

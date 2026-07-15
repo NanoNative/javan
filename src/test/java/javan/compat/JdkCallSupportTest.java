@@ -241,6 +241,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void atomicBooleanConstructorWithInitialValueIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/atomic/AtomicBoolean",
+            "<init>",
+            "(Z)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void atomicBooleanGetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/atomic/AtomicBoolean",
+            "get",
+            "()Z"
+        ))).isTrue();
+    }
+
+    @Test
     void normalizesInheritedScheduledThreadPoolExecutorCallFromApplicationSubclass() {
         final ClassFile scheduler = new ClassFile(
             69,

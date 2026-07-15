@@ -5673,6 +5673,72 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersAtomicBooleanDefaultConstructorPredicateForSupportedSignature() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+
+        assertThat(BytecodeToIRInvokeSupport.lowerAtomicBooleanConstructor(
+            new MethodRef("java/util/concurrent/atomic/AtomicBoolean", "<init>", "()V"),
+            instructions,
+            List.of(),
+            IrExpression.objectLocal("arg0")
+        )).isTrue();
+        assertThat(instructions).containsExactly(
+            IrInstruction.callStaticVoid(
+                "javan_atomic_boolean_init",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.intLiteral(0))
+            )
+        );
+    }
+
+    @Test
+    void lowersAtomicBooleanConstructorWithInitialValuePredicateForSupportedSignature() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+
+        assertThat(BytecodeToIRInvokeSupport.lowerAtomicBooleanConstructor(
+            new MethodRef("java/util/concurrent/atomic/AtomicBoolean", "<init>", "(Z)V"),
+            instructions,
+            List.of(IrExpression.intLocal("arg1")),
+            IrExpression.objectLocal("arg0")
+        )).isTrue();
+        assertThat(instructions).containsExactly(
+            IrInstruction.callStaticVoid(
+                "javan_atomic_boolean_init",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"))
+            )
+        );
+    }
+
+    @Test
+    void lowersAtomicBooleanGetToRuntimeHelper() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/concurrent/atomic/AtomicBoolean;)Z",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/util/concurrent/atomic/AtomicBoolean", "get", "()Z")),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall("javan_atomic_boolean_get", List.of(IrExpression.objectLocal("arg0"))))
+        );
+    }
+
+    @Test
+    void lowerAtomicBooleanInstanceCallRejectsUnsupportedMethodShape() {
+        assertThat(BytecodeToIRInvokeSupport.lowerAtomicBooleanInstanceCall(
+            classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of()),
+            method(0x0008, "main", "()V", 0, 0),
+            new MethodRef("java/util/concurrent/atomic/AtomicBoolean", "lazySet", "(Z)V"),
+            new ArrayList<>(),
+            new ArrayList<>(),
+            new LinkedHashMap<>()
+        )).isFalse();
+    }
+
+    @Test
     void lowersThreadLocalGetToRuntimeHelperWithTemporaryLocal() {
         final IrFunction function = lowerMain(method(
             0x0008,

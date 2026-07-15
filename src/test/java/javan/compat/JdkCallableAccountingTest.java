@@ -721,6 +721,18 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksAtomicBooleanDefaultConstructorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/atomic/AtomicBoolean", "<init>", "()V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksAtomicBooleanGetAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/atomic/AtomicBoolean", "get", "()Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksAtomicBooleanLazySetAsExplicitRejected() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/atomic/AtomicBoolean", "lazySet", "(Z)V")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);

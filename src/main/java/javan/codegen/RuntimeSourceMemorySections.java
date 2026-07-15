@@ -61,6 +61,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_RUNTIME_KIND_CLASS 25
         #define JAVAN_RUNTIME_KIND_SCHEDULED_THREAD_POOL_EXECUTOR 26
         #define JAVAN_RUNTIME_KIND_ATOMIC_LONG 27
+        #define JAVAN_RUNTIME_KIND_ATOMIC_BOOLEAN 28
         #define JAVAN_LIST_VIEW_UNMODIFIABLE 1
 
         typedef struct javan_object_list {
@@ -146,6 +147,13 @@ final class RuntimeSourceMemorySections {
             int reserved0;
             long long value;
         } javan_atomic_long_state;
+
+        typedef struct {
+            int magic;
+            int value;
+            int reserved0;
+            int reserved1;
+        } javan_atomic_boolean_state;
 
         typedef struct {
             int magic;
@@ -293,6 +301,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_RUNTIME_CLASS_MAGIC 0x4a434c53
         #define JAVAN_SCHEDULED_THREAD_POOL_EXECUTOR_MAGIC 0x4a535045
         #define JAVAN_ATOMIC_LONG_MAGIC 0x4a41544c
+        #define JAVAN_ATOMIC_BOOLEAN_MAGIC 0x4a415442
         #define JAVAN_HTTP_METHOD_GET 1
         #define JAVAN_HTTP_METHOD_POST 2
         #define JAVAN_HTTP_METHOD_PUT 3
@@ -918,7 +927,8 @@ final class RuntimeSourceMemorySections {
                 || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_BODY_HANDLER
                 || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_RESPONSE
                 || runtime_kind == JAVAN_RUNTIME_KIND_SCHEDULED_THREAD_POOL_EXECUTOR
-                || runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_LONG;
+                || runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_LONG
+                || runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_BOOLEAN;
             javan_heap_maybe_validate();
             javan_runtime_lock_leave();
         }
@@ -1162,6 +1172,12 @@ final class RuntimeSourceMemorySections {
                 if (state->magic != JAVAN_ATOMIC_LONG_MAGIC) {
                     javan_panic("invalid runtime atomic long metadata");
                 }
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_BOOLEAN) {
+                javan_atomic_boolean_state* state = (javan_atomic_boolean_state*) node->value;
+                if (state->magic != JAVAN_ATOMIC_BOOLEAN_MAGIC
+                    || (state->value != 0 && state->value != 1)) {
+                    javan_panic("invalid runtime atomic boolean metadata");
+                }
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_CLASS) {
                 javan_runtime_class_state* state = (javan_runtime_class_state*) node->value;
                 if (state->magic != JAVAN_RUNTIME_CLASS_MAGIC || state->binary_name == NULL || state->binary_name[0] == '\\0') {
@@ -1383,7 +1399,8 @@ final class RuntimeSourceMemorySections {
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_EXECUTOR
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_CLASS
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_SCHEDULED_THREAD_POOL_EXECUTOR
-                    && node->runtime_kind != JAVAN_RUNTIME_KIND_ATOMIC_LONG) {
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_ATOMIC_LONG
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_ATOMIC_BOOLEAN) {
                     javan_panic("invalid runtime allocation kind");
                 }
                 javan_validate_runtime_container_references(node);
@@ -2108,6 +2125,18 @@ final class RuntimeSourceMemorySections {
             return state;
         }
 
+        static javan_atomic_boolean_state* javan_atomic_boolean_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported atomic boolean");
+            }
+            void* attached = javan_generated_object_runtime_state(value, JAVAN_RUNTIME_KIND_ATOMIC_BOOLEAN);
+            javan_atomic_boolean_state* state = (javan_atomic_boolean_state*) (attached == NULL ? value : attached);
+            if (state->magic != JAVAN_ATOMIC_BOOLEAN_MAGIC || (state->value != 0 && state->value != 1)) {
+                javan_panic("unsupported atomic boolean");
+            }
+            return state;
+        }
+
         static javan_runtime_class_state* javan_runtime_class_checked(void* value) {
             if (value == NULL) {
                 javan_panic("unsupported runtime class");
@@ -2298,6 +2327,7 @@ final class RuntimeSourceMemorySections {
         static javan_object_list* javan_list_new_view(javan_object_list* backing, int immutable, int view_flags);
         static void javan_list_append_raw(javan_object_list* list, void* value);
         void* javan_virtual_thread_executor_from_factory(void* value);
+        void javan_atomic_boolean_init(void* value, int initial_value);
         void javan_atomic_long_init(void* value, long long initial_value);
         void javan_scheduled_thread_pool_executor_init(void* value, int core_pool_size);
         void javan_scheduled_thread_pool_executor_init_full(void* value, int core_pool_size, void* thread_factory, void* rejected_execution_handler);
@@ -2398,6 +2428,26 @@ final class RuntimeSourceMemorySections {
             state->value = 0LL;
             javan_update_runtime_allocation_kind(value, JAVAN_RUNTIME_KIND_ATOMIC_LONG);
             return value;
+        }
+
+        void* javan_atomic_boolean_new(void) {
+            void* value = javan_alloc(sizeof(javan_atomic_boolean_state));
+            javan_atomic_boolean_state* state = (javan_atomic_boolean_state*) value;
+            state->magic = JAVAN_ATOMIC_BOOLEAN_MAGIC;
+            state->value = 0;
+            state->reserved0 = 0;
+            state->reserved1 = 0;
+            javan_update_runtime_allocation_kind(value, JAVAN_RUNTIME_KIND_ATOMIC_BOOLEAN);
+            return value;
+        }
+
+        void javan_atomic_boolean_init(void* value, int initial_value) {
+            javan_atomic_boolean_state* state = javan_atomic_boolean_checked(value);
+            state->value = initial_value == 0 ? 0 : 1;
+        }
+
+        int javan_atomic_boolean_get(void* value) {
+            return javan_atomic_boolean_checked(value)->value;
         }
 
         void javan_atomic_long_init(void* value, long long initial_value) {
