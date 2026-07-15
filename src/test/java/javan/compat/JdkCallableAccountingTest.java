@@ -763,6 +763,30 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksAtomicReferenceDefaultConstructorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/atomic/AtomicReference", "<init>", "()V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksAtomicReferenceConstructorWithInitialValueAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/atomic/AtomicReference", "<init>", "(Ljava/lang/Object;)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksAtomicReferenceGetAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/atomic/AtomicReference", "get", "()Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksAtomicReferenceSetAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/atomic/AtomicReference", "set", "(Ljava/lang/Object;)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksAtomicLongArraySizedConstructorAsExplicitRejected() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/atomic/AtomicLongArray", "<init>", "(I)V")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);

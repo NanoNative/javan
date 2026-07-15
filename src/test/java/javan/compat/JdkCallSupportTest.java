@@ -421,6 +421,33 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void atomicReferenceConstructorWithInitialValueIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/atomic/AtomicReference",
+            "<init>",
+            "(Ljava/lang/Object;)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void atomicReferenceGetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/atomic/AtomicReference",
+            "get",
+            "()Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void atomicReferenceSetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/atomic/AtomicReference",
+            "set",
+            "(Ljava/lang/Object;)V"
+        ))).isTrue();
+    }
+
+    @Test
     void normalizesInheritedScheduledThreadPoolExecutorCallFromApplicationSubclass() {
         final ClassFile scheduler = new ClassFile(
             69,

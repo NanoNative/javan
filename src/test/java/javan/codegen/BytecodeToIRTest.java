@@ -6322,6 +6322,83 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersAtomicReferenceDefaultConstructorPredicateForSupportedSignature() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+
+        assertThat(BytecodeToIRInvokeSupport.lowerAtomicReferenceConstructor(
+            new MethodRef("java/util/concurrent/atomic/AtomicReference", "<init>", "()V"),
+            instructions,
+            List.of(),
+            IrExpression.objectLocal("arg0")
+        )).isTrue();
+        assertThat(instructions).containsExactly(
+            IrInstruction.callStaticVoid(
+                "javan_atomic_reference_init",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectNull())
+            )
+        );
+    }
+
+    @Test
+    void lowersAtomicReferenceConstructorWithInitialValuePredicateForSupportedSignature() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+
+        assertThat(BytecodeToIRInvokeSupport.lowerAtomicReferenceConstructor(
+            new MethodRef("java/util/concurrent/atomic/AtomicReference", "<init>", "(Ljava/lang/Object;)V"),
+            instructions,
+            List.of(IrExpression.objectLocal("arg1")),
+            IrExpression.objectLocal("arg0")
+        )).isTrue();
+        assertThat(instructions).containsExactly(
+            IrInstruction.callStaticVoid(
+                "javan_atomic_reference_init",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            )
+        );
+    }
+
+    @Test
+    void lowersAtomicReferenceGetToRuntimeHelper() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/concurrent/atomic/AtomicReference;)Ljava/lang/Object;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/util/concurrent/atomic/AtomicReference", "get", "()Ljava/lang/Object;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall("javan_atomic_reference_get", List.of(IrExpression.objectLocal("arg0"))))
+        );
+    }
+
+    @Test
+    void lowersAtomicReferenceSetToRuntimeHelper() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/concurrent/atomic/AtomicReference;Ljava/lang/Object;)V",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/util/concurrent/atomic/AtomicReference", "set", "(Ljava/lang/Object;)V")),
+            plain(3, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid(
+                "javan_atomic_reference_set",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
     void lowersMapOfEmptyToRuntimeHelper() {
         final IrFunction function = lowerMain(method(
             0x0008,

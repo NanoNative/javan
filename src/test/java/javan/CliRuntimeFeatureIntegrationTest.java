@@ -1019,6 +1019,33 @@ final class CliRuntimeFeatureIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void checkAcceptsReachableAtomicReferenceConstructorsGetAndSet() throws Exception {
+        final Path project = project("atomic-reference-runtime");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final var current = new java.util.concurrent.atomic.AtomicReference<Object>("alpha");
+                    final var fallback = new java.util.concurrent.atomic.AtomicReference<Object>();
+                    fallback.set("beta");
+                    if ("alpha".equals(current.get()) && "beta".equals(fallback.get())) {
+                        System.out.println("ok");
+                    }
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stderr()).isEmpty();
+    }
+
+    @Test
     void checkRejectsReachableThirdPartyHttpServerDependencyAndReportsHttpRuntimeModules() throws Exception {
         final Path project = project("unsupported-third-party-http-server-dependency");
         writeJava(project, "com.acme.Main", """

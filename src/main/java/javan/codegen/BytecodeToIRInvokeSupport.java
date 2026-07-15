@@ -673,6 +673,9 @@ final class BytecodeToIRInvokeSupport {
         if (lowerAtomicLongInstanceCall(classFile, method, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
+        if (lowerAtomicReferenceInstanceCall(classFile, method, methodRef, instructions, stack, localDeclarations)) {
+            return;
+        }
         if (lowerDateTimeFormatterBuilderVirtualCall(classFile, method, methodRef, stack)) {
             return;
         }
@@ -1423,6 +1426,9 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if (lowerAtomicLongConstructor(methodRef, instructions, arguments, receiver)) {
+            return;
+        }
+        if (lowerAtomicReferenceConstructor(methodRef, instructions, arguments, receiver)) {
             return;
         }
         if (lowerDateTimeFormatterBuilderConstructor(methodRef)) {
@@ -3066,6 +3072,35 @@ final class BytecodeToIRInvokeSupport {
         return false;
     }
 
+    static boolean lowerAtomicReferenceConstructor(
+        final MethodRef methodRef,
+        final List<IrInstruction> instructions,
+        final List<IrExpression> arguments,
+        final IrExpression receiver
+    ) {
+        if (!"java/util/concurrent/atomic/AtomicReference".equals(methodRef.owner())) {
+            return false;
+        }
+        if (!"<init>".equals(methodRef.name())) {
+            return false;
+        }
+        if ("()V".equals(methodRef.descriptor())) {
+            instructions.add(IrInstruction.callStaticVoid(
+                "javan_atomic_reference_init",
+                List.of(receiver, IrExpression.objectNull())
+            ));
+            return true;
+        }
+        if ("(Ljava/lang/Object;)V".equals(methodRef.descriptor())) {
+            instructions.add(IrInstruction.callStaticVoid(
+                "javan_atomic_reference_init",
+                List.of(receiver, arguments.getFirst())
+            ));
+            return true;
+        }
+        return false;
+    }
+
     static boolean lowerThreadLocalConstructor(final MethodRef methodRef) {
         return "java/lang/ThreadLocal".equals(methodRef.owner())
             && "<init>".equals(methodRef.name())
@@ -3214,6 +3249,31 @@ final class BytecodeToIRInvokeSupport {
         }
         if ("decrementAndGet".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
             stack.add(StackValue.intExpression(IrExpression.intCall("javan_atomic_integer_decrement_and_get", List.of(receiver))));
+            return true;
+        }
+        return false;
+    }
+
+    static boolean lowerAtomicReferenceInstanceCall(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final MethodRef methodRef,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations
+    ) {
+        if (!"java/util/concurrent/atomic/AtomicReference".equals(methodRef.owner()) || !JdkCallSupport.isSupported(methodRef)) {
+            return false;
+        }
+        if ("get".equals(methodRef.name()) && "()Ljava/lang/Object;".equals(methodRef.descriptor())) {
+            final IrExpression receiver = popObject(classFile, method, stack);
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_atomic_reference_get", List.of(receiver))));
+            return true;
+        }
+        if ("set".equals(methodRef.name()) && "(Ljava/lang/Object;)V".equals(methodRef.descriptor())) {
+            final IrExpression argument = popObject(classFile, method, stack);
+            final IrExpression receiver = popObject(classFile, method, stack);
+            instructions.add(IrInstruction.callStaticVoid("javan_atomic_reference_set", List.of(receiver, argument)));
             return true;
         }
         return false;
@@ -6150,6 +6210,14 @@ final class BytecodeToIRInvokeSupport {
             localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
             final IrExpression local = IrExpression.objectLocal(localName);
             instructions.add(IrInstruction.assignObject(localName, IrExpression.objectCall("javan_atomic_boolean_new", List.of())));
+            stack.add(StackValue.objectExpression(local));
+            return;
+        }
+        if ("java/util/concurrent/atomic/AtomicReference".equals(owner)) {
+            final String localName = "object" + localDeclarations.size();
+            localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
+            final IrExpression local = IrExpression.objectLocal(localName);
+            instructions.add(IrInstruction.assignObject(localName, IrExpression.objectCall("javan_atomic_reference_new", List.of())));
             stack.add(StackValue.objectExpression(local));
             return;
         }

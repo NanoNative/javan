@@ -438,6 +438,35 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void atomicReferenceBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("atomic-reference");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final var current = new java.util.concurrent.atomic.AtomicReference<Object>("alpha");
+                    final var fallback = new java.util.concurrent.atomic.AtomicReference<Object>();
+                    fallback.set("beta");
+                    System.out.println(current.get());
+                    System.out.println(fallback.get());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/atomic-reference").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("alpha\nbeta\n");
+    }
+
+    @Test
     void stringStartsWithBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("string-starts-with");
         writeJava(project, "com.acme.Main", """
