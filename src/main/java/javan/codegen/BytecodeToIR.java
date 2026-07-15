@@ -650,7 +650,7 @@ public final class BytecodeToIR {
                 BytecodeToIRInvokeSupport.lowerInterfaceCall(classes, classFile, method, instruction, instructions, stack, localDeclarations, dispatches);
                 break;
             case 186:
-                BytecodeToIRInvokeSupport.lowerDynamicCall(classFile, method, instruction, stack);
+                BytecodeToIRInvokeSupport.lowerDynamicCall(classes, classFile, method, instruction, stack);
                 break;
             case 187:
                 BytecodeToIRInvokeSupport.newObject(classes, classFile, method, instruction, instructions, stack, localDeclarations);
@@ -2244,6 +2244,16 @@ public final class BytecodeToIR {
             return Optional.of(TYPE_JAVA_LANG_BOOLEAN);
         }
         return Optional.empty();
+    }
+
+    static int exactTypeId(final Map<String, ClassFile> classes, final String target) {
+        final List<ClassFile> sorted = BytecodeToIRMetadataSupport.sortedClasses(classes);
+        for (int index = 0; index < sorted.size(); index++) {
+            if (sorted.get(index).name().equals(target)) {
+                return index + 1;
+            }
+        }
+        throw new IllegalArgumentException("Unknown class type id: " + target);
     }
 
     static boolean isSubtypeOf(final Map<String, ClassFile> classes, final String candidate, final String expectedSuper) {

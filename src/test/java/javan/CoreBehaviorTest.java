@@ -4075,7 +4075,20 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void staticVerifierRejectsReachableJavacRecordObjectMethods() {
+    void staticVerifierAcceptsReachableJavacRecordEqualsMethodForObjectFields() {
+        final List<Diagnostic> diagnostics = verifyRecordObjectMethod(
+            "java/lang/Record",
+            "equals",
+            "(Ljava/lang/Object;)Z",
+            List.of(new javan.classfile.FieldInfo(0, "value", "Ljava/lang/String;")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierRejectsReachableJavacRecordObjectToStringMethod() {
         final List<Diagnostic> diagnostics = verifyRecordObjectMethod("java/lang/Record", "toString", "()Ljava/lang/String;", true);
 
         assertThat(diagnostics).hasSize(1);
@@ -8886,6 +8899,16 @@ final class CoreBehaviorTest {
         final String descriptor,
         final boolean reachable
     ) {
+        return verifyRecordObjectMethod(superName, methodName, descriptor, List.of(), reachable);
+    }
+
+    private static List<Diagnostic> verifyRecordObjectMethod(
+        final String superName,
+        final String methodName,
+        final String descriptor,
+        final List<javan.classfile.FieldInfo> fields,
+        final boolean reachable
+    ) {
         return verifyRecordObjectMethod(superName, methodName, descriptor, Optional.of(new DynamicRef(
             methodName,
             descriptor,
@@ -8893,7 +8916,7 @@ final class CoreBehaviorTest {
             "bootstrap",
             "()V",
             List.of("field")
-        )), reachable);
+        )), fields, reachable);
     }
 
     private static List<Diagnostic> verifyRecordObjectMethod(
@@ -8901,6 +8924,17 @@ final class CoreBehaviorTest {
         final String methodName,
         final String descriptor,
         final Optional<DynamicRef> dynamicRef,
+        final boolean reachable
+    ) {
+        return verifyRecordObjectMethod(superName, methodName, descriptor, dynamicRef, List.of(), reachable);
+    }
+
+    private static List<Diagnostic> verifyRecordObjectMethod(
+        final String superName,
+        final String methodName,
+        final String descriptor,
+        final Optional<DynamicRef> dynamicRef,
+        final List<javan.classfile.FieldInfo> fields,
         final boolean reachable
     ) {
         final MethodInfo method = methodInfo(methodName, descriptor, new Instruction(
@@ -8916,7 +8950,17 @@ final class CoreBehaviorTest {
             Optional.empty(),
             dynamicRef
         ));
-        final ClassFile classFile = classWithMethods("com/acme/Message", superName, 0, List.of(), method);
+        final ClassFile classFile = new ClassFile(
+            69,
+            "com/acme/Message",
+            superName,
+            0,
+            List.of(),
+            List.copyOf(fields),
+            List.of(method),
+            Path.of("com/acme/Message.class"),
+            true
+        );
         final List<EntryPoint> reachableMethods;
         if (reachable) {
             reachableMethods = List.of(new EntryPoint(classFile.name(), methodName, descriptor));

@@ -26,7 +26,7 @@ These probes prove that the backend can consume real dependency bytecode for sim
 
 Known blockers before broader TypeMap/Nano coverage:
 
-- the current main-based Nano frontier is now the scheduled-executor carrier bootstrap; `Collections.unmodifiableSet(Set)`, `Thread.setDaemon(boolean)` / `Thread.isDaemon()`, and `ThreadPoolExecutor.CallerRunsPolicy()` are no longer the first missing helpers
+- the current main-based Nano frontier has moved through the first scheduler bootstrap slices: `ScheduledThreadPoolExecutor.<init>(int)`, `ScheduledThreadPoolExecutor.<init>(int,ThreadFactory,RejectedExecutionHandler)`, same-method static virtual-thread builder/factory bootstrap, runtime ownership for `Scheduler extends ScheduledThreadPoolExecutor`, and `AtomicLong(long|get|incrementAndGet|decrementAndGet)` are now integrated and focused-tested; the CLI verification surface is split into dedicated command, shared-state, thread/runtime, runtime-feature, runtime-reporting, core-semantics, runtime-translation, JDK-semantics, dependency/project, string-api, print-stream, path/files, network, packaging, real-probe, and StringBuilder classes, and the stitched serialized Maven gate is green across `17` CLI classes with `545` tests / `0` failures / `0` errors / `0` skipped
 - only the current blocking TCP loopback socket slice is implemented
 - only raw loopback HTTP responder slices are verified so far (`GET` success, unmatched-route `404`, POST body handling, sequential two-connection lifetime, method-plus-path dispatch, multi-class route-handler dispatch, request-header matching, response-header emission, and a request/response object model over router and service classes); no higher-level native HTTP server API yet
 - no native HTTPS/TLS runtime yet
@@ -37,7 +37,7 @@ Known blockers before broader TypeMap/Nano coverage:
 - `invokedynamic` lambdas and dynamic-call sites
 - non-ASCII/full UTF-16 `String` runtime semantics
 - general try/catch/finally exception-handler lowering
-- common JDK intrinsics for `String`, collections, streams, `Optional`, and atomics
+- common JDK intrinsics for `String`, collections, streams, `Optional`, and broader atomics
 
 Fresh Nano packaging may still fail if a broader Nano graph resolves a TypeMap version
 that does not provide `JsonDecoder.jsonTypeOf(String)`. The `src/test/resources/projects/real-probes/nano-metric` probe

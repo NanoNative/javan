@@ -154,14 +154,15 @@ public final class CCodegen {
     }
 
     private static void emitObjectHeader(final StringBuilder c) {
-        c.append("struct javan_object_header {").append(System.lineSeparator());
-        c.append("    int _javan_type_id;").append(System.lineSeparator());
-        c.append("};").append(System.lineSeparator()).append(System.lineSeparator());
+        // Declared in javan_runtime.h so runtime helpers and generated code share one object layout.
     }
 
     private static void emitStruct(final IrClass classInfo, final StringBuilder c) {
         c.append("struct ").append(classInfo.symbol()).append(" {").append(System.lineSeparator());
         c.append("    int _javan_type_id;").append(System.lineSeparator());
+        c.append("    void* _javan_runtime_state;").append(System.lineSeparator());
+        c.append("    int _javan_runtime_kind;").append(System.lineSeparator());
+        c.append("    int _javan_runtime_reserved;").append(System.lineSeparator());
         if (classInfo.fields().isEmpty()) {
             c.append("    char _javan_empty;").append(System.lineSeparator());
         } else {
@@ -345,6 +346,9 @@ public final class CCodegen {
                 .append(typeIds.get(classInfo.jvmName()).intValue())
                 .append(";")
                 .append(System.lineSeparator());
+            c.append("    object->_javan_runtime_state = (void*) 0;").append(System.lineSeparator());
+            c.append("    object->_javan_runtime_kind = 0;").append(System.lineSeparator());
+            c.append("    object->_javan_runtime_reserved = 0;").append(System.lineSeparator());
             c.append("    javan_register_object((void*) object, ")
                 .append(typeIds.get(classInfo.jvmName()).intValue())
                 .append(");")

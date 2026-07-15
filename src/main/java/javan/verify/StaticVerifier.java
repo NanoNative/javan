@@ -349,7 +349,7 @@ public final class StaticVerifier {
         if (unsupportedNewArrayType(instruction)) {
             diagnostics.add(newArrayDiagnostic(classFile, method, instruction, reachable));
         }
-        if (unsupportedInvokedynamic(instruction) && !ignoredUnreachableRecordObjectMethod(classFile, method, instruction, reachable)) {
+        if (unsupportedInvokedynamic(classFile, method, instruction) && !ignoredUnreachableRecordObjectMethod(classFile, method, instruction, reachable)) {
             diagnostics.add(invokedynamicDiagnostic(classFile, method, instruction, reachable));
         }
         if (unsupportedStringConstant == 1 && unsupportedRuntimeStringSemanticCall(instruction)) {
@@ -1732,6 +1732,17 @@ public final class StaticVerifier {
                 return rootProducerIndex < 0;
             }
         }
+        if (producer.opcode() == 178
+            && producer.fieldRef().isPresent()
+            && supportedVirtualThreadFactoryStaticField(
+                classes,
+                instructions,
+                transparentProducerIndex,
+                producer.fieldRef().orElseThrow(),
+                rootProducerIndex
+            )) {
+            return true;
+        }
         if (transparentProducerIndex < 2) {
             return false;
         }
@@ -1812,6 +1823,16 @@ public final class StaticVerifier {
                 return supportedVirtualThreadFactoryProducer(classes, instructions, transparentProducerIndex - 1, -1);
             }
         }
+        if (producer.opcode() == 178
+            && producer.fieldRef().isPresent()
+            && supportedVirtualThreadExecutorStaticField(
+                classes,
+                instructions,
+                transparentProducerIndex,
+                producer.fieldRef().orElseThrow()
+            )) {
+            return true;
+        }
         if (transparentProducerIndex < 2) {
             return false;
         }
@@ -1824,6 +1845,45 @@ public final class StaticVerifier {
             return false;
         }
         return supportedVirtualThreadExecutorProducer(classes, instructions, storeIndex - 1);
+    }
+
+    private static boolean supportedVirtualThreadFactoryStaticField(
+        final Map<String, ClassFile> classes,
+        final List<Instruction> instructions,
+        final int loadIndex,
+        final FieldRef fieldRef,
+        final int rootProducerIndex
+    ) {
+        if (!"Ljava/util/concurrent/ThreadFactory;".equals(fieldRef.descriptor())) {
+            return false;
+        }
+        for (int index = loadIndex - 1; index >= 0; index--) {
+            final Instruction candidate = instructions.get(index);
+            if (candidate.opcode() != 179 || candidate.fieldRef().isEmpty() || !fieldRef.equals(candidate.fieldRef().orElseThrow())) {
+                continue;
+            }
+            return supportedVirtualThreadFactoryProducer(classes, instructions, index - 1, rootProducerIndex);
+        }
+        return false;
+    }
+
+    private static boolean supportedVirtualThreadExecutorStaticField(
+        final Map<String, ClassFile> classes,
+        final List<Instruction> instructions,
+        final int loadIndex,
+        final FieldRef fieldRef
+    ) {
+        if (!"Ljava/util/concurrent/ExecutorService;".equals(fieldRef.descriptor())) {
+            return false;
+        }
+        for (int index = loadIndex - 1; index >= 0; index--) {
+            final Instruction candidate = instructions.get(index);
+            if (candidate.opcode() != 179 || candidate.fieldRef().isEmpty() || !fieldRef.equals(candidate.fieldRef().orElseThrow())) {
+                continue;
+            }
+            return supportedVirtualThreadExecutorProducer(classes, instructions, index - 1);
+        }
+        return false;
     }
 
     private static boolean supportedRunnableProducer(
@@ -2289,7 +2349,11 @@ public final class StaticVerifier {
         return false;
     }
 
-    private static boolean unsupportedInvokedynamic(final Instruction instruction) {
+    private static boolean unsupportedInvokedynamic(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction
+    ) {
         if (instruction.opcode() != 186) {
             return false;
         }
@@ -2299,6 +2363,42 @@ public final class StaticVerifier {
         }
         if (supportedStringConcat(dynamicRef.orElseThrow())) {
             return false;
+        }
+        if (supportedRecordEqualsDynamic(classFile, method, instruction)) {
+            return false;
+        }
+        return true;
+    }
+
+    private static boolean supportedRecordEqualsDynamic(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction
+    ) {
+        if (!"java/lang/Record".equals(classFile.superName())) {
+            return false;
+        }
+        if (!"equals".equals(method.name()) || !"(Ljava/lang/Object;)Z".equals(method.descriptor())) {
+            return false;
+        }
+        final Optional<DynamicRef> dynamicRef = instruction.dynamicRef();
+        if (dynamicRef.isEmpty()) {
+            return false;
+        }
+        final DynamicRef ref = dynamicRef.orElseThrow();
+        if (!"java/lang/runtime/ObjectMethods".equals(ref.bootstrapOwner())) {
+            return false;
+        }
+        if (!"bootstrap".equals(ref.bootstrapName())) {
+            return false;
+        }
+        for (final javan.classfile.FieldInfo field : classFile.fields()) {
+            if (field.isStatic()) {
+                continue;
+            }
+            if (!field.descriptor().startsWith("L") && !field.descriptor().startsWith("[")) {
+                return false;
+            }
         }
         return true;
     }

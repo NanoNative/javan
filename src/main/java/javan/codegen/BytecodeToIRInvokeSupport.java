@@ -109,6 +109,14 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.objectExpression(enumConstantExpression(classes, fieldRef)));
             return;
         }
+        if (supportedVirtualThreadFactoryStaticField(classes, method, instruction, fieldRef)) {
+            stack.add(StackValue.virtualThreadFactory(IrExpression.objectStaticField(fieldRef.owner(), fieldRef.name())));
+            return;
+        }
+        if (supportedVirtualThreadExecutorStaticField(classes, method, instruction, fieldRef)) {
+            stack.add(StackValue.virtualThreadExecutor(IrExpression.objectStaticField(fieldRef.owner(), fieldRef.name())));
+            return;
+        }
         final Optional<IrType> type = staticFieldType(classes, fieldRef);
         if (type.isEmpty()) {
             throw unsupported(classFile, method, instruction);
@@ -508,6 +516,9 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if (lowerJdkFileInstanceCall(classFile, method, instruction, methodRef, stack)) {
+            return;
+        }
+        if (lowerAtomicLongInstanceCall(classFile, method, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
         if (lowerThreadLocalInstanceCall(classFile, method, methodRef, instructions, stack, localDeclarations)) {
@@ -1225,6 +1236,12 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if (lowerThreadConstructor(methodRef, instructions, arguments, receiver)) {
+            return;
+        }
+        if (lowerScheduledThreadPoolExecutorConstructor(methodRef, instructions, arguments, receiver)) {
+            return;
+        }
+        if (lowerAtomicLongConstructor(methodRef, instructions, arguments, receiver)) {
             return;
         }
         if (lowerThreadLocalConstructor(methodRef)) {
@@ -2526,6 +2543,57 @@ final class BytecodeToIRInvokeSupport {
         return false;
     }
 
+    static boolean lowerScheduledThreadPoolExecutorConstructor(
+        final MethodRef methodRef,
+        final List<IrInstruction> instructions,
+        final List<IrExpression> arguments,
+        final IrExpression receiver
+    ) {
+        if (!"java/util/concurrent/ScheduledThreadPoolExecutor".equals(methodRef.owner())) {
+            return false;
+        }
+        if (!"<init>".equals(methodRef.name())) {
+            return false;
+        }
+        if ("(I)V".equals(methodRef.descriptor())) {
+            instructions.add(IrInstruction.callStaticVoid(
+                "javan_scheduled_thread_pool_executor_init",
+                List.of(receiver, arguments.getFirst())
+            ));
+            return true;
+        }
+        if ("(ILjava/util/concurrent/ThreadFactory;Ljava/util/concurrent/RejectedExecutionHandler;)V".equals(methodRef.descriptor())) {
+            instructions.add(IrInstruction.callStaticVoid(
+                "javan_scheduled_thread_pool_executor_init_full",
+                List.of(receiver, arguments.get(0), arguments.get(1), arguments.get(2))
+            ));
+            return true;
+        }
+        return false;
+    }
+
+    static boolean lowerAtomicLongConstructor(
+        final MethodRef methodRef,
+        final List<IrInstruction> instructions,
+        final List<IrExpression> arguments,
+        final IrExpression receiver
+    ) {
+        if (!"java/util/concurrent/atomic/AtomicLong".equals(methodRef.owner())) {
+            return false;
+        }
+        if (!"<init>".equals(methodRef.name())) {
+            return false;
+        }
+        if ("(J)V".equals(methodRef.descriptor())) {
+            instructions.add(IrInstruction.callStaticVoid(
+                "javan_atomic_long_init",
+                List.of(receiver, arguments.getFirst())
+            ));
+            return true;
+        }
+        return false;
+    }
+
     static boolean lowerThreadLocalConstructor(final MethodRef methodRef) {
         return "java/lang/ThreadLocal".equals(methodRef.owner())
             && "<init>".equals(methodRef.name())
@@ -2547,6 +2615,33 @@ final class BytecodeToIRInvokeSupport {
         final List<IrExpression> arguments = new ArrayList<>(popArguments(classFile, method, stack, descriptor));
         final IrExpression receiver = popObject(classFile, method, stack);
         return lowerThreadLocalInstanceCall(methodRef, instructions, stack, localDeclarations, arguments, receiver);
+    }
+
+    static boolean lowerAtomicLongInstanceCall(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final MethodRef methodRef,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations
+    ) {
+        if (!"java/util/concurrent/atomic/AtomicLong".equals(methodRef.owner()) || !JdkCallSupport.isSupported(methodRef)) {
+            return false;
+        }
+        final IrExpression receiver = popObject(classFile, method, stack);
+        if ("get".equals(methodRef.name()) && "()J".equals(methodRef.descriptor())) {
+            stack.add(StackValue.longExpression(IrExpression.longCall("javan_atomic_long_get", List.of(receiver))));
+            return true;
+        }
+        if ("incrementAndGet".equals(methodRef.name()) && "()J".equals(methodRef.descriptor())) {
+            stack.add(StackValue.longExpression(IrExpression.longCall("javan_atomic_long_increment_and_get", List.of(receiver))));
+            return true;
+        }
+        if ("decrementAndGet".equals(methodRef.name()) && "()J".equals(methodRef.descriptor())) {
+            stack.add(StackValue.longExpression(IrExpression.longCall("javan_atomic_long_decrement_and_get", List.of(receiver))));
+            return true;
+        }
+        return false;
     }
 
     static boolean lowerThreadLocalInstanceCall(
@@ -3382,6 +3477,63 @@ final class BytecodeToIRInvokeSupport {
             return false;
         }
         return supportedVirtualThreadExecutorProducer(classes, instructions, storeIndex - 1);
+    }
+
+    private static boolean supportedVirtualThreadFactoryStaticField(
+        final Map<String, ClassFile> classes,
+        final MethodInfo method,
+        final Instruction instruction,
+        final FieldRef fieldRef
+    ) {
+        if (!"Ljava/util/concurrent/ThreadFactory;".equals(fieldRef.descriptor()) || method.code().isEmpty()) {
+            return false;
+        }
+        final List<Instruction> instructions = method.code().orElseThrow().instructions();
+        final int loadIndex = currentInstructionIndex(instructions, instruction.offset());
+        if (loadIndex < 0) {
+            return false;
+        }
+        for (int index = loadIndex - 1; index >= 0; index--) {
+            final Instruction candidate = instructions.get(index);
+            if (candidate.opcode() != 179 || candidate.fieldRef().isEmpty() || !fieldRef.equals(candidate.fieldRef().orElseThrow())) {
+                continue;
+            }
+            return supportedVirtualThreadFactoryProducer(classes, instructions, index - 1);
+        }
+        return false;
+    }
+
+    private static boolean supportedVirtualThreadExecutorStaticField(
+        final Map<String, ClassFile> classes,
+        final MethodInfo method,
+        final Instruction instruction,
+        final FieldRef fieldRef
+    ) {
+        if (!"Ljava/util/concurrent/ExecutorService;".equals(fieldRef.descriptor()) || method.code().isEmpty()) {
+            return false;
+        }
+        final List<Instruction> instructions = method.code().orElseThrow().instructions();
+        final int loadIndex = currentInstructionIndex(instructions, instruction.offset());
+        if (loadIndex < 0) {
+            return false;
+        }
+        for (int index = loadIndex - 1; index >= 0; index--) {
+            final Instruction candidate = instructions.get(index);
+            if (candidate.opcode() != 179 || candidate.fieldRef().isEmpty() || !fieldRef.equals(candidate.fieldRef().orElseThrow())) {
+                continue;
+            }
+            return supportedVirtualThreadExecutorProducer(classes, instructions, index - 1);
+        }
+        return false;
+    }
+
+    private static int currentInstructionIndex(final List<Instruction> instructions, final int offset) {
+        for (int index = 0; index < instructions.size(); index++) {
+            if (instructions.get(index).offset() == offset) {
+                return index;
+            }
+        }
+        return -1;
     }
 
     private static boolean isThreadOfVirtual(final MethodRef methodRef) {
@@ -4358,11 +4510,15 @@ final class BytecodeToIRInvokeSupport {
         return List.copyOf(arguments);
     }
     static void lowerDynamicCall(
+        final Map<String, ClassFile> classes,
         final ClassFile classFile,
         final MethodInfo method,
         final Instruction instruction,
         final List<StackValue> stack
     ) {
+        if (lowerRecordEqualsDynamic(classes, classFile, method, instruction, stack)) {
+            return;
+        }
         final Optional<DynamicRef> maybeDynamicRef = instruction.dynamicRef();
         if (maybeDynamicRef.isEmpty()) {
             throw unsupported(classFile, method, instruction);
@@ -4385,6 +4541,75 @@ final class BytecodeToIRInvokeSupport {
             throw unsupported(classFile, method, instruction);
         }
         stack.add(StackValue.objectExpression(IrExpression.stringConcat(recipe.orElseThrow(), arguments)));
+    }
+
+    static boolean lowerRecordEqualsDynamic(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<StackValue> stack
+    ) {
+        if (!supportedRecordEqualsDynamic(classFile, method, instruction)) {
+            return false;
+        }
+        final IrExpression other = popObject(classFile, method, stack);
+        final IrExpression self = popObject(classFile, method, stack);
+        final List<javan.classfile.FieldInfo> fields = recordObjectEqualsFields(classFile);
+        final List<IrExpression> arguments = new ArrayList<>();
+        arguments.add(self);
+        arguments.add(other);
+        arguments.add(IrExpression.intLiteral(exactTypeId(classes, classFile.name())));
+        arguments.add(IrExpression.intLiteral(fields.size()));
+        for (final javan.classfile.FieldInfo field : fields) {
+            arguments.add(IrExpression.objectField(classFile.name(), field.name(), self));
+            arguments.add(IrExpression.objectField(classFile.name(), field.name(), other));
+        }
+        stack.add(StackValue.intExpression(IrExpression.intCall("javan_record_object_equals", arguments)));
+        return true;
+    }
+
+    private static boolean supportedRecordEqualsDynamic(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction
+    ) {
+        if (!"java/lang/Record".equals(classFile.superName())) {
+            return false;
+        }
+        if (!"equals".equals(method.name()) || !"(Ljava/lang/Object;)Z".equals(method.descriptor())) {
+            return false;
+        }
+        final Optional<DynamicRef> dynamicRef = instruction.dynamicRef();
+        if (dynamicRef.isEmpty()) {
+            return false;
+        }
+        final DynamicRef ref = dynamicRef.orElseThrow();
+        if (!"java/lang/runtime/ObjectMethods".equals(ref.bootstrapOwner())) {
+            return false;
+        }
+        if (!"bootstrap".equals(ref.bootstrapName())) {
+            return false;
+        }
+        for (final javan.classfile.FieldInfo field : classFile.fields()) {
+            if (field.isStatic()) {
+                continue;
+            }
+            if (!field.descriptor().startsWith("L") && !field.descriptor().startsWith("[")) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static List<javan.classfile.FieldInfo> recordObjectEqualsFields(final ClassFile classFile) {
+        final List<javan.classfile.FieldInfo> result = new ArrayList<>();
+        for (final javan.classfile.FieldInfo field : classFile.fields()) {
+            if (!field.isStatic()) {
+                result.add(field);
+            }
+        }
+        return List.copyOf(result);
     }
     static IrExpression popStringConcatArgument(
         final ClassFile classFile,
@@ -4642,6 +4867,22 @@ final class BytecodeToIRInvokeSupport {
             localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
             final IrExpression local = IrExpression.objectLocal(localName);
             instructions.add(IrInstruction.assignObject(localName, IrExpression.objectCall("javan_thread_local_new", List.of())));
+            stack.add(StackValue.objectExpression(local));
+            return;
+        }
+        if ("java/util/concurrent/ScheduledThreadPoolExecutor".equals(owner)) {
+            final String localName = "object" + localDeclarations.size();
+            localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
+            final IrExpression local = IrExpression.objectLocal(localName);
+            instructions.add(IrInstruction.assignObject(localName, IrExpression.objectCall("javan_scheduled_thread_pool_executor_new", List.of())));
+            stack.add(StackValue.objectExpression(local));
+            return;
+        }
+        if ("java/util/concurrent/atomic/AtomicLong".equals(owner)) {
+            final String localName = "object" + localDeclarations.size();
+            localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
+            final IrExpression local = IrExpression.objectLocal(localName);
+            instructions.add(IrInstruction.assignObject(localName, IrExpression.objectCall("javan_atomic_long_new", List.of())));
             stack.add(StackValue.objectExpression(local));
             return;
         }

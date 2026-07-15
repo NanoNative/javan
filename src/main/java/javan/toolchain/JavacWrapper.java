@@ -44,7 +44,7 @@ public final class JavacWrapper {
     public int run(final Path cwd, final PrintStream out, final PrintStream err, final List<String> args)
         throws IOException, InterruptedException {
         final List<String> command = new ArrayList<>();
-        command.add("javac");
+        command.add(CurrentJdkTools.javac());
         command.addAll(args);
 
         final ProcessRunner.Result result = processRunner.run(cwd, command);

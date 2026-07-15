@@ -114,6 +114,12 @@ final class RuntimeHeaderFile {
             int object_field_count;
             unsigned long* object_field_offsets;
         } JavanTypeDescriptor;
+        struct javan_object_header {
+            int _javan_type_id;
+            void* _javan_runtime_state;
+            int _javan_runtime_kind;
+            int _javan_runtime_reserved;
+        };
         void* javan_alloc(unsigned long size);
         void javan_free(void* value);
         JavanResult javan_result_ok(void);
@@ -346,6 +352,14 @@ final class RuntimeHeaderFile {
         void* javan_duration_of_seconds(long long seconds);
         long long javan_duration_to_millis(void* value);
         void* javan_caller_runs_policy_new(void);
+        void* javan_atomic_long_new(void);
+        void javan_atomic_long_init(void* value, long long initial_value);
+        long long javan_atomic_long_get(void* value);
+        long long javan_atomic_long_increment_and_get(void* value);
+        long long javan_atomic_long_decrement_and_get(void* value);
+        void* javan_scheduled_thread_pool_executor_new(void);
+        void javan_scheduled_thread_pool_executor_init(void* value, int core_pool_size);
+        void javan_scheduled_thread_pool_executor_init_full(void* value, int core_pool_size, void* thread_factory, void* rejected_execution_handler);
         void* javan_thread_new(void);
         void* javan_thread_new_virtual(void);
         void* javan_virtual_thread_builder_new(void);
@@ -404,6 +418,7 @@ final class RuntimeHeaderFile {
         void* javan_string_value_of_bool(int value);
         void* javan_string_value_of_char(int value);
         void* javan_printable_object_string(void* value);
+        int javan_record_object_equals(void* self, void* other, int expected_type_id, int field_count, ...);
         void* javan_string_concat(const char* recipe, int argc, const char** values);
         char* javan_string_export(const char* value);
         void* javan_stringbuilder_new(void);

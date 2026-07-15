@@ -64,6 +64,18 @@ final class CliTestHarnessTest {
         }
     }
 
+    @Test
+    void currentJdkToolCommandsResolveFromJavaHomeBin() {
+        final String suffix = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win")
+            ? ".exe"
+            : "";
+        final String bin = java.nio.file.Path.of(System.getProperty("java.home")).resolve("bin").toString();
+
+        assertThat(CliTestHarness.currentJavaCommand()).isEqualTo(java.nio.file.Path.of(bin).resolve("java" + suffix).toString());
+        assertThat(CliTestHarness.currentJavacCommand()).isEqualTo(java.nio.file.Path.of(bin).resolve("javac" + suffix).toString());
+        assertThat(CliTestHarness.currentJarCommand()).isEqualTo(java.nio.file.Path.of(bin).resolve("jar" + suffix).toString());
+    }
+
     private static void restoreProperty(final String key, final String value) {
         if (value == null) {
             System.clearProperty(key);

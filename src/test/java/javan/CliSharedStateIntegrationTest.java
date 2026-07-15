@@ -62,7 +62,7 @@ final class CliSharedStateIntegrationTest {
         assertThat(classes.resolve("javan/Main.class")).exists();
 
         final ProcessResult run = processSlow(root, List.of(
-            "java",
+            CliTestHarness.currentJavaCommand(),
             "-cp",
             classes.toString(),
             "javan.Main",
@@ -204,8 +204,8 @@ final class CliSharedStateIntegrationTest {
         Files.createDirectories(sourceFile.getParent());
         Files.createDirectories(classes);
         Files.writeString(sourceFile, source, StandardCharsets.UTF_8);
-        assertThat(process(root, List.of("javac", "-d", classes.toString(), sourceFile.toString())).exitCode()).isZero();
-        assertThat(process(root, List.of("jar", "--create", "--file", jar.toString(), "-C", classes.toString(), ".")).exitCode()).isZero();
+        assertThat(process(root, List.of(CliTestHarness.currentJavacCommand(), "-d", classes.toString(), sourceFile.toString())).exitCode()).isZero();
+        assertThat(process(root, List.of(CliTestHarness.currentJarCommand(), "--create", "--file", jar.toString(), "-C", classes.toString(), ".")).exitCode()).isZero();
         return jar;
     }
 

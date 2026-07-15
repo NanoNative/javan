@@ -59,6 +59,8 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_FACTORY 23
         #define JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_EXECUTOR 24
         #define JAVAN_RUNTIME_KIND_CLASS 25
+        #define JAVAN_RUNTIME_KIND_SCHEDULED_THREAD_POOL_EXECUTOR 26
+        #define JAVAN_RUNTIME_KIND_ATOMIC_LONG 27
         #define JAVAN_LIST_VIEW_UNMODIFIABLE 1
 
         typedef struct javan_object_list {
@@ -128,6 +130,21 @@ final class RuntimeSourceMemorySections {
             void* factory;
             javan_object_list* threads;
         } javan_virtual_thread_executor_state;
+
+        typedef struct {
+            int magic;
+            int core_pool_size;
+            int closed;
+            int reserved0;
+            void* thread_factory;
+            void* rejected_execution_handler;
+        } javan_scheduled_thread_pool_executor_state;
+
+        typedef struct {
+            int magic;
+            int reserved0;
+            long long value;
+        } javan_atomic_long_state;
 
         typedef struct {
             int magic;
@@ -273,6 +290,8 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_VIRTUAL_THREAD_FACTORY_MAGIC 0x4a565446
         #define JAVAN_VIRTUAL_THREAD_EXECUTOR_MAGIC 0x4a565445
         #define JAVAN_RUNTIME_CLASS_MAGIC 0x4a434c53
+        #define JAVAN_SCHEDULED_THREAD_POOL_EXECUTOR_MAGIC 0x4a535045
+        #define JAVAN_ATOMIC_LONG_MAGIC 0x4a41544c
         #define JAVAN_HTTP_METHOD_GET 1
         #define JAVAN_HTTP_METHOD_POST 2
         #define JAVAN_HTTP_METHOD_PUT 3
@@ -490,6 +509,7 @@ final class RuntimeSourceMemorySections {
 
         static void javan_heap_maybe_validate(void);
         static void javan_object_registry_cleanup(void);
+        static int javan_registered_type_id(void* value);
 
         static void javan_native_file_cleanup(void* value) {
             if (value != NULL) {
@@ -895,7 +915,9 @@ final class RuntimeSourceMemorySections {
                 || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_REQUEST
                 || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_BODY_PUBLISHER
                 || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_BODY_HANDLER
-                || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_RESPONSE;
+                || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_RESPONSE
+                || runtime_kind == JAVAN_RUNTIME_KIND_SCHEDULED_THREAD_POOL_EXECUTOR
+                || runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_LONG;
             javan_heap_maybe_validate();
             javan_runtime_lock_leave();
         }
@@ -1028,6 +1050,42 @@ final class RuntimeSourceMemorySections {
             }
         }
 
+        static struct javan_object_header* javan_generated_object_header(void* value) {
+            if (value == NULL) {
+                return NULL;
+            }
+            int type_id = javan_registered_type_id(value);
+            if (type_id <= 0) {
+                return NULL;
+            }
+            return (struct javan_object_header*) value;
+        }
+
+        static void* javan_generated_object_runtime_state(void* value, int runtime_kind) {
+            struct javan_object_header* header = javan_generated_object_header(value);
+            if (header == NULL || header->_javan_runtime_state == NULL) {
+                return NULL;
+            }
+            if (header->_javan_runtime_kind != runtime_kind) {
+                javan_panic("invalid generated object runtime attachment");
+            }
+            return header->_javan_runtime_state;
+        }
+
+        static void javan_generated_object_attach_runtime_state(void* value, void* runtime_state, int runtime_kind) {
+            struct javan_object_header* header = javan_generated_object_header(value);
+            if (header == NULL) {
+                javan_panic("unsupported generated object runtime attachment");
+            }
+            javan_allocation_node* node = javan_find_allocation(runtime_state, NULL);
+            if (node == NULL || node->kind != JAVAN_HEAP_KIND_RUNTIME || node->runtime_kind != runtime_kind) {
+                javan_panic("invalid generated object runtime attachment");
+            }
+            header->_javan_runtime_state = runtime_state;
+            header->_javan_runtime_kind = runtime_kind;
+            header->_javan_runtime_reserved = 0;
+        }
+
         static void javan_validate_runtime_managed_reference(void* value) {
             if (value == NULL) {
                 return;
@@ -1089,6 +1147,20 @@ final class RuntimeSourceMemorySections {
                 }
                 javan_validate_runtime_managed_reference(state->factory);
                 javan_validate_runtime_managed_reference((void*) state->threads);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_SCHEDULED_THREAD_POOL_EXECUTOR) {
+                javan_scheduled_thread_pool_executor_state* state = (javan_scheduled_thread_pool_executor_state*) node->value;
+                if (state->magic != JAVAN_SCHEDULED_THREAD_POOL_EXECUTOR_MAGIC
+                    || state->core_pool_size < 0
+                    || (state->closed != 0 && state->closed != 1)) {
+                    javan_panic("invalid runtime scheduled thread pool executor metadata");
+                }
+                javan_validate_runtime_managed_reference(state->thread_factory);
+                javan_validate_runtime_managed_reference(state->rejected_execution_handler);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_LONG) {
+                javan_atomic_long_state* state = (javan_atomic_long_state*) node->value;
+                if (state->magic != JAVAN_ATOMIC_LONG_MAGIC) {
+                    javan_panic("invalid runtime atomic long metadata");
+                }
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_CLASS) {
                 javan_runtime_class_state* state = (javan_runtime_class_state*) node->value;
                 if (state->magic != JAVAN_RUNTIME_CLASS_MAGIC || state->binary_name == NULL || state->binary_name[0] == '\\0') {
@@ -1268,6 +1340,21 @@ final class RuntimeSourceMemorySections {
                 if (node->collectible != 0 && node->collectible != 1) {
                     javan_panic("invalid heap allocation collectibility");
                 }
+                if (node->kind == JAVAN_HEAP_KIND_OBJECT && node->type_id > 0) {
+                    struct javan_object_header* header = (struct javan_object_header*) node->value;
+                    if ((header->_javan_runtime_state == NULL && header->_javan_runtime_kind != JAVAN_RUNTIME_KIND_NONE)
+                        || (header->_javan_runtime_state != NULL && header->_javan_runtime_kind == JAVAN_RUNTIME_KIND_NONE)) {
+                        javan_panic("invalid generated object runtime attachment");
+                    }
+                    if (header->_javan_runtime_state != NULL) {
+                        javan_allocation_node* attached = javan_find_allocation(header->_javan_runtime_state, NULL);
+                        if (attached == NULL
+                            || attached->kind != JAVAN_HEAP_KIND_RUNTIME
+                            || attached->runtime_kind != header->_javan_runtime_kind) {
+                            javan_panic("invalid generated object runtime attachment");
+                        }
+                    }
+                }
                 if (node->runtime_kind != JAVAN_RUNTIME_KIND_NONE
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_OBJECT_LIST
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_OBJECT_ITERATOR
@@ -1293,7 +1380,9 @@ final class RuntimeSourceMemorySections {
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_BUILDER
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_FACTORY
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_EXECUTOR
-                    && node->runtime_kind != JAVAN_RUNTIME_KIND_CLASS) {
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_CLASS
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_SCHEDULED_THREAD_POOL_EXECUTOR
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_ATOMIC_LONG) {
                     javan_panic("invalid runtime allocation kind");
                 }
                 javan_validate_runtime_container_references(node);
@@ -1989,6 +2078,30 @@ final class RuntimeSourceMemorySections {
             return state;
         }
 
+        static javan_scheduled_thread_pool_executor_state* javan_scheduled_thread_pool_executor_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported scheduled thread pool executor");
+            }
+            void* attached = javan_generated_object_runtime_state(value, JAVAN_RUNTIME_KIND_SCHEDULED_THREAD_POOL_EXECUTOR);
+            javan_scheduled_thread_pool_executor_state* state = (javan_scheduled_thread_pool_executor_state*) (attached == NULL ? value : attached);
+            if (state->magic != JAVAN_SCHEDULED_THREAD_POOL_EXECUTOR_MAGIC || state->core_pool_size < 0) {
+                javan_panic("unsupported scheduled thread pool executor");
+            }
+            return state;
+        }
+
+        static javan_atomic_long_state* javan_atomic_long_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported atomic long");
+            }
+            void* attached = javan_generated_object_runtime_state(value, JAVAN_RUNTIME_KIND_ATOMIC_LONG);
+            javan_atomic_long_state* state = (javan_atomic_long_state*) (attached == NULL ? value : attached);
+            if (state->magic != JAVAN_ATOMIC_LONG_MAGIC) {
+                javan_panic("unsupported atomic long");
+            }
+            return state;
+        }
+
         static javan_runtime_class_state* javan_runtime_class_checked(void* value) {
             if (value == NULL) {
                 javan_panic("unsupported runtime class");
@@ -2179,6 +2292,9 @@ final class RuntimeSourceMemorySections {
         static javan_object_list* javan_list_new_view(javan_object_list* backing, int immutable, int view_flags);
         static void javan_list_append_raw(javan_object_list* list, void* value);
         void* javan_virtual_thread_executor_from_factory(void* value);
+        void javan_atomic_long_init(void* value, long long initial_value);
+        void javan_scheduled_thread_pool_executor_init(void* value, int core_pool_size);
+        void javan_scheduled_thread_pool_executor_init_full(void* value, int core_pool_size, void* thread_factory, void* rejected_execution_handler);
 
         void* javan_virtual_thread_executor_new(void) {
             void* factory_value = NULL;
@@ -2220,6 +2336,100 @@ final class RuntimeSourceMemorySections {
             javan_update_runtime_allocation_kind(executor_value, JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_EXECUTOR);
             javan_root_frame_pop(roots);
             return executor_value;
+        }
+
+        void* javan_scheduled_thread_pool_executor_new(void) {
+            void* executor_value = javan_alloc(sizeof(javan_scheduled_thread_pool_executor_state));
+            javan_scheduled_thread_pool_executor_state* state = (javan_scheduled_thread_pool_executor_state*) executor_value;
+            state->magic = JAVAN_SCHEDULED_THREAD_POOL_EXECUTOR_MAGIC;
+            state->core_pool_size = 0;
+            state->closed = 0;
+            state->reserved0 = 0;
+            state->thread_factory = NULL;
+            state->rejected_execution_handler = NULL;
+            javan_update_runtime_allocation_kind(executor_value, JAVAN_RUNTIME_KIND_SCHEDULED_THREAD_POOL_EXECUTOR);
+            return executor_value;
+        }
+
+        static javan_scheduled_thread_pool_executor_state* javan_scheduled_thread_pool_executor_state_for_init(void* value) {
+            if (value == NULL) {
+                javan_panic("unsupported scheduled thread pool executor");
+            }
+            struct javan_object_header* header = javan_generated_object_header(value);
+            if (header == NULL) {
+                return javan_scheduled_thread_pool_executor_checked(value);
+            }
+            if (header->_javan_runtime_state == NULL) {
+                void* owner_root = value;
+                void* state_value = NULL;
+                void** roots[] = {
+                    (void**) &owner_root,
+                    (void**) &state_value
+                };
+                javan_root_frame_push(roots, 2);
+                state_value = javan_scheduled_thread_pool_executor_new();
+                javan_generated_object_attach_runtime_state(owner_root, state_value, JAVAN_RUNTIME_KIND_SCHEDULED_THREAD_POOL_EXECUTOR);
+                javan_root_frame_pop(roots);
+            }
+            return javan_scheduled_thread_pool_executor_checked(value);
+        }
+
+        void* javan_atomic_long_new(void) {
+            void* value = javan_alloc(sizeof(javan_atomic_long_state));
+            javan_atomic_long_state* state = (javan_atomic_long_state*) value;
+            state->magic = JAVAN_ATOMIC_LONG_MAGIC;
+            state->reserved0 = 0;
+            state->value = 0LL;
+            javan_update_runtime_allocation_kind(value, JAVAN_RUNTIME_KIND_ATOMIC_LONG);
+            return value;
+        }
+
+        void javan_atomic_long_init(void* value, long long initial_value) {
+            javan_atomic_long_state* state = javan_atomic_long_checked(value);
+            state->value = initial_value;
+        }
+
+        long long javan_atomic_long_get(void* value) {
+            return javan_atomic_long_checked(value)->value;
+        }
+
+        long long javan_atomic_long_increment_and_get(void* value) {
+            javan_atomic_long_state* state = javan_atomic_long_checked(value);
+            state->value += 1LL;
+            return state->value;
+        }
+
+        long long javan_atomic_long_decrement_and_get(void* value) {
+            javan_atomic_long_state* state = javan_atomic_long_checked(value);
+            state->value -= 1LL;
+            return state->value;
+        }
+
+        void javan_scheduled_thread_pool_executor_init(void* value, int core_pool_size) {
+            if (core_pool_size < 0) {
+                javan_panic("negative scheduled thread pool core size");
+            }
+            javan_scheduled_thread_pool_executor_state* state = javan_scheduled_thread_pool_executor_state_for_init(value);
+            state->core_pool_size = core_pool_size;
+            state->closed = 0;
+            state->thread_factory = NULL;
+            state->rejected_execution_handler = NULL;
+        }
+
+        void javan_scheduled_thread_pool_executor_init_full(
+            void* value,
+            int core_pool_size,
+            void* thread_factory,
+            void* rejected_execution_handler
+        ) {
+            if (core_pool_size < 0) {
+                javan_panic("negative scheduled thread pool core size");
+            }
+            javan_scheduled_thread_pool_executor_state* state = javan_scheduled_thread_pool_executor_state_for_init(value);
+            state->core_pool_size = core_pool_size;
+            state->closed = 0;
+            state->thread_factory = thread_factory;
+            state->rejected_execution_handler = rejected_execution_handler;
         }
 
         void javan_virtual_thread_executor_execute(void* value, void* runnable) {
@@ -3444,6 +3654,12 @@ final class RuntimeSourceMemorySections {
                     javan_gc_mark_value(state->factory);
                     javan_gc_mark_value((void*) state->threads);
                 }
+            } else if (runtime_kind == JAVAN_RUNTIME_KIND_SCHEDULED_THREAD_POOL_EXECUTOR) {
+                javan_scheduled_thread_pool_executor_state* state = (javan_scheduled_thread_pool_executor_state*) value;
+                if (state != NULL && state->magic == JAVAN_SCHEDULED_THREAD_POOL_EXECUTOR_MAGIC) {
+                    javan_gc_mark_value(state->thread_factory);
+                    javan_gc_mark_value(state->rejected_execution_handler);
+                }
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_INET_ADDRESS) {
                 javan_inet_address* address = (javan_inet_address*) value;
                 if (address != NULL && address->magic == JAVAN_INET_ADDRESS_MAGIC) {
@@ -3528,6 +3744,10 @@ final class RuntimeSourceMemorySections {
             node->mark = 1;
             if (node->kind == JAVAN_HEAP_KIND_OBJECT) {
                 javan_gc_mark_object_fields(value, node->type_id);
+                if (node->type_id > 0) {
+                    struct javan_object_header* header = (struct javan_object_header*) value;
+                    javan_gc_mark_value(header->_javan_runtime_state);
+                }
                 if (node->type_id == JAVAN_TYPE_JAVA_LANG_THREAD) {
                     javan_gc_mark_value(((javan_thread*) value)->name);
                     javan_gc_mark_value(((javan_thread*) value)->target);
@@ -4482,6 +4702,33 @@ final class RuntimeSourceMemorySections {
                 return strcmp((const char*) left, (const char*) right) == 0;
             }
             return 0;
+        }
+
+        int javan_record_object_equals(void* self, void* other, int expected_type_id, int field_count, ...) {
+            if (self == other) {
+                return 1;
+            }
+            if (self == NULL || other == NULL) {
+                return 0;
+            }
+            if (field_count < 0) {
+                javan_panic("negative record field count");
+            }
+            if (javan_registered_type_id(other) != expected_type_id) {
+                return 0;
+            }
+            va_list arguments;
+            va_start(arguments, field_count);
+            for (int index = 0; index < field_count; index++) {
+                void* left = va_arg(arguments, void*);
+                void* right = va_arg(arguments, void*);
+                if (javan_object_equals(left, right) == 0) {
+                    va_end(arguments);
+                    return 0;
+                }
+            }
+            va_end(arguments);
+            return 1;
         }
 
         static javan_object_list* javan_list_new_with_capacity(int capacity, int immutable) {
