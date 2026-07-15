@@ -26,19 +26,19 @@ public final class CCodegen {
     private static final String MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL = "javan_materialized_lambda_apply_object";
     private static final String MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL = "javan_materialized_lambda_apply_boolean";
     private static final String MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL = "javan_materialized_lambda_apply_void";
-    private static final String TYPEMAP_ENUM_OF_SYMBOL = "javan_typemap_enum_of";
-    private static final String TYPEMAP_FUNCTION_OR_NULL_APPLY_SYMBOL = "javan_typemap_function_or_null_apply";
-    private static final String TYPEMAP_TEMPORAL_OF_UNSUPPORTED_SYMBOL = "javan_typemap_temporal_of_unsupported";
-    private static final String TYPEMAP_TEMPORAL_STRING_BRIDGE_UNSUPPORTED_SYMBOL = "javan_typemap_temporal_string_bridge_unsupported";
-    private static final String TYPEMAP_CALENDAR_OF_MILLIS_UNSUPPORTED_SYMBOL = "javan_typemap_calendar_of_millis_unsupported";
-    private static final String TYPEMAP_CALENDAR_OF_DATE_UNSUPPORTED_SYMBOL = "javan_typemap_calendar_of_date_unsupported";
-    private static final String TYPEMAP_CALENDAR_OF_LOCAL_TIME_UNSUPPORTED_SYMBOL = "javan_typemap_calendar_of_local_time_unsupported";
-    private static final String TYPEMAP_THROWABLE_STRING_OF_UNSUPPORTED_SYMBOL = "javan_typemap_throwable_string_of_unsupported";
+    private static final String EXACT_ENUM_LOOKUP_SYMBOL = "javan_exact_enum_lookup";
+    private static final String EXACT_CATCH_NULL_APPLY_SYMBOL = "javan_exact_catch_null_apply";
+    private static final String EXACT_TEMPORAL_OF_UNSUPPORTED_SYMBOL = "javan_exact_temporal_of_unsupported";
+    private static final String EXACT_TEMPORAL_STRING_BRIDGE_UNSUPPORTED_SYMBOL = "javan_exact_temporal_string_bridge_unsupported";
+    private static final String EXACT_CALENDAR_OF_MILLIS_UNSUPPORTED_SYMBOL = "javan_exact_calendar_of_millis_unsupported";
+    private static final String EXACT_CALENDAR_OF_DATE_UNSUPPORTED_SYMBOL = "javan_exact_calendar_of_date_unsupported";
+    private static final String EXACT_CALENDAR_OF_LOCAL_TIME_UNSUPPORTED_SYMBOL = "javan_exact_calendar_of_local_time_unsupported";
+    private static final String EXACT_THROWABLE_STRING_OF_UNSUPPORTED_SYMBOL = "javan_exact_throwable_string_of_unsupported";
     private static final String TEMPORAL_CONVERSION_LAMBDA_UNSUPPORTED_SYMBOL = "javan_temporal_conversion_lambda_unsupported";
     private static final String GENERATED_ENUM_BY_NAME_SYMBOL = "javan_generated_enum_by_name";
     private static final String GENERATED_ENUM_BY_ORDINAL_SYMBOL = "javan_generated_enum_by_ordinal";
-    private static final MethodRef FUNCTION_OR_NULL_APPLY_WITH_EXCEPTION =
-        new MethodRef("berlin/yuna/typemap/model/FunctionOrNull", "applyWithException", "(Ljava/lang/Object;)Ljava/lang/Object;");
+    private static final String FALLIBLE_APPLY_METHOD_NAME = "applyWithException";
+    private static final String FALLIBLE_APPLY_METHOD_DESCRIPTOR = "(Ljava/lang/Object;)Ljava/lang/Object;";
 
     /**
      * Writes the generated C program.
@@ -464,7 +464,7 @@ public final class CCodegen {
         c.append("    }").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
 
-        c.append("static void* ").append(TYPEMAP_ENUM_OF_SYMBOL).append("(void* value, void* class_value) {").append(System.lineSeparator());
+        c.append("static void* ").append(EXACT_ENUM_LOOKUP_SYMBOL).append("(void* value, void* class_value) {").append(System.lineSeparator());
         c.append("    if (javan_is_supported_number(value) != 0) {").append(System.lineSeparator());
         c.append("        return ").append(GENERATED_ENUM_BY_ORDINAL_SYMBOL)
             .append("(class_value, javan_number_int_value(value));")
@@ -475,35 +475,41 @@ public final class CCodegen {
     }
 
     private static void emitExactFunctionOrNullHelpers(final IrProgram program, final StringBuilder c) {
+        final java.util.Set<String> bridgeOwners = new java.util.LinkedHashSet<>();
+        for (final IrFunction function : program.functions()) {
+            if ("apply".equals(function.name()) && "(Ljava/lang/Object;)Ljava/lang/Object;".equals(function.descriptor())) {
+                bridgeOwners.add(function.owner());
+            }
+        }
         final java.util.Map<String, Integer> typeIds = typeIds(program);
         final List<IrFunction> concreteTargets = new java.util.ArrayList<>();
         for (final IrFunction function : program.functions()) {
-            if (FUNCTION_OR_NULL_APPLY_WITH_EXCEPTION.owner().equals(function.owner())) {
+            if (bridgeOwners.contains(function.owner())) {
                 continue;
             }
-            if (!FUNCTION_OR_NULL_APPLY_WITH_EXCEPTION.name().equals(function.name())) {
+            if (!FALLIBLE_APPLY_METHOD_NAME.equals(function.name())) {
                 continue;
             }
-            if (!FUNCTION_OR_NULL_APPLY_WITH_EXCEPTION.descriptor().equals(function.descriptor())) {
+            if (!FALLIBLE_APPLY_METHOD_DESCRIPTOR.equals(function.descriptor())) {
                 continue;
             }
             concreteTargets.add(function);
         }
-        c.append("static void* ").append(TYPEMAP_FUNCTION_OR_NULL_APPLY_SYMBOL).append("(void* self, void* arg) {").append(System.lineSeparator());
+        c.append("static void* ").append(EXACT_CATCH_NULL_APPLY_SYMBOL).append("(void* self, void* arg) {").append(System.lineSeparator());
         c.append("    if (self == 0) {").append(System.lineSeparator());
-        c.append("        javan_panic(\"FunctionOrNull receiver is null\");").append(System.lineSeparator());
+        c.append("        javan_panic(\"catch-null function receiver is null\");").append(System.lineSeparator());
         c.append("    }").append(System.lineSeparator());
         c.append("    struct javan_object_header* header = (struct javan_object_header*) self;").append(System.lineSeparator());
         if (!program.materializedLambdaTargets().isEmpty()) {
             c.append("    if (header->_javan_type_id == 0) {").append(System.lineSeparator());
             c.append("        if (header->_javan_runtime_kind != JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA) {").append(System.lineSeparator());
-            c.append("            javan_panic(\"unsupported FunctionOrNull receiver shape\");").append(System.lineSeparator());
+            c.append("            javan_panic(\"unsupported catch-null function receiver shape\");").append(System.lineSeparator());
             c.append("        }").append(System.lineSeparator());
             emitRecoverableFunctionOrNullCall(c, MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL, List.of("self", "arg"));
             c.append("    }").append(System.lineSeparator());
         } else {
             c.append("    if (header->_javan_type_id == 0) {").append(System.lineSeparator());
-            c.append("        javan_panic(\"unsupported FunctionOrNull receiver shape\");").append(System.lineSeparator());
+            c.append("        javan_panic(\"unsupported catch-null function receiver shape\");").append(System.lineSeparator());
             c.append("    }").append(System.lineSeparator());
         }
         c.append("    switch (header->_javan_type_id) {").append(System.lineSeparator());
@@ -516,67 +522,67 @@ public final class CCodegen {
             emitRecoverableFunctionOrNullCall(c, target.symbol(), List.of("self", "arg"), 12);
             c.append("        }").append(System.lineSeparator());
         }
-        c.append("        default: javan_panic(\"unsupported FunctionOrNull receiver shape\");").append(System.lineSeparator());
+        c.append("        default: javan_panic(\"unsupported catch-null function receiver shape\");").append(System.lineSeparator());
         c.append("    }").append(System.lineSeparator());
         c.append("    return 0;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
     }
 
     private static void emitExactTemporalBridgeHelpers(final StringBuilder c) {
-        c.append("static void* ").append(TYPEMAP_TEMPORAL_OF_UNSUPPORTED_SYMBOL)
+        c.append("static void* ").append(EXACT_TEMPORAL_OF_UNSUPPORTED_SYMBOL)
             .append("(void* class_value, void* text, void* function) {").append(System.lineSeparator());
         c.append("    (void) text;").append(System.lineSeparator());
         c.append("    (void) function;").append(System.lineSeparator());
         c.append("    const char* class_name = (const char*) javan_printable_object_string(class_value);").append(System.lineSeparator());
         c.append("    char message[256];").append(System.lineSeparator());
         c.append("    if (class_name != 0) {").append(System.lineSeparator());
-        c.append("        snprintf(message, sizeof(message), \"unsupported TypeMap temporal conversion runtime for %s\", class_name);").append(System.lineSeparator());
+        c.append("        snprintf(message, sizeof(message), \"unsupported exact temporal conversion runtime for %s\", class_name);").append(System.lineSeparator());
         c.append("    } else {").append(System.lineSeparator());
-        c.append("        snprintf(message, sizeof(message), \"unsupported TypeMap temporal conversion runtime\");").append(System.lineSeparator());
+        c.append("        snprintf(message, sizeof(message), \"unsupported exact temporal conversion runtime\");").append(System.lineSeparator());
         c.append("    }").append(System.lineSeparator());
         c.append("    javan_panic(message);").append(System.lineSeparator());
         c.append("    return 0;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
 
-        c.append("static void* ").append(TYPEMAP_TEMPORAL_STRING_BRIDGE_UNSUPPORTED_SYMBOL)
+        c.append("static void* ").append(EXACT_TEMPORAL_STRING_BRIDGE_UNSUPPORTED_SYMBOL)
             .append("(void* text, void* target_name) {").append(System.lineSeparator());
         c.append("    (void) text;").append(System.lineSeparator());
         c.append("    const char* target = (const char*) javan_printable_object_string(target_name);").append(System.lineSeparator());
         c.append("    char message[256];").append(System.lineSeparator());
         c.append("    if (target != 0) {").append(System.lineSeparator());
-        c.append("        snprintf(message, sizeof(message), \"unsupported TypeMap temporal registration bridge runtime for %s\", target);").append(System.lineSeparator());
+        c.append("        snprintf(message, sizeof(message), \"unsupported exact temporal registration bridge runtime for %s\", target);").append(System.lineSeparator());
         c.append("    } else {").append(System.lineSeparator());
-        c.append("        snprintf(message, sizeof(message), \"unsupported TypeMap temporal registration bridge runtime\");").append(System.lineSeparator());
+        c.append("        snprintf(message, sizeof(message), \"unsupported exact temporal registration bridge runtime\");").append(System.lineSeparator());
         c.append("    }").append(System.lineSeparator());
         c.append("    javan_panic(message);").append(System.lineSeparator());
         c.append("    return 0;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
 
-        c.append("static void* ").append(TYPEMAP_CALENDAR_OF_MILLIS_UNSUPPORTED_SYMBOL)
+        c.append("static void* ").append(EXACT_CALENDAR_OF_MILLIS_UNSUPPORTED_SYMBOL)
             .append("(long long value) {").append(System.lineSeparator());
         c.append("    (void) value;").append(System.lineSeparator());
-        c.append("    javan_panic(\"unsupported TypeMap Calendar conversion runtime from epoch millis\");").append(System.lineSeparator());
+        c.append("    javan_panic(\"unsupported exact Calendar conversion runtime from epoch millis\");").append(System.lineSeparator());
         c.append("    return 0;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
 
-        c.append("static void* ").append(TYPEMAP_CALENDAR_OF_DATE_UNSUPPORTED_SYMBOL)
+        c.append("static void* ").append(EXACT_CALENDAR_OF_DATE_UNSUPPORTED_SYMBOL)
             .append("(void* value) {").append(System.lineSeparator());
         c.append("    (void) value;").append(System.lineSeparator());
-        c.append("    javan_panic(\"unsupported TypeMap Calendar conversion runtime from java.util.Date\");").append(System.lineSeparator());
+        c.append("    javan_panic(\"unsupported exact Calendar conversion runtime from java.util.Date\");").append(System.lineSeparator());
         c.append("    return 0;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
 
-        c.append("static void* ").append(TYPEMAP_CALENDAR_OF_LOCAL_TIME_UNSUPPORTED_SYMBOL)
+        c.append("static void* ").append(EXACT_CALENDAR_OF_LOCAL_TIME_UNSUPPORTED_SYMBOL)
             .append("(void* value) {").append(System.lineSeparator());
         c.append("    (void) value;").append(System.lineSeparator());
-        c.append("    javan_panic(\"unsupported TypeMap Calendar conversion runtime from java.time.LocalTime\");").append(System.lineSeparator());
+        c.append("    javan_panic(\"unsupported exact Calendar conversion runtime from java.time.LocalTime\");").append(System.lineSeparator());
         c.append("    return 0;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
 
-        c.append("static void* ").append(TYPEMAP_THROWABLE_STRING_OF_UNSUPPORTED_SYMBOL)
+        c.append("static void* ").append(EXACT_THROWABLE_STRING_OF_UNSUPPORTED_SYMBOL)
             .append("(void* value) {").append(System.lineSeparator());
         c.append("    (void) value;").append(System.lineSeparator());
-        c.append("    javan_panic(\"unsupported TypeMap Throwable string rendering runtime\");").append(System.lineSeparator());
+        c.append("    javan_panic(\"unsupported exact Throwable string rendering runtime\");").append(System.lineSeparator());
         c.append("    return 0;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
 

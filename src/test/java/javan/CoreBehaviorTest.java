@@ -980,7 +980,7 @@ final class CoreBehaviorTest {
     void staticVerifierAcceptsReachableExactCatchNullFunctionOrNullApplyMethod() {
         final MethodInfo method = exactCatchNullFunctionOrNullApplyMethod();
         final ClassFile functionOrNull = classWithMethods(
-            "berlin/yuna/typemap/model/FunctionOrNull",
+            "com/acme/FallibleFunction",
             "java/lang/Object",
             0x0200,
             List.of(),
@@ -989,7 +989,7 @@ final class CoreBehaviorTest {
 
         final List<Diagnostic> diagnostics = new StaticVerifier().verify(
             Map.of(functionOrNull.name(), functionOrNull),
-            List.of(new EntryPoint("berlin/yuna/typemap/model/FunctionOrNull", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;"))
+            List.of(new EntryPoint("com/acme/FallibleFunction", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;"))
         );
 
         assertThat(diagnostics).isEmpty();
@@ -999,7 +999,7 @@ final class CoreBehaviorTest {
     void exactMethodSupportDetectsTemporalOfLoopFallbackShape() {
         final MethodInfo method = exactTemporalOfLoopFallbackMethod();
         final ClassFile register = classWithMethods(
-            "berlin/yuna/typemap/config/TypeConversionRegister",
+            "com/acme/TemporalSupport",
             "java/lang/Object",
             0,
             List.of(),
@@ -1013,7 +1013,7 @@ final class CoreBehaviorTest {
     void exactMethodSupportDetectsTemporalStringBridgeShape() {
         final MethodInfo method = exactTemporalStringBridgeMethod();
         final ClassFile register = classWithMethods(
-            "berlin/yuna/typemap/config/TypeConversionRegister",
+            "com/acme/TemporalSupport",
             "java/lang/Object",
             0,
             List.of(),
@@ -1029,7 +1029,7 @@ final class CoreBehaviorTest {
     void exactMethodSupportDetectsCalendarOfEpochMillisShape() {
         final MethodInfo method = exactCalendarOfEpochMillisMethod();
         final ClassFile register = classWithMethods(
-            "berlin/yuna/typemap/config/TypeConversionRegister",
+            "com/acme/TemporalSupport",
             "java/lang/Object",
             0,
             List.of(),
@@ -1043,7 +1043,7 @@ final class CoreBehaviorTest {
     void exactMethodSupportDetectsCalendarOfDateShape() {
         final MethodInfo method = exactCalendarOfDateMethod();
         final ClassFile register = classWithMethods(
-            "berlin/yuna/typemap/config/TypeConversionRegister",
+            "com/acme/TemporalSupport",
             "java/lang/Object",
             0,
             List.of(),
@@ -1057,7 +1057,7 @@ final class CoreBehaviorTest {
     void exactMethodSupportDetectsCalendarOfLocalTimeShape() {
         final MethodInfo method = exactCalendarOfLocalTimeMethod();
         final ClassFile register = classWithMethods(
-            "berlin/yuna/typemap/config/TypeConversionRegister",
+            "com/acme/TemporalSupport",
             "java/lang/Object",
             0,
             List.of(),
@@ -1071,7 +1071,7 @@ final class CoreBehaviorTest {
     void exactMethodSupportDetectsThrowableStringOfShape() {
         final MethodInfo method = exactThrowableStringOfMethod();
         final ClassFile register = classWithMethods(
-            "berlin/yuna/typemap/config/TypeConversionRegister",
+            "com/acme/TemporalSupport",
             "java/lang/Object",
             0,
             List.of(),
@@ -1085,7 +1085,7 @@ final class CoreBehaviorTest {
     void exactMethodSupportDetectsUnsupportedTemporalConversionLambdaShape() {
         final MethodInfo method = exactUnsupportedTemporalConversionLambdaMethod();
         final ClassFile register = classWithMethods(
-            "berlin/yuna/typemap/config/TypeConversionRegister",
+            "com/acme/TemporalSupport",
             "java/lang/Object",
             0,
             List.of(),
@@ -10732,7 +10732,7 @@ final class CoreBehaviorTest {
                 List.of(
                     instruction(0, 42, "aload_0"),
                     instruction(1, 43, "aload_1"),
-                    instruction(2, 185, "invokeinterface", new MethodRef("berlin/yuna/typemap/model/FunctionOrNull", "applyWithException", "(Ljava/lang/Object;)Ljava/lang/Object;")),
+                    instruction(2, 185, "invokeinterface", new MethodRef("com/acme/FallibleFunction", "applyWithException", "(Ljava/lang/Object;)Ljava/lang/Object;")),
                     instruction(7, 176, "areturn"),
                     instruction(8, 77, "astore_2"),
                     instruction(9, 1, "aconst_null"),
@@ -10757,7 +10757,7 @@ final class CoreBehaviorTest {
                     new CodeException(39, 53, 54, Optional.of("java/lang/Exception"))
                 ),
                 List.of(
-                    fieldInstruction(0, 178, "getstatic", new FieldRef("berlin/yuna/typemap/config/TypeConversionRegister", "DATE_TIME_FORMATTERS", "[Ljava/time/format/DateTimeFormatter;")),
+                    fieldInstruction(0, 178, "getstatic", new FieldRef("com/acme/TemporalSupport", "DATE_TIME_FORMATTERS", "[Ljava/time/format/DateTimeFormatter;")),
                     instruction(3, 78, "astore_3"),
                     instruction(4, 45, "aload_3"),
                     instruction(5, 190, "arraylength"),
@@ -10780,10 +10780,10 @@ final class CoreBehaviorTest {
                     instruction(37, 58, "astore"),
                     instruction(39, 43, "aload_1"),
                     instruction(40, 184, "invokestatic", new MethodRef("java/lang/Long", "parseLong", "(Ljava/lang/String;)J")),
-                    instruction(43, 184, "invokestatic", new MethodRef("berlin/yuna/typemap/config/TypeConversionRegister", "toTimestampMs", "(J)J")),
+                    instruction(43, 184, "invokestatic", new MethodRef("com/acme/TemporalSupport", "toTimestampMs", "(J)J")),
                     instruction(46, 184, "invokestatic", new MethodRef("java/lang/Long", "valueOf", "(J)Ljava/lang/Long;")),
                     instruction(49, 42, "aload_0"),
-                    instruction(50, 184, "invokestatic", new MethodRef("berlin/yuna/typemap/logic/TypeConverter", "convertObj", "(Ljava/lang/Object;Ljava/lang/Class;)Ljava/lang/Object;")),
+                    instruction(50, 184, "invokestatic", new MethodRef("com/acme/TypeConverter", "convertObj", "(Ljava/lang/Object;Ljava/lang/Class;)Ljava/lang/Object;")),
                     instruction(53, 176, "areturn"),
                     instruction(54, 58, "astore"),
                     instruction(56, 132, "iinc"),
@@ -10818,7 +10818,7 @@ final class CoreBehaviorTest {
                             + "Ljava/lang/invoke/CallSite;",
                         List.of(
                             "(Ljava/lang/Object;)Ljava/lang/Object;",
-                            "invokestatic berlin/yuna/typemap/config/TypeConversionRegister.lambda$null$133:(Ljava/time/temporal/TemporalAccessor;)Ljava/sql/Timestamp;",
+                            "invokestatic com/acme/TemporalSupport.lambda$null$133:(Ljava/time/temporal/TemporalAccessor;)Ljava/sql/Timestamp;",
                             "(Ljava/time/temporal/TemporalAccessor;)Ljava/sql/Timestamp;"
                         ),
                         List.of(
@@ -10826,7 +10826,7 @@ final class CoreBehaviorTest {
                             BootstrapArgument.methodHandle(
                                 6,
                                 new MethodRef(
-                                    "berlin/yuna/typemap/config/TypeConversionRegister",
+                                    "com/acme/TemporalSupport",
                                     "lambda$null$133",
                                     "(Ljava/time/temporal/TemporalAccessor;)Ljava/sql/Timestamp;"
                                 )
@@ -10835,7 +10835,7 @@ final class CoreBehaviorTest {
                         )
                     )),
                     instruction(8, 184, "invokestatic", new MethodRef(
-                        "berlin/yuna/typemap/config/TypeConversionRegister",
+                        "com/acme/TemporalSupport",
                         "temporalOf",
                         "(Ljava/lang/Class;Ljava/lang/String;Ljava/util/function/Function;)Ljava/lang/Object;"
                     )),
@@ -10952,13 +10952,13 @@ final class CoreBehaviorTest {
                     instruction(8, 43, "aload_1"),
                     instruction(9, 42, "aload_0"),
                     instruction(10, 182, "invokevirtual", new MethodRef("java/lang/StringBuilder", "append", "(Ljava/lang/Object;)Ljava/lang/StringBuilder;")),
-                    fieldInstruction(13, 178, "getstatic", new FieldRef("berlin/yuna/typemap/config/TypeConversionRegister", "LINE_SEPARATOR", "Ljava/lang/String;")),
+                    fieldInstruction(13, 178, "getstatic", new FieldRef("com/acme/TemporalSupport", "LINE_SEPARATOR", "Ljava/lang/String;")),
                     instruction(16, 182, "invokevirtual", new MethodRef("java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;")),
                     instruction(19, 87, "pop"),
                     instruction(20, 43, "aload_1"),
                     instruction(21, 42, "aload_0"),
                     instruction(22, 3, "iconst_0"),
-                    instruction(23, 184, "invokestatic", new MethodRef("berlin/yuna/typemap/config/TypeConversionRegister", "extractCause", "(Ljava/lang/StringBuilder;Ljava/lang/Throwable;Z)V")),
+                    instruction(23, 184, "invokestatic", new MethodRef("com/acme/TemporalSupport", "extractCause", "(Ljava/lang/StringBuilder;Ljava/lang/Throwable;Z)V")),
                     instruction(26, 42, "aload_0"),
                     instruction(27, 182, "invokevirtual", new MethodRef("java/lang/Throwable", "getCause", "()Ljava/lang/Throwable;")),
                     instruction(30, 77, "astore_2"),
@@ -10969,13 +10969,13 @@ final class CoreBehaviorTest {
                     instruction(38, 182, "invokevirtual", new MethodRef("java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;")),
                     instruction(41, 44, "aload_2"),
                     instruction(42, 182, "invokevirtual", new MethodRef("java/lang/StringBuilder", "append", "(Ljava/lang/Object;)Ljava/lang/StringBuilder;")),
-                    fieldInstruction(45, 178, "getstatic", new FieldRef("berlin/yuna/typemap/config/TypeConversionRegister", "LINE_SEPARATOR", "Ljava/lang/String;")),
+                    fieldInstruction(45, 178, "getstatic", new FieldRef("com/acme/TemporalSupport", "LINE_SEPARATOR", "Ljava/lang/String;")),
                     instruction(48, 182, "invokevirtual", new MethodRef("java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;")),
                     instruction(51, 87, "pop"),
                     instruction(52, 43, "aload_1"),
                     instruction(53, 44, "aload_2"),
                     instruction(54, 3, "iconst_0"),
-                    instruction(55, 184, "invokestatic", new MethodRef("berlin/yuna/typemap/config/TypeConversionRegister", "extractCause", "(Ljava/lang/StringBuilder;Ljava/lang/Throwable;Z)V")),
+                    instruction(55, 184, "invokestatic", new MethodRef("com/acme/TemporalSupport", "extractCause", "(Ljava/lang/StringBuilder;Ljava/lang/Throwable;Z)V")),
                     instruction(58, 44, "aload_2"),
                     instruction(59, 182, "invokevirtual", new MethodRef("java/lang/Throwable", "getCause", "()Ljava/lang/Throwable;")),
                     instruction(62, 77, "astore_2"),

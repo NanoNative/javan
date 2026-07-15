@@ -72,6 +72,14 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_BUILTIN_INSTANCEOF_MAP 2
         #define JAVAN_BUILTIN_INSTANCEOF_MAP_ENTRY 3
         #define JAVAN_BUILTIN_INSTANCEOF_OBJECT_ARRAY 4
+        #define JAVAN_BUILTIN_INSTANCEOF_INT_ARRAY 5
+        #define JAVAN_BUILTIN_INSTANCEOF_LONG_ARRAY 6
+        #define JAVAN_BUILTIN_INSTANCEOF_FLOAT_ARRAY 7
+        #define JAVAN_BUILTIN_INSTANCEOF_DOUBLE_ARRAY 8
+        #define JAVAN_BUILTIN_INSTANCEOF_BYTE_ARRAY 9
+        #define JAVAN_BUILTIN_INSTANCEOF_BOOLEAN_ARRAY 10
+        #define JAVAN_BUILTIN_INSTANCEOF_SHORT_ARRAY 11
+        #define JAVAN_BUILTIN_INSTANCEOF_CHAR_ARRAY 12
 
         typedef struct javan_object_list {
             int magic;
@@ -2215,6 +2223,30 @@ final class RuntimeSourceMemorySections {
             }
             if (target == JAVAN_BUILTIN_INSTANCEOF_OBJECT_ARRAY) {
                 return node->kind == JAVAN_HEAP_KIND_ARRAY && node->type_id == JAVAN_ARRAY_KIND_OBJECT;
+            }
+            if (target == JAVAN_BUILTIN_INSTANCEOF_INT_ARRAY) {
+                return node->kind == JAVAN_HEAP_KIND_ARRAY && node->type_id == JAVAN_ARRAY_KIND_INT;
+            }
+            if (target == JAVAN_BUILTIN_INSTANCEOF_LONG_ARRAY) {
+                return node->kind == JAVAN_HEAP_KIND_ARRAY && node->type_id == JAVAN_ARRAY_KIND_LONG;
+            }
+            if (target == JAVAN_BUILTIN_INSTANCEOF_FLOAT_ARRAY) {
+                return node->kind == JAVAN_HEAP_KIND_ARRAY && node->type_id == JAVAN_ARRAY_KIND_FLOAT;
+            }
+            if (target == JAVAN_BUILTIN_INSTANCEOF_DOUBLE_ARRAY) {
+                return node->kind == JAVAN_HEAP_KIND_ARRAY && node->type_id == JAVAN_ARRAY_KIND_DOUBLE;
+            }
+            if (target == JAVAN_BUILTIN_INSTANCEOF_BYTE_ARRAY) {
+                return node->kind == JAVAN_HEAP_KIND_ARRAY && node->type_id == JAVAN_ARRAY_KIND_BYTE;
+            }
+            if (target == JAVAN_BUILTIN_INSTANCEOF_BOOLEAN_ARRAY) {
+                return node->kind == JAVAN_HEAP_KIND_ARRAY && node->type_id == JAVAN_ARRAY_KIND_BOOLEAN;
+            }
+            if (target == JAVAN_BUILTIN_INSTANCEOF_SHORT_ARRAY) {
+                return node->kind == JAVAN_HEAP_KIND_ARRAY && node->type_id == JAVAN_ARRAY_KIND_SHORT;
+            }
+            if (target == JAVAN_BUILTIN_INSTANCEOF_CHAR_ARRAY) {
+                return node->kind == JAVAN_HEAP_KIND_ARRAY && node->type_id == JAVAN_ARRAY_KIND_CHAR;
             }
             javan_panic("unsupported builtin instanceof target");
             return 0;

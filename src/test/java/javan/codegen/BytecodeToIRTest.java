@@ -632,7 +632,7 @@ final class BytecodeToIRTest {
         assertThat(program.functions().getFirst().locals()).isEmpty();
         assertThat(program.functions().getFirst().instructions()).containsExactly(
             IrInstruction.returnObject(IrExpression.objectCall(
-                "javan_typemap_enum_of",
+                "javan_exact_enum_lookup",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
             ))
         );
@@ -641,12 +641,12 @@ final class BytecodeToIRTest {
     @Test
     void lowersExactCatchNullFunctionOrNullApplyMethodToHelperCall() {
         final MethodInfo apply = exactCatchNullFunctionOrNullApplyMethod();
-        final EntryPoint entryPoint = new EntryPoint("berlin/yuna/typemap/model/FunctionOrNull", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;");
+        final EntryPoint entryPoint = new EntryPoint("com/acme/FallibleFunction", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;");
         final CallGraph graph = new CallGraph(entryPoint, List.of(entryPoint), List.of());
         final IrProgram program = new BytecodeToIR().lower(
             Map.of(
-                "berlin/yuna/typemap/model/FunctionOrNull",
-                classFile("berlin/yuna/typemap/model/FunctionOrNull", "java/lang/Object", 0x0200, List.of(), List.of(), List.of(apply))
+                "com/acme/FallibleFunction",
+                classFile("com/acme/FallibleFunction", "java/lang/Object", 0x0200, List.of(), List.of(), List.of(apply))
             ),
             graph,
             SourceLineIndex.empty()
@@ -656,7 +656,7 @@ final class BytecodeToIRTest {
         assertThat(program.functions().getFirst().locals()).isEmpty();
         assertThat(program.functions().getFirst().instructions()).containsExactly(
             IrInstruction.returnObject(IrExpression.objectCall(
-                "javan_typemap_function_or_null_apply",
+                "javan_exact_catch_null_apply",
                 List.of(IrExpression.objectLocal("self"), IrExpression.objectLocal("arg0"))
             ))
         );
@@ -666,15 +666,15 @@ final class BytecodeToIRTest {
     void lowersExactTemporalOfMethodToExplicitUnsupportedRuntimeBridge() {
         final MethodInfo temporalOf = exactTemporalOfLoopFallbackMethod();
         final EntryPoint entryPoint = new EntryPoint(
-            "berlin/yuna/typemap/config/TypeConversionRegister",
+            "com/acme/TemporalSupport",
             "temporalOf",
             "(Ljava/lang/Class;Ljava/lang/String;Ljava/util/function/Function;)Ljava/lang/Object;"
         );
         final CallGraph graph = new CallGraph(entryPoint, List.of(entryPoint), List.of());
         final IrProgram program = new BytecodeToIR().lower(
             Map.of(
-                "berlin/yuna/typemap/config/TypeConversionRegister",
-                classFile("berlin/yuna/typemap/config/TypeConversionRegister", "java/lang/Object", 0, List.of(), List.of(), List.of(temporalOf))
+                "com/acme/TemporalSupport",
+                classFile("com/acme/TemporalSupport", "java/lang/Object", 0, List.of(), List.of(), List.of(temporalOf))
             ),
             graph,
             SourceLineIndex.empty()
@@ -683,7 +683,7 @@ final class BytecodeToIRTest {
         assertThat(program.functions()).hasSize(1);
         assertThat(program.functions().getFirst().instructions()).containsExactly(
             IrInstruction.returnObject(IrExpression.objectCall(
-                "javan_typemap_temporal_of_unsupported",
+                "javan_exact_temporal_of_unsupported",
                 List.of(
                     IrExpression.objectLocal("arg0"),
                     IrExpression.objectLocal("arg1"),
@@ -697,15 +697,15 @@ final class BytecodeToIRTest {
     void lowersExactTemporalStringBridgeMethodToExplicitUnsupportedRuntimeBridge() {
         final MethodInfo bridge = exactTemporalStringBridgeMethod();
         final EntryPoint entryPoint = new EntryPoint(
-            "berlin/yuna/typemap/config/TypeConversionRegister",
+            "com/acme/TemporalSupport",
             "lambda$static$134",
             "(Ljava/lang/String;)Ljava/sql/Timestamp;"
         );
         final CallGraph graph = new CallGraph(entryPoint, List.of(entryPoint), List.of());
         final IrProgram program = new BytecodeToIR().lower(
             Map.of(
-                "berlin/yuna/typemap/config/TypeConversionRegister",
-                classFile("berlin/yuna/typemap/config/TypeConversionRegister", "java/lang/Object", 0, List.of(), List.of(), List.of(bridge))
+                "com/acme/TemporalSupport",
+                classFile("com/acme/TemporalSupport", "java/lang/Object", 0, List.of(), List.of(), List.of(bridge))
             ),
             graph,
             SourceLineIndex.empty()
@@ -714,7 +714,7 @@ final class BytecodeToIRTest {
         assertThat(program.functions()).hasSize(1);
         assertThat(program.functions().getFirst().instructions()).containsExactly(
             IrInstruction.returnObject(IrExpression.objectCall(
-                "javan_typemap_temporal_string_bridge_unsupported",
+                "javan_exact_temporal_string_bridge_unsupported",
                 List.of(
                     IrExpression.objectLocal("arg0"),
                     IrExpression.stringLiteral("java.sql.Timestamp")
@@ -726,15 +726,15 @@ final class BytecodeToIRTest {
     @Test
     void lowersExactCalendarOfEpochMillisMethodToExplicitUnsupportedRuntimeBridge() {
         final EntryPoint entryPoint = new EntryPoint(
-            "berlin/yuna/typemap/config/TypeConversionRegister",
+            "com/acme/TemporalSupport",
             "calendarOf",
             "(J)Ljava/util/Calendar;"
         );
         final CallGraph graph = new CallGraph(entryPoint, List.of(entryPoint), List.of());
         final IrProgram program = new BytecodeToIR().lower(
             Map.of(
-                "berlin/yuna/typemap/config/TypeConversionRegister",
-                classFile("berlin/yuna/typemap/config/TypeConversionRegister", "java/lang/Object", 0, List.of(), List.of(), List.of(exactCalendarOfEpochMillisMethod()))
+                "com/acme/TemporalSupport",
+                classFile("com/acme/TemporalSupport", "java/lang/Object", 0, List.of(), List.of(), List.of(exactCalendarOfEpochMillisMethod()))
             ),
             graph,
             SourceLineIndex.empty()
@@ -743,7 +743,7 @@ final class BytecodeToIRTest {
         assertThat(program.functions()).hasSize(1);
         assertThat(program.functions().getFirst().instructions()).containsExactly(
             IrInstruction.returnObject(IrExpression.objectCall(
-                "javan_typemap_calendar_of_millis_unsupported",
+                "javan_exact_calendar_of_millis_unsupported",
                 List.of(IrExpression.longLocal("arg0"))
             ))
         );
@@ -752,15 +752,15 @@ final class BytecodeToIRTest {
     @Test
     void lowersExactCalendarOfDateMethodToExplicitUnsupportedRuntimeBridge() {
         final EntryPoint entryPoint = new EntryPoint(
-            "berlin/yuna/typemap/config/TypeConversionRegister",
+            "com/acme/TemporalSupport",
             "calendarOf",
             "(Ljava/util/Date;)Ljava/util/Calendar;"
         );
         final CallGraph graph = new CallGraph(entryPoint, List.of(entryPoint), List.of());
         final IrProgram program = new BytecodeToIR().lower(
             Map.of(
-                "berlin/yuna/typemap/config/TypeConversionRegister",
-                classFile("berlin/yuna/typemap/config/TypeConversionRegister", "java/lang/Object", 0, List.of(), List.of(), List.of(exactCalendarOfDateMethod()))
+                "com/acme/TemporalSupport",
+                classFile("com/acme/TemporalSupport", "java/lang/Object", 0, List.of(), List.of(), List.of(exactCalendarOfDateMethod()))
             ),
             graph,
             SourceLineIndex.empty()
@@ -769,7 +769,7 @@ final class BytecodeToIRTest {
         assertThat(program.functions()).hasSize(1);
         assertThat(program.functions().getFirst().instructions()).containsExactly(
             IrInstruction.returnObject(IrExpression.objectCall(
-                "javan_typemap_calendar_of_date_unsupported",
+                "javan_exact_calendar_of_date_unsupported",
                 List.of(IrExpression.objectLocal("arg0"))
             ))
         );
@@ -778,15 +778,15 @@ final class BytecodeToIRTest {
     @Test
     void lowersExactCalendarOfLocalTimeMethodToExplicitUnsupportedRuntimeBridge() {
         final EntryPoint entryPoint = new EntryPoint(
-            "berlin/yuna/typemap/config/TypeConversionRegister",
+            "com/acme/TemporalSupport",
             "calendarOf",
             "(Ljava/time/LocalTime;)Ljava/util/Calendar;"
         );
         final CallGraph graph = new CallGraph(entryPoint, List.of(entryPoint), List.of());
         final IrProgram program = new BytecodeToIR().lower(
             Map.of(
-                "berlin/yuna/typemap/config/TypeConversionRegister",
-                classFile("berlin/yuna/typemap/config/TypeConversionRegister", "java/lang/Object", 0, List.of(), List.of(), List.of(exactCalendarOfLocalTimeMethod()))
+                "com/acme/TemporalSupport",
+                classFile("com/acme/TemporalSupport", "java/lang/Object", 0, List.of(), List.of(), List.of(exactCalendarOfLocalTimeMethod()))
             ),
             graph,
             SourceLineIndex.empty()
@@ -795,7 +795,7 @@ final class BytecodeToIRTest {
         assertThat(program.functions()).hasSize(1);
         assertThat(program.functions().getFirst().instructions()).containsExactly(
             IrInstruction.returnObject(IrExpression.objectCall(
-                "javan_typemap_calendar_of_local_time_unsupported",
+                "javan_exact_calendar_of_local_time_unsupported",
                 List.of(IrExpression.objectLocal("arg0"))
             ))
         );
@@ -804,15 +804,15 @@ final class BytecodeToIRTest {
     @Test
     void lowersExactThrowableStringOfMethodToExplicitUnsupportedRuntimeBridge() {
         final EntryPoint entryPoint = new EntryPoint(
-            "berlin/yuna/typemap/config/TypeConversionRegister",
+            "com/acme/TemporalSupport",
             "stringOf",
             "(Ljava/lang/Throwable;)Ljava/lang/String;"
         );
         final CallGraph graph = new CallGraph(entryPoint, List.of(entryPoint), List.of());
         final IrProgram program = new BytecodeToIR().lower(
             Map.of(
-                "berlin/yuna/typemap/config/TypeConversionRegister",
-                classFile("berlin/yuna/typemap/config/TypeConversionRegister", "java/lang/Object", 0, List.of(), List.of(), List.of(exactThrowableStringOfMethod()))
+                "com/acme/TemporalSupport",
+                classFile("com/acme/TemporalSupport", "java/lang/Object", 0, List.of(), List.of(), List.of(exactThrowableStringOfMethod()))
             ),
             graph,
             SourceLineIndex.empty()
@@ -821,7 +821,7 @@ final class BytecodeToIRTest {
         assertThat(program.functions()).hasSize(1);
         assertThat(program.functions().getFirst().instructions()).containsExactly(
             IrInstruction.returnObject(IrExpression.objectCall(
-                "javan_typemap_throwable_string_of_unsupported",
+                "javan_exact_throwable_string_of_unsupported",
                 List.of(IrExpression.objectLocal("arg0"))
             ))
         );
@@ -897,15 +897,15 @@ final class BytecodeToIRTest {
     @Test
     void lowersExactUnsupportedTemporalConversionLambdaToExplicitUnsupportedRuntimeBridge() {
         final EntryPoint entryPoint = new EntryPoint(
-            "berlin/yuna/typemap/config/TypeConversionRegister",
+            "com/acme/TemporalSupport",
             "lambda$static$117",
             "(Ljava/sql/Timestamp;)Ljava/util/Date;"
         );
         final CallGraph graph = new CallGraph(entryPoint, List.of(entryPoint), List.of());
         final IrProgram program = new BytecodeToIR().lower(
             Map.of(
-                "berlin/yuna/typemap/config/TypeConversionRegister",
-                classFile("berlin/yuna/typemap/config/TypeConversionRegister", "java/lang/Object", 0, List.of(), List.of(), List.of(exactUnsupportedTemporalConversionLambdaMethod()))
+                "com/acme/TemporalSupport",
+                classFile("com/acme/TemporalSupport", "java/lang/Object", 0, List.of(), List.of(), List.of(exactUnsupportedTemporalConversionLambdaMethod()))
             ),
             graph,
             SourceLineIndex.empty()
@@ -915,7 +915,7 @@ final class BytecodeToIRTest {
         assertThat(program.functions().getFirst().instructions()).containsExactly(
             IrInstruction.returnObject(IrExpression.objectCall(
                 "javan_temporal_conversion_lambda_unsupported",
-                List.of(IrExpression.stringLiteral("berlin/yuna/typemap/config/TypeConversionRegister.lambda$static$117(Ljava/sql/Timestamp;)Ljava/util/Date;"))
+                List.of(IrExpression.stringLiteral("com/acme/TemporalSupport.lambda$static$117(Ljava/sql/Timestamp;)Ljava/util/Date;"))
             ))
         );
     }
@@ -3278,6 +3278,46 @@ final class BytecodeToIRTest {
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.intLiteral(JdkCallSupport.BUILTIN_INSTANCEOF_OBJECT_ARRAY))
             ))
         );
+    }
+
+    @Test
+    void lowersInstanceOfIntArrayToBuiltinRuntimeIntrinsic() {
+        assertBuiltinInstanceOfLowering("[I", JdkCallSupport.BUILTIN_INSTANCEOF_INT_ARRAY);
+    }
+
+    @Test
+    void lowersInstanceOfLongArrayToBuiltinRuntimeIntrinsic() {
+        assertBuiltinInstanceOfLowering("[J", JdkCallSupport.BUILTIN_INSTANCEOF_LONG_ARRAY);
+    }
+
+    @Test
+    void lowersInstanceOfFloatArrayToBuiltinRuntimeIntrinsic() {
+        assertBuiltinInstanceOfLowering("[F", JdkCallSupport.BUILTIN_INSTANCEOF_FLOAT_ARRAY);
+    }
+
+    @Test
+    void lowersInstanceOfDoubleArrayToBuiltinRuntimeIntrinsic() {
+        assertBuiltinInstanceOfLowering("[D", JdkCallSupport.BUILTIN_INSTANCEOF_DOUBLE_ARRAY);
+    }
+
+    @Test
+    void lowersInstanceOfByteArrayToBuiltinRuntimeIntrinsic() {
+        assertBuiltinInstanceOfLowering("[B", JdkCallSupport.BUILTIN_INSTANCEOF_BYTE_ARRAY);
+    }
+
+    @Test
+    void lowersInstanceOfBooleanArrayToBuiltinRuntimeIntrinsic() {
+        assertBuiltinInstanceOfLowering("[Z", JdkCallSupport.BUILTIN_INSTANCEOF_BOOLEAN_ARRAY);
+    }
+
+    @Test
+    void lowersInstanceOfShortArrayToBuiltinRuntimeIntrinsic() {
+        assertBuiltinInstanceOfLowering("[S", JdkCallSupport.BUILTIN_INSTANCEOF_SHORT_ARRAY);
+    }
+
+    @Test
+    void lowersInstanceOfCharArrayToBuiltinRuntimeIntrinsic() {
+        assertBuiltinInstanceOfLowering("[C", JdkCallSupport.BUILTIN_INSTANCEOF_CHAR_ARRAY);
     }
 
     @Test
@@ -16020,7 +16060,7 @@ final class BytecodeToIRTest {
             List.of(new CodeException(0, 7, 8, Optional.of("java/lang/Exception"))),
             plain(0, 42, "aload_0"),
             plain(1, 43, "aload_1"),
-            invokeInterface(2, new MethodRef("berlin/yuna/typemap/model/FunctionOrNull", "applyWithException", "(Ljava/lang/Object;)Ljava/lang/Object;")),
+            invokeInterface(2, new MethodRef("com/acme/FallibleFunction", "applyWithException", "(Ljava/lang/Object;)Ljava/lang/Object;")),
             plain(7, 176, "areturn"),
             plain(8, 77, "astore_2"),
             plain(9, 1, "aconst_null"),
@@ -16039,7 +16079,7 @@ final class BytecodeToIRTest {
                 new CodeException(24, 36, 37, Optional.of("java/time/format/DateTimeParseException")),
                 new CodeException(39, 53, 54, Optional.of("java/lang/Exception"))
             ),
-            fieldInstruction(0, 178, "getstatic", new FieldRef("berlin/yuna/typemap/config/TypeConversionRegister", "DATE_TIME_FORMATTERS", "[Ljava/time/format/DateTimeFormatter;")),
+            fieldInstruction(0, 178, "getstatic", new FieldRef("com/acme/TemporalSupport", "DATE_TIME_FORMATTERS", "[Ljava/time/format/DateTimeFormatter;")),
             plain(3, 78, "astore_3"),
             plain(4, 45, "aload_3"),
             plain(5, 190, "arraylength"),
@@ -16062,10 +16102,10 @@ final class BytecodeToIRTest {
             plain(37, 58, "astore"),
             plain(39, 43, "aload_1"),
             invokeStatic(40, new MethodRef("java/lang/Long", "parseLong", "(Ljava/lang/String;)J")),
-            invokeStatic(43, new MethodRef("berlin/yuna/typemap/config/TypeConversionRegister", "toTimestampMs", "(J)J")),
+            invokeStatic(43, new MethodRef("com/acme/TemporalSupport", "toTimestampMs", "(J)J")),
             invokeStatic(46, new MethodRef("java/lang/Long", "valueOf", "(J)Ljava/lang/Long;")),
             plain(49, 42, "aload_0"),
-            invokeStatic(50, new MethodRef("berlin/yuna/typemap/logic/TypeConverter", "convertObj", "(Ljava/lang/Object;Ljava/lang/Class;)Ljava/lang/Object;")),
+            invokeStatic(50, new MethodRef("com/acme/TypeConverter", "convertObj", "(Ljava/lang/Object;Ljava/lang/Class;)Ljava/lang/Object;")),
             plain(53, 176, "areturn"),
             plain(54, 58, "astore"),
             plain(56, 132, "iinc"),
@@ -16094,7 +16134,7 @@ final class BytecodeToIRTest {
                     + "Ljava/lang/invoke/CallSite;",
                 List.of(
                     "(Ljava/lang/Object;)Ljava/lang/Object;",
-                    "invokestatic berlin/yuna/typemap/config/TypeConversionRegister.lambda$null$133:(Ljava/time/temporal/TemporalAccessor;)Ljava/sql/Timestamp;",
+                    "invokestatic com/acme/TemporalSupport.lambda$null$133:(Ljava/time/temporal/TemporalAccessor;)Ljava/sql/Timestamp;",
                     "(Ljava/time/temporal/TemporalAccessor;)Ljava/sql/Timestamp;"
                 ),
                 List.of(
@@ -16102,7 +16142,7 @@ final class BytecodeToIRTest {
                     BootstrapArgument.methodHandle(
                         6,
                         new MethodRef(
-                            "berlin/yuna/typemap/config/TypeConversionRegister",
+                            "com/acme/TemporalSupport",
                             "lambda$null$133",
                             "(Ljava/time/temporal/TemporalAccessor;)Ljava/sql/Timestamp;"
                         )
@@ -16111,7 +16151,7 @@ final class BytecodeToIRTest {
                 )
             )),
             invokeStatic(8, new MethodRef(
-                "berlin/yuna/typemap/config/TypeConversionRegister",
+                "com/acme/TemporalSupport",
                 "temporalOf",
                 "(Ljava/lang/Class;Ljava/lang/String;Ljava/util/function/Function;)Ljava/lang/Object;"
             )),
@@ -16204,13 +16244,13 @@ final class BytecodeToIRTest {
             plain(8, 43, "aload_1"),
             plain(9, 42, "aload_0"),
             invokeVirtual(10, new MethodRef("java/lang/StringBuilder", "append", "(Ljava/lang/Object;)Ljava/lang/StringBuilder;")),
-            getStatic(13, new FieldRef("berlin/yuna/typemap/config/TypeConversionRegister", "LINE_SEPARATOR", "Ljava/lang/String;")),
+            getStatic(13, new FieldRef("com/acme/TemporalSupport", "LINE_SEPARATOR", "Ljava/lang/String;")),
             invokeVirtual(16, new MethodRef("java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;")),
             plain(19, 87, "pop"),
             plain(20, 43, "aload_1"),
             plain(21, 42, "aload_0"),
             plain(22, 3, "iconst_0"),
-            invokeStatic(23, new MethodRef("berlin/yuna/typemap/config/TypeConversionRegister", "extractCause", "(Ljava/lang/StringBuilder;Ljava/lang/Throwable;Z)V")),
+            invokeStatic(23, new MethodRef("com/acme/TemporalSupport", "extractCause", "(Ljava/lang/StringBuilder;Ljava/lang/Throwable;Z)V")),
             plain(26, 42, "aload_0"),
             invokeVirtual(27, new MethodRef("java/lang/Throwable", "getCause", "()Ljava/lang/Throwable;")),
             plain(30, 77, "astore_2"),
@@ -16221,13 +16261,13 @@ final class BytecodeToIRTest {
             invokeVirtual(38, new MethodRef("java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;")),
             plain(41, 44, "aload_2"),
             invokeVirtual(42, new MethodRef("java/lang/StringBuilder", "append", "(Ljava/lang/Object;)Ljava/lang/StringBuilder;")),
-            getStatic(45, new FieldRef("berlin/yuna/typemap/config/TypeConversionRegister", "LINE_SEPARATOR", "Ljava/lang/String;")),
+            getStatic(45, new FieldRef("com/acme/TemporalSupport", "LINE_SEPARATOR", "Ljava/lang/String;")),
             invokeVirtual(48, new MethodRef("java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;")),
             plain(51, 87, "pop"),
             plain(52, 43, "aload_1"),
             plain(53, 44, "aload_2"),
             plain(54, 3, "iconst_0"),
-            invokeStatic(55, new MethodRef("berlin/yuna/typemap/config/TypeConversionRegister", "extractCause", "(Ljava/lang/StringBuilder;Ljava/lang/Throwable;Z)V")),
+            invokeStatic(55, new MethodRef("com/acme/TemporalSupport", "extractCause", "(Ljava/lang/StringBuilder;Ljava/lang/Throwable;Z)V")),
             plain(58, 44, "aload_2"),
             invokeVirtual(59, new MethodRef("java/lang/Throwable", "getCause", "()Ljava/lang/Throwable;")),
             plain(62, 77, "astore_2"),
@@ -16251,6 +16291,26 @@ final class BytecodeToIRTest {
             invokeVirtual(5, new MethodRef("java/sql/Timestamp", "getTime", "()J")),
             invokeSpecial(8, new MethodRef("java/util/Date", "<init>", "(J)V")),
             plain(11, 176, "areturn")
+        );
+    }
+
+    private static void assertBuiltinInstanceOfLowering(final String target, final int builtinTargetId) {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Object;)I",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            classInstruction(1, 193, "instanceof", target),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_object_builtin_instance_of",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.intLiteral(builtinTargetId))
+            ))
         );
     }
 

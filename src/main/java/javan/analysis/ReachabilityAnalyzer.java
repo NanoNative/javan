@@ -179,7 +179,7 @@ public final class ReachabilityAnalyzer {
                 addEdge(callEdges, current, callee, CallEdge.Kind.CALL);
                 return;
             }
-            if (isFunctionOrNullInterfaceCall(target)) {
+            if (isCatchNullFunctionalInterfaceCall(classes, target)) {
                 final List<EntryPoint> targetMethods = interfaceTargets(classes, target);
                 if (!targetMethods.isEmpty()) {
                     work.addAll(targetMethods);
@@ -194,8 +194,8 @@ public final class ReachabilityAnalyzer {
                     current.className(),
                     current.methodName() + current.descriptor(),
                     target.display(),
-                    "FunctionOrNull dispatch requires either a closed-world implementation class or a supported materialized lambda target.",
-                    "Provide a reachable implementation class or keep this FunctionOrNull flow on the JVM until broader interface receiver support lands."
+                    "Catch-null functional-interface dispatch requires either a closed-world implementation class or a supported materialized lambda target.",
+                    "Provide a reachable implementation class or keep this exact catch-null functional flow on the JVM until broader interface receiver support lands."
                 ));
                 return;
             }
@@ -341,14 +341,22 @@ public final class ReachabilityAnalyzer {
         return Optional.of(new EntryPoint(target.owner(), target.name(), target.descriptor()));
     }
 
-    private static boolean isFunctionOrNullInterfaceCall(final MethodRef target) {
-        if (!"berlin/yuna/typemap/model/FunctionOrNull".equals(target.owner())) {
+    private static boolean isCatchNullFunctionalInterfaceCall(final Map<String, ClassFile> classes, final MethodRef target) {
+        if (!"(Ljava/lang/Object;)Ljava/lang/Object;".equals(target.descriptor())) {
             return false;
         }
-        if ("apply".equals(target.name()) && "(Ljava/lang/Object;)Ljava/lang/Object;".equals(target.descriptor())) {
-            return true;
+        if (!"apply".equals(target.name()) && !"applyWithException".equals(target.name())) {
+            return false;
         }
-        return "applyWithException".equals(target.name()) && "(Ljava/lang/Object;)Ljava/lang/Object;".equals(target.descriptor());
+        final ClassFile owner = classes.get(target.owner());
+        if (owner == null || !owner.isInterface()) {
+            return false;
+        }
+        final Optional<MethodInfo> apply = owner.method("apply", "(Ljava/lang/Object;)Ljava/lang/Object;");
+        final Optional<MethodInfo> fallibleApply = owner.method("applyWithException", "(Ljava/lang/Object;)Ljava/lang/Object;");
+        return apply.isPresent()
+            && fallibleApply.isPresent()
+            && ExactMethodSupport.isExactCatchNullFunctionOrNullApplyMethod(owner, apply.orElseThrow());
     }
 
     private static boolean containsMethodRef(final List<MethodRef> values, final MethodRef target) {

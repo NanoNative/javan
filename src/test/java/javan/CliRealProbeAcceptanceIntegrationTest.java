@@ -117,19 +117,11 @@ final class CliRealProbeAcceptanceIntegrationTest extends CliIntegrationSupport 
         final CliRun run = run(tempDir, "build", project.toString(), "--classpath", classpath, "--output", "nano-config-register-frontier");
 
         assertThat(run.exitCode()).isEqualTo(2);
-        assertThat(run.stderr()).satisfiesAnyOf(
-            stderr -> assertThat(stderr).contains(
-                "error[JAVAN031]",
-                "berlin/yuna/typemap/config/TypeConversionRegister",
-                "lambda$static$79(Ljava/time/LocalTime;)Ljava/sql/Date;",
-                "java/sql/Date.valueOf(Ljava/time/LocalDate;)Ljava/sql/Date;"
-            ),
-            stderr -> assertThat(stderr).contains(
-                "error[JAVAN045]",
-                "berlin/yuna/typemap/logic/TypeConverter",
-                "iterateOverArray(Ljava/lang/Object;Ljava/util/function/Consumer;)V",
-                "[I"
-            )
+        assertThat(run.stderr()).contains(
+            "error[JAVAN031]",
+            "berlin/yuna/typemap/logic/TypeConverter",
+            "iterateOverArray(Ljava/lang/Object;Ljava/util/function/Consumer;)V",
+            "java/lang/Character.valueOf(C)Ljava/lang/Character;"
         );
         assertThat(project.resolve(".javan/bin/nano-config-register-frontier")).doesNotExist();
     }

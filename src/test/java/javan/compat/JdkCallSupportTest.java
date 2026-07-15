@@ -94,6 +94,54 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void builtinIntArrayInstanceOfTargetIsSupported() {
+        assertThat(JdkCallSupport.builtinInstanceOfTargetId("[I"))
+            .contains(JdkCallSupport.BUILTIN_INSTANCEOF_INT_ARRAY);
+    }
+
+    @Test
+    void builtinLongArrayInstanceOfTargetIsSupported() {
+        assertThat(JdkCallSupport.builtinInstanceOfTargetId("[J"))
+            .contains(JdkCallSupport.BUILTIN_INSTANCEOF_LONG_ARRAY);
+    }
+
+    @Test
+    void builtinFloatArrayInstanceOfTargetIsSupported() {
+        assertThat(JdkCallSupport.builtinInstanceOfTargetId("[F"))
+            .contains(JdkCallSupport.BUILTIN_INSTANCEOF_FLOAT_ARRAY);
+    }
+
+    @Test
+    void builtinDoubleArrayInstanceOfTargetIsSupported() {
+        assertThat(JdkCallSupport.builtinInstanceOfTargetId("[D"))
+            .contains(JdkCallSupport.BUILTIN_INSTANCEOF_DOUBLE_ARRAY);
+    }
+
+    @Test
+    void builtinByteArrayInstanceOfTargetIsSupported() {
+        assertThat(JdkCallSupport.builtinInstanceOfTargetId("[B"))
+            .contains(JdkCallSupport.BUILTIN_INSTANCEOF_BYTE_ARRAY);
+    }
+
+    @Test
+    void builtinBooleanArrayInstanceOfTargetIsSupported() {
+        assertThat(JdkCallSupport.builtinInstanceOfTargetId("[Z"))
+            .contains(JdkCallSupport.BUILTIN_INSTANCEOF_BOOLEAN_ARRAY);
+    }
+
+    @Test
+    void builtinShortArrayInstanceOfTargetIsSupported() {
+        assertThat(JdkCallSupport.builtinInstanceOfTargetId("[S"))
+            .contains(JdkCallSupport.BUILTIN_INSTANCEOF_SHORT_ARRAY);
+    }
+
+    @Test
+    void builtinCharArrayInstanceOfTargetIsSupported() {
+        assertThat(JdkCallSupport.builtinInstanceOfTargetId("[C"))
+            .contains(JdkCallSupport.BUILTIN_INSTANCEOF_CHAR_ARRAY);
+    }
+
+    @Test
     void virtualThreadPerTaskExecutorIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/concurrent/Executors",

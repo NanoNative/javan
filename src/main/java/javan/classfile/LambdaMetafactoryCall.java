@@ -67,7 +67,7 @@ public record LambdaMetafactoryCall(
         if (!"Ljava/util/function/Function;".equals(returnDescriptor.orElseThrow())
             && !"Ljava/util/function/Predicate;".equals(returnDescriptor.orElseThrow())
             && !"Ljava/util/function/Consumer;".equals(returnDescriptor.orElseThrow())
-            && !"Lberlin/yuna/typemap/model/FunctionOrNull;".equals(returnDescriptor.orElseThrow())) {
+            && !returnDescriptor.orElseThrow().startsWith("L")) {
             return Optional.empty();
         }
         final List<String> captured = parameterDescriptors(dynamicRef.descriptor());
@@ -78,7 +78,7 @@ public record LambdaMetafactoryCall(
         if (!"java/util/function/Function".equals(interfaceOwner)
             && !"java/util/function/Predicate".equals(interfaceOwner)
             && !"java/util/function/Consumer".equals(interfaceOwner)
-            && !"berlin/yuna/typemap/model/FunctionOrNull".equals(interfaceOwner)) {
+            && interfaceOwner.isEmpty()) {
             return Optional.empty();
         }
         return Optional.of(new LambdaMetafactoryCall(
@@ -184,14 +184,11 @@ public record LambdaMetafactoryCall(
     }
 
     /**
-     * Returns whether this is the exact zero-capture TypeMap FunctionOrNull materialization shape.
+     * Returns whether this is the exact zero-capture catch-null functional-interface materialization shape.
      *
-     * @return true when the lambda matches the current FunctionOrNull runtime slice
+     * @return true when the lambda matches the current catch-null functional-interface runtime slice
      */
     public boolean isExactFunctionOrNullMaterialization() {
-        if (!"berlin/yuna/typemap/model/FunctionOrNull".equals(interfaceOwner)) {
-            return false;
-        }
         if (!"applyWithException".equals(interfaceMethodName)) {
             return false;
         }

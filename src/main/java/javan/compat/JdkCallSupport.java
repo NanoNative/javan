@@ -15,6 +15,14 @@ public final class JdkCallSupport {
     public static final int BUILTIN_INSTANCEOF_MAP = 2;
     public static final int BUILTIN_INSTANCEOF_MAP_ENTRY = 3;
     public static final int BUILTIN_INSTANCEOF_OBJECT_ARRAY = 4;
+    public static final int BUILTIN_INSTANCEOF_INT_ARRAY = 5;
+    public static final int BUILTIN_INSTANCEOF_LONG_ARRAY = 6;
+    public static final int BUILTIN_INSTANCEOF_FLOAT_ARRAY = 7;
+    public static final int BUILTIN_INSTANCEOF_DOUBLE_ARRAY = 8;
+    public static final int BUILTIN_INSTANCEOF_BYTE_ARRAY = 9;
+    public static final int BUILTIN_INSTANCEOF_BOOLEAN_ARRAY = 10;
+    public static final int BUILTIN_INSTANCEOF_SHORT_ARRAY = 11;
+    public static final int BUILTIN_INSTANCEOF_CHAR_ARRAY = 12;
 
     private static final String[][] PLATFORM_THROWABLE_PARENTS = new String[][]{
         {"java/lang/Exception", "java/lang/Throwable"},
@@ -860,6 +868,30 @@ public final class JdkCallSupport {
         }
         if ("[Ljava/lang/Object;".equals(target)) {
             return Optional.of(BUILTIN_INSTANCEOF_OBJECT_ARRAY);
+        }
+        if ("[I".equals(target)) {
+            return Optional.of(BUILTIN_INSTANCEOF_INT_ARRAY);
+        }
+        if ("[J".equals(target)) {
+            return Optional.of(BUILTIN_INSTANCEOF_LONG_ARRAY);
+        }
+        if ("[F".equals(target)) {
+            return Optional.of(BUILTIN_INSTANCEOF_FLOAT_ARRAY);
+        }
+        if ("[D".equals(target)) {
+            return Optional.of(BUILTIN_INSTANCEOF_DOUBLE_ARRAY);
+        }
+        if ("[B".equals(target)) {
+            return Optional.of(BUILTIN_INSTANCEOF_BYTE_ARRAY);
+        }
+        if ("[Z".equals(target)) {
+            return Optional.of(BUILTIN_INSTANCEOF_BOOLEAN_ARRAY);
+        }
+        if ("[S".equals(target)) {
+            return Optional.of(BUILTIN_INSTANCEOF_SHORT_ARRAY);
+        }
+        if ("[C".equals(target)) {
+            return Optional.of(BUILTIN_INSTANCEOF_CHAR_ARRAY);
         }
         return Optional.empty();
     }

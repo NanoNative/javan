@@ -4183,4 +4183,71 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
         assertThat(process(project, List.of(project.resolve(".javan/bin/instanceof-map-entry").toString())).stdout()).isEqualTo(jvmOutput);
     }
 
+    @Test
+    void instanceOfIntArrayBuildsAndMatchesJvmOutput() throws Exception {
+        assertPrimitiveArrayInstanceOf("instanceof-int-array", "new int[]{1, 2}", "int[]");
+    }
+
+    @Test
+    void instanceOfLongArrayBuildsAndMatchesJvmOutput() throws Exception {
+        assertPrimitiveArrayInstanceOf("instanceof-long-array", "new long[]{1L, 2L}", "long[]");
+    }
+
+    @Test
+    void instanceOfFloatArrayBuildsAndMatchesJvmOutput() throws Exception {
+        assertPrimitiveArrayInstanceOf("instanceof-float-array", "new float[]{1.0f, 2.0f}", "float[]");
+    }
+
+    @Test
+    void instanceOfDoubleArrayBuildsAndMatchesJvmOutput() throws Exception {
+        assertPrimitiveArrayInstanceOf("instanceof-double-array", "new double[]{1.0d, 2.0d}", "double[]");
+    }
+
+    @Test
+    void instanceOfByteArrayBuildsAndMatchesJvmOutput() throws Exception {
+        assertPrimitiveArrayInstanceOf("instanceof-byte-array", "new byte[]{1, 2}", "byte[]");
+    }
+
+    @Test
+    void instanceOfBooleanArrayBuildsAndMatchesJvmOutput() throws Exception {
+        assertPrimitiveArrayInstanceOf("instanceof-boolean-array", "new boolean[]{true, false}", "boolean[]");
+    }
+
+    @Test
+    void instanceOfShortArrayBuildsAndMatchesJvmOutput() throws Exception {
+        assertPrimitiveArrayInstanceOf("instanceof-short-array", "new short[]{1, 2}", "short[]");
+    }
+
+    @Test
+    void instanceOfCharArrayBuildsAndMatchesJvmOutput() throws Exception {
+        assertPrimitiveArrayInstanceOf("instanceof-char-array", "new char[]{'a', 'b'}", "char[]");
+    }
+
+    private void assertPrimitiveArrayInstanceOf(
+        final String projectName,
+        final String valueExpression,
+        final String instanceOfType
+    ) throws Exception {
+        final Path project = project(projectName);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Object value = %s;
+                    System.out.println(value instanceof %s);
+                }
+            }
+            """.formatted(valueExpression, instanceOfType));
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/" + projectName).toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
 }

@@ -1019,8 +1019,8 @@ final class CliRuntimeFeatureIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void checkRejectsReachableNanoStyleHttpServerDependencyAndReportsHttpRuntimeModules() throws Exception {
-        final Path project = project("unsupported-nano-http-server-dependency");
+    void checkRejectsReachableThirdPartyHttpServerDependencyAndReportsHttpRuntimeModules() throws Exception {
+        final Path project = project("unsupported-third-party-http-server-dependency");
         writeJava(project, "com.acme.Main", """
             package com.acme;
 
@@ -1029,12 +1029,12 @@ final class CliRuntimeFeatureIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void main(final String[] args) throws Exception {
-                    org.nanonative.nano.services.http.HttpServer.create();
+                    com.thirdparty.http.HttpServer.create();
                 }
             }
             """);
-        writeJava(project, "org.nanonative.nano.services.http.HttpServer", """
-            package org.nanonative.nano.services.http;
+        writeJava(project, "com.thirdparty.http.HttpServer", """
+            package com.thirdparty.http;
 
             public final class HttpServer {
                 private HttpServer() {
@@ -1051,7 +1051,7 @@ final class CliRuntimeFeatureIntegrationTest extends CliIntegrationSupport {
         assertThat(run.exitCode()).isEqualTo(2);
         assertThat(run.stderr()).contains(
             "error[JAVAN061]",
-            "org/nanonative/nano/services/http/HttpServer",
+            "com/thirdparty/http/HttpServer",
             "create()Lcom/sun/net/httpserver/HttpServer;",
             "com/sun/net/httpserver/HttpServer.create",
             "network/http"

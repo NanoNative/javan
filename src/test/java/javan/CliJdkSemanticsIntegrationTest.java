@@ -1841,12 +1841,12 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
 
     @Test
     void exactCatchNullFunctionOrNullApplyBuildsAndMatchesJvmOutput() throws Exception {
-        final Path project = project("exact-catch-null-function-or-null-apply");
-        writeJava(project, "berlin.yuna.typemap.model.FunctionOrNull", """
-            package berlin.yuna.typemap.model;
+        final Path project = project("exact-catch-null-fallible-function-apply");
+        writeJava(project, "com.acme.FallibleFunction", """
+            package com.acme;
 
             @FunctionalInterface
-            public interface FunctionOrNull<T, R> {
+            public interface FallibleFunction<T, R> {
                 R applyWithException(T value) throws Exception;
 
                 default R apply(T value) {
@@ -1861,14 +1861,12 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         writeJava(project, "com.acme.Main", """
             package com.acme;
 
-            import berlin.yuna.typemap.model.FunctionOrNull;
-
             public final class Main {
                 private Main() {
                 }
 
                 public static void main(final String[] args) {
-                    final FunctionOrNull<String, String> trimOrNull = value -> {
+                    final FallibleFunction<String, String> trimOrNull = value -> {
                         if (value == null) {
                             throw new IllegalArgumentException("missing");
                         }
@@ -1884,7 +1882,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        assertThat(process(project, List.of(project.resolve(".javan/bin/exact-catch-null-function-or-null-apply").toString())).stdout())
+        assertThat(process(project, List.of(project.resolve(".javan/bin/exact-catch-null-fallible-function-apply").toString())).stdout())
             .isEqualTo(jvmOutput);
         assertThat(jvmOutput).isEqualTo("ok\nnull\n");
     }

@@ -267,7 +267,7 @@ public final class BytecodeToIR {
             parameters,
             List.of(),
             List.of(IrInstruction.returnObject(IrExpression.objectCall(
-                "javan_typemap_enum_of",
+                "javan_exact_enum_lookup",
                 List.of(
                     IrExpression.objectLocal(parameters.get(0).name()),
                     IrExpression.objectLocal(parameters.get(1).name())
@@ -290,7 +290,7 @@ public final class BytecodeToIR {
             parameters,
             List.of(),
             List.of(IrInstruction.returnObject(IrExpression.objectCall(
-                "javan_typemap_function_or_null_apply",
+                "javan_exact_catch_null_apply",
                 List.of(
                     IrExpression.objectLocal(parameters.get(0).name()),
                     IrExpression.objectLocal(parameters.get(1).name())
@@ -313,7 +313,7 @@ public final class BytecodeToIR {
             parameters,
             List.of(),
             List.of(IrInstruction.returnObject(IrExpression.objectCall(
-                "javan_typemap_temporal_of_unsupported",
+                "javan_exact_temporal_of_unsupported",
                 List.of(
                     IrExpression.objectLocal(parameters.get(0).name()),
                     IrExpression.objectLocal(parameters.get(1).name()),
@@ -343,7 +343,7 @@ public final class BytecodeToIR {
             parameters,
             List.of(),
             List.of(IrInstruction.returnObject(IrExpression.objectCall(
-                "javan_typemap_temporal_string_bridge_unsupported",
+                "javan_exact_temporal_string_bridge_unsupported",
                 List.of(
                     IrExpression.objectLocal(parameters.getFirst().name()),
                     IrExpression.stringLiteral(targetOwner.orElseThrow().replace('/', '.'))
@@ -366,7 +366,7 @@ public final class BytecodeToIR {
             parameters,
             List.of(),
             List.of(IrInstruction.returnObject(IrExpression.objectCall(
-                "javan_typemap_calendar_of_millis_unsupported",
+                "javan_exact_calendar_of_millis_unsupported",
                 List.of(IrExpression.longLocal(parameters.getFirst().name()))
             )))
         );
@@ -386,7 +386,7 @@ public final class BytecodeToIR {
             parameters,
             List.of(),
             List.of(IrInstruction.returnObject(IrExpression.objectCall(
-                "javan_typemap_calendar_of_date_unsupported",
+                "javan_exact_calendar_of_date_unsupported",
                 List.of(IrExpression.objectLocal(parameters.getFirst().name()))
             )))
         );
@@ -406,7 +406,7 @@ public final class BytecodeToIR {
             parameters,
             List.of(),
             List.of(IrInstruction.returnObject(IrExpression.objectCall(
-                "javan_typemap_calendar_of_local_time_unsupported",
+                "javan_exact_calendar_of_local_time_unsupported",
                 List.of(IrExpression.objectLocal(parameters.getFirst().name()))
             )))
         );
@@ -426,7 +426,7 @@ public final class BytecodeToIR {
             parameters,
             List.of(),
             List.of(IrInstruction.returnObject(IrExpression.objectCall(
-                "javan_typemap_throwable_string_of_unsupported",
+                "javan_exact_throwable_string_of_unsupported",
                 List.of(IrExpression.objectLocal(parameters.getFirst().name()))
             )))
         );
@@ -2546,8 +2546,8 @@ public final class BytecodeToIR {
             classFile.name(),
             method.name() + method.descriptor(),
             instruction.mnemonic() + " " + target,
-            "The native runtime only has deterministic instanceof support for application classes, supported boxed primitive wrappers, and the built-in Collection/Map runtime objects.",
-            "Keep instanceof targets to application classes/interfaces, Object, supported wrappers, or the currently admitted Collection/Map runtime targets."
+            "The native runtime only has deterministic instanceof support for application classes, supported boxed primitive wrappers, primitive arrays, Object[], and the built-in Collection/Map runtime objects.",
+            "Keep instanceof targets to application classes/interfaces, Object, supported wrappers, primitive arrays, Object[], or the currently admitted Collection/Map runtime targets."
         ));
     }
 

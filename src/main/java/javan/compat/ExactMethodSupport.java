@@ -16,29 +16,29 @@ import java.util.Optional;
  * Exact bytecode-shape recognizers for deterministic non-JDK compatibility slices.
  */
 public final class ExactMethodSupport {
+    private static final String OBJECT_TO_OBJECT_DESCRIPTOR = "(Ljava/lang/Object;)Ljava/lang/Object;";
+    private static final String FALLIBLE_APPLY_METHOD_NAME = "applyWithException";
+    private static final String TEMPORAL_OF_METHOD_NAME = "temporalOf";
+    private static final String TO_TIMESTAMP_MS_METHOD_NAME = "toTimestampMs";
+    private static final String CONVERT_OBJECT_METHOD_NAME = "convertObj";
+    private static final String CALENDAR_OF_METHOD_NAME = "calendarOf";
+    private static final String STRING_OF_METHOD_NAME = "stringOf";
+    private static final String EXTRACT_CAUSE_METHOD_NAME = "extractCause";
     private static final MethodRef NUMBER_INT_VALUE = new MethodRef("java/lang/Number", "intValue", "()I");
     private static final MethodRef CLASS_GET_ENUM_CONSTANTS = new MethodRef("java/lang/Class", "getEnumConstants", "()[Ljava/lang/Object;");
     private static final MethodRef STRING_VALUE_OF_OBJECT = new MethodRef("java/lang/String", "valueOf", "(Ljava/lang/Object;)Ljava/lang/String;");
     private static final MethodRef ENUM_VALUE_OF = new MethodRef("java/lang/Enum", "valueOf", "(Ljava/lang/Class;Ljava/lang/String;)Ljava/lang/Enum;");
-    private static final MethodRef FUNCTION_OR_NULL_APPLY_WITH_EXCEPTION =
-        new MethodRef("berlin/yuna/typemap/model/FunctionOrNull", "applyWithException", "(Ljava/lang/Object;)Ljava/lang/Object;");
     private static final MethodRef DATE_TIME_FORMATTER_PARSE =
         new MethodRef("java/time/format/DateTimeFormatter", "parse", "(Ljava/lang/CharSequence;)Ljava/time/temporal/TemporalAccessor;");
     private static final MethodRef FUNCTION_APPLY =
         new MethodRef("java/util/function/Function", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;");
     private static final MethodRef LONG_PARSE_LONG = new MethodRef("java/lang/Long", "parseLong", "(Ljava/lang/String;)J");
-    private static final MethodRef TYPE_CONVERSION_TO_TIMESTAMP_MS =
-        new MethodRef("berlin/yuna/typemap/config/TypeConversionRegister", "toTimestampMs", "(J)J");
     private static final MethodRef LONG_VALUE_OF = new MethodRef("java/lang/Long", "valueOf", "(J)Ljava/lang/Long;");
-    private static final MethodRef TYPE_CONVERTER_CONVERT_OBJ =
-        new MethodRef("berlin/yuna/typemap/logic/TypeConverter", "convertObj", "(Ljava/lang/Object;Ljava/lang/Class;)Ljava/lang/Object;");
     private static final MethodRef STRING_BUILDER_INIT = new MethodRef("java/lang/StringBuilder", "<init>", "()V");
     private static final MethodRef STRING_BUILDER_APPEND_OBJECT =
         new MethodRef("java/lang/StringBuilder", "append", "(Ljava/lang/Object;)Ljava/lang/StringBuilder;");
     private static final MethodRef STRING_BUILDER_APPEND_STRING =
         new MethodRef("java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;");
-    private static final MethodRef TYPE_CONVERSION_EXTRACT_CAUSE =
-        new MethodRef("berlin/yuna/typemap/config/TypeConversionRegister", "extractCause", "(Ljava/lang/StringBuilder;Ljava/lang/Throwable;Z)V");
     private static final MethodRef THROWABLE_GET_CAUSE =
         new MethodRef("java/lang/Throwable", "getCause", "()Ljava/lang/Throwable;");
     private static final MethodRef STRING_BUILDER_TO_STRING =
@@ -67,7 +67,7 @@ public final class ExactMethodSupport {
     }
 
     /**
-     * Returns true when the method matches the current exact catch-null enum lookup slice used by TypeMap.
+     * Returns true when the method matches the current exact catch-null enum lookup slice.
      *
      * @param classFile owning class
      * @param method candidate method
@@ -125,7 +125,7 @@ public final class ExactMethodSupport {
     }
 
     /**
-     * Returns true when the method matches the current exact catch-null TypeMap FunctionOrNull default apply slice.
+     * Returns true when the method matches the current exact catch-null default functional bridge slice.
      *
      * @param classFile owning class
      * @param method candidate method
@@ -135,10 +135,10 @@ public final class ExactMethodSupport {
         if (classFile == null || method == null || method.isStatic()) {
             return false;
         }
-        if (!classFile.isInterface() || !"berlin/yuna/typemap/model/FunctionOrNull".equals(classFile.name())) {
+        if (!classFile.isInterface()) {
             return false;
         }
-        if (!"apply".equals(method.name()) || !"(Ljava/lang/Object;)Ljava/lang/Object;".equals(method.descriptor())) {
+        if (!"apply".equals(method.name()) || !OBJECT_TO_OBJECT_DESCRIPTOR.equals(method.descriptor())) {
             return false;
         }
         final Optional<CodeAttribute> code = method.code();
@@ -152,9 +152,10 @@ public final class ExactMethodSupport {
         if (instructions.size() != 7) {
             return false;
         }
+        final MethodRef fallibleApply = new MethodRef(classFile.name(), FALLIBLE_APPLY_METHOD_NAME, OBJECT_TO_OBJECT_DESCRIPTOR);
         return sameInstruction(instructions, 0, 0, 42)
             && sameInstruction(instructions, 1, 1, 43)
-            && sameMethodInstruction(instructions, 2, 2, 185, FUNCTION_OR_NULL_APPLY_WITH_EXCEPTION)
+            && sameMethodInstruction(instructions, 2, 2, 185, fallibleApply)
             && sameInstruction(instructions, 3, 7, 176)
             && sameInstruction(instructions, 4, 8, 77)
             && sameInstruction(instructions, 5, 9, 1)
@@ -162,7 +163,7 @@ public final class ExactMethodSupport {
     }
 
     /**
-     * Returns true when the method matches the current exact TypeMap String-to-temporal registration bridge shape.
+     * Returns true when the method matches the current exact String-to-temporal registration bridge shape.
      *
      * @param classFile owning class
      * @param method candidate method
@@ -170,9 +171,6 @@ public final class ExactMethodSupport {
      */
     public static boolean isExactTemporalStringBridgeMethod(final ClassFile classFile, final MethodInfo method) {
         if (classFile == null || method == null || !method.isStatic()) {
-            return false;
-        }
-        if (!"berlin/yuna/typemap/config/TypeConversionRegister".equals(classFile.name())) {
             return false;
         }
         final Optional<String> targetOwner = objectOwner(returnDescriptor(method.descriptor()).orElse(""));
@@ -192,8 +190,8 @@ public final class ExactMethodSupport {
             && sameInstruction(instructions, 1, 2, 42)
             && sameTemporalStringBridgeLambdaInstruction(instructions.get(2), classFile.name(), targetDescriptor)
             && sameMethodInstruction(instructions, 3, 8, 184, new MethodRef(
-                "berlin/yuna/typemap/config/TypeConversionRegister",
-                "temporalOf",
+                classFile.name(),
+                TEMPORAL_OF_METHOD_NAME,
                 "(Ljava/lang/Class;Ljava/lang/String;Ljava/util/function/Function;)Ljava/lang/Object;"
             ))
             && sameClassInstruction(instructions, 4, 11, 192, targetOwner.orElseThrow())
@@ -201,7 +199,7 @@ public final class ExactMethodSupport {
     }
 
     /**
-     * Returns the exact target owner for the current TypeMap String-to-temporal bridge shape.
+     * Returns the exact target owner for the current String-to-temporal bridge shape.
      *
      * @param classFile owning class
      * @param method candidate method
@@ -306,7 +304,7 @@ public final class ExactMethodSupport {
     }
 
     /**
-     * Returns true when the method matches the current exact Throwable-to-String helper shape used by TypeMap.
+     * Returns true when the method matches the current exact Throwable-to-String helper shape.
      *
      * @param classFile owning class
      * @param method candidate method
@@ -316,10 +314,7 @@ public final class ExactMethodSupport {
         if (classFile == null || method == null || !method.isStatic()) {
             return false;
         }
-        if (!"berlin/yuna/typemap/config/TypeConversionRegister".equals(classFile.name())) {
-            return false;
-        }
-        if (!"stringOf".equals(method.name()) || !"(Ljava/lang/Throwable;)Ljava/lang/String;".equals(method.descriptor())) {
+        if (!STRING_OF_METHOD_NAME.equals(method.name()) || !"(Ljava/lang/Throwable;)Ljava/lang/String;".equals(method.descriptor())) {
             return false;
         }
         final Optional<CodeAttribute> code = method.code();
@@ -337,13 +332,17 @@ public final class ExactMethodSupport {
             && sameInstruction(instructions, 4, 8, 43)
             && sameInstruction(instructions, 5, 9, 42)
             && sameMethodInstruction(instructions, 6, 10, 182, STRING_BUILDER_APPEND_OBJECT)
-            && sameFieldInstruction(instructions, 7, 13, 178, "berlin/yuna/typemap/config/TypeConversionRegister", "LINE_SEPARATOR", "Ljava/lang/String;")
+            && sameFieldInstruction(instructions, 7, 13, 178, classFile.name(), "LINE_SEPARATOR", "Ljava/lang/String;")
             && sameMethodInstruction(instructions, 8, 16, 182, STRING_BUILDER_APPEND_STRING)
             && sameInstruction(instructions, 9, 19, 87)
             && sameInstruction(instructions, 10, 20, 43)
             && sameInstruction(instructions, 11, 21, 42)
             && sameInstruction(instructions, 12, 22, 3)
-            && sameMethodInstruction(instructions, 13, 23, 184, TYPE_CONVERSION_EXTRACT_CAUSE)
+            && sameMethodInstruction(instructions, 13, 23, 184, new MethodRef(
+                classFile.name(),
+                EXTRACT_CAUSE_METHOD_NAME,
+                "(Ljava/lang/StringBuilder;Ljava/lang/Throwable;Z)V"
+            ))
             && sameInstruction(instructions, 14, 26, 42)
             && sameMethodInstruction(instructions, 15, 27, 182, THROWABLE_GET_CAUSE)
             && sameInstruction(instructions, 16, 30, 77)
@@ -354,13 +353,17 @@ public final class ExactMethodSupport {
             && sameMethodInstruction(instructions, 21, 38, 182, STRING_BUILDER_APPEND_STRING)
             && sameInstruction(instructions, 22, 41, 44)
             && sameMethodInstruction(instructions, 23, 42, 182, STRING_BUILDER_APPEND_OBJECT)
-            && sameFieldInstruction(instructions, 24, 45, 178, "berlin/yuna/typemap/config/TypeConversionRegister", "LINE_SEPARATOR", "Ljava/lang/String;")
+            && sameFieldInstruction(instructions, 24, 45, 178, classFile.name(), "LINE_SEPARATOR", "Ljava/lang/String;")
             && sameMethodInstruction(instructions, 25, 48, 182, STRING_BUILDER_APPEND_STRING)
             && sameInstruction(instructions, 26, 51, 87)
             && sameInstruction(instructions, 27, 52, 43)
             && sameInstruction(instructions, 28, 53, 44)
             && sameInstruction(instructions, 29, 54, 3)
-            && sameMethodInstruction(instructions, 30, 55, 184, TYPE_CONVERSION_EXTRACT_CAUSE)
+            && sameMethodInstruction(instructions, 30, 55, 184, new MethodRef(
+                classFile.name(),
+                EXTRACT_CAUSE_METHOD_NAME,
+                "(Ljava/lang/StringBuilder;Ljava/lang/Throwable;Z)V"
+            ))
             && sameInstruction(instructions, 31, 58, 44)
             && sameMethodInstruction(instructions, 32, 59, 182, THROWABLE_GET_CAUSE)
             && sameInstruction(instructions, 33, 62, 77)
@@ -371,7 +374,7 @@ public final class ExactMethodSupport {
     }
 
     /**
-     * Returns true when the method matches the current linear TypeMap unsupported temporal/sql conversion-lambda subset.
+     * Returns true when the method matches the current linear unsupported temporal/sql conversion-lambda subset.
      *
      * @param classFile owning class
      * @param method candidate method
@@ -399,7 +402,7 @@ public final class ExactMethodSupport {
             return false;
         }
         for (final Instruction instruction : instructions) {
-            if (!isSupportedUnsupportedTemporalInstruction(instruction)) {
+            if (!isSupportedUnsupportedTemporalInstruction(classFile.name(), instruction)) {
                 return false;
             }
         }
@@ -407,7 +410,7 @@ public final class ExactMethodSupport {
     }
 
     /**
-     * Returns true when the method matches the current exact temporalOf loop/fallback slice used by TypeMap.
+     * Returns true when the method matches the current exact temporalOf loop/fallback slice.
      *
      * @param classFile owning class
      * @param method candidate method
@@ -417,10 +420,7 @@ public final class ExactMethodSupport {
         if (classFile == null || method == null || !method.isStatic()) {
             return false;
         }
-        if (!"berlin/yuna/typemap/config/TypeConversionRegister".equals(classFile.name())) {
-            return false;
-        }
-        if (!"temporalOf".equals(method.name())
+        if (!TEMPORAL_OF_METHOD_NAME.equals(method.name())
             || !"(Ljava/lang/Class;Ljava/lang/String;Ljava/util/function/Function;)Ljava/lang/Object;".equals(method.descriptor())) {
             return false;
         }
@@ -435,7 +435,7 @@ public final class ExactMethodSupport {
         if (instructions.size() != 33) {
             return false;
         }
-        return sameFieldInstruction(instructions, 0, 0, 178, "berlin/yuna/typemap/config/TypeConversionRegister", "DATE_TIME_FORMATTERS", "[Ljava/time/format/DateTimeFormatter;")
+        return sameFieldInstruction(instructions, 0, 0, 178, classFile.name(), "DATE_TIME_FORMATTERS", "[Ljava/time/format/DateTimeFormatter;")
             && sameInstruction(instructions, 1, 3, 78)
             && sameInstruction(instructions, 2, 4, 45)
             && sameInstruction(instructions, 3, 5, 190)
@@ -458,10 +458,10 @@ public final class ExactMethodSupport {
             && sameInstruction(instructions, 20, 37, 58)
             && sameInstruction(instructions, 21, 39, 43)
             && sameMethodInstruction(instructions, 22, 40, 184, LONG_PARSE_LONG)
-            && sameMethodInstruction(instructions, 23, 43, 184, TYPE_CONVERSION_TO_TIMESTAMP_MS)
+            && sameMethodInstruction(instructions, 23, 43, 184, new MethodRef(classFile.name(), TO_TIMESTAMP_MS_METHOD_NAME, "(J)J"))
             && sameMethodInstruction(instructions, 24, 46, 184, LONG_VALUE_OF)
             && sameInstruction(instructions, 25, 49, 42)
-            && sameMethodInstruction(instructions, 26, 50, 184, TYPE_CONVERTER_CONVERT_OBJ)
+            && sameNamedMethodInstruction(instructions, 26, 50, 184, CONVERT_OBJECT_METHOD_NAME, "(Ljava/lang/Object;Ljava/lang/Class;)Ljava/lang/Object;")
             && sameInstruction(instructions, 27, 53, 176)
             && sameInstruction(instructions, 28, 54, 58)
             && sameInstruction(instructions, 29, 56, 132)
@@ -543,6 +543,23 @@ public final class ExactMethodSupport {
             && methodRef.equals(instructions.get(index).methodRef().orElse(null));
     }
 
+    private static boolean sameNamedMethodInstruction(
+        final List<Instruction> instructions,
+        final int index,
+        final int offset,
+        final int opcode,
+        final String name,
+        final String descriptor
+    ) {
+        if (!sameInstruction(instructions, index, offset, opcode)) {
+            return false;
+        }
+        final Optional<MethodRef> methodRef = instructions.get(index).methodRef();
+        return methodRef.isPresent()
+            && name.equals(methodRef.orElseThrow().name())
+            && descriptor.equals(methodRef.orElseThrow().descriptor());
+    }
+
     private static boolean sameFieldInstruction(
         final List<Instruction> instructions,
         final int index,
@@ -591,23 +608,20 @@ public final class ExactMethodSupport {
         if (classFile == null || method == null || !method.isStatic()) {
             return false;
         }
-        if (!"berlin/yuna/typemap/config/TypeConversionRegister".equals(classFile.name())) {
-            return false;
-        }
-        if (!"calendarOf".equals(method.name()) || !descriptor.equals(method.descriptor())) {
+        if (!CALENDAR_OF_METHOD_NAME.equals(method.name()) || !descriptor.equals(method.descriptor())) {
             return false;
         }
         return method.code().isPresent() && method.code().orElseThrow().exceptionTable().isEmpty();
     }
 
-    private static boolean isSupportedUnsupportedTemporalInstruction(final Instruction instruction) {
+    private static boolean isSupportedUnsupportedTemporalInstruction(final String owner, final Instruction instruction) {
         if (instruction.dynamicRef().isPresent() || instruction.fieldRef().isPresent()) {
             return false;
         }
         if (instruction.className().isPresent() && !isUnsupportedTemporalClassLiteral(instruction.className().orElseThrow())) {
             return false;
         }
-        if (instruction.methodRef().isPresent() && !isUnsupportedTemporalMethod(instruction.methodRef().orElseThrow())) {
+        if (instruction.methodRef().isPresent() && !isUnsupportedTemporalMethod(owner, instruction.methodRef().orElseThrow())) {
             return false;
         }
         return switch (instruction.opcode()) {
@@ -620,12 +634,12 @@ public final class ExactMethodSupport {
         return isUnsupportedTemporalOwner(owner);
     }
 
-    private static boolean isUnsupportedTemporalMethod(final MethodRef methodRef) {
+    private static boolean isUnsupportedTemporalMethod(final String owner, final MethodRef methodRef) {
         return isUnsupportedTemporalOwner(methodRef.owner())
             || ("java/lang/Long".equals(methodRef.owner())
             && "valueOf".equals(methodRef.name())
             && "(J)Ljava/lang/Long;".equals(methodRef.descriptor()))
-            || "berlin/yuna/typemap/config/TypeConversionRegister".equals(methodRef.owner());
+            || owner.equals(methodRef.owner());
     }
 
     private static boolean isUnsupportedTemporalOwner(final String owner) {

@@ -2796,8 +2796,8 @@ public final class StaticVerifier {
         final int reachable
     ) {
         final String target = instruction.className().orElse("unknown");
-        final String reason = "The current runtime only has deterministic instanceof support for application classes, supported boxed primitive wrappers, Object[], and the built-in Collection/Map runtime objects.";
-        final String fix = "Keep instanceof targets to application classes/interfaces, Object, Object[], supported wrappers, or the currently admitted Collection/Map runtime targets.";
+        final String reason = "The current runtime only has deterministic instanceof support for application classes, supported boxed primitive wrappers, primitive arrays, Object[], and the built-in Collection/Map runtime objects.";
+        final String fix = "Keep instanceof targets to application classes/interfaces, Object, primitive arrays, Object[], supported wrappers, or the currently admitted Collection/Map runtime targets.";
         if (reachable == 1) {
             return error(classFile, method, "JAVAN045", "unsupported instanceof target", target, reason, fix);
         }
