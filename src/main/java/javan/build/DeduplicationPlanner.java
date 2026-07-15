@@ -69,7 +69,7 @@ public final class DeduplicationPlanner {
                 continue;
             }
             for (final Instruction instruction : code.orElseThrow().instructions()) {
-                inspect(instruction, strings, helpers, modules);
+                inspect(classes, instruction, strings, helpers, modules);
             }
         }
         final long duplicates = duplicateCount(strings);
@@ -80,6 +80,7 @@ public final class DeduplicationPlanner {
     }
 
     private static void inspect(
+        final Map<String, ClassFile> classes,
         final Instruction instruction,
         final List<LiteralCount> strings,
         final List<String> helpers,
@@ -111,17 +112,24 @@ public final class DeduplicationPlanner {
                 modules.add("arrays");
             }
             case 178, 179, 186 -> modules.add("strings");
-            case 182, 183, 184, 185 -> inspectMethodRef(instruction, modules);
+            case 182, 183, 184, 185 -> inspectMethodRef(classes, instruction, modules);
             default -> {
             }
         }
     }
 
-    private static void inspectMethodRef(final Instruction instruction, final List<String> modules) {
+    private static void inspectMethodRef(
+        final Map<String, ClassFile> classes,
+        final Instruction instruction,
+        final List<String> modules
+    ) {
         if (instruction.methodRef().isEmpty()) {
             return;
         }
-        final javan.classfile.MethodRef methodRef = instruction.methodRef().orElseThrow();
+        final javan.classfile.MethodRef methodRef = JdkCallSupport.normalizeInheritedSupportedJdkCall(
+            classes,
+            instruction.methodRef().orElseThrow()
+        ).orElse(instruction.methodRef().orElseThrow());
         for (final String module : JdkCallSupport.runtimeModules(methodRef)) {
             modules.add(module);
         }

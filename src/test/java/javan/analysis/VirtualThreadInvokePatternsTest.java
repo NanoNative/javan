@@ -136,8 +136,57 @@ final class VirtualThreadInvokePatternsTest {
         assertThat(VirtualThreadInvokePatterns.isExecutorServiceSubmit(
             new MethodRef("java/util/concurrent/ExecutorService", "submit", "(Ljava/lang/Runnable;)Ljava/util/concurrent/Future;")
         )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isExecutorServiceAwaitTermination(
+            new MethodRef("java/util/concurrent/ExecutorService", "awaitTermination", "(JLjava/util/concurrent/TimeUnit;)Z")
+        )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isExecutorServiceShutdownNow(
+            new MethodRef("java/util/concurrent/ExecutorService", "shutdownNow", "()Ljava/util/List;")
+        )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorAwaitTermination(
+            new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "awaitTermination", "(JLjava/util/concurrent/TimeUnit;)Z")
+        )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorShutdownNow(
+            new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "shutdownNow", "()Ljava/util/List;")
+        )).isTrue();
         assertThat(VirtualThreadInvokePatterns.isFutureCancel(
             new MethodRef("java/util/concurrent/Future", "cancel", "(Z)Z")
+        )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorSchedule(
+            new MethodRef(
+                "java/util/concurrent/ScheduledThreadPoolExecutor",
+                "schedule",
+                "(Ljava/lang/Runnable;JLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"
+            )
+        )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorScheduleAtFixedRate(
+            new MethodRef(
+                "java/util/concurrent/ScheduledThreadPoolExecutor",
+                "scheduleAtFixedRate",
+                "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"
+            )
+        )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isScheduledExecutorServiceSchedule(
+            new MethodRef(
+                "java/util/concurrent/ScheduledExecutorService",
+                "schedule",
+                "(Ljava/lang/Runnable;JLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"
+            )
+        )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isScheduledExecutorServiceScheduleAtFixedRate(
+            new MethodRef(
+                "java/util/concurrent/ScheduledExecutorService",
+                "scheduleAtFixedRate",
+                "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"
+            )
+        )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isScheduledExecutorServiceShutdown(
+            new MethodRef("java/util/concurrent/ScheduledExecutorService", "shutdown", "()V")
+        )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isScheduledExecutorServiceAwaitTermination(
+            new MethodRef("java/util/concurrent/ScheduledExecutorService", "awaitTermination", "(JLjava/util/concurrent/TimeUnit;)Z")
+        )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isScheduledExecutorServiceShutdownNow(
+            new MethodRef("java/util/concurrent/ScheduledExecutorService", "shutdownNow", "()Ljava/util/List;")
         )).isTrue();
         assertThat(VirtualThreadInvokePatterns.isExecutorServiceClose(
             new MethodRef("java/util/concurrent/ExecutorService", "shutdown", "()V")
@@ -198,8 +247,57 @@ final class VirtualThreadInvokePatternsTest {
         assertThat(VirtualThreadInvokePatterns.isExecutorServiceSubmit(
             new MethodRef("java/util/concurrent/ExecutorService", "submit", "()Ljava/util/concurrent/Future;")
         )).isFalse();
+        assertThat(VirtualThreadInvokePatterns.isExecutorServiceAwaitTermination(
+            new MethodRef("java/util/concurrent/ExecutorService", "awaitTermination", "()Z")
+        )).isFalse();
+        assertThat(VirtualThreadInvokePatterns.isExecutorServiceShutdownNow(
+            new MethodRef("java/util/concurrent/ExecutorService", "shutdownNow", "()V")
+        )).isFalse();
+        assertThat(VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorAwaitTermination(
+            new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "awaitTermination", "()Z")
+        )).isFalse();
+        assertThat(VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorShutdownNow(
+            new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "shutdownNow", "()V")
+        )).isFalse();
         assertThat(VirtualThreadInvokePatterns.isFutureCancel(
             new MethodRef("java/util/concurrent/Future", "cancel", "()Z")
+        )).isFalse();
+        assertThat(VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorSchedule(
+            new MethodRef(
+                "java/util/concurrent/ScheduledThreadPoolExecutor",
+                "schedule",
+                "(Ljava/lang/Runnable;Ljava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"
+            )
+        )).isFalse();
+        assertThat(VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorScheduleAtFixedRate(
+            new MethodRef(
+                "java/util/concurrent/ScheduledThreadPoolExecutor",
+                "scheduleAtFixedRate",
+                "(Ljava/lang/Runnable;JLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"
+            )
+        )).isFalse();
+        assertThat(VirtualThreadInvokePatterns.isScheduledExecutorServiceSchedule(
+            new MethodRef(
+                "java/util/concurrent/ScheduledExecutorService",
+                "schedule",
+                "(Ljava/lang/Runnable;Ljava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"
+            )
+        )).isFalse();
+        assertThat(VirtualThreadInvokePatterns.isScheduledExecutorServiceScheduleAtFixedRate(
+            new MethodRef(
+                "java/util/concurrent/ScheduledExecutorService",
+                "scheduleAtFixedRate",
+                "(Ljava/lang/Runnable;JLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"
+            )
+        )).isFalse();
+        assertThat(VirtualThreadInvokePatterns.isScheduledExecutorServiceShutdown(
+            new MethodRef("java/util/concurrent/ScheduledExecutorService", "shutdown", "(J)V")
+        )).isFalse();
+        assertThat(VirtualThreadInvokePatterns.isScheduledExecutorServiceAwaitTermination(
+            new MethodRef("java/util/concurrent/ScheduledExecutorService", "awaitTermination", "()Z")
+        )).isFalse();
+        assertThat(VirtualThreadInvokePatterns.isScheduledExecutorServiceShutdownNow(
+            new MethodRef("java/util/concurrent/ScheduledExecutorService", "shutdownNow", "()V")
         )).isFalse();
     }
 

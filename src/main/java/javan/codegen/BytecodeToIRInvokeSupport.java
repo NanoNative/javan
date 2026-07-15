@@ -227,7 +227,9 @@ final class BytecodeToIRInvokeSupport {
         final Map<String, IrDispatch> dispatches,
         final SourceLineIndex sourceLines
     ) {
-        final MethodRef methodRef = instruction.methodRef().orElseThrow();
+        final MethodRef rawMethodRef = instruction.methodRef().orElseThrow();
+        final MethodRef methodRef = JdkCallSupport.normalizeInheritedSupportedJdkCall(classes, rawMethodRef)
+            .orElse(rawMethodRef);
         if (lowerPrintStreamCall(classFile, method, instruction, methodRef, instructions, stack)) {
             return;
         }
@@ -243,6 +245,9 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if (lowerJavanProcessRunnerRun(classes, classFile, method, methodRef, instructions, stack, localDeclarations)) {
+            return;
+        }
+        if (lowerScheduledThreadPoolExecutorCall(classFile, method, instruction, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
         if ("java/lang/String".equals(methodRef.owner()) && "length".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
@@ -1214,7 +1219,9 @@ final class BytecodeToIRInvokeSupport {
         final List<IrInstruction> instructions,
         final List<StackValue> stack
     ) {
-        final MethodRef methodRef = instruction.methodRef().orElseThrow();
+        final MethodRef rawMethodRef = instruction.methodRef().orElseThrow();
+        final MethodRef methodRef = JdkCallSupport.normalizeInheritedSupportedJdkCall(classes, rawMethodRef)
+            .orElse(rawMethodRef);
         if (isZeroArgNoopPlatformConstructor(methodRef)) {
             popObject(classFile, method, stack);
             return;
@@ -3192,24 +3199,31 @@ final class BytecodeToIRInvokeSupport {
             final List<Instruction> instructions = method.orElseThrow().code().orElseThrow().instructions();
             for (int index = 0; index < instructions.size(); index++) {
                 final Optional<MethodRef> methodRef = instructions.get(index).methodRef();
-                if (methodRef.isPresent()
-                    && (isVirtualThreadStart(methodRef.orElseThrow())
-                    || isVirtualThreadBuilderStart(methodRef.orElseThrow())
-                    || isVirtualThreadBuilderUnstarted(methodRef.orElseThrow())
-                    || isVirtualThreadFactoryNewThread(methodRef.orElseThrow())
-                    || VirtualThreadInvokePatterns.isExecutorExecute(methodRef.orElseThrow())
-                    || VirtualThreadInvokePatterns.isExecutorServiceSubmit(methodRef.orElseThrow()))) {
-                    sawRunnableThreadConstruction = true;
-                    final Optional<EntryPoint> resolved = inferVirtualThreadTarget(classes, instructions, index);
-                    if (resolved.isPresent()) {
-                        final EntryPoint entryPoint = resolved.orElseThrow();
-                        if (!result.contains(entryPoint)) {
-                            result.add(entryPoint);
+                if (methodRef.isPresent()) {
+                    final MethodRef target = JdkCallSupport.normalizeInheritedSupportedJdkCall(classes, methodRef.orElseThrow())
+                        .orElse(methodRef.orElseThrow());
+                    if (isVirtualThreadStart(target)
+                        || isVirtualThreadBuilderStart(target)
+                        || isVirtualThreadBuilderUnstarted(target)
+                        || isVirtualThreadFactoryNewThread(target)
+                        || VirtualThreadInvokePatterns.isExecutorExecute(target)
+                        || VirtualThreadInvokePatterns.isExecutorServiceSubmit(target)
+                        || VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorSchedule(target)
+                        || VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorScheduleAtFixedRate(target)
+                        || VirtualThreadInvokePatterns.isScheduledExecutorServiceSchedule(target)
+                        || VirtualThreadInvokePatterns.isScheduledExecutorServiceScheduleAtFixedRate(target)) {
+                        sawRunnableThreadConstruction = true;
+                        final Optional<EntryPoint> resolved = inferVirtualThreadTarget(classes, instructions, index);
+                        if (resolved.isPresent()) {
+                            final EntryPoint entryPoint = resolved.orElseThrow();
+                            if (!result.contains(entryPoint)) {
+                                result.add(entryPoint);
+                            }
+                        } else {
+                            unknownRunnableTarget = true;
                         }
-                    } else {
-                        unknownRunnableTarget = true;
+                        continue;
                     }
-                    continue;
                 }
                 if (methodRef.isEmpty() || (!isRunnableThreadConstructor(methodRef.orElseThrow())
                     && !isVirtualThreadBuilderUnstarted(methodRef.orElseThrow()))) {
@@ -3247,12 +3261,20 @@ final class BytecodeToIRInvokeSupport {
             }
             for (final Instruction instruction : method.orElseThrow().code().orElseThrow().instructions()) {
                 final Optional<MethodRef> methodRef = instruction.methodRef();
-                if (methodRef.isPresent() && (isThreadStart(methodRef.orElseThrow())
-                    || isVirtualThreadStart(methodRef.orElseThrow())
-                    || isVirtualThreadBuilderStart(methodRef.orElseThrow())
-                    || VirtualThreadInvokePatterns.isExecutorExecute(methodRef.orElseThrow())
-                    || VirtualThreadInvokePatterns.isExecutorServiceSubmit(methodRef.orElseThrow()))) {
-                    return true;
+                if (methodRef.isPresent()) {
+                    final MethodRef target = JdkCallSupport.normalizeInheritedSupportedJdkCall(classes, methodRef.orElseThrow())
+                        .orElse(methodRef.orElseThrow());
+                    if (isThreadStart(target)
+                        || isVirtualThreadStart(target)
+                        || isVirtualThreadBuilderStart(target)
+                        || VirtualThreadInvokePatterns.isExecutorExecute(target)
+                        || VirtualThreadInvokePatterns.isExecutorServiceSubmit(target)
+                        || VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorSchedule(target)
+                        || VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorScheduleAtFixedRate(target)
+                        || VirtualThreadInvokePatterns.isScheduledExecutorServiceSchedule(target)
+                        || VirtualThreadInvokePatterns.isScheduledExecutorServiceScheduleAtFixedRate(target)) {
+                        return true;
+                    }
                 }
             }
         }
@@ -4002,6 +4024,9 @@ final class BytecodeToIRInvokeSupport {
         if (lowerVirtualThreadBuilderInterfaceCall(classFile, method, instruction, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
+        if (lowerScheduledThreadPoolExecutorCall(classFile, method, instruction, methodRef, instructions, stack, localDeclarations)) {
+            return;
+        }
         if (lowerVirtualThreadExecutorInterfaceCall(classFile, method, instruction, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
@@ -4108,7 +4133,8 @@ final class BytecodeToIRInvokeSupport {
         final List<StackValue> stack,
         final Map<Integer, IrLocal> localDeclarations
     ) {
-        if (VirtualThreadInvokePatterns.isExecutorExecute(methodRef)) {
+        if (VirtualThreadInvokePatterns.isExecutorExecute(methodRef)
+            && hasReceiverKind(stack, methodRef, StackKind.VIRTUAL_THREAD_EXECUTOR)) {
             final IrExpression runnable = popObject(classFile, method, instruction, stack);
             final StackValue executor = popVirtualThreadExecutor(classFile, method, instruction, stack);
             instructions.add(IrInstruction.callStaticVoid(
@@ -4117,7 +4143,8 @@ final class BytecodeToIRInvokeSupport {
             ));
             return true;
         }
-        if (VirtualThreadInvokePatterns.isExecutorServiceSubmit(methodRef)) {
+        if (VirtualThreadInvokePatterns.isExecutorServiceSubmit(methodRef)
+            && hasReceiverKind(stack, methodRef, StackKind.VIRTUAL_THREAD_EXECUTOR)) {
             final IrExpression runnable = popObject(classFile, method, instruction, stack);
             final StackValue executor = popVirtualThreadExecutor(classFile, method, instruction, stack);
             pushObjectCall(
@@ -4129,7 +4156,8 @@ final class BytecodeToIRInvokeSupport {
             );
             return true;
         }
-        if (VirtualThreadInvokePatterns.isExecutorServiceShutdown(methodRef)) {
+        if (VirtualThreadInvokePatterns.isExecutorServiceShutdown(methodRef)
+            && hasReceiverKind(stack, methodRef, StackKind.VIRTUAL_THREAD_EXECUTOR)) {
             final StackValue executor = popVirtualThreadExecutor(classFile, method, instruction, stack);
             instructions.add(IrInstruction.callStaticVoid(
                 "javan_virtual_thread_executor_shutdown",
@@ -4137,7 +4165,8 @@ final class BytecodeToIRInvokeSupport {
             ));
             return true;
         }
-        if (VirtualThreadInvokePatterns.isExecutorServiceClose(methodRef)) {
+        if (VirtualThreadInvokePatterns.isExecutorServiceClose(methodRef)
+            && hasReceiverKind(stack, methodRef, StackKind.VIRTUAL_THREAD_EXECUTOR)) {
             final StackValue executor = popVirtualThreadExecutor(classFile, method, instruction, stack);
             instructions.add(IrInstruction.callStaticVoid(
                 "javan_virtual_thread_executor_close",
@@ -4146,6 +4175,102 @@ final class BytecodeToIRInvokeSupport {
             return true;
         }
         return false;
+    }
+
+    private static boolean lowerScheduledThreadPoolExecutorCall(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final MethodRef methodRef,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations
+    ) {
+        if (VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorSchedule(methodRef)
+            || VirtualThreadInvokePatterns.isScheduledExecutorServiceSchedule(methodRef)) {
+            final IrExpression unit = popObject(classFile, method, stack);
+            final IrExpression delay = popLong(classFile, method, stack);
+            final IrExpression runnable = popObject(classFile, method, stack);
+            final StackValue executor = popScheduledThreadPoolExecutor(classFile, method, instruction, stack);
+            pushObjectCall(
+                instructions,
+                stack,
+                localDeclarations,
+                "javan_scheduled_thread_pool_executor_schedule",
+                List.of(executor.expression().orElse(IrExpression.objectNull()), runnable, delay, unit)
+            );
+            return true;
+        }
+        if (VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorScheduleAtFixedRate(methodRef)
+            || VirtualThreadInvokePatterns.isScheduledExecutorServiceScheduleAtFixedRate(methodRef)) {
+            final IrExpression unit = popObject(classFile, method, stack);
+            final IrExpression period = popLong(classFile, method, stack);
+            final IrExpression initialDelay = popLong(classFile, method, stack);
+            final IrExpression runnable = popObject(classFile, method, stack);
+            final StackValue executor = popScheduledThreadPoolExecutor(classFile, method, instruction, stack);
+            pushObjectCall(
+                instructions,
+                stack,
+                localDeclarations,
+                "javan_scheduled_thread_pool_executor_schedule_at_fixed_rate",
+                List.of(executor.expression().orElse(IrExpression.objectNull()), runnable, initialDelay, period, unit)
+            );
+            return true;
+        }
+        if (VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorShutdown(methodRef)
+            || (VirtualThreadInvokePatterns.isExecutorServiceShutdown(methodRef)
+                && hasReceiverKind(stack, methodRef, StackKind.SCHEDULED_THREAD_POOL_EXECUTOR))
+            || VirtualThreadInvokePatterns.isScheduledExecutorServiceShutdown(methodRef)) {
+            final StackValue executor = popScheduledThreadPoolExecutor(classFile, method, instruction, stack);
+            instructions.add(IrInstruction.callStaticVoid(
+                "javan_scheduled_thread_pool_executor_shutdown",
+                List.of(executor.expression().orElse(IrExpression.objectNull()))
+            ));
+            return true;
+        }
+        if ((VirtualThreadInvokePatterns.isExecutorServiceAwaitTermination(methodRef)
+            && hasReceiverKind(stack, methodRef, StackKind.SCHEDULED_THREAD_POOL_EXECUTOR))
+            || VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorAwaitTermination(methodRef)
+            || VirtualThreadInvokePatterns.isScheduledExecutorServiceAwaitTermination(methodRef)) {
+            final IrExpression unit = popObject(classFile, method, stack);
+            final IrExpression timeout = popLong(classFile, method, stack);
+            final StackValue executor = popScheduledThreadPoolExecutor(classFile, method, instruction, stack);
+            pushIntCall(
+                instructions,
+                stack,
+                localDeclarations,
+                "javan_scheduled_thread_pool_executor_await_termination",
+                List.of(executor.expression().orElse(IrExpression.objectNull()), timeout, unit)
+            );
+            return true;
+        }
+        if ((VirtualThreadInvokePatterns.isExecutorServiceShutdownNow(methodRef)
+            && hasReceiverKind(stack, methodRef, StackKind.SCHEDULED_THREAD_POOL_EXECUTOR))
+            || VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorShutdownNow(methodRef)
+            || VirtualThreadInvokePatterns.isScheduledExecutorServiceShutdownNow(methodRef)) {
+            final StackValue executor = popScheduledThreadPoolExecutor(classFile, method, instruction, stack);
+            pushObjectCall(
+                instructions,
+                stack,
+                localDeclarations,
+                "javan_scheduled_thread_pool_executor_shutdown_now",
+                List.of(executor.expression().orElse(IrExpression.objectNull()))
+            );
+            return true;
+        }
+        return false;
+    }
+
+    private static boolean hasReceiverKind(
+        final List<StackValue> stack,
+        final MethodRef methodRef,
+        final StackKind expectedKind
+    ) {
+        final MethodDescriptor descriptor = MethodDescriptor.parse(methodRef.descriptor());
+        final int receiverIndex = stack.size() - 1 - descriptor.parameterTypes().size();
+        return receiverIndex >= 0
+            && receiverIndex < stack.size()
+            && stack.get(receiverIndex).kind() == expectedKind;
     }
 
     private static boolean lowerVirtualThreadObservationInterfaceCall(
@@ -4361,6 +4486,22 @@ final class BytecodeToIRInvokeSupport {
         final StackValue executor = pop(stack);
         if (executor.kind() != StackKind.VIRTUAL_THREAD_EXECUTOR) {
             throw invalidStack(classFile, method, instruction, wrongStackTypeReason("virtual-thread executor receiver", executor.kind()));
+        }
+        return executor;
+    }
+
+    private static StackValue popScheduledThreadPoolExecutor(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<StackValue> stack
+    ) {
+        if (stack.isEmpty()) {
+            throw invalidStack(classFile, method, instruction, "A scheduled thread pool executor receiver was expected on the bytecode stack.");
+        }
+        final StackValue executor = pop(stack);
+        if (executor.kind() != StackKind.SCHEDULED_THREAD_POOL_EXECUTOR) {
+            throw invalidStack(classFile, method, instruction, wrongStackTypeReason("scheduled thread pool executor receiver", executor.kind()));
         }
         return executor;
     }
@@ -4902,7 +5043,16 @@ final class BytecodeToIRInvokeSupport {
             localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
             final IrExpression local = IrExpression.objectLocal(localName);
             instructions.add(IrInstruction.assignObject(localName, IrExpression.objectCall("javan_scheduled_thread_pool_executor_new", List.of())));
-            stack.add(StackValue.objectExpression(local));
+            stack.add(StackValue.scheduledThreadPoolExecutor(local));
+            return;
+        }
+        if (!"java/util/concurrent/ScheduledThreadPoolExecutor".equals(owner)
+            && isAssignableTo(classes, owner, "java/util/concurrent/ScheduledThreadPoolExecutor")) {
+            final String localName = "object" + localDeclarations.size();
+            localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
+            final IrExpression local = IrExpression.objectLocal(localName);
+            instructions.add(IrInstruction.assignObject(localName, IrExpression.objectAllocation(owner)));
+            stack.add(StackValue.scheduledThreadPoolExecutor(local));
             return;
         }
         if ("java/util/concurrent/atomic/AtomicLong".equals(owner)) {

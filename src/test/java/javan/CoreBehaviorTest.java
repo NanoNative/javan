@@ -7424,6 +7424,284 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void reachabilityTracksScheduledThreadPoolExecutorScheduleTask() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    5,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        classInstruction(0, 187, "new", "java/util/concurrent/ScheduledThreadPoolExecutor"),
+                        instruction(1, 89, "dup"),
+                        instruction(2, 4, "iconst_1"),
+                        instruction(3, 183, "invokespecial", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+                        instruction(4, 75, "astore_0"),
+                        instruction(5, 42, "aload_0"),
+                        classInstruction(6, 187, "new", "com/acme/Task"),
+                        instruction(7, 89, "dup"),
+                        instruction(8, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        instruction(9, 9, "lconst_0"),
+                        instruction(10, 178, "getstatic", new FieldRef("java/util/concurrent/TimeUnit", "MILLISECONDS", "Ljava/util/concurrent/TimeUnit;")),
+                        instruction(11, 182, "invokevirtual", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "schedule", "(Ljava/lang/Runnable;JLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;")),
+                        instruction(12, 87, "pop"),
+                        instruction(13, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(graph.reachableMethods()).contains(new EntryPoint(task.name(), "run", "()V"));
+        assertThat(graph.callEdges()).contains(new CallEdge(
+            new EntryPoint(main.name(), "main", "()V"),
+            new EntryPoint(task.name(), "run", "()V"),
+            CallEdge.Kind.THREAD_START_TASK
+        ));
+    }
+
+    @Test
+    void reachabilityTracksInheritedScheduledThreadPoolExecutorScheduleOnApplicationSubclass() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile scheduler = classWithMethods(
+            "com/acme/Scheduler",
+            "java/util/concurrent/ScheduledThreadPoolExecutor",
+            0,
+            List.of(),
+            new MethodInfo(
+                0,
+                "<init>",
+                "(I)V",
+                Optional.of(new CodeAttribute(
+                    2,
+                    2,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 42, "aload_0"),
+                        instruction(1, 27, "iload_1"),
+                        instruction(2, 183, "invokespecial", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+                        instruction(3, 177, "return")
+                    )
+                ))
+            )
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    5,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        classInstruction(0, 187, "new", "com/acme/Scheduler"),
+                        instruction(1, 89, "dup"),
+                        instruction(2, 4, "iconst_1"),
+                        instruction(3, 183, "invokespecial", new MethodRef("com/acme/Scheduler", "<init>", "(I)V")),
+                        instruction(4, 75, "astore_0"),
+                        instruction(5, 42, "aload_0"),
+                        classInstruction(6, 187, "new", "com/acme/Task"),
+                        instruction(7, 89, "dup"),
+                        instruction(8, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        instruction(9, 9, "lconst_0"),
+                        instruction(10, 178, "getstatic", new FieldRef("java/util/concurrent/TimeUnit", "MILLISECONDS", "Ljava/util/concurrent/TimeUnit;")),
+                        instruction(11, 182, "invokevirtual", new MethodRef("com/acme/Scheduler", "schedule", "(Ljava/lang/Runnable;JLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;")),
+                        instruction(12, 87, "pop"),
+                        instruction(13, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(main.name(), main, scheduler.name(), scheduler, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(graph.reachableMethods()).contains(new EntryPoint(task.name(), "run", "()V"));
+        assertThat(graph.callEdges()).contains(new CallEdge(
+            new EntryPoint(main.name(), "main", "()V"),
+            new EntryPoint(task.name(), "run", "()V"),
+            CallEdge.Kind.THREAD_START_TASK
+        ));
+    }
+
+    @Test
+    void reachabilityTracksInheritedScheduledThreadPoolExecutorScheduleAtFixedRateOnApplicationSubclass() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile scheduler = classWithMethods(
+            "com/acme/Scheduler",
+            "java/util/concurrent/ScheduledThreadPoolExecutor",
+            0,
+            List.of(),
+            new MethodInfo(
+                0,
+                "<init>",
+                "(I)V",
+                Optional.of(new CodeAttribute(
+                    2,
+                    2,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 42, "aload_0"),
+                        instruction(1, 27, "iload_1"),
+                        instruction(2, 183, "invokespecial", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+                        instruction(3, 177, "return")
+                    )
+                ))
+            )
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    8,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        classInstruction(0, 187, "new", "com/acme/Scheduler"),
+                        instruction(1, 89, "dup"),
+                        instruction(2, 4, "iconst_1"),
+                        instruction(3, 183, "invokespecial", new MethodRef("com/acme/Scheduler", "<init>", "(I)V")),
+                        instruction(4, 75, "astore_0"),
+                        instruction(5, 42, "aload_0"),
+                        classInstruction(6, 187, "new", "com/acme/Task"),
+                        instruction(7, 89, "dup"),
+                        instruction(8, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        instruction(9, 9, "lconst_0"),
+                        instruction(10, 10, "lconst_1"),
+                        instruction(11, 178, "getstatic", new FieldRef("java/util/concurrent/TimeUnit", "MILLISECONDS", "Ljava/util/concurrent/TimeUnit;")),
+                        instruction(12, 182, "invokevirtual", new MethodRef("com/acme/Scheduler", "scheduleAtFixedRate", "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;")),
+                        instruction(13, 87, "pop"),
+                        instruction(14, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(main.name(), main, scheduler.name(), scheduler, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(graph.reachableMethods()).contains(new EntryPoint(task.name(), "run", "()V"));
+        assertThat(graph.callEdges()).contains(new CallEdge(
+            new EntryPoint(main.name(), "main", "()V"),
+            new EntryPoint(task.name(), "run", "()V"),
+            CallEdge.Kind.THREAD_START_TASK
+        ));
+    }
+
+    @Test
+    void reachabilityTracksScheduledExecutorServiceScheduleAtFixedRateTask() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    8,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        classInstruction(0, 187, "new", "java/util/concurrent/ScheduledThreadPoolExecutor"),
+                        instruction(1, 89, "dup"),
+                        instruction(2, 4, "iconst_1"),
+                        instruction(3, 183, "invokespecial", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+                        instruction(4, 75, "astore_0"),
+                        instruction(5, 42, "aload_0"),
+                        instruction(6, 76, "astore_1"),
+                        instruction(7, 43, "aload_1"),
+                        classInstruction(8, 187, "new", "com/acme/Task"),
+                        instruction(9, 89, "dup"),
+                        instruction(10, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        instruction(11, 9, "lconst_0"),
+                        instruction(12, 10, "lconst_1"),
+                        instruction(13, 178, "getstatic", new FieldRef("java/util/concurrent/TimeUnit", "SECONDS", "Ljava/util/concurrent/TimeUnit;")),
+                        instruction(14, 185, "invokeinterface", new MethodRef("java/util/concurrent/ScheduledExecutorService", "scheduleAtFixedRate", "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;")),
+                        instruction(15, 87, "pop"),
+                        instruction(16, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(graph.reachableMethods()).contains(new EntryPoint(task.name(), "run", "()V"));
+        assertThat(graph.callEdges()).contains(new CallEdge(
+            new EntryPoint(main.name(), "main", "()V"),
+            new EntryPoint(task.name(), "run", "()V"),
+            CallEdge.Kind.THREAD_START_TASK
+        ));
+    }
+
+    @Test
     void staticVerifierAcceptsReachableVirtualThreadExecutorExecute() {
         final ClassFile task = classWithMethods(
             "com/acme/Task",
@@ -7600,6 +7878,513 @@ final class CoreBehaviorTest {
         );
 
         assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableScheduledThreadPoolExecutorSchedule() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    5,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        classInstruction(0, 187, "new", "java/util/concurrent/ScheduledThreadPoolExecutor"),
+                        instruction(1, 89, "dup"),
+                        instruction(2, 4, "iconst_1"),
+                        instruction(3, 183, "invokespecial", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+                        instruction(4, 75, "astore_0"),
+                        instruction(5, 42, "aload_0"),
+                        classInstruction(6, 187, "new", "com/acme/Task"),
+                        instruction(7, 89, "dup"),
+                        instruction(8, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        instruction(9, 9, "lconst_0"),
+                        instruction(10, 178, "getstatic", new FieldRef("java/util/concurrent/TimeUnit", "MILLISECONDS", "Ljava/util/concurrent/TimeUnit;")),
+                        instruction(11, 182, "invokevirtual", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "schedule", "(Ljava/lang/Runnable;JLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;")),
+                        instruction(12, 87, "pop"),
+                        instruction(13, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableScheduledThreadPoolExecutorShutdownViaExecutorServiceAlias() {
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    2,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        classInstruction(0, 187, "new", "java/util/concurrent/ScheduledThreadPoolExecutor"),
+                        instruction(1, 89, "dup"),
+                        instruction(2, 4, "iconst_1"),
+                        instruction(3, 183, "invokespecial", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+                        instruction(4, 75, "astore_0"),
+                        instruction(5, 42, "aload_0"),
+                        instruction(6, 76, "astore_1"),
+                        instruction(7, 43, "aload_1"),
+                        instruction(8, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "shutdown", "()V")),
+                        instruction(9, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableScheduledThreadPoolExecutorAwaitTerminationViaExecutorServiceAlias() {
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    4,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        classInstruction(0, 187, "new", "java/util/concurrent/ScheduledThreadPoolExecutor"),
+                        instruction(1, 89, "dup"),
+                        instruction(2, 4, "iconst_1"),
+                        instruction(3, 183, "invokespecial", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+                        instruction(4, 75, "astore_0"),
+                        instruction(5, 42, "aload_0"),
+                        instruction(6, 76, "astore_1"),
+                        instruction(7, 43, "aload_1"),
+                        instruction(8, 10, "lconst_1"),
+                        instruction(9, 178, "getstatic", new FieldRef("java/util/concurrent/TimeUnit", "SECONDS", "Ljava/util/concurrent/TimeUnit;")),
+                        instruction(10, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "awaitTermination", "(JLjava/util/concurrent/TimeUnit;)Z")),
+                        instruction(11, 87, "pop"),
+                        instruction(12, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableScheduledThreadPoolExecutorShutdownNowViaExecutorServiceAlias() {
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    2,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        classInstruction(0, 187, "new", "java/util/concurrent/ScheduledThreadPoolExecutor"),
+                        instruction(1, 89, "dup"),
+                        instruction(2, 4, "iconst_1"),
+                        instruction(3, 183, "invokespecial", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+                        instruction(4, 75, "astore_0"),
+                        instruction(5, 42, "aload_0"),
+                        instruction(6, 76, "astore_1"),
+                        instruction(7, 43, "aload_1"),
+                        instruction(8, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "shutdownNow", "()Ljava/util/List;")),
+                        instruction(9, 87, "pop"),
+                        instruction(10, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableInheritedScheduledThreadPoolExecutorShutdownViaExecutorServiceAlias() {
+        final ClassFile scheduler = classWithMethods(
+            "com/acme/Scheduler",
+            "java/util/concurrent/ScheduledThreadPoolExecutor",
+            0,
+            List.of(),
+            new MethodInfo(
+                0,
+                "<init>",
+                "(I)V",
+                Optional.of(new CodeAttribute(
+                    2,
+                    2,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 42, "aload_0"),
+                        instruction(1, 27, "iload_1"),
+                        instruction(2, 183, "invokespecial", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+                        instruction(3, 177, "return")
+                    )
+                ))
+            )
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    2,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        classInstruction(0, 187, "new", "com/acme/Scheduler"),
+                        instruction(1, 89, "dup"),
+                        instruction(2, 4, "iconst_1"),
+                        instruction(3, 183, "invokespecial", new MethodRef("com/acme/Scheduler", "<init>", "(I)V")),
+                        instruction(4, 75, "astore_0"),
+                        instruction(5, 42, "aload_0"),
+                        instruction(6, 76, "astore_1"),
+                        instruction(7, 43, "aload_1"),
+                        instruction(8, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "shutdown", "()V")),
+                        instruction(9, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main, scheduler.name(), scheduler),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableInheritedScheduledThreadPoolExecutorAwaitTerminationViaExecutorServiceAlias() {
+        final ClassFile scheduler = classWithMethods(
+            "com/acme/Scheduler",
+            "java/util/concurrent/ScheduledThreadPoolExecutor",
+            0,
+            List.of(),
+            new MethodInfo(
+                0,
+                "<init>",
+                "(I)V",
+                Optional.of(new CodeAttribute(
+                    2,
+                    2,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 42, "aload_0"),
+                        instruction(1, 27, "iload_1"),
+                        instruction(2, 183, "invokespecial", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+                        instruction(3, 177, "return")
+                    )
+                ))
+            )
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    4,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        classInstruction(0, 187, "new", "com/acme/Scheduler"),
+                        instruction(1, 89, "dup"),
+                        instruction(2, 4, "iconst_1"),
+                        instruction(3, 183, "invokespecial", new MethodRef("com/acme/Scheduler", "<init>", "(I)V")),
+                        instruction(4, 75, "astore_0"),
+                        instruction(5, 42, "aload_0"),
+                        instruction(6, 76, "astore_1"),
+                        instruction(7, 43, "aload_1"),
+                        instruction(8, 10, "lconst_1"),
+                        instruction(9, 178, "getstatic", new FieldRef("java/util/concurrent/TimeUnit", "SECONDS", "Ljava/util/concurrent/TimeUnit;")),
+                        instruction(10, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "awaitTermination", "(JLjava/util/concurrent/TimeUnit;)Z")),
+                        instruction(11, 87, "pop"),
+                        instruction(12, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main, scheduler.name(), scheduler),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableInheritedScheduledThreadPoolExecutorShutdownNowViaExecutorServiceAlias() {
+        final ClassFile scheduler = classWithMethods(
+            "com/acme/Scheduler",
+            "java/util/concurrent/ScheduledThreadPoolExecutor",
+            0,
+            List.of(),
+            new MethodInfo(
+                0,
+                "<init>",
+                "(I)V",
+                Optional.of(new CodeAttribute(
+                    2,
+                    2,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 42, "aload_0"),
+                        instruction(1, 27, "iload_1"),
+                        instruction(2, 183, "invokespecial", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+                        instruction(3, 177, "return")
+                    )
+                ))
+            )
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    2,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        classInstruction(0, 187, "new", "com/acme/Scheduler"),
+                        instruction(1, 89, "dup"),
+                        instruction(2, 4, "iconst_1"),
+                        instruction(3, 183, "invokespecial", new MethodRef("com/acme/Scheduler", "<init>", "(I)V")),
+                        instruction(4, 75, "astore_0"),
+                        instruction(5, 42, "aload_0"),
+                        instruction(6, 76, "astore_1"),
+                        instruction(7, 43, "aload_1"),
+                        instruction(8, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "shutdownNow", "()Ljava/util/List;")),
+                        instruction(9, 87, "pop"),
+                        instruction(10, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main, scheduler.name(), scheduler),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableVirtualThreadFactoryStaticField() {
+        final ClassFile main = new ClassFile(
+            69,
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            List.of(new FieldInfo(0x0008, "FACTORY", "Ljava/util/concurrent/ThreadFactory;")),
+            List.of(
+                new MethodInfo(
+                    0x0008,
+                    "main",
+                    "()V",
+                    Optional.of(new CodeAttribute(
+                        2,
+                        1,
+                        new byte[0],
+                        0,
+                        List.of(
+                            instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;")),
+                            instruction(1, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "factory", "()Ljava/util/concurrent/ThreadFactory;")),
+                            instruction(2, 179, "putstatic", new FieldRef("com/acme/Main", "FACTORY", "Ljava/util/concurrent/ThreadFactory;")),
+                            instruction(3, 178, "getstatic", new FieldRef("com/acme/Main", "FACTORY", "Ljava/util/concurrent/ThreadFactory;")),
+                            instruction(4, 185, "invokeinterface", new MethodRef("java/util/concurrent/ThreadFactory", "toString", "()Ljava/lang/String;")),
+                            instruction(5, 87, "pop"),
+                            instruction(6, 177, "return")
+                        )
+                    ))
+                )
+            ),
+            Path.of("Main.class"),
+            true
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    void staticVerifierAcceptsReachableVirtualThreadExecutorStaticField() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile main = new ClassFile(
+            69,
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            List.of(new FieldInfo(0x0008, "EXECUTOR", "Ljava/util/concurrent/ExecutorService;")),
+            List.of(
+                new MethodInfo(
+                    0x0008,
+                    "main",
+                    "()V",
+                    Optional.of(new CodeAttribute(
+                        4,
+                        1,
+                        new byte[0],
+                        0,
+                        List.of(
+                            instruction(0, 184, "invokestatic", new MethodRef("java/util/concurrent/Executors", "newVirtualThreadPerTaskExecutor", "()Ljava/util/concurrent/ExecutorService;")),
+                            instruction(1, 179, "putstatic", new FieldRef("com/acme/Main", "EXECUTOR", "Ljava/util/concurrent/ExecutorService;")),
+                            instruction(2, 178, "getstatic", new FieldRef("com/acme/Main", "EXECUTOR", "Ljava/util/concurrent/ExecutorService;")),
+                            classInstruction(3, 187, "new", "com/acme/Task"),
+                            instruction(4, 89, "dup"),
+                            instruction(5, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                            instruction(6, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "execute", "(Ljava/lang/Runnable;)V")),
+                            instruction(7, 178, "getstatic", new FieldRef("com/acme/Main", "EXECUTOR", "Ljava/util/concurrent/ExecutorService;")),
+                            instruction(8, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "close", "()V")),
+                            instruction(9, 177, "return")
+                        )
+                    ))
+                )
+            ),
+            Path.of("Main.class"),
+            true
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierRejectsReachableVirtualThreadExecutorStaticFieldWithoutMatchingPutStatic() {
+        final ClassFile main = new ClassFile(
+            69,
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            List.of(new FieldInfo(0x0008, "EXECUTOR", "Ljava/util/concurrent/ExecutorService;")),
+            List.of(
+                new MethodInfo(
+                    0x0008,
+                    "main",
+                    "()V",
+                    Optional.of(new CodeAttribute(
+                        1,
+                        1,
+                        new byte[0],
+                        0,
+                        List.of(
+                            instruction(0, 178, "getstatic", new FieldRef("com/acme/Main", "EXECUTOR", "Ljava/util/concurrent/ExecutorService;")),
+                            instruction(1, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "close", "()V")),
+                            instruction(2, 177, "return")
+                        )
+                    ))
+                )
+            ),
+            Path.of("Main.class"),
+            true
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
+            assertThat(diagnostic.code()).isEqualTo("JAVAN077");
+            assertThat(diagnostic.subject()).isEqualTo("ExecutorService.close()");
+        });
     }
 
     @Test
@@ -8324,6 +9109,111 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void reachabilityConservativelyTracksScheduledExecutorServiceScheduleTaskForUnknownReceiver() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final String descriptor = "(Ljava/util/concurrent/ScheduledExecutorService;)V";
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                descriptor,
+                Optional.of(new CodeAttribute(
+                    5,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 42, "aload_0"),
+                        classInstruction(1, 187, "new", "com/acme/Task"),
+                        instruction(2, 89, "dup"),
+                        instruction(3, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        instruction(4, 9, "lconst_0"),
+                        instruction(5, 178, "getstatic", new FieldRef("java/util/concurrent/TimeUnit", "SECONDS", "Ljava/util/concurrent/TimeUnit;")),
+                        instruction(6, 185, "invokeinterface", new MethodRef("java/util/concurrent/ScheduledExecutorService", "schedule", "(Ljava/lang/Runnable;JLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;")),
+                        instruction(7, 87, "pop"),
+                        instruction(8, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", descriptor))
+        );
+
+        assertThat(graph.reachableMethods()).contains(new EntryPoint(task.name(), "run", "()V"));
+    }
+
+    @Test
+    void reachabilityFallsBackToAllRunnableTargetsWhenScheduledRunnableCannotBeInferred() {
+        final ClassFile taskA = classWithMethods(
+            "com/acme/TaskA",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile taskB = classWithMethods(
+            "com/acme/TaskB",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final String descriptor = "(Ljava/util/concurrent/ScheduledExecutorService;Ljava/lang/Runnable;)V";
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                descriptor,
+                Optional.of(new CodeAttribute(
+                    5,
+                    2,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 42, "aload_0"),
+                        instruction(1, 43, "aload_1"),
+                        instruction(2, 9, "lconst_0"),
+                        instruction(3, 178, "getstatic", new FieldRef("java/util/concurrent/TimeUnit", "SECONDS", "Ljava/util/concurrent/TimeUnit;")),
+                        instruction(4, 185, "invokeinterface", new MethodRef("java/util/concurrent/ScheduledExecutorService", "schedule", "(Ljava/lang/Runnable;JLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;")),
+                        instruction(5, 87, "pop"),
+                        instruction(6, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(main.name(), main, taskA.name(), taskA, taskB.name(), taskB),
+            List.of(new EntryPoint(main.name(), "main", descriptor))
+        );
+
+        assertThat(graph.reachableMethods()).contains(
+            new EntryPoint(taskA.name(), "run", "()V"),
+            new EntryPoint(taskB.name(), "run", "()V")
+        );
+    }
+
+    @Test
     void staticVerifierRejectsReachableExecutorExecuteWithUnknownReceiver() {
         final String descriptor = "(Ljava/util/concurrent/ExecutorService;)V";
         final ClassFile main = classWithMethods(
@@ -8447,6 +9337,48 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void staticVerifierRejectsReachableScheduledThreadPoolExecutorShutdownAliasWithoutSupportedConstruction() {
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    2,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        classInstruction(0, 187, "new", "java/util/concurrent/ScheduledThreadPoolExecutor"),
+                        instruction(1, 4, "iconst_1"),
+                        instruction(2, 183, "invokespecial", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+                        instruction(3, 75, "astore_0"),
+                        instruction(4, 42, "aload_0"),
+                        instruction(5, 76, "astore_1"),
+                        instruction(6, 43, "aload_1"),
+                        instruction(7, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "shutdown", "()V")),
+                        instruction(8, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
+            assertThat(diagnostic.code()).isEqualTo("JAVAN077");
+            assertThat(diagnostic.subject()).isEqualTo("ExecutorService.shutdown()");
+        });
+    }
+
+    @Test
     void staticVerifierRejectsReachableExecutorsFactoryAsConcurrencyRuntimeApi() {
         final ClassFile main = classWithMethods(
             "com/acme/Main",
@@ -8531,6 +9463,24 @@ final class CoreBehaviorTest {
         ), new CodeException(0, 4, 5, Optional.empty()));
 
         assertThat(diagnostics).extracting(Diagnostic::code).contains("JAVAN076", "JAVAN014");
+    }
+
+    @Test
+    void staticVerifierAcceptsSynchronizedMonitorHandlerShape() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            instruction(0, 42, "aload_0"),
+            instruction(1, 194, "monitorenter"),
+            instruction(2, 42, "aload_0"),
+            instruction(3, 195, "monitorexit"),
+            instruction(4, 177, "return"),
+            instruction(5, 76, "astore_1"),
+            instruction(6, 43, "aload_1"),
+            instruction(7, 195, "monitorexit"),
+            instruction(8, 43, "aload_1"),
+            instruction(9, 191, "athrow")
+        ), new CodeException(0, 4, 5, Optional.empty()));
+
+        assertThat(diagnostics).extracting(Diagnostic::code).containsExactly("JAVAN076");
     }
 
     @Test

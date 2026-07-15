@@ -63,6 +63,89 @@ final class CliRealProbeAcceptanceIntegrationTest extends CliIntegrationSupport 
     }
 
     @Test
+    void nanoSchedulerProbeBuildsAgainstPinnedMavenArtifactAndMatchesJvmOutput() throws Exception {
+        final Path artifact = pinnedMavenArtifact("org.nanonative", "nano", "2025.11.3131219");
+        Assumptions.assumeTrue(Files.isRegularFile(artifact), "Pinned Nano artifact is not available in the local Maven cache");
+        final Path project = project("nano-scheduler");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.TimeUnit;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final var scheduler = new org.nanonative.nano.core.model.Scheduler("probe");
+                    scheduler.schedule(new Task(), 10L, TimeUnit.MILLISECONDS);
+                    Thread.sleep(30L);
+                    scheduler.shutdown();
+                    System.out.println(scheduler.awaitTermination(1L, TimeUnit.SECONDS));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println("tick");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main", List.of(artifact));
+        final CliRun run = run(tempDir, "build", project.toString(), "--classpath", artifact.toString(), "--output", "nano-scheduler");
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/nano-scheduler").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void nanoFixedRateSchedulerProbeBuildsAgainstPinnedMavenArtifactAndMatchesJvmOutput() throws Exception {
+        final Path artifact = pinnedMavenArtifact("org.nanonative", "nano", "2025.11.3131219");
+        Assumptions.assumeTrue(Files.isRegularFile(artifact), "Pinned Nano artifact is not available in the local Maven cache");
+        final Path project = project("nano-scheduler-fixed-rate");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.TimeUnit;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final var scheduler = new org.nanonative.nano.core.model.Scheduler("probe");
+                    scheduler.scheduleAtFixedRate(new Task(), 200L, 50L, TimeUnit.MILLISECONDS);
+                    Thread.sleep(20L);
+                    scheduler.shutdown();
+                    System.out.println(scheduler.awaitTermination(1L, TimeUnit.SECONDS));
+                    System.out.println("done");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println("tick");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main", List.of(artifact));
+        final CliRun run = run(tempDir, "build", project.toString(), "--classpath", artifact.toString(), "--output", "nano-scheduler-fixed-rate");
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/nano-scheduler-fixed-rate").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void acceptanceRealProbesFailWhenRequiredArtifactsAreMissing() throws Exception {
         final Path repo = tempDir.resolve("empty-maven-repo");
         Files.createDirectories(repo);

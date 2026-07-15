@@ -988,6 +988,9 @@ final class BytecodeToIRControlFlowSupport {
         if (kind == StackKind.VIRTUAL_THREAD_EXECUTOR) {
             return StackValue.virtualThreadExecutor(expression);
         }
+        if (kind == StackKind.SCHEDULED_THREAD_POOL_EXECUTOR) {
+            return StackValue.scheduledThreadPoolExecutor(expression);
+        }
         if (kind == StackKind.SOCKET_INPUT_STREAM) {
             return StackValue.socketInputStream(expression);
         }
@@ -1001,6 +1004,7 @@ final class BytecodeToIRControlFlowSupport {
             || kind == StackKind.VIRTUAL_THREAD_BUILDER
             || kind == StackKind.VIRTUAL_THREAD_FACTORY
             || kind == StackKind.VIRTUAL_THREAD_EXECUTOR
+            || kind == StackKind.SCHEDULED_THREAD_POOL_EXECUTOR
             || kind == StackKind.PRINT_STREAM
             || kind == StackKind.ERROR_PRINT_STREAM
             || kind == StackKind.SOCKET_INPUT_STREAM

@@ -1963,9 +1963,8 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
             """);
 
         final CliRun run = run(tempDir, "build", project.toString());
-        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/virtual-thread-factory-executor-execute").toString()));
-
         assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/virtual-thread-factory-executor-execute").toString()));
         assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
         assertThat(nativeRun.stdout().lines().toList()).containsExactlyInAnyOrder("done", "task");
     }
@@ -3031,6 +3030,339 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/thread-executor-submit-cancel").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void scheduledThreadPoolExecutorScheduleBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-scheduled-executor-schedule");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.ScheduledThreadPoolExecutor;
+            import java.util.concurrent.TimeUnit;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(1);
+                    executor.schedule(new Task(), 0L, TimeUnit.MILLISECONDS);
+                    Thread.sleep(50L);
+                    executor.shutdown();
+                    System.out.println("done");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println("task");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-scheduled-executor-schedule").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void scheduledExecutorServiceScheduleBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-scheduled-executor-service-schedule");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.ScheduledExecutorService;
+            import java.util.concurrent.ScheduledThreadPoolExecutor;
+            import java.util.concurrent.TimeUnit;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ScheduledExecutorService executor = new ScheduledThreadPoolExecutor(1);
+                    executor.schedule(new Task(), 0L, TimeUnit.MILLISECONDS);
+                    executor.shutdown();
+                    System.out.println(executor.awaitTermination(1L, TimeUnit.SECONDS));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println("task");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-scheduled-executor-service-schedule").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void scheduledThreadPoolExecutorAwaitTerminationBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-scheduled-executor-await-termination");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.ExecutorService;
+            import java.util.concurrent.ScheduledThreadPoolExecutor;
+            import java.util.concurrent.TimeUnit;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(1);
+                    executor.schedule(new Task(), 0L, TimeUnit.MILLISECONDS);
+                    final ExecutorService service = executor;
+                    service.shutdown();
+                    System.out.println(service.awaitTermination(1L, TimeUnit.SECONDS));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println("task");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-scheduled-executor-await-termination").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void scheduledThreadPoolExecutorConcreteAwaitTerminationBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-scheduled-executor-concrete-await-termination");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.ScheduledThreadPoolExecutor;
+            import java.util.concurrent.TimeUnit;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(1);
+                    executor.schedule(new Task(), 0L, TimeUnit.MILLISECONDS);
+                    executor.shutdown();
+                    System.out.println(executor.awaitTermination(1L, TimeUnit.SECONDS));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println("task");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-scheduled-executor-concrete-await-termination").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void scheduledThreadPoolExecutorShutdownNowBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-scheduled-executor-shutdown-now");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.ExecutorService;
+            import java.util.concurrent.ScheduledThreadPoolExecutor;
+            import java.util.concurrent.TimeUnit;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(1);
+                    executor.schedule(new Task(), 200L, TimeUnit.MILLISECONDS);
+                    final ExecutorService service = executor;
+                    service.shutdownNow();
+                    System.out.println(service.awaitTermination(1L, TimeUnit.SECONDS));
+                    System.out.println("done");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println("late");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-scheduled-executor-shutdown-now").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void scheduledThreadPoolExecutorConcreteShutdownNowBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-scheduled-executor-concrete-shutdown-now");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.ScheduledThreadPoolExecutor;
+            import java.util.concurrent.TimeUnit;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(1);
+                    executor.schedule(new Task(), 200L, TimeUnit.MILLISECONDS);
+                    executor.shutdownNow();
+                    System.out.println(executor.awaitTermination(1L, TimeUnit.SECONDS));
+                    System.out.println("done");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println("late");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-scheduled-executor-concrete-shutdown-now").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void scheduledThreadPoolExecutorShutdownNowReturnsPendingDelayedTaskBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-scheduled-executor-shutdown-now-pending");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.List;
+            import java.util.concurrent.ScheduledThreadPoolExecutor;
+            import java.util.concurrent.TimeUnit;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(1);
+                    executor.schedule(new Task(), 200L, TimeUnit.MILLISECONDS);
+                    final List<Runnable> pending = executor.shutdownNow();
+                    System.out.println(pending.size());
+                    System.out.println(executor.awaitTermination(1L, TimeUnit.SECONDS));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println("late");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-scheduled-executor-shutdown-now-pending").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void scheduledExecutorServiceScheduleAtFixedRateStopsAfterShutdownBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-scheduled-executor-service-fixed-rate-shutdown");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.ScheduledExecutorService;
+            import java.util.concurrent.ScheduledThreadPoolExecutor;
+            import java.util.concurrent.TimeUnit;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ScheduledExecutorService executor = new ScheduledThreadPoolExecutor(1);
+                    executor.scheduleAtFixedRate(new Task(), 200L, 50L, TimeUnit.MILLISECONDS);
+                    Thread.sleep(20L);
+                    executor.shutdown();
+                    System.out.println(executor.awaitTermination(1L, TimeUnit.SECONDS));
+                    System.out.println("done");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println("tick");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-scheduled-executor-service-fixed-rate-shutdown").toString())).stdout())
             .isEqualTo(jvmOutput);
     }
 

@@ -1,8 +1,10 @@
 package javan.compat;
 
+import javan.classfile.ClassFile;
 import javan.classfile.MethodRef;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -96,12 +98,24 @@ public final class JdkCallSupport {
         runtime("ExecutorService.submit", "java/util/concurrent/ExecutorService", "submit", "(Ljava/lang/Runnable;)Ljava/util/concurrent/Future;"),
         runtime("ExecutorService.shutdown", "java/util/concurrent/ExecutorService", "shutdown", "()V"),
         runtime("ExecutorService.close", "java/util/concurrent/ExecutorService", "close", "()V"),
+        runtime("ExecutorService.awaitTermination", "java/util/concurrent/ExecutorService", "awaitTermination", "(JLjava/util/concurrent/TimeUnit;)Z"),
+        runtime("ExecutorService.shutdownNow", "java/util/concurrent/ExecutorService", "shutdownNow", "()Ljava/util/List;"),
         runtime("ExecutorService.toString", "java/util/concurrent/ExecutorService", "toString", "()Ljava/lang/String;"),
         runtime("ExecutorService.hashCode", "java/util/concurrent/ExecutorService", "hashCode", "()I"),
         runtime("ExecutorService.equals", "java/util/concurrent/ExecutorService", "equals", "(Ljava/lang/Object;)Z"),
         runtime("Future.cancel", "java/util/concurrent/Future", "cancel", "(Z)Z"),
         runtime("ScheduledThreadPoolExecutor.<init>", "java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V"),
         runtime("ScheduledThreadPoolExecutor.<init>", "java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(ILjava/util/concurrent/ThreadFactory;Ljava/util/concurrent/RejectedExecutionHandler;)V"),
+        runtime("ScheduledThreadPoolExecutor.awaitTermination", "java/util/concurrent/ScheduledThreadPoolExecutor", "awaitTermination", "(JLjava/util/concurrent/TimeUnit;)Z"),
+        runtime("ScheduledThreadPoolExecutor.shutdownNow", "java/util/concurrent/ScheduledThreadPoolExecutor", "shutdownNow", "()Ljava/util/List;"),
+        runtime("ScheduledThreadPoolExecutor.schedule", "java/util/concurrent/ScheduledThreadPoolExecutor", "schedule", "(Ljava/lang/Runnable;JLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"),
+        runtime("ScheduledThreadPoolExecutor.scheduleAtFixedRate", "java/util/concurrent/ScheduledThreadPoolExecutor", "scheduleAtFixedRate", "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"),
+        runtime("ScheduledThreadPoolExecutor.shutdown", "java/util/concurrent/ScheduledThreadPoolExecutor", "shutdown", "()V"),
+        runtime("ScheduledExecutorService.shutdown", "java/util/concurrent/ScheduledExecutorService", "shutdown", "()V"),
+        runtime("ScheduledExecutorService.awaitTermination", "java/util/concurrent/ScheduledExecutorService", "awaitTermination", "(JLjava/util/concurrent/TimeUnit;)Z"),
+        runtime("ScheduledExecutorService.shutdownNow", "java/util/concurrent/ScheduledExecutorService", "shutdownNow", "()Ljava/util/List;"),
+        runtime("ScheduledExecutorService.schedule", "java/util/concurrent/ScheduledExecutorService", "schedule", "(Ljava/lang/Runnable;JLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"),
+        runtime("ScheduledExecutorService.scheduleAtFixedRate", "java/util/concurrent/ScheduledExecutorService", "scheduleAtFixedRate", "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"),
         runtime("ThreadPoolExecutor.CallerRunsPolicy.<init>", "java/util/concurrent/ThreadPoolExecutor$CallerRunsPolicy", "<init>", "()V"),
         runtime("AtomicLong.<init>", "java/util/concurrent/atomic/AtomicLong", "<init>", "(J)V"),
         runtime("AtomicLong.get", "java/util/concurrent/atomic/AtomicLong", "get", "()J"),
@@ -732,6 +746,44 @@ public final class JdkCallSupport {
     }
 
     /**
+     * Normalizes an inherited application-subclass call to a directly supported JDK call when the
+     * subclass does not override the method and the first supported superclass declaration is part
+     * of the JDK.
+     *
+     * @param classes parsed closed-world classes
+     * @param methodRef original bytecode method reference
+     * @return directly supported JDK method reference when normalizable
+     */
+    public static Optional<MethodRef> normalizeInheritedSupportedJdkCall(
+        final Map<String, ClassFile> classes,
+        final MethodRef methodRef
+    ) {
+        if (isJdkCall(methodRef)) {
+            return Optional.of(methodRef);
+        }
+        String current = methodRef.owner();
+        while (classes.containsKey(current)) {
+            final ClassFile classFile = classes.get(current);
+            if (classFile == null) {
+                return Optional.empty();
+            }
+            if (classFile.method(methodRef.name(), methodRef.descriptor()).isPresent()) {
+                return Optional.empty();
+            }
+            final String superName = classFile.superName();
+            if (superName == null || superName.isEmpty()) {
+                return Optional.empty();
+            }
+            final MethodRef inherited = new MethodRef(superName, methodRef.name(), methodRef.descriptor());
+            if (isSupported(inherited)) {
+                return Optional.of(inherited);
+            }
+            current = superName;
+        }
+        return Optional.empty();
+    }
+
+    /**
      * Returns runtime modules required by a reachable JDK call.
      *
      * @param methodRef method reference
@@ -772,6 +824,12 @@ public final class JdkCallSupport {
             return List.of("threads");
         }
         if ("java/util/concurrent/Future".equals(owner)) {
+            return List.of("threads");
+        }
+        if ("java/util/concurrent/ScheduledThreadPoolExecutor".equals(owner)) {
+            return List.of("threads");
+        }
+        if ("java/util/concurrent/ScheduledExecutorService".equals(owner)) {
             return List.of("threads");
         }
         if ("java/util/concurrent/locks/LockSupport".equals(owner)) {

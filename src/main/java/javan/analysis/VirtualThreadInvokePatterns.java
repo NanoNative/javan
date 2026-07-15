@@ -108,10 +108,86 @@ public final class VirtualThreadInvokePatterns {
             && "()V".equals(methodRef.descriptor());
     }
 
+    public static boolean isExecutorServiceAwaitTermination(final MethodRef methodRef) {
+        return "java/util/concurrent/ExecutorService".equals(methodRef.owner())
+            && "awaitTermination".equals(methodRef.name())
+            && "(JLjava/util/concurrent/TimeUnit;)Z".equals(methodRef.descriptor());
+    }
+
+    public static boolean isExecutorServiceShutdownNow(final MethodRef methodRef) {
+        return "java/util/concurrent/ExecutorService".equals(methodRef.owner())
+            && "shutdownNow".equals(methodRef.name())
+            && "()Ljava/util/List;".equals(methodRef.descriptor());
+    }
+
+    public static boolean isScheduledThreadPoolExecutorAwaitTermination(final MethodRef methodRef) {
+        return "java/util/concurrent/ScheduledThreadPoolExecutor".equals(methodRef.owner())
+            && "awaitTermination".equals(methodRef.name())
+            && "(JLjava/util/concurrent/TimeUnit;)Z".equals(methodRef.descriptor());
+    }
+
+    public static boolean isScheduledThreadPoolExecutorShutdownNow(final MethodRef methodRef) {
+        return "java/util/concurrent/ScheduledThreadPoolExecutor".equals(methodRef.owner())
+            && "shutdownNow".equals(methodRef.name())
+            && "()Ljava/util/List;".equals(methodRef.descriptor());
+    }
+
     public static boolean isFutureCancel(final MethodRef methodRef) {
         return "java/util/concurrent/Future".equals(methodRef.owner())
             && "cancel".equals(methodRef.name())
             && "(Z)Z".equals(methodRef.descriptor());
+    }
+
+    public static boolean isScheduledThreadPoolExecutorSchedule(final MethodRef methodRef) {
+        return "java/util/concurrent/ScheduledThreadPoolExecutor".equals(methodRef.owner())
+            && "schedule".equals(methodRef.name())
+            && "(Ljava/lang/Runnable;JLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"
+            .equals(methodRef.descriptor());
+    }
+
+    public static boolean isScheduledThreadPoolExecutorScheduleAtFixedRate(final MethodRef methodRef) {
+        return "java/util/concurrent/ScheduledThreadPoolExecutor".equals(methodRef.owner())
+            && "scheduleAtFixedRate".equals(methodRef.name())
+            && "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"
+            .equals(methodRef.descriptor());
+    }
+
+    public static boolean isScheduledExecutorServiceSchedule(final MethodRef methodRef) {
+        return "java/util/concurrent/ScheduledExecutorService".equals(methodRef.owner())
+            && "schedule".equals(methodRef.name())
+            && "(Ljava/lang/Runnable;JLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"
+            .equals(methodRef.descriptor());
+    }
+
+    public static boolean isScheduledExecutorServiceScheduleAtFixedRate(final MethodRef methodRef) {
+        return "java/util/concurrent/ScheduledExecutorService".equals(methodRef.owner())
+            && "scheduleAtFixedRate".equals(methodRef.name())
+            && "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"
+            .equals(methodRef.descriptor());
+    }
+
+    public static boolean isScheduledExecutorServiceShutdown(final MethodRef methodRef) {
+        return "java/util/concurrent/ScheduledExecutorService".equals(methodRef.owner())
+            && "shutdown".equals(methodRef.name())
+            && "()V".equals(methodRef.descriptor());
+    }
+
+    public static boolean isScheduledExecutorServiceAwaitTermination(final MethodRef methodRef) {
+        return "java/util/concurrent/ScheduledExecutorService".equals(methodRef.owner())
+            && "awaitTermination".equals(methodRef.name())
+            && "(JLjava/util/concurrent/TimeUnit;)Z".equals(methodRef.descriptor());
+    }
+
+    public static boolean isScheduledExecutorServiceShutdownNow(final MethodRef methodRef) {
+        return "java/util/concurrent/ScheduledExecutorService".equals(methodRef.owner())
+            && "shutdownNow".equals(methodRef.name())
+            && "()Ljava/util/List;".equals(methodRef.descriptor());
+    }
+
+    public static boolean isScheduledThreadPoolExecutorShutdown(final MethodRef methodRef) {
+        return "java/util/concurrent/ScheduledThreadPoolExecutor".equals(methodRef.owner())
+            && "shutdown".equals(methodRef.name())
+            && "()V".equals(methodRef.descriptor());
     }
 
     public static int virtualThreadReceiverProducerIndex(

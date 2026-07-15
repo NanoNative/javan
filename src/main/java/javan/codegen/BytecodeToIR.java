@@ -1514,7 +1514,8 @@ public final class BytecodeToIR {
             || kind == StackKind.SOCKET_OUTPUT_STREAM
             || kind == StackKind.VIRTUAL_THREAD_BUILDER
             || kind == StackKind.VIRTUAL_THREAD_FACTORY
-            || kind == StackKind.VIRTUAL_THREAD_EXECUTOR) {
+            || kind == StackKind.VIRTUAL_THREAD_EXECUTOR
+            || kind == StackKind.SCHEDULED_THREAD_POOL_EXECUTOR) {
             objectLocalKinds.put(slot, kind);
             return;
         }
@@ -1988,7 +1989,10 @@ public final class BytecodeToIR {
         if (isStandardCopyReplaceExisting(fieldRef)) {
             return true;
         }
-        return isLinkOptionNoFollowLinks(fieldRef);
+        if (isLinkOptionNoFollowLinks(fieldRef)) {
+            return true;
+        }
+        return isTimeUnitConstant(fieldRef);
     }
 
     static boolean isStandardCopyReplaceExisting(final FieldRef fieldRef) {
@@ -2009,6 +2013,13 @@ public final class BytecodeToIR {
             return false;
         }
         return "Ljava/nio/file/LinkOption;".equals(fieldRef.descriptor());
+    }
+
+    static boolean isTimeUnitConstant(final FieldRef fieldRef) {
+        if (!"java/util/concurrent/TimeUnit".equals(fieldRef.owner())) {
+            return false;
+        }
+        return "Ljava/util/concurrent/TimeUnit;".equals(fieldRef.descriptor());
     }
 
     static boolean isEnumIntrinsic(final Map<String, ClassFile> classes, final MethodRef methodRef) {
@@ -2421,6 +2432,7 @@ public final class BytecodeToIR {
         VIRTUAL_THREAD_BUILDER,
         VIRTUAL_THREAD_FACTORY,
         VIRTUAL_THREAD_EXECUTOR,
+        SCHEDULED_THREAD_POOL_EXECUTOR,
         PRINT_STREAM,
         ERROR_PRINT_STREAM,
         SOCKET_INPUT_STREAM,
@@ -2450,6 +2462,10 @@ public final class BytecodeToIR {
 
         static StackValue virtualThreadExecutor(final IrExpression expression) {
             return new StackValue(StackKind.VIRTUAL_THREAD_EXECUTOR, Optional.empty(), Optional.of(expression));
+        }
+
+        static StackValue scheduledThreadPoolExecutor(final IrExpression expression) {
+            return new StackValue(StackKind.SCHEDULED_THREAD_POOL_EXECUTOR, Optional.empty(), Optional.of(expression));
         }
 
         static StackValue printStream() {

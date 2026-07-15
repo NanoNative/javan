@@ -41,6 +41,37 @@ final class BuildPackagingTest {
     }
 
     @Test
+    void resourceBundlerBundlesEmptyResourceSetFromMissingAndEmptyClassFolders() throws Exception {
+        final Path missing = tempDir.resolve("missing");
+        final Path empty = tempDir.resolve("empty");
+        Files.createDirectories(empty);
+        final ProjectLayout layout = layout(tempDir, tempDir.resolve(".javan"), missing, empty);
+
+        final List<ResourceBundler.ResourceFile> resources = new ResourceBundler().bundle(layout);
+
+        assertThat(resources).isEmpty();
+        assertThat(Files.readString(layout.outputDirectory().resolve("reports/resources.json"))).contains("\"resourceCount\": 0");
+        assertThat(Files.readString(layout.outputDirectory().resolve("reports/resources.md"))).contains("Resource files copied: 0");
+    }
+
+    @Test
+    void resourceBundlerSortsEarlierLexicographicPathAcrossClassFolders() throws Exception {
+        final Path classesA = tempDir.resolve("classes-a");
+        final Path classesB = tempDir.resolve("classes-b");
+        Files.createDirectories(classesA);
+        Files.createDirectories(classesB);
+        Files.writeString(classesA.resolve("z-last.txt"), "z");
+        Files.writeString(classesB.resolve("a-first.txt"), "a");
+
+        final List<ResourceBundler.ResourceFile> resources = new ResourceBundler().collect(
+            layout(tempDir, tempDir.resolve(".javan"), classesA, classesB)
+        );
+
+        assertThat(resources).extracting(ResourceBundler.ResourceFile::path)
+            .containsExactly("a-first.txt", "z-last.txt");
+    }
+
+    @Test
     void jarPackagerCopiesInputJarVerbatim() throws Exception {
         final Path sourceJar = tempDir.resolve("input.jar");
         Files.write(sourceJar, new byte[]{1, 2, 3, 4});

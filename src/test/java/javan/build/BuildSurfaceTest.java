@@ -292,6 +292,42 @@ final class BuildSurfaceTest {
     }
 
     @Test
+    void exportResolverDeduplicatesExactCliAndConfigEntryPoints() throws Exception {
+        final ClassFile api = classFile("com/acme/Api", method(0x0008, "touch", "()V"));
+        Files.writeString(tempDir.resolve("javan.toml"), """
+            [exports]
+            methods = ["com.acme.Api.touch"]
+            """);
+
+        final List<ExportedMethod> exports = new ExportResolver().resolve(
+            Map.of(api.name(), api),
+            tempDir,
+            List.of("com.acme.Api.touch")
+        );
+
+        assertThat(exports).extracting(ExportedMethod::entryPoint)
+            .containsExactly(new EntryPoint("com/acme/Api", "touch", "()V"));
+    }
+
+    @Test
+    void exportResolverKeepsEntriesFromDifferentOwnersWithSameMethodName() throws Exception {
+        final ClassFile left = classFile("com/acme/Left", method(0x0008, "touch", "()V"));
+        final ClassFile right = classFile("com/acme/Right", method(0x0008, "touch", "()V"));
+
+        final List<ExportedMethod> exports = new ExportResolver().resolve(
+            Map.of(left.name(), left, right.name(), right),
+            tempDir,
+            List.of("com.acme.Left.touch", "com.acme.Right.touch")
+        );
+
+        assertThat(exports).extracting(ExportedMethod::entryPoint)
+            .containsExactly(
+                new EntryPoint("com/acme/Left", "touch", "()V"),
+                new EntryPoint("com/acme/Right", "touch", "()V")
+            );
+    }
+
+    @Test
     void exportResolverIgnoresConfigMethodsWithoutArraySyntax() throws Exception {
         final ClassFile api = classFile("com/acme/Api", method(0x0008, "touch", "()V"));
         Files.writeString(tempDir.resolve("javan.toml"), """
@@ -320,6 +356,123 @@ final class BuildSurfaceTest {
             [exports]
             methods = ["com.acme.Api.touch]
             """);
+        assertThatThrownBy(() -> new ExportResolver().resolve(Map.of(api.name(), api), tempDir, List.of()))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Invalid quoted export in javan.toml");
+    }
+
+    @Test
+    void exportResolverRejectsConfigWithMethodsTokenAtEndWithoutAssignment() throws Exception {
+        final ClassFile api = classFile("com/acme/Api", method(0x0008, "touch", "()V"));
+        Files.writeString(tempDir.resolve("javan.toml"), "[exports]%nmethods   ".formatted());
+
+        assertThatThrownBy(() -> new ExportResolver().resolve(Map.of(api.name(), api), tempDir, List.of()))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Library builds require at least one --export or [exports].methods entry in javan.toml");
+    }
+
+    @Test
+    void exportResolverRejectsConfigWithMethodsAssignmentWithoutArrayStart() throws Exception {
+        final ClassFile api = classFile("com/acme/Api", method(0x0008, "touch", "()V"));
+        Files.writeString(tempDir.resolve("javan.toml"), "[exports]%nmethods =   ".formatted());
+
+        assertThatThrownBy(() -> new ExportResolver().resolve(Map.of(api.name(), api), tempDir, List.of()))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Library builds require at least one --export or [exports].methods entry in javan.toml");
+    }
+
+    @Test
+    void exportResolverRejectsConfigWithMethodsTokenFollowedByCarriageReturnAtEnd() throws Exception {
+        final ClassFile api = classFile("com/acme/Api", method(0x0008, "touch", "()V"));
+        Files.writeString(tempDir.resolve("javan.toml"), "[exports]\rmethods\r");
+
+        assertThatThrownBy(() -> new ExportResolver().resolve(Map.of(api.name(), api), tempDir, List.of()))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Library builds require at least one --export or [exports].methods entry in javan.toml");
+    }
+
+    @Test
+    void exportResolverRejectsEmptyConfigFileWithoutMethodsArray() throws Exception {
+        final ClassFile api = classFile("com/acme/Api", method(0x0008, "touch", "()V"));
+        Files.writeString(tempDir.resolve("javan.toml"), "");
+
+        assertThatThrownBy(() -> new ExportResolver().resolve(Map.of(api.name(), api), tempDir, List.of()))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Library builds require at least one --export or [exports].methods entry in javan.toml");
+    }
+
+    @Test
+    void exportResolverSkipsMethodsSubstringInsideLongerIdentifierBeforeRealArray() throws Exception {
+        final ClassFile api = classFile("com/acme/Api", method(0x0008, "touch", "()V"));
+        Files.writeString(tempDir.resolve("javan.toml"), """
+            [exports]
+            methodsExtra = "ignore"
+            methods = ["com.acme.Api.touch"]
+            """);
+
+        final List<ExportedMethod> exports = new ExportResolver().resolve(Map.of(api.name(), api), tempDir, List.of());
+
+        assertThat(exports).extracting(ExportedMethod::entryPoint)
+            .containsExactly(new EntryPoint("com/acme/Api", "touch", "()V"));
+    }
+
+    @Test
+    void exportResolverSkipsMethodsAssignmentWithoutArrayBeforeLaterRealArray() throws Exception {
+        final ClassFile api = classFile("com/acme/Api", method(0x0008, "touch", "()V"));
+        Files.writeString(tempDir.resolve("javan.toml"), """
+            [exports]
+            methods = "ignore"
+            methods = ["com.acme.Api.touch"]
+            """);
+
+        final List<ExportedMethod> exports = new ExportResolver().resolve(Map.of(api.name(), api), tempDir, List.of());
+
+        assertThat(exports).extracting(ExportedMethod::entryPoint)
+            .containsExactly(new EntryPoint("com/acme/Api", "touch", "()V"));
+    }
+
+    @Test
+    void exportResolverReadsConfigMethodsAcrossCarriageReturnWhitespaceAroundEquals() throws Exception {
+        final ClassFile api = classFile("com/acme/Api", method(0x0008, "touch", "()V"));
+        Files.writeString(tempDir.resolve("javan.toml"), "[exports]\nmethods\r=\r[\n\"com.acme.Api.touch\"\n]\n");
+
+        final List<ExportedMethod> exports = new ExportResolver().resolve(Map.of(api.name(), api), tempDir, List.of());
+
+        assertThat(exports).extracting(ExportedMethod::entryPoint)
+            .containsExactly(new EntryPoint("com/acme/Api", "touch", "()V"));
+    }
+
+    @Test
+    void exportResolverReadsConfigMethodsAcrossNewlineWhitespaceAroundEquals() throws Exception {
+        final ClassFile api = classFile("com/acme/Api", method(0x0008, "touch", "()V"));
+        Files.writeString(tempDir.resolve("javan.toml"), "[exports]\nmethods\n=\n[\n\"com.acme.Api.touch\"\n]\n");
+
+        final List<ExportedMethod> exports = new ExportResolver().resolve(Map.of(api.name(), api), tempDir, List.of());
+
+        assertThat(exports).extracting(ExportedMethod::entryPoint)
+            .containsExactly(new EntryPoint("com/acme/Api", "touch", "()V"));
+    }
+
+    @Test
+    void exportResolverReadsConfigMethodsAcrossTabsAndCarriageReturns() throws Exception {
+        final ClassFile api = classFile("com/acme/Api", method(0x0008, "touch", "()V"));
+        Files.writeString(tempDir.resolve("javan.toml"), "[exports]\r\nmethods\t=\t[\r\n  \"com.acme.Api.touch\"\r\n]\r\n");
+
+        final List<ExportedMethod> exports = new ExportResolver().resolve(Map.of(api.name(), api), tempDir, List.of());
+
+        assertThat(exports).extracting(ExportedMethod::entryPoint)
+            .containsExactly(new EntryPoint("com/acme/Api", "touch", "()V"));
+    }
+
+    @Test
+    void exportResolverRejectsConfigQuoteClosedPastMethodsArrayEnd() throws Exception {
+        final ClassFile api = classFile("com/acme/Api", method(0x0008, "touch", "()V"));
+        Files.writeString(tempDir.resolve("javan.toml"), """
+            [exports]
+            methods = ["com.acme.Api.touch]
+            "
+            """);
+
         assertThatThrownBy(() -> new ExportResolver().resolve(Map.of(api.name(), api), tempDir, List.of()))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessage("Invalid quoted export in javan.toml");
@@ -362,9 +515,44 @@ final class BuildSurfaceTest {
     }
 
     @Test
+    void exportResolverRejectsShortDeclarationWithoutQualifiedOwner() {
+        final ClassFile api = classFile("com/acme/Api", method(0x0008, "touch", "()V"));
+
+        assertThatThrownBy(() -> new ExportResolver().resolve(Map.of(api.name(), api), tempDir, List.of("touch")))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Export must look like com.acme.Type.method or com.acme.Type.method(int):int");
+    }
+
+    @Test
+    void exportResolverRejectsExplicitDeclarationWithCloseParenBeforeOpenParen() {
+        final ClassFile api = classFile("com/acme/Api", method(0x0008, "touch", "()V"));
+
+        assertThatThrownBy(() -> new ExportResolver().resolve(Map.of(api.name(), api), tempDir, List.of("com.acme.Api.touch)(:int")))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Invalid export declaration: com.acme.Api.touch)(:int");
+    }
+
+    @Test
+    void exportResolverRejectsExplicitDeclarationWithGapBetweenCloseParenAndColon() {
+        final ClassFile api = classFile("com/acme/Api", method(0x0008, "touch", "()V"));
+
+        assertThatThrownBy(() -> new ExportResolver().resolve(Map.of(api.name(), api), tempDir, List.of("com.acme.Api.touch()x:int")))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Invalid export declaration: com.acme.Api.touch()x:int");
+    }
+
+    @Test
+    void exportResolverRejectsExplicitDeclarationThatStartsWithOpenParen() {
+        assertThatThrownBy(() -> new ExportResolver().resolve(Map.of(), tempDir, List.of("(int):int")))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Invalid export declaration: (int):int");
+    }
+
+    @Test
     void exportResolverRejectsUnsupportedDescriptorTypesFromShortDeclaration() {
         final ClassFile objectReturn = classFile("com/acme/Api", method(0x0008, "touch", "()Ljava/lang/Object;"));
         final ClassFile intArrayReturn = classFile("com/acme/Bytes", method(0x0008, "read", "()[I"));
+        final ClassFile unknownReturn = classFile("com/acme/Weird", method(0x0008, "touch", "()Q"));
 
         assertThatThrownBy(() -> new ExportResolver().resolve(Map.of(objectReturn.name(), objectReturn), tempDir, List.of("com.acme.Api.touch")))
             .isInstanceOf(IllegalArgumentException.class)
@@ -372,6 +560,9 @@ final class BuildSurfaceTest {
         assertThatThrownBy(() -> new ExportResolver().resolve(Map.of(intArrayReturn.name(), intArrayReturn), tempDir, List.of("com.acme.Bytes.read")))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessage("Unsupported export array descriptor: ()[I");
+        assertThatThrownBy(() -> new ExportResolver().resolve(Map.of(unknownReturn.name(), unknownReturn), tempDir, List.of("com.acme.Weird.touch")))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Unsupported export descriptor: ()Q");
     }
 
     @Test
@@ -394,6 +585,45 @@ final class BuildSurfaceTest {
     }
 
     @Test
+    void exportResolverResolvesShortDeclarationForStringDescriptorTypes() throws Exception {
+        final ClassFile api = classFile("com/acme/Text", method(0x0008, "echo", "(Ljava/lang/String;)Ljava/lang/String;"));
+
+        final ExportedMethod export = new ExportResolver().resolve(
+            Map.of(api.name(), api),
+            tempDir,
+            List.of("com.acme.Text.echo")
+        ).getFirst();
+
+        assertThat(export.entryPoint()).isEqualTo(new EntryPoint("com/acme/Text", "echo", "(Ljava/lang/String;)Ljava/lang/String;"));
+        assertThat(export.parameterTypes()).containsExactly(AbiType.STRING);
+        assertThat(export.returnType()).isEqualTo(AbiType.STRING);
+    }
+
+    @Test
+    void exportResolverRejectsArrayDescriptorWithoutComponentType() {
+        final ClassFile broken = classFile("com/acme/Bytes", method(0x0008, "read", "()["));
+
+        assertThatThrownBy(() -> new ExportResolver().resolve(Map.of(broken.name(), broken), tempDir, List.of("com.acme.Bytes.read")))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Unsupported export array descriptor: ()[");
+    }
+
+    @Test
+    void exportResolverResolvesShortDeclarationsForByteCharShortBooleanDescriptors() throws Exception {
+        final ClassFile api = classFile("com/acme/Numbers", method(0x0008, "mix", "(BCSZ)I"));
+
+        final ExportedMethod export = new ExportResolver().resolve(
+            Map.of(api.name(), api),
+            tempDir,
+            List.of("com.acme.Numbers.mix")
+        ).getFirst();
+
+        assertThat(export.entryPoint()).isEqualTo(new EntryPoint("com/acme/Numbers", "mix", "(BCSZ)I"));
+        assertThat(export.parameterTypes()).containsExactly(AbiType.INT, AbiType.INT, AbiType.INT, AbiType.INT);
+        assertThat(export.returnType()).isEqualTo(AbiType.INT);
+    }
+
+    @Test
     void exportResolverResolvesExplicitByteCharShortAndBooleanAsInts() throws Exception {
         final ClassFile api = classFile(
             "com/acme/Numbers",
@@ -408,6 +638,83 @@ final class BuildSurfaceTest {
 
         assertThat(export.parameterTypes()).containsExactly(AbiType.INT, AbiType.INT, AbiType.INT, AbiType.INT);
         assertThat(export.returnType()).isEqualTo(AbiType.INT);
+    }
+
+    @Test
+    void exportResolverResolvesExplicitByteArrayRoundTripTypes() throws Exception {
+        final ClassFile api = classFile("com/acme/Bytes", method(0x0008, "copy", "([B)[B"));
+
+        final ExportedMethod export = new ExportResolver().resolve(
+            Map.of(api.name(), api),
+            tempDir,
+            List.of("com.acme.Bytes.copy(byte[]):byte[]")
+        ).getFirst();
+
+        assertThat(export.entryPoint()).isEqualTo(new EntryPoint("com/acme/Bytes", "copy", "([B)[B"));
+        assertThat(export.parameterTypes()).containsExactly(AbiType.BYTE_ARRAY);
+        assertThat(export.returnType()).isEqualTo(AbiType.BYTE_ARRAY);
+    }
+
+    @Test
+    void exportResolverResolvesShortDeclarationForByteCharShortBooleanAndByteArrayDescriptors() throws Exception {
+        final ClassFile api = classFile(
+            "com/acme/Api",
+            method(0x0008, "mix", "(IIII[B)[B")
+        );
+
+        final ExportedMethod export = new ExportResolver().resolve(
+            Map.of(api.name(), api),
+            tempDir,
+            List.of("com.acme.Api.mix")
+        ).getFirst();
+
+        assertThat(export.entryPoint()).isEqualTo(new EntryPoint("com/acme/Api", "mix", "(IIII[B)[B"));
+        assertThat(export.parameterTypes()).containsExactly(AbiType.INT, AbiType.INT, AbiType.INT, AbiType.INT, AbiType.BYTE_ARRAY);
+        assertThat(export.returnType()).isEqualTo(AbiType.BYTE_ARRAY);
+    }
+
+    @Test
+    void exportResolverKeepsOverloadsFromCliAndConfigWhenDescriptorsDiffer() throws Exception {
+        final ClassFile api = classFile(
+            "com/acme/Api",
+            method(0x0008, "touch", "()V"),
+            method(0x0008, "touch", "(I)I")
+        );
+        Files.writeString(tempDir.resolve("javan.toml"), """
+            [exports]
+            methods = ["com.acme.Api.touch(int):int"]
+            """);
+
+        final List<ExportedMethod> exports = new ExportResolver().resolve(
+            Map.of(api.name(), api),
+            tempDir,
+            List.of("com.acme.Api.touch():void")
+        );
+
+        assertThat(exports).extracting(ExportedMethod::entryPoint)
+            .containsExactly(
+                new EntryPoint("com/acme/Api", "touch", "()V"),
+                new EntryPoint("com/acme/Api", "touch", "(I)I")
+            );
+    }
+
+    @Test
+    void exportResolverRejectsStaticMethodWithoutBytecodeEvenWhenItIsNotNative() {
+        final ClassFile api = new ClassFile(
+            69,
+            "com/acme/Api",
+            "java/lang/Object",
+            0,
+            List.of(),
+            List.of(),
+            List.of(new MethodInfo(0x0008, "touch", "()V", Optional.empty())),
+            Path.of("Api.class"),
+            true
+        );
+
+        assertThatThrownBy(() -> new ExportResolver().resolve(Map.of(api.name(), api), tempDir, List.of("com.acme.Api.touch")))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Unsupported export com.acme.Api.touch()V: method must have Java bytecode");
     }
 
     @Test

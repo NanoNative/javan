@@ -2,7 +2,6 @@ package javan.verify;
 
 import javan.analysis.EntryPoint;
 import javan.analysis.VirtualThreadInvokePatterns;
-import javan.analysis.VirtualThreadInvokePatterns;
 import javan.classfile.ClassFile;
 import javan.classfile.CodeAttribute;
 import javan.classfile.CodeException;
@@ -316,7 +315,8 @@ public final class StaticVerifier {
         }
         final Optional<MethodRef> methodRef = instruction.methodRef();
         if (methodRef.isPresent()) {
-            final MethodRef target = methodRef.orElseThrow();
+            final MethodRef target = JdkCallSupport.normalizeInheritedSupportedJdkCall(classes, methodRef.orElseThrow())
+                .orElse(methodRef.orElseThrow());
             final int unsupportedMonitorMethod = unsupportedMonitorMethod(target) ? 1 : 0;
             final int unsupportedConcurrencyApi = unsupportedConcurrencyRuntimeApi(
                 classes,
@@ -1167,6 +1167,9 @@ public final class StaticVerifier {
         if (isSupportedDirectVirtualThreadExecutorFlow(classes, instructions, instructionIndex, methodRef)) {
             return false;
         }
+        if (isSupportedDirectScheduledThreadPoolExecutorFlow(classes, instructions, instructionIndex, methodRef)) {
+            return false;
+        }
         if (exactVirtualThreadWrapperMethod && isVirtualThreadWrapperInternalCall(methodRef)) {
             return false;
         }
@@ -1339,6 +1342,20 @@ public final class StaticVerifier {
         }
         if (isVirtualThreadExecutorObservationMethod(methodRef)) {
             return supportedVirtualThreadExecutorObservationReceiver(classes, instructions, instructionIndex, methodRef);
+        }
+        return false;
+    }
+
+    private static boolean isSupportedDirectScheduledThreadPoolExecutorFlow(
+        final Map<String, ClassFile> classes,
+        final List<Instruction> instructions,
+        final int instructionIndex,
+        final MethodRef methodRef
+    ) {
+        if (isExecutorServiceShutdown(methodRef)
+            || isExecutorServiceShutdownNow(methodRef)
+            || isExecutorServiceAwaitTermination(methodRef)) {
+            return supportedScheduledThreadPoolExecutorReceiver(classes, instructions, instructionIndex, methodRef);
         }
         return false;
     }
@@ -1791,6 +1808,74 @@ public final class StaticVerifier {
         return supportedVirtualThreadExecutorProducer(classes, instructions, receiverIndex);
     }
 
+    private static boolean supportedScheduledThreadPoolExecutorReceiver(
+        final Map<String, ClassFile> classes,
+        final List<Instruction> instructions,
+        final int instructionIndex,
+        final MethodRef methodRef
+    ) {
+        final int receiverIndex;
+        if (isExecutorServiceShutdown(methodRef) || isExecutorServiceShutdownNow(methodRef)) {
+            receiverIndex = instructionIndex - 1;
+        } else if (isExecutorServiceAwaitTermination(methodRef)) {
+            receiverIndex = instructionIndex - 3;
+        } else {
+            return false;
+        }
+        if (receiverIndex < 0) {
+            return false;
+        }
+        return supportedScheduledThreadPoolExecutorProducer(classes, instructions, receiverIndex);
+    }
+
+    private static boolean supportedScheduledThreadPoolExecutorProducer(
+        final Map<String, ClassFile> classes,
+        final List<Instruction> instructions,
+        final int producerIndex
+    ) {
+        final int transparentProducerIndex = VirtualThreadInvokePatterns.transparentReferenceProducerIndex(instructions, producerIndex);
+        if (transparentProducerIndex < 0) {
+            return false;
+        }
+        final Instruction producer = instructions.get(transparentProducerIndex);
+        final Optional<MethodRef> methodRef = producer.methodRef();
+        if (methodRef.isPresent()
+            && producer.opcode() == 183
+            && isSupportedScheduledThreadPoolExecutorConstructor(classes, methodRef.orElseThrow())
+            && supportedScheduledThreadPoolExecutorConstruction(classes, instructions, transparentProducerIndex)) {
+            return true;
+        }
+        final int loadSlot = localLoadSlot(producer);
+        if (loadSlot < 0) {
+            return false;
+        }
+        final int storeIndex = VirtualThreadInvokePatterns.previousLocalStoreIndex(instructions, transparentProducerIndex - 1, loadSlot);
+        if (storeIndex < 0) {
+            return false;
+        }
+        return supportedScheduledThreadPoolExecutorProducer(classes, instructions, storeIndex - 1);
+    }
+
+    private static boolean supportedScheduledThreadPoolExecutorConstruction(
+        final Map<String, ClassFile> classes,
+        final List<Instruction> instructions,
+        final int constructorIndex
+    ) {
+        int sawDuplicateReceiver = 0;
+        for (int index = constructorIndex - 1; index >= 0; index--) {
+            final Instruction candidate = instructions.get(index);
+            if (candidate.opcode() == 89) {
+                sawDuplicateReceiver = 1;
+                continue;
+            }
+            if (candidate.opcode() == 187) {
+                return sawDuplicateReceiver == 1
+                    && isAssignableTo(classes, candidate.className().orElse(""), "java/util/concurrent/ScheduledThreadPoolExecutor");
+            }
+        }
+        return false;
+    }
+
     private static int observationReceiverProducerIndex(
         final List<Instruction> instructions,
         final int instructionIndex,
@@ -1984,8 +2069,39 @@ public final class StaticVerifier {
         return VirtualThreadInvokePatterns.isExecutorServiceClose(methodRef);
     }
 
+    private static boolean isExecutorServiceAwaitTermination(final MethodRef methodRef) {
+        return VirtualThreadInvokePatterns.isExecutorServiceAwaitTermination(methodRef);
+    }
+
+    private static boolean isExecutorServiceShutdownNow(final MethodRef methodRef) {
+        return VirtualThreadInvokePatterns.isExecutorServiceShutdownNow(methodRef);
+    }
+
     private static boolean isFutureCancel(final MethodRef methodRef) {
         return VirtualThreadInvokePatterns.isFutureCancel(methodRef);
+    }
+
+    private static boolean isScheduledThreadPoolExecutorConstructor(final MethodRef methodRef) {
+        if (!"java/util/concurrent/ScheduledThreadPoolExecutor".equals(methodRef.owner())) {
+            return false;
+        }
+        if (!"<init>".equals(methodRef.name())) {
+            return false;
+        }
+        return "(I)V".equals(methodRef.descriptor())
+            || "(ILjava/util/concurrent/ThreadFactory;Ljava/util/concurrent/RejectedExecutionHandler;)V"
+            .equals(methodRef.descriptor());
+    }
+
+    private static boolean isSupportedScheduledThreadPoolExecutorConstructor(
+        final Map<String, ClassFile> classes,
+        final MethodRef methodRef
+    ) {
+        if (isScheduledThreadPoolExecutorConstructor(methodRef)) {
+            return true;
+        }
+        return "<init>".equals(methodRef.name())
+            && isAssignableTo(classes, methodRef.owner(), "java/util/concurrent/ScheduledThreadPoolExecutor");
     }
 
     private static boolean isVirtualThreadBuilderOwner(final String owner) {
@@ -2120,6 +2236,12 @@ public final class StaticVerifier {
             }
             if ("shutdown".equals(methodRef.name())) {
                 return "ExecutorService.shutdown()";
+            }
+            if ("awaitTermination".equals(methodRef.name())) {
+                return "ExecutorService.awaitTermination(long,TimeUnit)";
+            }
+            if ("shutdownNow".equals(methodRef.name())) {
+                return "ExecutorService.shutdownNow()";
             }
             if ("close".equals(methodRef.name())) {
                 return "ExecutorService.close()";

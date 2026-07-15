@@ -4823,7 +4823,132 @@ final class BytecodeToIRTest {
             new CallGraph(entryPoint, List.of(entryPoint, taskRun), List.of()),
             SourceLineIndex.empty()
         )).isInstanceOf(DiagnosticException.class)
-            .hasMessageContaining("Expected virtual-thread executor receiver value on the bytecode stack");
+            .hasMessageContaining("bytecode is not implemented by native code generation");
+    }
+
+    @Test
+    void lowerProgramRejectsUnknownExecutorReceiverForVirtualThreadSubmit() {
+        assertUnknownExecutorReceiverRejected(method(
+            0x0008,
+            "main",
+            "(Ljava/util/concurrent/ExecutorService;)V",
+            3,
+            1,
+            plain(0, 42, "aload_0"),
+            classInstruction(1, 187, "new", "com/acme/Task"),
+            plain(2, 89, "dup"),
+            invokeSpecial(3, new MethodRef("com/acme/Task", "<init>", "()V")),
+            invokeInterface(4, new MethodRef("java/util/concurrent/ExecutorService", "submit", "(Ljava/lang/Runnable;)Ljava/util/concurrent/Future;")),
+            plain(5, 87, "pop"),
+            plain(6, 177, "return")
+        ));
+    }
+
+    @Test
+    void lowerProgramRejectsUnknownExecutorReceiverForVirtualThreadShutdown() {
+        assertUnknownExecutorReceiverRejected(method(
+            0x0008,
+            "main",
+            "(Ljava/util/concurrent/ExecutorService;)V",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeInterface(1, new MethodRef("java/util/concurrent/ExecutorService", "shutdown", "()V")),
+            plain(2, 177, "return")
+        ));
+    }
+
+    @Test
+    void lowerProgramRejectsUnknownExecutorReceiverForVirtualThreadClose() {
+        assertUnknownExecutorReceiverRejected(method(
+            0x0008,
+            "main",
+            "(Ljava/util/concurrent/ExecutorService;)V",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeInterface(1, new MethodRef("java/util/concurrent/ExecutorService", "close", "()V")),
+            plain(2, 177, "return")
+        ));
+    }
+
+    @Test
+    void lowerProgramRejectsUnknownExecutorReceiverForScheduledAwaitTermination() {
+        assertUnknownExecutorReceiverRejected(method(
+            0x0008,
+            "main",
+            "(Ljava/util/concurrent/ExecutorService;)V",
+            3,
+            1,
+            plain(0, 42, "aload_0"),
+            plain(1, 9, "lconst_0"),
+            getStatic(2, new FieldRef("java/util/concurrent/TimeUnit", "SECONDS", "Ljava/util/concurrent/TimeUnit;")),
+            invokeInterface(3, new MethodRef("java/util/concurrent/ExecutorService", "awaitTermination", "(JLjava/util/concurrent/TimeUnit;)Z")),
+            plain(4, 87, "pop"),
+            plain(5, 177, "return")
+        ));
+    }
+
+    @Test
+    void lowerProgramRejectsUnknownExecutorReceiverForScheduledSchedule() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/concurrent/ScheduledExecutorService;Ljava/lang/Runnable;)V",
+            5,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            plain(2, 9, "lconst_0"),
+            getStatic(3, new FieldRef("java/util/concurrent/TimeUnit", "SECONDS", "Ljava/util/concurrent/TimeUnit;")),
+            invokeInterface(4, new MethodRef("java/util/concurrent/ScheduledExecutorService", "schedule", "(Ljava/lang/Runnable;JLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;")),
+            plain(5, 87, "pop"),
+            plain(6, 177, "return")
+        )))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN049");
+                assertThat(exception.diagnostic().subject()).isEqualTo("invokeinterface java/util/concurrent/ScheduledExecutorService.schedule(Ljava/lang/Runnable;JLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;");
+                assertThat(exception.diagnostic().reason()).isEqualTo("Expected scheduled thread pool executor receiver value on the bytecode stack, but found object.");
+            });
+    }
+
+    @Test
+    void lowerProgramRejectsUnknownExecutorReceiverForScheduledScheduleAtFixedRate() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/concurrent/ScheduledExecutorService;Ljava/lang/Runnable;)V",
+            8,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            plain(2, 9, "lconst_0"),
+            plain(3, 10, "lconst_1"),
+            getStatic(4, new FieldRef("java/util/concurrent/TimeUnit", "SECONDS", "Ljava/util/concurrent/TimeUnit;")),
+            invokeInterface(5, new MethodRef("java/util/concurrent/ScheduledExecutorService", "scheduleAtFixedRate", "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;")),
+            plain(6, 87, "pop"),
+            plain(7, 177, "return")
+        )))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN049");
+                assertThat(exception.diagnostic().subject()).isEqualTo("invokeinterface java/util/concurrent/ScheduledExecutorService.scheduleAtFixedRate(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;");
+                assertThat(exception.diagnostic().reason()).isEqualTo("Expected scheduled thread pool executor receiver value on the bytecode stack, but found object.");
+            });
+    }
+
+    @Test
+    void lowerProgramRejectsUnknownExecutorReceiverForScheduledShutdownNow() {
+        assertUnknownExecutorReceiverRejected(method(
+            0x0008,
+            "main",
+            "(Ljava/util/concurrent/ExecutorService;)V",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeInterface(1, new MethodRef("java/util/concurrent/ExecutorService", "shutdownNow", "()Ljava/util/List;")),
+            plain(2, 87, "pop"),
+            plain(3, 177, "return")
+        ));
     }
 
     @Test
@@ -4902,6 +5027,173 @@ final class BytecodeToIRTest {
         final EntryPoint taskRun = new EntryPoint("com/acme/Task", "run", "()V");
         final Map<String, ClassFile> classes = new LinkedHashMap<>();
         classes.put("com/acme/Main", classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(main)));
+        classes.put(task.name(), task);
+
+        final IrProgram program = new BytecodeToIR().lower(
+            classes,
+            new CallGraph(entryPoint, List.of(entryPoint, taskRun), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.dispatches()).extracting(IrDispatch::symbol).contains("javan_dispatch_java_lang_Runnable_run___V");
+    }
+
+    @Test
+    void lowerProgramAddsRunnableDispatchForScheduledThreadPoolExecutorSchedule() {
+        final MethodInfo main = method(
+            0x0008,
+            "main",
+            "()V",
+            5,
+            1,
+            classInstruction(0, 187, "new", "java/util/concurrent/ScheduledThreadPoolExecutor"),
+            plain(1, 89, "dup"),
+            plain(2, 4, "iconst_1"),
+            invokeSpecial(3, new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+            plain(4, 75, "astore_0"),
+            plain(5, 42, "aload_0"),
+            classInstruction(6, 187, "new", "com/acme/Task"),
+            plain(7, 89, "dup"),
+            invokeSpecial(8, new MethodRef("com/acme/Task", "<init>", "()V")),
+            plain(9, 9, "lconst_0"),
+            getStatic(10, new FieldRef("java/util/concurrent/TimeUnit", "MILLISECONDS", "Ljava/util/concurrent/TimeUnit;")),
+            invokeVirtual(11, new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "schedule", "(Ljava/lang/Runnable;JLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;")),
+            plain(12, 87, "pop"),
+            plain(13, 177, "return")
+        );
+        final ClassFile task = classFile(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            List.of(),
+            List.of(
+                method(0, "<init>", "()V", 0, 1, plain(0, 177, "return")),
+                method(0, "run", "()V", 0, 1, plain(0, 177, "return"))
+            )
+        );
+        final EntryPoint entryPoint = new EntryPoint("com/acme/Main", "main", "()V");
+        final EntryPoint taskRun = new EntryPoint("com/acme/Task", "run", "()V");
+        final Map<String, ClassFile> classes = new LinkedHashMap<>();
+        classes.put("com/acme/Main", classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(main)));
+        classes.put(task.name(), task);
+
+        final IrProgram program = new BytecodeToIR().lower(
+            classes,
+            new CallGraph(entryPoint, List.of(entryPoint, taskRun), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.dispatches()).extracting(IrDispatch::symbol).contains("javan_dispatch_java_lang_Runnable_run___V");
+    }
+
+    @Test
+    void lowerProgramAddsRunnableDispatchForScheduledExecutorServiceScheduleAtFixedRate() {
+        final MethodInfo main = method(
+            0x0008,
+            "main",
+            "()V",
+            8,
+            1,
+            classInstruction(0, 187, "new", "java/util/concurrent/ScheduledThreadPoolExecutor"),
+            plain(1, 89, "dup"),
+            plain(2, 4, "iconst_1"),
+            invokeSpecial(3, new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+            plain(4, 75, "astore_0"),
+            plain(5, 42, "aload_0"),
+            plain(6, 76, "astore_1"),
+            plain(7, 43, "aload_1"),
+            classInstruction(8, 187, "new", "com/acme/Task"),
+            plain(9, 89, "dup"),
+            invokeSpecial(10, new MethodRef("com/acme/Task", "<init>", "()V")),
+            plain(11, 9, "lconst_0"),
+            plain(12, 10, "lconst_1"),
+            getStatic(13, new FieldRef("java/util/concurrent/TimeUnit", "SECONDS", "Ljava/util/concurrent/TimeUnit;")),
+            invokeInterface(14, new MethodRef("java/util/concurrent/ScheduledExecutorService", "scheduleAtFixedRate", "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;")),
+            plain(15, 87, "pop"),
+            plain(16, 177, "return")
+        );
+        final ClassFile task = classFile(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            List.of(),
+            List.of(
+                method(0, "<init>", "()V", 0, 1, plain(0, 177, "return")),
+                method(0, "run", "()V", 0, 1, plain(0, 177, "return"))
+            )
+        );
+        final EntryPoint entryPoint = new EntryPoint("com/acme/Main", "main", "()V");
+        final EntryPoint taskRun = new EntryPoint("com/acme/Task", "run", "()V");
+        final Map<String, ClassFile> classes = new LinkedHashMap<>();
+        classes.put("com/acme/Main", classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(main)));
+        classes.put(task.name(), task);
+
+        final IrProgram program = new BytecodeToIR().lower(
+            classes,
+            new CallGraph(entryPoint, List.of(entryPoint, taskRun), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.dispatches()).extracting(IrDispatch::symbol).contains("javan_dispatch_java_lang_Runnable_run___V");
+    }
+
+    @Test
+    void lowerProgramAddsRunnableDispatchForInheritedScheduledThreadPoolExecutorScheduleAtFixedRate() {
+        final MethodInfo main = method(
+            0x0008,
+            "main",
+            "()V",
+            8,
+            1,
+            classInstruction(0, 187, "new", "com/acme/Scheduler"),
+            plain(1, 89, "dup"),
+            plain(2, 4, "iconst_1"),
+            invokeSpecial(3, new MethodRef("com/acme/Scheduler", "<init>", "(I)V")),
+            plain(4, 75, "astore_0"),
+            plain(5, 42, "aload_0"),
+            classInstruction(6, 187, "new", "com/acme/Task"),
+            plain(7, 89, "dup"),
+            invokeSpecial(8, new MethodRef("com/acme/Task", "<init>", "()V")),
+            plain(9, 9, "lconst_0"),
+            plain(10, 10, "lconst_1"),
+            getStatic(11, new FieldRef("java/util/concurrent/TimeUnit", "SECONDS", "Ljava/util/concurrent/TimeUnit;")),
+            invokeVirtual(12, new MethodRef("com/acme/Scheduler", "scheduleAtFixedRate", "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;")),
+            plain(13, 87, "pop"),
+            plain(14, 177, "return")
+        );
+        final ClassFile scheduler = classFile(
+            "com/acme/Scheduler",
+            "java/util/concurrent/ScheduledThreadPoolExecutor",
+            0,
+            List.of(),
+            List.of(),
+            List.of(
+                method(0, "<init>", "(I)V", 2, 2,
+                    plain(0, 42, "aload_0"),
+                    plain(1, 27, "iload_1"),
+                    invokeSpecial(2, new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+                    plain(3, 177, "return")
+                )
+            )
+        );
+        final ClassFile task = classFile(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            List.of(),
+            List.of(
+                method(0, "<init>", "()V", 0, 1, plain(0, 177, "return")),
+                method(0, "run", "()V", 0, 1, plain(0, 177, "return"))
+            )
+        );
+        final EntryPoint entryPoint = new EntryPoint("com/acme/Main", "main", "()V");
+        final EntryPoint taskRun = new EntryPoint("com/acme/Task", "run", "()V");
+        final Map<String, ClassFile> classes = new LinkedHashMap<>();
+        classes.put("com/acme/Main", classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(main)));
+        classes.put(scheduler.name(), scheduler);
         classes.put(task.name(), task);
 
         final IrProgram program = new BytecodeToIR().lower(
@@ -5772,6 +6064,57 @@ final class BytecodeToIRTest {
                         ),
                         IrExpression.objectLocal("arg0")
                     )
+                )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersThreadOfVirtualBuilderFactoryNewThreadViaStaticField() {
+        final MethodInfo main = method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Runnable;)Ljava/lang/Thread;",
+            2,
+            1,
+            invokeStatic(0, new MethodRef("java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;")),
+            invokeInterface(1, new MethodRef("java/lang/Thread$Builder$OfVirtual", "factory", "()Ljava/util/concurrent/ThreadFactory;")),
+            fieldInstruction(2, 179, "putstatic", new FieldRef("com/acme/Main", "FACTORY", "Ljava/util/concurrent/ThreadFactory;")),
+            getStatic(3, new FieldRef("com/acme/Main", "FACTORY", "Ljava/util/concurrent/ThreadFactory;")),
+            plain(4, 42, "aload_0"),
+            invokeInterface(5, new MethodRef("java/util/concurrent/ThreadFactory", "newThread", "(Ljava/lang/Runnable;)Ljava/lang/Thread;")),
+            plain(6, 176, "areturn")
+        );
+        final ClassFile mainClass = classFile(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            List.of(new FieldInfo(0x0008, "FACTORY", "Ljava/util/concurrent/ThreadFactory;")),
+            List.of(main)
+        );
+
+        final EntryPoint entryPoint = new EntryPoint("com/acme/Main", "main", "(Ljava/lang/Runnable;)Ljava/lang/Thread;");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(mainClass.name(), mainClass),
+            new CallGraph(entryPoint, List.of(entryPoint), List.of())
+        );
+
+        assertThat(program.functions().getFirst().instructions()).containsExactly(
+            IrInstruction.assignStaticFieldObject(
+                "com/acme/Main",
+                "FACTORY",
+                IrExpression.objectCall(
+                    "javan_virtual_thread_builder_factory",
+                    List.of(IrExpression.objectCall("javan_virtual_thread_builder_new", List.of()))
+                )
+            ),
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_virtual_thread_factory_new_thread",
+                    List.of(IrExpression.objectStaticField("com/acme/Main", "FACTORY"), IrExpression.objectLocal("arg0"))
                 )
             ),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
@@ -7065,6 +7408,25 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).containsExactly(
             IrInstruction.assignObject("object0", IrExpression.objectCall("javan_http_response_body", List.of(IrExpression.objectLocal("arg0")))),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersHttpResponseStatusCodeInterfaceCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/http/HttpResponse;)I",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeInterface(1, new MethodRef("java/net/http/HttpResponse", "statusCode", "()I")),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignInt("int0", IrExpression.intCall("javan_http_response_status_code", List.of(IrExpression.objectLocal("arg0")))),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
         );
     }
 
@@ -15094,5 +15456,30 @@ final class BytecodeToIRTest {
             Optional.empty(),
             Optional.empty()
         );
+    }
+
+    private static void assertUnknownExecutorReceiverRejected(final MethodInfo main) {
+        final ClassFile task = classFile(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            List.of(),
+            List.of(
+                method(0, "<init>", "()V", 0, 1, plain(0, 177, "return")),
+                method(0, "run", "()V", 0, 1, plain(0, 177, "return"))
+            )
+        );
+        final EntryPoint entryPoint = new EntryPoint("com/acme/Main", "main", main.descriptor());
+        final Map<String, ClassFile> classes = new LinkedHashMap<>();
+        classes.put("com/acme/Main", classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(main)));
+        classes.put(task.name(), task);
+
+        assertThatThrownBy(() -> new BytecodeToIR().lower(
+            classes,
+            new CallGraph(entryPoint, List.of(entryPoint), List.of()),
+            SourceLineIndex.empty()
+        )).isInstanceOf(DiagnosticException.class)
+            .hasMessageContaining("bytecode is not implemented by native code generation");
     }
 }

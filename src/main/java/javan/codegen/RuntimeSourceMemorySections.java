@@ -138,6 +138,7 @@ final class RuntimeSourceMemorySections {
             int reserved0;
             void* thread_factory;
             void* rejected_execution_handler;
+            javan_object_list* threads;
         } javan_scheduled_thread_pool_executor_state;
 
         typedef struct {
@@ -2001,7 +2002,11 @@ final class RuntimeSourceMemorySections {
             int virtual_thread;
             int daemon;
             int park_permit;
+            int schedule_mode;
+            int scheduled_first_run_started;
             char* name;
+            long long scheduled_initial_delay_nanos;
+            long long scheduled_period_nanos;
             #if defined(_WIN32)
             void* native_handle;
             CONDITION_VARIABLE native_completion_cond;
@@ -2014,6 +2019,7 @@ final class RuntimeSourceMemorySections {
             int native_sync_initialized;
             #endif
             void* target;
+            void* scheduled_executor;
             void* thread_locals;
         } javan_thread;
 
@@ -2339,7 +2345,15 @@ final class RuntimeSourceMemorySections {
         }
 
         void* javan_scheduled_thread_pool_executor_new(void) {
-            void* executor_value = javan_alloc(sizeof(javan_scheduled_thread_pool_executor_state));
+            void* list_value = NULL;
+            void* executor_value = NULL;
+            void** roots[] = {
+                (void**) &list_value,
+                (void**) &executor_value
+            };
+            javan_root_frame_push(roots, 2);
+            list_value = javan_list_new_with_capacity(0, 0);
+            executor_value = javan_alloc(sizeof(javan_scheduled_thread_pool_executor_state));
             javan_scheduled_thread_pool_executor_state* state = (javan_scheduled_thread_pool_executor_state*) executor_value;
             state->magic = JAVAN_SCHEDULED_THREAD_POOL_EXECUTOR_MAGIC;
             state->core_pool_size = 0;
@@ -2347,7 +2361,9 @@ final class RuntimeSourceMemorySections {
             state->reserved0 = 0;
             state->thread_factory = NULL;
             state->rejected_execution_handler = NULL;
+            state->threads = (javan_object_list*) list_value;
             javan_update_runtime_allocation_kind(executor_value, JAVAN_RUNTIME_KIND_SCHEDULED_THREAD_POOL_EXECUTOR);
+            javan_root_frame_pop(roots);
             return executor_value;
         }
 
@@ -2504,7 +2520,11 @@ final class RuntimeSourceMemorySections {
             object->virtual_thread = 0;
             object->daemon = 0;
             object->park_permit = 0;
+            object->schedule_mode = 0;
+            object->scheduled_first_run_started = 0;
             object->name = NULL;
+            object->scheduled_initial_delay_nanos = 0LL;
+            object->scheduled_period_nanos = 0LL;
             #if defined(_WIN32)
             object->native_handle = NULL;
             InitializeConditionVariable(&object->native_completion_cond);
@@ -2522,6 +2542,7 @@ final class RuntimeSourceMemorySections {
             object->native_sync_initialized = 1;
             #endif
             object->target = NULL;
+            object->scheduled_executor = NULL;
             object->thread_locals = NULL;
             javan_register_object((void*) object, JAVAN_TYPE_JAVA_LANG_THREAD);
             void* rooted_object = (void*) object;
@@ -2896,6 +2917,8 @@ final class RuntimeSourceMemorySections {
             thread->completed = 1;
             thread->park_permit = 0;
             thread->target = NULL;
+            thread->scheduled_first_run_started = 0;
+            thread->scheduled_executor = NULL;
             thread->thread_locals = NULL;
             javan_profile_thread_completion_count_value++;
         }
@@ -3161,13 +3184,111 @@ final class RuntimeSourceMemorySections {
             javan_runtime_lock_leave();
         }
 
+        static long long javan_time_unit_to_nanos(void* unit, long long value) {
+            const char* name = (const char*) unit;
+            if (name == NULL) {
+                javan_panic("unsupported TimeUnit");
+            }
+            if (value < 0LL) {
+                javan_panic("negative schedule duration");
+            }
+            if (javan_string_equals(name, "NANOSECONDS")) {
+                return value;
+            }
+            if (javan_string_equals(name, "MICROSECONDS")) {
+                return value * 1000LL;
+            }
+            if (javan_string_equals(name, "MILLISECONDS")) {
+                return value * 1000000LL;
+            }
+            if (javan_string_equals(name, "SECONDS")) {
+                return value * 1000000000LL;
+            }
+            if (javan_string_equals(name, "MINUTES")) {
+                return value * 60LL * 1000000000LL;
+            }
+            if (javan_string_equals(name, "HOURS")) {
+                return value * 3600LL * 1000000000LL;
+            }
+            if (javan_string_equals(name, "DAYS")) {
+                return value * 86400LL * 1000000000LL;
+            }
+            javan_panic("unsupported TimeUnit");
+            return 0LL;
+        }
+
+        static int javan_thread_scheduler_closed(javan_thread* thread) {
+            if (thread == NULL || thread->schedule_mode != 2 || thread->scheduled_executor == NULL) {
+                return 0;
+            }
+            return javan_scheduled_thread_pool_executor_checked(thread->scheduled_executor)->closed != 0;
+        }
+
+        static int javan_thread_sleep_nanos_interruptible(javan_thread* thread, long long nanos) {
+            if (nanos <= 0LL) {
+                return 0;
+            }
+            long long started = javan_system_nano_time();
+            while (1) {
+                if (javan_thread_current_interrupted_peek() != 0) {
+                    (void) javan_thread_interrupted();
+                    return 1;
+                }
+                if (javan_thread_scheduler_closed(thread) != 0) {
+                    return 2;
+                }
+                long long elapsed = javan_system_nano_time() - started;
+                if (elapsed >= nanos) {
+                    return 0;
+                }
+                long long remaining = nanos - elapsed;
+                long long chunk_nanos = remaining > 5000000LL ? 5000000LL : remaining;
+                if (chunk_nanos <= 0LL) {
+                    return 0;
+                }
+                javan_sleep_micros((unsigned long) ((chunk_nanos + 999LL) / 1000LL));
+            }
+        }
+
         static void javan_thread_run_registered_target(void* value) {
             javan_thread* thread = javan_require_thread(value);
             void* target = thread->target;
             void** javan_thread_start_roots[] = { &value, &target };
             javan_root_frame_push(javan_thread_start_roots, 2);
-            if (target != NULL) {
-                javan_thread_run_target(target);
+            if (thread->schedule_mode == 0) {
+                if (target != NULL) {
+                    javan_thread_run_target(target);
+                }
+            } else {
+                long long next_fire = javan_system_nano_time() + thread->scheduled_initial_delay_nanos;
+                if (thread->scheduled_initial_delay_nanos > 0LL
+                    && javan_thread_sleep_nanos_interruptible(thread, thread->scheduled_initial_delay_nanos) != 0) {
+                    if (javan_root_frames_value != NULL && javan_root_frames_value->roots == javan_thread_start_roots) {
+                        javan_root_frame_pop(javan_thread_start_roots);
+                    }
+                    return;
+                }
+                while (1) {
+                    if (javan_thread_scheduler_closed(thread) != 0) {
+                        break;
+                    }
+                    if (target != NULL) {
+                        thread->scheduled_first_run_started = 1;
+                        javan_thread_run_target(target);
+                    }
+                    if (thread->schedule_mode != 2 || thread->scheduled_period_nanos <= 0LL) {
+                        break;
+                    }
+                    if (javan_thread_current_interrupted_peek() != 0) {
+                        (void) javan_thread_interrupted();
+                        break;
+                    }
+                    next_fire += thread->scheduled_period_nanos;
+                    long long remaining = next_fire - javan_system_nano_time();
+                    if (remaining > 0LL && javan_thread_sleep_nanos_interruptible(thread, remaining) != 0) {
+                        break;
+                    }
+                }
             }
             if (javan_root_frames_value != NULL && javan_root_frames_value->roots == javan_thread_start_roots) {
                 javan_root_frame_pop(javan_thread_start_roots);
@@ -3461,6 +3582,152 @@ final class RuntimeSourceMemorySections {
             #endif
         }
 
+        static void javan_thread_set_scheduled_task(
+            void* value,
+            void* scheduled_executor,
+            int schedule_mode,
+            long long initial_delay_nanos,
+            long long period_nanos
+        ) {
+            javan_thread* thread = javan_require_thread(value);
+            thread->scheduled_executor = scheduled_executor;
+            thread->schedule_mode = schedule_mode;
+            thread->scheduled_first_run_started = 0;
+            thread->scheduled_initial_delay_nanos = initial_delay_nanos;
+            thread->scheduled_period_nanos = period_nanos;
+        }
+
+        void* javan_scheduled_thread_pool_executor_schedule(void* value, void* runnable, long long delay, void* unit) {
+            void* executor_root = value;
+            void* runnable_root = runnable;
+            void* unit_root = unit;
+            void* thread_value = NULL;
+            void** roots[] = {
+                (void**) &executor_root,
+                (void**) &runnable_root,
+                (void**) &unit_root,
+                (void**) &thread_value
+            };
+            javan_root_frame_push(roots, 4);
+            javan_scheduled_thread_pool_executor_state* state = javan_scheduled_thread_pool_executor_checked(executor_root);
+            if (state->closed != 0) {
+                javan_panic("scheduled thread pool executor is closed");
+            }
+            if (state->thread_factory != NULL) {
+                thread_value = javan_virtual_thread_factory_new_thread(state->thread_factory, runnable_root);
+            } else {
+                thread_value = javan_thread_new_virtual();
+                javan_thread_set_target(thread_value, runnable_root);
+            }
+            javan_thread_set_scheduled_task(thread_value, executor_root, 1, javan_time_unit_to_nanos(unit_root, delay), 0LL);
+            javan_thread_start(thread_value);
+            javan_list_append_raw(state->threads, thread_value);
+            javan_root_frame_pop(roots);
+            return thread_value;
+        }
+
+        void* javan_scheduled_thread_pool_executor_schedule_at_fixed_rate(
+            void* value,
+            void* runnable,
+            long long initial_delay,
+            long long period,
+            void* unit
+        ) {
+            void* executor_root = value;
+            void* runnable_root = runnable;
+            void* unit_root = unit;
+            void* thread_value = NULL;
+            void** roots[] = {
+                (void**) &executor_root,
+                (void**) &runnable_root,
+                (void**) &unit_root,
+                (void**) &thread_value
+            };
+            javan_root_frame_push(roots, 4);
+            javan_scheduled_thread_pool_executor_state* state = javan_scheduled_thread_pool_executor_checked(executor_root);
+            if (state->closed != 0) {
+                javan_panic("scheduled thread pool executor is closed");
+            }
+            if (period <= 0LL) {
+                javan_panic("non-positive scheduleAtFixedRate period");
+            }
+            if (state->thread_factory != NULL) {
+                thread_value = javan_virtual_thread_factory_new_thread(state->thread_factory, runnable_root);
+            } else {
+                thread_value = javan_thread_new_virtual();
+                javan_thread_set_target(thread_value, runnable_root);
+            }
+            javan_thread_set_scheduled_task(
+                thread_value,
+                executor_root,
+                2,
+                javan_time_unit_to_nanos(unit_root, initial_delay),
+                javan_time_unit_to_nanos(unit_root, period)
+            );
+            javan_thread_start(thread_value);
+            javan_list_append_raw(state->threads, thread_value);
+            javan_root_frame_pop(roots);
+            return thread_value;
+        }
+
+        void javan_scheduled_thread_pool_executor_shutdown(void* value) {
+            javan_scheduled_thread_pool_executor_checked(value)->closed = 1;
+        }
+
+        int javan_scheduled_thread_pool_executor_await_termination(void* value, long long timeout, void* unit) {
+            javan_scheduled_thread_pool_executor_state* state = javan_scheduled_thread_pool_executor_checked(value);
+            long long timeout_nanos = javan_time_unit_to_nanos(unit, timeout);
+            long long deadline = javan_system_nano_time() + timeout_nanos;
+            while (1) {
+                int all_done = 1;
+                if (state->threads != NULL && state->threads->values != NULL) {
+                    for (int index = 0; index < state->threads->length; index++) {
+                        void* thread_value = state->threads->values[index];
+                        if (thread_value != NULL && javan_thread_is_alive(thread_value) != 0) {
+                            all_done = 0;
+                            break;
+                        }
+                    }
+                }
+                if (all_done != 0) {
+                    return 1;
+                }
+                if (javan_system_nano_time() >= deadline) {
+                    return 0;
+                }
+                javan_sleep_micros(5000UL);
+            }
+        }
+
+        void* javan_scheduled_thread_pool_executor_shutdown_now(void* value) {
+            void* executor_root = value;
+            void* result = NULL;
+            void** roots[] = {
+                (void**) &executor_root,
+                (void**) &result
+            };
+            javan_root_frame_push(roots, 2);
+            javan_scheduled_thread_pool_executor_state* state = javan_scheduled_thread_pool_executor_checked(executor_root);
+            state->closed = 1;
+            result = javan_list_new_with_capacity(0, 0);
+            if (state->threads != NULL && state->threads->values != NULL) {
+                for (int index = 0; index < state->threads->length; index++) {
+                    void* thread_value = state->threads->values[index];
+                    if (thread_value != NULL && javan_thread_is_alive(thread_value) != 0) {
+                        javan_thread* thread = (javan_thread*) thread_value;
+                        if (thread->schedule_mode != 0
+                            && thread->scheduled_first_run_started == 0
+                            && thread->target != NULL) {
+                            javan_list_append_raw((javan_object_list*) result, thread->target);
+                        }
+                        javan_thread_interrupt(thread_value);
+                    }
+                }
+            }
+            javan_root_frame_pop(roots);
+            return result;
+        }
+
         int javan_thread_join_interruptible(void* value) {
             javan_thread* thread = javan_require_thread(value);
             javan_thread* current = javan_current_thread_object();
@@ -3696,6 +3963,7 @@ final class RuntimeSourceMemorySections {
                 if (state != NULL && state->magic == JAVAN_SCHEDULED_THREAD_POOL_EXECUTOR_MAGIC) {
                     javan_gc_mark_value(state->thread_factory);
                     javan_gc_mark_value(state->rejected_execution_handler);
+                    javan_gc_mark_value((void*) state->threads);
                 }
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_INET_ADDRESS) {
                 javan_inet_address* address = (javan_inet_address*) value;
@@ -3788,6 +4056,7 @@ final class RuntimeSourceMemorySections {
                 if (node->type_id == JAVAN_TYPE_JAVA_LANG_THREAD) {
                     javan_gc_mark_value(((javan_thread*) value)->name);
                     javan_gc_mark_value(((javan_thread*) value)->target);
+                    javan_gc_mark_value(((javan_thread*) value)->scheduled_executor);
                     javan_gc_mark_value(((javan_thread*) value)->thread_locals);
                 }
                 return;

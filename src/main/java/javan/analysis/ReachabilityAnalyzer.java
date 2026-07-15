@@ -6,6 +6,7 @@ import javan.classfile.FieldRef;
 import javan.classfile.Instruction;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
+import javan.compat.JdkCallSupport;
 import javan.compat.NetworkApiSupport;
 import javan.compat.JavanNativeSubstitutions;
 import javan.verify.Diagnostic;
@@ -132,11 +133,19 @@ public final class ReachabilityAnalyzer {
         if (methodRef.isEmpty()) {
             return;
         }
-        final MethodRef target = methodRef.orElseThrow();
+        final MethodRef target = JdkCallSupport.normalizeInheritedSupportedJdkCall(classes, methodRef.orElseThrow())
+            .orElse(methodRef.orElseThrow());
         if (isEnumIntrinsic(classes, target) || isSupportedEnumSynthetic(classes, target) || isSupportedArrayClone(target)) {
             return;
         }
-        if (isVirtualThreadStart(target) || isVirtualThreadBuilderStart(target) || isExecutorExecute(target) || isExecutorSubmit(target)) {
+        if (isVirtualThreadStart(target)
+            || isVirtualThreadBuilderStart(target)
+            || isExecutorExecute(target)
+            || isExecutorSubmit(target)
+            || isScheduledThreadPoolExecutorSchedule(target)
+            || isScheduledThreadPoolExecutorScheduleAtFixedRate(target)
+            || isScheduledExecutorServiceSchedule(target)
+            || isScheduledExecutorServiceScheduleAtFixedRate(target)) {
             final List<EntryPoint> targets = virtualThreadTargets(classes, current);
             if (!targets.isEmpty()) {
                 work.addAll(targets);
@@ -435,6 +444,22 @@ public final class ReachabilityAnalyzer {
         return VirtualThreadInvokePatterns.isExecutorServiceSubmit(target);
     }
 
+    private static boolean isScheduledThreadPoolExecutorSchedule(final MethodRef target) {
+        return VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorSchedule(target);
+    }
+
+    private static boolean isScheduledThreadPoolExecutorScheduleAtFixedRate(final MethodRef target) {
+        return VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorScheduleAtFixedRate(target);
+    }
+
+    private static boolean isScheduledExecutorServiceSchedule(final MethodRef target) {
+        return VirtualThreadInvokePatterns.isScheduledExecutorServiceSchedule(target);
+    }
+
+    private static boolean isScheduledExecutorServiceScheduleAtFixedRate(final MethodRef target) {
+        return VirtualThreadInvokePatterns.isScheduledExecutorServiceScheduleAtFixedRate(target);
+    }
+
     private static boolean isExecutorServiceShutdown(final MethodRef target) {
         return VirtualThreadInvokePatterns.isExecutorServiceShutdown(target);
     }
@@ -516,12 +541,20 @@ public final class ReachabilityAnalyzer {
         boolean unknownRunnableTarget = false;
         for (int index = 0; index < instructions.size(); index++) {
             final Optional<MethodRef> methodRef = instructions.get(index).methodRef();
-            if (methodRef.isEmpty()
-                || (!isVirtualThreadStart(methodRef.orElseThrow())
-                && !isVirtualThreadBuilderStart(methodRef.orElseThrow())
-                && !isThreadFactoryNewThread(methodRef.orElseThrow())
-                && !isExecutorExecute(methodRef.orElseThrow())
-                && !isExecutorSubmit(methodRef.orElseThrow()))) {
+            if (methodRef.isEmpty()) {
+                continue;
+            }
+            final MethodRef target = JdkCallSupport.normalizeInheritedSupportedJdkCall(classes, methodRef.orElseThrow())
+                .orElse(methodRef.orElseThrow());
+            if (!isVirtualThreadStart(target)
+                && !isVirtualThreadBuilderStart(target)
+                && !isThreadFactoryNewThread(target)
+                && !isExecutorExecute(target)
+                && !isExecutorSubmit(target)
+                && !isScheduledThreadPoolExecutorSchedule(target)
+                && !isScheduledThreadPoolExecutorScheduleAtFixedRate(target)
+                && !isScheduledExecutorServiceSchedule(target)
+                && !isScheduledExecutorServiceScheduleAtFixedRate(target)) {
                 continue;
             }
             final Optional<EntryPoint> inferredTarget = inferVirtualThreadTarget(classes, instructions, index);
@@ -880,12 +913,20 @@ public final class ReachabilityAnalyzer {
             }
             for (final Instruction instruction : method.orElseThrow().code().orElseThrow().instructions()) {
                 final Optional<MethodRef> methodRef = instruction.methodRef();
-                if (methodRef.isPresent() && (isThreadStart(methodRef.orElseThrow())
-                    || isVirtualThreadStart(methodRef.orElseThrow())
-                    || isVirtualThreadBuilderStart(methodRef.orElseThrow())
-                    || isExecutorExecute(methodRef.orElseThrow())
-                    || isExecutorSubmit(methodRef.orElseThrow()))) {
-                    return true;
+                if (methodRef.isPresent()) {
+                    final MethodRef target = JdkCallSupport.normalizeInheritedSupportedJdkCall(classes, methodRef.orElseThrow())
+                        .orElse(methodRef.orElseThrow());
+                    if (isThreadStart(target)
+                        || isVirtualThreadStart(target)
+                        || isVirtualThreadBuilderStart(target)
+                        || isExecutorExecute(target)
+                        || isExecutorSubmit(target)
+                        || isScheduledThreadPoolExecutorSchedule(target)
+                        || isScheduledThreadPoolExecutorScheduleAtFixedRate(target)
+                        || isScheduledExecutorServiceSchedule(target)
+                        || isScheduledExecutorServiceScheduleAtFixedRate(target)) {
+                        return true;
+                    }
                 }
             }
         }
