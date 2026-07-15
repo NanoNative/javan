@@ -1258,7 +1258,9 @@ final class BytecodeToIRInvokeSupport {
         if (!"<init>".equals(methodRef.name()) || !"()V".equals(methodRef.descriptor())) {
             return false;
         }
-        return "java/lang/Object".equals(methodRef.owner()) || "java/lang/Record".equals(methodRef.owner());
+        return "java/lang/Object".equals(methodRef.owner())
+            || "java/lang/Record".equals(methodRef.owner())
+            || "java/util/concurrent/ThreadPoolExecutor$CallerRunsPolicy".equals(methodRef.owner());
     }
     static void lowerStaticCall(
         final Map<String, ClassFile> classes,
@@ -2425,6 +2427,14 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_copy_of", arguments)));
             return true;
         }
+        if ("java/util/Collections".equals(owner)) {
+            if (!"unmodifiableSet".equals(name) || !"(Ljava/util/Set;)Ljava/util/Set;".equals(descriptor)) {
+                return false;
+            }
+            final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_set_unmodifiable", arguments)));
+            return true;
+        }
         if (!"java/util/List".equals(owner)) {
             return false;
         }
@@ -2483,6 +2493,11 @@ final class BytecodeToIRInvokeSupport {
                 instructions.add(IrInstruction.callStaticVoid("javan_arraylist_add_all", List.of(receiver, arguments.getFirst())));
                 return true;
             }
+        }
+        if (("java/util/HashSet".equals(methodRef.owner()) || "java/util/LinkedHashSet".equals(methodRef.owner()))
+            && "<init>".equals(methodRef.name())
+            && "()V".equals(methodRef.descriptor())) {
+            return true;
         }
         if (isJdkMapClass(methodRef.owner()) && "<init>".equals(methodRef.name()) && "()V".equals(methodRef.descriptor())) {
             return true;
@@ -2588,6 +2603,28 @@ final class BytecodeToIRInvokeSupport {
         if (isJdkListOrCollection(methodRef.owner())) {
             if ("contains(Ljava/lang/Object;)Z".equals(signature)) {
                 stack.add(StackValue.intExpression(IrExpression.intCall("javan_list_contains", List.of(receiver, arguments.getFirst()))));
+                return true;
+            }
+            if ("iterator()Ljava/util/Iterator;".equals(signature)) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_iterator", List.of(receiver))));
+                return true;
+            }
+        }
+        if (isJdkSetOwner(methodRef.owner())) {
+            if ("add(Ljava/lang/Object;)Z".equals(signature)) {
+                stack.add(StackValue.intExpression(IrExpression.intCall("javan_set_add", List.of(receiver, arguments.getFirst()))));
+                return true;
+            }
+            if ("contains(Ljava/lang/Object;)Z".equals(signature)) {
+                stack.add(StackValue.intExpression(IrExpression.intCall("javan_list_contains", List.of(receiver, arguments.getFirst()))));
+                return true;
+            }
+            if ("size()I".equals(signature)) {
+                stack.add(StackValue.intExpression(IrExpression.intCall("javan_list_size", List.of(receiver))));
+                return true;
+            }
+            if ("isEmpty()Z".equals(signature)) {
+                stack.add(StackValue.intExpression(IrExpression.intCall("javan_list_is_empty", List.of(receiver))));
                 return true;
             }
             if ("iterator()Ljava/util/Iterator;".equals(signature)) {
@@ -2811,6 +2848,9 @@ final class BytecodeToIRInvokeSupport {
         if (isJdkListOrCollection(owner)) {
             return true;
         }
+        if (isJdkSetOwner(owner)) {
+            return true;
+        }
         if ("java/util/Iterator".equals(owner)) {
             return true;
         }
@@ -2827,6 +2867,15 @@ final class BytecodeToIRInvokeSupport {
             return true;
         }
         return "java/util/Collection".equals(owner);
+    }
+    static boolean isJdkSetClass(final String owner) {
+        return "java/util/HashSet".equals(owner) || "java/util/LinkedHashSet".equals(owner);
+    }
+    static boolean isJdkSetOwner(final String owner) {
+        if ("java/util/Set".equals(owner)) {
+            return true;
+        }
+        return isJdkSetClass(owner);
     }
     static boolean isJdkMapOwner(final String owner) {
         if ("java/util/Map".equals(owner)) {
@@ -2966,9 +3015,22 @@ final class BytecodeToIRInvokeSupport {
         if (!"java/lang/Thread".equals(methodRef.owner())) {
             return false;
         }
+        if ("setDaemon".equals(methodRef.name()) && "(Z)V".equals(methodRef.descriptor())) {
+            final IrExpression daemon = popInt(classFile, method, stack);
+            final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+            instructions.add(IrInstruction.callStaticVoid(
+                "javan_thread_set_daemon",
+                List.of(receiver, daemon)
+            ));
+            return true;
+        }
         final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
         if ("interrupt".equals(methodRef.name()) && "()V".equals(methodRef.descriptor())) {
             instructions.add(IrInstruction.callStaticVoid("javan_thread_interrupt", List.of(receiver)));
+            return true;
+        }
+        if ("isDaemon".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor())) {
+            pushIntCall(instructions, stack, localDeclarations, "javan_thread_is_daemon", List.of(receiver));
             return true;
         }
         if ("isInterrupted".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor())) {
@@ -4583,6 +4645,14 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.objectExpression(local));
             return;
         }
+        if ("java/util/concurrent/ThreadPoolExecutor$CallerRunsPolicy".equals(owner)) {
+            final String localName = "object" + localDeclarations.size();
+            localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
+            final IrExpression local = IrExpression.objectLocal(localName);
+            instructions.add(IrInstruction.assignObject(localName, IrExpression.objectCall("javan_caller_runs_policy_new", List.of())));
+            stack.add(StackValue.objectExpression(local));
+            return;
+        }
         if (!"java/lang/Thread".equals(owner) && isAssignableTo(classes, owner, "java/lang/Thread")) {
             throw unsupportedThreadSubclassAllocation(classFile, method, instruction, owner);
         }
@@ -4591,6 +4661,14 @@ final class BytecodeToIRInvokeSupport {
             localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
             final IrExpression local = IrExpression.objectLocal(localName);
             instructions.add(IrInstruction.assignObject(localName, IrExpression.objectCall("javan_thread_new", List.of())));
+            stack.add(StackValue.objectExpression(local));
+            return;
+        }
+        if (isJdkSetClass(owner)) {
+            final String localName = "object" + localDeclarations.size();
+            localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
+            final IrExpression local = IrExpression.objectLocal(localName);
+            instructions.add(IrInstruction.assignObject(localName, IrExpression.objectCall("javan_hashset_new", List.of())));
             stack.add(StackValue.objectExpression(local));
             return;
         }

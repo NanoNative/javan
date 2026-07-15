@@ -11033,6 +11033,128 @@ final class CliIntegrationTest {
     }
 
     @Test
+    void collectionsUnmodifiableSetReflectsBackingMutationBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("collections-unmodifiable-set-live-view");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Collections;
+            import java.util.LinkedHashSet;
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final LinkedHashSet<String> base = new LinkedHashSet<>();
+                    base.add("left");
+                    final Set<String> view = Collections.unmodifiableSet(base);
+                    base.add("right");
+                    System.out.println(view.size());
+                    System.out.println(view.contains("right"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/collections-unmodifiable-set-live-view").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("2\ntrue\n");
+    }
+
+    @Test
+    void collectionsUnmodifiableSetAddFailsAtRuntime() throws Exception {
+        final Path project = project("collections-unmodifiable-set-add");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Collections;
+            import java.util.HashSet;
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Set<String> values = Collections.unmodifiableSet(new HashSet<>());
+                    values.add("right");
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/collections-unmodifiable-set-add").toString()));
+
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("unsupported operation on immutable list");
+    }
+
+    @Test
+    void threadDaemonFlagBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-daemon-flag");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Thread thread = new Thread(new Runnable() {
+                        @Override
+                        public void run() {
+                        }
+                    });
+                    thread.setDaemon(true);
+                    System.out.println(thread.isDaemon());
+                    thread.setDaemon(false);
+                    System.out.println(thread.isDaemon());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-daemon-flag").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\nfalse\n");
+    }
+
+    @Test
+    void callerRunsPolicyConstructorBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("caller-runs-policy-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.ThreadPoolExecutor;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Object policy = new ThreadPoolExecutor.CallerRunsPolicy();
+                    System.out.println(policy != null);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/caller-runs-policy-constructor").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n");
+    }
+
+    @Test
     void pathResolveBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("path-resolve");
         writeJava(project, "com.acme.Main", """

@@ -26,6 +26,7 @@ These probes prove that the backend can consume real dependency bytecode for sim
 
 Known blockers before broader TypeMap/Nano coverage:
 
+- the current main-based Nano frontier is now the scheduled-executor carrier bootstrap; `Collections.unmodifiableSet(Set)`, `Thread.setDaemon(boolean)` / `Thread.isDaemon()`, and `ThreadPoolExecutor.CallerRunsPolicy()` are no longer the first missing helpers
 - only the current blocking TCP loopback socket slice is implemented
 - only raw loopback HTTP responder slices are verified so far (`GET` success, unmatched-route `404`, POST body handling, sequential two-connection lifetime, method-plus-path dispatch, multi-class route-handler dispatch, request-header matching, response-header emission, and a request/response object model over router and service classes); no higher-level native HTTP server API yet
 - no native HTTPS/TLS runtime yet

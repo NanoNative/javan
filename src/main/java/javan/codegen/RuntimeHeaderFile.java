@@ -231,6 +231,9 @@ final class RuntimeHeaderFile {
         void* javan_list_iterator(void* list);
         int javan_iterator_has_next(void* iterator);
         void* javan_iterator_next(void* iterator);
+        void* javan_hashset_new(void);
+        void* javan_set_unmodifiable(void* set);
+        int javan_set_add(void* set, void* value);
         void* javan_hashmap_new(void);
         void* javan_map_copy_of(void* map);
         void* javan_map_get(void* map, void* key);
@@ -342,6 +345,7 @@ final class RuntimeHeaderFile {
         void* javan_duration_of_millis(long long millis);
         void* javan_duration_of_seconds(long long seconds);
         long long javan_duration_to_millis(void* value);
+        void* javan_caller_runs_policy_new(void);
         void* javan_thread_new(void);
         void* javan_thread_new_virtual(void);
         void* javan_virtual_thread_builder_new(void);
@@ -368,6 +372,8 @@ final class RuntimeHeaderFile {
         void* javan_thread_current(void);
         void* javan_thread_get_name(void* value);
         void javan_thread_set_name(void* value, void* name);
+        void javan_thread_set_daemon(void* value, int daemon);
+        int javan_thread_is_daemon(void* value);
         void javan_thread_detach_current(void);
         void javan_thread_set_target(void* value, void* target);
         void* javan_thread_local_new(void);
