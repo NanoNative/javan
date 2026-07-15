@@ -309,6 +309,177 @@ final class CliDependencyProjectIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void dependencyJarGenericPairGetterBuilds() throws Exception {
+        final Path dependency = dependencyJar("pairlib", "dep.Pair", """
+            package dep;
+
+            public final class Pair<L, R> {
+                private final L key;
+                private final R value;
+
+                public Pair(final L key, final R value) {
+                    this.key = key;
+                    this.value = value;
+                }
+
+                public L getKey() {
+                    return key;
+                }
+
+                public R getValue() {
+                    return value;
+                }
+            }
+            """);
+        final Path project = project("dependency-pair");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import dep.Pair;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Pair<String, String> pair = new Pair<>("key", "value");
+                    System.out.println(pair.getValue());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main", List.of(dependency));
+        final CliRun run = run(tempDir, "build", project.toString(), "--classpath", dependency.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/dependency-pair").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("value\n");
+    }
+
+    @Test
+    void dependencyJarRecordAccessorBuilds() throws Exception {
+        final Path dependency = dependencyJar("metriclib", "dep.Metric", """
+            package dep;
+
+            public record Metric(String name, long value) {
+            }
+            """);
+        final Path project = project("dependency-record");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import dep.Metric;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Metric metric = new Metric("requests", 7L);
+                    System.out.println(metric.name() + "=" + metric.value());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main", List.of(dependency));
+        final CliRun run = run(tempDir, "build", project.toString(), "--classpath", dependency.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/dependency-record").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("requests=7\n");
+    }
+
+    @Test
+    void dependencyJarStaticDurationFormatterBuilds() throws Exception {
+        final Path dependency = dependencyJar("durationlib", "dep.DurationFormatter", """
+            package dep;
+
+            public final class DurationFormatter {
+                private DurationFormatter() {
+                }
+
+                public static String formatDuration(final long nanos) {
+                    final long totalSeconds = nanos / 1_000_000_000L;
+                    return (totalSeconds / 60L) + "m " + (totalSeconds % 60L) + "s";
+                }
+            }
+            """);
+        final Path project = project("dependency-duration");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import dep.DurationFormatter;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(DurationFormatter.formatDuration(65_000_000_000L));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main", List.of(dependency));
+        final CliRun run = run(tempDir, "build", project.toString(), "--classpath", dependency.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/dependency-duration").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("1m 5s\n");
+    }
+
+    @Test
+    void dependencyJarScheduledExecutorSubclassBuilds() throws Exception {
+        final Path dependency = dependencyJar("schedulerlib", "dep.Scheduler", """
+            package dep;
+
+            import java.util.concurrent.ScheduledThreadPoolExecutor;
+
+            public final class Scheduler extends ScheduledThreadPoolExecutor {
+                public Scheduler(final String name) {
+                    super(1);
+                }
+            }
+            """);
+        final Path project = project("dependency-scheduler");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import dep.Scheduler;
+            import java.util.concurrent.TimeUnit;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Scheduler scheduler = new Scheduler("probe");
+                    scheduler.schedule(new Task(), 0L, TimeUnit.MILLISECONDS);
+                    scheduler.shutdown();
+                    System.out.println(scheduler.awaitTermination(1L, TimeUnit.SECONDS));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println("tick");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main", List.of(dependency));
+        final CliRun run = run(tempDir, "build", project.toString(), "--classpath", dependency.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/dependency-scheduler").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("tick\ntrue\n");
+    }
+
+    @Test
     void dependencyClassDirectoryObjectStringReturnBuilds() throws Exception {
         final Path dependency = dependencyClasses("messageclasses", "dep.Message", """
             package dep;

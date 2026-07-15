@@ -13,6 +13,9 @@ Status summary:
 These external probes are intentionally excluded from `doc/status/support-matrix.*` so the
 JDK support ledger stays limited to synthetic/compiler-owned scenarios.
 
+Compiler-owned regression coverage for the same shapes lives under `src/test/java/javan/*`
+using synthetic dependency jars and projects. The external probes are smoke evidence only.
+
 Current compatibility probes:
 
 - TypeMap: `src/test/resources/projects/real-probes/typemap-pair` builds against the pinned Maven-cache TypeMap jar by default and prints `value`.

@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 @Execution(SAME_THREAD)
 @ResourceLock("native-cli-heavy")
 @ResourceLock(value = Resources.SYSTEM_PROPERTIES, mode = ResourceAccessMode.READ)
-final class CliRealProbeAcceptanceIntegrationTest extends CliIntegrationSupport {
+final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupport {
     @Test
     void typeMapPairProbeBuildsAgainstPinnedMavenArtifactAndMatchesJvmOutput() throws Exception {
         final Path artifact = pinnedMavenArtifact("berlin.yuna", "type-map", "2025.06.1521025");
