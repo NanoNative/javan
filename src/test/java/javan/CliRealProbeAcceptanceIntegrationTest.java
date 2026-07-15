@@ -125,6 +125,13 @@ final class CliRealProbeAcceptanceIntegrationTest extends CliIntegrationSupport 
                 "iterateOverArray(Ljava/lang/Object;Ljava/util/function/Consumer;)V",
                 "java/lang/Byte.valueOf(B)Ljava/lang/Byte;"
             );
+        } else if (run.stderr().contains("java/util/concurrent/atomic/AtomicReference.<init>(Ljava/lang/Object;)V")) {
+            assertThat(run.stderr()).contains(
+                "error[JAVAN031]",
+                "berlin/yuna/typemap/logic/TypeConverter",
+                "getFirstFromArray(Ljava/lang/Object;)Ljava/lang/Object;",
+                "java/util/concurrent/atomic/AtomicReference.<init>(Ljava/lang/Object;)V"
+            );
         } else {
             assertThat(run.stderr()).contains(
                 "error[JAVAN061]",

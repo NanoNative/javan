@@ -2434,6 +2434,12 @@ public final class StaticVerifier {
         if ("java/lang/Boolean".equals(target)) {
             return true;
         }
+        if ("java/lang/Byte".equals(target)) {
+            return true;
+        }
+        if ("java/lang/Short".equals(target)) {
+            return true;
+        }
         return "java/lang/Character".equals(target);
     }
 

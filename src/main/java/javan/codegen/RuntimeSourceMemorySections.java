@@ -1040,6 +1040,8 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_TYPE_JAVA_LANG_FLOAT -1003
         #define JAVAN_TYPE_JAVA_LANG_DOUBLE -1004
         #define JAVAN_TYPE_JAVA_LANG_BOOLEAN -1005
+        #define JAVAN_TYPE_JAVA_LANG_BYTE -1015
+        #define JAVAN_TYPE_JAVA_LANG_SHORT -1016
         #define JAVAN_TYPE_JAVA_LANG_CHARACTER -1014
         #define JAVAN_TYPE_JAVA_NIO_FILE_ATTRIBUTE_FILE_TIME -1006
         #define JAVAN_TYPE_JAVA_TIME_DURATION -1007
@@ -1069,6 +1071,8 @@ final class RuntimeSourceMemorySections {
                 || type_id == JAVAN_TYPE_JAVA_LANG_FLOAT
                 || type_id == JAVAN_TYPE_JAVA_LANG_DOUBLE
                 || type_id == JAVAN_TYPE_JAVA_LANG_BOOLEAN
+                || type_id == JAVAN_TYPE_JAVA_LANG_BYTE
+                || type_id == JAVAN_TYPE_JAVA_LANG_SHORT
                 || type_id == JAVAN_TYPE_JAVA_LANG_CHARACTER
                 || type_id == JAVAN_TYPE_JAVA_NIO_FILE_ATTRIBUTE_FILE_TIME
                 || type_id == JAVAN_TYPE_JAVA_TIME_DURATION
@@ -2297,6 +2301,14 @@ final class RuntimeSourceMemorySections {
 
         typedef struct {
             int value;
+        } javan_boxed_byte;
+
+        typedef struct {
+            int value;
+        } javan_boxed_short;
+
+        typedef struct {
+            int value;
         } javan_boxed_character;
 
         typedef struct {
@@ -2851,6 +2863,12 @@ final class RuntimeSourceMemorySections {
             if (type_id == JAVAN_TYPE_JAVA_LANG_BOOLEAN) {
                 return javan_runtime_class_literal("java.lang.Boolean", JAVAN_TYPE_JAVA_LANG_BOOLEAN, 0, 0, 0);
             }
+            if (type_id == JAVAN_TYPE_JAVA_LANG_BYTE) {
+                return javan_runtime_class_literal("java.lang.Byte", JAVAN_TYPE_JAVA_LANG_BYTE, 0, 0, 0);
+            }
+            if (type_id == JAVAN_TYPE_JAVA_LANG_SHORT) {
+                return javan_runtime_class_literal("java.lang.Short", JAVAN_TYPE_JAVA_LANG_SHORT, 0, 0, 0);
+            }
             if (type_id == JAVAN_TYPE_JAVA_LANG_CHARACTER) {
                 return javan_runtime_class_literal("java.lang.Character", JAVAN_TYPE_JAVA_LANG_CHARACTER, 0, 0, 0);
             }
@@ -3399,6 +3417,34 @@ final class RuntimeSourceMemorySections {
             return ((javan_boxed_boolean*) value)->value;
         }
 
+        void* javan_byte_value_of(int value) {
+            javan_boxed_byte* object = (javan_boxed_byte*) javan_alloc(sizeof(javan_boxed_byte));
+            object->value = (signed char) value;
+            javan_register_object((void*) object, JAVAN_TYPE_JAVA_LANG_BYTE);
+            return object;
+        }
+
+        int javan_byte_byte_value(void* value) {
+            if (javan_registered_type_id(value) != JAVAN_TYPE_JAVA_LANG_BYTE) {
+                javan_panic("not a Byte");
+            }
+            return ((javan_boxed_byte*) value)->value;
+        }
+
+        void* javan_short_value_of(int value) {
+            javan_boxed_short* object = (javan_boxed_short*) javan_alloc(sizeof(javan_boxed_short));
+            object->value = (short) value;
+            javan_register_object((void*) object, JAVAN_TYPE_JAVA_LANG_SHORT);
+            return object;
+        }
+
+        int javan_short_short_value(void* value) {
+            if (javan_registered_type_id(value) != JAVAN_TYPE_JAVA_LANG_SHORT) {
+                javan_panic("not a Short");
+            }
+            return ((javan_boxed_short*) value)->value;
+        }
+
         void* javan_character_value_of(int value) {
             javan_boxed_character* object = (javan_boxed_character*) javan_alloc(sizeof(javan_boxed_character));
             object->value = value & 0xFFFF;
@@ -3444,7 +3490,9 @@ final class RuntimeSourceMemorySections {
             return type_id == JAVAN_TYPE_JAVA_LANG_INTEGER
                 || type_id == JAVAN_TYPE_JAVA_LANG_LONG
                 || type_id == JAVAN_TYPE_JAVA_LANG_FLOAT
-                || type_id == JAVAN_TYPE_JAVA_LANG_DOUBLE;
+                || type_id == JAVAN_TYPE_JAVA_LANG_DOUBLE
+                || type_id == JAVAN_TYPE_JAVA_LANG_BYTE
+                || type_id == JAVAN_TYPE_JAVA_LANG_SHORT;
         }
 
         int javan_number_int_value(void* value) {
@@ -3460,6 +3508,12 @@ final class RuntimeSourceMemorySections {
             }
             if (type_id == JAVAN_TYPE_JAVA_LANG_DOUBLE) {
                 return javan_double_to_int(javan_double_double_value(value));
+            }
+            if (type_id == JAVAN_TYPE_JAVA_LANG_BYTE) {
+                return javan_byte_byte_value(value);
+            }
+            if (type_id == JAVAN_TYPE_JAVA_LANG_SHORT) {
+                return javan_short_short_value(value);
             }
             javan_panic("not a supported Number");
             return 0;
@@ -5898,6 +5952,12 @@ final class RuntimeSourceMemorySections {
             }
             if (left_type == right_type && left_type == JAVAN_TYPE_JAVA_LANG_BOOLEAN) {
                 return ((javan_boxed_boolean*) left)->value == ((javan_boxed_boolean*) right)->value;
+            }
+            if (left_type == right_type && left_type == JAVAN_TYPE_JAVA_LANG_BYTE) {
+                return ((javan_boxed_byte*) left)->value == ((javan_boxed_byte*) right)->value;
+            }
+            if (left_type == right_type && left_type == JAVAN_TYPE_JAVA_LANG_SHORT) {
+                return ((javan_boxed_short*) left)->value == ((javan_boxed_short*) right)->value;
             }
             if (left_type == right_type && left_type == JAVAN_TYPE_JAVA_LANG_CHARACTER) {
                 return ((javan_boxed_character*) left)->value == ((javan_boxed_character*) right)->value;

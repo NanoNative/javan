@@ -1078,6 +1078,54 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void boxedByteUnboxBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("boxed-byte-unbox");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Byte value = Byte.valueOf((byte) 7);
+                    System.out.println(value.byteValue());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/boxed-byte-unbox").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void boxedShortUnboxBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("boxed-short-unbox");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Short value = Short.valueOf((short) 12);
+                    System.out.println(value.shortValue());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/boxed-short-unbox").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void boxedCharacterUnboxBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("boxed-character-unbox");
         writeJava(project, "com.acme.Main", """
@@ -1195,6 +1243,54 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/boxed-integer-instanceof").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void boxedByteInstanceOfBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("boxed-byte-instanceof");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Object value = Byte.valueOf((byte) 3);
+                    System.out.println(value instanceof Byte);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/boxed-byte-instanceof").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void boxedShortInstanceOfBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("boxed-short-instanceof");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Object value = Short.valueOf((short) 3);
+                    System.out.println(value instanceof Short);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/boxed-short-instanceof").toString())).stdout()).isEqualTo(jvmOutput);
     }
 
     @Test

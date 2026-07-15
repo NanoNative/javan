@@ -46,6 +46,8 @@ public final class BytecodeToIR {
     static final int TYPE_JAVA_LANG_FLOAT = -1003;
     static final int TYPE_JAVA_LANG_DOUBLE = -1004;
     static final int TYPE_JAVA_LANG_BOOLEAN = -1005;
+    static final int TYPE_JAVA_LANG_BYTE = -1015;
+    static final int TYPE_JAVA_LANG_SHORT = -1016;
     static final int TYPE_JAVA_LANG_CHARACTER = -1014;
 
     /**
@@ -2510,6 +2512,12 @@ public final class BytecodeToIR {
         }
         if ("java/lang/Boolean".equals(target)) {
             return Optional.of(TYPE_JAVA_LANG_BOOLEAN);
+        }
+        if ("java/lang/Byte".equals(target)) {
+            return Optional.of(TYPE_JAVA_LANG_BYTE);
+        }
+        if ("java/lang/Short".equals(target)) {
+            return Optional.of(TYPE_JAVA_LANG_SHORT);
         }
         if ("java/lang/Character".equals(target)) {
             return Optional.of(TYPE_JAVA_LANG_CHARACTER);

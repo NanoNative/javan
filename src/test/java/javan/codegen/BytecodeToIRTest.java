@@ -9359,6 +9359,48 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersByteByteValueToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Byte;)B",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/Byte", "byteValue", "()B")),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_byte_byte_value",
+                List.of(IrExpression.objectLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersShortShortValueToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Short;)S",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/Short", "shortValue", "()S")),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_short_short_value",
+                List.of(IrExpression.objectLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
     void lowersCharacterCharValueToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -9395,6 +9437,48 @@ final class BytecodeToIRTest {
                 assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
                 assertThat(exception.diagnostic().subject()).isEqualTo("invokevirtual java/lang/Boolean.booleanValue()Ljava/lang/String;");
             });
+    }
+
+    @Test
+    void lowersByteValueOfToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(B)Ljava/lang/Byte;",
+            1,
+            1,
+            plain(0, 26, "iload_0"),
+            invokeStatic(1, new MethodRef("java/lang/Byte", "valueOf", "(B)Ljava/lang/Byte;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_byte_value_of",
+                List.of(IrExpression.intLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersShortValueOfToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(S)Ljava/lang/Short;",
+            1,
+            1,
+            plain(0, 26, "iload_0"),
+            invokeStatic(1, new MethodRef("java/lang/Short", "valueOf", "(S)Ljava/lang/Short;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_short_value_of",
+                List.of(IrExpression.intLocal("arg0"))
+            ))
+        );
     }
 
     @Test

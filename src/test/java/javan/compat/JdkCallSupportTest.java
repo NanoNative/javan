@@ -160,6 +160,42 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void byteValueOfIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Byte",
+            "valueOf",
+            "(B)Ljava/lang/Byte;"
+        ))).isTrue();
+    }
+
+    @Test
+    void byteByteValueIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Byte",
+            "byteValue",
+            "()B"
+        ))).isTrue();
+    }
+
+    @Test
+    void shortValueOfIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Short",
+            "valueOf",
+            "(S)Ljava/lang/Short;"
+        ))).isTrue();
+    }
+
+    @Test
+    void shortShortValueIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Short",
+            "shortValue",
+            "()S"
+        ))).isTrue();
+    }
+
+    @Test
     void virtualThreadPerTaskExecutorIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/concurrent/Executors",

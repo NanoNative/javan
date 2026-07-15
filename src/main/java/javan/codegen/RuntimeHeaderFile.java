@@ -378,6 +378,10 @@ final class RuntimeHeaderFile {
         double javan_double_long_bits_to_double(long long value);
         void* javan_boolean_value_of(int value);
         int javan_boolean_boolean_value(void* value);
+        void* javan_byte_value_of(int value);
+        int javan_byte_byte_value(void* value);
+        void* javan_short_value_of(int value);
+        int javan_short_short_value(void* value);
         void* javan_character_value_of(int value);
         int javan_character_char_value(void* value);
         int javan_is_supported_number(void* value);

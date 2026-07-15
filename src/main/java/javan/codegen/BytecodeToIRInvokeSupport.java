@@ -1359,6 +1359,14 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.intExpression(IrExpression.intCall("javan_boolean_boolean_value", List.of(popObject(classFile, method, stack)))));
             return true;
         }
+        if ("java/lang/Byte".equals(methodRef.owner()) && "byteValue".equals(methodRef.name()) && "()B".equals(methodRef.descriptor())) {
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_byte_byte_value", List.of(popObject(classFile, method, stack)))));
+            return true;
+        }
+        if ("java/lang/Short".equals(methodRef.owner()) && "shortValue".equals(methodRef.name()) && "()S".equals(methodRef.descriptor())) {
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_short_short_value", List.of(popObject(classFile, method, stack)))));
+            return true;
+        }
         if ("java/lang/Character".equals(methodRef.owner()) && "charValue".equals(methodRef.name()) && "()C".equals(methodRef.descriptor())) {
             stack.add(StackValue.intExpression(IrExpression.intCall("javan_character_char_value", List.of(popObject(classFile, method, stack)))));
             return true;
@@ -1660,6 +1668,12 @@ final class BytecodeToIRInvokeSupport {
         if ("java/lang/Boolean".equals(methodRef.owner())) {
             return lowerBooleanIntrinsic(classFile, method, methodRef, stack);
         }
+        if ("java/lang/Byte".equals(methodRef.owner())) {
+            return lowerByteIntrinsic(classFile, method, methodRef, stack);
+        }
+        if ("java/lang/Short".equals(methodRef.owner())) {
+            return lowerShortIntrinsic(classFile, method, methodRef, stack);
+        }
         if ("java/lang/Character".equals(methodRef.owner())) {
             return lowerCharacterIntrinsic(classFile, method, methodRef, stack);
         }
@@ -1936,6 +1950,30 @@ final class BytecodeToIRInvokeSupport {
             final IrExpression argument = popObject(classFile, method, stack);
             final IrExpression receiver = popObject(classFile, method, stack);
             stack.add(StackValue.intExpression(IrExpression.intCall("javan_boolean_equals", List.of(receiver, argument))));
+            return true;
+        }
+        return false;
+    }
+    static boolean lowerByteIntrinsic(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final MethodRef methodRef,
+        final List<StackValue> stack
+    ) {
+        if ("valueOf".equals(methodRef.name()) && "(B)Ljava/lang/Byte;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_byte_value_of", List.of(popInt(classFile, method, stack)))));
+            return true;
+        }
+        return false;
+    }
+    static boolean lowerShortIntrinsic(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final MethodRef methodRef,
+        final List<StackValue> stack
+    ) {
+        if ("valueOf".equals(methodRef.name()) && "(S)Ljava/lang/Short;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_short_value_of", List.of(popInt(classFile, method, stack)))));
             return true;
         }
         return false;

@@ -214,6 +214,10 @@ public final class JdkCallSupport {
         runtime("Boolean.valueOf", "java/lang/Boolean", "valueOf", "(Z)Ljava/lang/Boolean;"),
         runtime("Boolean.booleanValue", "java/lang/Boolean", "booleanValue", "()Z"),
         runtime("Boolean.equals", "java/lang/Boolean", "equals", "(Ljava/lang/Object;)Z"),
+        runtime("Byte.valueOf", "java/lang/Byte", "valueOf", "(B)Ljava/lang/Byte;"),
+        runtime("Byte.byteValue", "java/lang/Byte", "byteValue", "()B"),
+        runtime("Short.valueOf", "java/lang/Short", "valueOf", "(S)Ljava/lang/Short;"),
+        runtime("Short.shortValue", "java/lang/Short", "shortValue", "()S"),
         runtime("Character.valueOf", "java/lang/Character", "valueOf", "(C)Ljava/lang/Character;"),
         runtime("Character.charValue", "java/lang/Character", "charValue", "()C"),
         intrinsic(
@@ -1123,6 +1127,12 @@ public final class JdkCallSupport {
             return true;
         }
         if ("java/lang/Double".equals(owner)) {
+            return true;
+        }
+        if ("java/lang/Byte".equals(owner)) {
+            return true;
+        }
+        if ("java/lang/Short".equals(owner)) {
             return true;
         }
         return "java/lang/Boolean".equals(owner);
