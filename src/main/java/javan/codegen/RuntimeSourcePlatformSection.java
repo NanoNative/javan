@@ -323,6 +323,7 @@ final class RuntimeSourcePlatformSection {
                 return javan_stringbuilder_length(value);
             }
             javan_panic("unsupported CharSequence runtime");
+            return 0;
         }
 
         int javan_char_sequence_char_at(void* value, int index) {
@@ -337,6 +338,7 @@ final class RuntimeSourcePlatformSection {
                 return javan_stringbuilder_char_at(value, index);
             }
             javan_panic("unsupported CharSequence runtime");
+            return 0;
         }
 
         int javan_character_is_whitespace(int value) {

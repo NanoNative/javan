@@ -91,6 +91,11 @@ public final class ExactMethodSupport {
         if (instructions.size() != 31) {
             return false;
         }
+        return matchesExactCatchNullEnumLookupSyntheticShape(instructions)
+            || matchesExactCatchNullEnumLookupJavacShape(instructions);
+    }
+
+    private static boolean matchesExactCatchNullEnumLookupSyntheticShape(final List<Instruction> instructions) {
         return sameInstruction(instructions, 0, 0, 42)
             && sameClassInstruction(instructions, 1, 1, 193, "java/lang/Number")
             && sameInstruction(instructions, 2, 4, 153)
@@ -122,6 +127,40 @@ public final class ExactMethodSupport {
             && sameInstruction(instructions, 28, 48, 77)
             && sameInstruction(instructions, 29, 49, 1)
             && sameInstruction(instructions, 30, 50, 176);
+    }
+
+    private static boolean matchesExactCatchNullEnumLookupJavacShape(final List<Instruction> instructions) {
+        return sameInstruction(instructions, 0, 0, 42)
+            && sameClassInstruction(instructions, 1, 1, 193, "java/lang/Number")
+            && sameInstruction(instructions, 2, 4, 153)
+            && sameInstruction(instructions, 3, 7, 42)
+            && sameClassInstruction(instructions, 4, 8, 192, "java/lang/Number")
+            && sameMethodInstruction(instructions, 5, 11, 182, NUMBER_INT_VALUE)
+            && sameInstruction(instructions, 6, 14, 61)
+            && sameInstruction(instructions, 7, 15, 43)
+            && sameMethodInstruction(instructions, 8, 16, 182, CLASS_GET_ENUM_CONSTANTS)
+            && sameClassInstruction(instructions, 9, 19, 192, "[Ljava/lang/Enum;")
+            && sameInstruction(instructions, 10, 22, 78)
+            && sameInstruction(instructions, 11, 23, 28)
+            && sameInstruction(instructions, 12, 24, 155)
+            && sameInstruction(instructions, 13, 27, 28)
+            && sameInstruction(instructions, 14, 28, 45)
+            && sameInstruction(instructions, 15, 29, 190)
+            && sameInstruction(instructions, 16, 30, 162)
+            && sameInstruction(instructions, 17, 33, 45)
+            && sameInstruction(instructions, 18, 34, 28)
+            && sameInstruction(instructions, 19, 35, 50)
+            && sameInstruction(instructions, 20, 36, 167)
+            && sameInstruction(instructions, 21, 39, 1)
+            && sameInstruction(instructions, 22, 40, 176)
+            && sameInstruction(instructions, 23, 41, 43)
+            && sameInstruction(instructions, 24, 42, 42)
+            && sameMethodInstruction(instructions, 25, 43, 184, STRING_VALUE_OF_OBJECT)
+            && sameMethodInstruction(instructions, 26, 46, 184, ENUM_VALUE_OF)
+            && sameInstruction(instructions, 27, 49, 176)
+            && sameInstruction(instructions, 28, 50, 77)
+            && sameInstruction(instructions, 29, 51, 1)
+            && sameInstruction(instructions, 30, 52, 176);
     }
 
     /**
@@ -471,12 +510,16 @@ public final class ExactMethodSupport {
     }
 
     private static boolean hasExactCatchNullEnumLookupExceptionTable(final List<CodeException> handlers) {
-        if (handlers.size() != 3) {
-            return false;
+        if (handlers.size() == 3) {
+            return sameHandler(handlers.get(0), 0, 36, 48)
+                && sameHandler(handlers.get(1), 37, 38, 48)
+                && sameHandler(handlers.get(2), 39, 47, 48);
         }
-        return sameHandler(handlers.get(0), 0, 36, 48)
-            && sameHandler(handlers.get(1), 37, 38, 48)
-            && sameHandler(handlers.get(2), 39, 47, 48);
+        if (handlers.size() == 2) {
+            return sameHandler(handlers.get(0), 0, 40, 50)
+                && sameHandler(handlers.get(1), 41, 49, 50);
+        }
+        return false;
     }
 
     private static boolean sameHandler(final CodeException handler, final int startPc, final int endPc, final int handlerPc) {

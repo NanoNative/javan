@@ -867,7 +867,7 @@ rejects_check "$NEGATIVE_PROJECTS/enum-value-of" "error[JAVAN015]"
 rejects_check "$NEGATIVE_PROJECTS/non-ascii-string" "error[JAVAN046]"
 rejects_check "$NEGATIVE_PROJECTS/unsupported-socket" "error[JAVAN061]"
 rejects_check "$NEGATIVE_PROJECTS/unsupported-server-socket" "error[JAVAN061]"
-rejects_check "$NEGATIVE_PROJECTS/unsupported-nano-http-server-dependency" "error[JAVAN061]"
+rejects_check "$NEGATIVE_PROJECTS/unsupported-http-server-dependency" "error[JAVAN061]"
 
 accepts_optional_typemap_probe
 accepts_optional_nano_probe

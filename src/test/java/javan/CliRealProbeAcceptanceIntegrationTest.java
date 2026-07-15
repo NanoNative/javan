@@ -91,59 +91,6 @@ final class CliRealProbeAcceptanceIntegrationTest extends CliIntegrationSupport 
     }
 
     @Test
-    void nanoConfigRegisterProbeNowFailsClearlyWithinKnownDependencyFrontiers() throws Exception {
-        final Path nanoArtifact = pinnedMavenArtifact("org.nanonative", "nano", "2025.11.3131219");
-        final Path typeMapArtifact = pinnedMavenArtifact("berlin.yuna", "type-map", "2025.06.1521025");
-        Assumptions.assumeTrue(Files.isRegularFile(nanoArtifact), "Pinned Nano artifact is not available in the local Maven cache");
-        Assumptions.assumeTrue(Files.isRegularFile(typeMapArtifact), "Pinned TypeMap artifact is not available in the local Maven cache");
-        final Path project = project("nano-config-register-frontier");
-        writeJava(project, "com.acme.Main", """
-            package com.acme;
-
-            import org.nanonative.nano.helper.config.ConfigRegister;
-
-            public final class Main {
-                private Main() {
-                }
-
-                public static void main(final String[] args) {
-                    System.out.println(ConfigRegister.registerConfig(" demo.key ", "demo"));
-                    System.out.println(ConfigRegister.configDescriptionOf("demo.key"));
-                }
-            }
-            """);
-
-        final String classpath = nanoArtifact + java.io.File.pathSeparator + typeMapArtifact;
-        final CliRun run = run(tempDir, "build", project.toString(), "--classpath", classpath, "--output", "nano-config-register-frontier");
-
-        assertThat(run.exitCode()).isEqualTo(2);
-        assertThat(run.stderr()).contains("error[");
-        if (run.stderr().contains("java/lang/Byte.valueOf(B)Ljava/lang/Byte;")) {
-            assertThat(run.stderr()).contains(
-                "error[JAVAN031]",
-                "berlin/yuna/typemap/logic/TypeConverter",
-                "iterateOverArray(Ljava/lang/Object;Ljava/util/function/Consumer;)V",
-                "java/lang/Byte.valueOf(B)Ljava/lang/Byte;"
-            );
-        } else if (run.stderr().contains("java/util/concurrent/atomic/AtomicReference.<init>(Ljava/lang/Object;)V")) {
-            assertThat(run.stderr()).contains(
-                "error[JAVAN031]",
-                "berlin/yuna/typemap/logic/TypeConverter",
-                "getFirstFromArray(Ljava/lang/Object;)Ljava/lang/Object;",
-                "java/util/concurrent/atomic/AtomicReference.<init>(Ljava/lang/Object;)V"
-            );
-        } else {
-            assertThat(run.stderr()).contains(
-                "error[JAVAN061]",
-                "berlin/yuna/typemap/config/TypeConversionRegister",
-                "lambda$static$19(Ljava/lang/String;)Ljava/net/Inet6Address;",
-                "java/net/InetAddress.getByName(Ljava/lang/String;)Ljava/net/InetAddress;"
-            );
-        }
-        assertThat(project.resolve(".javan/bin/nano-config-register-frontier")).doesNotExist();
-    }
-
-    @Test
     void acceptanceRealProbesFailWhenRequiredArtifactsAreMissing() throws Exception {
         final Path repo = tempDir.resolve("empty-maven-repo");
         Files.createDirectories(repo);

@@ -247,8 +247,10 @@ public final class CCodegen {
                 c.append("    {")
                     .append(ids.get(classInfo.jvmName()).intValue())
                     .append(", \"")
-                    .append(escapeCString(classInfo.jvmName()))
+                    .append(escapeCString(displayClassName(classInfo.jvmName())))
                     .append("\", ")
+                    .append(classInfo.enumConstants().isEmpty() ? 0 : 1)
+                    .append(", ")
                     .append(objectFields.size())
                     .append(", ");
                 if (objectFields.isEmpty()) {

@@ -1822,11 +1822,11 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                 GREEN
             }
             """);
-        writeJava(project, "com.acme.TypeConverter", """
+        writeJava(project, "com.acme.EnumLookupSupport", """
             package com.acme;
 
-            public final class TypeConverter {
-                private TypeConverter() {
+            public final class EnumLookupSupport {
+                private EnumLookupSupport() {
                 }
 
                 public static <T extends Enum<T>> T enumOf(final Object value, final Class<T> type) {
@@ -1851,11 +1851,11 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void main(final String[] args) {
-                    System.out.println(TypeConverter.enumOf("RED", Color.class));
-                    System.out.println(TypeConverter.enumOf("MISSING", Color.class));
-                    System.out.println(TypeConverter.enumOf(1, Color.class));
-                    System.out.println(TypeConverter.enumOf(4L, Color.class));
-                    System.out.println(TypeConverter.enumOf(null, Color.class));
+                    System.out.println(EnumLookupSupport.enumOf("RED", Color.class));
+                    System.out.println(EnumLookupSupport.enumOf("MISSING", Color.class));
+                    System.out.println(EnumLookupSupport.enumOf(1, Color.class));
+                    System.out.println(EnumLookupSupport.enumOf(4L, Color.class));
+                    System.out.println(EnumLookupSupport.enumOf(null, Color.class));
                 }
             }
             """);
@@ -1869,7 +1869,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void exactCatchNullFunctionOrNullApplyBuildsAndMatchesJvmOutput() throws Exception {
+    void exactCatchNullFallibleApplyBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("exact-catch-null-fallible-function-apply");
         writeJava(project, "com.acme.FallibleFunction", """
             package com.acme;

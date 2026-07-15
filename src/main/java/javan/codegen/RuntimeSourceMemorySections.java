@@ -633,6 +633,7 @@ final class RuntimeSourceMemorySections {
         static void javan_heap_maybe_validate(void);
         static void javan_object_registry_cleanup(void);
         static int javan_registered_type_id(void* value);
+        static JavanTypeDescriptor* javan_type_descriptor_for(int type_id);
         static int javan_probably_string_key(void* value);
 
         static void javan_native_file_cleanup(void* value) {
@@ -2861,7 +2862,11 @@ final class RuntimeSourceMemorySections {
             }
             int type_id = javan_registered_type_id(value);
             if (type_id > 0) {
-                return javan_generated_object_get_class(value);
+                JavanTypeDescriptor* descriptor = javan_type_descriptor_for(type_id);
+                if (descriptor != NULL && descriptor->name != NULL) {
+                    return javan_runtime_class_literal(descriptor->name, type_id, descriptor->is_enum, 0, 1, type_id);
+                }
+                javan_panic("unsupported generated object type");
             }
             if (node != NULL && node->runtime_kind == JAVAN_RUNTIME_KIND_STRING) {
                 return javan_runtime_class_literal("java.lang.String", JAVAN_CLASS_EXACT_STRING, 0, 0, 0);

@@ -123,6 +123,7 @@ final class RuntimeHeaderFile {
         typedef struct {
             int type_id;
             const char* name;
+            int is_enum;
             int object_field_count;
             unsigned long* object_field_offsets;
         } JavanTypeDescriptor;

@@ -617,12 +617,12 @@ final class BytecodeToIRTest {
     @Test
     void lowersExactCatchNullEnumLookupMethodToHelperCall() {
         final MethodInfo enumOf = exactCatchNullEnumLookupMethod();
-        final EntryPoint entryPoint = new EntryPoint("com/acme/TypeConverter", "enumOf", "(Ljava/lang/Object;Ljava/lang/Class;)Ljava/lang/Enum;");
+        final EntryPoint entryPoint = new EntryPoint("com/acme/EnumLookupSupport", "enumOf", "(Ljava/lang/Object;Ljava/lang/Class;)Ljava/lang/Enum;");
         final CallGraph graph = new CallGraph(entryPoint, List.of(entryPoint), List.of());
         final IrProgram program = new BytecodeToIR().lower(
             Map.of(
-                "com/acme/TypeConverter",
-                classFile("com/acme/TypeConverter", "java/lang/Object", 0, List.of(), List.of(), List.of(enumOf))
+                "com/acme/EnumLookupSupport",
+                classFile("com/acme/EnumLookupSupport", "java/lang/Object", 0, List.of(), List.of(), List.of(enumOf))
             ),
             graph,
             SourceLineIndex.empty()
@@ -639,8 +639,8 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowersExactCatchNullFunctionOrNullApplyMethodToHelperCall() {
-        final MethodInfo apply = exactCatchNullFunctionOrNullApplyMethod();
+    void lowersExactCatchNullFallibleApplyMethodToHelperCall() {
+        final MethodInfo apply = exactCatchNullFallibleApplyMethod();
         final EntryPoint entryPoint = new EntryPoint("com/acme/FallibleFunction", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;");
         final CallGraph graph = new CallGraph(entryPoint, List.of(entryPoint), List.of());
         final IrProgram program = new BytecodeToIR().lower(
@@ -16302,7 +16302,7 @@ final class BytecodeToIRTest {
         );
     }
 
-    private static MethodInfo exactCatchNullFunctionOrNullApplyMethod() {
+    private static MethodInfo exactCatchNullFallibleApplyMethod() {
         return methodWithHandlers(
             0,
             "apply",
@@ -16357,7 +16357,7 @@ final class BytecodeToIRTest {
             invokeStatic(43, new MethodRef("com/acme/TemporalSupport", "toTimestampMs", "(J)J")),
             invokeStatic(46, new MethodRef("java/lang/Long", "valueOf", "(J)Ljava/lang/Long;")),
             plain(49, 42, "aload_0"),
-            invokeStatic(50, new MethodRef("com/acme/TypeConverter", "convertObj", "(Ljava/lang/Object;Ljava/lang/Class;)Ljava/lang/Object;")),
+            invokeStatic(50, new MethodRef("com/acme/ValueCoercionSupport", "convertObj", "(Ljava/lang/Object;Ljava/lang/Class;)Ljava/lang/Object;")),
             plain(53, 176, "areturn"),
             plain(54, 58, "astore"),
             plain(56, 132, "iinc"),

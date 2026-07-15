@@ -966,19 +966,19 @@ final class CoreBehaviorTest {
     @Test
     void staticVerifierAcceptsReachableExactCatchNullEnumLookupMethod() {
         final MethodInfo method = exactCatchNullEnumLookupMethod();
-        final ClassFile typeConverter = classWithMethods("com/acme/TypeConverter", "java/lang/Object", 0, List.of(), method);
+        final ClassFile enumLookupSupport = classWithMethods("com/acme/EnumLookupSupport", "java/lang/Object", 0, List.of(), method);
 
         final List<Diagnostic> diagnostics = new StaticVerifier().verify(
-            Map.of(typeConverter.name(), typeConverter),
-            List.of(new EntryPoint("com/acme/TypeConverter", "enumOf", "(Ljava/lang/Object;Ljava/lang/Class;)Ljava/lang/Enum;"))
+            Map.of(enumLookupSupport.name(), enumLookupSupport),
+            List.of(new EntryPoint("com/acme/EnumLookupSupport", "enumOf", "(Ljava/lang/Object;Ljava/lang/Class;)Ljava/lang/Enum;"))
         );
 
         assertThat(diagnostics).isEmpty();
     }
 
     @Test
-    void staticVerifierAcceptsReachableExactCatchNullFunctionOrNullApplyMethod() {
-        final MethodInfo method = exactCatchNullFunctionOrNullApplyMethod();
+    void staticVerifierAcceptsReachableExactCatchNullFallibleApplyMethod() {
+        final MethodInfo method = exactCatchNullFallibleApplyMethod();
         final ClassFile functionOrNull = classWithMethods(
             "com/acme/FallibleFunction",
             "java/lang/Object",
@@ -10746,7 +10746,7 @@ final class CoreBehaviorTest {
         );
     }
 
-    private static MethodInfo exactCatchNullFunctionOrNullApplyMethod() {
+    private static MethodInfo exactCatchNullFallibleApplyMethod() {
         return new MethodInfo(
             0,
             "apply",
@@ -10811,7 +10811,7 @@ final class CoreBehaviorTest {
                     instruction(43, 184, "invokestatic", new MethodRef("com/acme/TemporalSupport", "toTimestampMs", "(J)J")),
                     instruction(46, 184, "invokestatic", new MethodRef("java/lang/Long", "valueOf", "(J)Ljava/lang/Long;")),
                     instruction(49, 42, "aload_0"),
-                    instruction(50, 184, "invokestatic", new MethodRef("com/acme/TypeConverter", "convertObj", "(Ljava/lang/Object;Ljava/lang/Class;)Ljava/lang/Object;")),
+                    instruction(50, 184, "invokestatic", new MethodRef("com/acme/ValueCoercionSupport", "convertObj", "(Ljava/lang/Object;Ljava/lang/Class;)Ljava/lang/Object;")),
                     instruction(53, 176, "areturn"),
                     instruction(54, 58, "astore"),
                     instruction(56, 132, "iinc"),
@@ -11407,7 +11407,7 @@ final class CoreBehaviorTest {
             "(unsigned long) offsetof(struct javan_class_com_acme_Node, field_child),",
             "(unsigned long) offsetof(struct javan_class_com_acme_Node, field_items)",
             "static JavanTypeDescriptor javan_type_descriptors[] = {",
-            "{1, \"com/acme/Node\", 2, javan_type_fields_com_acme_Node}",
+            "{1, \"com.acme.Node\", 0, 2, javan_type_fields_com_acme_Node}",
             "javan_register_type_descriptors(javan_type_descriptors, 1);",
             "javan_register_generated_type_descriptors();",
             "javan_gc_safe_point();"

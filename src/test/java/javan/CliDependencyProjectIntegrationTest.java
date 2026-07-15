@@ -467,6 +467,51 @@ final class CliDependencyProjectIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void reachableUnsupportedNetworkCallInsideDependencyFailsClearly() throws Exception {
+        final Path dependency = dependencyJar("dep-live-network", "dep.Lookup", """
+            package dep;
+
+            import java.net.InetAddress;
+
+            public final class Lookup {
+                private Lookup() {
+                }
+
+                public static String host(final String value) throws Exception {
+                    return InetAddress.getByName(value).getHostAddress();
+                }
+            }
+            """);
+        final Path project = project("dependency-live-network");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import dep.Lookup;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    System.out.println(Lookup.host("127.0.0.1"));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString(), "--classpath", dependency.toString());
+
+        assertThat(run.exitCode()).isEqualTo(2);
+        assertThat(run.stderr()).contains(
+            "error[JAVAN061]",
+            "dep/Lookup",
+            "host(Ljava/lang/String;)Ljava/lang/String;",
+            "java/net/InetAddress.getByName(Ljava/lang/String;)Ljava/net/InetAddress;",
+            "network/socket"
+        );
+        assertThat(project.resolve(".javan/bin/dependency-live-network")).doesNotExist();
+    }
+
+    @Test
     void reachableReflectionFails() throws Exception {
         final Path project = project("reachable-reflection");
         writeJava(project, "com.acme.Main", """
