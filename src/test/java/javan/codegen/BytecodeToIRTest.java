@@ -921,6 +921,58 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersExactUnsupportedTemporalSqlDateValueOfLambdaToExplicitUnsupportedRuntimeBridge() {
+        final EntryPoint entryPoint = new EntryPoint(
+            "com/acme/TemporalSupport",
+            "lambda$static$79",
+            "(Ljava/time/LocalTime;)Ljava/sql/Date;"
+        );
+        final CallGraph graph = new CallGraph(entryPoint, List.of(entryPoint), List.of());
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/TemporalSupport",
+                classFile("com/acme/TemporalSupport", "java/lang/Object", 0, List.of(), List.of(), List.of(exactUnsupportedTemporalSqlDateValueOfLambdaMethod()))
+            ),
+            graph,
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).hasSize(1);
+        assertThat(program.functions().getFirst().instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_temporal_conversion_lambda_unsupported",
+                List.of(IrExpression.stringLiteral("com/acme/TemporalSupport.lambda$static$79(Ljava/time/LocalTime;)Ljava/sql/Date;"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersExactUnsupportedTemporalSqlTimestampFromLongLambdaToExplicitUnsupportedRuntimeBridge() {
+        final EntryPoint entryPoint = new EntryPoint(
+            "com/acme/TemporalSupport",
+            "lambda$static$30",
+            "(Ljava/lang/Long;)Ljava/sql/Timestamp;"
+        );
+        final CallGraph graph = new CallGraph(entryPoint, List.of(entryPoint), List.of());
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/TemporalSupport",
+                classFile("com/acme/TemporalSupport", "java/lang/Object", 0, List.of(), List.of(), List.of(exactUnsupportedTemporalSqlTimestampFromLongLambdaMethod()))
+            ),
+            graph,
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).hasSize(1);
+        assertThat(program.functions().getFirst().instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_temporal_conversion_lambda_unsupported",
+                List.of(IrExpression.stringLiteral("com/acme/TemporalSupport.lambda$static$30(Ljava/lang/Long;)Ljava/sql/Timestamp;"))
+            ))
+        );
+    }
+
+    @Test
     void lowersZonedDateTimeEpochMillisBoxingLambdaToExplicitUnsupportedRuntimeBridge() {
         final EntryPoint entryPoint = new EntryPoint(
             "com/acme/Main",
@@ -16330,6 +16382,36 @@ final class BytecodeToIRTest {
             invokeVirtual(5, new MethodRef("java/sql/Timestamp", "getTime", "()J")),
             invokeSpecial(8, new MethodRef("java/util/Date", "<init>", "(J)V")),
             plain(11, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo exactUnsupportedTemporalSqlDateValueOfLambdaMethod() {
+        return method(
+            0x0008,
+            "lambda$static$79",
+            "(Ljava/time/LocalTime;)Ljava/sql/Date;",
+            1,
+            1,
+            getStatic(0, new FieldRef("java/time/LocalDate", "MIN", "Ljava/time/LocalDate;")),
+            invokeStatic(3, new MethodRef("java/sql/Date", "valueOf", "(Ljava/time/LocalDate;)Ljava/sql/Date;")),
+            plain(6, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo exactUnsupportedTemporalSqlTimestampFromLongLambdaMethod() {
+        return method(
+            0x0008,
+            "lambda$static$30",
+            "(Ljava/lang/Long;)Ljava/sql/Timestamp;",
+            4,
+            1,
+            classInstruction(0, 187, "new", "java/sql/Timestamp"),
+            plain(3, 89, "dup"),
+            plain(4, 42, "aload_0"),
+            invokeVirtual(5, new MethodRef("java/lang/Long", "longValue", "()J")),
+            invokeStatic(8, new MethodRef("com/acme/TemporalSupport", "toTimestampMs", "(J)J")),
+            invokeSpecial(11, new MethodRef("java/sql/Timestamp", "<init>", "(J)V")),
+            plain(14, 176, "areturn")
         );
     }
 

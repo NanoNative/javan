@@ -615,7 +615,10 @@ public final class ExactMethodSupport {
     }
 
     private static boolean isSupportedUnsupportedTemporalInstruction(final String owner, final Instruction instruction) {
-        if (instruction.dynamicRef().isPresent() || instruction.fieldRef().isPresent()) {
+        if (instruction.dynamicRef().isPresent()) {
+            return false;
+        }
+        if (instruction.fieldRef().isPresent() && !isUnsupportedTemporalField(instruction.fieldRef().orElseThrow())) {
             return false;
         }
         if (instruction.className().isPresent() && !isUnsupportedTemporalClassLiteral(instruction.className().orElseThrow())) {
@@ -625,7 +628,7 @@ public final class ExactMethodSupport {
             return false;
         }
         return switch (instruction.opcode()) {
-            case 1, 3, 4, 9, 16, 18, 42, 43, 44, 45, 76, 77, 78, 89, 176, 182, 183, 184, 187 -> true;
+            case 1, 3, 4, 9, 16, 18, 42, 43, 44, 45, 76, 77, 78, 89, 176, 178, 182, 183, 184, 187 -> true;
             default -> false;
         };
     }
@@ -634,11 +637,18 @@ public final class ExactMethodSupport {
         return isUnsupportedTemporalOwner(owner);
     }
 
+    private static boolean isUnsupportedTemporalField(final FieldRef fieldRef) {
+        return isUnsupportedTemporalOwner(fieldRef.owner());
+    }
+
     private static boolean isUnsupportedTemporalMethod(final String owner, final MethodRef methodRef) {
         return isUnsupportedTemporalOwner(methodRef.owner())
             || ("java/lang/Long".equals(methodRef.owner())
             && "valueOf".equals(methodRef.name())
             && "(J)Ljava/lang/Long;".equals(methodRef.descriptor()))
+            || (("java/lang/Long".equals(methodRef.owner()) || "java/lang/Number".equals(methodRef.owner()))
+            && "longValue".equals(methodRef.name())
+            && "()J".equals(methodRef.descriptor()))
             || owner.equals(methodRef.owner());
     }
 

@@ -1096,6 +1096,34 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void exactMethodSupportDetectsUnsupportedTemporalSqlDateValueOfLambdaShape() {
+        final MethodInfo method = exactUnsupportedTemporalSqlDateValueOfLambdaMethod();
+        final ClassFile register = classWithMethods(
+            "com/acme/TemporalSupport",
+            "java/lang/Object",
+            0,
+            List.of(),
+            method
+        );
+
+        assertThat(ExactMethodSupport.isExactUnsupportedTemporalConversionLambdaMethod(register, method)).isTrue();
+    }
+
+    @Test
+    void exactMethodSupportDetectsUnsupportedTemporalSqlTimestampFromLongLambdaShape() {
+        final MethodInfo method = exactUnsupportedTemporalSqlTimestampFromLongLambdaMethod();
+        final ClassFile register = classWithMethods(
+            "com/acme/TemporalSupport",
+            "java/lang/Object",
+            0,
+            List.of(),
+            method
+        );
+
+        assertThat(ExactMethodSupport.isExactUnsupportedTemporalConversionLambdaMethod(register, method)).isTrue();
+    }
+
+    @Test
     void exactMethodSupportDetectsZonedDateTimeEpochMillisBoxingLambdaShape() {
         final MethodInfo method = exactTemporalEpochMillisBoxingLambdaMethod(
             "lambda$static$200",
@@ -11005,6 +11033,48 @@ final class CoreBehaviorTest {
                     instruction(5, 182, "invokevirtual", new MethodRef("java/sql/Timestamp", "getTime", "()J")),
                     instruction(8, 183, "invokespecial", new MethodRef("java/util/Date", "<init>", "(J)V")),
                     instruction(11, 176, "areturn")
+                )
+            ))
+        );
+    }
+
+    private static MethodInfo exactUnsupportedTemporalSqlDateValueOfLambdaMethod() {
+        return new MethodInfo(
+            0x0008,
+            "lambda$static$79",
+            "(Ljava/time/LocalTime;)Ljava/sql/Date;",
+            Optional.of(new CodeAttribute(
+                1,
+                1,
+                new byte[0],
+                0,
+                List.of(
+                    fieldInstruction(0, 178, "getstatic", new FieldRef("java/time/LocalDate", "MIN", "Ljava/time/LocalDate;")),
+                    instruction(3, 184, "invokestatic", new MethodRef("java/sql/Date", "valueOf", "(Ljava/time/LocalDate;)Ljava/sql/Date;")),
+                    instruction(6, 176, "areturn")
+                )
+            ))
+        );
+    }
+
+    private static MethodInfo exactUnsupportedTemporalSqlTimestampFromLongLambdaMethod() {
+        return new MethodInfo(
+            0x0008,
+            "lambda$static$30",
+            "(Ljava/lang/Long;)Ljava/sql/Timestamp;",
+            Optional.of(new CodeAttribute(
+                4,
+                1,
+                new byte[0],
+                0,
+                List.of(
+                    classInstruction(0, 187, "new", "java/sql/Timestamp"),
+                    instruction(3, 89, "dup"),
+                    instruction(4, 42, "aload_0"),
+                    instruction(5, 182, "invokevirtual", new MethodRef("java/lang/Long", "longValue", "()J")),
+                    instruction(8, 184, "invokestatic", new MethodRef("com/acme/TemporalSupport", "toTimestampMs", "(J)J")),
+                    instruction(11, 183, "invokespecial", new MethodRef("java/sql/Timestamp", "<init>", "(J)V")),
+                    instruction(14, 176, "areturn")
                 )
             ))
         );
