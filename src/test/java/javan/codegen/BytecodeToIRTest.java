@@ -921,6 +921,62 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersZonedDateTimeEpochMillisBoxingLambdaToExplicitUnsupportedRuntimeBridge() {
+        final EntryPoint entryPoint = new EntryPoint(
+            "com/acme/Main",
+            "lambda$static$200",
+            "(Ljava/time/ZonedDateTime;)Ljava/lang/Long;"
+        );
+        final CallGraph graph = new CallGraph(entryPoint, List.of(entryPoint), List.of());
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    exactTemporalEpochMillisBoxingLambdaMethod("lambda$static$200", "java/time/ZonedDateTime", "toInstant")
+                ))
+            ),
+            graph,
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).hasSize(1);
+        assertThat(program.functions().getFirst().instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_temporal_conversion_lambda_unsupported",
+                List.of(IrExpression.stringLiteral("com/acme/Main.lambda$static$200(Ljava/time/ZonedDateTime;)Ljava/lang/Long;"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersOffsetDateTimeEpochMillisBoxingLambdaToExplicitUnsupportedRuntimeBridge() {
+        final EntryPoint entryPoint = new EntryPoint(
+            "com/acme/Main",
+            "lambda$static$201",
+            "(Ljava/time/OffsetDateTime;)Ljava/lang/Long;"
+        );
+        final CallGraph graph = new CallGraph(entryPoint, List.of(entryPoint), List.of());
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    exactTemporalEpochMillisBoxingLambdaMethod("lambda$static$201", "java/time/OffsetDateTime", "toInstant")
+                ))
+            ),
+            graph,
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).hasSize(1);
+        assertThat(program.functions().getFirst().instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_temporal_conversion_lambda_unsupported",
+                List.of(IrExpression.stringLiteral("com/acme/Main.lambda$static$201(Ljava/time/OffsetDateTime;)Ljava/lang/Long;"))
+            ))
+        );
+    }
+
+    @Test
     void storeObjectClearsThrowableTypeWhenPlainObjectOverwritesThrowableLocal() {
         final Map<Integer, IrExpression> locals = new HashMap<>();
         final Map<Integer, BytecodeToIR.StackKind> objectLocalKinds = new HashMap<>();
@@ -16195,6 +16251,25 @@ final class BytecodeToIRTest {
             invokeVirtual(5, new MethodRef("java/sql/Timestamp", "getTime", "()J")),
             invokeSpecial(8, new MethodRef("java/util/Date", "<init>", "(J)V")),
             plain(11, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo exactTemporalEpochMillisBoxingLambdaMethod(
+        final String methodName,
+        final String temporalOwner,
+        final String temporalMethod
+    ) {
+        return method(
+            0x0008,
+            methodName,
+            "(L" + temporalOwner + ";)Ljava/lang/Long;",
+            3,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef(temporalOwner, temporalMethod, "()Ljava/time/Instant;")),
+            invokeVirtual(4, new MethodRef("java/time/Instant", "toEpochMilli", "()J")),
+            invokeStatic(7, new MethodRef("java/lang/Long", "valueOf", "(J)Ljava/lang/Long;")),
+            plain(10, 176, "areturn")
         );
     }
 

@@ -1096,6 +1096,42 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void exactMethodSupportDetectsZonedDateTimeEpochMillisBoxingLambdaShape() {
+        final MethodInfo method = exactTemporalEpochMillisBoxingLambdaMethod(
+            "lambda$static$200",
+            "java/time/ZonedDateTime",
+            "toInstant"
+        );
+        final ClassFile owner = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            method
+        );
+
+        assertThat(ExactMethodSupport.isExactUnsupportedTemporalConversionLambdaMethod(owner, method)).isTrue();
+    }
+
+    @Test
+    void exactMethodSupportDetectsOffsetDateTimeEpochMillisBoxingLambdaShape() {
+        final MethodInfo method = exactTemporalEpochMillisBoxingLambdaMethod(
+            "lambda$static$201",
+            "java/time/OffsetDateTime",
+            "toInstant"
+        );
+        final ClassFile owner = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            method
+        );
+
+        assertThat(ExactMethodSupport.isExactUnsupportedTemporalConversionLambdaMethod(owner, method)).isTrue();
+    }
+
+    @Test
     void staticVerifierSkipsUnreachableGeneratedEnumValueOfBody() {
         final MethodInfo method = generatedEnumValueOfMethod(0x0008, instruction(0, 18, "ldc"));
         final ClassFile enumClass = classWithMethods("com/acme/Color", "java/lang/Enum", 0x4000, List.of(), method);
@@ -10969,6 +11005,31 @@ final class CoreBehaviorTest {
                     instruction(5, 182, "invokevirtual", new MethodRef("java/sql/Timestamp", "getTime", "()J")),
                     instruction(8, 183, "invokespecial", new MethodRef("java/util/Date", "<init>", "(J)V")),
                     instruction(11, 176, "areturn")
+                )
+            ))
+        );
+    }
+
+    private static MethodInfo exactTemporalEpochMillisBoxingLambdaMethod(
+        final String methodName,
+        final String temporalOwner,
+        final String temporalMethod
+    ) {
+        return new MethodInfo(
+            0x0008,
+            methodName,
+            "(L" + temporalOwner + ";)Ljava/lang/Long;",
+            Optional.of(new CodeAttribute(
+                3,
+                1,
+                new byte[0],
+                0,
+                List.of(
+                    instruction(0, 42, "aload_0"),
+                    instruction(1, 182, "invokevirtual", new MethodRef(temporalOwner, temporalMethod, "()Ljava/time/Instant;")),
+                    instruction(4, 182, "invokevirtual", new MethodRef("java/time/Instant", "toEpochMilli", "()J")),
+                    instruction(7, 184, "invokestatic", new MethodRef("java/lang/Long", "valueOf", "(J)Ljava/lang/Long;")),
+                    instruction(10, 176, "areturn")
                 )
             ))
         );

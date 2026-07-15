@@ -381,14 +381,13 @@ public final class ExactMethodSupport {
         if (classFile == null || method == null || !method.isStatic()) {
             return false;
         }
-        if (!"berlin/yuna/typemap/config/TypeConversionRegister".equals(classFile.name())) {
-            return false;
-        }
         if (!method.name().startsWith("lambda$static$")) {
             return false;
         }
         final Optional<String> returnOwner = objectOwner(returnDescriptor(method.descriptor()).orElse(""));
-        if (returnOwner.isEmpty() || !isUnsupportedTemporalOwner(returnOwner.orElseThrow())) {
+        if (returnOwner.isEmpty()
+            || (!isUnsupportedTemporalOwner(returnOwner.orElseThrow())
+            && !"java/lang/Long".equals(returnOwner.orElseThrow()))) {
             return false;
         }
         final Optional<CodeAttribute> code = method.code();
@@ -623,6 +622,9 @@ public final class ExactMethodSupport {
 
     private static boolean isUnsupportedTemporalMethod(final MethodRef methodRef) {
         return isUnsupportedTemporalOwner(methodRef.owner())
+            || ("java/lang/Long".equals(methodRef.owner())
+            && "valueOf".equals(methodRef.name())
+            && "(J)Ljava/lang/Long;".equals(methodRef.descriptor()))
             || "berlin/yuna/typemap/config/TypeConversionRegister".equals(methodRef.owner());
     }
 
