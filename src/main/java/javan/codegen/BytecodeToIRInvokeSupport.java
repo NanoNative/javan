@@ -6642,6 +6642,9 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if (isLiteralOpcode(instruction.opcode())) {
+            if (instruction.constantPoolTag().filter(tag -> tag == 15).isPresent()) {
+                throw unsupportedMethodHandleLiteral(classFile, method, instruction);
+            }
             if (instruction.constantPoolTag().filter(tag -> tag == 16).isPresent()) {
                 throw unsupportedMethodTypeLiteral(classFile, method, instruction);
             }

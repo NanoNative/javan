@@ -232,6 +232,36 @@ final class ClassFileReaderTest {
     }
 
     @Test
+    void readerPreservesMethodHandleTagForLdc() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(classfileWithMethodHandleLiteral(new byte[]{18, 14, (byte) 177}), SOURCE);
+
+        final Instruction instruction = classFile.method("demo", "()V").orElseThrow().code().orElseThrow().instructions().getFirst();
+
+        assertThat(instruction.mnemonic()).isEqualTo("ldc");
+        assertThat(instruction.constantPoolTag()).contains(15);
+        assertThat(instruction.className()).isEmpty();
+        assertThat(instruction.stringValue()).isEmpty();
+        assertThat(instruction.intValue()).isEmpty();
+        assertThat(instruction.floatValue()).isEmpty();
+        assertThat(instruction.dynamicRef()).isEmpty();
+    }
+
+    @Test
+    void readerPreservesMethodHandleTagForLdcw() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(classfileWithMethodHandleLiteral(new byte[]{19, 0, 14, (byte) 177}), SOURCE);
+
+        final Instruction instruction = classFile.method("demo", "()V").orElseThrow().code().orElseThrow().instructions().getFirst();
+
+        assertThat(instruction.mnemonic()).isEqualTo("ldc_w");
+        assertThat(instruction.constantPoolTag()).contains(15);
+        assertThat(instruction.className()).isEmpty();
+        assertThat(instruction.stringValue()).isEmpty();
+        assertThat(instruction.intValue()).isEmpty();
+        assertThat(instruction.floatValue()).isEmpty();
+        assertThat(instruction.dynamicRef()).isEmpty();
+    }
+
+    @Test
     void readerNormalizesSmallIntegerLiteralInstructions() throws Exception {
         final ClassFile classFile = new ClassFileReader().read(
             minimalClassfile(
@@ -614,6 +644,48 @@ final class ClassFileReaderTest {
             .u2(8)
             .u2(1)
             .u2(9)
+            .u4(12L + code.length)
+            .u2(2)
+            .u2(1)
+            .u4(code.length)
+            .bytes(code)
+            .u2(0)
+            .u2(0)
+            .u2(0)
+            .toByteArray();
+    }
+
+    private static byte[] classfileWithMethodHandleLiteral(final byte[] code) {
+        return new Bytes()
+            .u4(0xCAFEBABEL)
+            .u2(0)
+            .u2(65)
+            .u2(15)
+            .utf8("sample/MethodHandleDemo")
+            .classInfo(1)
+            .utf8("java/lang/Object")
+            .classInfo(3)
+            .utf8("demo")
+            .utf8("()V")
+            .utf8("Code")
+            .utf8("java/util/Map")
+            .classInfo(8)
+            .utf8("get")
+            .utf8("(Ljava/lang/Object;)Ljava/lang/Object;")
+            .nameAndType(10, 11)
+            .u1(11).u2(9).u2(12)
+            .methodHandle(9, 13)
+            .u2(0x0021)
+            .u2(2)
+            .u2(4)
+            .u2(0)
+            .u2(0)
+            .u2(1)
+            .u2(0x0009)
+            .u2(5)
+            .u2(6)
+            .u2(1)
+            .u2(7)
             .u4(12L + code.length)
             .u2(2)
             .u2(1)

@@ -2834,6 +2834,42 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void rejectsMethodHandleLdcLiteral() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/lang/Object;",
+            1,
+            0,
+            taggedLiteral(0, 18, "ldc", 15),
+            plain(1, 176, "areturn")
+        )))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("ldc");
+                assertThat(exception).hasMessageContaining("method handle literals are not implemented by native code generation");
+            });
+    }
+
+    @Test
+    void rejectsMethodHandleLdcwLiteral() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/lang/Object;",
+            1,
+            0,
+            taggedLiteral(0, 19, "ldc_w", 15),
+            plain(1, 176, "areturn")
+        )))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("ldc_w");
+                assertThat(exception).hasMessageContaining("method handle literals are not implemented by native code generation");
+            });
+    }
+
+    @Test
     void lowersIincToIntLocalAddAssignment() {
         final IrFunction function = lowerMain(method(
             0x0008,
