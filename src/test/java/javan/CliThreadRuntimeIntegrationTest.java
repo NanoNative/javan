@@ -2428,6 +2428,32 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void threadSleepDurationBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-sleep-duration");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.time.Duration;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    Thread.sleep(Duration.ofMillis(20L));
+                    System.out.println("awake");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-sleep-duration").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void threadSetNameBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("thread-set-name");
         writeJava(project, "com.acme.Main", """

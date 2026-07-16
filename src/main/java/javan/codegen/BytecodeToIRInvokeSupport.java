@@ -2089,6 +2089,24 @@ final class BytecodeToIRInvokeSupport {
             );
             return true;
         }
+        if ("sleep".equals(methodRef.name()) && "(Ljava/time/Duration;)V".equals(methodRef.descriptor())) {
+            final IrExpression duration = popObjectForJdkCall(classFile, method, instruction, stack);
+            lowerInterruptAwareThreadWait(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                localDeclarations,
+                pendingExceptionHandlerStacks,
+                sourceLines,
+                true,
+                IrExpression.stringLiteral("sleep interrupted"),
+                "javan_thread_sleep_millis_interruptible",
+                List.of(IrExpression.longCall("javan_duration_to_millis", List.of(duration)))
+            );
+            return true;
+        }
         if ("interrupted".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor())) {
             stack.add(StackValue.intExpression(IrExpression.intCall("javan_thread_interrupted", List.of())));
             return true;

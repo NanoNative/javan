@@ -991,6 +991,12 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void jdkCallSupportClassifiesThreadSleepDurationRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new MethodRef("java/lang/Thread", "sleep", "(Ljava/time/Duration;)V")))
+            .containsExactly("threads");
+    }
+
+    @Test
     void jdkCallSupportClassifiesThreadIsAliveRuntimeModule() {
         assertThat(JdkCallSupport.runtimeModules(new MethodRef("java/lang/Thread", "isAlive", "()Z")))
             .containsExactly("threads");
@@ -1129,6 +1135,7 @@ final class CoreBehaviorTest {
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "getId", "()J"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "threadId", "()J"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "sleep", "(J)V"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "sleep", "(Ljava/time/Duration;)V"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "interrupted", "()Z"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "interrupt", "()V"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "isInterrupted", "()Z"))).isTrue();
