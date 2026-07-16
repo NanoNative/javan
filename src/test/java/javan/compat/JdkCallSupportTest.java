@@ -710,11 +710,65 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void socketGetReceiveBufferSizeIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/Socket",
+            "getReceiveBufferSize",
+            "()I"
+        ))).isTrue();
+    }
+
+    @Test
+    void socketSetReceiveBufferSizeIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/Socket",
+            "setReceiveBufferSize",
+            "(I)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void socketGetSendBufferSizeIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/Socket",
+            "getSendBufferSize",
+            "()I"
+        ))).isTrue();
+    }
+
+    @Test
+    void socketSetSendBufferSizeIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/Socket",
+            "setSendBufferSize",
+            "(I)V"
+        ))).isTrue();
+    }
+
+    @Test
     void serverSocketGetSoTimeoutIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/net/ServerSocket",
             "getSoTimeout",
             "()I"
+        ))).isTrue();
+    }
+
+    @Test
+    void serverSocketGetReceiveBufferSizeIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/ServerSocket",
+            "getReceiveBufferSize",
+            "()I"
+        ))).isTrue();
+    }
+
+    @Test
+    void serverSocketSetReceiveBufferSizeIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/ServerSocket",
+            "setReceiveBufferSize",
+            "(I)V"
         ))).isTrue();
     }
 

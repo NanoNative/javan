@@ -338,6 +338,10 @@ final class RuntimeHeaderFile {
         void javan_socket_set_keep_alive(void* value, int enabled);
         int javan_socket_get_reuse_address(void* value);
         void javan_socket_set_reuse_address(void* value, int enabled);
+        int javan_socket_get_receive_buffer_size(void* value);
+        void javan_socket_set_receive_buffer_size(void* value, int size);
+        int javan_socket_get_send_buffer_size(void* value);
+        void javan_socket_set_send_buffer_size(void* value, int size);
         void* javan_socket_get_local_address(void* value);
         void* javan_socket_get_inet_address(void* value);
         void* javan_socket_get_local_socket_address(void* value);
@@ -362,6 +366,8 @@ final class RuntimeHeaderFile {
         void javan_server_socket_set_so_timeout(void* value, int timeout_millis);
         int javan_server_socket_get_reuse_address(void* value);
         void javan_server_socket_set_reuse_address(void* value, int enabled);
+        int javan_server_socket_get_receive_buffer_size(void* value);
+        void javan_server_socket_set_receive_buffer_size(void* value, int size);
         void* javan_server_socket_get_local_socket_address(void* value);
         void* javan_server_socket_accept(void* value);
         void javan_server_socket_close(void* value);

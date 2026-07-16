@@ -556,8 +556,38 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void jdkCallSupportAcceptsSocketGetReceiveBufferSizeCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/Socket", "getReceiveBufferSize", "()I"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsSocketSetReceiveBufferSizeCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/Socket", "setReceiveBufferSize", "(I)V"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsSocketGetSendBufferSizeCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/Socket", "getSendBufferSize", "()I"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsSocketSetSendBufferSizeCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/Socket", "setSendBufferSize", "(I)V"))).isTrue();
+    }
+
+    @Test
     void jdkCallSupportAcceptsServerSocketGetSoTimeoutCall() {
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/ServerSocket", "getSoTimeout", "()I"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsServerSocketGetReceiveBufferSizeCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/ServerSocket", "getReceiveBufferSize", "()I"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsServerSocketSetReceiveBufferSizeCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/ServerSocket", "setReceiveBufferSize", "(I)V"))).isTrue();
     }
 
     @Test
@@ -680,9 +710,69 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void staticVerifierAcceptsReachableSocketGetReceiveBufferSizeCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 182, "invokevirtual", new MethodRef("java/net/Socket", "getReceiveBufferSize", "()I")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableSocketSetReceiveBufferSizeCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 182, "invokevirtual", new MethodRef("java/net/Socket", "setReceiveBufferSize", "(I)V")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableSocketGetSendBufferSizeCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 182, "invokevirtual", new MethodRef("java/net/Socket", "getSendBufferSize", "()I")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableSocketSetSendBufferSizeCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 182, "invokevirtual", new MethodRef("java/net/Socket", "setSendBufferSize", "(I)V")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
     void staticVerifierAcceptsReachableServerSocketGetSoTimeoutCall() {
         final List<Diagnostic> diagnostics = verifyInstruction(
             instruction(0, 182, "invokevirtual", new MethodRef("java/net/ServerSocket", "getSoTimeout", "()I")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableServerSocketGetReceiveBufferSizeCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 182, "invokevirtual", new MethodRef("java/net/ServerSocket", "getReceiveBufferSize", "()I")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableServerSocketSetReceiveBufferSizeCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 182, "invokevirtual", new MethodRef("java/net/ServerSocket", "setReceiveBufferSize", "(I)V")),
             true
         );
 

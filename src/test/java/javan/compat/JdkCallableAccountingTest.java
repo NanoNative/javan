@@ -1081,8 +1081,20 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksServerSocketGetReceiveBufferSizeAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/net/ServerSocket", "getReceiveBufferSize", "()I")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksServerSocketSetSoTimeoutAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/net/ServerSocket", "setSoTimeout", "(I)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksServerSocketSetReceiveBufferSizeAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/net/ServerSocket", "setReceiveBufferSize", "(I)V")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
@@ -1123,6 +1135,18 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksSocketGetReceiveBufferSizeAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/net/Socket", "getReceiveBufferSize", "()I")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksSocketGetSendBufferSizeAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/net/Socket", "getSendBufferSize", "()I")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksSocketGetSoTimeoutAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/net/Socket", "getSoTimeout", "()I")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
@@ -1137,6 +1161,18 @@ final class JdkCallableAccountingTest {
     @Test
     void marksSocketSetReuseAddressAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/net/Socket", "setReuseAddress", "(Z)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksSocketSetReceiveBufferSizeAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/net/Socket", "setReceiveBufferSize", "(I)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksSocketSetSendBufferSizeAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/net/Socket", "setSendBufferSize", "(I)V")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 

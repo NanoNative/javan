@@ -4463,6 +4463,10 @@ final class BytecodeToIRInvokeSupport {
                 && !"setKeepAlive".equals(methodRef.name())
                 && !"getReuseAddress".equals(methodRef.name())
                 && !"setReuseAddress".equals(methodRef.name())
+                && !"getReceiveBufferSize".equals(methodRef.name())
+                && !"setReceiveBufferSize".equals(methodRef.name())
+                && !"getSendBufferSize".equals(methodRef.name())
+                && !"setSendBufferSize".equals(methodRef.name())
                 && !"getLocalAddress".equals(methodRef.name())
                 && !"getInetAddress".equals(methodRef.name())
                 && !"getLocalSocketAddress".equals(methodRef.name())
@@ -4488,6 +4492,18 @@ final class BytecodeToIRInvokeSupport {
                 final IrExpression enabled = popInt(classFile, method, stack);
                 final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
                 instructions.add(IrInstruction.callStaticVoid("javan_socket_set_reuse_address", List.of(receiver, enabled)));
+                return true;
+            }
+            if ("setReceiveBufferSize".equals(methodRef.name()) && "(I)V".equals(methodRef.descriptor())) {
+                final IrExpression size = popInt(classFile, method, stack);
+                final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+                instructions.add(IrInstruction.callStaticVoid("javan_socket_set_receive_buffer_size", List.of(receiver, size)));
+                return true;
+            }
+            if ("setSendBufferSize".equals(methodRef.name()) && "(I)V".equals(methodRef.descriptor())) {
+                final IrExpression size = popInt(classFile, method, stack);
+                final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+                instructions.add(IrInstruction.callStaticVoid("javan_socket_set_send_buffer_size", List.of(receiver, size)));
                 return true;
             }
             if ("setSoTimeout".equals(methodRef.name()) && "(I)V".equals(methodRef.descriptor())) {
@@ -4527,6 +4543,14 @@ final class BytecodeToIRInvokeSupport {
             }
             if ("getReuseAddress".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor())) {
                 pushIntCall(instructions, stack, localDeclarations, "javan_socket_get_reuse_address", List.of(receiver));
+                return true;
+            }
+            if ("getReceiveBufferSize".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
+                pushIntCall(instructions, stack, localDeclarations, "javan_socket_get_receive_buffer_size", List.of(receiver));
+                return true;
+            }
+            if ("getSendBufferSize".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
+                pushIntCall(instructions, stack, localDeclarations, "javan_socket_get_send_buffer_size", List.of(receiver));
                 return true;
             }
             if ("getLocalAddress".equals(methodRef.name()) && "()Ljava/net/InetAddress;".equals(methodRef.descriptor())) {
@@ -4574,6 +4598,8 @@ final class BytecodeToIRInvokeSupport {
             && !"setSoTimeout".equals(methodRef.name())
             && !"getReuseAddress".equals(methodRef.name())
             && !"setReuseAddress".equals(methodRef.name())
+            && !"getReceiveBufferSize".equals(methodRef.name())
+            && !"setReceiveBufferSize".equals(methodRef.name())
             && !"getLocalSocketAddress".equals(methodRef.name())
             && !"accept".equals(methodRef.name())
             && !"close".equals(methodRef.name())) {
@@ -4591,6 +4617,12 @@ final class BytecodeToIRInvokeSupport {
             instructions.add(IrInstruction.callStaticVoid("javan_server_socket_set_reuse_address", List.of(receiver, enabled)));
             return true;
         }
+        if ("setReceiveBufferSize".equals(methodRef.name()) && "(I)V".equals(methodRef.descriptor())) {
+            final IrExpression size = popInt(classFile, method, stack);
+            final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+            instructions.add(IrInstruction.callStaticVoid("javan_server_socket_set_receive_buffer_size", List.of(receiver, size)));
+            return true;
+        }
         final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
         if ("getInetAddress".equals(methodRef.name()) && "()Ljava/net/InetAddress;".equals(methodRef.descriptor())) {
             pushObjectCall(instructions, stack, localDeclarations, "javan_server_socket_get_inet_address", List.of(receiver));
@@ -4606,6 +4638,10 @@ final class BytecodeToIRInvokeSupport {
         }
         if ("getReuseAddress".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor())) {
             pushIntCall(instructions, stack, localDeclarations, "javan_server_socket_get_reuse_address", List.of(receiver));
+            return true;
+        }
+        if ("getReceiveBufferSize".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
+            pushIntCall(instructions, stack, localDeclarations, "javan_server_socket_get_receive_buffer_size", List.of(receiver));
             return true;
         }
         if ("getLocalSocketAddress".equals(methodRef.name()) && "()Ljava/net/SocketAddress;".equals(methodRef.descriptor())) {

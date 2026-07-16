@@ -7718,6 +7718,84 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersSocketGetReceiveBufferSizeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/Socket;)I",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/net/Socket", "getReceiveBufferSize", "()I")),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignInt("int0", IrExpression.intCall("javan_socket_get_receive_buffer_size", List.of(IrExpression.objectLocal("arg0")))),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
+        );
+    }
+
+    @Test
+    void lowersSocketSetReceiveBufferSizeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/Socket;I)V",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 27, "iload_1"),
+            invokeVirtual(2, new MethodRef("java/net/Socket", "setReceiveBufferSize", "(I)V")),
+            plain(3, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid("javan_socket_set_receive_buffer_size", List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"))),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
+    void lowersSocketGetSendBufferSizeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/Socket;)I",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/net/Socket", "getSendBufferSize", "()I")),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignInt("int0", IrExpression.intCall("javan_socket_get_send_buffer_size", List.of(IrExpression.objectLocal("arg0")))),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
+        );
+    }
+
+    @Test
+    void lowersSocketSetSendBufferSizeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/Socket;I)V",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 27, "iload_1"),
+            invokeVirtual(2, new MethodRef("java/net/Socket", "setSendBufferSize", "(I)V")),
+            plain(3, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid("javan_socket_set_send_buffer_size", List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"))),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
     void lowersSocketGetTcpNoDelayCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -8005,6 +8083,45 @@ final class BytecodeToIRTest {
 
         assertThat(function.instructions()).containsExactly(
             IrInstruction.callStaticVoid("javan_server_socket_set_so_timeout", List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"))),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
+    void lowersServerSocketGetReceiveBufferSizeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/ServerSocket;)I",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/net/ServerSocket", "getReceiveBufferSize", "()I")),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignInt("int0", IrExpression.intCall("javan_server_socket_get_receive_buffer_size", List.of(IrExpression.objectLocal("arg0")))),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
+        );
+    }
+
+    @Test
+    void lowersServerSocketSetReceiveBufferSizeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/ServerSocket;I)V",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 27, "iload_1"),
+            invokeVirtual(2, new MethodRef("java/net/ServerSocket", "setReceiveBufferSize", "(I)V")),
+            plain(3, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid("javan_server_socket_set_receive_buffer_size", List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"))),
             IrInstruction.returnVoid()
         );
     }

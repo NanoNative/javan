@@ -11,8 +11,8 @@
     "rule": "done = supported variants + rejected variants; unknown leftovers must be 0 for a release-gated JDK"
   },
   "counts": {
-    "rows": 117,
-    "pass": 117,
+    "rows": 126,
+    "pass": 126,
     "scoped": 0,
     "target": 0,
     "rejected": 0
@@ -114,9 +114,12 @@
     {"feature": "network-tcp-socket-tcp-nodelay", "jdk25": "pass"},
     {"feature": "network-tcp-socket-keepalive", "jdk25": "pass"},
     {"feature": "network-tcp-socket-reuse-address", "jdk25": "pass"},
+    {"feature": "network-tcp-socket-receive-buffer", "jdk25": "pass"},
+    {"feature": "network-tcp-socket-send-buffer", "jdk25": "pass"},
     {"feature": "network-tcp-socket-timeout-round-trip", "jdk25": "pass"},
     {"feature": "network-tcp-socket-read-timeout-boundary", "jdk25": "pass"},
     {"feature": "network-tcp-server-socket-local-socket-address", "jdk25": "pass"},
+    {"feature": "network-tcp-server-socket-receive-buffer", "jdk25": "pass"},
     {"feature": "network-tcp-server-socket-timeout-round-trip", "jdk25": "pass"},
     {"feature": "network-tcp-server-socket-accept-timeout-boundary", "jdk25": "pass"},
     {"feature": "network-tcp-socket-stream-io", "jdk25": "pass"},

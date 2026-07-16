@@ -1349,6 +1349,31 @@ final class RuntimeSourcePlatformSection {
             }
         }
 
+        static int javan_socket_getsockopt_int(int fd, int level, int option_name, const char* message) {
+            int value = 0;
+            socklen_t length = (socklen_t) sizeof(value);
+            if (getsockopt(fd, level, option_name, (void*) &value, &length) != 0) {
+                javan_panic(message);
+            }
+            if (value < 0) {
+                javan_panic(message);
+            }
+            return value;
+        }
+
+        static int javan_socket_buffer_size_checked(int size) {
+            if (size <= 0) {
+                javan_panic("non-positive socket buffer size");
+            }
+            return size;
+        }
+
+        static void javan_socket_setsockopt_int(int fd, int level, int option_name, int value, const char* message) {
+            if (setsockopt(fd, level, option_name, (const void*) &value, (socklen_t) sizeof(value)) != 0) {
+                javan_panic(message);
+            }
+        }
+
         static int javan_socket_timeout_checked(int timeout_millis) {
             if (timeout_millis < 0) {
                 javan_panic("negative socket timeout");
@@ -1656,6 +1681,52 @@ final class RuntimeSourcePlatformSection {
         #endif
         }
 
+        int javan_socket_get_receive_buffer_size(void* value) {
+        #if defined(_WIN32)
+            (void) value;
+            javan_socket_runtime_unsupported();
+            return 0;
+        #else
+            javan_socket* socket = javan_socket_open_checked(value);
+            return javan_socket_getsockopt_int(socket->fd, SOL_SOCKET, SO_RCVBUF, "socket SO_RCVBUF lookup failed");
+        #endif
+        }
+
+        void javan_socket_set_receive_buffer_size(void* value, int size) {
+        #if defined(_WIN32)
+            (void) value;
+            (void) size;
+            javan_socket_runtime_unsupported();
+        #else
+            javan_socket* socket = javan_socket_open_checked(value);
+            int checked = javan_socket_buffer_size_checked(size);
+            javan_socket_setsockopt_int(socket->fd, SOL_SOCKET, SO_RCVBUF, checked, "socket SO_RCVBUF update failed");
+        #endif
+        }
+
+        int javan_socket_get_send_buffer_size(void* value) {
+        #if defined(_WIN32)
+            (void) value;
+            javan_socket_runtime_unsupported();
+            return 0;
+        #else
+            javan_socket* socket = javan_socket_open_checked(value);
+            return javan_socket_getsockopt_int(socket->fd, SOL_SOCKET, SO_SNDBUF, "socket SO_SNDBUF lookup failed");
+        #endif
+        }
+
+        void javan_socket_set_send_buffer_size(void* value, int size) {
+        #if defined(_WIN32)
+            (void) value;
+            (void) size;
+            javan_socket_runtime_unsupported();
+        #else
+            javan_socket* socket = javan_socket_open_checked(value);
+            int checked = javan_socket_buffer_size_checked(size);
+            javan_socket_setsockopt_int(socket->fd, SOL_SOCKET, SO_SNDBUF, checked, "socket SO_SNDBUF update failed");
+        #endif
+        }
+
         void* javan_socket_get_local_address(void* value) {
             return javan_socket_checked(value)->local_address;
         }
@@ -1923,6 +1994,35 @@ final class RuntimeSourcePlatformSection {
             }
             javan_socket_setsockopt_flag(socket->fd, SOL_SOCKET, SO_REUSEADDR, enabled, "server socket SO_REUSEADDR update failed");
             socket->reuse_address = enabled == 0 ? 0 : 1;
+        #endif
+        }
+
+        int javan_server_socket_get_receive_buffer_size(void* value) {
+        #if defined(_WIN32)
+            (void) value;
+            javan_socket_runtime_unsupported();
+            return 0;
+        #else
+            javan_server_socket* socket = javan_server_socket_checked(value);
+            if (socket->closed != 0 || socket->fd < 0) {
+                javan_panic("server socket is closed");
+            }
+            return javan_socket_getsockopt_int(socket->fd, SOL_SOCKET, SO_RCVBUF, "server socket SO_RCVBUF lookup failed");
+        #endif
+        }
+
+        void javan_server_socket_set_receive_buffer_size(void* value, int size) {
+        #if defined(_WIN32)
+            (void) value;
+            (void) size;
+            javan_socket_runtime_unsupported();
+        #else
+            javan_server_socket* socket = javan_server_socket_checked(value);
+            if (socket->closed != 0 || socket->fd < 0) {
+                javan_panic("server socket is closed");
+            }
+            int checked = javan_socket_buffer_size_checked(size);
+            javan_socket_setsockopt_int(socket->fd, SOL_SOCKET, SO_RCVBUF, checked, "server socket SO_RCVBUF update failed");
         #endif
         }
 

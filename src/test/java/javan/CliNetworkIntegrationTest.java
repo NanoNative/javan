@@ -440,6 +440,88 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void socketReceiveBufferSizeRoundTripBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
+                try (java.net.Socket socket = server.accept()) {
+                    socket.getOutputStream().flush();
+                } catch (final Exception exception) {
+                    throw new IllegalStateException(exception);
+                }
+            });
+            final Path project = project("socket-receive-buffer-size-round-trip");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.net.Socket;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final Socket socket = new Socket("127.0.0.1", %d);
+                        System.out.println(socket.getReceiveBufferSize());
+                        socket.setReceiveBufferSize(8192);
+                        System.out.println(socket.getReceiveBufferSize());
+                        socket.close();
+                    }
+                }
+                """.formatted(port));
+
+            final String jvmOutput = runJvm(project, "com.acme.Main");
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            assertThat(process(project, List.of(project.resolve(".javan/bin/socket-receive-buffer-size-round-trip").toString())).stdout())
+                .isEqualTo(jvmOutput);
+            accepted.get(5, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
+    void socketSendBufferSizeRoundTripBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
+                try (java.net.Socket socket = server.accept()) {
+                    socket.getOutputStream().flush();
+                } catch (final Exception exception) {
+                    throw new IllegalStateException(exception);
+                }
+            });
+            final Path project = project("socket-send-buffer-size-round-trip");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.net.Socket;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final Socket socket = new Socket("127.0.0.1", %d);
+                        System.out.println(socket.getSendBufferSize());
+                        socket.setSendBufferSize(8192);
+                        System.out.println(socket.getSendBufferSize());
+                        socket.close();
+                    }
+                }
+                """.formatted(port));
+
+            final String jvmOutput = runJvm(project, "com.acme.Main");
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            assertThat(process(project, List.of(project.resolve(".javan/bin/socket-send-buffer-size-round-trip").toString())).stdout())
+                .isEqualTo(jvmOutput);
+            accepted.get(5, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
     void serverSocketAcceptBuildsAndAcceptsLoopbackClient() throws Exception {
         final int port = freeTcpPort();
         final Path project = project("server-socket-accept");
@@ -727,6 +809,37 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/server-socket-so-timeout-round-trip").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void serverSocketReceiveBufferSizeRoundTripBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("server-socket-receive-buffer-size-round-trip");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.ServerSocket;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ServerSocket server = new ServerSocket(%d, 2);
+                    System.out.println(server.getReceiveBufferSize());
+                    server.setReceiveBufferSize(8192);
+                    System.out.println(server.getReceiveBufferSize());
+                    server.close();
+                }
+            }
+            """.formatted(port));
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/server-socket-receive-buffer-size-round-trip").toString())).stdout())
             .isEqualTo(jvmOutput);
     }
 
