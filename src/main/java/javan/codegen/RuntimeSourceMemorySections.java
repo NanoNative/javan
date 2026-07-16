@@ -8492,6 +8492,15 @@ final class RuntimeSourceMemorySections {
             return javan_atomic_reference_checked(value)->value;
         }
 
+        int javan_atomic_reference_compare_and_set(void* value, void* expected_value, void* next_value) {
+            javan_atomic_reference_state* state = javan_atomic_reference_checked(value);
+            if (state->value != expected_value) {
+                return 0;
+            }
+            state->value = next_value;
+            return 1;
+        }
+
         void javan_atomic_reference_set(void* value, void* next_value) {
             javan_atomic_reference_state* state = javan_atomic_reference_checked(value);
             state->value = next_value;

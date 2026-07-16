@@ -467,6 +467,7 @@ final class RuntimeHeaderFile {
         void* javan_atomic_reference_new(void);
         void javan_atomic_reference_init(void* value, void* initial_value);
         void* javan_atomic_reference_get(void* value);
+        int javan_atomic_reference_compare_and_set(void* value, void* expected_value, void* next_value);
         void javan_atomic_reference_set(void* value, void* next_value);
         void* javan_atomic_integer_new(void);
         void javan_atomic_integer_init(void* value, int initial_value);

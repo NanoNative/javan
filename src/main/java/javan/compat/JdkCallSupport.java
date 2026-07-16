@@ -176,6 +176,7 @@ public final class JdkCallSupport {
         runtime("AtomicLong.decrementAndGet", "java/util/concurrent/atomic/AtomicLong", "decrementAndGet", "()J"),
         runtime("AtomicReference.<init>", "java/util/concurrent/atomic/AtomicReference", "<init>", "()V", "(Ljava/lang/Object;)V"),
         runtime("AtomicReference.get", "java/util/concurrent/atomic/AtomicReference", "get", "()Ljava/lang/Object;"),
+        runtime("AtomicReference.compareAndSet", "java/util/concurrent/atomic/AtomicReference", "compareAndSet", "(Ljava/lang/Object;Ljava/lang/Object;)Z"),
         runtime("AtomicReference.set", "java/util/concurrent/atomic/AtomicReference", "set", "(Ljava/lang/Object;)V"),
         runtime("Thread.currentThread", "java/lang/Thread", "currentThread", "()Ljava/lang/Thread;"),
         runtime("Thread.yield", "java/lang/Thread", "yield", "()V"),

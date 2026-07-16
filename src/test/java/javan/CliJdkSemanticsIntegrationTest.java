@@ -1697,6 +1697,65 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void atomicReferenceCompareAndSetSuccessBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("atomic-reference-compare-and-set-success");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final var expected = new StringBuilder("alpha");
+                    final var next = new StringBuilder("beta");
+                    final var ref = new java.util.concurrent.atomic.AtomicReference<Object>(expected);
+                    System.out.println(ref.compareAndSet(expected, next));
+                    System.out.println(ref.get() == next);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/atomic-reference-compare-and-set-success").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\ntrue\n");
+    }
+
+    @Test
+    void atomicReferenceCompareAndSetIdentityFailureBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("atomic-reference-compare-and-set-identity-failure");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final var current = new String("same");
+                    final var equalButDifferent = new String("same");
+                    final var next = new String("next");
+                    final var ref = new java.util.concurrent.atomic.AtomicReference<Object>(current);
+                    System.out.println(ref.compareAndSet(equalButDifferent, next));
+                    System.out.println(ref.get() == current);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/atomic-reference-compare-and-set-identity-failure").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("false\ntrue\n");
+    }
+
+    @Test
     void atomicReferenceBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("atomic-reference");
         writeJava(project, "com.acme.Main", """

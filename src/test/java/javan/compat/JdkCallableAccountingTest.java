@@ -1033,9 +1033,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksAtomicReferenceCompareAndSetAsExplicitRejected() {
+    void marksAtomicReferenceCompareAndSetAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/atomic/AtomicReference", "compareAndSet", "(Ljava/lang/Object;Ljava/lang/Object;)Z")))
-            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
     @Test

@@ -849,6 +849,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void atomicReferenceCompareAndSetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/atomic/AtomicReference",
+            "compareAndSet",
+            "(Ljava/lang/Object;Ljava/lang/Object;)Z"
+        ))).isTrue();
+    }
+
+    @Test
     void atomicReferenceSetIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/concurrent/atomic/AtomicReference",

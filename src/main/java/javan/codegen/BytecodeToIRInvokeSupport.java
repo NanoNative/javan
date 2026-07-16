@@ -3727,6 +3727,16 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_atomic_reference_get", List.of(receiver))));
             return true;
         }
+        if ("compareAndSet".equals(methodRef.name()) && "(Ljava/lang/Object;Ljava/lang/Object;)Z".equals(methodRef.descriptor())) {
+            final IrExpression nextValue = popObject(classFile, method, stack);
+            final IrExpression expectedValue = popObject(classFile, method, stack);
+            final IrExpression receiver = popObject(classFile, method, stack);
+            stack.add(StackValue.intExpression(IrExpression.intCall(
+                "javan_atomic_reference_compare_and_set",
+                List.of(receiver, expectedValue, nextValue)
+            )));
+            return true;
+        }
         if ("set".equals(methodRef.name()) && "(Ljava/lang/Object;)V".equals(methodRef.descriptor())) {
             final IrExpression argument = popObject(classFile, method, stack);
             final IrExpression receiver = popObject(classFile, method, stack);
