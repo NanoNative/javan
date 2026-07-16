@@ -4228,6 +4228,118 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void scheduledFutureCancelFalseStopsFixedRateAfterFirstRunBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-scheduled-future-cancel-false-fixed-rate");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.Future;
+            import java.util.concurrent.ScheduledThreadPoolExecutor;
+            import java.util.concurrent.TimeUnit;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(1);
+                    final Future<?> future = executor.scheduleAtFixedRate(new Task(), 0L, 200L, TimeUnit.MILLISECONDS);
+                    while (Task.runs() == 0) {
+                        Thread.yield();
+                    }
+                    System.out.println(future.cancel(false));
+                    executor.shutdown();
+                    System.out.println(executor.awaitTermination(1L, TimeUnit.SECONDS));
+                    System.out.println(future.isDone());
+                    System.out.println(future.isCancelled());
+                    System.out.println(Task.runs());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            import java.util.concurrent.atomic.AtomicInteger;
+
+            public final class Task implements Runnable {
+                private static final AtomicInteger RUNS = new AtomicInteger();
+
+                @Override
+                public void run() {
+                    RUNS.incrementAndGet();
+                }
+
+                public static int runs() {
+                    return RUNS.get();
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-scheduled-future-cancel-false-fixed-rate").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void scheduledFutureCancelFalseStopsFixedDelayAfterFirstRunBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-scheduled-future-cancel-false-fixed-delay");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.Future;
+            import java.util.concurrent.ScheduledThreadPoolExecutor;
+            import java.util.concurrent.TimeUnit;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(1);
+                    final Future<?> future = executor.scheduleWithFixedDelay(new Task(), 0L, 200L, TimeUnit.MILLISECONDS);
+                    while (Task.runs() == 0) {
+                        Thread.yield();
+                    }
+                    System.out.println(future.cancel(false));
+                    executor.shutdown();
+                    System.out.println(executor.awaitTermination(1L, TimeUnit.SECONDS));
+                    System.out.println(future.isDone());
+                    System.out.println(future.isCancelled());
+                    System.out.println(Task.runs());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            import java.util.concurrent.atomic.AtomicInteger;
+
+            public final class Task implements Runnable {
+                private static final AtomicInteger RUNS = new AtomicInteger();
+
+                @Override
+                public void run() {
+                    RUNS.incrementAndGet();
+                }
+
+                public static int runs() {
+                    return RUNS.get();
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-scheduled-future-cancel-false-fixed-delay").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
     void scheduledExecutorServiceScheduleBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("thread-scheduled-executor-service-schedule");
         writeJava(project, "com.acme.Main", """
