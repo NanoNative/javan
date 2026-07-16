@@ -2385,6 +2385,7 @@ final class RuntimeSourceMemorySections {
             int completed;
             int virtual_thread;
             int daemon;
+            int priority;
             int park_permit;
             int schedule_mode;
             int scheduled_first_run_started;
@@ -3329,6 +3330,7 @@ final class RuntimeSourceMemorySections {
             object->completed = 0;
             object->virtual_thread = 0;
             object->daemon = 0;
+            object->priority = 5;
             object->park_permit = 0;
             object->schedule_mode = 0;
             object->scheduled_first_run_started = 0;
@@ -3354,6 +3356,9 @@ final class RuntimeSourceMemorySections {
             object->target = NULL;
             object->scheduled_executor = NULL;
             object->thread_locals = NULL;
+            if (javan_current_thread_value != NULL) {
+                object->priority = ((javan_thread*) javan_current_thread_value)->priority;
+            }
             javan_register_object((void*) object, JAVAN_TYPE_JAVA_LANG_THREAD);
             void* rooted_object = (void*) object;
             void** javan_thread_new_roots[] = { &rooted_object };
@@ -3982,6 +3987,17 @@ final class RuntimeSourceMemorySections {
 
         int javan_thread_is_daemon(void* value) {
             return javan_require_thread(value)->daemon != 0;
+        }
+
+        void javan_thread_set_priority(void* value, int priority) {
+            if (priority < 1 || priority > 10) {
+                javan_panic("invalid Thread priority");
+            }
+            javan_require_thread(value)->priority = priority;
+        }
+
+        int javan_thread_get_priority(void* value) {
+            return javan_require_thread(value)->priority;
         }
 
         void javan_thread_detach_current(void) {

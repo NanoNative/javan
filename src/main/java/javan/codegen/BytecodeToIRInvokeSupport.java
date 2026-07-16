@@ -3922,6 +3922,12 @@ final class BytecodeToIRInvokeSupport {
             ));
             return true;
         }
+        if ("setPriority".equals(methodRef.name()) && "(I)V".equals(methodRef.descriptor())) {
+            final IrExpression priority = popInt(classFile, method, stack);
+            final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+            instructions.add(IrInstruction.callStaticVoid("javan_thread_set_priority", List.of(receiver, priority)));
+            return true;
+        }
         if ("join".equals(methodRef.name()) && "(J)V".equals(methodRef.descriptor())) {
             final IrExpression millis = popLong(classFile, method, stack);
             final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
@@ -3968,6 +3974,10 @@ final class BytecodeToIRInvokeSupport {
         }
         if ("isDaemon".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor())) {
             pushIntCall(instructions, stack, localDeclarations, "javan_thread_is_daemon", List.of(receiver));
+            return true;
+        }
+        if ("getPriority".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
+            pushIntCall(instructions, stack, localDeclarations, "javan_thread_get_priority", List.of(receiver));
             return true;
         }
         if ("isInterrupted".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor())) {

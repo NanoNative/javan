@@ -2295,6 +2295,82 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void threadPriorityDefaultsBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-priority-default");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Thread.currentThread().getPriority());
+                    System.out.println(new Thread().getPriority());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-priority-default").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadPrioritySetGetBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-priority-set-get");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Thread worker = new Thread();
+                    worker.setPriority(7);
+                    System.out.println(worker.getPriority());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-priority-set-get").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadPriorityInheritedAtConstructionBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-priority-inherited-construction");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Thread current = Thread.currentThread();
+                    current.setPriority(8);
+                    final Thread child = new Thread();
+                    System.out.println(child.getPriority());
+                    current.setPriority(5);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-priority-inherited-construction").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void threadSleepUninterruptedBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("thread-sleep-uninterrupted");
         writeJava(project, "com.acme.Main", """

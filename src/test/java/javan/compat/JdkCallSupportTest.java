@@ -223,6 +223,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void threadGetPriorityIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Thread",
+            "getPriority",
+            "()I"
+        ))).isTrue();
+    }
+
+    @Test
+    void threadSetPriorityIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Thread",
+            "setPriority",
+            "(I)V"
+        ))).isTrue();
+    }
+
+    @Test
     void threadBuilderUnstartedRequiresThreadsRuntimeModule() {
         assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
             "java/lang/Thread$Builder$OfVirtual",
