@@ -321,6 +321,45 @@ final class JdkCallableAccounting {
         if (owner.startsWith("jdk/jfr/")) {
             return true;
         }
+        if (owner.startsWith("jdk/incubator/vector/")) {
+            return true;
+        }
+        if (owner.startsWith("jdk/graal/compiler/")) {
+            return true;
+        }
+        if (owner.startsWith("jdk/vm/ci/")) {
+            return true;
+        }
+        if (owner.startsWith("jdk/jpackage/internal/")) {
+            return true;
+        }
+        if (owner.startsWith("jdk/internal/classfile/impl/")) {
+            return true;
+        }
+        if (owner.startsWith("com/sun/tools/javac/")) {
+            return true;
+        }
+        if (owner.startsWith("com/sun/tools/jdi/")) {
+            return true;
+        }
+        if (owner.startsWith("com/apple/laf/")) {
+            return true;
+        }
+        if (owner.startsWith("com/sun/media/sound/")) {
+            return true;
+        }
+        if (owner.startsWith("sun/font/")) {
+            return true;
+        }
+        if (owner.startsWith("sun/lwawt/")) {
+            return true;
+        }
+        if (owner.startsWith("sun/jvm/hotspot/")) {
+            return true;
+        }
+        if (owner.startsWith("sun/util/resources/cldr/ext/")) {
+            return true;
+        }
         if ("sun/misc/Unsafe".equals(owner)) {
             return true;
         }

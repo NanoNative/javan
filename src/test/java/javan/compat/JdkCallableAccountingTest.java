@@ -271,6 +271,84 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksVectorCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("jdk/incubator/vector/ByteVector", "species", "()Ljdk/incubator/vector/VectorSpecies;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksGraalCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("jdk/graal/compiler/nodes/ValueNode", "isConstant", "()Z")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksVmciCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("jdk/vm/ci/hotspot/CompilerToVM", "shouldDebugNonSafepoints", "()Z")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksJpackageCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("jdk/jpackage/internal/ApplicationLayout", "resolveAt", "(Ljava/nio/file/Path;)Ljdk/jpackage/internal/ApplicationLayout;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksClassfileImplCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("jdk/internal/classfile/impl/DirectCodeBuilder", "receiverSlot", "()I")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksJavacCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("com/sun/tools/javac/comp/Attr", "resultInfo", "(Lcom/sun/tools/javac/code/Type;Lcom/sun/tools/javac/tree/JCTree;)Lcom/sun/tools/javac/comp/Attr$ResultInfo;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksJdiCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("com/sun/tools/jdi/VirtualMachineManagerImpl", "allConnectors", "()Ljava/util/List;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksAppleLafCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("com/apple/laf/AquaButtonUI", "createUI", "(Ljavax/swing/JComponent;)Ljavax/swing/plaf/ComponentUI;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksSoundCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("com/sun/media/sound/SoftSynthesizer", "open", "()V")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksSunFontCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("sun/font/FontDesignMetrics", "charWidth", "(C)I")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksLwawtCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("sun/lwawt/LWWindowPeer", "updateInsets", "(Lsun/lwawt/PlatformWindow;)V")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksHotspotSaCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("sun/jvm/hotspot/oops/InstanceKlass", "methods", "()Lsun/jvm/hotspot/utilities/GrowableArray;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksCldrExtCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("sun/util/resources/cldr/ext/LocaleNames_de", "getContents", "()[[Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
     void marksStringBuilderCharSequenceConstructorAsExplicitRejected() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/StringBuilder", "<init>", "(Ljava/lang/CharSequence;)V")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
