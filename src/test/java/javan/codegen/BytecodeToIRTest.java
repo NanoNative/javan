@@ -3849,6 +3849,54 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersObjectsIsNullToObjectComparison() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Object;)Z",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeStatic(1, new MethodRef(
+                "java/util/Objects",
+                "isNull",
+                "(Ljava/lang/Object;)Z"
+            )),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(
+                IrExpression.objectComparison("==", IrExpression.objectLocal("arg0"), IrExpression.objectNull())
+            )
+        );
+    }
+
+    @Test
+    void lowersObjectsNonNullToObjectComparison() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Object;)Z",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeStatic(1, new MethodRef(
+                "java/util/Objects",
+                "nonNull",
+                "(Ljava/lang/Object;)Z"
+            )),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(
+                IrExpression.objectComparison("!=", IrExpression.objectLocal("arg0"), IrExpression.objectNull())
+            )
+        );
+    }
+
+    @Test
     void lowersObjectsToStringObjectToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,

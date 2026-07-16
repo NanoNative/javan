@@ -2602,6 +2602,16 @@ final class BytecodeToIRInvokeSupport {
             pushObjectCall(instructions, stack, localDeclarations, "javan_objects_require_non_null_else", List.of(value, fallback));
             return true;
         }
+        if ("isNull".equals(methodRef.name()) && "(Ljava/lang/Object;)Z".equals(methodRef.descriptor())) {
+            final IrExpression value = popObject(classFile, method, stack);
+            stack.add(StackValue.intExpression(IrExpression.objectComparison("==", value, IrExpression.objectNull())));
+            return true;
+        }
+        if ("nonNull".equals(methodRef.name()) && "(Ljava/lang/Object;)Z".equals(methodRef.descriptor())) {
+            final IrExpression value = popObject(classFile, method, stack);
+            stack.add(StackValue.intExpression(IrExpression.objectComparison("!=", value, IrExpression.objectNull())));
+            return true;
+        }
         if ("toString".equals(methodRef.name()) && "(Ljava/lang/Object;)Ljava/lang/String;".equals(methodRef.descriptor())) {
             final IrExpression value = popObject(classFile, method, stack);
             pushObjectCall(instructions, stack, localDeclarations, "javan_printable_object_string", List.of(value));

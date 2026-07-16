@@ -211,6 +211,18 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksObjectsIsNullAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Objects", "isNull", "(Ljava/lang/Object;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksObjectsNonNullAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Objects", "nonNull", "(Ljava/lang/Object;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksObjectsToStringObjectAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Objects", "toString", "(Ljava/lang/Object;)Ljava/lang/String;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

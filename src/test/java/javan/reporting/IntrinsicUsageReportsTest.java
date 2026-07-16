@@ -60,6 +60,8 @@ final class IntrinsicUsageReportsTest {
         assertThat(report.intrinsics()).containsExactly(
             new IntrinsicCallCount("Objects.requireNonNull", 0),
             new IntrinsicCallCount("Objects.requireNonNullElse", 0),
+            new IntrinsicCallCount("Objects.isNull", 0),
+            new IntrinsicCallCount("Objects.nonNull", 0),
             new IntrinsicCallCount("Objects.toString", 0),
             new IntrinsicCallCount("Math.abs", 1),
             new IntrinsicCallCount("Math.min", 0),
@@ -101,6 +103,8 @@ final class IntrinsicUsageReportsTest {
             .contains(
                 "{\"name\": \"Objects.requireNonNull\", \"count\": 0}",
                 "{\"name\": \"Objects.requireNonNullElse\", \"count\": 0}",
+                "{\"name\": \"Objects.isNull\", \"count\": 0}",
+                "{\"name\": \"Objects.nonNull\", \"count\": 0}",
                 "{\"name\": \"Objects.toString\", \"count\": 0}",
                 "{\"name\": \"Math.abs\", \"count\": 1}",
                 "{\"name\": \"Arrays.copyOf\", \"count\": 1}",
@@ -182,6 +186,48 @@ final class IntrinsicUsageReportsTest {
     }
 
     @Test
+    void countsObjectsIsNullAsSupportedIntrinsic() {
+        final IntrinsicUsageReports reports = new IntrinsicUsageReports();
+        final EntryPoint entry = new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V");
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classFile("com/acme/Main", method(
+                "main",
+                "([Ljava/lang/String;)V",
+                instruction("java/util/Objects", "isNull", "(Ljava/lang/Object;)Z")
+            ))
+        );
+
+        final IntrinsicUsageReport report = reports.analyze(classes, List.of(entry));
+
+        assertThat(report.intrinsics()).contains(new IntrinsicCallCount("Objects.isNull", 1));
+        assertThat(report.supportedJdkCallSiteCount()).isEqualTo(1);
+        assertThat(report.unsupportedJdkCallCandidateCount()).isZero();
+        assertThat(report.unsupportedJdkCallCandidates()).isEmpty();
+    }
+
+    @Test
+    void countsObjectsNonNullAsSupportedIntrinsic() {
+        final IntrinsicUsageReports reports = new IntrinsicUsageReports();
+        final EntryPoint entry = new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V");
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classFile("com/acme/Main", method(
+                "main",
+                "([Ljava/lang/String;)V",
+                instruction("java/util/Objects", "nonNull", "(Ljava/lang/Object;)Z")
+            ))
+        );
+
+        final IntrinsicUsageReport report = reports.analyze(classes, List.of(entry));
+
+        assertThat(report.intrinsics()).contains(new IntrinsicCallCount("Objects.nonNull", 1));
+        assertThat(report.supportedJdkCallSiteCount()).isEqualTo(1);
+        assertThat(report.unsupportedJdkCallCandidateCount()).isZero();
+        assertThat(report.unsupportedJdkCallCandidates()).isEmpty();
+    }
+
+    @Test
     void countsObjectsToStringAsSupportedIntrinsic() {
         final IntrinsicUsageReports reports = new IntrinsicUsageReports();
         final EntryPoint entry = new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V");
@@ -223,6 +269,8 @@ final class IntrinsicUsageReportsTest {
             new IntrinsicCallCount("Arrays.copyOf", 0),
             new IntrinsicCallCount("Objects.requireNonNull", 0),
             new IntrinsicCallCount("Objects.requireNonNullElse", 0),
+            new IntrinsicCallCount("Objects.isNull", 0),
+            new IntrinsicCallCount("Objects.nonNull", 0),
             new IntrinsicCallCount("Objects.toString", 0)
         );
         assertThat(report.runtimeCallSiteCount()).isZero();
