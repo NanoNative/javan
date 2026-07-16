@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.nio.charset.MalformedInputException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
@@ -21,6 +22,7 @@ final class ExternalProbeIsolationTest {
     private static final Path TEST_SOURCES = Path.of("src/test/java");
     private static final Path SCRIPT_SOURCES = Path.of(".github/scripts");
     private static final Path DOC_STATUS = Path.of("doc/status");
+    private static final Path TEST_RESOURCES = Path.of("src/test/resources");
     private static final Path EXTERNAL_ACCEPTANCE_TEST =
         TEST_SOURCES.resolve("javan/CliExternalProbeAcceptanceIntegrationTest.java");
     private static final Path SUPPORT_MATRIX = DOC_STATUS.resolve("support-matrix.md");
@@ -50,6 +52,21 @@ final class ExternalProbeIsolationTest {
                 .toList();
             for (final Path file : scripts) {
                 assertTextExcludesExternalProbeIdentities(Files.readString(file), file);
+            }
+        }
+    }
+
+    @Test
+    void onlyDedicatedExternalSmokeResourcesMayReferenceExternalProbeIdentities() throws Exception {
+        final Path allowedRoot = TEST_RESOURCES.resolve("projects/real-probes");
+        try (Stream<Path> files = Files.walk(TEST_RESOURCES)) {
+            final List<Path> resourceFiles = files
+                .filter(Files::isRegularFile)
+                .filter(file -> !file.startsWith(allowedRoot))
+                .sorted(Comparator.comparing(Path::toString))
+                .toList();
+            for (final Path file : resourceFiles) {
+                assertTextExcludesExternalProbeIdentitiesIfText(file);
             }
         }
     }
@@ -198,6 +215,14 @@ final class ExternalProbeIsolationTest {
             assertThat(pattern.matcher(content).find())
                 .as(file + " should stay free of external probe identity pattern " + pattern)
                 .isFalse();
+        }
+    }
+
+    private static void assertTextExcludesExternalProbeIdentitiesIfText(final Path file) throws IOException {
+        try {
+            assertTextExcludesExternalProbeIdentities(Files.readString(file), file);
+        } catch (final MalformedInputException ignored) {
+            // Binary fixtures and generated artifacts are allowed to exist here; identity checks are for text resources.
         }
     }
 

@@ -31,6 +31,10 @@ They are not static compiler knowledge. Upstream project code may change at any 
 allowed to keep named smoke probes here only as compatibility evidence for the currently pinned
 artifacts; support claims must still be expressed in generic JDK/runtime terms elsewhere.
 
+Read that as a moving snapshot, not as a frozen allowlist. The current probe directories may
+change, grow, or disappear over time. Javan must still stay project-neutral outside this dedicated
+smoke boundary.
+
 Rule:
 
 - if a real probe breaks, fix the compiler/runtime gap in a generic JDK-support test first
@@ -87,7 +91,7 @@ support row.
 
 `.github/scripts/acceptance.sh` now auto-discovers probe directories and CI prefetches the pinned
 artifacts from probe metadata via `.github/scripts/list-real-probe-artifacts.sh` before `mvn verify`,
-so the five probes are required in the external-probe acceptance gate.
+so the current discovered probe set is required in the external-probe acceptance gate.
 Local runs still skip cleanly when the declared dependency is absent.
 
 These probes prove that the backend can consume real dependency bytecode for simple object constructors, object fields, object returns, object arrays, records, scalar long/float/double operations, primitive arrays, basic enum names, closed-world virtual/interface dispatch, static fields, reachable class initializers, javac string concatenation, basic string intrinsics, exact `LambdaMetafactory` `Function`/`Predicate` bridges into `Optional.filter`, `Optional.map`, and `Map.computeIfAbsent`, selected Nano static helper code, direct same-method exception catches, uncaught panic-style exceptions, and concrete instance calls.
@@ -110,7 +114,7 @@ but the release gate uses the pinned published Nano jar rather than a sibling ch
 
 Next gates before claiming Nano support:
 
-1. done: make the five real probes reproducible and required in at least one CI row
+1. done: make the current real-probe set reproducible and required in at least one CI row
 2. done: add negative diagnostics for `Socket`, `ServerSocket`, `HttpClient`, and Nano-style `HttpServer`
 3. done: report reachable `network`, `socket`, and `http` usage even while unsupported
 4. implement TCP loopback support with close/ownership and sanitizer proof
