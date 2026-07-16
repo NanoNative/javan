@@ -38,11 +38,25 @@ Current public showcase:
 
 Optional real-project probes:
 
-- `src/test/resources/projects/real-probes/typemap-pair`: optional real dependency probe against TypeMap.
-- `src/test/resources/projects/real-probes/nano-metric`: optional real dependency probe against Nano's `MetricUpdate`
-  record.
-- `src/test/resources/projects/real-probes/nano-duration`: optional Nano duration example slice using
-  `NanoUtils.formatDuration(long)` without `DevConsoleService`.
+- `src/test/resources/projects/real-probes/typemap-pair`: external compatibility smoke against a real TypeMap artifact.
+- `src/test/resources/projects/real-probes/nano-metric`: external compatibility smoke against a real Nano artifact.
+- `src/test/resources/projects/real-probes/nano-duration`: external compatibility smoke for one Nano helper slice.
+
+Each probe owns its own `probe.properties`, `expected.stdout`, and `build-example.sh`.
+The acceptance harness only iterates probe directories; it does not hardcode library-specific
+support claims into the compiler-owned test line.
+
+These are not core compiler/runtime support tests. They are allowed to prove "Javan can compile
+this real artifact today", but they are not allowed to define "Javan supports this JDK feature".
+Core support tests must stay compiler-owned, deterministic, and independent of external project
+semantics. When a real probe finds a bug, the fix must land with a synthetic compiler-owned
+regression test that proves the underlying JDK/runtime shape without depending on Nano, TypeMap,
+or any other external project name.
+
+Javan must not learn probe-specific semantics from these projects. If upstream Nano, TypeMap, or
+any future real probe changes, the probe metadata and smoke assets may change, but the durable
+compiler/runtime regression must still be expressed in generic JDK/runtime terms inside the core
+test line.
 
 ## Test Projects
 
