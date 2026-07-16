@@ -3,8 +3,8 @@
 This ledger describes the dedicated external-smoke boundary without teaching Javan any
 upstream project identity. Hardcoded upstream coordinates and package names belong only in
 the probe metadata and tiny probe sources under `src/test/resources/projects/real-probes/*`.
-They are pinned moving snapshots of upstream artifacts, not compiler-owned support claims
-and not internal fixtures.
+They are a pinned moving slice of upstream artifacts, not compiler-owned support claims
+and not internal fixtures or product knowledge.
 
 Probe summary:
 
@@ -42,6 +42,10 @@ without a project-neutral proof in the main javan test line.
 The acceptance harness now reads all real-probe metadata through one shared test-only catalog. The
 catalog is allowed to load probe names and coordinates from metadata; the harness itself, this
 ledger, and the compiler-owned support line must stay project-neutral.
+
+Today the pinned probes happen to point at specific upstream artifacts, but that is incidental
+evidence, not product knowledge. If the pinned set changes tomorrow, the compiler-owned support
+line and its generic regression names must still read the same.
 
 The acceptance harness must also stay directory-name neutral. Probe metadata may use a project
 name that differs from the on-disk probe directory; the harness must copy and run the probe from
@@ -111,7 +115,8 @@ artifacts from probe metadata via `.github/scripts/list-real-probe-artifacts.sh`
 so the current discovered probe set is required in the external-probe acceptance gate.
 Local runs still skip cleanly when the declared dependency is absent.
 
-These probes prove that the backend can consume real dependency bytecode for simple object
+These probes prove only that the backend can consume the currently pinned external dependency
+bytecode for simple object
 constructors, object fields, object returns, object arrays, records, scalar
 long/float/double operations, primitive arrays, basic enum names, closed-world
 virtual/interface dispatch, static fields, reachable class initializers, javac string

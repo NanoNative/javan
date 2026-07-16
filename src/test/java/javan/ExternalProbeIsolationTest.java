@@ -222,6 +222,29 @@ final class ExternalProbeIsolationTest {
     }
 
     @Test
+    void onlyDedicatedAcceptanceBoundaryTestMayUseExternalProbeTag() throws Exception {
+        final Set<Path> allowed = Set.of(TEST_SOURCES.resolve("javan/CliExternalProbeAcceptanceIntegrationTest.java"));
+        try (Stream<Path> files = Files.walk(TEST_SOURCES)) {
+            final List<Path> sourceFiles = files
+                .filter(path -> path.toString().endsWith(".java"))
+                .sorted(Comparator.comparing(Path::toString))
+                .toList();
+            for (final Path file : sourceFiles) {
+                final String content = Files.readString(file);
+                if (allowed.contains(file)) {
+                    assertThat(content)
+                        .as(file + " must stay explicitly marked as the dedicated external probe acceptance boundary")
+                        .contains("@Tag(\"external-probe\")");
+                    continue;
+                }
+                assertThat(content)
+                    .as(file + " should not use the external probe acceptance tag")
+                    .doesNotContain("@Tag(\"external-probe\")");
+            }
+        }
+    }
+
+    @Test
     void acceptanceBoundaryHarnessStaysMetadataDrivenWithoutHardcodedProbeIdentities() throws Exception {
         final Path acceptanceTest = TEST_SOURCES.resolve("javan/CliExternalProbeAcceptanceIntegrationTest.java");
         assertTextExcludesExternalProbeIdentities(Files.readString(acceptanceTest), acceptanceTest);

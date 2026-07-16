@@ -13,7 +13,7 @@ be understandable as real user-facing samples.
 | `acceptance` | end-to-end public-entrypoint checks used by release validation |
 | `native-profile` | one-assumption supported native runtime/codegen scenarios |
 | `negative` | deterministic rejection scenarios |
-| `real-probes` | external smoke probes against pinned third-party artifacts; each probe declares its own metadata and exact expected stdout, CI resolves artifacts from that metadata, local helper scripts resolve classpaths from the same metadata, and the acceptance harness must stay metadata-driven without hardcoding probe identities; these are moving upstream artifacts rather than internal fixtures, do not define compiler-owned support claims, may rotate over time, and must always map back to a generic compiler-owned regression in `src/test/java/javan` |
+| `real-probes` | external smoke probes against pinned third-party artifacts; each probe declares its own metadata and exact expected stdout, CI resolves artifacts from that metadata, local helper scripts resolve classpaths from the same metadata, and the acceptance harness must stay metadata-driven without hardcoding probe identities; these are moving upstream artifacts rather than internal fixtures, do not define compiler-owned support claims or product knowledge, may rotate over time, and must always map back to a generic compiler-owned regression in `src/test/java/javan` |
 
 Promote a test project to `example/` or a future public examples folder only after rewriting it into a production-grade
 sample with complete user-facing instructions.

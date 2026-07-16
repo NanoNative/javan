@@ -62,8 +62,8 @@ Boundary:
 
 These are not core compiler/runtime support tests. They are allowed to prove "Javan can compile
 this pinned real artifact today", but they are not allowed to define "Javan supports this JDK
-feature". Core support tests must stay compiler-owned, deterministic, and independent of external
-project semantics. When a real probe finds a bug, the fix must land with a synthetic
+feature" or teach Javan any project-specific semantics. Core support tests must stay compiler-owned,
+deterministic, and independent of external project semantics. When a real probe finds a bug, the fix must land with a synthetic
 compiler-owned regression test that proves the underlying JDK/runtime shape without depending on
 any external project identity. External probes are allowed to answer only one question: "does
 Javan compile this pinned real artifact today?" They are not allowed to answer "is this Java
