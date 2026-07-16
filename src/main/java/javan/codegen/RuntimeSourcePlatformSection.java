@@ -1604,15 +1604,29 @@ final class RuntimeSourcePlatformSection {
         }
 
         static void javan_socket_apply_receive_timeout(int fd, int timeout_millis, const char* message) {
+        #if defined(_WIN32)
+            (void) fd;
+            (void) timeout_millis;
+            (void) message;
+            javan_socket_runtime_unsupported();
+        #else
             struct timeval timeout;
             timeout.tv_sec = (time_t) (timeout_millis / 1000);
-            timeout.tv_usec = (suseconds_t) ((timeout_millis % 1000) * 1000);
+            timeout.tv_usec = (long) ((timeout_millis % 1000) * 1000);
             if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, (const void*) &timeout, (socklen_t) sizeof(timeout)) != 0) {
                 javan_panic(message);
             }
+        #endif
         }
 
         static void javan_socket_wait_readable(int fd, int timeout_millis, const char* timeout_message, const char* wait_message) {
+        #if defined(_WIN32)
+            (void) fd;
+            (void) timeout_millis;
+            (void) timeout_message;
+            (void) wait_message;
+            javan_socket_runtime_unsupported();
+        #else
             if (timeout_millis <= 0) {
                 return;
             }
@@ -1621,7 +1635,7 @@ final class RuntimeSourcePlatformSection {
             FD_SET(fd, &read_set);
             struct timeval timeout;
             timeout.tv_sec = (time_t) (timeout_millis / 1000);
-            timeout.tv_usec = (suseconds_t) ((timeout_millis % 1000) * 1000);
+            timeout.tv_usec = (long) ((timeout_millis % 1000) * 1000);
             int ready = select(fd + 1, &read_set, NULL, NULL, &timeout);
             if (ready == 0) {
                 javan_panic(timeout_message);
@@ -1629,6 +1643,7 @@ final class RuntimeSourcePlatformSection {
             if (ready < 0) {
                 javan_panic(wait_message);
             }
+        #endif
         }
 
         static void javan_socket_populate_names(int fd, void** local_address_out, int* local_port_out, void** remote_address_out, int* remote_port_out) {
@@ -1698,6 +1713,13 @@ final class RuntimeSourcePlatformSection {
         }
 
         static void javan_socket_connect_native_timeout(int fd, const struct sockaddr* address, socklen_t address_length, int timeout_millis) {
+        #if defined(_WIN32)
+            (void) fd;
+            (void) address;
+            (void) address_length;
+            (void) timeout_millis;
+            javan_socket_runtime_unsupported();
+        #else
             int timeout = javan_socket_timeout_checked(timeout_millis);
             if (timeout == 0) {
                 if (connect(fd, address, address_length) != 0) {
@@ -1723,7 +1745,7 @@ final class RuntimeSourcePlatformSection {
                 FD_SET(fd, &write_set);
                 struct timeval timeout_value;
                 timeout_value.tv_sec = (time_t) (timeout / 1000);
-                timeout_value.tv_usec = (suseconds_t) ((timeout % 1000) * 1000);
+                timeout_value.tv_usec = (long) ((timeout % 1000) * 1000);
                 int ready = select(fd + 1, NULL, &write_set, NULL, &timeout_value);
                 if (ready == 0) {
                     fcntl(fd, F_SETFL, flags);
@@ -1747,6 +1769,7 @@ final class RuntimeSourcePlatformSection {
             if (fcntl(fd, F_SETFL, flags) != 0) {
                 javan_panic("socket connect blocking restore failed");
             }
+        #endif
         }
 
         static void javan_socket_assign_connected_fd(void* socket_value, int fd) {

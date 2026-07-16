@@ -34,6 +34,23 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void writeGuardsSocketTimeoutHelpersBehindWindowsUnsupportedBranches() throws Exception {
+        final Path runtime = new RuntimeFiles().write(tempDir);
+
+        assertThat(Files.readString(runtime)).contains(
+            "static void javan_socket_apply_receive_timeout(int fd, int timeout_millis, const char* message) {",
+            "#if defined(_WIN32)",
+            "javan_socket_runtime_unsupported();",
+            "#else",
+            "timeout.tv_usec = (long) ((timeout_millis % 1000) * 1000);",
+            "static void javan_socket_wait_readable(int fd, int timeout_millis, const char* timeout_message, const char* wait_message) {",
+            "static void javan_socket_connect_native_timeout(int fd, const struct sockaddr* address, socklen_t address_length, int timeout_millis) {",
+            "int flags = fcntl(fd, F_GETFL, 0);",
+            "timeout_value.tv_usec = (long) ((timeout % 1000) * 1000);"
+        );
+    }
+
+    @Test
     void runtimeSystemErrPrintlnIntWritesOneLine() throws Exception {
         final String stderr = runRuntimeBoundaryProbeStderr(
             """
