@@ -8412,6 +8412,29 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersAtomicBooleanSetToRuntimeHelper() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/concurrent/atomic/AtomicBoolean;Z)V",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 27, "iload_1"),
+            invokeVirtual(2, new MethodRef("java/util/concurrent/atomic/AtomicBoolean", "set", "(Z)V")),
+            plain(3, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid(
+                "javan_atomic_boolean_set",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"))
+            ),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
     void lowersAtomicIntegerConstructorWithInitialValuePredicateForSupportedSignature() {
         final List<IrInstruction> instructions = new ArrayList<>();
 
@@ -8444,6 +8467,29 @@ final class BytecodeToIRTest {
 
         assertThat(function.instructions()).containsExactly(
             IrInstruction.returnInt(IrExpression.intCall("javan_atomic_integer_get", List.of(IrExpression.objectLocal("arg0"))))
+        );
+    }
+
+    @Test
+    void lowersAtomicIntegerSetToRuntimeHelper() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/concurrent/atomic/AtomicInteger;I)V",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 27, "iload_1"),
+            invokeVirtual(2, new MethodRef("java/util/concurrent/atomic/AtomicInteger", "set", "(I)V")),
+            plain(3, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid(
+                "javan_atomic_integer_set",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"))
+            ),
+            IrInstruction.returnVoid()
         );
     }
 
@@ -8519,6 +8565,29 @@ final class BytecodeToIRTest {
             IrInstruction.callStaticVoid(
                 "javan_atomic_reference_set",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
+    void lowersAtomicLongSetToRuntimeHelper() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/concurrent/atomic/AtomicLong;J)V",
+            3,
+            3,
+            plain(0, 42, "aload_0"),
+            plain(1, 31, "lload_1"),
+            invokeVirtual(2, new MethodRef("java/util/concurrent/atomic/AtomicLong", "set", "(J)V")),
+            plain(3, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid(
+                "javan_atomic_long_set",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.longLocal("arg1"))
             ),
             IrInstruction.returnVoid()
         );

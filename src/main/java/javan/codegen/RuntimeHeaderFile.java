@@ -463,6 +463,7 @@ final class RuntimeHeaderFile {
         void* javan_atomic_boolean_new(void);
         void javan_atomic_boolean_init(void* value, int initial_value);
         int javan_atomic_boolean_get(void* value);
+        void javan_atomic_boolean_set(void* value, int next_value);
         void* javan_atomic_reference_new(void);
         void javan_atomic_reference_init(void* value, void* initial_value);
         void* javan_atomic_reference_get(void* value);
@@ -470,12 +471,14 @@ final class RuntimeHeaderFile {
         void* javan_atomic_integer_new(void);
         void javan_atomic_integer_init(void* value, int initial_value);
         int javan_atomic_integer_get(void* value);
+        void javan_atomic_integer_set(void* value, int next_value);
         int javan_atomic_integer_get_and_increment(void* value);
         int javan_atomic_integer_increment_and_get(void* value);
         int javan_atomic_integer_decrement_and_get(void* value);
         void* javan_atomic_long_new(void);
         void javan_atomic_long_init(void* value, long long initial_value);
         long long javan_atomic_long_get(void* value);
+        void javan_atomic_long_set(void* value, long long next_value);
         long long javan_atomic_long_increment_and_get(void* value);
         long long javan_atomic_long_decrement_and_get(void* value);
         void* javan_scheduled_thread_pool_executor_new(void);

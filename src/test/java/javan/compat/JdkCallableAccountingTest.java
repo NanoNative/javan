@@ -1027,6 +1027,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksAtomicIntegerSetAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/atomic/AtomicInteger", "set", "(I)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksAtomicReferenceCompareAndSetAsExplicitRejected() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/atomic/AtomicReference", "compareAndSet", "(Ljava/lang/Object;Ljava/lang/Object;)Z")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
@@ -1041,6 +1047,18 @@ final class JdkCallableAccountingTest {
     @Test
     void marksAtomicReferenceConstructorWithInitialValueAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/atomic/AtomicReference", "<init>", "(Ljava/lang/Object;)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksAtomicBooleanSetAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/atomic/AtomicBoolean", "set", "(Z)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksAtomicLongSetAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/atomic/AtomicLong", "set", "(J)V")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 

@@ -3622,16 +3622,24 @@ final class BytecodeToIRInvokeSupport {
         if (!"java/util/concurrent/atomic/AtomicLong".equals(methodRef.owner()) || !JdkCallSupport.isSupported(methodRef)) {
             return false;
         }
-        final IrExpression receiver = popObject(classFile, method, stack);
         if ("get".equals(methodRef.name()) && "()J".equals(methodRef.descriptor())) {
+            final IrExpression receiver = popObject(classFile, method, stack);
             stack.add(StackValue.longExpression(IrExpression.longCall("javan_atomic_long_get", List.of(receiver))));
             return true;
         }
+        if ("set".equals(methodRef.name()) && "(J)V".equals(methodRef.descriptor())) {
+            final IrExpression argument = popLong(classFile, method, stack);
+            final IrExpression receiver = popObject(classFile, method, stack);
+            instructions.add(IrInstruction.callStaticVoid("javan_atomic_long_set", List.of(receiver, argument)));
+            return true;
+        }
         if ("incrementAndGet".equals(methodRef.name()) && "()J".equals(methodRef.descriptor())) {
+            final IrExpression receiver = popObject(classFile, method, stack);
             stack.add(StackValue.longExpression(IrExpression.longCall("javan_atomic_long_increment_and_get", List.of(receiver))));
             return true;
         }
         if ("decrementAndGet".equals(methodRef.name()) && "()J".equals(methodRef.descriptor())) {
+            final IrExpression receiver = popObject(classFile, method, stack);
             stack.add(StackValue.longExpression(IrExpression.longCall("javan_atomic_long_decrement_and_get", List.of(receiver))));
             return true;
         }
@@ -3649,9 +3657,15 @@ final class BytecodeToIRInvokeSupport {
         if (!"java/util/concurrent/atomic/AtomicBoolean".equals(methodRef.owner()) || !JdkCallSupport.isSupported(methodRef)) {
             return false;
         }
-        final IrExpression receiver = popObject(classFile, method, stack);
         if ("get".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor())) {
+            final IrExpression receiver = popObject(classFile, method, stack);
             stack.add(StackValue.intExpression(IrExpression.intCall("javan_atomic_boolean_get", List.of(receiver))));
+            return true;
+        }
+        if ("set".equals(methodRef.name()) && "(Z)V".equals(methodRef.descriptor())) {
+            final IrExpression argument = popInt(classFile, method, stack);
+            final IrExpression receiver = popObject(classFile, method, stack);
+            instructions.add(IrInstruction.callStaticVoid("javan_atomic_boolean_set", List.of(receiver, argument)));
             return true;
         }
         return false;
@@ -3668,20 +3682,29 @@ final class BytecodeToIRInvokeSupport {
         if (!"java/util/concurrent/atomic/AtomicInteger".equals(methodRef.owner()) || !JdkCallSupport.isSupported(methodRef)) {
             return false;
         }
-        final IrExpression receiver = popObject(classFile, method, stack);
         if ("get".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
+            final IrExpression receiver = popObject(classFile, method, stack);
             stack.add(StackValue.intExpression(IrExpression.intCall("javan_atomic_integer_get", List.of(receiver))));
             return true;
         }
+        if ("set".equals(methodRef.name()) && "(I)V".equals(methodRef.descriptor())) {
+            final IrExpression argument = popInt(classFile, method, stack);
+            final IrExpression receiver = popObject(classFile, method, stack);
+            instructions.add(IrInstruction.callStaticVoid("javan_atomic_integer_set", List.of(receiver, argument)));
+            return true;
+        }
         if ("getAndIncrement".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
+            final IrExpression receiver = popObject(classFile, method, stack);
             stack.add(StackValue.intExpression(IrExpression.intCall("javan_atomic_integer_get_and_increment", List.of(receiver))));
             return true;
         }
         if ("incrementAndGet".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
+            final IrExpression receiver = popObject(classFile, method, stack);
             stack.add(StackValue.intExpression(IrExpression.intCall("javan_atomic_integer_increment_and_get", List.of(receiver))));
             return true;
         }
         if ("decrementAndGet".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
+            final IrExpression receiver = popObject(classFile, method, stack);
             stack.add(StackValue.intExpression(IrExpression.intCall("javan_atomic_integer_decrement_and_get", List.of(receiver))));
             return true;
         }

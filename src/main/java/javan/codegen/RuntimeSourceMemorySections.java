@@ -8426,6 +8426,10 @@ final class RuntimeSourceMemorySections {
             return javan_atomic_integer_checked(value)->value;
         }
 
+        void javan_atomic_integer_set(void* value, int next_value) {
+            javan_atomic_integer_checked(value)->value = next_value;
+        }
+
         int javan_atomic_integer_get_and_increment(void* value) {
             javan_atomic_integer_state* state = javan_atomic_integer_checked(value);
             int current = state->value;
@@ -8465,6 +8469,10 @@ final class RuntimeSourceMemorySections {
             return javan_atomic_boolean_checked(value)->value;
         }
 
+        void javan_atomic_boolean_set(void* value, int next_value) {
+            javan_atomic_boolean_checked(value)->value = next_value == 0 ? 0 : 1;
+        }
+
         void* javan_atomic_reference_new(void) {
             void* value = javan_alloc(sizeof(javan_atomic_reference_state));
             javan_atomic_reference_state* state = (javan_atomic_reference_state*) value;
@@ -8496,6 +8504,10 @@ final class RuntimeSourceMemorySections {
 
         long long javan_atomic_long_get(void* value) {
             return javan_atomic_long_checked(value)->value;
+        }
+
+        void javan_atomic_long_set(void* value, long long next_value) {
+            javan_atomic_long_checked(value)->value = next_value;
         }
 
         long long javan_atomic_long_increment_and_get(void* value) {

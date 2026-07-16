@@ -795,6 +795,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void atomicBooleanSetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/atomic/AtomicBoolean",
+            "set",
+            "(Z)V"
+        ))).isTrue();
+    }
+
+    @Test
     void atomicIntegerConstructorWithInitialValueIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/concurrent/atomic/AtomicInteger",
@@ -809,6 +818,15 @@ final class JdkCallSupportTest {
             "java/util/concurrent/atomic/AtomicInteger",
             "get",
             "()I"
+        ))).isTrue();
+    }
+
+    @Test
+    void atomicIntegerSetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/atomic/AtomicInteger",
+            "set",
+            "(I)V"
         ))).isTrue();
     }
 
@@ -836,6 +854,15 @@ final class JdkCallSupportTest {
             "java/util/concurrent/atomic/AtomicReference",
             "set",
             "(Ljava/lang/Object;)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void atomicLongSetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/atomic/AtomicLong",
+            "set",
+            "(J)V"
         ))).isTrue();
     }
 

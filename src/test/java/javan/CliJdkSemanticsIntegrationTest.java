@@ -1607,6 +1607,96 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void atomicBooleanSetBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("atomic-boolean-set");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final var flag = new java.util.concurrent.atomic.AtomicBoolean();
+                    System.out.println(flag.get());
+                    flag.set(true);
+                    System.out.println(flag.get());
+                    flag.set(false);
+                    System.out.println(flag.get());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/atomic-boolean-set").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("false\ntrue\nfalse\n");
+    }
+
+    @Test
+    void atomicIntegerSetBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("atomic-integer-set");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final var counter = new java.util.concurrent.atomic.AtomicInteger();
+                    System.out.println(counter.get());
+                    counter.set(9);
+                    System.out.println(counter.get());
+                    counter.set(-3);
+                    System.out.println(counter.get());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/atomic-integer-set").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("0\n9\n-3\n");
+    }
+
+    @Test
+    void atomicLongSetBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("atomic-long-set");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final var counter = new java.util.concurrent.atomic.AtomicLong(2L);
+                    System.out.println(counter.get());
+                    counter.set(15L);
+                    System.out.println(counter.get());
+                    counter.set(-7L);
+                    System.out.println(counter.get());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/atomic-long-set").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("2\n15\n-7\n");
+    }
+
+    @Test
     void atomicReferenceBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("atomic-reference");
         writeJava(project, "com.acme.Main", """
