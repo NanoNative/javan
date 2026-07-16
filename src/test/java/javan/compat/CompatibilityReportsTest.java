@@ -76,12 +76,12 @@ final class CompatibilityReportsTest {
         assertThat(summary).contains(
             "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 5, \"leftCallables\": 3, \"coveragePercent\": \"40.0\"}",
             "\"exactJdkCallableAccounting\": {\"supportedCallables\": 2, \"explicitRejectedCallables\": 3, \"doneCallables\": 5, \"unknownCallables\": 0, \"totalCallables\": 5, \"donePercent\": \"100.0\"}",
-            "\"supportRows\": 152",
-            "\"passRows\": 152",
+            "\"supportRows\": 156",
+            "\"passRows\": 156",
             "\"scopedRows\": 0",
             "\"targetRows\": 0",
             "\"rejectedRows\": 0",
-            "\"accountedRows\": 152",
+            "\"accountedRows\": 156",
             "\"unaccountedRows\": 0"
         );
     }
@@ -183,6 +183,10 @@ final class CompatibilityReportsTest {
             "| `platform-thread-sleep-entry-interrupted-same-method-catch` | pass |",
             "| `platform-thread-sleep-millis-nanos-entry-interrupted-same-method-catch` | pass |",
             "| `platform-thread-inheritable-threadlocal` | pass |",
+            "| `virtual-thread-start-inheritable-threadlocal` | pass |",
+            "| `virtual-thread-builder-start-inheritable-threadlocal` | pass |",
+            "| `virtual-thread-factory-new-thread-inheritable-threadlocal` | pass |",
+            "| `virtual-thread-executor-submit-inheritable-threadlocal` | pass |",
             "| `platform-thread-join-entry-interrupted-same-method-catch` | pass |",
             "| `platform-thread-join-timeout` | pass |",
             "| `platform-thread-join-millis-nanos-timeout` | pass |",
@@ -263,6 +267,10 @@ final class CompatibilityReportsTest {
             "\"feature\": \"platform-thread-sleep-entry-interrupted-same-method-catch\"",
             "\"feature\": \"platform-thread-sleep-millis-nanos-entry-interrupted-same-method-catch\"",
             "\"feature\": \"platform-thread-inheritable-threadlocal\"",
+            "\"feature\": \"virtual-thread-start-inheritable-threadlocal\"",
+            "\"feature\": \"virtual-thread-builder-start-inheritable-threadlocal\"",
+            "\"feature\": \"virtual-thread-factory-new-thread-inheritable-threadlocal\"",
+            "\"feature\": \"virtual-thread-executor-submit-inheritable-threadlocal\"",
             "\"feature\": \"platform-thread-join-entry-interrupted-same-method-catch\"",
             "\"feature\": \"platform-thread-join-timeout\"",
             "\"feature\": \"platform-thread-join-millis-nanos-timeout\"",

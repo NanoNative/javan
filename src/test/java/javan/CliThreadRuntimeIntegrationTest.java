@@ -313,6 +313,49 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void startVirtualThreadInheritsInheritableThreadLocalBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-start-inheritable-threadlocal");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final InheritableThreadLocal<String> local = new InheritableThreadLocal<>();
+                    local.set("main");
+                    final Thread worker = Thread.startVirtualThread(new Task(local));
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                private final InheritableThreadLocal<String> local;
+
+                public Task(final InheritableThreadLocal<String> local) {
+                    this.local = local;
+                }
+
+                @Override
+                public void run() {
+                    System.out.println(local.get());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-start-inheritable-threadlocal").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
     void threadOfVirtualStartBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("virtual-thread-builder-start");
         writeJava(project, "com.acme.Main", """
@@ -345,6 +388,44 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-start").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOfVirtualStartInheritsInheritableThreadLocalBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-start-inheritable-threadlocal");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                static final InheritableThreadLocal<String> LOCAL = new InheritableThreadLocal<>();
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    LOCAL.set("main");
+                    final Thread worker = Thread.ofVirtual().start(new Task());
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Main.LOCAL.get());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-start-inheritable-threadlocal").toString())).stdout())
+            .isEqualTo(jvmOutput);
     }
 
     @Test
@@ -384,6 +465,90 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-start-static-helper").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void virtualThreadFactoryNewThreadInheritsInheritableThreadLocalBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-factory-new-thread-inheritable-threadlocal");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.ThreadFactory;
+
+            public final class Main {
+                static final InheritableThreadLocal<String> LOCAL = new InheritableThreadLocal<>();
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    LOCAL.set("main");
+                    final ThreadFactory factory = Thread.ofVirtual().factory();
+                    final Thread worker = factory.newThread(new Task());
+                    worker.start();
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Main.LOCAL.get());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-factory-new-thread-inheritable-threadlocal").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void virtualThreadPerTaskExecutorSubmitInheritsInheritableThreadLocalBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-executor-submit-inheritable-threadlocal");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.ExecutorService;
+            import java.util.concurrent.Executors;
+
+            public final class Main {
+                static final InheritableThreadLocal<String> LOCAL = new InheritableThreadLocal<>();
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    LOCAL.set("main");
+                    final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+                    executor.submit(new Task());
+                    executor.close();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Main.LOCAL.get());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-executor-submit-inheritable-threadlocal").toString())).stdout())
+            .isEqualTo(jvmOutput);
     }
 
     @Test
