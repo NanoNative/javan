@@ -11,8 +11,8 @@
     "rule": "done = supported variants + rejected variants; unknown leftovers must be 0 for a release-gated JDK"
   },
   "counts": {
-    "rows": 162,
-    "pass": 162,
+    "rows": 163,
+    "pass": 163,
     "scoped": 0,
     "target": 0,
     "rejected": 0
@@ -98,6 +98,7 @@
     {"feature": "deduplication-plan", "jdk25": "pass"},
     {"feature": "hashmap-realloc-gc", "jdk25": "pass"},
     {"feature": "collections-empty-set", "jdk25": "pass"},
+    {"feature": "collections-singleton-set", "jdk25": "pass"},
     {"feature": "collections-singleton-list", "jdk25": "pass"},
     {"feature": "collections-empty-list", "jdk25": "pass"},
     {"feature": "collections-singleton-map", "jdk25": "pass"},

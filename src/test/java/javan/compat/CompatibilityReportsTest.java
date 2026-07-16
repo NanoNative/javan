@@ -76,12 +76,12 @@ final class CompatibilityReportsTest {
         assertThat(summary).contains(
             "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 5, \"leftCallables\": 3, \"coveragePercent\": \"40.0\"}",
             "\"exactJdkCallableAccounting\": {\"supportedCallables\": 2, \"explicitRejectedCallables\": 3, \"doneCallables\": 5, \"unknownCallables\": 0, \"totalCallables\": 5, \"donePercent\": \"100.0\"}",
-            "\"supportRows\": 162",
-            "\"passRows\": 162",
+            "\"supportRows\": 163",
+            "\"passRows\": 163",
             "\"scopedRows\": 0",
             "\"targetRows\": 0",
             "\"rejectedRows\": 0",
-            "\"accountedRows\": 162",
+            "\"accountedRows\": 163",
             "\"unaccountedRows\": 0"
         );
     }
@@ -123,6 +123,7 @@ final class CompatibilityReportsTest {
             "| `library-negative-byte-array-rejection` | pass |",
             "| `hashmap-realloc-gc` | pass |",
             "| `collections-empty-set` | pass |",
+            "| `collections-singleton-set` | pass |",
             "| `collections-singleton-list` | pass |",
             "| `collections-empty-list` | pass |",
             "| `collections-singleton-map` | pass |",
@@ -219,6 +220,7 @@ final class CompatibilityReportsTest {
             "\"feature\": \"string-intrinsics\"",
             "\"feature\": \"library-c-result-wrapper-success\"",
             "\"feature\": \"collections-empty-set\"",
+            "\"feature\": \"collections-singleton-set\"",
             "\"feature\": \"collections-singleton-list\"",
             "\"feature\": \"collections-empty-list\"",
             "\"feature\": \"collections-singleton-map\"",

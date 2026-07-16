@@ -3231,6 +3231,11 @@ final class BytecodeToIRInvokeSupport {
                 stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_set_empty", List.of())));
                 return true;
             }
+            if ("singleton".equals(name) && "(Ljava/lang/Object;)Ljava/util/Set;".equals(descriptor)) {
+                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_set_singleton", arguments)));
+                return true;
+            }
             if ("singletonList".equals(name) && "(Ljava/lang/Object;)Ljava/util/List;".equals(descriptor)) {
                 final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
                 final List<IrExpression> callArguments = new ArrayList<>();

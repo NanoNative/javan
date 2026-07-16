@@ -211,6 +211,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksCollectionsSingletonSetAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Collections", "singleton", "(Ljava/lang/Object;)Ljava/util/Set;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksCollectionsSingletonListAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Collections", "singletonList", "(Ljava/lang/Object;)Ljava/util/List;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

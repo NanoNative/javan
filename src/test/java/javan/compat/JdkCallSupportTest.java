@@ -157,6 +157,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void collectionsSingletonSetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Collections",
+            "singleton",
+            "(Ljava/lang/Object;)Ljava/util/Set;"
+        ))).isTrue();
+    }
+
+    @Test
     void collectionsSingletonListIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Collections",
