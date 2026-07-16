@@ -1578,6 +1578,43 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void collectionsUnmodifiableSetBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("collections-unmodifiable-set");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Collections;
+            import java.util.HashSet;
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Set<String> mutable = new HashSet<>();
+                    mutable.add("x");
+                    final Set<String> values = Collections.unmodifiableSet(mutable);
+                    System.out.println(values.isEmpty());
+                    System.out.println(values.size());
+                    System.out.println(values.contains("x"));
+                    mutable.add("y");
+                    System.out.println(values.contains("y"));
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/collections-unmodifiable-set").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("false\n1\ntrue\ntrue\n2\n");
+    }
+
+    @Test
     void collectionsSingletonSetBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("collections-singleton-set");
         writeJava(project, "com.acme.Main", """

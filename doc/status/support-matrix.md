@@ -9,8 +9,8 @@ External project names do not belong in this matrix; this ledger stays compiler-
 
 | Measure | Count |
 | --- | ---: |
-| rows | 163 |
-| pass | 163 |
+| rows | 164 |
+| pass | 164 |
 | scoped | 0 |
 | target | 0 |
 | rejected | 0 |
@@ -106,6 +106,7 @@ Status mapping:
 | `deduplication-plan` | pass |
 | `hashmap-realloc-gc` | pass |
 | `collections-empty-set` | pass |
+| `collections-unmodifiable-set` | pass |
 | `collections-singleton-set` | pass |
 | `collections-singleton-list` | pass |
 | `collections-empty-list` | pass |
