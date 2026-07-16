@@ -912,7 +912,7 @@ public final class BytecodeToIR {
                 newPrimitiveArray(classFile, method, instruction, instructions, stack, localDeclarations);
                 break;
             case 189:
-                newObjectArray(classFile, method, instructions, stack, localDeclarations);
+                newObjectArray(classFile, method, instruction, instructions, stack, localDeclarations);
                 break;
             case 190:
                 arrayLength(classFile, method, stack);
@@ -1250,16 +1250,29 @@ public final class BytecodeToIR {
     static void newObjectArray(
         final ClassFile classFile,
         final MethodInfo method,
+        final Instruction instruction,
         final List<IrInstruction> instructions,
         final List<StackValue> stack,
         final Map<Integer, IrLocal> localDeclarations
     ) {
         final IrExpression length = popInt(classFile, method, stack);
+        final String componentJvmName = instruction.className().orElseThrow();
         final String localName = "object" + localDeclarations.size();
         localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
         final IrExpression local = IrExpression.objectLocal(localName);
-        instructions.add(IrInstruction.assignObject(localName, IrExpression.objectArrayAllocation(length)));
+        instructions.add(IrInstruction.assignObject(
+            localName,
+            IrExpression.objectArrayAllocation(length, objectArrayBinaryName(componentJvmName))
+        ));
         stack.add(StackValue.objectExpression(local));
+    }
+
+    private static String objectArrayBinaryName(final String componentJvmName) {
+        final String componentBinaryName = BytecodeToIRInvokeSupport.binaryClassName(componentJvmName);
+        if (componentJvmName.startsWith("[")) {
+            return "[" + componentBinaryName;
+        }
+        return "[L" + componentBinaryName + ";";
     }
 
     static void newPrimitiveArray(

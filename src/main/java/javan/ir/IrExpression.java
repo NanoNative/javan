@@ -276,7 +276,18 @@ public record IrExpression(Kind kind, IrType type, String value, List<IrExpressi
      * @return expression
      */
     public static IrExpression objectArrayAllocation(final IrExpression length) {
-        return new IrExpression(Kind.OBJECT_ARRAY_ALLOCATION, IrType.OBJECT, "", List.of(length));
+        return objectArrayAllocation(length, "[Ljava.lang.Object;");
+    }
+
+    /**
+     * Creates an object-array allocation expression with an exact array binary name.
+     *
+     * @param length array length expression
+     * @param arrayBinaryName exact array binary name such as {@code [Ljava.lang.String;}
+     * @return expression
+     */
+    public static IrExpression objectArrayAllocation(final IrExpression length, final String arrayBinaryName) {
+        return new IrExpression(Kind.OBJECT_ARRAY_ALLOCATION, IrType.OBJECT, arrayBinaryName, List.of(length));
     }
 
     /**

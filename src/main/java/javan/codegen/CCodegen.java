@@ -1882,7 +1882,11 @@ public final class CCodegen {
                 case OBJECT_ALLOCATION:
                     return allocatorSymbol(expression.value()) + "()";
                 case OBJECT_ARRAY_ALLOCATION:
-                    return "javan_object_array_new(" + expression(expression.arguments().get(0)) + ")";
+                    return "javan_object_array_new("
+                        + expression(expression.arguments().get(0))
+                        + ", "
+                        + emitCStringLiteral(expression.value().isBlank() ? "[Ljava.lang.Object;" : expression.value())
+                        + ")";
                 case OBJECT_ARRAY_LOAD:
                     return "javan_object_array_get("
                         + expression(expression.arguments().get(0))

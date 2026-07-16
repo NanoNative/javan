@@ -5449,6 +5449,49 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void runtimeObjectArrayGetClassPreservesExactBinaryName() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* array = javan_object_array_new(1, "[Ljava.lang.String;");
+                void* klass = javan_object_get_class(array);
+                printf("%s\\n", (char*) javan_runtime_class_get_name(klass));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("[Ljava.lang.String;\n");
+    }
+
+    @Test
+    void runtimeObjectArrayCopyPreservesExactBinaryName() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* source = javan_object_array_new(2, "[Ljava.lang.String;");
+                void* copy = javan_arrays_copy_of_object(source, 4);
+                void* klass = javan_object_get_class(copy);
+                printf("%s\\n", (char*) javan_runtime_class_get_name(klass));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("[Ljava.lang.String;\n");
+    }
+
+    @Test
     void runtimeArrayRangeCopyRootsSourceAcrossTargetAllocation() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """

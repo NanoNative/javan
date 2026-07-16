@@ -1142,7 +1142,7 @@ final class RuntimeSourcePlatformSection {
                 (void**) &array_root
             };
             javan_root_frame_push(javan_inet_address_all_roots, 2);
-            array_root = javan_object_array_new(1);
+            array_root = javan_object_array_new(1, "[Ljava.net.InetAddress;");
             javan_object_array_set(array_root, 0, address_root);
             javan_root_frame_pop(javan_inet_address_all_roots);
             return array_root;

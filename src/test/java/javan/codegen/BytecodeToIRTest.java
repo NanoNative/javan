@@ -2316,7 +2316,7 @@ final class BytecodeToIRTest {
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.assignObject("object0", IrExpression.objectArrayAllocation(IrExpression.intLiteral(1))),
+            IrInstruction.assignObject("object0", IrExpression.objectArrayAllocation(IrExpression.intLiteral(1), "[Ljava.lang.String;")),
             IrInstruction.assignArrayObject(
                 IrExpression.objectLocal("object0"),
                 IrExpression.intLiteral(0),
@@ -13546,7 +13546,7 @@ final class BytecodeToIRTest {
 
         assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.assignObject("object0", IrExpression.objectArrayAllocation(IrExpression.intLiteral(2))),
+            IrInstruction.assignObject("object0", IrExpression.objectArrayAllocation(IrExpression.intLiteral(2), "[Lcom.acme.Mode;")),
             IrInstruction.assignArrayObject(IrExpression.objectLocal("object0"), IrExpression.intLiteral(0), IrExpression.objectStaticField("com/acme/Mode", "FIRST")),
             IrInstruction.assignArrayObject(IrExpression.objectLocal("object0"), IrExpression.intLiteral(1), IrExpression.objectStaticField("com/acme/Mode", "SECOND")),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
@@ -14505,7 +14505,7 @@ final class BytecodeToIRTest {
             plain(4, 172, "ireturn")
         ));
 
-        assertZeroVarargsIntCall(function, "javan_files_is_directory", IrExpression.objectLocal("arg0"));
+        assertZeroVarargsIntCall(function, "javan_files_is_directory", IrExpression.objectLocal("arg0"), "[Ljava.nio.file.LinkOption;");
     }
 
     @Test
@@ -14627,7 +14627,7 @@ final class BytecodeToIRTest {
             plain(4, 176, "areturn")
         ));
 
-        assertZeroVarargsObjectCall(function, "javan_files_create_directories", IrExpression.objectLocal("arg0"));
+        assertZeroVarargsObjectCall(function, "javan_files_create_directories", IrExpression.objectLocal("arg0"), "[Ljava.nio.file.attribute.FileAttribute;");
     }
 
     @Test
@@ -14696,7 +14696,7 @@ final class BytecodeToIRTest {
             plain(4, 176, "areturn")
         ));
 
-        assertZeroVarargsObjectCall(function, "javan_files_get_last_modified_time", IrExpression.objectLocal("arg0"));
+        assertZeroVarargsObjectCall(function, "javan_files_get_last_modified_time", IrExpression.objectLocal("arg0"), "[Ljava.nio.file.LinkOption;");
     }
 
     @Test
@@ -19979,12 +19979,13 @@ final class BytecodeToIRTest {
     private static void assertZeroVarargsIntCall(
         final IrFunction function,
         final String symbol,
-        final IrExpression firstArgument
+        final IrExpression firstArgument,
+        final String arrayBinaryName
     ) {
         assertThat(function.instructions()).hasSize(2);
         final IrInstruction allocation = function.instructions().get(0);
         assertThat(allocation.op()).isEqualTo(IrInstruction.Op.ASSIGN_OBJECT);
-        assertThat(allocation.expression()).contains(IrExpression.objectArrayAllocation(IrExpression.intLiteral(0)));
+        assertThat(allocation.expression()).contains(IrExpression.objectArrayAllocation(IrExpression.intLiteral(0), arrayBinaryName));
         final String arrayLocal = allocation.value().orElseThrow();
         assertThat(function.instructions().get(1)).isEqualTo(IrInstruction.returnInt(IrExpression.intCall(
             symbol,
@@ -19995,12 +19996,13 @@ final class BytecodeToIRTest {
     private static void assertZeroVarargsObjectCall(
         final IrFunction function,
         final String symbol,
-        final IrExpression firstArgument
+        final IrExpression firstArgument,
+        final String arrayBinaryName
     ) {
         assertThat(function.instructions()).hasSize(3);
         final IrInstruction allocation = function.instructions().get(0);
         assertThat(allocation.op()).isEqualTo(IrInstruction.Op.ASSIGN_OBJECT);
-        assertThat(allocation.expression()).contains(IrExpression.objectArrayAllocation(IrExpression.intLiteral(0)));
+        assertThat(allocation.expression()).contains(IrExpression.objectArrayAllocation(IrExpression.intLiteral(0), arrayBinaryName));
         final String arrayLocal = allocation.value().orElseThrow();
         final IrInstruction call = function.instructions().get(1);
         assertThat(call.op()).isEqualTo(IrInstruction.Op.ASSIGN_OBJECT);

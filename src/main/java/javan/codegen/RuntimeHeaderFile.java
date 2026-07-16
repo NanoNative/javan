@@ -169,7 +169,7 @@ final class RuntimeHeaderFile {
         int javan_object_non_null(void* value);
         int javan_object_builtin_instance_of(void* value, int target);
         int javan_object_type_in(void* value, int count, ...);
-        void* javan_object_array_new(int length);
+        void* javan_object_array_new(int length, const char* class_name);
         void* javan_object_array_get(void* array, int index);
         void javan_object_array_set(void* array, int index, void* value);
         void* javan_int_array_new(int length);

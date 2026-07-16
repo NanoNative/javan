@@ -11,6 +11,7 @@ final class RuntimeSourceMemorySections {
             int collectible;
             int runtime_kind;
             unsigned int mark;
+            const char* array_class_name;
             struct javan_allocation_node* next;
         } javan_allocation_node;
 
@@ -1007,6 +1008,7 @@ final class RuntimeSourceMemorySections {
             node->collectible = 0;
             node->runtime_kind = JAVAN_RUNTIME_KIND_NONE;
             node->mark = 0;
+            node->array_class_name = NULL;
             node->next = javan_allocations;
             javan_allocations = node;
             javan_account_allocation(size);
@@ -1121,6 +1123,29 @@ final class RuntimeSourceMemorySections {
             node->type_id = type_id;
             node->collectible = ((kind == JAVAN_HEAP_KIND_OBJECT && javan_object_kind_collectible(type_id) != 0)
                 || (kind == JAVAN_HEAP_KIND_ARRAY && javan_array_kind_collectible(type_id) != 0)) ? 1 : 0;
+            if (kind != JAVAN_HEAP_KIND_ARRAY) {
+                node->array_class_name = NULL;
+            }
+            javan_heap_maybe_validate();
+            javan_runtime_lock_leave();
+        }
+
+        static void javan_update_array_class_name(void* value, const char* class_name) {
+            javan_runtime_lock_enter();
+            javan_allocation_node* node = javan_find_allocation(value, NULL);
+            if (node == NULL) {
+                javan_runtime_lock_leave();
+                javan_panic("unknown array allocation");
+            }
+            if (node->kind != JAVAN_HEAP_KIND_ARRAY) {
+                javan_runtime_lock_leave();
+                javan_panic("invalid array allocation tag");
+            }
+            if (class_name == NULL || class_name[0] == '\\0') {
+                javan_runtime_lock_leave();
+                javan_panic("invalid array class name");
+            }
+            node->array_class_name = class_name;
             javan_heap_maybe_validate();
             javan_runtime_lock_leave();
         }
@@ -2903,44 +2928,16 @@ final class RuntimeSourceMemorySections {
             return 0;
         }
 
-        static const char* javan_array_class_name(int kind) {
-            if (kind == JAVAN_ARRAY_KIND_OBJECT) {
-                return "[Ljava.lang.Object;";
-            }
-            if (kind == JAVAN_ARRAY_KIND_INT) {
-                return "[I";
-            }
-            if (kind == JAVAN_ARRAY_KIND_LONG) {
-                return "[J";
-            }
-            if (kind == JAVAN_ARRAY_KIND_FLOAT) {
-                return "[F";
-            }
-            if (kind == JAVAN_ARRAY_KIND_DOUBLE) {
-                return "[D";
-            }
-            if (kind == JAVAN_ARRAY_KIND_BYTE) {
-                return "[B";
-            }
-            if (kind == JAVAN_ARRAY_KIND_BOOLEAN) {
-                return "[Z";
-            }
-            if (kind == JAVAN_ARRAY_KIND_SHORT) {
-                return "[S";
-            }
-            if (kind == JAVAN_ARRAY_KIND_CHAR) {
-                return "[C";
-            }
-            return "[Ljava.lang.Object;";
-        }
-
         void* javan_object_get_class(void* value) {
             if (value == NULL) {
                 javan_panic("null object");
             }
             javan_allocation_node* node = javan_find_allocation(value, NULL);
             if (node != NULL && node->kind == JAVAN_HEAP_KIND_ARRAY) {
-                return javan_runtime_class_literal(javan_array_class_name(node->type_id), 0, 0, 1, 0);
+                if (node->array_class_name == NULL || node->array_class_name[0] == '\\0') {
+                    javan_panic("unsupported array class metadata");
+                }
+                return javan_runtime_class_literal(node->array_class_name, 0, 0, 1, 0);
             }
             int type_id = javan_registered_type_id(value);
             if (type_id > 0) {
@@ -5068,6 +5065,7 @@ final class RuntimeSourceMemorySections {
             int element_size;
             int kind;
             int reserved;
+            const char* class_name;
         } javan_array_header;
 
         typedef struct {
@@ -5075,6 +5073,7 @@ final class RuntimeSourceMemorySections {
             int element_size;
             int kind;
             int reserved;
+            const char* class_name;
             void* values[];
         } javan_object_array;
 
@@ -5083,6 +5082,7 @@ final class RuntimeSourceMemorySections {
             int element_size;
             int kind;
             int reserved;
+            const char* class_name;
             int values[];
         } javan_int_array;
 
@@ -5091,6 +5091,7 @@ final class RuntimeSourceMemorySections {
             int element_size;
             int kind;
             int reserved;
+            const char* class_name;
             long long values[];
         } javan_long_array;
 
@@ -5099,6 +5100,7 @@ final class RuntimeSourceMemorySections {
             int element_size;
             int kind;
             int reserved;
+            const char* class_name;
             float values[];
         } javan_float_array;
 
@@ -5107,6 +5109,7 @@ final class RuntimeSourceMemorySections {
             int element_size;
             int kind;
             int reserved;
+            const char* class_name;
             double values[];
         } javan_double_array;
 
@@ -5115,6 +5118,7 @@ final class RuntimeSourceMemorySections {
             int element_size;
             int kind;
             int reserved;
+            const char* class_name;
             signed char values[];
         } javan_byte_array;
 
@@ -5123,6 +5127,7 @@ final class RuntimeSourceMemorySections {
             int element_size;
             int kind;
             int reserved;
+            const char* class_name;
             short values[];
         } javan_short_array;
 
@@ -5131,6 +5136,7 @@ final class RuntimeSourceMemorySections {
             int element_size;
             int kind;
             int reserved;
+            const char* class_name;
             unsigned short values[];
         } javan_char_array;
 
@@ -5507,12 +5513,14 @@ final class RuntimeSourceMemorySections {
         }
         """;
     private static final String SOURCE_ARRAYS = """
-        static void javan_array_init(javan_array_header* array, int length, int element_size, int kind) {
+        static void javan_array_init(javan_array_header* array, int length, int element_size, int kind, const char* class_name) {
             array->length = length;
             array->element_size = element_size;
             array->kind = kind;
             array->reserved = 0;
+            array->class_name = class_name;
             javan_update_allocation_metadata((void*) array, JAVAN_HEAP_KIND_ARRAY, kind);
+            javan_update_array_class_name((void*) array, class_name);
         }
 
         static unsigned long javan_array_allocation_size(unsigned long header_size, int length, unsigned long element_size) {
@@ -5525,66 +5533,69 @@ final class RuntimeSourceMemorySections {
             return header_size + ((unsigned long) length * element_size);
         }
 
-        void* javan_object_array_new(int length) {
+        void* javan_object_array_new(int length, const char* class_name) {
             unsigned long size = javan_array_allocation_size(sizeof(javan_object_array), length, sizeof(void*));
             javan_object_array* array = (javan_object_array*) javan_alloc(size);
-            javan_array_init((javan_array_header*) array, length, sizeof(void*), JAVAN_ARRAY_KIND_OBJECT);
+            if (class_name == NULL || class_name[0] == '\\0') {
+                javan_panic("invalid object array class name");
+            }
+            javan_array_init((javan_array_header*) array, length, sizeof(void*), JAVAN_ARRAY_KIND_OBJECT, class_name);
             return array;
         }
 
         void* javan_int_array_new(int length) {
             unsigned long size = javan_array_allocation_size(sizeof(javan_int_array), length, sizeof(int));
             javan_int_array* array = (javan_int_array*) javan_alloc(size);
-            javan_array_init((javan_array_header*) array, length, sizeof(int), JAVAN_ARRAY_KIND_INT);
+            javan_array_init((javan_array_header*) array, length, sizeof(int), JAVAN_ARRAY_KIND_INT, "[I");
             return array;
         }
 
         void* javan_long_array_new(int length) {
             unsigned long size = javan_array_allocation_size(sizeof(javan_long_array), length, sizeof(long long));
             javan_long_array* array = (javan_long_array*) javan_alloc(size);
-            javan_array_init((javan_array_header*) array, length, sizeof(long long), JAVAN_ARRAY_KIND_LONG);
+            javan_array_init((javan_array_header*) array, length, sizeof(long long), JAVAN_ARRAY_KIND_LONG, "[J");
             return array;
         }
 
         void* javan_float_array_new(int length) {
             unsigned long size = javan_array_allocation_size(sizeof(javan_float_array), length, sizeof(float));
             javan_float_array* array = (javan_float_array*) javan_alloc(size);
-            javan_array_init((javan_array_header*) array, length, sizeof(float), JAVAN_ARRAY_KIND_FLOAT);
+            javan_array_init((javan_array_header*) array, length, sizeof(float), JAVAN_ARRAY_KIND_FLOAT, "[F");
             return array;
         }
 
         void* javan_double_array_new(int length) {
             unsigned long size = javan_array_allocation_size(sizeof(javan_double_array), length, sizeof(double));
             javan_double_array* array = (javan_double_array*) javan_alloc(size);
-            javan_array_init((javan_array_header*) array, length, sizeof(double), JAVAN_ARRAY_KIND_DOUBLE);
+            javan_array_init((javan_array_header*) array, length, sizeof(double), JAVAN_ARRAY_KIND_DOUBLE, "[D");
             return array;
         }
 
         void* javan_byte_array_new(int length) {
             unsigned long size = javan_array_allocation_size(sizeof(javan_byte_array), length, sizeof(signed char));
             javan_byte_array* array = (javan_byte_array*) javan_alloc(size);
-            javan_array_init((javan_array_header*) array, length, sizeof(signed char), JAVAN_ARRAY_KIND_BYTE);
+            javan_array_init((javan_array_header*) array, length, sizeof(signed char), JAVAN_ARRAY_KIND_BYTE, "[B");
             return array;
         }
 
         void* javan_boolean_array_new(int length) {
             unsigned long size = javan_array_allocation_size(sizeof(javan_byte_array), length, sizeof(signed char));
             javan_byte_array* array = (javan_byte_array*) javan_alloc(size);
-            javan_array_init((javan_array_header*) array, length, sizeof(signed char), JAVAN_ARRAY_KIND_BOOLEAN);
+            javan_array_init((javan_array_header*) array, length, sizeof(signed char), JAVAN_ARRAY_KIND_BOOLEAN, "[Z");
             return array;
         }
 
         void* javan_short_array_new(int length) {
             unsigned long size = javan_array_allocation_size(sizeof(javan_short_array), length, sizeof(short));
             javan_short_array* array = (javan_short_array*) javan_alloc(size);
-            javan_array_init((javan_array_header*) array, length, sizeof(short), JAVAN_ARRAY_KIND_SHORT);
+            javan_array_init((javan_array_header*) array, length, sizeof(short), JAVAN_ARRAY_KIND_SHORT, "[S");
             return array;
         }
 
         void* javan_char_array_new(int length) {
             unsigned long size = javan_array_allocation_size(sizeof(javan_char_array), length, sizeof(unsigned short));
             javan_char_array* array = (javan_char_array*) javan_alloc(size);
-            javan_array_init((javan_array_header*) array, length, sizeof(unsigned short), JAVAN_ARRAY_KIND_CHAR);
+            javan_array_init((javan_array_header*) array, length, sizeof(unsigned short), JAVAN_ARRAY_KIND_CHAR, "[C");
             return array;
         }
 
@@ -5796,7 +5807,26 @@ final class RuntimeSourceMemorySections {
         }
 
         void* javan_arrays_copy_of_object(void* array, int new_length) {
-            return javan_arrays_copy_of(array, new_length, JAVAN_ARRAY_KIND_OBJECT, javan_object_array_new);
+            void* source_root = array;
+            javan_array_header* source = javan_array_checked(source_root);
+            javan_array_kind_checked(source, JAVAN_ARRAY_KIND_OBJECT);
+            void** javan_array_copy_roots[] = {
+                (void**) &source_root
+            };
+            javan_root_frame_push(javan_array_copy_roots, 1);
+            void* result = javan_object_array_new(new_length, source->class_name);
+            source = javan_array_checked(source_root);
+            javan_array_header* target = javan_array_checked(result);
+            int copied = source->length < new_length ? source->length : new_length;
+            if (copied > 0) {
+                memcpy(
+                    javan_array_values(target),
+                    javan_array_values(source),
+                    (unsigned long) copied * (unsigned long) source->element_size
+                );
+            }
+            javan_root_frame_pop(javan_array_copy_roots);
+            return result;
         }
 
         void* javan_arrays_copy_of_boolean(void* array, int new_length) {
@@ -5877,7 +5907,7 @@ final class RuntimeSourceMemorySections {
                 (void**) &source_root
             };
             javan_root_frame_push(javan_array_range_copy_roots, 1);
-            void* result = javan_object_array_new(new_length);
+            void* result = javan_object_array_new(new_length, source->class_name);
             source = javan_array_checked(source_root);
             javan_array_header* target = javan_array_checked(result);
             int remaining = source->length - begin;
@@ -5895,7 +5925,7 @@ final class RuntimeSourceMemorySections {
 
         void* javan_string_array_from_args(int argc, char** argv) {
             int length = argc > 0 ? argc - 1 : 0;
-            void* result = javan_object_array_new(length);
+            void* result = javan_object_array_new(length, "[Ljava.lang.String;");
             for (int index = 0; index < length; index++) {
                 javan_object_array_set(result, index, argv[index + 1]);
             }

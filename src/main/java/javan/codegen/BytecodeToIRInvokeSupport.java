@@ -1695,7 +1695,13 @@ final class BytecodeToIRInvokeSupport {
         final String localName = "object" + localDeclarations.size();
         localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
         final IrExpression local = IrExpression.objectLocal(localName);
-        instructions.add(IrInstruction.assignObject(localName, IrExpression.objectArrayAllocation(IrExpression.intLiteral(constants.size()))));
+        instructions.add(IrInstruction.assignObject(
+            localName,
+            IrExpression.objectArrayAllocation(
+                IrExpression.intLiteral(constants.size()),
+                "[L" + binaryClassName(methodRef.owner()) + ";"
+            )
+        ));
         for (int index = 0; index < constants.size(); index++) {
             instructions.add(IrInstruction.assignArrayObject(
                 local,

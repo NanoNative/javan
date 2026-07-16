@@ -190,6 +190,82 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void objectArrayGetClassNameBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("object-array-get-class-name");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new String[2].getClass().getName());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/object-array-get-class-name").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("[Ljava.lang.String;\n");
+    }
+
+    @Test
+    void nestedPrimitiveArrayGetClassNameBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("nested-primitive-array-get-class-name");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new int[1][].getClass().getName());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/nested-primitive-array-get-class-name").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("[[I\n");
+    }
+
+    @Test
+    void mainArgsGetClassNameBuildsAndMatchesExpectedRuntimeOutput() throws Exception {
+        final Path project = project("main-args-get-class-name");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(args.getClass().getName());
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(
+            project.resolve(".javan/bin/main-args-get-class-name").toString(),
+            "one",
+            "two"
+        )).stdout()).isEqualTo("[Ljava.lang.String;\n");
+    }
+
+    @Test
     void classIsInstanceAndCastBuildAndMatchJvmOutput() throws Exception {
         final Path project = project("class-is-instance-cast");
         writeJava(project, "com.acme.Main", """
