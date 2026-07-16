@@ -961,6 +961,18 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void jdkCallSupportClassifiesNamedThreadConstructorRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new MethodRef("java/lang/Thread", "<init>", "(Ljava/lang/String;)V")))
+            .containsExactly("threads");
+    }
+
+    @Test
+    void jdkCallSupportClassifiesRunnableNamedThreadConstructorRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new MethodRef("java/lang/Thread", "<init>", "(Ljava/lang/Runnable;Ljava/lang/String;)V")))
+            .containsExactly("threads");
+    }
+
+    @Test
     void jdkCallSupportClassifiesThreadSleepRuntimeModule() {
         assertThat(JdkCallSupport.runtimeModules(new MethodRef("java/lang/Thread", "sleep", "(J)V")))
             .containsExactly("threads");
@@ -1099,6 +1111,8 @@ final class CoreBehaviorTest {
     void jdkCallSupportAcceptsCurrentThreadInterruptStateCalls() {
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "<init>", "()V"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "<init>", "(Ljava/lang/Runnable;)V"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "<init>", "(Ljava/lang/String;)V"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "<init>", "(Ljava/lang/Runnable;Ljava/lang/String;)V"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "currentThread", "()Ljava/lang/Thread;"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "sleep", "(J)V"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "interrupted", "()Z"))).isTrue();
@@ -3556,6 +3570,53 @@ final class CoreBehaviorTest {
                         instruction(5, 183, "invokespecial", new MethodRef("java/lang/Thread", "<init>", "(Ljava/lang/Runnable;)V")),
                         instruction(6, 182, "invokevirtual", new MethodRef("java/lang/Thread", "start", "()V")),
                         instruction(7, 177, "return")
+                    )
+                ),
+                "com/acme/Task", classWithMethods(
+                    "com/acme/Task",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/lang/Runnable"),
+                    methodInfo("<init>", "()V"),
+                    methodInfo("run", "()V")
+                ),
+                "com/acme/OtherTask", classWithMethods(
+                    "com/acme/OtherTask",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/lang/Runnable"),
+                    methodInfo("run", "()V")
+                )
+            ),
+            List.of(new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+        assertThat(graph.reachableMethods()).contains(new EntryPoint("com/acme/Task", "run", "()V"));
+        assertThat(graph.reachableMethods()).doesNotContain(new EntryPoint("com/acme/OtherTask", "run", "()V"));
+    }
+
+    @Test
+    void reachabilityKeepsOnlyConstructedRunnableTargetsForNamedThreadStart() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo(
+                        "main",
+                        "([Ljava/lang/String;)V",
+                        classInstruction(0, 187, "new", "java/lang/Thread"),
+                        instruction(1, 89, "dup"),
+                        classInstruction(2, 187, "new", "com/acme/Task"),
+                        instruction(3, 89, "dup"),
+                        instruction(4, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        classInstruction(5, 18, "ldc", "worker"),
+                        instruction(6, 183, "invokespecial", new MethodRef("java/lang/Thread", "<init>", "(Ljava/lang/Runnable;Ljava/lang/String;)V")),
+                        instruction(7, 182, "invokevirtual", new MethodRef("java/lang/Thread", "start", "()V")),
+                        instruction(8, 177, "return")
                     )
                 ),
                 "com/acme/Task", classWithMethods(

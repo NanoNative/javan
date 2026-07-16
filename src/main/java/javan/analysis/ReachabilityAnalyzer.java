@@ -608,7 +608,8 @@ public final class ReachabilityAnalyzer {
     private static boolean isRunnableThreadConstructor(final MethodRef target) {
         return "java/lang/Thread".equals(target.owner())
             && "<init>".equals(target.name())
-            && "(Ljava/lang/Runnable;)V".equals(target.descriptor());
+            && ("(Ljava/lang/Runnable;)V".equals(target.descriptor())
+            || "(Ljava/lang/Runnable;Ljava/lang/String;)V".equals(target.descriptor()));
     }
 
     private static List<EntryPoint> interfaceTargets(final Map<String, ClassFile> classes, final MethodRef target) {
@@ -1084,10 +1085,15 @@ public final class ReachabilityAnalyzer {
             || isVirtualThreadBuilderUnstarted(targetRef.orElseThrow()))) {
             return inferVirtualThreadTarget(classes, instructions, threadConstructorIndex);
         }
-        if (threadConstructorIndex < 3) {
+        final int runnableConstructorOffset = targetRef.isPresent()
+            && "(Ljava/lang/Runnable;Ljava/lang/String;)V".equals(targetRef.orElseThrow().descriptor())
+            ? 2
+            : 1;
+        final int runnableConstructorIndex = threadConstructorIndex - runnableConstructorOffset;
+        if (runnableConstructorIndex < 2) {
             return Optional.empty();
         }
-        final Instruction runnableConstructor = instructions.get(threadConstructorIndex - 1);
+        final Instruction runnableConstructor = instructions.get(runnableConstructorIndex);
         final Optional<MethodRef> runnableConstructorRef = runnableConstructor.methodRef();
         if (runnableConstructorRef.isEmpty()) {
             return Optional.empty();
@@ -1098,10 +1104,10 @@ public final class ReachabilityAnalyzer {
             || isAssignableTo(classes, target.owner(), "java/lang/Thread")) {
             return Optional.empty();
         }
-        if (instructions.get(threadConstructorIndex - 2).opcode() != 89) {
+        if (instructions.get(runnableConstructorIndex - 1).opcode() != 89) {
             return Optional.empty();
         }
-        final Instruction allocation = instructions.get(threadConstructorIndex - 3);
+        final Instruction allocation = instructions.get(runnableConstructorIndex - 2);
         final Optional<String> className = allocation.className();
         if (allocation.opcode() != 187
             || className.isEmpty()

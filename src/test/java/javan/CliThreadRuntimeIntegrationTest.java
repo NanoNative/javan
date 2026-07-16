@@ -2628,6 +2628,93 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void threadStringConstructorBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-string-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Thread thread = new Thread("named-worker");
+                    System.out.println(thread.getName());
+                    System.out.println(thread.isInterrupted());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-string-constructor").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadRunnableStringConstructorBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-runnable-string-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread thread = new Thread(new Task(), "named-task");
+                    System.out.println(thread.getName());
+                    thread.start();
+                    thread.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Thread.currentThread().getName());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-runnable-string-constructor").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadStringConstructorNullFailsClearlyAtRuntime() throws Exception {
+        final Path project = project("thread-string-constructor-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Thread thread = new Thread((String) null);
+                    System.out.println(thread);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/thread-string-constructor-null").toString()));
+        assertThat(nativeRun.exitCode()).isEqualTo(1);
+        assertThat(nativeRun.stdout()).isEmpty();
+        assertThat(nativeRun.stderr()).contains("null Thread name");
+    }
+
+    @Test
     void threadSubclassAllocationFailsClearlyAtBuildTime() throws Exception {
         final Path project = project("thread-subclass-allocation");
         writeJava(project, "com.acme.Main", """

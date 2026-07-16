@@ -91,7 +91,7 @@ public final class JdkCallSupport {
         runtime("Class.isArray", "java/lang/Class", "isArray", "()Z"),
         runtime("Class.isAssignableFrom", "java/lang/Class", "isAssignableFrom", "(Ljava/lang/Class;)Z"),
         runtime("Class.getName", "java/lang/Class", "getName", "()Ljava/lang/String;"),
-        runtime("Thread.<init>", "java/lang/Thread", "<init>", "()V", "(Ljava/lang/Runnable;)V"),
+        runtime("Thread.<init>", "java/lang/Thread", "<init>", "()V", "(Ljava/lang/Runnable;)V", "(Ljava/lang/String;)V", "(Ljava/lang/Runnable;Ljava/lang/String;)V"),
         runtime("Thread.ofVirtual", "java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;"),
         runtime("Thread.startVirtualThread", "java/lang/Thread", "startVirtualThread", "(Ljava/lang/Runnable;)Ljava/lang/Thread;"),
         runtime("Thread.Builder.name", "java/lang/Thread$Builder", "name", "(Ljava/lang/String;)Ljava/lang/Thread$Builder;", "(Ljava/lang/String;J)Ljava/lang/Thread$Builder;"),

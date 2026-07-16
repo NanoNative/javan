@@ -8435,6 +8435,54 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersThreadStringConstructorCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/String;)Ljava/lang/Thread;",
+            3,
+            1,
+            classInstruction(0, 187, "new", "java/lang/Thread"),
+            plain(1, 89, "dup"),
+            plain(2, 42, "aload_0"),
+            invokeSpecial(3, new MethodRef("java/lang/Thread", "<init>", "(Ljava/lang/String;)V")),
+            plain(4, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_thread_new", List.of())),
+            IrInstruction.callStaticVoid("javan_thread_set_name", List.of(IrExpression.objectLocal("object0"), IrExpression.objectLocal("arg0"))),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersThreadRunnableStringConstructorCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Runnable;Ljava/lang/String;)Ljava/lang/Thread;",
+            4,
+            2,
+            classInstruction(0, 187, "new", "java/lang/Thread"),
+            plain(1, 89, "dup"),
+            plain(2, 42, "aload_0"),
+            plain(3, 43, "aload_1"),
+            invokeSpecial(4, new MethodRef("java/lang/Thread", "<init>", "(Ljava/lang/Runnable;Ljava/lang/String;)V")),
+            plain(5, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_thread_new", List.of())),
+            IrInstruction.callStaticVoid("javan_thread_set_target", List.of(IrExpression.objectLocal("object0"), IrExpression.objectLocal("arg0"))),
+            IrInstruction.callStaticVoid("javan_thread_set_name", List.of(IrExpression.objectLocal("object0"), IrExpression.objectLocal("arg1"))),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
     void lowersThreadJoinInstanceCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -9980,6 +10028,39 @@ final class BytecodeToIRTest {
         );
 
         assertThat(target).isEmpty();
+    }
+
+    @Test
+    void inferRunnableThreadTargetSupportsRunnableStringConstructor() {
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Task", classFile(
+                "com/acme/Task",
+                "java/lang/Object",
+                0,
+                List.of("java/lang/Runnable"),
+                List.of(),
+                List.of(
+                    method(0, "<init>", "()V", 0, 0, plain(0, 177, "return")),
+                    method(0, "run", "()V", 0, 0, plain(0, 177, "return"))
+                )
+            )
+        );
+
+        final Optional<EntryPoint> target = BytecodeToIRInvokeSupport.inferRunnableThreadTarget(
+            classes,
+            List.of(
+                classInstruction(0, 187, "new", "java/lang/Thread"),
+                plain(1, 89, "dup"),
+                classInstruction(2, 187, "new", "com/acme/Task"),
+                plain(3, 89, "dup"),
+                invokeSpecial(4, new MethodRef("com/acme/Task", "<init>", "()V")),
+                stringConstant(5, "worker"),
+                invokeSpecial(6, new MethodRef("java/lang/Thread", "<init>", "(Ljava/lang/Runnable;Ljava/lang/String;)V"))
+            ),
+            6
+        );
+
+        assertThat(target).contains(new EntryPoint("com/acme/Task", "run", "()V"));
     }
 
     @Test

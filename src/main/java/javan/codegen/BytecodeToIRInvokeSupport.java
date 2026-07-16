@@ -3086,6 +3086,15 @@ final class BytecodeToIRInvokeSupport {
             instructions.add(IrInstruction.callStaticVoid("javan_thread_set_target", List.of(receiver, arguments.getFirst())));
             return true;
         }
+        if ("(Ljava/lang/String;)V".equals(methodRef.descriptor())) {
+            instructions.add(IrInstruction.callStaticVoid("javan_thread_set_name", List.of(receiver, arguments.getFirst())));
+            return true;
+        }
+        if ("(Ljava/lang/Runnable;Ljava/lang/String;)V".equals(methodRef.descriptor())) {
+            instructions.add(IrInstruction.callStaticVoid("javan_thread_set_target", List.of(receiver, arguments.get(0))));
+            instructions.add(IrInstruction.callStaticVoid("javan_thread_set_name", List.of(receiver, arguments.get(1))));
+            return true;
+        }
         return false;
     }
 
@@ -4162,7 +4171,8 @@ final class BytecodeToIRInvokeSupport {
     static boolean isRunnableThreadConstructor(final MethodRef methodRef) {
         return "java/lang/Thread".equals(methodRef.owner())
             && "<init>".equals(methodRef.name())
-            && "(Ljava/lang/Runnable;)V".equals(methodRef.descriptor());
+            && ("(Ljava/lang/Runnable;)V".equals(methodRef.descriptor())
+            || "(Ljava/lang/Runnable;Ljava/lang/String;)V".equals(methodRef.descriptor()));
     }
     static Optional<EntryPoint> inferVirtualThreadTarget(
         final Map<String, ClassFile> classes,
@@ -4446,10 +4456,15 @@ final class BytecodeToIRInvokeSupport {
         if (targetRef.isPresent() && isVirtualThreadBuilderUnstarted(targetRef.orElseThrow())) {
             return inferVirtualThreadTarget(classes, instructions, threadConstructorIndex);
         }
-        if (threadConstructorIndex < 3) {
+        final int runnableConstructorOffset = targetRef.isPresent()
+            && "(Ljava/lang/Runnable;Ljava/lang/String;)V".equals(targetRef.orElseThrow().descriptor())
+            ? 2
+            : 1;
+        final int runnableConstructorIndex = threadConstructorIndex - runnableConstructorOffset;
+        if (runnableConstructorIndex < 2) {
             return Optional.empty();
         }
-        final Instruction runnableConstructor = instructions.get(threadConstructorIndex - 1);
+        final Instruction runnableConstructor = instructions.get(runnableConstructorIndex);
         final Optional<MethodRef> runnableConstructorRef = runnableConstructor.methodRef();
         if (runnableConstructorRef.isEmpty()) {
             return Optional.empty();
@@ -4460,10 +4475,10 @@ final class BytecodeToIRInvokeSupport {
             || isAssignableTo(classes, target.owner(), "java/lang/Thread")) {
             return Optional.empty();
         }
-        if (instructions.get(threadConstructorIndex - 2).opcode() != 89) {
+        if (instructions.get(runnableConstructorIndex - 1).opcode() != 89) {
             return Optional.empty();
         }
-        final Instruction allocation = instructions.get(threadConstructorIndex - 3);
+        final Instruction allocation = instructions.get(runnableConstructorIndex - 2);
         final Optional<String> className = allocation.className();
         if (allocation.opcode() != 187
             || className.isEmpty()
