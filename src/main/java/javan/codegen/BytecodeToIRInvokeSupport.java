@@ -4446,6 +4446,10 @@ final class BytecodeToIRInvokeSupport {
                 && !"isClosed".equals(methodRef.name())
                 && !"getPort".equals(methodRef.name())
                 && !"getLocalPort".equals(methodRef.name())
+                && !"getTcpNoDelay".equals(methodRef.name())
+                && !"setTcpNoDelay".equals(methodRef.name())
+                && !"getKeepAlive".equals(methodRef.name())
+                && !"setKeepAlive".equals(methodRef.name())
                 && !"getLocalAddress".equals(methodRef.name())
                 && !"getInetAddress".equals(methodRef.name())
                 && !"getLocalSocketAddress".equals(methodRef.name())
@@ -4454,6 +4458,18 @@ final class BytecodeToIRInvokeSupport {
                 && !"getOutputStream".equals(methodRef.name())
                 && !"close".equals(methodRef.name())) {
                 return false;
+            }
+            if ("setTcpNoDelay".equals(methodRef.name()) && "(Z)V".equals(methodRef.descriptor())) {
+                final IrExpression enabled = popInt(classFile, method, stack);
+                final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+                instructions.add(IrInstruction.callStaticVoid("javan_socket_set_tcp_no_delay", List.of(receiver, enabled)));
+                return true;
+            }
+            if ("setKeepAlive".equals(methodRef.name()) && "(Z)V".equals(methodRef.descriptor())) {
+                final IrExpression enabled = popInt(classFile, method, stack);
+                final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+                instructions.add(IrInstruction.callStaticVoid("javan_socket_set_keep_alive", List.of(receiver, enabled)));
+                return true;
             }
             final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
             if ("isConnected".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor())) {
@@ -4470,6 +4486,14 @@ final class BytecodeToIRInvokeSupport {
             }
             if ("getLocalPort".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
                 pushIntCall(instructions, stack, localDeclarations, "javan_socket_get_local_port", List.of(receiver));
+                return true;
+            }
+            if ("getTcpNoDelay".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor())) {
+                pushIntCall(instructions, stack, localDeclarations, "javan_socket_get_tcp_no_delay", List.of(receiver));
+                return true;
+            }
+            if ("getKeepAlive".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor())) {
+                pushIntCall(instructions, stack, localDeclarations, "javan_socket_get_keep_alive", List.of(receiver));
                 return true;
             }
             if ("getLocalAddress".equals(methodRef.name()) && "()Ljava/net/InetAddress;".equals(methodRef.descriptor())) {
@@ -4513,10 +4537,18 @@ final class BytecodeToIRInvokeSupport {
         }
         if (!"getInetAddress".equals(methodRef.name())
             && !"getLocalPort".equals(methodRef.name())
+            && !"getReuseAddress".equals(methodRef.name())
+            && !"setReuseAddress".equals(methodRef.name())
             && !"getLocalSocketAddress".equals(methodRef.name())
             && !"accept".equals(methodRef.name())
             && !"close".equals(methodRef.name())) {
             return false;
+        }
+        if ("setReuseAddress".equals(methodRef.name()) && "(Z)V".equals(methodRef.descriptor())) {
+            final IrExpression enabled = popInt(classFile, method, stack);
+            final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+            instructions.add(IrInstruction.callStaticVoid("javan_server_socket_set_reuse_address", List.of(receiver, enabled)));
+            return true;
         }
         final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
         if ("getInetAddress".equals(methodRef.name()) && "()Ljava/net/InetAddress;".equals(methodRef.descriptor())) {
@@ -4525,6 +4557,10 @@ final class BytecodeToIRInvokeSupport {
         }
         if ("getLocalPort".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
             pushIntCall(instructions, stack, localDeclarations, "javan_server_socket_get_local_port", List.of(receiver));
+            return true;
+        }
+        if ("getReuseAddress".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor())) {
+            pushIntCall(instructions, stack, localDeclarations, "javan_server_socket_get_reuse_address", List.of(receiver));
             return true;
         }
         if ("getLocalSocketAddress".equals(methodRef.name()) && "()Ljava/net/SocketAddress;".equals(methodRef.descriptor())) {

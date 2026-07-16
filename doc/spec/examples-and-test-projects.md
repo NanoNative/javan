@@ -41,6 +41,8 @@ Optional real-project probes:
 - `src/test/resources/projects/real-probes/typemap-pair`: external compatibility smoke against a real TypeMap artifact.
 - `src/test/resources/projects/real-probes/nano-metric`: external compatibility smoke against a real Nano artifact.
 - `src/test/resources/projects/real-probes/nano-duration`: external compatibility smoke for one Nano helper slice.
+- `src/test/resources/projects/real-probes/nano-scheduler`: external compatibility smoke for one-shot Nano scheduler lifecycle.
+- `src/test/resources/projects/real-probes/nano-scheduler-fixed-rate`: external compatibility smoke for fixed-rate Nano scheduler lifecycle.
 
 Each probe owns its own `probe.properties`, `expected.stdout`, and `build-example.sh`.
 The acceptance harness only iterates probe directories; it does not hardcode library-specific

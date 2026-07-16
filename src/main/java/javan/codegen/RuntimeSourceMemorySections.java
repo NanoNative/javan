@@ -263,6 +263,8 @@ final class RuntimeSourceMemorySections {
             int closed;
             int local_port;
             int remote_port;
+            int tcp_no_delay;
+            int keep_alive;
             javan_inet_address* local_address;
             javan_inet_address* remote_address;
         } javan_socket;
@@ -272,7 +274,7 @@ final class RuntimeSourceMemorySections {
             int fd;
             int closed;
             int local_port;
-            int reserved0;
+            int reuse_address;
             int reserved1;
             javan_inet_address* local_address;
         } javan_server_socket;
@@ -1481,6 +1483,8 @@ final class RuntimeSourceMemorySections {
                     || socket->closed < 0
                     || socket->local_port < 0
                     || socket->remote_port < 0
+                    || (socket->tcp_no_delay != 0 && socket->tcp_no_delay != 1)
+                    || (socket->keep_alive != 0 && socket->keep_alive != 1)
                     || socket->local_address == NULL
                     || socket->remote_address == NULL) {
                     javan_panic("invalid runtime socket metadata");
@@ -1491,6 +1495,7 @@ final class RuntimeSourceMemorySections {
                     || socket->fd < -1
                     || socket->closed < 0
                     || socket->local_port < 0
+                    || (socket->reuse_address != 0 && socket->reuse_address != 1)
                     || socket->local_address == NULL) {
                     javan_panic("invalid runtime server socket metadata");
                 }

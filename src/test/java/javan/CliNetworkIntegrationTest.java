@@ -204,6 +204,160 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void socketTcpNoDelayDefaultBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
+                try (java.net.Socket socket = server.accept()) {
+                    socket.getOutputStream().flush();
+                } catch (final Exception exception) {
+                    throw new IllegalStateException(exception);
+                }
+            });
+            final Path project = project("socket-tcp-no-delay-default");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.net.Socket;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final Socket socket = new Socket("127.0.0.1", %d);
+                        System.out.println(socket.getTcpNoDelay());
+                        socket.close();
+                    }
+                }
+                """.formatted(port));
+
+            final String jvmOutput = runJvm(project, "com.acme.Main");
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            assertThat(process(project, List.of(project.resolve(".javan/bin/socket-tcp-no-delay-default").toString())).stdout()).isEqualTo(jvmOutput);
+            accepted.get(5, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
+    void socketTcpNoDelayEnableBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
+                try (java.net.Socket socket = server.accept()) {
+                    socket.getOutputStream().flush();
+                } catch (final Exception exception) {
+                    throw new IllegalStateException(exception);
+                }
+            });
+            final Path project = project("socket-tcp-no-delay-enable");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.net.Socket;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final Socket socket = new Socket("127.0.0.1", %d);
+                        socket.setTcpNoDelay(true);
+                        System.out.println(socket.getTcpNoDelay());
+                        socket.close();
+                    }
+                }
+                """.formatted(port));
+
+            final String jvmOutput = runJvm(project, "com.acme.Main");
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            assertThat(process(project, List.of(project.resolve(".javan/bin/socket-tcp-no-delay-enable").toString())).stdout()).isEqualTo(jvmOutput);
+            accepted.get(5, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
+    void socketKeepAliveDefaultBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
+                try (java.net.Socket socket = server.accept()) {
+                    socket.getOutputStream().flush();
+                } catch (final Exception exception) {
+                    throw new IllegalStateException(exception);
+                }
+            });
+            final Path project = project("socket-keep-alive-default");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.net.Socket;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final Socket socket = new Socket("127.0.0.1", %d);
+                        System.out.println(socket.getKeepAlive());
+                        socket.close();
+                    }
+                }
+                """.formatted(port));
+
+            final String jvmOutput = runJvm(project, "com.acme.Main");
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            assertThat(process(project, List.of(project.resolve(".javan/bin/socket-keep-alive-default").toString())).stdout()).isEqualTo(jvmOutput);
+            accepted.get(5, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
+    void socketKeepAliveEnableBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
+                try (java.net.Socket socket = server.accept()) {
+                    socket.getOutputStream().flush();
+                } catch (final Exception exception) {
+                    throw new IllegalStateException(exception);
+                }
+            });
+            final Path project = project("socket-keep-alive-enable");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.net.Socket;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final Socket socket = new Socket("127.0.0.1", %d);
+                        socket.setKeepAlive(true);
+                        System.out.println(socket.getKeepAlive());
+                        socket.close();
+                    }
+                }
+                """.formatted(port));
+
+            final String jvmOutput = runJvm(project, "com.acme.Main");
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            assertThat(process(project, List.of(project.resolve(".javan/bin/socket-keep-alive-enable").toString())).stdout()).isEqualTo(jvmOutput);
+            accepted.get(5, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
     void serverSocketAcceptBuildsAndAcceptsLoopbackClient() throws Exception {
         final int port = freeTcpPort();
         final Path project = project("server-socket-accept");
@@ -461,6 +615,66 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/server-socket-local-socket-address").toString())).stdout())
             .isEqualTo("127.0.0.1\n" + port + "\n");
+    }
+
+    @Test
+    void serverSocketReuseAddressDefaultBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("server-socket-reuse-address-default");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.ServerSocket;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ServerSocket server = new ServerSocket(%d, 2);
+                    System.out.println(server.getReuseAddress());
+                    server.close();
+                }
+            }
+            """.formatted(port));
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/server-socket-reuse-address-default").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void serverSocketReuseAddressRoundTripBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("server-socket-reuse-address-round-trip");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.ServerSocket;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ServerSocket server = new ServerSocket(%d, 2);
+                    server.setReuseAddress(false);
+                    System.out.println(server.getReuseAddress());
+                    server.setReuseAddress(true);
+                    System.out.println(server.getReuseAddress());
+                    server.close();
+                }
+            }
+            """.formatted(port));
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/server-socket-reuse-address-round-trip").toString())).stdout())
+            .isEqualTo(jvmOutput);
     }
 
     @Test

@@ -24,6 +24,7 @@ final class RuntimeSourceCoreSection {
         #else
         #include <arpa/inet.h>
         #include <netinet/in.h>
+        #include <netinet/tcp.h>
         #include <pthread.h>
         #include <sys/socket.h>
         #include <sys/wait.h>

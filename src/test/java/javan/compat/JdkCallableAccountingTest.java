@@ -1069,8 +1069,44 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksServerSocketGetReuseAddressAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/net/ServerSocket", "getReuseAddress", "()Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksServerSocketSetReuseAddressAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/net/ServerSocket", "setReuseAddress", "(Z)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksServerSocketGetLocalSocketAddressAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/net/ServerSocket", "getLocalSocketAddress", "()Ljava/net/SocketAddress;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksSocketGetTcpNoDelayAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/net/Socket", "getTcpNoDelay", "()Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksSocketSetTcpNoDelayAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/net/Socket", "setTcpNoDelay", "(Z)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksSocketGetKeepAliveAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/net/Socket", "getKeepAlive", "()Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksSocketSetKeepAliveAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/net/Socket", "setKeepAlive", "(Z)V")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 

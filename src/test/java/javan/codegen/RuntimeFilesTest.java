@@ -4189,6 +4189,31 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void writeIncludesSocketOptionRuntimeStateAndHelpers() throws Exception {
+        final Path runtime = new RuntimeFiles().write(tempDir);
+
+        assertThat(Files.readString(runtime)).contains(
+            "int tcp_no_delay;",
+            "int keep_alive;",
+            "int reuse_address;",
+            "static int javan_socket_getsockopt_flag(int fd, int level, int option_name, const char* message)",
+            "static void javan_socket_setsockopt_flag(int fd, int level, int option_name, int enabled, const char* message)",
+            "socket->tcp_no_delay = tcp_no_delay;",
+            "socket->keep_alive = keep_alive;",
+            "socket->reuse_address = javan_socket_getsockopt_flag(fd, SOL_SOCKET, SO_REUSEADDR, \"server socket SO_REUSEADDR lookup failed\");",
+            "int javan_socket_get_tcp_no_delay(void* value)",
+            "void javan_socket_set_tcp_no_delay(void* value, int enabled)",
+            "int javan_socket_get_keep_alive(void* value)",
+            "void javan_socket_set_keep_alive(void* value, int enabled)",
+            "int javan_server_socket_get_reuse_address(void* value)",
+            "void javan_server_socket_set_reuse_address(void* value, int enabled)",
+            "(socket->tcp_no_delay != 0 && socket->tcp_no_delay != 1)",
+            "(socket->keep_alive != 0 && socket->keep_alive != 1)",
+            "(socket->reuse_address != 0 && socket->reuse_address != 1)"
+        );
+    }
+
+    @Test
     void writeEmitsHttpPostHeaderAndByteArrayHelpers() throws Exception {
         final Path runtime = new RuntimeFiles().write(tempDir);
 

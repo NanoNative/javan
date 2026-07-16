@@ -9,8 +9,8 @@ External project names do not belong in this matrix; this ledger stays compiler-
 
 | Measure | Count |
 | --- | ---: |
-| rows | 114 |
-| pass | 114 |
+| rows | 117 |
+| pass | 117 |
 | scoped | 0 |
 | target | 0 |
 | rejected | 0 |
@@ -115,8 +115,11 @@ Status mapping:
 | `network-tcp-server-socket-backlog` | pass |
 | `network-tcp-server-socket-bind-address` | pass |
 | `network-tcp-server-socket-local-address` | pass |
+| `network-tcp-server-socket-reuse-address` | pass |
 | `network-tcp-socket-local-address` | pass |
 | `network-tcp-socket-socket-address` | pass |
+| `network-tcp-socket-tcp-nodelay` | pass |
+| `network-tcp-socket-keepalive` | pass |
 | `network-tcp-server-socket-local-socket-address` | pass |
 | `network-tcp-socket-stream-io` | pass |
 | `network-http-client-get-string` | pass |
