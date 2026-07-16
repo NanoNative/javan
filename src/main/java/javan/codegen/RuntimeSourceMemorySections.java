@@ -3361,6 +3361,72 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        void* javan_class_package_name(void* class_value) {
+            void* class_root = class_value;
+            void* result = NULL;
+            void** roots[] = {
+                (void**) &class_root,
+                (void**) &result
+            };
+            javan_root_frame_push(roots, 2);
+            javan_runtime_class_state* state = javan_runtime_class_checked(class_root);
+            const char* binary_name = state->binary_name;
+            if (state->is_array != 0) {
+                int dimensions = 0;
+                while (binary_name[dimensions] == '[') {
+                    dimensions++;
+                }
+                const char* component = binary_name + dimensions;
+                if (component[0] == 'L') {
+                    unsigned long component_length = (unsigned long) strlen(component);
+                    if (component_length < 2UL || component[component_length - 1UL] != ';') {
+                        javan_panic("unsupported array class metadata");
+                    }
+                    char* component_binary_name = (char*) javan_raw_calloc_retry(component_length - 1UL);
+                    if (component_binary_name == NULL) {
+                        javan_panic("out of memory");
+                    }
+                    memcpy(component_binary_name, component + 1, component_length - 2UL);
+                    component_binary_name[component_length - 2UL] = '\\0';
+                    binary_name = component_binary_name;
+                } else {
+                    result = javan_string_from("java.lang");
+                    javan_root_frame_pop(roots);
+                    return result;
+                }
+            } else if (javan_runtime_class_is_primitive_exact_type_id(state->exact_type_id) != 0) {
+                result = javan_string_from("java.lang");
+                javan_root_frame_pop(roots);
+                return result;
+            }
+            const char* package_end = strrchr(binary_name, '.');
+            if (package_end == NULL) {
+                if (binary_name != state->binary_name) {
+                    free((void*) binary_name);
+                }
+                result = javan_string_from("");
+                javan_root_frame_pop(roots);
+                return result;
+            }
+            unsigned long package_length = (unsigned long) (package_end - binary_name);
+            char* package_name = (char*) javan_raw_calloc_retry(package_length + 1UL);
+            if (package_name == NULL) {
+                if (binary_name != state->binary_name) {
+                    free((void*) binary_name);
+                }
+                javan_panic("out of memory");
+            }
+            memcpy(package_name, binary_name, package_length);
+            package_name[package_length] = '\\0';
+            result = javan_string_from(package_name);
+            free(package_name);
+            if (binary_name != state->binary_name) {
+                free((void*) binary_name);
+            }
+            javan_root_frame_pop(roots);
+            return result;
+        }
+
         void* javan_class_descriptor_string(void* class_value) {
             void* class_root = class_value;
             void* result = NULL;

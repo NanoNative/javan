@@ -5697,6 +5697,66 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void runtimeReferenceArrayPackageNameUsesElementPackage() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* klass = javan_runtime_class_literal("[Ljava.util.Map$Entry;", 0, 0, 1, 0);
+                printf("%s\\n", (char*) javan_class_package_name(klass));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("java.util\n");
+    }
+
+    @Test
+    void runtimePrimitivePackageNameIsJavaLang() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* klass = javan_runtime_class_literal("int", -2010, 0, 0, 0);
+                printf("%s\\n", (char*) javan_class_package_name(klass));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("java.lang\n");
+    }
+
+    @Test
+    void runtimeVoidPackageNameIsJavaLang() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* klass = javan_runtime_class_literal("void", -2014, 0, 0, 0);
+                printf("%s\\n", (char*) javan_class_package_name(klass));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("java.lang\n");
+    }
+
+    @Test
     void runtimeArrayAssignableFromUsesComponentTypes() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """

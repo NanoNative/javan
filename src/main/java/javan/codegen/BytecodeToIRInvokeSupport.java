@@ -524,6 +524,13 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if ("java/lang/Class".equals(methodRef.owner())
+            && "getPackageName".equals(methodRef.name())
+            && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
+            final IrExpression receiver = popObject(classFile, method, stack);
+            pushObjectCall(instructions, stack, localDeclarations, "javan_class_package_name", List.of(receiver));
+            return;
+        }
+        if ("java/lang/Class".equals(methodRef.owner())
             && "getTypeName".equals(methodRef.name())
             && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
             final IrExpression receiver = popObject(classFile, method, stack);
@@ -6901,7 +6908,16 @@ final class BytecodeToIRInvokeSupport {
             }
             return IrExpression.objectCall("javan_runtime_class_literal", arguments);
         }
-        throw unsupported(classFile, method, instruction);
+        return IrExpression.objectCall(
+            "javan_runtime_class_literal",
+            List.of(
+                IrExpression.stringLiteral(binaryClassName(jvmName)),
+                IrExpression.intLiteral(0),
+                IrExpression.intLiteral(0),
+                IrExpression.intLiteral(0),
+                IrExpression.intLiteral(0)
+            )
+        );
     }
 
     private static Optional<IrExpression> supportedPrimitiveClassField(final FieldRef fieldRef) {

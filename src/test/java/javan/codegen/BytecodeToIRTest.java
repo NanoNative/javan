@@ -3076,6 +3076,32 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersArbitraryReferenceClassLiteral() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/lang/Class;",
+            1,
+            0,
+            classInstruction(0, 18, "ldc", "java/util/Map$Entry"),
+            plain(1, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_runtime_class_literal",
+                List.of(
+                    IrExpression.stringLiteral("java.util.Map$Entry"),
+                    IrExpression.intLiteral(0),
+                    IrExpression.intLiteral(0),
+                    IrExpression.intLiteral(0),
+                    IrExpression.intLiteral(0)
+                )
+            ))
+        );
+    }
+
+    @Test
     void lowersLdc2wLongLiteral() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -14554,6 +14580,25 @@ final class BytecodeToIRTest {
 
         assertThat(function.instructions()).containsExactly(
             IrInstruction.assignObject("object0", IrExpression.objectCall("javan_class_type_name", List.of(IrExpression.objectLocal("arg0")))),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersClassGetPackageNameToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Class;)Ljava/lang/String;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/Class", "getPackageName", "()Ljava/lang/String;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_class_package_name", List.of(IrExpression.objectLocal("arg0")))),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }

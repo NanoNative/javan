@@ -67,6 +67,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void classGetPackageNameIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Class",
+            "getPackageName",
+            "()Ljava/lang/String;"
+        ))).isTrue();
+    }
+
+    @Test
     void threadLocalGetIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef("java/lang/ThreadLocal", "get", "()Ljava/lang/Object;")))
             .isTrue();
