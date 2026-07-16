@@ -2798,6 +2798,42 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void rejectsMethodTypeLdcLiteral() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/lang/Object;",
+            1,
+            0,
+            taggedLiteral(0, 18, "ldc", 16),
+            plain(1, 176, "areturn")
+        )))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("ldc");
+                assertThat(exception).hasMessageContaining("method type literals are not implemented by native code generation");
+            });
+    }
+
+    @Test
+    void rejectsMethodTypeLdcwLiteral() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/lang/Object;",
+            1,
+            0,
+            taggedLiteral(0, 19, "ldc_w", 16),
+            plain(1, 176, "areturn")
+        )))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("ldc_w");
+                assertThat(exception).hasMessageContaining("method type literals are not implemented by native code generation");
+            });
+    }
+
+    @Test
     void lowersIincToIntLocalAddAssignment() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -21047,6 +21083,10 @@ final class BytecodeToIRTest {
     }
 
     private static Instruction constantDynamicLiteral(final int offset, final int opcode, final String mnemonic) {
+        return taggedLiteral(offset, opcode, mnemonic, 17);
+    }
+
+    private static Instruction taggedLiteral(final int offset, final int opcode, final String mnemonic, final int constantPoolTag) {
         return new Instruction(
             offset,
             opcode,
@@ -21061,7 +21101,7 @@ final class BytecodeToIRTest {
             Optional.empty(),
             Optional.empty(),
             Optional.empty(),
-            Optional.of(17)
+            Optional.of(constantPoolTag)
         );
     }
 

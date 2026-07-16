@@ -2194,6 +2194,22 @@ public final class BytecodeToIR {
         ));
     }
 
+    static DiagnosticException unsupportedMethodTypeLiteral(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction
+    ) {
+        return new DiagnosticException(Diagnostic.error(
+            "JAVAN040",
+            "method type literals are not implemented by native code generation",
+            classFile.name(),
+            method.name() + method.descriptor(),
+            instructionSubject(instruction),
+            "This literal comes from a CONSTANT_MethodType constant-pool entry. Javan does not yet model java.lang.invoke.MethodType objects in the native runtime.",
+            "Keep this code on the JVM for now, or remove the reachable MethodType literal from the native closed world."
+        ));
+    }
+
     static DiagnosticException invalidStack(
         final ClassFile classFile,
         final MethodInfo method,

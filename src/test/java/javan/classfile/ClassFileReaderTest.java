@@ -202,6 +202,36 @@ final class ClassFileReaderTest {
     }
 
     @Test
+    void readerPreservesMethodTypeTagForLdc() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(classfileWithMethodTypeLiteral(new byte[]{18, 6, (byte) 177}, "()Ljava/lang/String;"), SOURCE);
+
+        final Instruction instruction = classFile.method("demo", "()V").orElseThrow().code().orElseThrow().instructions().getFirst();
+
+        assertThat(instruction.mnemonic()).isEqualTo("ldc");
+        assertThat(instruction.constantPoolTag()).contains(16);
+        assertThat(instruction.className()).isEmpty();
+        assertThat(instruction.stringValue()).isEmpty();
+        assertThat(instruction.intValue()).isEmpty();
+        assertThat(instruction.floatValue()).isEmpty();
+        assertThat(instruction.dynamicRef()).isEmpty();
+    }
+
+    @Test
+    void readerPreservesMethodTypeTagForLdcw() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(classfileWithMethodTypeLiteral(new byte[]{19, 0, 6, (byte) 177}, "()Ljava/lang/String;"), SOURCE);
+
+        final Instruction instruction = classFile.method("demo", "()V").orElseThrow().code().orElseThrow().instructions().getFirst();
+
+        assertThat(instruction.mnemonic()).isEqualTo("ldc_w");
+        assertThat(instruction.constantPoolTag()).contains(16);
+        assertThat(instruction.className()).isEmpty();
+        assertThat(instruction.stringValue()).isEmpty();
+        assertThat(instruction.intValue()).isEmpty();
+        assertThat(instruction.floatValue()).isEmpty();
+        assertThat(instruction.dynamicRef()).isEmpty();
+    }
+
+    @Test
     void readerNormalizesSmallIntegerLiteralInstructions() throws Exception {
         final ClassFile classFile = new ClassFileReader().read(
             minimalClassfile(
@@ -556,6 +586,45 @@ final class ClassFileReaderTest {
             .toByteArray();
     }
 
+    private static byte[] classfileWithMethodTypeLiteral(final byte[] code, final String methodTypeDescriptor) {
+        return new Bytes()
+            .u4(0xCAFEBABEL)
+            .u2(0)
+            .u2(65)
+            .u2(12)
+            .utf8("sample/MethodTypeDemo")
+            .classInfo(1)
+            .utf8("java/lang/Object")
+            .classInfo(3)
+            .utf8(methodTypeDescriptor)
+            .methodType(5)
+            .utf8("demo")
+            .utf8("()V")
+            .utf8("Code")
+            .nameAndType(7, 8)
+            .methodRef(4, 10)
+            .u2(0x0021)
+            .u2(2)
+            .u2(4)
+            .u2(0)
+            .u2(0)
+            .u2(1)
+            .u2(0x0009)
+            .u2(7)
+            .u2(8)
+            .u2(1)
+            .u2(9)
+            .u4(12L + code.length)
+            .u2(2)
+            .u2(1)
+            .u4(code.length)
+            .bytes(code)
+            .u2(0)
+            .u2(0)
+            .u2(0)
+            .toByteArray();
+    }
+
     private static byte[] constructorCode() {
         return new byte[]{
             42,
@@ -602,6 +671,10 @@ final class ClassFileReaderTest {
 
         private Bytes methodHandle(final int referenceKind, final int referenceIndex) {
             return u1(15).u1(referenceKind).u2(referenceIndex);
+        }
+
+        private Bytes methodType(final int descriptorIndex) {
+            return u1(16).u2(descriptorIndex);
         }
 
         private Bytes dynamicEntry(final int tag, final int bootstrapIndex, final int nameAndTypeIndex) {
