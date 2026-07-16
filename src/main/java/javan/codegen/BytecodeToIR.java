@@ -513,7 +513,7 @@ public final class BytecodeToIR {
             case 6:
             case 7:
             case 8:
-                stack.add(StackValue.intExpression(IrExpression.intLiteral(instruction.opcode() - 3)));
+                BytecodeToIRInvokeSupport.pushConstant(classes, classFile, method, instruction, stack);
                 break;
             case 9:
             case 10:
@@ -529,10 +529,8 @@ public final class BytecodeToIR {
                 stack.add(StackValue.doubleExpression(IrExpression.doubleLiteral(instruction.opcode() - 14.0)));
                 break;
             case 16:
-                stack.add(StackValue.intExpression(IrExpression.intLiteral(signedByte(instruction.operands()[0]))));
-                break;
             case 17:
-                stack.add(StackValue.intExpression(IrExpression.intLiteral(signedShort(instruction.operands()))));
+                BytecodeToIRInvokeSupport.pushConstant(classes, classFile, method, instruction, stack);
                 break;
             case 21:
                 stack.add(StackValue.intExpression(local(classFile, method, locals, unsigned(instruction.operands()[0]), IrType.INT)));

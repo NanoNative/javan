@@ -2363,6 +2363,57 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersIconstThroughNormalizedIntMetadata() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()I",
+            1,
+            0,
+            plain(0, 2, "iconst_m1"),
+            plain(1, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intLiteral(-1))
+        );
+    }
+
+    @Test
+    void lowersBipushThroughNormalizedIntMetadata() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()I",
+            1,
+            0,
+            plainOperands(0, 16, "bipush", 127),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intLiteral(127))
+        );
+    }
+
+    @Test
+    void lowersSipushThroughNormalizedIntMetadata() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()I",
+            1,
+            0,
+            plainOperands(0, 17, "sipush", 0x01, 0x2C),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intLiteral(300))
+        );
+    }
+
+    @Test
     void rejectsUnsupportedOpcodeOutsideNop() {
         assertThatThrownBy(() -> lowerMain(method(
             0x0008,
@@ -20637,10 +20688,30 @@ final class BytecodeToIRTest {
             Optional.empty(),
             Optional.empty(),
             Optional.empty(),
-            Optional.empty(),
+            normalizedIntValue(opcode, bytes),
             Optional.empty(),
             Optional.empty()
         );
+    }
+
+    private static Optional<Integer> normalizedIntValue(final int opcode, final byte[] operands) {
+        return switch (opcode) {
+            case 2 -> Optional.of(-1);
+            case 3 -> Optional.of(0);
+            case 4 -> Optional.of(1);
+            case 5 -> Optional.of(2);
+            case 6 -> Optional.of(3);
+            case 7 -> Optional.of(4);
+            case 8 -> Optional.of(5);
+            case 16 -> operands.length == 1 ? Optional.of((int) operands[0]) : Optional.empty();
+            case 17 -> operands.length == 2 ? Optional.of(signedShortFromOperands(operands)) : Optional.empty();
+            default -> Optional.empty();
+        };
+    }
+
+    private static int signedShortFromOperands(final byte[] operands) {
+        final int unsigned = ((operands[0] & 0xFF) << 8) | (operands[1] & 0xFF);
+        return unsigned > Short.MAX_VALUE ? unsigned - 0x1_0000 : unsigned;
     }
 
     private static int[] tableSwitchOperands(
