@@ -25,6 +25,105 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void socketGetSoLingerIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/Socket",
+            "getSoLinger",
+            "()I"
+        ))).isTrue();
+    }
+
+    @Test
+    void socketSetSoLingerIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/Socket",
+            "setSoLinger",
+            "(ZI)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void socketGetOobInlineIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/Socket",
+            "getOOBInline",
+            "()Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void socketSetOobInlineIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/Socket",
+            "setOOBInline",
+            "(Z)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void socketGetTrafficClassIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/Socket",
+            "getTrafficClass",
+            "()I"
+        ))).isTrue();
+    }
+
+    @Test
+    void socketSetTrafficClassIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/Socket",
+            "setTrafficClass",
+            "(I)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void socketHostLocalBindConstructorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/Socket",
+            "<init>",
+            "(Ljava/lang/String;ILjava/net/InetAddress;I)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void socketInetAddressLocalBindConstructorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/Socket",
+            "<init>",
+            "(Ljava/net/InetAddress;ILjava/net/InetAddress;I)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void inetAddressGetByAddressIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/InetAddress",
+            "getByAddress",
+            "([B)Ljava/net/InetAddress;"
+        ))).isTrue();
+    }
+
+    @Test
+    void inetAddressGetByAddressNamedIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/InetAddress",
+            "getByAddress",
+            "(Ljava/lang/String;[B)Ljava/net/InetAddress;"
+        ))).isTrue();
+    }
+
+    @Test
+    void inetAddressGetAddressIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/InetAddress",
+            "getAddress",
+            "()[B"
+        ))).isTrue();
+    }
+
+    @Test
     void threadBuilderUnstartedIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/Thread$Builder$OfVirtual",
@@ -683,11 +782,56 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void socketIsBoundIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/Socket",
+            "isBound",
+            "()Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void socketIsInputShutdownIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/Socket",
+            "isInputShutdown",
+            "()Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void socketIsOutputShutdownIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/Socket",
+            "isOutputShutdown",
+            "()Z"
+        ))).isTrue();
+    }
+
+    @Test
     void socketSetSoTimeoutIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/net/Socket",
             "setSoTimeout",
             "(I)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void socketShutdownInputIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/Socket",
+            "shutdownInput",
+            "()V"
+        ))).isTrue();
+    }
+
+    @Test
+    void socketShutdownOutputIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/Socket",
+            "shutdownOutput",
+            "()V"
         ))).isTrue();
     }
 
@@ -751,6 +895,24 @@ final class JdkCallSupportTest {
             "java/net/ServerSocket",
             "getSoTimeout",
             "()I"
+        ))).isTrue();
+    }
+
+    @Test
+    void serverSocketIsBoundIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/ServerSocket",
+            "isBound",
+            "()Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void serverSocketIsClosedIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/ServerSocket",
+            "isClosed",
+            "()Z"
         ))).isTrue();
     }
 

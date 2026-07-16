@@ -895,6 +895,773 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersOptionalMapStaticFunctionLambdaToOptionalHelpersAndDirectFunctionCall() {
+        final EntryPoint entryPoint = new EntryPoint("com/acme/Main", "mapValue", "(Ljava/util/Optional;)Ljava/util/Optional;");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    optionalMapLambdaMethod(),
+                    optionalMapLambdaImplementationMethod()
+                ))
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("mapValue")).singleElement().satisfies(function -> {
+            assertThat(function.locals()).containsExactly(
+                new IrLocal(IrType.OBJECT, "object0"),
+                new IrLocal(IrType.OBJECT, "object1"),
+                new IrLocal(IrType.OBJECT, "object2")
+            );
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.assignObject(
+                    "object0",
+                    IrExpression.objectCall("javan_optional_or_else", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectNull()))
+                ),
+                IrInstruction.branchIf(
+                    "label_optional_map_value_present_2_2",
+                    IrExpression.objectComparison("!=", IrExpression.objectLocal("object0"), IrExpression.objectNull())
+                ),
+                IrInstruction.assignObject("object1", IrExpression.objectCall("javan_optional_empty", List.of())),
+                IrInstruction.jump("label_optional_map_end_2_2"),
+                IrInstruction.label("label_optional_map_value_present_2_2"),
+                IrInstruction.assignObject(
+                    "object2",
+                    IrExpression.objectCall(
+                        symbol("com/acme/Main", "lambda$map$0", "(Ljava/lang/Object;)Ljava/lang/Object;"),
+                        List.of(IrExpression.objectLocal("object0"))
+                    )
+                ),
+                IrInstruction.assignObject(
+                    "object1",
+                    IrExpression.objectCall("javan_optional_of_nullable", List.of(IrExpression.objectLocal("object2")))
+                ),
+                IrInstruction.label("label_optional_map_end_2_2"),
+                IrInstruction.returnObject(IrExpression.objectLocal("object1"))
+            );
+        });
+    }
+
+    @Test
+    void lowersCapturedOptionalMapFunctionLambdaToOptionalHelpersAndDirectFunctionCall() {
+        final EntryPoint entryPoint = new EntryPoint("com/acme/Main", "mapCapturedValue", "(Ljava/lang/Object;Ljava/util/Optional;)Ljava/util/Optional;");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    optionalCapturedMapLambdaMethod(),
+                    optionalCapturedMapLambdaImplementationMethod()
+                ))
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("mapCapturedValue")).singleElement().satisfies(function -> {
+            assertThat(function.locals()).containsExactly(
+                new IrLocal(IrType.OBJECT, "object0"),
+                new IrLocal(IrType.OBJECT, "object1"),
+                new IrLocal(IrType.OBJECT, "object2")
+            );
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.assignObject(
+                    "object0",
+                    IrExpression.objectCall("javan_optional_or_else", List.of(IrExpression.objectLocal("arg1"), IrExpression.objectNull()))
+                ),
+                IrInstruction.branchIf(
+                    "label_optional_map_value_present_3_2",
+                    IrExpression.objectComparison("!=", IrExpression.objectLocal("object0"), IrExpression.objectNull())
+                ),
+                IrInstruction.assignObject("object1", IrExpression.objectCall("javan_optional_empty", List.of())),
+                IrInstruction.jump("label_optional_map_end_3_2"),
+                IrInstruction.label("label_optional_map_value_present_3_2"),
+                IrInstruction.assignObject(
+                    "object2",
+                    IrExpression.objectCall(
+                        symbol("com/acme/Main", "lambda$capturedMap$0", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+                        List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("object0"))
+                    )
+                ),
+                IrInstruction.assignObject(
+                    "object1",
+                    IrExpression.objectCall("javan_optional_of_nullable", List.of(IrExpression.objectLocal("object2")))
+                ),
+                IrInstruction.label("label_optional_map_end_3_2"),
+                IrInstruction.returnObject(IrExpression.objectLocal("object1"))
+            );
+        });
+    }
+
+    @Test
+    void lowersOptionalMapStringInputLambdaToObjectCompatibleImplementation() {
+        final EntryPoint entryPoint = new EntryPoint("com/acme/Main", "mapStringValue", "(Ljava/util/Optional;)Ljava/util/Optional;");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    optionalMapObjectCompatibleLambdaMethod(),
+                    optionalMapLambdaImplementationMethod()
+                ))
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("mapStringValue")).singleElement().satisfies(function -> {
+            assertThat(function.locals()).containsExactly(
+                new IrLocal(IrType.OBJECT, "object0"),
+                new IrLocal(IrType.OBJECT, "object1"),
+                new IrLocal(IrType.OBJECT, "object2")
+            );
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.assignObject(
+                    "object0",
+                    IrExpression.objectCall("javan_optional_or_else", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectNull()))
+                ),
+                IrInstruction.branchIf(
+                    "label_optional_map_value_present_2_2",
+                    IrExpression.objectComparison("!=", IrExpression.objectLocal("object0"), IrExpression.objectNull())
+                ),
+                IrInstruction.assignObject("object1", IrExpression.objectCall("javan_optional_empty", List.of())),
+                IrInstruction.jump("label_optional_map_end_2_2"),
+                IrInstruction.label("label_optional_map_value_present_2_2"),
+                IrInstruction.assignObject(
+                    "object2",
+                    IrExpression.objectCall(
+                        symbol("com/acme/Main", "lambda$map$0", "(Ljava/lang/Object;)Ljava/lang/Object;"),
+                        List.of(IrExpression.objectLocal("object0"))
+                    )
+                ),
+                IrInstruction.assignObject(
+                    "object1",
+                    IrExpression.objectCall("javan_optional_of_nullable", List.of(IrExpression.objectLocal("object2")))
+                ),
+                IrInstruction.label("label_optional_map_end_2_2"),
+                IrInstruction.returnObject(IrExpression.objectLocal("object1"))
+            );
+        });
+    }
+
+    @Test
+    void rejectsOptionalMapWhenFunctionArgumentIsNotDynamicLambda() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "mapValueNonLambda",
+            "(Ljava/util/Optional;Ljava/util/function/Function;)Ljava/util/Optional;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/util/Optional", "map", "(Ljava/util/function/Function;)Ljava/util/Optional;")),
+            plain(5, 176, "areturn")
+        )))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("invokevirtual java/util/Optional.map(Ljava/util/function/Function;)Ljava/util/Optional;");
+            });
+    }
+
+    @Test
+    void rejectsOptionalMapCapturedLambdaWithWrongImplementationArity() {
+        assertThatThrownBy(() -> lowerMain(optionalCapturedMapWrongArityLambdaMethod()))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("invokedynamic");
+            });
+    }
+
+    @Test
+    void rejectsOptionalMapCapturedLambdaWithWrongCaptureType() {
+        assertThatThrownBy(() -> lowerMain(optionalCapturedMapCaptureTypeMismatchLambdaMethod()))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("invokedynamic");
+            });
+    }
+
+    @Test
+    void rejectsOptionalMapLambdaWhenImplementationOwnerIsMissing() {
+        assertThatThrownBy(() -> lowerMain(optionalMapMissingOwnerLambdaMethod()))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("invokedynamic");
+            });
+    }
+
+    @Test
+    void lowerLambdaMetafactoryDynamicReturnsFalseForMalformedImplementationDescriptor() {
+        final MethodInfo method = optionalMapMalformedImplementationDescriptorLambdaMethod();
+        final ClassFile classFile = classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(method));
+        final Instruction instruction = method.code().orElseThrow().instructions().get(1);
+
+        assertThat(BytecodeToIRInvokeSupport.lowerLambdaMetafactoryDynamic(
+            Map.of("com/acme/Main", classFile),
+            classFile,
+            method,
+            instruction,
+            new ArrayList<>(),
+            instruction.dynamicRef().orElseThrow(),
+            Map.of()
+        )).isFalse();
+    }
+
+    @Test
+    void lowersOptionalFilterStaticPredicateLambdaToOptionalHelpersAndDirectPredicateCall() {
+        final EntryPoint entryPoint = new EntryPoint("com/acme/Main", "filterValue", "(Ljava/util/Optional;)Ljava/util/Optional;");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    optionalFilterLambdaMethod(),
+                    optionalFilterLambdaImplementationMethod()
+                ))
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("filterValue")).singleElement().satisfies(function -> {
+            assertThat(function.locals()).containsExactly(
+                new IrLocal(IrType.OBJECT, "object0"),
+                new IrLocal(IrType.OBJECT, "object1"),
+                new IrLocal(IrType.INT, "int2")
+            );
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.assignObject(
+                    "object0",
+                    IrExpression.objectCall("javan_optional_or_else", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectNull()))
+                ),
+                IrInstruction.branchIf(
+                    "label_optional_filter_value_present_2_2",
+                    IrExpression.objectComparison("!=", IrExpression.objectLocal("object0"), IrExpression.objectNull())
+                ),
+                IrInstruction.assignObject("object1", IrExpression.objectCall("javan_optional_empty", List.of())),
+                IrInstruction.jump("label_optional_filter_end_2_2"),
+                IrInstruction.label("label_optional_filter_value_present_2_2"),
+                IrInstruction.assignInt(
+                    "int2",
+                    IrExpression.intCall(
+                        symbol("com/acme/Main", "lambda$filter$0", "(Ljava/lang/Object;)Z"),
+                        List.of(IrExpression.objectLocal("object0"))
+                    )
+                ),
+                IrInstruction.branchIf(
+                    "label_optional_filter_keep_2_2",
+                    IrExpression.intComparison("!=", IrExpression.intLocal("int2"), IrExpression.intLiteral(0))
+                ),
+                IrInstruction.assignObject("object1", IrExpression.objectCall("javan_optional_empty", List.of())),
+                IrInstruction.jump("label_optional_filter_end_2_2"),
+                IrInstruction.label("label_optional_filter_keep_2_2"),
+                IrInstruction.assignObject("object1", IrExpression.objectLocal("arg0")),
+                IrInstruction.label("label_optional_filter_end_2_2"),
+                IrInstruction.returnObject(IrExpression.objectLocal("object1"))
+            );
+        });
+    }
+
+    @Test
+    void lowersCapturedOptionalFilterPredicateLambdaToOptionalHelpersAndDirectPredicateCall() {
+        final EntryPoint entryPoint = new EntryPoint("com/acme/Main", "filterCapturedValue", "(Ljava/lang/Object;Ljava/util/Optional;)Ljava/util/Optional;");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    optionalCapturedFilterLambdaMethod(),
+                    optionalCapturedFilterLambdaImplementationMethod()
+                ))
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("filterCapturedValue")).singleElement().satisfies(function -> {
+            assertThat(function.locals()).containsExactly(
+                new IrLocal(IrType.OBJECT, "object0"),
+                new IrLocal(IrType.OBJECT, "object1"),
+                new IrLocal(IrType.INT, "int2")
+            );
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.assignObject(
+                    "object0",
+                    IrExpression.objectCall("javan_optional_or_else", List.of(IrExpression.objectLocal("arg1"), IrExpression.objectNull()))
+                ),
+                IrInstruction.branchIf(
+                    "label_optional_filter_value_present_3_2",
+                    IrExpression.objectComparison("!=", IrExpression.objectLocal("object0"), IrExpression.objectNull())
+                ),
+                IrInstruction.assignObject("object1", IrExpression.objectCall("javan_optional_empty", List.of())),
+                IrInstruction.jump("label_optional_filter_end_3_2"),
+                IrInstruction.label("label_optional_filter_value_present_3_2"),
+                IrInstruction.assignInt(
+                    "int2",
+                    IrExpression.intCall(
+                        symbol("com/acme/Main", "lambda$capturedFilter$0", "(Ljava/lang/Object;Ljava/lang/Object;)Z"),
+                        List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("object0"))
+                    )
+                ),
+                IrInstruction.branchIf(
+                    "label_optional_filter_keep_3_2",
+                    IrExpression.intComparison("!=", IrExpression.intLocal("int2"), IrExpression.intLiteral(0))
+                ),
+                IrInstruction.assignObject("object1", IrExpression.objectCall("javan_optional_empty", List.of())),
+                IrInstruction.jump("label_optional_filter_end_3_2"),
+                IrInstruction.label("label_optional_filter_keep_3_2"),
+                IrInstruction.assignObject("object1", IrExpression.objectLocal("arg1")),
+                IrInstruction.label("label_optional_filter_end_3_2"),
+                IrInstruction.returnObject(IrExpression.objectLocal("object1"))
+            );
+        });
+    }
+
+    @Test
+    void rejectsOptionalFilterWhenPredicateArgumentIsNotDynamicLambda() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "filterValueNonLambda",
+            "(Ljava/util/Optional;Ljava/util/function/Predicate;)Ljava/util/Optional;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/util/Optional", "filter", "(Ljava/util/function/Predicate;)Ljava/util/Optional;")),
+            plain(5, 176, "areturn")
+        )))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("invokevirtual java/util/Optional.filter(Ljava/util/function/Predicate;)Ljava/util/Optional;");
+            });
+    }
+
+    @Test
+    void rejectsOptionalFilterLambdaWithWrongInputType() {
+        assertThatThrownBy(() -> lowerMain(optionalFilterInputTypeMismatchLambdaMethod()))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("invokedynamic");
+            });
+    }
+
+    @Test
+    void lowerLambdaMetafactoryDynamicReturnsFalseForPrimitiveCapturedMaterializedConsumer() {
+        final MethodInfo method = primitiveCaptureConsumerBuildMethod();
+        final ClassFile classFile = classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+            method,
+            capturedConsumerImplementationMethod()
+        ));
+        final Instruction instruction = method.code().orElseThrow().instructions().get(1);
+
+        assertThat(BytecodeToIRInvokeSupport.lowerLambdaMetafactoryDynamic(
+            Map.of("com/acme/Main", classFile),
+            classFile,
+            method,
+            instruction,
+            new ArrayList<>(),
+            instruction.dynamicRef().orElseThrow(),
+            BytecodeToIRInvokeSupport.functionOrNullTargetIds(
+                Map.of("com/acme/Main", classFile),
+                List.of(new EntryPoint("com/acme/Main", "buildPrimitiveCaptureConsumer", "(I)Ljava/util/function/Consumer;"))
+            )
+        )).isFalse();
+    }
+
+    @Test
+    void lowersMapComputeIfAbsentWithCapturedMapGetLambdaToDirectMapHelpers() {
+        final EntryPoint entryPoint = new EntryPoint("com/acme/Main", "loadOrCompute", "(Ljava/util/Map;Ljava/lang/Object;)Ljava/lang/Object;");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    mapComputeIfAbsentCapturedMapGetLambdaMethod()
+                ))
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("loadOrCompute")).singleElement().satisfies(function -> {
+            assertThat(function.locals()).containsExactly(
+                new IrLocal(IrType.OBJECT, "object0"),
+                new IrLocal(IrType.OBJECT, "object1"),
+                new IrLocal(IrType.OBJECT, "object2")
+            );
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.assignObject(
+                    "object0",
+                    IrExpression.objectCall("javan_map_get", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
+                ),
+                IrInstruction.branchIf(
+                    "label_map_compute_if_absent_present_4_1",
+                    IrExpression.objectComparison("!=", IrExpression.objectLocal("object0"), IrExpression.objectNull())
+                ),
+                IrInstruction.assignObject(
+                    "object2",
+                    IrExpression.objectCall("javan_map_get", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
+                ),
+                IrInstruction.branchIf(
+                    "label_map_compute_if_absent_store_4_3",
+                    IrExpression.objectComparison("!=", IrExpression.objectLocal("object2"), IrExpression.objectNull())
+                ),
+                IrInstruction.assignObject("object1", IrExpression.objectLocal("object2")),
+                IrInstruction.jump("label_map_compute_if_absent_end_4_1"),
+                IrInstruction.label("label_map_compute_if_absent_store_4_3"),
+                IrInstruction.callStaticVoid(
+                    "javan_map_put",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.objectLocal("object2"))
+                ),
+                IrInstruction.assignObject("object1", IrExpression.objectLocal("object2")),
+                IrInstruction.jump("label_map_compute_if_absent_end_4_1"),
+                IrInstruction.label("label_map_compute_if_absent_present_4_1"),
+                IrInstruction.assignObject("object1", IrExpression.objectLocal("object0")),
+                IrInstruction.label("label_map_compute_if_absent_end_4_1"),
+                IrInstruction.returnObject(IrExpression.objectLocal("object1"))
+            );
+        });
+    }
+
+    @Test
+    void lowersMapComputeIfAbsentWithDirectFunctionLambdaToMapHelpersAndFunctionCall() {
+        final EntryPoint entryPoint = new EntryPoint("com/acme/Main", "loadOrComputeFunction", "(Ljava/util/Map;Ljava/lang/Object;)Ljava/lang/Object;");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    mapComputeIfAbsentDirectFunctionLambdaMethod(),
+                    mapComputeIfAbsentDirectFunctionLambdaImplementationMethod()
+                ))
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("loadOrComputeFunction")).singleElement().satisfies(function -> {
+            assertThat(function.locals()).containsExactly(
+                new IrLocal(IrType.OBJECT, "object0"),
+                new IrLocal(IrType.OBJECT, "object1"),
+                new IrLocal(IrType.OBJECT, "object2")
+            );
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.assignObject(
+                    "object0",
+                    IrExpression.objectCall("javan_map_get", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
+                ),
+                IrInstruction.branchIf(
+                    "label_map_compute_if_absent_present_3_1",
+                    IrExpression.objectComparison("!=", IrExpression.objectLocal("object0"), IrExpression.objectNull())
+                ),
+                IrInstruction.assignObject(
+                    "object2",
+                    IrExpression.objectCall(
+                        symbol("com/acme/Main", "lambda$compute$0", "(Ljava/lang/Object;)Ljava/lang/Object;"),
+                        List.of(IrExpression.objectLocal("arg1"))
+                    )
+                ),
+                IrInstruction.branchIf(
+                    "label_map_compute_if_absent_store_3_3",
+                    IrExpression.objectComparison("!=", IrExpression.objectLocal("object2"), IrExpression.objectNull())
+                ),
+                IrInstruction.assignObject("object1", IrExpression.objectLocal("object2")),
+                IrInstruction.jump("label_map_compute_if_absent_end_3_1"),
+                IrInstruction.label("label_map_compute_if_absent_store_3_3"),
+                IrInstruction.callStaticVoid(
+                    "javan_map_put",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.objectLocal("object2"))
+                ),
+                IrInstruction.assignObject("object1", IrExpression.objectLocal("object2")),
+                IrInstruction.jump("label_map_compute_if_absent_end_3_1"),
+                IrInstruction.label("label_map_compute_if_absent_present_3_1"),
+                IrInstruction.assignObject("object1", IrExpression.objectLocal("object0")),
+                IrInstruction.label("label_map_compute_if_absent_end_3_1"),
+                IrInstruction.returnObject(IrExpression.objectLocal("object1"))
+            );
+        });
+    }
+
+    @Test
+    void rejectsMapComputeIfAbsentMapGetLambdaWithoutCapturedMapReceiver() {
+        assertThatThrownBy(() -> lowerMain(mapComputeIfAbsentMapGetWithoutCaptureLambdaMethod()))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("invokedynamic");
+            });
+    }
+
+    @Test
+    void rejectsMapComputeIfAbsentMapGetLambdaWithWrongCapturedReceiverType() {
+        assertThatThrownBy(() -> lowerMain(mapComputeIfAbsentMapGetWrongCaptureTypeLambdaMethod()))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("invokedynamic");
+            });
+    }
+
+    @Test
+    void rejectsMapComputeIfAbsentMapGetLambdaWithWrongImplementationDescriptor() {
+        assertThatThrownBy(() -> lowerMain(mapComputeIfAbsentMapGetWrongDescriptorLambdaMethod()))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("invokedynamic");
+            });
+    }
+
+    @Test
+    void rejectsMapComputeIfAbsentMapGetLambdaWithWrongImplementationOwner() {
+        assertThatThrownBy(() -> lowerMain(mapComputeIfAbsentMapGetWrongOwnerLambdaMethod()))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("invokedynamic");
+            });
+    }
+
+    @Test
+    void rejectsMapComputeIfAbsentMapGetLambdaWithWrongImplementationMethodName() {
+        assertThatThrownBy(() -> lowerMain(mapComputeIfAbsentMapGetWrongMethodNameLambdaMethod()))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("invokedynamic");
+            });
+    }
+
+    @Test
+    void rejectsOptionalMapLambdaBackedByJavaOwnerImplementation() {
+        assertThatThrownBy(() -> lower(optionalMapJavaOwnerLambdaMethod()))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("invokedynamic");
+            });
+    }
+
+    @Test
+    void lowersZeroCaptureMaterializedObjectLambdaBuildAndInvokeToRuntimeHelpers() {
+        final EntryPoint buildEntry = new EntryPoint("com/acme/Main", "buildObjectLambda", "()Lcom/acme/ObjectFn;");
+        final EntryPoint invokeEntry = new EntryPoint("com/acme/Main", "invokeObjectLambda", "(Lcom/acme/ObjectFn;Ljava/lang/Object;)Ljava/lang/Object;");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    buildObjectMaterializedLambdaMethod(),
+                    invokeObjectMaterializedLambdaMethod(),
+                    objectMaterializedLambdaImplementationMethod()
+                )),
+                "com/acme/ObjectFn",
+                interfaceType("com/acme/ObjectFn", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;")
+            ),
+            new CallGraph(buildEntry, List.of(buildEntry, invokeEntry), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.materializedLambdaTargets()).singleElement().satisfies(target -> {
+            assertThat(target.interfaceOwner()).isEqualTo("com/acme/ObjectFn");
+            assertThat(target.interfaceMethodName()).isEqualTo("apply");
+            assertThat(target.captureCount()).isZero();
+            assertThat(target.booleanResult()).isFalse();
+            assertThat(target.voidResult()).isFalse();
+        });
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("buildObjectLambda")).singleElement().satisfies(function ->
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.returnObject(IrExpression.objectCall(
+                    "javan_materialized_lambda_new",
+                    List.of(IrExpression.intLiteral(1))
+                ))
+            )
+        );
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("invokeObjectLambda")).singleElement().satisfies(function ->
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.returnObject(IrExpression.objectCall(
+                    "javan_materialized_lambda_apply_object",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+                ))
+            )
+        );
+    }
+
+    @Test
+    void deduplicatesIdenticalZeroCaptureMaterializedObjectLambdaTargets() {
+        final EntryPoint buildEntry = new EntryPoint("com/acme/Main", "buildObjectLambda", "()Lcom/acme/ObjectFn;");
+        final EntryPoint duplicateEntry = new EntryPoint("com/acme/Main", "buildObjectLambdaAgain", "()Lcom/acme/ObjectFn;");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    buildObjectMaterializedLambdaMethod(),
+                    buildObjectMaterializedLambdaMethod("buildObjectLambdaAgain", new MethodRef("com/acme/Main", "lambda$object$0", "(Ljava/lang/Object;)Ljava/lang/Object;")),
+                    objectMaterializedLambdaImplementationMethod()
+                )),
+                "com/acme/ObjectFn",
+                interfaceType("com/acme/ObjectFn", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;")
+            ),
+            new CallGraph(buildEntry, List.of(buildEntry, duplicateEntry), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.materializedLambdaTargets()).singleElement().satisfies(target -> {
+            assertThat(target.interfaceOwner()).isEqualTo("com/acme/ObjectFn");
+            assertThat(target.interfaceMethodName()).isEqualTo("apply");
+            assertThat(target.captureCount()).isZero();
+        });
+    }
+
+    @Test
+    void materializedLambdaDiscoverySkipsMissingMethodAndCodeLessReachableEntries() {
+        final EntryPoint buildEntry = new EntryPoint("com/acme/Main", "buildObjectLambda", "()Lcom/acme/ObjectFn;");
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                buildObjectMaterializedLambdaMethod(),
+                buildObjectMaterializedLambdaMethod("buildObjectLambdaAgain", new MethodRef("com/acme/Main", "lambda$object$0", "(Ljava/lang/Object;)Ljava/lang/Object;")),
+                buildObjectMaterializedLambdaMethod("buildMissingMaterializedLambda", new MethodRef("com/acme/Missing", "lambda$object$0", "(Ljava/lang/Object;)Ljava/lang/Object;")),
+                optionalMapLambdaMethod(),
+                optionalMapLambdaImplementationMethod(),
+                nonLambdaDynamicMethod(),
+                objectMaterializedLambdaImplementationMethod()
+            )),
+            "com/acme/NoCode",
+            classFile("com/acme/NoCode", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                new MethodInfo(0x0008, "buildObjectLambda", "()Lcom/acme/ObjectFn;", Optional.empty())
+            )),
+            "com/acme/ObjectFn",
+            interfaceType("com/acme/ObjectFn", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;")
+        );
+        final List<EntryPoint> reachable = List.of(
+            buildEntry,
+            new EntryPoint("com/acme/Main", "buildObjectLambdaAgain", "()Lcom/acme/ObjectFn;"),
+            new EntryPoint("com/acme/Main", "buildMissingMaterializedLambda", "()Lcom/acme/ObjectFn;"),
+            new EntryPoint("com/acme/Main", "mapValue", "(Ljava/util/Optional;)Ljava/util/Optional;"),
+            new EntryPoint("com/acme/Main", "concatValue", "(Ljava/lang/String;)Ljava/lang/String;"),
+            new EntryPoint("com/acme/Missing", "buildObjectLambda", "()Lcom/acme/ObjectFn;"),
+            new EntryPoint("com/acme/Main", "missingMethod", "()Lcom/acme/ObjectFn;"),
+            new EntryPoint("com/acme/NoCode", "buildObjectLambda", "()Lcom/acme/ObjectFn;")
+        );
+
+        assertThat(BytecodeToIRInvokeSupport.functionOrNullTargetIds(classes, reachable))
+            .hasSize(1)
+            .containsEntry(
+                "com/acme/ObjectFn#apply#(Ljava/lang/Object;)Ljava/lang/Object;#com/acme/Main.lambda$object$0(Ljava/lang/Object;)Ljava/lang/Object;#0#0#0",
+                Integer.valueOf(1)
+            );
+        assertThat(BytecodeToIRInvokeSupport.materializedLambdaMethods(classes, reachable))
+            .hasSize(1)
+            .containsEntry(
+                new MethodRef("com/acme/ObjectFn", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;"),
+                BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind.OBJECT
+            );
+    }
+
+    @Test
+    void rejectsCapturedObjectMaterializedLambdaUntilImplemented() {
+        assertThatThrownBy(() -> lowerMain(buildCapturedObjectMaterializedLambdaMethod()))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("invokedynamic");
+            });
+    }
+
+    @Test
+    void lowersZeroCaptureMaterializedConsumerBuildAndInvokeToRuntimeHelpers() {
+        final EntryPoint buildEntry = new EntryPoint("com/acme/Main", "buildZeroCaptureConsumer", "()Ljava/util/function/Consumer;");
+        final EntryPoint invokeEntry = new EntryPoint("com/acme/Main", "invoke", "(Ljava/util/function/Consumer;Ljava/lang/Object;)V");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    zeroCaptureConsumerBuildMethod(),
+                    consumerInvokeMethod(),
+                    zeroCaptureConsumerImplementationMethod()
+                ))
+            ),
+            new CallGraph(buildEntry, List.of(buildEntry, invokeEntry), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.materializedLambdaTargets()).singleElement().satisfies(target -> {
+            assertThat(target.interfaceOwner()).isEqualTo("java/util/function/Consumer");
+            assertThat(target.interfaceMethodName()).isEqualTo("accept");
+            assertThat(target.captureCount()).isZero();
+            assertThat(target.voidResult()).isTrue();
+        });
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("buildZeroCaptureConsumer")).singleElement().satisfies(function ->
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.returnObject(IrExpression.objectCall(
+                    "javan_materialized_lambda_new",
+                    List.of(IrExpression.intLiteral(1))
+                ))
+            )
+        );
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("invoke")).singleElement().satisfies(function ->
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.callStaticVoid(
+                    "javan_materialized_lambda_apply_void",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+                ),
+                IrInstruction.returnVoid()
+            )
+        );
+    }
+
+    @Test
+    void lowersZeroCaptureMaterializedBooleanLambdaBuildAndInvokeToRuntimeHelpers() {
+        final EntryPoint buildEntry = new EntryPoint("com/acme/Main", "buildBooleanLambda", "()Lcom/acme/BooleanFn;");
+        final EntryPoint invokeEntry = new EntryPoint("com/acme/Main", "invokeBooleanLambda", "(Lcom/acme/BooleanFn;Ljava/lang/Object;)Z");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    buildBooleanMaterializedLambdaMethod(),
+                    invokeBooleanMaterializedLambdaMethod(),
+                    booleanMaterializedLambdaImplementationMethod()
+                )),
+                "com/acme/BooleanFn",
+                interfaceType("com/acme/BooleanFn", "test", "(Ljava/lang/Object;)Z")
+            ),
+            new CallGraph(buildEntry, List.of(buildEntry, invokeEntry), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.materializedLambdaTargets()).singleElement().satisfies(target -> {
+            assertThat(target.interfaceOwner()).isEqualTo("com/acme/BooleanFn");
+            assertThat(target.interfaceMethodName()).isEqualTo("test");
+            assertThat(target.captureCount()).isZero();
+            assertThat(target.booleanResult()).isTrue();
+            assertThat(target.voidResult()).isFalse();
+        });
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("buildBooleanLambda")).singleElement().satisfies(function ->
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.returnObject(IrExpression.objectCall(
+                    "javan_materialized_lambda_new",
+                    List.of(IrExpression.intLiteral(1))
+                ))
+            )
+        );
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("invokeBooleanLambda")).singleElement().satisfies(function ->
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.returnInt(IrExpression.intCall(
+                    "javan_materialized_lambda_apply_boolean",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+                ))
+            )
+        );
+    }
+
+    @Test
+    void rejectsMaterializedConsumerLambdaWithPrimitiveCapture() {
+        assertThatThrownBy(() -> lowerMain(primitiveCaptureConsumerBuildMethod()))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("invokedynamic");
+            });
+    }
+
+    @Test
+    void rejectsMaterializedObjectLambdaWhenImplementationOwnerIsMissing() {
+        assertThatThrownBy(() -> lowerMain(buildObjectMaterializedLambdaMethod("buildMissingObjectLambda", new MethodRef("com/acme/Missing", "lambda$object$0", "(Ljava/lang/Object;)Ljava/lang/Object;"))))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("invokedynamic");
+            });
+    }
+
+    @Test
     void lowersExactUnsupportedTemporalConversionLambdaToExplicitUnsupportedRuntimeBridge() {
         final EntryPoint entryPoint = new EntryPoint(
             "com/acme/TemporalSupport",
@@ -7622,6 +8389,46 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersInetAddressGetByAddressStaticCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "([B)Ljava/net/InetAddress;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeStatic(1, new MethodRef("java/net/InetAddress", "getByAddress", "([B)Ljava/net/InetAddress;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall("javan_inet_address_get_by_address", List.of(IrExpression.objectLocal("arg0"))))
+        );
+    }
+
+    @Test
+    void lowersInetAddressGetByAddressNamedStaticCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/String;[B)Ljava/net/InetAddress;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeStatic(2, new MethodRef("java/net/InetAddress", "getByAddress", "(Ljava/lang/String;[B)Ljava/net/InetAddress;")),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_inet_address_get_by_address_named",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
     void lowersInetAddressHostNameCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -7636,6 +8443,25 @@ final class BytecodeToIRTest {
 
         assertThat(function.instructions()).containsExactly(
             IrInstruction.assignObject("object0", IrExpression.objectCall("javan_inet_address_get_host_name", List.of(IrExpression.objectLocal("arg0")))),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersInetAddressGetAddressCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/InetAddress;)[B",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/net/InetAddress", "getAddress", "()[B")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_inet_address_get_address", List.of(IrExpression.objectLocal("arg0")))),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
@@ -7679,6 +8505,63 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersSocketIsBoundCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/Socket;)Z",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/net/Socket", "isBound", "()Z")),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignInt("int0", IrExpression.intCall("javan_socket_is_bound", List.of(IrExpression.objectLocal("arg0")))),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
+        );
+    }
+
+    @Test
+    void lowersSocketIsInputShutdownCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/Socket;)Z",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/net/Socket", "isInputShutdown", "()Z")),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignInt("int0", IrExpression.intCall("javan_socket_is_input_shutdown", List.of(IrExpression.objectLocal("arg0")))),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
+        );
+    }
+
+    @Test
+    void lowersSocketIsOutputShutdownCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/Socket;)Z",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/net/Socket", "isOutputShutdown", "()Z")),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignInt("int0", IrExpression.intCall("javan_socket_is_output_shutdown", List.of(IrExpression.objectLocal("arg0")))),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
+        );
+    }
+
+    @Test
     void lowersSocketGetSoTimeoutCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -7713,6 +8596,165 @@ final class BytecodeToIRTest {
 
         assertThat(function.instructions()).containsExactly(
             IrInstruction.callStaticVoid("javan_socket_set_so_timeout", List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"))),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
+    void lowersSocketGetSoLingerCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/Socket;)I",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/net/Socket", "getSoLinger", "()I")),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignInt("int0", IrExpression.intCall("javan_socket_get_so_linger", List.of(IrExpression.objectLocal("arg0")))),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
+        );
+    }
+
+    @Test
+    void lowersSocketSetSoLingerCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/Socket;ZI)V",
+            3,
+            3,
+            plain(0, 42, "aload_0"),
+            plain(1, 27, "iload_1"),
+            plain(2, 28, "iload_2"),
+            invokeVirtual(3, new MethodRef("java/net/Socket", "setSoLinger", "(ZI)V")),
+            plain(4, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid(
+                "javan_socket_set_so_linger",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"), IrExpression.intLocal("arg2"))
+            ),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
+    void lowersSocketGetOobInlineCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/Socket;)Z",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/net/Socket", "getOOBInline", "()Z")),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignInt("int0", IrExpression.intCall("javan_socket_get_oob_inline", List.of(IrExpression.objectLocal("arg0")))),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
+        );
+    }
+
+    @Test
+    void lowersSocketSetOobInlineCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/Socket;Z)V",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 27, "iload_1"),
+            invokeVirtual(2, new MethodRef("java/net/Socket", "setOOBInline", "(Z)V")),
+            plain(3, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid("javan_socket_set_oob_inline", List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"))),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
+    void lowersSocketGetTrafficClassCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/Socket;)I",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/net/Socket", "getTrafficClass", "()I")),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignInt("int0", IrExpression.intCall("javan_socket_get_traffic_class", List.of(IrExpression.objectLocal("arg0")))),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
+        );
+    }
+
+    @Test
+    void lowersSocketSetTrafficClassCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/Socket;I)V",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 27, "iload_1"),
+            invokeVirtual(2, new MethodRef("java/net/Socket", "setTrafficClass", "(I)V")),
+            plain(3, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid("javan_socket_set_traffic_class", List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"))),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
+    void lowersSocketShutdownInputCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/Socket;)V",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/net/Socket", "shutdownInput", "()V")),
+            plain(2, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid("javan_socket_shutdown_input", List.of(IrExpression.objectLocal("arg0"))),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
+    void lowersSocketShutdownOutputCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/Socket;)V",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/net/Socket", "shutdownOutput", "()V")),
+            plain(2, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid("javan_socket_shutdown_output", List.of(IrExpression.objectLocal("arg0"))),
             IrInstruction.returnVoid()
         );
     }
@@ -7946,6 +8988,80 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersSocketHostLocalBindConstructorCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/String;ILjava/net/InetAddress;I)Ljava/net/Socket;",
+            5,
+            4,
+            classInstruction(0, 187, "new", "java/net/Socket"),
+            plain(1, 89, "dup"),
+            plain(2, 42, "aload_0"),
+            plain(3, 27, "iload_1"),
+            plain(4, 44, "aload_2"),
+            plain(5, 29, "iload_3"),
+            invokeSpecial(6, new MethodRef("java/net/Socket", "<init>", "(Ljava/lang/String;ILjava/net/InetAddress;I)V")),
+            plain(7, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectNull()),
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_socket_connect_host_config",
+                    List.of(
+                        IrExpression.objectLocal("arg0"),
+                        IrExpression.intLocal("arg1"),
+                        IrExpression.objectLocal("arg2"),
+                        IrExpression.intLocal("arg3")
+                    )
+                )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersSocketInetAddressLocalBindConstructorCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/InetAddress;ILjava/net/InetAddress;I)Ljava/net/Socket;",
+            5,
+            4,
+            classInstruction(0, 187, "new", "java/net/Socket"),
+            plain(1, 89, "dup"),
+            plain(2, 42, "aload_0"),
+            plain(3, 27, "iload_1"),
+            plain(4, 44, "aload_2"),
+            plain(5, 29, "iload_3"),
+            invokeSpecial(6, new MethodRef("java/net/Socket", "<init>", "(Ljava/net/InetAddress;ILjava/net/InetAddress;I)V")),
+            plain(7, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectNull()),
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_socket_connect_address_config",
+                    List.of(
+                        IrExpression.objectLocal("arg0"),
+                        IrExpression.intLocal("arg1"),
+                        IrExpression.objectLocal("arg2"),
+                        IrExpression.intLocal("arg3")
+                    )
+                )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
     void lowersServerSocketPortBacklogConstructorCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -8026,6 +9142,44 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).containsExactly(
             IrInstruction.assignObject("object0", IrExpression.objectCall("javan_server_socket_get_inet_address", List.of(IrExpression.objectLocal("arg0")))),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersServerSocketIsBoundCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/ServerSocket;)Z",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/net/ServerSocket", "isBound", "()Z")),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignInt("int0", IrExpression.intCall("javan_server_socket_is_bound", List.of(IrExpression.objectLocal("arg0")))),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
+        );
+    }
+
+    @Test
+    void lowersServerSocketIsClosedCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/ServerSocket;)Z",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/net/ServerSocket", "isClosed", "()Z")),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignInt("int0", IrExpression.intCall("javan_server_socket_is_closed", List.of(IrExpression.objectLocal("arg0")))),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
         );
     }
 
@@ -9853,6 +11007,29 @@ final class BytecodeToIRTest {
         assertThat(function.locals()).isEmpty();
         assertThat(function.instructions()).containsExactly(
             IrInstruction.returnInt(IrExpression.intCall("javan_char_sequence_length", List.of(IrExpression.objectLocal("arg0"))))
+        );
+    }
+
+    @Test
+    void lowersCharSequenceCharAtToRuntimeHelper() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/CharSequence;I)I",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 27, "iload_1"),
+            invokeInterface(2, new MethodRef("java/lang/CharSequence", "charAt", "(I)C")),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.locals()).isEmpty();
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_char_sequence_char_at",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"))
+            ))
         );
     }
 
@@ -17162,6 +18339,914 @@ final class BytecodeToIRTest {
         );
     }
 
+    private static MethodInfo optionalMapLambdaMethod() {
+        return method(
+            0x0008,
+            "mapValue",
+            "(Ljava/util/Optional;)Ljava/util/Optional;",
+            2,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeDynamic(1, new DynamicRef(
+                "apply",
+                "()Ljava/util/function/Function;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "invokestatic com/acme/Main.lambda$map$0:(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "(Ljava/lang/Object;)Ljava/lang/Object;"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;"),
+                    BootstrapArgument.methodHandle(
+                        6,
+                        new MethodRef("com/acme/Main", "lambda$map$0", "(Ljava/lang/Object;)Ljava/lang/Object;")
+                    ),
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;")
+                )
+            )),
+            invokeVirtual(2, new MethodRef("java/util/Optional", "map", "(Ljava/util/function/Function;)Ljava/util/Optional;")),
+            plain(3, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo optionalCapturedMapLambdaMethod() {
+        return method(
+            0x0008,
+            "mapCapturedValue",
+            "(Ljava/lang/Object;Ljava/util/Optional;)Ljava/util/Optional;",
+            2,
+            2,
+            plain(0, 43, "aload_1"),
+            plain(1, 42, "aload_0"),
+            invokeDynamic(2, new DynamicRef(
+                "apply",
+                "(Ljava/lang/Object;)Ljava/util/function/Function;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "invokestatic com/acme/Main.lambda$capturedMap$0:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+                    "(Ljava/lang/Object;)Ljava/lang/Object;"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;"),
+                    BootstrapArgument.methodHandle(
+                        6,
+                        new MethodRef("com/acme/Main", "lambda$capturedMap$0", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")
+                    ),
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;")
+                )
+            )),
+            invokeVirtual(3, new MethodRef("java/util/Optional", "map", "(Ljava/util/function/Function;)Ljava/util/Optional;")),
+            plain(4, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo optionalMapObjectCompatibleLambdaMethod() {
+        return method(
+            0x0008,
+            "mapStringValue",
+            "(Ljava/util/Optional;)Ljava/util/Optional;",
+            2,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeDynamic(1, new DynamicRef(
+                "apply",
+                "()Ljava/util/function/Function;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "invokestatic com/acme/Main.lambda$map$0:(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "(Ljava/lang/String;)Ljava/lang/Object;"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;"),
+                    BootstrapArgument.methodHandle(
+                        6,
+                        new MethodRef("com/acme/Main", "lambda$map$0", "(Ljava/lang/Object;)Ljava/lang/Object;")
+                    ),
+                    BootstrapArgument.methodType("(Ljava/lang/String;)Ljava/lang/Object;")
+                )
+            )),
+            invokeVirtual(2, new MethodRef("java/util/Optional", "map", "(Ljava/util/function/Function;)Ljava/util/Optional;")),
+            plain(3, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo optionalCapturedMapWrongArityLambdaMethod() {
+        return method(
+            0x0008,
+            "mapCapturedWrongArity",
+            "(Ljava/lang/Object;Ljava/util/Optional;)Ljava/util/Optional;",
+            2,
+            2,
+            plain(0, 43, "aload_1"),
+            plain(1, 42, "aload_0"),
+            invokeDynamic(2, new DynamicRef(
+                "apply",
+                "(Ljava/lang/Object;)Ljava/util/function/Function;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "invokestatic com/acme/Main.lambda$map$arity$0:(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "(Ljava/lang/Object;)Ljava/lang/Object;"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;"),
+                    BootstrapArgument.methodHandle(
+                        6,
+                        new MethodRef("com/acme/Main", "lambda$map$arity$0", "(Ljava/lang/Object;)Ljava/lang/Object;")
+                    ),
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;")
+                )
+            )),
+            invokeVirtual(3, new MethodRef("java/util/Optional", "map", "(Ljava/util/function/Function;)Ljava/util/Optional;")),
+            plain(4, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo optionalCapturedMapCaptureTypeMismatchLambdaMethod() {
+        return method(
+            0x0008,
+            "mapCapturedTypeMismatch",
+            "(Ljava/lang/String;Ljava/util/Optional;)Ljava/util/Optional;",
+            2,
+            2,
+            plain(0, 43, "aload_1"),
+            plain(1, 42, "aload_0"),
+            invokeDynamic(2, new DynamicRef(
+                "apply",
+                "(Ljava/lang/String;)Ljava/util/function/Function;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "invokestatic com/acme/Main.lambda$map$type$0:(Ljava/lang/Integer;Ljava/lang/Object;)Ljava/lang/Object;",
+                    "(Ljava/lang/Object;)Ljava/lang/Object;"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;"),
+                    BootstrapArgument.methodHandle(
+                        6,
+                        new MethodRef("com/acme/Main", "lambda$map$type$0", "(Ljava/lang/Integer;Ljava/lang/Object;)Ljava/lang/Object;")
+                    ),
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;")
+                )
+            )),
+            invokeVirtual(3, new MethodRef("java/util/Optional", "map", "(Ljava/util/function/Function;)Ljava/util/Optional;")),
+            plain(4, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo optionalMapJavaOwnerLambdaMethod() {
+        return method(
+            0x0008,
+            "mapValueJavaOwner",
+            "(Ljava/util/Optional;)Ljava/util/Optional;",
+            2,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeDynamic(1, new DynamicRef(
+                "apply",
+                "()Ljava/util/function/Function;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "invokestatic java/lang/String.valueOf:(Ljava/lang/Object;)Ljava/lang/String;",
+                    "(Ljava/lang/Object;)Ljava/lang/Object;"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;"),
+                    BootstrapArgument.methodHandle(
+                        6,
+                        new MethodRef("java/lang/String", "valueOf", "(Ljava/lang/Object;)Ljava/lang/String;")
+                    ),
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;")
+                )
+            )),
+            invokeVirtual(2, new MethodRef("java/util/Optional", "map", "(Ljava/util/function/Function;)Ljava/util/Optional;")),
+            plain(3, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo optionalMapMissingOwnerLambdaMethod() {
+        return method(
+            0x0008,
+            "mapValueMissingOwner",
+            "(Ljava/util/Optional;)Ljava/util/Optional;",
+            2,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeDynamic(1, new DynamicRef(
+                "apply",
+                "()Ljava/util/function/Function;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "invokestatic com/acme/Missing.lambda$map$0:(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "(Ljava/lang/Object;)Ljava/lang/Object;"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;"),
+                    BootstrapArgument.methodHandle(
+                        6,
+                        new MethodRef("com/acme/Missing", "lambda$map$0", "(Ljava/lang/Object;)Ljava/lang/Object;")
+                    ),
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;")
+                )
+            )),
+            invokeVirtual(2, new MethodRef("java/util/Optional", "map", "(Ljava/util/function/Function;)Ljava/util/Optional;")),
+            plain(3, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo optionalMapMalformedImplementationDescriptorLambdaMethod() {
+        return method(
+            0x0008,
+            "mapValueMalformedImplementationDescriptor",
+            "(Ljava/util/Optional;)Ljava/util/Optional;",
+            2,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeDynamic(1, new DynamicRef(
+                "apply",
+                "()Ljava/util/function/Function;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "invokestatic com/acme/Main.lambda$broken$0:([",
+                    "(Ljava/lang/Object;)Ljava/lang/Object;"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;"),
+                    BootstrapArgument.methodHandle(
+                        6,
+                        new MethodRef("com/acme/Main", "lambda$broken$0", "([")
+                    ),
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;")
+                )
+            )),
+            invokeVirtual(2, new MethodRef("java/util/Optional", "map", "(Ljava/util/function/Function;)Ljava/util/Optional;")),
+            plain(3, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo optionalMapLambdaImplementationMethod() {
+        return method(
+            0x0008,
+            "lambda$map$0",
+            "(Ljava/lang/Object;)Ljava/lang/Object;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            plain(1, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo optionalCapturedMapLambdaImplementationMethod() {
+        return method(
+            0x0008,
+            "lambda$capturedMap$0",
+            "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+            1,
+            2,
+            plain(0, 43, "aload_1"),
+            plain(1, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo optionalFilterLambdaMethod() {
+        return method(
+            0x0008,
+            "filterValue",
+            "(Ljava/util/Optional;)Ljava/util/Optional;",
+            2,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeDynamic(1, new DynamicRef(
+                "test",
+                "()Ljava/util/function/Predicate;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;)Z",
+                    "invokestatic com/acme/Main.lambda$filter$0:(Ljava/lang/Object;)Z",
+                    "(Ljava/lang/Object;)Z"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Z"),
+                    BootstrapArgument.methodHandle(
+                        6,
+                        new MethodRef("com/acme/Main", "lambda$filter$0", "(Ljava/lang/Object;)Z")
+                    ),
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Z")
+                )
+            )),
+            invokeVirtual(2, new MethodRef("java/util/Optional", "filter", "(Ljava/util/function/Predicate;)Ljava/util/Optional;")),
+            plain(3, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo optionalCapturedFilterLambdaMethod() {
+        return method(
+            0x0008,
+            "filterCapturedValue",
+            "(Ljava/lang/Object;Ljava/util/Optional;)Ljava/util/Optional;",
+            2,
+            2,
+            plain(0, 43, "aload_1"),
+            plain(1, 42, "aload_0"),
+            invokeDynamic(2, new DynamicRef(
+                "test",
+                "(Ljava/lang/Object;)Ljava/util/function/Predicate;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;)Z",
+                    "invokestatic com/acme/Main.lambda$capturedFilter$0:(Ljava/lang/Object;Ljava/lang/Object;)Z",
+                    "(Ljava/lang/Object;)Z"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Z"),
+                    BootstrapArgument.methodHandle(
+                        6,
+                        new MethodRef("com/acme/Main", "lambda$capturedFilter$0", "(Ljava/lang/Object;Ljava/lang/Object;)Z")
+                    ),
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Z")
+                )
+            )),
+            invokeVirtual(3, new MethodRef("java/util/Optional", "filter", "(Ljava/util/function/Predicate;)Ljava/util/Optional;")),
+            plain(4, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo optionalFilterInputTypeMismatchLambdaMethod() {
+        return method(
+            0x0008,
+            "filterWrongInputType",
+            "(Ljava/util/Optional;)Ljava/util/Optional;",
+            2,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeDynamic(1, new DynamicRef(
+                "test",
+                "()Ljava/util/function/Predicate;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;)Z",
+                    "invokestatic com/acme/Main.lambda$filter$input$0:(Ljava/lang/String;)Z",
+                    "(Ljava/lang/Integer;)Z"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Z"),
+                    BootstrapArgument.methodHandle(
+                        6,
+                        new MethodRef("com/acme/Main", "lambda$filter$input$0", "(Ljava/lang/String;)Z")
+                    ),
+                    BootstrapArgument.methodType("(Ljava/lang/Integer;)Z")
+                )
+            )),
+            invokeVirtual(2, new MethodRef("java/util/Optional", "filter", "(Ljava/util/function/Predicate;)Ljava/util/Optional;")),
+            plain(3, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo optionalFilterLambdaImplementationMethod() {
+        return method(
+            0x0008,
+            "lambda$filter$0",
+            "(Ljava/lang/Object;)Z",
+            1,
+            1,
+            plain(0, 4, "iconst_1"),
+            plain(1, 172, "ireturn")
+        );
+    }
+
+    private static MethodInfo optionalCapturedFilterLambdaImplementationMethod() {
+        return method(
+            0x0008,
+            "lambda$capturedFilter$0",
+            "(Ljava/lang/Object;Ljava/lang/Object;)Z",
+            1,
+            2,
+            plain(0, 4, "iconst_1"),
+            plain(1, 172, "ireturn")
+        );
+    }
+
+    private static MethodInfo mapComputeIfAbsentCapturedMapGetLambdaMethod() {
+        return method(
+            0x0008,
+            "loadOrCompute",
+            "(Ljava/util/Map;Ljava/lang/Object;)Ljava/lang/Object;",
+            3,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            plain(2, 42, "aload_0"),
+            invokeDynamic(3, new DynamicRef(
+                "apply",
+                "(Ljava/util/Map;)Ljava/util/function/Function;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "invokeinterface java/util/Map.get:(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "(Ljava/lang/Object;)Ljava/lang/Object;"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;"),
+                    BootstrapArgument.methodHandle(
+                        9,
+                        new MethodRef("java/util/Map", "get", "(Ljava/lang/Object;)Ljava/lang/Object;")
+                    ),
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;")
+                )
+            )),
+            invokeInterface(4, new MethodRef("java/util/Map", "computeIfAbsent", "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;")),
+            plain(5, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo mapComputeIfAbsentMapGetWithoutCaptureLambdaMethod() {
+        return method(
+            0x0008,
+            "loadOrComputeWithoutCapture",
+            "(Ljava/util/Map;Ljava/lang/Object;)Ljava/lang/Object;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeDynamic(2, new DynamicRef(
+                "apply",
+                "()Ljava/util/function/Function;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "invokeinterface java/util/Map.get:(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "(Ljava/lang/Object;)Ljava/lang/Object;"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;"),
+                    BootstrapArgument.methodHandle(
+                        9,
+                        new MethodRef("java/util/Map", "get", "(Ljava/lang/Object;)Ljava/lang/Object;")
+                    ),
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;")
+                )
+            )),
+            invokeInterface(3, new MethodRef("java/util/Map", "computeIfAbsent", "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;")),
+            plain(8, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo mapComputeIfAbsentMapGetWrongCaptureTypeLambdaMethod() {
+        return method(
+            0x0008,
+            "loadOrComputeWrongCaptureType",
+            "(Ljava/util/List;Ljava/util/Map;Ljava/lang/Object;)Ljava/lang/Object;",
+            3,
+            3,
+            plain(0, 43, "aload_1"),
+            plain(1, 44, "aload_2"),
+            plain(2, 42, "aload_0"),
+            invokeDynamic(3, new DynamicRef(
+                "apply",
+                "(Ljava/util/List;)Ljava/util/function/Function;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "invokeinterface java/util/Map.get:(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "(Ljava/lang/Object;)Ljava/lang/Object;"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;"),
+                    BootstrapArgument.methodHandle(
+                        9,
+                        new MethodRef("java/util/Map", "get", "(Ljava/lang/Object;)Ljava/lang/Object;")
+                    ),
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;")
+                )
+            )),
+            invokeInterface(4, new MethodRef("java/util/Map", "computeIfAbsent", "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;")),
+            plain(9, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo mapComputeIfAbsentMapGetWrongDescriptorLambdaMethod() {
+        return method(
+            0x0008,
+            "loadOrComputeWrongDescriptor",
+            "(Ljava/util/Map;Ljava/lang/Object;)Ljava/lang/Object;",
+            3,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            plain(2, 42, "aload_0"),
+            invokeDynamic(3, new DynamicRef(
+                "apply",
+                "(Ljava/util/Map;)Ljava/util/function/Function;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "invokeinterface java/util/Map.get:(I)Ljava/lang/Object;",
+                    "(Ljava/lang/Object;)Ljava/lang/Object;"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;"),
+                    BootstrapArgument.methodHandle(
+                        9,
+                        new MethodRef("java/util/Map", "get", "(I)Ljava/lang/Object;")
+                    ),
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;")
+                )
+            )),
+            invokeInterface(4, new MethodRef("java/util/Map", "computeIfAbsent", "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;")),
+            plain(5, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo mapComputeIfAbsentMapGetWrongOwnerLambdaMethod() {
+        return method(
+            0x0008,
+            "loadOrComputeWrongOwner",
+            "(Ljava/util/Map;Ljava/lang/Object;)Ljava/lang/Object;",
+            3,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            plain(2, 42, "aload_0"),
+            invokeDynamic(3, new DynamicRef(
+                "apply",
+                "(Ljava/util/Map;)Ljava/util/function/Function;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "invokeinterface java/util/List.get:(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "(Ljava/lang/Object;)Ljava/lang/Object;"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;"),
+                    BootstrapArgument.methodHandle(
+                        9,
+                        new MethodRef("java/util/List", "get", "(Ljava/lang/Object;)Ljava/lang/Object;")
+                    ),
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;")
+                )
+            )),
+            invokeInterface(4, new MethodRef("java/util/Map", "computeIfAbsent", "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;")),
+            plain(5, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo mapComputeIfAbsentMapGetWrongMethodNameLambdaMethod() {
+        return method(
+            0x0008,
+            "loadOrComputeWrongMethodName",
+            "(Ljava/util/Map;Ljava/lang/Object;)Ljava/lang/Object;",
+            3,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            plain(2, 42, "aload_0"),
+            invokeDynamic(3, new DynamicRef(
+                "apply",
+                "(Ljava/util/Map;)Ljava/util/function/Function;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "invokeinterface java/util/Map.remove:(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "(Ljava/lang/Object;)Ljava/lang/Object;"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;"),
+                    BootstrapArgument.methodHandle(
+                        9,
+                        new MethodRef("java/util/Map", "remove", "(Ljava/lang/Object;)Ljava/lang/Object;")
+                    ),
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;")
+                )
+            )),
+            invokeInterface(4, new MethodRef("java/util/Map", "computeIfAbsent", "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;")),
+            plain(5, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo mapComputeIfAbsentDirectFunctionLambdaMethod() {
+        return method(
+            0x0008,
+            "loadOrComputeFunction",
+            "(Ljava/util/Map;Ljava/lang/Object;)Ljava/lang/Object;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeDynamic(2, new DynamicRef(
+                "apply",
+                "()Ljava/util/function/Function;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "invokestatic com/acme/Main.lambda$compute$0:(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "(Ljava/lang/Object;)Ljava/lang/Object;"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;"),
+                    BootstrapArgument.methodHandle(
+                        6,
+                        new MethodRef("com/acme/Main", "lambda$compute$0", "(Ljava/lang/Object;)Ljava/lang/Object;")
+                    ),
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;")
+                )
+            )),
+            invokeInterface(3, new MethodRef("java/util/Map", "computeIfAbsent", "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;")),
+            plain(8, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo mapComputeIfAbsentDirectFunctionLambdaImplementationMethod() {
+        return method(
+            0x0008,
+            "lambda$compute$0",
+            "(Ljava/lang/Object;)Ljava/lang/Object;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            plain(1, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo buildObjectMaterializedLambdaMethod() {
+        return buildObjectMaterializedLambdaMethod(
+            "buildObjectLambda",
+            new MethodRef("com/acme/Main", "lambda$object$0", "(Ljava/lang/Object;)Ljava/lang/Object;")
+        );
+    }
+
+    private static MethodInfo buildObjectMaterializedLambdaMethod(final String methodName, final MethodRef implementation) {
+        return method(
+            0x0008,
+            methodName,
+            "()Lcom/acme/ObjectFn;",
+            1,
+            0,
+            invokeDynamic(0, new DynamicRef(
+                "apply",
+                "()Lcom/acme/ObjectFn;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "invokestatic " + implementation.owner() + "." + implementation.name() + ":" + implementation.descriptor(),
+                    "(Ljava/lang/Object;)Ljava/lang/Object;"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;"),
+                    BootstrapArgument.methodHandle(6, implementation),
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;")
+                )
+            )),
+            plain(1, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo buildCapturedObjectMaterializedLambdaMethod() {
+        return method(
+            0x0008,
+            "buildCapturedObjectLambda",
+            "(Ljava/lang/Object;)Lcom/acme/ObjectFn;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeDynamic(1, new DynamicRef(
+                "apply",
+                "(Ljava/lang/Object;)Lcom/acme/ObjectFn;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "invokestatic com/acme/Main.lambda$capturedObject$0:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+                    "(Ljava/lang/Object;)Ljava/lang/Object;"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;"),
+                    BootstrapArgument.methodHandle(
+                        6,
+                        new MethodRef("com/acme/Main", "lambda$capturedObject$0", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")
+                    ),
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;")
+                )
+            )),
+            plain(2, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo invokeObjectMaterializedLambdaMethod() {
+        return method(
+            0x0008,
+            "invokeObjectLambda",
+            "(Lcom/acme/ObjectFn;Ljava/lang/Object;)Ljava/lang/Object;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeInterface(2, new MethodRef("com/acme/ObjectFn", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;")),
+            plain(3, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo objectMaterializedLambdaImplementationMethod() {
+        return method(
+            0x0008,
+            "lambda$object$0",
+            "(Ljava/lang/Object;)Ljava/lang/Object;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            plain(1, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo capturedObjectMaterializedLambdaImplementationMethod() {
+        return method(
+            0x0008,
+            "lambda$capturedObject$0",
+            "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+            1,
+            2,
+            plain(0, 43, "aload_1"),
+            plain(1, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo buildBooleanMaterializedLambdaMethod() {
+        return method(
+            0x0008,
+            "buildBooleanLambda",
+            "()Lcom/acme/BooleanFn;",
+            1,
+            0,
+            invokeDynamic(0, new DynamicRef(
+                "test",
+                "()Lcom/acme/BooleanFn;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;)Z",
+                    "invokestatic com/acme/Main.lambda$boolean$0:(Ljava/lang/Object;)Z",
+                    "(Ljava/lang/Object;)Z"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Z"),
+                    BootstrapArgument.methodHandle(
+                        6,
+                        new MethodRef("com/acme/Main", "lambda$boolean$0", "(Ljava/lang/Object;)Z")
+                    ),
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Z")
+                )
+            )),
+            plain(1, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo invokeBooleanMaterializedLambdaMethod() {
+        return method(
+            0x0008,
+            "invokeBooleanLambda",
+            "(Lcom/acme/BooleanFn;Ljava/lang/Object;)Z",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeInterface(2, new MethodRef("com/acme/BooleanFn", "test", "(Ljava/lang/Object;)Z")),
+            plain(3, 172, "ireturn")
+        );
+    }
+
+    private static MethodInfo booleanMaterializedLambdaImplementationMethod() {
+        return method(
+            0x0008,
+            "lambda$boolean$0",
+            "(Ljava/lang/Object;)Z",
+            1,
+            1,
+            plain(0, 4, "iconst_1"),
+            plain(1, 172, "ireturn")
+        );
+    }
+
+    private static MethodInfo primitiveCaptureConsumerBuildMethod() {
+        return method(
+            0x0008,
+            "buildPrimitiveCaptureConsumer",
+            "(I)Ljava/util/function/Consumer;",
+            2,
+            1,
+            plain(0, 26, "iload_0"),
+            invokeDynamic(1, new DynamicRef(
+                "accept",
+                "(I)Ljava/util/function/Consumer;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;)V",
+                    "invokestatic com/acme/Main.lambda$primitiveConsumer$0:(ILjava/lang/Object;)V",
+                    "(Ljava/lang/Object;)V"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)V"),
+                    BootstrapArgument.methodHandle(
+                        6,
+                        new MethodRef("com/acme/Main", "lambda$primitiveConsumer$0", "(ILjava/lang/Object;)V")
+                    ),
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)V")
+                )
+            )),
+            plain(2, 176, "areturn")
+        );
+    }
+
     private static MethodInfo capturedConsumerBuildMethod() {
         return method(
             0x0008,
@@ -17215,6 +19300,39 @@ final class BytecodeToIRTest {
         );
     }
 
+    private static MethodInfo zeroCaptureConsumerBuildMethod() {
+        return method(
+            0x0008,
+            "buildZeroCaptureConsumer",
+            "()Ljava/util/function/Consumer;",
+            1,
+            0,
+            invokeDynamic(0, new DynamicRef(
+                "accept",
+                "()Ljava/util/function/Consumer;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;)V",
+                    "invokestatic com/acme/Main.lambda$zeroCaptureConsumer$0:(Ljava/lang/Object;)V",
+                    "(Ljava/lang/Object;)V"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)V"),
+                    BootstrapArgument.methodHandle(
+                        6,
+                        new MethodRef("com/acme/Main", "lambda$zeroCaptureConsumer$0", "(Ljava/lang/Object;)V")
+                    ),
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)V")
+                )
+            )),
+            plain(1, 176, "areturn")
+        );
+    }
+
     private static MethodInfo capturedConsumerImplementationMethod() {
         return method(
             0x0008,
@@ -17223,6 +19341,37 @@ final class BytecodeToIRTest {
             1,
             3,
             plain(0, 177, "return")
+        );
+    }
+
+    private static MethodInfo zeroCaptureConsumerImplementationMethod() {
+        return method(
+            0x0008,
+            "lambda$zeroCaptureConsumer$0",
+            "(Ljava/lang/Object;)V",
+            0,
+            1,
+            plain(0, 177, "return")
+        );
+    }
+
+    private static MethodInfo nonLambdaDynamicMethod() {
+        return method(
+            0x0008,
+            "concatValue",
+            "(Ljava/lang/String;)Ljava/lang/String;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeDynamic(1, new DynamicRef(
+                "makeConcat",
+                "(Ljava/lang/String;)Ljava/lang/String;",
+                "java/lang/invoke/StringConcatFactory",
+                "makeConcat",
+                "",
+                List.of()
+            )),
+            plain(2, 176, "areturn")
         );
     }
 

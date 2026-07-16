@@ -122,6 +122,143 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void socketHostConstructorWithLocalBindBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
+                try (java.net.Socket socket = server.accept()) {
+                    socket.getOutputStream().write(65);
+                    socket.getOutputStream().flush();
+                } catch (final Exception exception) {
+                    throw new IllegalStateException(exception);
+                }
+            });
+            final Path project = project("socket-host-constructor-local-bind");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.net.InetAddress;
+                import java.net.Socket;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final Socket socket = new Socket("127.0.0.1", %d, InetAddress.getByName("127.0.0.1"), 0);
+                        System.out.println(socket.getLocalAddress().getHostAddress());
+                        System.out.println(socket.getLocalPort() > 0);
+                        System.out.println(socket.getInetAddress().getHostAddress());
+                        System.out.println(socket.getPort());
+                        System.out.println(socket.getInputStream().read());
+                        socket.close();
+                    }
+                }
+                """.formatted(port));
+
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            assertThat(process(project, List.of(project.resolve(".javan/bin/socket-host-constructor-local-bind").toString())).stdout())
+                .isEqualTo("127.0.0.1\ntrue\n127.0.0.1\n" + port + "\n65\n");
+            accepted.get(5, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
+    void socketInetAddressConstructorWithLocalBindBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
+                try (java.net.Socket socket = server.accept()) {
+                    socket.getOutputStream().write(66);
+                    socket.getOutputStream().flush();
+                } catch (final Exception exception) {
+                    throw new IllegalStateException(exception);
+                }
+            });
+            final Path project = project("socket-inet-address-constructor-local-bind");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.net.InetAddress;
+                import java.net.Socket;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final Socket socket = new Socket(
+                            InetAddress.getByName("127.0.0.1"),
+                            %d,
+                            InetAddress.getByName("127.0.0.1"),
+                            0
+                        );
+                        System.out.println(socket.getLocalAddress().getHostAddress());
+                        System.out.println(socket.getLocalPort() > 0);
+                        System.out.println(socket.getInetAddress().getHostAddress());
+                        System.out.println(socket.getPort());
+                        System.out.println(socket.getInputStream().read());
+                        socket.close();
+                    }
+                }
+                """.formatted(port));
+
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            assertThat(process(project, List.of(project.resolve(".javan/bin/socket-inet-address-constructor-local-bind").toString())).stdout())
+                .isEqualTo("127.0.0.1\ntrue\n127.0.0.1\n" + port + "\n66\n");
+            accepted.get(5, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
+    void socketHostConstructorWithNullLocalAddressBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
+                try (java.net.Socket socket = server.accept()) {
+                    socket.getOutputStream().write(67);
+                    socket.getOutputStream().flush();
+                } catch (final Exception exception) {
+                    throw new IllegalStateException(exception);
+                }
+            });
+            final Path project = project("socket-host-constructor-null-local-address");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.net.InetAddress;
+                import java.net.Socket;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final Socket socket = new Socket("127.0.0.1", %d, (InetAddress) null, 0);
+                        System.out.println(socket.getLocalAddress().getHostAddress());
+                        System.out.println(socket.getLocalPort() > 0);
+                        System.out.println(socket.getInetAddress().getHostAddress());
+                        System.out.println(socket.getPort());
+                        System.out.println(socket.getInputStream().read());
+                        socket.close();
+                    }
+                }
+                """.formatted(port));
+
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            assertThat(process(project, List.of(project.resolve(".javan/bin/socket-host-constructor-null-local-address").toString())).stdout())
+                .isEqualTo("127.0.0.1\ntrue\n127.0.0.1\n" + port + "\n67\n");
+            accepted.get(5, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
     void socketLocalAddressBuildsAndReportsIpv4Loopback() throws Exception {
         final int port = freeTcpPort();
         try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
@@ -440,6 +577,257 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void socketSoLingerRoundTripBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
+                try (java.net.Socket socket = server.accept()) {
+                    socket.getOutputStream().flush();
+                } catch (final Exception exception) {
+                    throw new IllegalStateException(exception);
+                }
+            });
+            final Path project = project("socket-so-linger-round-trip");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.net.Socket;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final Socket socket = new Socket("127.0.0.1", %d);
+                        System.out.println(socket.getSoLinger());
+                        socket.setSoLinger(true, 7);
+                        System.out.println(socket.getSoLinger());
+                        socket.setSoLinger(false, 99);
+                        System.out.println(socket.getSoLinger());
+                        socket.close();
+                    }
+                }
+                """.formatted(port));
+
+            final String jvmOutput = runJvm(project, "com.acme.Main");
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            assertThat(process(project, List.of(project.resolve(".javan/bin/socket-so-linger-round-trip").toString())).stdout())
+                .isEqualTo(jvmOutput);
+            accepted.get(5, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
+    void socketSoLingerClampBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
+                try (java.net.Socket socket = server.accept()) {
+                    socket.getOutputStream().flush();
+                } catch (final Exception exception) {
+                    throw new IllegalStateException(exception);
+                }
+            });
+            final Path project = project("socket-so-linger-clamp");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.net.Socket;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final Socket socket = new Socket("127.0.0.1", %d);
+                        socket.setSoLinger(true, 65_536);
+                        System.out.println(socket.getSoLinger());
+                        socket.close();
+                    }
+                }
+                """.formatted(port));
+
+            final String jvmOutput = runJvm(project, "com.acme.Main");
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            assertThat(process(project, List.of(project.resolve(".javan/bin/socket-so-linger-clamp").toString())).stdout())
+                .isEqualTo(jvmOutput);
+            accepted.get(5, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
+    void socketOobInlineRoundTripBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
+                try (java.net.Socket socket = server.accept()) {
+                    socket.getInputStream().read();
+                } catch (final Exception exception) {
+                    throw new IllegalStateException(exception);
+                }
+            });
+            final Path project = project("socket-oob-inline-round-trip");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.net.Socket;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final Socket socket = new Socket("127.0.0.1", %d);
+                        System.out.println(socket.getOOBInline());
+                        socket.setOOBInline(true);
+                        System.out.println(socket.getOOBInline());
+                        socket.setOOBInline(false);
+                        System.out.println(socket.getOOBInline());
+                        socket.getOutputStream().write(1);
+                        socket.close();
+                    }
+                }
+                """.formatted(port));
+
+            final String jvmOutput = runJvm(project, "com.acme.Main");
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            assertThat(process(project, List.of(project.resolve(".javan/bin/socket-oob-inline-round-trip").toString())).stdout())
+                .isEqualTo(jvmOutput);
+            accepted.get(5, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
+    void socketTrafficClassRoundTripBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
+                try (java.net.Socket socket = server.accept()) {
+                    socket.getInputStream().read();
+                } catch (final Exception exception) {
+                    throw new IllegalStateException(exception);
+                }
+            });
+            final Path project = project("socket-traffic-class-round-trip");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.net.Socket;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final Socket socket = new Socket("127.0.0.1", %d);
+                        System.out.println(socket.getTrafficClass());
+                        socket.setTrafficClass(16);
+                        System.out.println(socket.getTrafficClass());
+                        socket.setTrafficClass(255);
+                        System.out.println(socket.getTrafficClass());
+                        socket.getOutputStream().write(1);
+                        socket.close();
+                    }
+                }
+                """.formatted(port));
+
+            final String jvmOutput = runJvm(project, "com.acme.Main");
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            assertThat(process(project, List.of(project.resolve(".javan/bin/socket-traffic-class-round-trip").toString())).stdout())
+                .isEqualTo(jvmOutput);
+            accepted.get(5, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
+    void socketTrafficClassNegativeBuildsAndFailsClearly() throws Exception {
+        final int port = freeTcpPort();
+        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
+                try (java.net.Socket socket = server.accept()) {
+                    socket.getInputStream().read();
+                } catch (final Exception exception) {
+                    throw new IllegalStateException(exception);
+                }
+            });
+            final Path project = project("socket-traffic-class-negative");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.net.Socket;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final Socket socket = new Socket("127.0.0.1", %d);
+                        socket.setTrafficClass(-1);
+                        socket.getOutputStream().write(1);
+                        socket.close();
+                    }
+                }
+                """.formatted(port));
+
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/socket-traffic-class-negative").toString()));
+            assertThat(nativeRun.exitCode()).isEqualTo(1);
+            assertThat(nativeRun.stderr()).contains("socket traffic class out of range");
+            accepted.cancel(true);
+        }
+    }
+
+    @Test
+    void socketTrafficClassHighBuildsAndFailsClearly() throws Exception {
+        final int port = freeTcpPort();
+        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
+                try (java.net.Socket socket = server.accept()) {
+                    socket.getInputStream().read();
+                } catch (final Exception exception) {
+                    throw new IllegalStateException(exception);
+                }
+            });
+            final Path project = project("socket-traffic-class-high");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.net.Socket;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final Socket socket = new Socket("127.0.0.1", %d);
+                        socket.setTrafficClass(256);
+                        socket.getOutputStream().write(1);
+                        socket.close();
+                    }
+                }
+                """.formatted(port));
+
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/socket-traffic-class-high").toString()));
+            assertThat(nativeRun.exitCode()).isEqualTo(1);
+            assertThat(nativeRun.stderr()).contains("socket traffic class out of range");
+            accepted.cancel(true);
+        }
+    }
+
+    @Test
     void socketReceiveBufferSizeRoundTripBuildsAndMatchesJvmOutput() throws Exception {
         final int port = freeTcpPort();
         try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
@@ -516,6 +904,137 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
             assertThat(run.exitCode()).as(run.stderr()).isZero();
             assertThat(process(project, List.of(project.resolve(".javan/bin/socket-send-buffer-size-round-trip").toString())).stdout())
+                .isEqualTo(jvmOutput);
+            accepted.get(5, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
+    void socketBoundAndClosedStateBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
+                try (java.net.Socket socket = server.accept()) {
+                    socket.getInputStream().available();
+                    Thread.sleep(250L);
+                } catch (final Exception exception) {
+                    throw new IllegalStateException(exception);
+                }
+            });
+            final Path project = project("socket-bound-and-closed-state");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.net.Socket;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final Socket socket = new Socket("127.0.0.1", %d);
+                        System.out.println(socket.isBound());
+                        System.out.println(socket.isClosed());
+                        socket.close();
+                        System.out.println(socket.isBound());
+                        System.out.println(socket.isClosed());
+                    }
+                }
+                """.formatted(port));
+
+            final String jvmOutput = runJvm(project, "com.acme.Main");
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            assertThat(process(project, List.of(project.resolve(".javan/bin/socket-bound-and-closed-state").toString())).stdout())
+                .isEqualTo(jvmOutput);
+            accepted.get(5, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
+    void socketShutdownInputStateBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
+                try (java.net.Socket socket = server.accept()) {
+                    socket.getInputStream().available();
+                    Thread.sleep(250L);
+                } catch (final Exception exception) {
+                    throw new IllegalStateException(exception);
+                }
+            });
+            final Path project = project("socket-shutdown-input-state");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.net.Socket;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final Socket socket = new Socket("127.0.0.1", %d);
+                        System.out.println(socket.isInputShutdown());
+                        System.out.println(socket.isOutputShutdown());
+                        socket.shutdownInput();
+                        System.out.println(socket.isInputShutdown());
+                        System.out.println(socket.isOutputShutdown());
+                        socket.close();
+                    }
+                }
+                """.formatted(port));
+
+            final String jvmOutput = runJvm(project, "com.acme.Main");
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            assertThat(process(project, List.of(project.resolve(".javan/bin/socket-shutdown-input-state").toString())).stdout())
+                .isEqualTo(jvmOutput);
+            accepted.get(5, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
+    void socketShutdownOutputStateBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
+                try (java.net.Socket socket = server.accept()) {
+                    socket.getInputStream().available();
+                    Thread.sleep(250L);
+                } catch (final Exception exception) {
+                    throw new IllegalStateException(exception);
+                }
+            });
+            final Path project = project("socket-shutdown-output-state");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.net.Socket;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final Socket socket = new Socket("127.0.0.1", %d);
+                        System.out.println(socket.isInputShutdown());
+                        System.out.println(socket.isOutputShutdown());
+                        socket.shutdownOutput();
+                        System.out.println(socket.isInputShutdown());
+                        System.out.println(socket.isOutputShutdown());
+                        socket.close();
+                    }
+                }
+                """.formatted(port));
+
+            final String jvmOutput = runJvm(project, "com.acme.Main");
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            assertThat(process(project, List.of(project.resolve(".javan/bin/socket-shutdown-output-state").toString())).stdout())
                 .isEqualTo(jvmOutput);
             accepted.get(5, TimeUnit.SECONDS);
         }
@@ -900,6 +1419,38 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/server-socket-reuse-address-round-trip").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void serverSocketBoundAndClosedStateBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("server-socket-bound-and-closed-state");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.ServerSocket;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ServerSocket server = new ServerSocket(%d, 2);
+                    System.out.println(server.isBound());
+                    System.out.println(server.isClosed());
+                    server.close();
+                    System.out.println(server.isBound());
+                    System.out.println(server.isClosed());
+                }
+            }
+            """.formatted(port));
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/server-socket-bound-and-closed-state").toString())).stdout())
             .isEqualTo(jvmOutput);
     }
 
@@ -3157,6 +3708,291 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/inet-address-get-all-by-name-ipv6-literal").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void inetAddressGetAddressIpv4BuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("inet-address-get-address-ipv4");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.InetAddress;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final byte[] address = InetAddress.getByName("127.0.0.1").getAddress();
+                    System.out.println(address.length);
+                    System.out.println(address[0]);
+                    System.out.println(address[1]);
+                    System.out.println(address[2]);
+                    System.out.println(address[3]);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/inet-address-get-address-ipv4").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void inetAddressGetAddressIpv6BuildsAndMatchesJvmOutput() throws Exception {
+        Assumptions.assumeTrue(ipv6LoopbackAvailable(), "IPv6 loopback is not available on this host");
+        final Path project = project("inet-address-get-address-ipv6");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.InetAddress;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final byte[] address = InetAddress.getByName("::1").getAddress();
+                    System.out.println(address.length);
+                    System.out.println(address[0]);
+                    System.out.println(address[1]);
+                    System.out.println(address[14]);
+                    System.out.println(address[15]);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/inet-address-get-address-ipv6").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void inetAddressGetByAddressIpv4BuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("inet-address-get-by-address-ipv4");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.InetAddress;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final InetAddress address = InetAddress.getByAddress(new byte[] {127, 0, 0, 1});
+                    System.out.println(address.getHostAddress());
+                    System.out.println(address.getHostName());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/inet-address-get-by-address-ipv4").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void inetAddressGetByAddressIpv6BuildsAndMatchesJvmOutput() throws Exception {
+        Assumptions.assumeTrue(ipv6LoopbackAvailable(), "IPv6 loopback is not available on this host");
+        final Path project = project("inet-address-get-by-address-ipv6");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.InetAddress;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final InetAddress address = InetAddress.getByAddress(new byte[] {
+                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1
+                    });
+                    System.out.println(address.getHostAddress());
+                    System.out.println(address.getHostName());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/inet-address-get-by-address-ipv6").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void inetAddressGetByAddressNamedLoopbackBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("inet-address-get-by-address-named-loopback");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.InetAddress;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final InetAddress address = InetAddress.getByAddress("loop", new byte[] {127, 0, 0, 1});
+                    System.out.println(address.getHostAddress());
+                    System.out.println(address.getHostName());
+                    System.out.println(address.getCanonicalHostName());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/inet-address-get-by-address-named-loopback").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void inetAddressGetByAddressNamedNonLoopbackBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("inet-address-get-by-address-named-non-loopback");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.InetAddress;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final InetAddress address = InetAddress.getByAddress("named", new byte[] {1, 2, 3, 4});
+                    System.out.println(address.getHostAddress());
+                    System.out.println(address.getHostName());
+                    System.out.println(address.getCanonicalHostName());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/inet-address-get-by-address-named-non-loopback").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void inetAddressGetByAddressNamedNullNameFallsBackAndMatchesJvmOutput() throws Exception {
+        final Path project = project("inet-address-get-by-address-named-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.InetAddress;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final InetAddress address = InetAddress.getByAddress(null, new byte[] {127, 0, 0, 1});
+                    System.out.println(address.getHostAddress());
+                    System.out.println(address.getHostName());
+                    System.out.println(address.getCanonicalHostName());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/inet-address-get-by-address-named-null").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void inetAddressGetByAddressNamedIpv6LoopbackBuildsAndMatchesJvmOutput() throws Exception {
+        Assumptions.assumeTrue(ipv6LoopbackAvailable(), "IPv6 loopback is not available on this host");
+        final Path project = project("inet-address-get-by-address-named-ipv6-loopback");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.InetAddress;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final InetAddress address = InetAddress.getByAddress("loop6", new byte[] {
+                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1
+                    });
+                    System.out.println(address.getHostAddress());
+                    System.out.println(address.getHostName());
+                    System.out.println(address.getCanonicalHostName());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/inet-address-get-by-address-named-ipv6-loopback").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void inetAddressGetByAddressNamedInvalidLengthFailsClearlyAtRuntime() throws Exception {
+        final Path project = project("inet-address-get-by-address-named-invalid-length");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.InetAddress;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    System.out.println(InetAddress.getByAddress("named", new byte[] {1, 2, 3}).getHostAddress());
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/inet-address-get-by-address-named-invalid-length").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("addr is of illegal length");
+    }
+
+    @Test
+    void inetAddressGetByAddressInvalidLengthFailsClearlyAtRuntime() throws Exception {
+        final Path project = project("inet-address-get-by-address-invalid-length");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.InetAddress;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    System.out.println(InetAddress.getByAddress(new byte[] {1, 2, 3}).getHostAddress());
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/inet-address-get-by-address-invalid-length").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("addr is of illegal length");
     }
 
     @Test

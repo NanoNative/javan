@@ -1,5 +1,6 @@
 package javan.compat;
 
+import javan.ExternalProbeIdentities;
 import javan.verify.Diagnostic;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -8,8 +9,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Properties;
-import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -78,12 +77,12 @@ final class CompatibilityReportsTest {
         assertThat(summary).contains(
             "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 5, \"leftCallables\": 3, \"coveragePercent\": \"40.0\"}",
             "\"exactJdkCallableAccounting\": {\"supportedCallables\": 2, \"explicitRejectedCallables\": 3, \"doneCallables\": 5, \"unknownCallables\": 0, \"totalCallables\": 5, \"donePercent\": \"100.0\"}",
-            "\"supportRows\": 126",
-            "\"passRows\": 126",
+            "\"supportRows\": 136",
+            "\"passRows\": 136",
             "\"scopedRows\": 0",
             "\"targetRows\": 0",
             "\"rejectedRows\": 0",
-            "\"accountedRows\": 126",
+            "\"accountedRows\": 136",
             "\"unaccountedRows\": 0"
         );
     }
@@ -127,9 +126,12 @@ final class CompatibilityReportsTest {
             "| `network-address-runtime` | pass |",
             "| `network-inetaddress-get-by-name-literal-host` | pass |",
             "| `network-inetaddress-get-all-by-name-literal-host` | pass |",
+            "| `network-inetaddress-byte-address` | pass |",
+            "| `network-inetaddress-named-byte-address` | pass |",
             "| `network-tcp-client-socket` | pass |",
             "| `network-tcp-client-socket-ipv6-loopback` | pass |",
             "| `network-tcp-client-socket-address` | pass |",
+            "| `network-tcp-client-socket-local-bind` | pass |",
             "| `network-tcp-server-socket` | pass |",
             "| `network-tcp-server-socket-backlog` | pass |",
             "| `network-tcp-server-socket-bind-address` | pass |",
@@ -142,8 +144,15 @@ final class CompatibilityReportsTest {
             "| `network-tcp-socket-reuse-address` | pass |",
             "| `network-tcp-socket-receive-buffer` | pass |",
             "| `network-tcp-socket-send-buffer` | pass |",
+            "| `network-tcp-socket-so-linger` | pass |",
+            "| `network-tcp-socket-oob-inline` | pass |",
+            "| `network-tcp-socket-traffic-class` | pass |",
+            "| `network-tcp-socket-bound-state` | pass |",
+            "| `network-tcp-socket-input-shutdown-state` | pass |",
+            "| `network-tcp-socket-output-shutdown-state` | pass |",
             "| `network-tcp-socket-timeout-round-trip` | pass |",
             "| `network-tcp-socket-read-timeout-boundary` | pass |",
+            "| `network-tcp-server-socket-bound-state` | pass |",
             "| `network-tcp-server-socket-local-socket-address` | pass |",
             "| `network-tcp-server-socket-receive-buffer` | pass |",
             "| `network-tcp-server-socket-timeout-round-trip` | pass |",
@@ -185,9 +194,12 @@ final class CompatibilityReportsTest {
             "\"feature\": \"network-address-runtime\"",
             "\"feature\": \"network-inetaddress-get-by-name-literal-host\"",
             "\"feature\": \"network-inetaddress-get-all-by-name-literal-host\"",
+            "\"feature\": \"network-inetaddress-byte-address\"",
+            "\"feature\": \"network-inetaddress-named-byte-address\"",
             "\"feature\": \"network-tcp-client-socket\"",
             "\"feature\": \"network-tcp-client-socket-ipv6-loopback\"",
             "\"feature\": \"network-tcp-client-socket-address\"",
+            "\"feature\": \"network-tcp-client-socket-local-bind\"",
             "\"feature\": \"network-tcp-server-socket\"",
             "\"feature\": \"network-tcp-server-socket-backlog\"",
             "\"feature\": \"network-tcp-server-socket-bind-address\"",
@@ -200,6 +212,9 @@ final class CompatibilityReportsTest {
             "\"feature\": \"network-tcp-socket-reuse-address\"",
             "\"feature\": \"network-tcp-socket-receive-buffer\"",
             "\"feature\": \"network-tcp-socket-send-buffer\"",
+            "\"feature\": \"network-tcp-socket-so-linger\"",
+            "\"feature\": \"network-tcp-socket-oob-inline\"",
+            "\"feature\": \"network-tcp-socket-traffic-class\"",
             "\"feature\": \"network-tcp-socket-timeout-round-trip\"",
             "\"feature\": \"network-tcp-socket-read-timeout-boundary\"",
             "\"feature\": \"network-tcp-server-socket-local-socket-address\"",
@@ -229,8 +244,8 @@ final class CompatibilityReportsTest {
             "\"feature\": \"network-http-rejection\"",
             "\"feature\": \"network-runtime-feature-reporting\""
         );
-        assertExcludesExternalProbeProjectNames(matrix);
-        assertExcludesExternalProbeProjectNames(json);
+        assertExcludesExternalProbeIdentities(matrix);
+        assertExcludesExternalProbeIdentities(json);
     }
 
     @Test
@@ -249,12 +264,12 @@ final class CompatibilityReportsTest {
             "This ledger excludes external example or library probes.",
             "and never define a supported JDK member count."
         );
-        assertExcludesExternalProbeProjectNames(compatibility);
+        assertExcludesExternalProbeIdentities(compatibility);
     }
 
     @Test
     void externalProbeIdentityAssertionsAreMetadataDriven() throws Exception {
-        assertThat(externalProbeProjectNames())
+        assertThat(ExternalProbeIdentities.projectNames())
             .isNotEmpty()
             .doesNotHaveDuplicates()
             .allSatisfy(project -> assertThat(project).isNotBlank());
@@ -568,32 +583,12 @@ final class CompatibilityReportsTest {
         }
     }
 
-    private static void assertExcludesExternalProbeProjectNames(final String content) throws Exception {
-        assertThat(content).doesNotContain(externalProbeProjectNames().toArray(String[]::new));
-    }
-
-    private static List<String> externalProbeProjectNames() throws Exception {
-        try (Stream<Path> paths = Files.list(Path.of("src/test/resources/projects/real-probes"))) {
-            return paths
-                .filter(Files::isDirectory)
-                .sorted()
-                .map(CompatibilityReportsTest::externalProbeProjectName)
-                .toList();
+    private static void assertExcludesExternalProbeIdentities(final String content) throws Exception {
+        for (final var pattern : ExternalProbeIdentities.identityPatterns()) {
+            assertThat(pattern.matcher(content).find())
+                .as("generated compatibility output should exclude external probe identity pattern " + pattern)
+                .isFalse();
         }
-    }
-
-    private static String externalProbeProjectName(final Path directory) {
-        final Properties properties = new Properties();
-        try (var reader = Files.newBufferedReader(directory.resolve("probe.properties"))) {
-            properties.load(reader);
-        } catch (final Exception exception) {
-            throw new IllegalStateException("Unable to load external probe metadata from " + directory, exception);
-        }
-        final String project = properties.getProperty("project");
-        if (project == null || project.isBlank()) {
-            throw new IllegalStateException("Missing probe property: project in " + directory);
-        }
-        return project;
     }
 
     @FunctionalInterface

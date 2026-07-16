@@ -2125,6 +2125,24 @@ final class BytecodeToIRInvokeSupport {
             )));
             return true;
         }
+        if ("getByAddress".equals(methodRef.name())
+            && "([B)Ljava/net/InetAddress;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_inet_address_get_by_address",
+                List.of(popObject(classFile, method, stack))
+            )));
+            return true;
+        }
+        if ("getByAddress".equals(methodRef.name())
+            && "(Ljava/lang/String;[B)Ljava/net/InetAddress;".equals(methodRef.descriptor())) {
+            final IrExpression bytes = popObject(classFile, method, stack);
+            final IrExpression host = popObject(classFile, method, stack);
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_inet_address_get_by_address_named",
+                List.of(host, bytes)
+            )));
+            return true;
+        }
         if ("getLoopbackAddress".equals(methodRef.name())
             && "()Ljava/net/InetAddress;".equals(methodRef.descriptor())) {
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_inet_address_loopback", List.of())));
@@ -2426,6 +2444,24 @@ final class BytecodeToIRInvokeSupport {
                         arguments.get(1)
                     )
                 )
+            ));
+            return true;
+        }
+        if ("java/net/Socket".equals(methodRef.owner())
+            && "<init>".equals(methodRef.name())
+            && "(Ljava/lang/String;ILjava/net/InetAddress;I)V".equals(methodRef.descriptor())) {
+            instructions.add(IrInstruction.assignObject(
+                receiver.value(),
+                IrExpression.objectCall("javan_socket_connect_host_config", arguments)
+            ));
+            return true;
+        }
+        if ("java/net/Socket".equals(methodRef.owner())
+            && "<init>".equals(methodRef.name())
+            && "(Ljava/net/InetAddress;ILjava/net/InetAddress;I)V".equals(methodRef.descriptor())) {
+            instructions.add(IrInstruction.assignObject(
+                receiver.value(),
+                IrExpression.objectCall("javan_socket_connect_address_config", arguments)
             ));
             return true;
         }
@@ -4395,10 +4431,15 @@ final class BytecodeToIRInvokeSupport {
         if ("java/net/InetAddress".equals(methodRef.owner())) {
             if (!"getHostAddress".equals(methodRef.name())
                 && !"getHostName".equals(methodRef.name())
-                && !"getCanonicalHostName".equals(methodRef.name())) {
+                && !"getCanonicalHostName".equals(methodRef.name())
+                && !"getAddress".equals(methodRef.name())) {
                 return false;
             }
             final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+            if ("getAddress".equals(methodRef.name()) && "()[B".equals(methodRef.descriptor())) {
+                pushObjectCall(instructions, stack, localDeclarations, "javan_inet_address_get_address", List.of(receiver));
+                return true;
+            }
             if ("getHostAddress".equals(methodRef.name()) && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
                 pushObjectCall(instructions, stack, localDeclarations, "javan_inet_address_get_host_address", List.of(receiver));
                 return true;
@@ -4453,10 +4494,19 @@ final class BytecodeToIRInvokeSupport {
         if ("java/net/Socket".equals(methodRef.owner())) {
             if (!"isConnected".equals(methodRef.name())
                 && !"isClosed".equals(methodRef.name())
+                && !"isBound".equals(methodRef.name())
+                && !"isInputShutdown".equals(methodRef.name())
+                && !"isOutputShutdown".equals(methodRef.name())
                 && !"getPort".equals(methodRef.name())
                 && !"getLocalPort".equals(methodRef.name())
                 && !"getSoTimeout".equals(methodRef.name())
                 && !"setSoTimeout".equals(methodRef.name())
+                && !"getSoLinger".equals(methodRef.name())
+                && !"setSoLinger".equals(methodRef.name())
+                && !"getOOBInline".equals(methodRef.name())
+                && !"setOOBInline".equals(methodRef.name())
+                && !"getTrafficClass".equals(methodRef.name())
+                && !"setTrafficClass".equals(methodRef.name())
                 && !"getTcpNoDelay".equals(methodRef.name())
                 && !"setTcpNoDelay".equals(methodRef.name())
                 && !"getKeepAlive".equals(methodRef.name())
@@ -4473,6 +4523,8 @@ final class BytecodeToIRInvokeSupport {
                 && !"getRemoteSocketAddress".equals(methodRef.name())
                 && !"getInputStream".equals(methodRef.name())
                 && !"getOutputStream".equals(methodRef.name())
+                && !"shutdownInput".equals(methodRef.name())
+                && !"shutdownOutput".equals(methodRef.name())
                 && !"close".equals(methodRef.name())) {
                 return false;
             }
@@ -4512,6 +4564,25 @@ final class BytecodeToIRInvokeSupport {
                 instructions.add(IrInstruction.callStaticVoid("javan_socket_set_so_timeout", List.of(receiver, timeout)));
                 return true;
             }
+            if ("setSoLinger".equals(methodRef.name()) && "(ZI)V".equals(methodRef.descriptor())) {
+                final IrExpression lingerSeconds = popInt(classFile, method, stack);
+                final IrExpression enabled = popInt(classFile, method, stack);
+                final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+                instructions.add(IrInstruction.callStaticVoid("javan_socket_set_so_linger", List.of(receiver, enabled, lingerSeconds)));
+                return true;
+            }
+            if ("setOOBInline".equals(methodRef.name()) && "(Z)V".equals(methodRef.descriptor())) {
+                final IrExpression enabled = popInt(classFile, method, stack);
+                final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+                instructions.add(IrInstruction.callStaticVoid("javan_socket_set_oob_inline", List.of(receiver, enabled)));
+                return true;
+            }
+            if ("setTrafficClass".equals(methodRef.name()) && "(I)V".equals(methodRef.descriptor())) {
+                final IrExpression trafficClass = popInt(classFile, method, stack);
+                final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+                instructions.add(IrInstruction.callStaticVoid("javan_socket_set_traffic_class", List.of(receiver, trafficClass)));
+                return true;
+            }
             final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
             if ("isConnected".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor())) {
                 pushIntCall(instructions, stack, localDeclarations, "javan_socket_is_connected", List.of(receiver));
@@ -4519,6 +4590,18 @@ final class BytecodeToIRInvokeSupport {
             }
             if ("isClosed".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor())) {
                 pushIntCall(instructions, stack, localDeclarations, "javan_socket_is_closed", List.of(receiver));
+                return true;
+            }
+            if ("isBound".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor())) {
+                pushIntCall(instructions, stack, localDeclarations, "javan_socket_is_bound", List.of(receiver));
+                return true;
+            }
+            if ("isInputShutdown".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor())) {
+                pushIntCall(instructions, stack, localDeclarations, "javan_socket_is_input_shutdown", List.of(receiver));
+                return true;
+            }
+            if ("isOutputShutdown".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor())) {
+                pushIntCall(instructions, stack, localDeclarations, "javan_socket_is_output_shutdown", List.of(receiver));
                 return true;
             }
             if ("getPort".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
@@ -4531,6 +4614,18 @@ final class BytecodeToIRInvokeSupport {
             }
             if ("getSoTimeout".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
                 pushIntCall(instructions, stack, localDeclarations, "javan_socket_get_so_timeout", List.of(receiver));
+                return true;
+            }
+            if ("getSoLinger".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
+                pushIntCall(instructions, stack, localDeclarations, "javan_socket_get_so_linger", List.of(receiver));
+                return true;
+            }
+            if ("getOOBInline".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor())) {
+                pushIntCall(instructions, stack, localDeclarations, "javan_socket_get_oob_inline", List.of(receiver));
+                return true;
+            }
+            if ("getTrafficClass".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
+                pushIntCall(instructions, stack, localDeclarations, "javan_socket_get_traffic_class", List.of(receiver));
                 return true;
             }
             if ("getTcpNoDelay".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor())) {
@@ -4583,6 +4678,14 @@ final class BytecodeToIRInvokeSupport {
                 stack.add(StackValue.socketOutputStream(IrExpression.objectLocal(localName)));
                 return true;
             }
+            if ("shutdownInput".equals(methodRef.name()) && "()V".equals(methodRef.descriptor())) {
+                instructions.add(IrInstruction.callStaticVoid("javan_socket_shutdown_input", List.of(receiver)));
+                return true;
+            }
+            if ("shutdownOutput".equals(methodRef.name()) && "()V".equals(methodRef.descriptor())) {
+                instructions.add(IrInstruction.callStaticVoid("javan_socket_shutdown_output", List.of(receiver)));
+                return true;
+            }
             if ("close".equals(methodRef.name()) && "()V".equals(methodRef.descriptor())) {
                 instructions.add(IrInstruction.callStaticVoid("javan_socket_close", List.of(receiver)));
                 return true;
@@ -4592,7 +4695,9 @@ final class BytecodeToIRInvokeSupport {
         if (!"java/net/ServerSocket".equals(methodRef.owner())) {
             return false;
         }
-        if (!"getInetAddress".equals(methodRef.name())
+        if (!"isBound".equals(methodRef.name())
+            && !"isClosed".equals(methodRef.name())
+            && !"getInetAddress".equals(methodRef.name())
             && !"getLocalPort".equals(methodRef.name())
             && !"getSoTimeout".equals(methodRef.name())
             && !"setSoTimeout".equals(methodRef.name())
@@ -4624,6 +4729,14 @@ final class BytecodeToIRInvokeSupport {
             return true;
         }
         final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+        if ("isBound".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor())) {
+            pushIntCall(instructions, stack, localDeclarations, "javan_server_socket_is_bound", List.of(receiver));
+            return true;
+        }
+        if ("isClosed".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor())) {
+            pushIntCall(instructions, stack, localDeclarations, "javan_server_socket_is_closed", List.of(receiver));
+            return true;
+        }
         if ("getInetAddress".equals(methodRef.name()) && "()Ljava/net/InetAddress;".equals(methodRef.descriptor())) {
             pushObjectCall(instructions, stack, localDeclarations, "javan_server_socket_get_inet_address", List.of(receiver));
             return true;

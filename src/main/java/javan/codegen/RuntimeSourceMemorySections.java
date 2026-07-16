@@ -246,6 +246,7 @@ final class RuntimeSourceMemorySections {
             int reserved2;
             char* host_address;
             char* host_name;
+            char* canonical_host_name;
         } javan_inet_address;
 
         typedef struct {
@@ -261,6 +262,12 @@ final class RuntimeSourceMemorySections {
             int fd;
             int connected;
             int closed;
+            int bound;
+            int input_shutdown;
+            int output_shutdown;
+            int so_linger;
+            int oob_inline;
+            int traffic_class;
             int local_port;
             int remote_port;
             int so_timeout;
@@ -274,6 +281,7 @@ final class RuntimeSourceMemorySections {
         typedef struct {
             int magic;
             int fd;
+            int bound;
             int closed;
             int local_port;
             int so_timeout;
@@ -1470,7 +1478,10 @@ final class RuntimeSourceMemorySections {
                 javan_validate_runtime_managed_reference(publisher->value);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_INET_ADDRESS) {
                 javan_inet_address* address = (javan_inet_address*) node->value;
-                if (address->magic != JAVAN_INET_ADDRESS_MAGIC || address->host_address == NULL || address->host_name == NULL) {
+                if (address->magic != JAVAN_INET_ADDRESS_MAGIC
+                    || address->host_address == NULL
+                    || address->host_name == NULL
+                    || address->canonical_host_name == NULL) {
                     javan_panic("invalid runtime inet address metadata");
                 }
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_INET_SOCKET_ADDRESS) {
@@ -4885,6 +4896,7 @@ final class RuntimeSourceMemorySections {
                 if (address != NULL && address->magic == JAVAN_INET_ADDRESS_MAGIC) {
                     javan_gc_mark_value((void*) address->host_address);
                     javan_gc_mark_value((void*) address->host_name);
+                    javan_gc_mark_value((void*) address->canonical_host_name);
                 }
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_INET_SOCKET_ADDRESS) {
                 javan_inet_socket_address* address = (javan_inet_socket_address*) value;

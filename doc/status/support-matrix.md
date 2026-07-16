@@ -9,8 +9,8 @@ External project names do not belong in this matrix; this ledger stays compiler-
 
 | Measure | Count |
 | --- | ---: |
-| rows | 126 |
-| pass | 126 |
+| rows | 136 |
+| pass | 136 |
 | scoped | 0 |
 | target | 0 |
 | rejected | 0 |
@@ -109,9 +109,12 @@ Status mapping:
 | `network-address-runtime` | pass |
 | `network-inetaddress-get-by-name-literal-host` | pass |
 | `network-inetaddress-get-all-by-name-literal-host` | pass |
+| `network-inetaddress-byte-address` | pass |
+| `network-inetaddress-named-byte-address` | pass |
 | `network-tcp-client-socket` | pass |
 | `network-tcp-client-socket-ipv6-loopback` | pass |
 | `network-tcp-client-socket-address` | pass |
+| `network-tcp-client-socket-local-bind` | pass |
 | `network-tcp-server-socket` | pass |
 | `network-tcp-server-socket-backlog` | pass |
 | `network-tcp-server-socket-bind-address` | pass |
@@ -124,8 +127,15 @@ Status mapping:
 | `network-tcp-socket-reuse-address` | pass |
 | `network-tcp-socket-receive-buffer` | pass |
 | `network-tcp-socket-send-buffer` | pass |
+| `network-tcp-socket-so-linger` | pass |
+| `network-tcp-socket-oob-inline` | pass |
+| `network-tcp-socket-traffic-class` | pass |
+| `network-tcp-socket-bound-state` | pass |
+| `network-tcp-socket-input-shutdown-state` | pass |
+| `network-tcp-socket-output-shutdown-state` | pass |
 | `network-tcp-socket-timeout-round-trip` | pass |
 | `network-tcp-socket-read-timeout-boundary` | pass |
+| `network-tcp-server-socket-bound-state` | pass |
 | `network-tcp-server-socket-local-socket-address` | pass |
 | `network-tcp-server-socket-receive-buffer` | pass |
 | `network-tcp-server-socket-timeout-round-trip` | pass |
