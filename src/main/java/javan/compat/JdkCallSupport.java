@@ -220,6 +220,7 @@ public final class JdkCallSupport {
         runtime("Collections.singletonMap", "java/util/Collections", "singletonMap", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;"),
         runtime("Collections.emptyMap", "java/util/Collections", "emptyMap", "()Ljava/util/Map;"),
         runtime("Map.of", "java/util/Map", "of", "()Ljava/util/Map;"),
+        runtime("Map.of", "java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;"),
         intrinsic(
             "Arrays.copyOf",
             "java/util/Arrays",

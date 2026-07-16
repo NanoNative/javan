@@ -193,6 +193,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void mapOfSingletonIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Map",
+            "of",
+            "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;"
+        ))).isTrue();
+    }
+
+    @Test
     void stringHashCodeIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/String",

@@ -8729,6 +8729,27 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersMapOfSingletonToRuntimeHelper() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeStatic(2, new MethodRef("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;")),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(
+                IrExpression.objectCall("javan_map_singleton", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
+            )
+        );
+    }
+
+    @Test
     void lowersBooleanEqualsToRuntimeHelper() {
         final IrFunction function = lowerMain(method(
             0x0008,
