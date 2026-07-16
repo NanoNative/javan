@@ -218,10 +218,73 @@ Current gates:
 
 Open acceptance criteria:
 
-- native `ClassLoader.getResource*` and `getResourceAsStream` runtime API
-- generated C resource tables for embedded read-only resources
-- resource lookup ABI for native library consumers
-- resource compression and checksum reporting
+- zero-registration resource discovery across application outputs and resolved dependency
+  directories/jars, in deterministic classpath order; no user-authored resource configuration
+  file is part of the product contract
+- an ordered resource index records normalized names, origins, sizes, checksums, duplicates,
+  and classpath shadowing before native code generation. Filesystem symlinks are resolved and
+  flattened at build time: the link path remains the logical resource name, target file bytes or
+  directory descendants are indexed beneath that name, and no symlink identity reaches the
+  packaged artifact. Resolution is cycle-safe and records the logical path, link path, resolved
+  source, and checksum; dangling, cyclic, unreadable, or non-file/non-directory targets fail with
+  a stable diagnostic. Targets outside declared resource roots are allowed with a provenance
+  warning and participate fully in build fingerprints. Distinct logical aliases of the same real
+  target are retained independently; cycle detection follows the active traversal chain instead
+  of globally deduplicating resolved targets
+- virtual directories are synthesized from indexed descendants, and empty directories exist only
+  when an explicit directory entry is present and retained
+- reachable constant and finite-set lookups through `Class.getResource*`,
+  `ClassLoader.getResource*`, and `Module.getResourceAsStream` retain exactly the matching
+  resources, including requested `.class` entries, while preserving package-relative, absolute,
+  module, first-match `getResource`, all-match `getResources`, and classpath-order rules
+- `META-INF/**` participates in the same index and standard lookup rules as every other resource.
+  Acceptance covers `Class.getResource*("/META-INF/...")`,
+  `ClassLoader.getResource*("META-INF/...")`, and module lookup, plus immutable `Files`/`Path`/
+  `File` reads and synthesized directory listings when resource intent is proven.
+  `META-INF/services` remains both readable resource data and service-provider metadata.
+  `META-INF/MANIFEST.MF` exposes the effective bytes for each origin after documented Javan
+  synthesis or merging; signature entries remain opaque readable bytes, without claiming native
+  signature verification or that embedding them signs the executable
+- reachable directory enumeration retains the matching descendants; a genuinely unbounded name
+  retains the finite resolved resource universe with a warning and complete size report instead
+  of requesting registration
+- generated C tables provide embedded read-only bytes, lookup/enumeration metadata, streams,
+  URLs, and a resource lookup ABI for native library consumers
+- statically proven resource intent through `Path` and `File` is redirected automatically to a
+  read-only resource view. Proof starts with known resource source roots or standard resource
+  lookup results and propagates through assignments, casts, supported calls, branches, finite
+  `Path.of`, `File`, URL/URI conversion, `resolve`, and normalization flows. The resulting runtime
+  value remains tagged as resource-backed; `..` escape is rejected, unproven paths keep normal
+  filesystem semantics, and a coincidental matching basename is never enough
+- finite mixed resource/host flows preserve both identities and dispatch on the runtime tag; if
+  an operation cannot preserve that distinction it fails at build time. Host-file existence never
+  chooses the mode: proven resource intent wins for supported reads, while unproven intent remains
+  normal filesystem access even when an indexed resource has the same name
+- the read-only resource view covers immutable byte/text/stream reads, existence/type/size
+  queries, and directory listing/walking through the supported `Files`, `Path`, and `File` APIs
+- `Path.toFile` and `File.toPath` preserve the resource tag. Resource URL/URI conversion must use
+  an explicit resource identity rather than masquerading as `file:`; canonical/real paths,
+  host-filesystem identity, and cross-filesystem path resolution/comparison remain rejected until
+  separately specified
+- every automatic filesystem-to-resource redirect emits a build warning and report entry with
+  the source call site, original path flow, selected resource origin, and JVM/jar semantic
+  difference
+- a flattened build-input link appears as an ordinary read-only file or directory at runtime:
+  `Files.isSymbolicLink` returns false and `Files.readSymbolicLink` throws `NotLinkException`.
+  Writes, deletes, moves, link creation, watches, locks, memory mapping, permission
+  changes, and other host-filesystem-only operations on a proven resource path fail at build time
+  with a stable diagnostic, or deterministically at runtime when only tagged runtime provenance
+  is available. Copying an embedded resource out to a writable filesystem path may be supported
+  as explicit materialization; mutation of the embedded resource may not
+- acceptance proves standard `Class`, `ClassLoader`, and `Module` lookups return indexed bytes and
+  classpath precedence from plain class output, packaged jars, and native executables, including
+  dependency-jar resources and duplicate names. Resources unchanged by packaging have equivalent
+  bytes across corresponding JVM and native forms; artifact-owned metadata such as an effective
+  manifest is checked against its documented artifact-specific bytes. Native-only `Path`/`File`
+  adaptation, nested listings, and unsupported mutation diagnostics are verified separately and
+  always report the deliberate JVM/jar semantic difference; native listing order is a
+  deterministic Javan contract, not a claim about unspecified JVM/jar enumeration order
+- deterministic resource compression and checksum reporting
 
 ## 0.285 Memory And Runtime Correctness
 
@@ -286,8 +349,9 @@ Reports:
 
 ## 0.295 CLI UX Consolidation
 
-Status: Partial. The CLI/reporting slice is implemented; build-plugin and
-artifact-layout acceptance criteria remain open.
+Status: Partial. The CLI/reporting slice is implemented; attached execution,
+runtime-input, incremental-reuse, build-plugin, and artifact-layout acceptance criteria
+remain open.
 
 Goal:
 
@@ -304,7 +368,8 @@ Implemented details:
 - keep `--kind app|jar|staticlib|sharedlib` as a stable advanced interface or compatibility
   alias
 - add `--format static|shared|both`
-- keep app runtime arguments behind `--`, for example `javan run . -- Alice 42`
+- pass ordinary non-option app arguments after an explicit target, for example
+  `javan run . Alice 42`; keep `--` as the unambiguous boundary for option-shaped arguments
 - detect class directories and jars as already-built inputs without a special reuse flag
 - add one bounded `javan report` reader over existing `.javan/reports` files; feature
   tracks add diagnostics and sections to that model, not new public report/check commands
@@ -321,10 +386,82 @@ Current gates:
 - generated report files remain stable even when CLI presentation changes
 - "easy" commands may infer; reports must say exactly what was inferred
 
-Open acceptance criteria:
+Open core Javan acceptance criteria:
 
 - make app and library builds produce all cheap useful artifacts into predictable
   subfolders; users should not have to choose internal artifact kinds when the cost is low
+- make `javan run` an attached process: stream stdin/stdout/stderr live, preserve stderr as
+  stderr, forward interruption and termination, return the child exit code, and impose no default
+  application timeout. Bounded capture remains appropriate for build subprocesses
+- launch `javan run` from the detected project root so `user.dir` and relative paths match normal
+  project execution; a directly launched native binary continues to use its caller's working
+  directory
+- when no target is supplied, search parents for the nearest unambiguous Javan, Maven, Gradle, or
+  plain source project root and report the inference. An explicit target always wins; competing
+  roots at the same level fail clearly instead of relying on marker order
+- make parsing command-aware: unknown commands fail with typo suggestions, every command supports
+  focused `--help`, irrelevant options and trailing arguments fail, conflicting artifact selectors
+  fail, and tokens after the app-argument `--` boundary are never interpreted by Javan
+- for `run`, interpret Javan options and generated-launcher inputs only until the first ordinary
+  app token after the optional target; that token implicitly starts `main(String[])` arguments and
+  everything following it is literal. An explicit `--` starts app arguments when the first one is
+  option-shaped or when the project root is inferred, for example `javan run -- Alice`
+- support compiler-derived startup properties without requiring `-D` on every value. Generated
+  native launchers accept Java-compatible leading `-Dkey` or `-Dkey=value` and a friendly
+  `--properties key=value... --` zone ending at an exact standalone `--` or end of input; every
+  token inside the zone must be a valid assignment, and an ordinary token is an error rather than
+  an implicit app-argument boundary. `javan run` accepts the same forms, consumes them before
+  `main(String[])`, and preserves a literal escape through the app-argument `--` boundary. Missing
+  and explicit-empty `-D` values both produce an empty string
+- never reinterpret arbitrary bare `key=value` or `--key=value` application arguments as system
+  properties. Startup assignments split at the first `=`, allow empty values, reject empty keys,
+  and use deterministic last-assignment-wins precedence
+- consume process arguments as already-tokenized `argv` values without a second quote or escape
+  parser. Each property assignment occupies one argument and preserves spaces, quote characters,
+  and additional `=` characters after the first `=`. Shell quotes group a value and are removed by
+  the shell; quote characters that survive into `argv` are literal data. As with JVM and native
+  process arguments generally, a NUL character cannot be represented
+- analyze reachable `System.getProperty` and `System.getenv` calls and write
+  `.javan/reports/runtime-inputs.json` plus `.md` with constant/finite/dynamic keys, defaults, call
+  sites, and requiredness only when it is provable. Supplied values and secrets never enter reports
+- for a finite property-key set, reject unknown friendly-zone keys with typo suggestions; a
+  reachable dynamic property key enables arbitrary startup properties and is reported as dynamic.
+  Java-compatible `-D` accepts any non-empty key even when unused. Environment variables remain a
+  separate input channel and are never silently promoted to properties. Mutable
+  `System.setProperty`, `clearProperty`, and `getProperties` semantics remain a separate
+  compatibility decision
+- consolidate Javan-owned runtime switches into the bounded launcher preamble or an out-of-band
+  channel so profiling and diagnostics cannot consume a legitimate application argument
+- reuse native outputs when a deterministic fingerprint of class/resource bytes, ordered
+  dependencies, build options, target, and compiler/runtime identity is unchanged. Cache hits and
+  misses report the reused stages and exact invalidation reason; uncertain state rebuilds instead
+  of risking a stale binary
+
+Planned launcher examples:
+
+```sh
+javan run . Alice 42
+javan run -- Alice 42
+javan run . -- --port 8080
+javan run . -Dmode=prod input.txt
+javan run . --properties mode=prod server.port=8080 -- input.txt
+javan run . input.txt -Dmode=prod
+javan run . -- --properties mode=prod
+.javan/bin/app --properties mode=prod -- input.txt
+javan run . "Alice Smith" 42
+javan run . -- --message "hello world"
+javan run . -Dmessage="hello world" input.txt
+javan run . --properties 'display.name=Alice Smith' 'url=https://example.test/?a=b' empty= -- input.txt
+javan run . --properties 'message=He said "hello"' -- input.txt
+```
+
+The sixth form passes `-Dmode=prod` literally because `input.txt` already started app arguments;
+the seventh passes `--properties mode=prod` literally through the explicit boundary. In the
+quoted forms, the shell passes each grouped value as one argument; the URL is split only at its
+first `=`, and the double quotes inside the final single-quoted value remain part of that value.
+
+Open external-integration acceptance criteria:
+
 - make build plugins expose normal plugin configuration instead of requiring users to pass
   Maven `-D...` properties for ordinary app arguments
 
@@ -332,6 +469,8 @@ Rules:
 
 - no hidden behavior changes based only on filename
 - every alias maps to one explicit internal build plan
+- launcher-owned arguments are consumed only inside the documented preamble; after the app
+  boundary, bytes belong to `main(String[])`
 - generated report files remain stable even when CLI presentation changes
 - "easy" commands may infer; reports must say exactly what was inferred
 - JSON and Markdown reports stay on disk for humans, CI, IDEs, and build plugins
@@ -778,15 +917,101 @@ collections, JSON without reflection, file IO, and HTTP runtime.
 
 Reflection strategy:
 
-- arbitrary reflection, runtime scanning, dynamic class loading, proxies, `setAccessible`,
-  and custom class loaders remain rejected when reachable
-- limited reflection can be supported later only when it is closed-world and explicit:
-  class literals, constant-string `Class.forName`, class/method/constructor metadata for
-  known classes, and generated invocation tables for statically known targets
-- reflection metadata must be linked only when reachable or explicitly requested
-- every reflected target must appear in reports with size impact and source provenance
-- dynamic or data-dependent reflection that cannot be resolved at build time must fail
-  with a stable diagnostic rather than silently generating a broken binary
+- Javan generates its own closed-world reflection plan; developers do not maintain
+  `reflection.json` or equivalent registration files
+- class literals, constant and finite-set `Class.forName`, constant member lookups, and finite
+  receiver-class flows are resolved automatically from reachable bytecode. Constant reflection
+  must work without annotations or configuration, and `ldc` class constants feed the same finite
+  class-value analysis
+- arbitrary runtime class definition/loading, custom class loaders, runtime bytecode generation,
+  unbounded proxies, instrumentation, `setAccessible`, reflective field mutation, and loader flows
+  that may introduce classes from outside the resolved build classpath remain rejected when
+  reachable
+
+Build-time metadata acceptance criteria:
+
+- retain one deterministic class index for names, access flags, hierarchy, interfaces, member
+  signatures, and classpath origin instead of reparsing partial, inconsistent models
+- stop discarding reflection-relevant classfile attributes. Decode class, field, method,
+  parameter, and type annotations (including values and defaults), generic signatures, declared
+  exceptions, method parameters, inner/enclosing and nest metadata, record components, and
+  permitted subclasses as their supported reflection APIs require them
+- preserve Java retention, inheritance, and repeatable-annotation rules: runtime-invisible
+  annotations may inform build-only analysis but must not become visible through standard Java
+  reflection; nested annotations and array, enum, class-literal, primitive, and string values
+  retain their declared types
+- value-bearing standard reflection returns generated immutable annotation implementations, not
+  dynamic proxies. Acceptance covers `annotationType`, defaults, nested/array values, repeatable
+  containers, `@Inherited`, `equals`, `hashCode`, `toString`, defensive array returns, and the
+  standard missing-type, missing-enum, incomplete, and type-mismatch failures
+- select emitted metadata by the intersection of reachable operation, finite receiver-class set,
+  and requested capability: identity/name, hierarchy, annotation presence, annotation values,
+  member descriptors, or invocation. Classpath-wide subtype or annotation queries may inspect
+  the closed-world index, but emit only their results and the payloads actually read at runtime
+- expand reflection queries to a fixed point with ordinary reachability. A reflected method body
+  becomes executable reachability only when construction or invocation is reachable; metadata
+  inspection alone must not retain method bodies or trigger class initialization
+- make lazy, once-only class initialization a prerequisite for runtime reflection: class literals
+  and metadata reads do not initialize a class, while the initializing `Class.forName` overload
+  and reflective invocation do when Java requires it
+- preserve lookup failures at runtime: a missing closed-world class/member produces the applicable
+  `ClassNotFoundException`, `NoSuchMethodException`, or `NoSuchFieldException`, not a build error.
+  The supported one- and three-argument `Class.forName` forms preserve the initialization flag and
+  accept only statically known bootstrap/application loader identities
+- every retained target and capability appears in deterministic reflection reports with its
+  source call site, inference path, reason, exact emitted metadata/thunk bytes, and an attributed
+  executable-size estimate whose method is reported. Machine-readable output is compiler evidence,
+  not developer input
+- when a data-dependent name cannot be reduced further, retain the requested capability across
+  the finite resolved closed world with a warning and complete size report when that preserves
+  exact semantics. Fail with a stable diagnostic only when an open-world loader/class-definition
+  flow is reachable or the requested operation itself is unsupported; never suggest a handwritten
+  JSON escape hatch
+
+Staged runtime surface:
+
+1. Read-only class metadata: identity, names, modifiers, hierarchy/assignability, enums, arrays,
+   annotation presence, and declared/public field, method, and constructor descriptors for finite
+   classes.
+2. Value-bearing annotations through the generated immutable annotation contract above.
+3. Closed-world lookup queries: exact name/signature lookups plus subtype and annotation result
+   sets derived from the resolved classpath index. Because Java has no standard “all subtypes” or
+   “all annotated classes” API, this requires a separately specified query surface or recognized
+   adapter and does not promise compatibility with arbitrary classpath-scanner libraries.
+4. Reflective method invocation as a non-hot-path side project: generate typed invocation thunks
+   only for a finite target set and preserve access checks, argument conversion, boxing/unboxing,
+   varargs, virtual dispatch, class initialization, return conversion, and
+   `InvocationTargetException`. Invocation sites and retained code size are reported; no private
+   access bypass or fake partial semantics is accepted.
+5. Constructor invocation and read-only field access follow only after their Java semantics and
+   reachability effects have equivalent acceptance coverage; field mutation remains rejected
+   unless a separate roadmap decision defines a safe need and complete semantics.
+6. Optional build-only hints such as `@JavanReflect` may later live in a separate companion
+   library for the rare bounded target set that bytecode analysis cannot infer. Hints are not
+   required for constant calls, cannot authorize unsupported behavior, and do not replace
+   automatic analysis with registrations.
+
+Service-loading strategy:
+
+- resolve reachable `ServiceLoader.load` calls from the same closed-world class/resource index;
+  developers do not maintain separate reflection or resource registrations for service providers
+- honor standard `META-INF/services` entries and module `provides ... with ...` declarations,
+  preserving specified declaration/classpath order and Java-compatible duplicate suppression;
+  where cross-module order is unspecified, use and report one deterministic Javan order. Do not
+  silently register every concrete subtype because that would change `ServiceLoader` semantics
+- constant and finite service classes retain exactly their declared providers. A data-dependent
+  service class may retain the finite declared service universe with a warning and size report when
+  semantics remain exact; unsupported custom loader or module-layer behavior fails clearly
+- provider descriptors are metadata reachability; provider constructors, static `provider()`
+  methods, and implementation bodies become executable reachability only when the supported
+  iteration/instantiation path requires them
+- preserve lazy provider creation, provider ordering, reload over the immutable native provider
+  table, validation, and `ServiceConfigurationError` behavior before claiming runtime support
+- report every service, declaration origin, selected provider, duplicate, lookup site,
+  reachability reason, and retained size. An undeclared service yields an empty loader; malformed
+  declarations or missing referenced provider classes receive source-oriented diagnostics and
+  preserve `ServiceConfigurationError` at the supported lazy access point rather than failing as a
+  linker or startup accident
 
 ## Flagship: Javan Studio With JavanUI
 
