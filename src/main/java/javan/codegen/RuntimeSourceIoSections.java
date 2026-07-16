@@ -510,13 +510,14 @@ final class RuntimeSourceIoSections {
             }
             javan_uri_value* uri = javan_uri_checked((void*) request->uri);
             javan_http_body_publisher_value* body_publisher = request->body == NULL ? NULL : javan_http_body_publisher_checked(request->body);
-            struct sockaddr_in address;
-            javan_socket_host_checked(uri->host, &address, uri->port);
-            int fd = socket(AF_INET, SOCK_STREAM, 0);
+            struct sockaddr_storage address;
+            socklen_t address_length = 0;
+            javan_socket_host_checked(uri->host, &address, &address_length, uri->port);
+            int fd = socket(((struct sockaddr*) &address)->sa_family, SOCK_STREAM, 0);
             if (fd < 0) {
                 javan_panic("http socket open failed");
             }
-            if (connect(fd, (struct sockaddr*) &address, sizeof(address)) != 0) {
+            if (connect(fd, (struct sockaddr*) &address, address_length) != 0) {
                 javan_socket_native_close(fd);
                 javan_panic("http connect failed");
             }

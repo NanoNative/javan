@@ -387,6 +387,8 @@ public final class CompatibilityReports {
     private static String supportMatrixMarkdown(final int feature) {
         final StringBuilder markdown = new StringBuilder("# javan Support Matrix\n\n");
         markdown.append("This matrix tracks named javan/JDK behavior scenarios. It is not a claim that every class or method in the scanned JDK is native-supported.\n\n");
+        markdown.append("Real external project probes are tracked separately in `doc/status/real-project-readiness.md`.\n");
+        markdown.append("External project names do not belong in this matrix; this ledger stays compiler-owned and deterministic.\n\n");
         final List<SupportRow> rows = supportRows();
         markdown.append("## Current Counts\n\n");
         markdown.append("| Measure | Count |\n");
@@ -499,7 +501,9 @@ public final class CompatibilityReports {
             pass("owned-buffer-realloc-validation"),
             pass("stringbuilder-setlength-overflow-panic"),
             pass("network-address-runtime"),
+            pass("network-inetaddress-get-by-name-literal-host"),
             pass("network-tcp-client-socket"),
+            pass("network-tcp-client-socket-ipv6-loopback"),
             pass("network-tcp-client-socket-address"),
             pass("network-tcp-server-socket"),
             pass("network-tcp-socket-stream-io"),
@@ -629,6 +633,8 @@ public final class CompatibilityReports {
             .append("| flow-qualified reachable executor receiver-shape rejects | ").append(flowQualifiedRejected.reachableExecutorReceiverShape()).append(" |\n")
             .append("| flow-qualified unreachable executor receiver-shape rejects | ").append(flowQualifiedRejected.unreachableExecutorReceiverShape()).append(" |\n")
             .append("| flow-qualified rejected JDK call shapes total | ").append(flowQualifiedRejected.total()).append(" |\n\n")
+            .append("This ledger excludes external example or library probes. Those stay in `doc/status/real-project-readiness.md`\n")
+            .append("and never define a supported JDK member count.\n\n")
             .append("Release-gated JDKs must report:\n\n")
             .append("```text\n")
             .append("done = supported variants + rejected variants\n")

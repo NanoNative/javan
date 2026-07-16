@@ -8,6 +8,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -76,12 +78,12 @@ final class CompatibilityReportsTest {
         assertThat(summary).contains(
             "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 5, \"leftCallables\": 3, \"coveragePercent\": \"40.0\"}",
             "\"exactJdkCallableAccounting\": {\"supportedCallables\": 2, \"explicitRejectedCallables\": 3, \"doneCallables\": 5, \"unknownCallables\": 0, \"totalCallables\": 5, \"donePercent\": \"100.0\"}",
-            "\"supportRows\": 106",
-            "\"passRows\": 106",
+            "\"supportRows\": 108",
+            "\"passRows\": 108",
             "\"scopedRows\": 0",
             "\"targetRows\": 0",
             "\"rejectedRows\": 0",
-            "\"accountedRows\": 106",
+            "\"accountedRows\": 108",
             "\"unaccountedRows\": 0"
         );
     }
@@ -101,6 +103,8 @@ final class CompatibilityReportsTest {
         final String json = Files.readString(tempDir.resolve("doc/status/support-matrix.json"));
 
         assertThat(matrix).contains(
+            "Real external project probes are tracked separately in `doc/status/real-project-readiness.md`.",
+            "External project names do not belong in this matrix; this ledger stays compiler-owned and deterministic.",
             "| `try-catch` | pass |",
             "| `try-finally` | pass |",
             "| `boxed-primitive-gc` | pass |",
@@ -121,7 +125,9 @@ final class CompatibilityReportsTest {
             "| `list-of-varargs-gc` | pass |",
             "| `owned-buffer-realloc-validation` | pass |",
             "| `network-address-runtime` | pass |",
+            "| `network-inetaddress-get-by-name-literal-host` | pass |",
             "| `network-tcp-client-socket` | pass |",
+            "| `network-tcp-client-socket-ipv6-loopback` | pass |",
             "| `network-tcp-client-socket-address` | pass |",
             "| `network-tcp-server-socket` | pass |",
             "| `network-tcp-socket-stream-io` | pass |",
@@ -159,7 +165,9 @@ final class CompatibilityReportsTest {
             "\"feature\": \"string-intrinsics\"",
             "\"feature\": \"library-c-result-wrapper-success\"",
             "\"feature\": \"network-address-runtime\"",
+            "\"feature\": \"network-inetaddress-get-by-name-literal-host\"",
             "\"feature\": \"network-tcp-client-socket\"",
+            "\"feature\": \"network-tcp-client-socket-ipv6-loopback\"",
             "\"feature\": \"network-tcp-client-socket-address\"",
             "\"feature\": \"network-tcp-server-socket\"",
             "\"feature\": \"network-tcp-socket-stream-io\"",
@@ -185,6 +193,35 @@ final class CompatibilityReportsTest {
             "\"feature\": \"network-http-rejection\"",
             "\"feature\": \"network-runtime-feature-reporting\""
         );
+        assertExcludesExternalProbeProjectNames(matrix);
+        assertExcludesExternalProbeProjectNames(json);
+    }
+
+    @Test
+    void writeJdkCompatibilityLedgerStaysIndependentOfExternalProbeNames() throws Exception {
+        new CompatibilityReports().write(
+            tempDir,
+            tempDir.resolve(".javan"),
+            List.of(metadata("", "com/acme/Main")),
+            List.of(metadata("java.base", "java/lang/Object")),
+            List.of()
+        );
+
+        final String compatibility = Files.readString(tempDir.resolve("doc/status/jdk-compatibility.md"));
+
+        assertThat(compatibility).contains(
+            "This ledger excludes external example or library probes.",
+            "and never define a supported JDK member count."
+        );
+        assertExcludesExternalProbeProjectNames(compatibility);
+    }
+
+    @Test
+    void externalProbeIdentityAssertionsAreMetadataDriven() throws Exception {
+        assertThat(externalProbeProjectNames())
+            .isNotEmpty()
+            .doesNotHaveDuplicates()
+            .allSatisfy(project -> assertThat(project).isNotBlank());
     }
 
     @Test
@@ -493,6 +530,34 @@ final class CompatibilityReportsTest {
                 System.setProperty("java.version", previous);
             }
         }
+    }
+
+    private static void assertExcludesExternalProbeProjectNames(final String content) throws Exception {
+        assertThat(content).doesNotContain(externalProbeProjectNames().toArray(String[]::new));
+    }
+
+    private static List<String> externalProbeProjectNames() throws Exception {
+        try (Stream<Path> paths = Files.list(Path.of("src/test/resources/projects/real-probes"))) {
+            return paths
+                .filter(Files::isDirectory)
+                .sorted()
+                .map(CompatibilityReportsTest::externalProbeProjectName)
+                .toList();
+        }
+    }
+
+    private static String externalProbeProjectName(final Path directory) {
+        final Properties properties = new Properties();
+        try (var reader = Files.newBufferedReader(directory.resolve("probe.properties"))) {
+            properties.load(reader);
+        } catch (final Exception exception) {
+            throw new IllegalStateException("Unable to load external probe metadata from " + directory, exception);
+        }
+        final String project = properties.getProperty("project");
+        if (project == null || project.isBlank()) {
+            throw new IllegalStateException("Missing probe property: project in " + directory);
+        }
+        return project;
     }
 
     @FunctionalInterface

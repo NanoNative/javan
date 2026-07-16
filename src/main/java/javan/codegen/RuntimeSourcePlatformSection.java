@@ -1047,6 +1047,81 @@ final class RuntimeSourcePlatformSection {
             return javan_inet_address_new("127.0.0.1", "localhost");
         }
 
+        static int javan_inet_address_is_ipv6_loopback(const unsigned char* bytes) {
+            int index = 0;
+            while (index < 15) {
+                if (bytes[index] != 0) {
+                    return 0;
+                }
+                index++;
+            }
+            return bytes[15] == 1 ? 1 : 0;
+        }
+
+        static void javan_inet_address_format_ipv6(const unsigned char* bytes, char* host_address, unsigned long host_address_size) {
+            int written = snprintf(
+                host_address,
+                host_address_size,
+                "%x:%x:%x:%x:%x:%x:%x:%x",
+                (((unsigned int) bytes[0]) << 8) | ((unsigned int) bytes[1]),
+                (((unsigned int) bytes[2]) << 8) | ((unsigned int) bytes[3]),
+                (((unsigned int) bytes[4]) << 8) | ((unsigned int) bytes[5]),
+                (((unsigned int) bytes[6]) << 8) | ((unsigned int) bytes[7]),
+                (((unsigned int) bytes[8]) << 8) | ((unsigned int) bytes[9]),
+                (((unsigned int) bytes[10]) << 8) | ((unsigned int) bytes[11]),
+                (((unsigned int) bytes[12]) << 8) | ((unsigned int) bytes[13]),
+                (((unsigned int) bytes[14]) << 8) | ((unsigned int) bytes[15])
+            );
+            if (written < 0 || (unsigned long) written >= host_address_size) {
+                javan_panic("inet6 address conversion failed");
+            }
+        }
+
+        static void javan_inet_address_host_checked(const char* host, char* host_address, unsigned long host_address_size, int* loopback_out) {
+            struct sockaddr_in address;
+            struct in6_addr address6;
+            const char* host_value = host == NULL ? "localhost" : host;
+            if (loopback_out != NULL) {
+                *loopback_out = 0;
+            }
+            memset(&address, 0, sizeof(address));
+            if (strcmp(host_value, "localhost") == 0) {
+                if (loopback_out != NULL) {
+                    *loopback_out = 1;
+                }
+                snprintf(host_address, host_address_size, "%s", "127.0.0.1");
+                return;
+            }
+            address.sin_family = AF_INET;
+            if (inet_pton(AF_INET, host_value, &address.sin_addr) == 1) {
+                if (inet_ntop(AF_INET, (const void*) &address.sin_addr, host_address, (socklen_t) host_address_size) == NULL) {
+                    javan_panic("inet address conversion failed");
+                }
+                if (loopback_out != NULL && strcmp(host_address, "127.0.0.1") == 0) {
+                    *loopback_out = 1;
+                }
+                return;
+            }
+            memset(&address6, 0, sizeof(address6));
+            if (inet_pton(AF_INET6, host_value, &address6) == 1) {
+                javan_inet_address_format_ipv6((const unsigned char*) &address6, host_address, host_address_size);
+                if (loopback_out != NULL && javan_inet_address_is_ipv6_loopback((const unsigned char*) &address6) != 0) {
+                    *loopback_out = 1;
+                }
+                return;
+            }
+            javan_panic("unsupported inet address host");
+        }
+
+        void* javan_inet_address_get_by_name(void* host) {
+            const char* host_value = host == NULL ? "localhost" : (const char*) host;
+            char host_address[64];
+            int loopback = 0;
+            javan_inet_address_host_checked(host_value, host_address, sizeof(host_address), &loopback);
+            const char* host_name = loopback != 0 ? "localhost" : host_address;
+            return javan_inet_address_new(host_address, host_name);
+        }
+
         void* javan_inet_address_get_host_address(void* value) {
             return javan_inet_address_checked(value)->host_address;
         }
@@ -1168,46 +1243,87 @@ final class RuntimeSourcePlatformSection {
             javan_panic("tcp sockets are not supported on this host yet");
         }
 
-        static void javan_socket_host_checked(const char* host, struct sockaddr_in* address, int port) {
+        static void javan_socket_host_checked(const char* host, struct sockaddr_storage* address, socklen_t* address_length, int port) {
             if (port < 0 || port > 65535) {
                 javan_panic("socket port out of range");
             }
             memset(address, 0, sizeof(*address));
-            address->sin_family = AF_INET;
-            address->sin_port = htons((unsigned short) port);
             if (host == NULL || strcmp(host, "localhost") == 0) {
-                address->sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+                struct sockaddr_in* address4 = (struct sockaddr_in*) address;
+                address4->sin_family = AF_INET;
+                address4->sin_port = htons((unsigned short) port);
+                address4->sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+                *address_length = sizeof(*address4);
                 return;
             }
-            if (inet_pton(AF_INET, host, &address->sin_addr) != 1) {
-                javan_panic("unsupported socket host");
+            {
+                struct sockaddr_in* address4 = (struct sockaddr_in*) address;
+                address4->sin_family = AF_INET;
+                address4->sin_port = htons((unsigned short) port);
+                if (inet_pton(AF_INET, host, &address4->sin_addr) == 1) {
+                    *address_length = sizeof(*address4);
+                    return;
+                }
             }
+            {
+                struct sockaddr_in6* address6 = (struct sockaddr_in6*) address;
+                address6->sin6_family = AF_INET6;
+                address6->sin6_port = htons((unsigned short) port);
+                if (inet_pton(AF_INET6, host, &address6->sin6_addr) == 1) {
+                    *address_length = sizeof(*address6);
+                    return;
+                }
+            }
+            javan_panic("unsupported socket host");
         }
 
-        static void* javan_inet_address_from_sockaddr(const struct sockaddr_in* address) {
-            char host[INET_ADDRSTRLEN];
-            if (inet_ntop(AF_INET, (const void*) &address->sin_addr, host, sizeof(host)) == NULL) {
-                javan_panic("socket address conversion failed");
+        static void* javan_inet_address_from_sockaddr(const struct sockaddr* address) {
+            if (address->sa_family == AF_INET) {
+                const struct sockaddr_in* address4 = (const struct sockaddr_in*) address;
+                char host[INET_ADDRSTRLEN];
+                if (inet_ntop(AF_INET, (const void*) &address4->sin_addr, host, sizeof(host)) == NULL) {
+                    javan_panic("socket address conversion failed");
+                }
+                const char* name = strcmp(host, "127.0.0.1") == 0 ? "localhost" : host;
+                return javan_inet_address_new(host, name);
             }
-            const char* name = strcmp(host, "127.0.0.1") == 0 ? "localhost" : host;
-            return javan_inet_address_new(host, name);
+            if (address->sa_family == AF_INET6) {
+                const struct sockaddr_in6* address6 = (const struct sockaddr_in6*) address;
+                char host[64];
+                javan_inet_address_format_ipv6((const unsigned char*) &address6->sin6_addr, host, sizeof(host));
+                const char* name = javan_inet_address_is_ipv6_loopback((const unsigned char*) &address6->sin6_addr) != 0 ? "localhost" : host;
+                return javan_inet_address_new(host, name);
+            }
+            javan_panic("unsupported socket address family");
+            return NULL;
+        }
+
+        static int javan_socket_port_from_sockaddr(const struct sockaddr* address) {
+            if (address->sa_family == AF_INET) {
+                return (int) ntohs(((const struct sockaddr_in*) address)->sin_port);
+            }
+            if (address->sa_family == AF_INET6) {
+                return (int) ntohs(((const struct sockaddr_in6*) address)->sin6_port);
+            }
+            javan_panic("unsupported socket address family");
+            return 0;
         }
 
         static void javan_socket_populate_names(int fd, void** local_address_out, int* local_port_out, void** remote_address_out, int* remote_port_out) {
-            struct sockaddr_in local_address;
+            struct sockaddr_storage local_address;
             socklen_t local_length = sizeof(local_address);
             if (getsockname(fd, (struct sockaddr*) &local_address, &local_length) != 0) {
                 javan_panic("socket local address lookup failed");
             }
-            struct sockaddr_in remote_address;
+            struct sockaddr_storage remote_address;
             socklen_t remote_length = sizeof(remote_address);
             if (getpeername(fd, (struct sockaddr*) &remote_address, &remote_length) != 0) {
                 javan_panic("socket remote address lookup failed");
             }
-            *local_address_out = javan_inet_address_from_sockaddr(&local_address);
-            *remote_address_out = javan_inet_address_from_sockaddr(&remote_address);
-            *local_port_out = (int) ntohs(local_address.sin_port);
-            *remote_port_out = (int) ntohs(remote_address.sin_port);
+            *local_address_out = javan_inet_address_from_sockaddr((const struct sockaddr*) &local_address);
+            *remote_address_out = javan_inet_address_from_sockaddr((const struct sockaddr*) &remote_address);
+            *local_port_out = javan_socket_port_from_sockaddr((const struct sockaddr*) &local_address);
+            *remote_port_out = javan_socket_port_from_sockaddr((const struct sockaddr*) &remote_address);
         }
 
         static void* javan_socket_wrap_connected_fd(int fd) {
@@ -1355,13 +1471,14 @@ final class RuntimeSourcePlatformSection {
             return NULL;
         #else
             const char* host = host_value == NULL ? "localhost" : (const char*) host_value;
-            struct sockaddr_in address;
-            javan_socket_host_checked(host, &address, port);
-            int fd = socket(AF_INET, SOCK_STREAM, 0);
+            struct sockaddr_storage address;
+            socklen_t address_length = 0;
+            javan_socket_host_checked(host, &address, &address_length, port);
+            int fd = socket(((struct sockaddr*) &address)->sa_family, SOCK_STREAM, 0);
             if (fd < 0) {
                 javan_panic("socket open failed");
             }
-            if (connect(fd, (struct sockaddr*) &address, sizeof(address)) != 0) {
+            if (connect(fd, (struct sockaddr*) &address, address_length) != 0) {
                 javan_socket_native_close(fd);
                 javan_panic("socket connect failed");
             }
@@ -1562,7 +1679,7 @@ final class RuntimeSourcePlatformSection {
                 (void**) &local_address
             };
             javan_root_frame_push(javan_server_socket_roots, 1);
-            local_address = javan_inet_address_from_sockaddr(&bound);
+            local_address = javan_inet_address_from_sockaddr((const struct sockaddr*) &bound);
             javan_server_socket* socket = (javan_server_socket*) javan_alloc(sizeof(javan_server_socket));
             void* socket_root = (void*) socket;
             void** javan_server_socket_owner_roots[] = {

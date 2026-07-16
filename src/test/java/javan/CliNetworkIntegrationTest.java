@@ -79,6 +79,49 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void socketConnectStateIpv6BuildsAndTalksToLoopbackServer() throws Exception {
+        Assumptions.assumeTrue(ipv6LoopbackAvailable(), "IPv6 loopback is not available on this host");
+        final int port = freeTcpPort();
+        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("::1"))) {
+            final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
+                try (java.net.Socket socket = server.accept()) {
+                    socket.getOutputStream().flush();
+                } catch (final Exception exception) {
+                    throw new IllegalStateException(exception);
+                }
+            });
+            final Path project = project("socket-connect-state-ipv6");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.net.Socket;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final Socket socket = new Socket("::1", %d);
+                        System.out.println(socket.isConnected());
+                        System.out.println(socket.getPort());
+                        System.out.println(socket.getInetAddress().getHostAddress());
+                        System.out.println(socket.isClosed());
+                        socket.close();
+                        System.out.println(socket.isClosed());
+                    }
+                }
+                """.formatted(port));
+
+            final String jvmOutput = runJvm(project, "com.acme.Main");
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            assertThat(process(project, List.of(project.resolve(".javan/bin/socket-connect-state-ipv6").toString())).stdout()).isEqualTo(jvmOutput);
+            accepted.get(5, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
     void serverSocketAcceptBuildsAndAcceptsLoopbackClient() throws Exception {
         final int port = freeTcpPort();
         final Path project = project("server-socket-accept");
@@ -2075,8 +2118,51 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void inetAddressGetByNameStillFailsClearlyWhenReachable() throws Exception {
-        final Path project = project("unsupported-inet-address-get-by-name");
+    void socketInetAddressIpv6ConstructorBuildsAndReadsFromLoopbackServer() throws Exception {
+        Assumptions.assumeTrue(ipv6LoopbackAvailable(), "IPv6 loopback is not available on this host");
+        final int port = freeTcpPort();
+        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("::1"))) {
+            final CompletableFuture<Void> served = CompletableFuture.runAsync(() -> {
+                try (java.net.Socket socket = server.accept()) {
+                    socket.getOutputStream().write(65);
+                    socket.getOutputStream().flush();
+                } catch (final Exception exception) {
+                    throw new IllegalStateException(exception);
+                }
+            });
+            final Path project = project("socket-inet-address-ipv6-constructor-read-byte");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.io.InputStream;
+                import java.net.InetAddress;
+                import java.net.Socket;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final Socket socket = new Socket(InetAddress.getByName("::1"), %d);
+                        final InputStream in = socket.getInputStream();
+                        System.out.println(in.read());
+                        socket.close();
+                    }
+                }
+                """.formatted(port));
+
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            assertThat(process(project, List.of(project.resolve(".javan/bin/socket-inet-address-ipv6-constructor-read-byte").toString())).stdout())
+                .isEqualTo("65\n");
+            served.get(5, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
+    void inetAddressGetByNameIpv4LiteralBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("inet-address-get-by-name-ipv4");
         writeJava(project, "com.acme.Main", """
             package com.acme;
 
@@ -2092,14 +2178,119 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
             }
             """);
 
+        final String jvmOutput = runJvm(project, "com.acme.Main");
         final CliRun run = run(tempDir, "build", project.toString());
 
-        assertThat(run.exitCode()).isEqualTo(2);
-        assertThat(run.stderr()).contains(
-            "error[JAVAN061]",
-            "java/net/InetAddress.getByName(Ljava/lang/String;)Ljava/net/InetAddress;",
-            "network/socket"
-        );
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/inet-address-get-by-name-ipv4").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void inetAddressGetByNameLocalhostBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("inet-address-get-by-name-localhost");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.InetAddress;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final InetAddress address = InetAddress.getByName("localhost");
+                    System.out.println(address.getHostAddress());
+                    System.out.println(address.getHostName());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/inet-address-get-by-name-localhost").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void inetAddressGetByNameIpv6LoopbackBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("inet-address-get-by-name-ipv6-loopback");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.InetAddress;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final InetAddress address = InetAddress.getByName("::1");
+                    System.out.println(address.getHostAddress());
+                    System.out.println(address.getHostName());
+                    System.out.println(address.getCanonicalHostName());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/inet-address-get-by-name-ipv6-loopback").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void inetAddressGetByNameIpv6LiteralBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("inet-address-get-by-name-ipv6-literal");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.InetAddress;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final InetAddress address = InetAddress.getByName("2001:db8::1");
+                    System.out.println(address.getHostAddress());
+                    System.out.println(address.getHostName());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/inet-address-get-by-name-ipv6-literal").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void inetAddressGetByNameDnsHostFailsClearlyAtRuntime() throws Exception {
+        final Path project = project("inet-address-get-by-name-dns-runtime-fail");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.InetAddress;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    System.out.println(InetAddress.getByName("example.com").getHostAddress());
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/inet-address-get-by-name-dns-runtime-fail").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("unsupported inet address host");
     }
 
     @Test
@@ -2324,6 +2515,14 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
             "\"reachableRuntimeModules\": [\"core\", \"http\", \"network\"]",
             "\"status\": \"pass\""
         );
+    }
+
+    private static boolean ipv6LoopbackAvailable() {
+        try (java.net.ServerSocket server = new java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("::1"))) {
+            return server.getInetAddress() != null;
+        } catch (final Exception exception) {
+            return false;
+        }
     }
 
 }
