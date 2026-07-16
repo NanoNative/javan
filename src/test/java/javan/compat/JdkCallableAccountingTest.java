@@ -241,6 +241,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksSetOfEmptyAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Set", "of", "()Ljava/util/Set;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksSetOfSingletonAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Set", "of", "(Ljava/lang/Object;)Ljava/util/Set;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

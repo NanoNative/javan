@@ -202,6 +202,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void setOfEmptyIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Set",
+            "of",
+            "()Ljava/util/Set;"
+        ))).isTrue();
+    }
+
+    @Test
     void setOfSingletonIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Set",

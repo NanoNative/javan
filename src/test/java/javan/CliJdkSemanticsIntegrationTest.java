@@ -1742,6 +1742,36 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void setOfEmptyBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("set-of-empty");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Set<String> values = Set.of();
+                    System.out.println(values.isEmpty());
+                    System.out.println(values.size());
+                    System.out.println(values.contains("x"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/set-of-empty").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n0\nfalse\n");
+    }
+
+    @Test
     void setOfSingletonBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("set-of-singleton");
         writeJava(project, "com.acme.Main", """

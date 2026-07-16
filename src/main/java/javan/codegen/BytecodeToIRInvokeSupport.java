@@ -3273,6 +3273,10 @@ final class BytecodeToIRInvokeSupport {
             if (!"java/util/Set".equals(owner)) {
                 return false;
             }
+            if ("of".equals(name) && "()Ljava/util/Set;".equals(descriptor)) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_set_empty", List.of())));
+                return true;
+            }
             if (!"of".equals(name) || !"(Ljava/lang/Object;)Ljava/util/Set;".equals(descriptor)) {
                 return false;
             }
