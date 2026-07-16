@@ -87,6 +87,9 @@ final class VirtualThreadReportsTest {
             Diagnostic.error("JAVAN077", "", "", "", "Thread.ofVirtual()", "", ""),
             Diagnostic.error("JAVAN077", "", "", "", "Thread.Builder.OfVirtual.factory()", "", ""),
             Diagnostic.warning("JAVAN177", "", "", "", "Thread.Builder.OfVirtual.scheduler()", "", ""),
+            Diagnostic.error("JAVAN077", "", "", "", "Executors.newVirtualThreadPerTaskExecutor()", "", ""),
+            Diagnostic.error("JAVAN077", "", "", "", "ExecutorService.submit(Runnable)", "", ""),
+            Diagnostic.warning("JAVAN177", "", "", "", "Future.cancel(boolean)", "", ""),
             Diagnostic.error("OTHER", "", "", "", "Thread.Builder.OfVirtual.ignored()", "", "")
         );
 
@@ -105,9 +108,9 @@ final class VirtualThreadReportsTest {
             "\"unsupportedBuilderApis\": 3",
             "\"unsupportedBuilderApisReachable\": 2",
             "\"unsupportedBuilderApisUnreachable\": 1",
-            "\"unsupportedExecutorApis\": 0",
-            "\"unsupportedExecutorApisReachable\": 0",
-            "\"unsupportedExecutorApisUnreachable\": 0",
+            "\"unsupportedExecutorApis\": 3",
+            "\"unsupportedExecutorApisReachable\": 2",
+            "\"unsupportedExecutorApisUnreachable\": 1",
             "LockSupport.park()/parkNanos(long)/parkUntil(long)/unpark(Thread)"
         );
         assertThat(Files.readString(tempDir.resolve("virtual-threads.md"))).contains(
@@ -115,7 +118,7 @@ final class VirtualThreadReportsTest {
             "- reachableVirtualStartMethods: `2`",
             "- reachableIsVirtualSites: `2`",
             "- unsupportedBuilderApis: `3`",
-            "- unsupportedExecutorApis: `0`"
+            "- unsupportedExecutorApis: `3`"
         );
     }
 
@@ -193,6 +196,48 @@ final class VirtualThreadReportsTest {
             "\"unsupportedBuilderApis\": 3",
             "\"unsupportedBuilderApisReachable\": 2",
             "\"unsupportedBuilderApisUnreachable\": 1"
+        );
+    }
+
+    @Test
+    void writeReportsCountsExecutorSubjectsAcrossFactoryAndReceiverShapes() throws Exception {
+        final EntryPoint main = new EntryPoint("com/acme/Main", "main", "()V");
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classFile(
+                "com/acme/Main",
+                method(
+                    "main",
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "startVirtualThread", "(Ljava/lang/Runnable;)Ljava/lang/Thread;"))
+                    )
+                )
+            )
+        );
+
+        new VirtualThreadReports().write(
+            tempDir,
+            List.of(
+                Diagnostic.error("JAVAN077", "", "", "", "Executors.newVirtualThreadPerTaskExecutor()", "", ""),
+                Diagnostic.error("JAVAN077", "", "", "", "Executors.newThreadPerTaskExecutor(ThreadFactory)", "", ""),
+                Diagnostic.error("JAVAN077", "", "", "", "Executor.execute(Runnable)", "", ""),
+                Diagnostic.warning("JAVAN177", "", "", "", "ExecutorService.submit(Runnable)", "", ""),
+                Diagnostic.warning("JAVAN177", "", "", "", "ExecutorService.close()", "", ""),
+                Diagnostic.warning("JAVAN177", "", "", "", "Future.cancel(boolean)", "", "")
+            ),
+            classes,
+            new CallGraph(main, List.of(main), List.of())
+        );
+
+        assertThat(Files.readString(tempDir.resolve("virtual-threads.json"))).contains(
+            "\"unsupportedExecutorApis\": 6",
+            "\"unsupportedExecutorApisReachable\": 3",
+            "\"unsupportedExecutorApisUnreachable\": 3"
+        );
+        assertThat(Files.readString(tempDir.resolve("virtual-threads.md"))).contains(
+            "- unsupportedExecutorApis: `6`",
+            "- unsupportedExecutorApisReachable: `3`",
+            "- unsupportedExecutorApisUnreachable: `3`"
         );
     }
 

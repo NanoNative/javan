@@ -196,8 +196,26 @@ public final class VirtualThreadReports {
             final long unsupportedBuilderApisUnreachable = countSubjects(diagnostics, "JAVAN177", "Thread.ofVirtual()")
                 + countSubjectsWithPrefixExcluding(diagnostics, "JAVAN177", "Thread.Builder.", "Thread.Builder.OfVirtual.")
                 + countSubjectsWithPrefix(diagnostics, "JAVAN177", "Thread.Builder.OfVirtual.");
-            final long unsupportedExecutorApisReachable = countSubjects(diagnostics, "JAVAN077", "Executors.newVirtualThreadPerTaskExecutor()");
-            final long unsupportedExecutorApisUnreachable = countSubjects(diagnostics, "JAVAN177", "Executors.newVirtualThreadPerTaskExecutor()");
+            final long unsupportedExecutorApisReachable = countExactSubjects(
+                diagnostics,
+                "JAVAN077",
+                "Executors.newVirtualThreadPerTaskExecutor()",
+                "Executors.newThreadPerTaskExecutor(ThreadFactory)",
+                "Executor.execute(Runnable)",
+                "ExecutorService.submit(Runnable)",
+                "ExecutorService.close()",
+                "Future.cancel(boolean)"
+            );
+            final long unsupportedExecutorApisUnreachable = countExactSubjects(
+                diagnostics,
+                "JAVAN177",
+                "Executors.newVirtualThreadPerTaskExecutor()",
+                "Executors.newThreadPerTaskExecutor(ThreadFactory)",
+                "Executor.execute(Runnable)",
+                "ExecutorService.submit(Runnable)",
+                "ExecutorService.close()",
+                "Future.cancel(boolean)"
+            );
             return new Summary(
                 "reachable-method-scan",
                 reachableVirtualStartSites,
@@ -250,6 +268,18 @@ public final class VirtualThreadReports {
             if (code.equals(diagnostic.code()) && subject.equals(diagnostic.subject())) {
                 count++;
             }
+        }
+        return count;
+    }
+
+    private static long countExactSubjects(
+        final List<Diagnostic> diagnostics,
+        final String code,
+        final String... subjects
+    ) {
+        long count = 0L;
+        for (final String subject : subjects) {
+            count += countSubjects(diagnostics, code, subject);
         }
         return count;
     }
