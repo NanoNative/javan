@@ -35,7 +35,9 @@ fi
 PASS_COUNT=0
 NATIVE_PROFILE_PROJECTS=src/test/resources/projects/native-profile
 NEGATIVE_PROJECTS=src/test/resources/projects/negative
-REAL_PROBES=${JAVAN_REAL_PROBES_DIR:-src/test/resources/projects/real-probes}
+EXTERNAL_SMOKE=${JAVAN_EXTERNAL_SMOKE_DIR:-${JAVAN_REAL_PROBES_DIR:-src/test/resources/projects/external-smoke}}
+REQUIRE_EXTERNAL_SMOKE=${JAVAN_REQUIRE_EXTERNAL_SMOKE:-${JAVAN_REQUIRE_REAL_PROBES:-false}}
+ACCEPTANCE_ONLY=${JAVAN_ACCEPTANCE_ONLY:-}
 
 pass() {
   PASS_COUNT=$((PASS_COUNT + 1))
@@ -576,7 +578,7 @@ accepts_optional_real_probe_dir() {
   fi
 
   if [ "$exit_code" -eq 3 ]; then
-    if [ "${JAVAN_REQUIRE_REAL_PROBES:-}" = "true" ]; then
+    if [ "$REQUIRE_EXTERNAL_SMOKE" = "true" ]; then
       fail "$probe_dir missing dependency"
     fi
     pass "$probe_dir skipped without dependency"
@@ -592,14 +594,14 @@ accepts_optional_real_probe_dir() {
 }
 
 accepts_optional_real_probes() {
-  for probe_dir in $(find "$REAL_PROBES" -mindepth 1 -maxdepth 1 -type d | sort); do
+  for probe_dir in $(find "$EXTERNAL_SMOKE" -mindepth 1 -maxdepth 1 -type d | sort); do
     accepts_optional_real_probe_dir "$probe_dir"
   done
 }
 
 cd "$ROOT"
 
-if [ "${JAVAN_ACCEPTANCE_ONLY:-}" = "real-probes" ]; then
+if [ "$ACCEPTANCE_ONLY" = "external-smoke" ] || [ "$ACCEPTANCE_ONLY" = "real-probes" ]; then
   accepts_optional_real_probes
   printf '%s\n' "Acceptance passed: $PASS_COUNT checks"
   exit 0

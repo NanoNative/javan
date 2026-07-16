@@ -2,4 +2,4 @@
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-exec "$ROOT/../build-real-probe.sh" "$ROOT"
+exec "$ROOT/../build-external-smoke.sh" "$ROOT"

@@ -11,7 +11,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 final class ExternalProbeCatalog {
-    static final Path REAL_PROBES = Path.of("src/test/resources/projects/real-probes");
+    static final Path REAL_PROBES = Path.of("src/test/resources/projects/external-smoke");
 
     private ExternalProbeCatalog() {
     }

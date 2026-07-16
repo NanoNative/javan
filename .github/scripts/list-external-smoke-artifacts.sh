@@ -1,14 +1,14 @@
 #!/bin/sh
 set -eu
 
-ROOT=${1:-src/test/resources/projects/real-probes}
+ROOT=${1:-src/test/resources/projects/external-smoke}
 
 if [ ! -d "$ROOT" ]; then
-  printf '%s\n' "Missing real-probes directory: $ROOT" >&2
+  printf '%s\n' "Missing external-smoke directory: $ROOT" >&2
   exit 1
 fi
 
-tmp=${TMPDIR:-/tmp}/javan-real-probe-artifacts-$$
+tmp=${TMPDIR:-/tmp}/javan-external-smoke-artifacts-$$
 trap 'rm -f "$tmp"' EXIT HUP INT TERM
 : >"$tmp"
 

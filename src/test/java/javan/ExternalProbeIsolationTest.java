@@ -58,7 +58,7 @@ final class ExternalProbeIsolationTest {
 
     @Test
     void onlyDedicatedExternalSmokeResourcesMayReferenceExternalProbeIdentities() throws Exception {
-        final Path allowedRoot = TEST_RESOURCES.resolve("projects/real-probes");
+        final Path allowedRoot = TEST_RESOURCES.resolve("projects/external-smoke");
         try (Stream<Path> files = Files.walk(TEST_RESOURCES)) {
             final List<Path> resourceFiles = files
                 .filter(Files::isRegularFile)
@@ -113,18 +113,18 @@ final class ExternalProbeIsolationTest {
             if (allowedDocs.contains(file)) {
                 assertThat(content)
                     .as(file + " should remain the dedicated place that documents external probe infrastructure")
-                    .contains("real-probes");
+                    .contains("external-smoke");
                 continue;
             }
             assertThat(content)
                 .as(file + " should not reference the dedicated external probe directory")
-                .doesNotContain("real-probes");
+                .doesNotContain("external-smoke");
             assertThat(content)
                 .as(file + " should not reference probe metadata files")
                 .doesNotContain("probe.properties");
             assertThat(content)
                 .as(file + " should not reference the shared external probe build helper")
-                .doesNotContain("build-real-probe.sh");
+                .doesNotContain("build-external-smoke.sh");
         }
     }
 
@@ -262,8 +262,8 @@ final class ExternalProbeIsolationTest {
                 }
                 final String content = Files.readString(file);
                 assertThat(content)
-                    .as(file + " should not reference the external real-probes directory")
-                    .doesNotContain("real-probes");
+                    .as(file + " should not reference the dedicated external-smoke directory")
+                    .doesNotContain("external-smoke");
                 assertThat(content)
                     .as(file + " should not reference probe metadata files")
                     .doesNotContain("probe.properties");
@@ -313,7 +313,7 @@ final class ExternalProbeIsolationTest {
 
     @Test
     void externalProbeBuildScriptsStayMetadataDrivenAndProjectNeutral() throws Exception {
-        final Path helper = TEST_RESOURCES.resolve("projects/real-probes/build-real-probe.sh");
+        final Path helper = TEST_RESOURCES.resolve("projects/external-smoke/build-external-smoke.sh");
         final String helperContent = Files.readString(helper);
 
         assertThat(helperContent)
@@ -329,7 +329,7 @@ final class ExternalProbeIsolationTest {
             final String content = Files.readString(script);
             assertThat(content)
                 .as(script + " should delegate to the shared metadata-driven resolver")
-                .contains("../build-real-probe.sh")
+                .contains("../build-external-smoke.sh")
                 .doesNotContain("JAVAN_PROBE_MAVEN_COORDINATE");
             assertOnlyGenericProbeOverrides(content, script);
             assertTextExcludesExternalProbeIdentities(content, script);

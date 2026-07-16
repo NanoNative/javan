@@ -85,9 +85,9 @@ jobs:
           repo=$(mvn -q help:evaluate -Dexpression=settings.localRepository -DforceStdout | tail -n 1)
           echo "MAVEN_REPO_LOCAL=$repo" >> "$GITHUB_ENV"
 
-      - name: Prefetch real probe artifacts
+      - name: Prefetch external smoke artifacts
         run: |
-          .github/scripts/list-real-probe-artifacts.sh | while IFS= read -r artifact; do
+          .github/scripts/list-external-smoke-artifacts.sh | while IFS= read -r artifact; do
             mvn -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" dependency:get -Dartifact="$artifact" -Dtransitive=false
           done
 
@@ -101,7 +101,7 @@ jobs:
       - name: Verify acceptance suite
         env:
           JAVAN_MAVEN_REPO: ${{ env.MAVEN_REPO_LOCAL }}
-          JAVAN_REQUIRE_REAL_PROBES: "true"
+          JAVAN_REQUIRE_EXTERNAL_SMOKE: "true"
         run: sh .github/scripts/acceptance.sh
 
       - name: Verify host target build
