@@ -7814,6 +7814,24 @@ final class RuntimeSourceMemorySections {
             return javan_list_new_with_capacity(0, 1);
         }
 
+        void* javan_set_copy_of(void* collection) {
+            javan_object_list* source = javan_list_checked(collection);
+            void* result_value = NULL;
+            void** javan_set_copy_roots[] = {
+                (void**) &source,
+                (void**) &result_value
+            };
+            javan_root_frame_push(javan_set_copy_roots, 2);
+            int length = javan_list_logical_length(source);
+            result_value = javan_hashset_new();
+            for (int index = 0; index < length; index++) {
+                javan_set_add(result_value, javan_list_get_unchecked(source, index));
+            }
+            ((javan_object_list*) result_value)->immutable = 1;
+            javan_root_frame_pop(javan_set_copy_roots);
+            return result_value;
+        }
+
         void* javan_set_singleton(void* value) {
             void* value_root = value;
             void** javan_set_singleton_roots[] = {

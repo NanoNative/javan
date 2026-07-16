@@ -8767,6 +8767,27 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersSetCopyOfToRuntimeHelper() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/Collection;)Ljava/util/Set;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeStatic(1, new MethodRef("java/util/Set", "copyOf", "(Ljava/util/Collection;)Ljava/util/Set;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_set_copy_of",
+                List.of(IrExpression.objectLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
     void lowersSetOfSingletonToRuntimeHelper() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -8784,6 +8805,24 @@ final class BytecodeToIRTest {
                 IrExpression.objectCall("javan_set_singleton", List.of(IrExpression.objectLocal("arg0")))
             )
         );
+    }
+
+    @Test
+    void rejectsSetCopyOfWithWrongDescriptor() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/Set;)Ljava/util/Set;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeStatic(1, new MethodRef("java/util/Set", "copyOf", "(Ljava/util/Set;)Ljava/util/Set;")),
+            plain(2, 176, "areturn")
+        )))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("invokestatic java/util/Set.copyOf(Ljava/util/Set;)Ljava/util/Set;");
+            });
     }
 
     @Test

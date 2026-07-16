@@ -1772,6 +1772,44 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void setCopyOfBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("set-copy-of");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<String> values = new ArrayList<>();
+                    values.add("left");
+                    values.add("left");
+                    values.add("right");
+                    final Set<String> snapshot = Set.copyOf(values);
+                    values.add("later");
+                    System.out.println(snapshot.size());
+                    System.out.println(snapshot.contains("left"));
+                    System.out.println(snapshot.contains("right"));
+                    System.out.println(snapshot.contains("later"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/set-copy-of").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("2\ntrue\ntrue\nfalse\n");
+    }
+
+    @Test
     void setOfSingletonBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("set-of-singleton");
         writeJava(project, "com.acme.Main", """

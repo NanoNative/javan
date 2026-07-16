@@ -440,6 +440,7 @@ public final class JdkCallSupport {
         runtime("List.of", "java/util/List", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;"),
         runtime("List.of", "java/util/List", "of", "([Ljava/lang/Object;)Ljava/util/List;"),
         runtime("List.copyOf", "java/util/List", "copyOf", "(Ljava/util/Collection;)Ljava/util/List;"),
+        runtime("Set.copyOf", "java/util/Set", "copyOf", "(Ljava/util/Collection;)Ljava/util/Set;"),
         runtime("Set.of", "java/util/Set", "of", "()Ljava/util/Set;"),
         runtime("Set.of", "java/util/Set", "of", "(Ljava/lang/Object;)Ljava/util/Set;"),
         runtime("List.add", "java/util/List", "add", "(Ljava/lang/Object;)Z"),

@@ -3273,6 +3273,11 @@ final class BytecodeToIRInvokeSupport {
             if (!"java/util/Set".equals(owner)) {
                 return false;
             }
+            if ("copyOf".equals(name) && "(Ljava/util/Collection;)Ljava/util/Set;".equals(descriptor)) {
+                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_set_copy_of", arguments)));
+                return true;
+            }
             if ("of".equals(name) && "()Ljava/util/Set;".equals(descriptor)) {
                 stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_set_empty", List.of())));
                 return true;

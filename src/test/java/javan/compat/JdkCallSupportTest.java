@@ -211,6 +211,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void setCopyOfIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Set",
+            "copyOf",
+            "(Ljava/util/Collection;)Ljava/util/Set;"
+        ))).isTrue();
+    }
+
+    @Test
     void setOfSingletonIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Set",
