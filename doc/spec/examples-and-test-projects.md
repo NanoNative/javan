@@ -38,27 +38,32 @@ Current public showcase:
 
 Optional real-project probes:
 
-- `src/test/resources/projects/real-probes/typemap-pair`: external compatibility smoke against a real TypeMap artifact.
-- `src/test/resources/projects/real-probes/nano-metric`: external compatibility smoke against a real Nano artifact.
-- `src/test/resources/projects/real-probes/nano-duration`: external compatibility smoke for one Nano helper slice.
-- `src/test/resources/projects/real-probes/nano-scheduler`: external compatibility smoke for one-shot Nano scheduler lifecycle.
-- `src/test/resources/projects/real-probes/nano-scheduler-fixed-rate`: external compatibility smoke for fixed-rate Nano scheduler lifecycle.
+- `src/test/resources/projects/real-probes/*`: external compatibility smoke against selected
+  third-party artifacts. Probe identity, coordinates, expected stdout, and the required mapping
+  back to a compiler-owned generic regression all live in per-probe metadata and in the dedicated
+  ledger at `doc/status/real-project-readiness.md`.
 
 Each probe owns its own `probe.properties`, `expected.stdout`, and `build-example.sh`.
 The acceptance harness only iterates probe directories; it does not hardcode library-specific
 support claims into the compiler-owned test line.
 
+Boundary:
+
+- probe names may stay in probe metadata, probe READMEs, and the dedicated external-smoke docs
+- probe names must stay out of support rows, JDK coverage ledgers, and compiler-owned regression tests
+- upstream probe changes are allowed; Javan support claims must still be expressed in generic JDK/runtime terms
+
 These are not core compiler/runtime support tests. They are allowed to prove "Javan can compile
 this real artifact today", but they are not allowed to define "Javan supports this JDK feature".
 Core support tests must stay compiler-owned, deterministic, and independent of external project
 semantics. When a real probe finds a bug, the fix must land with a synthetic compiler-owned
-regression test that proves the underlying JDK/runtime shape without depending on Nano, TypeMap,
-or any other external project name.
+regression test that proves the underlying JDK/runtime shape without depending on any external
+project identity. External probes are allowed to answer only one question: "does Javan compile
+this pinned real artifact today?" They are not allowed to answer "is this Java feature supported?"
 
-Javan must not learn probe-specific semantics from these projects. If upstream Nano, TypeMap, or
-any future real probe changes, the probe metadata and smoke assets may change, but the durable
-compiler/runtime regression must still be expressed in generic JDK/runtime terms inside the core
-test line.
+Javan must not learn probe-specific semantics from these projects. If an upstream real probe
+changes, the probe metadata and smoke assets may change, but the durable compiler/runtime
+regression must still be expressed in generic JDK/runtime terms inside the core test line.
 
 ## Test Projects
 
@@ -92,7 +97,7 @@ when they are release-quality samples:
 - CLI app with resources and argument parsing.
 - Multi-class service-style app with interfaces and substitutions.
 - Native library with C, Rust, Go, and Python consumers.
-- Dependency-backed TypeMap scenario.
-- Dependency-backed Nano scenario.
+- Dependency-backed external library scenario.
+- Dependency-backed external service scenario.
 - Self-host bootstrap is covered by release tooling; future complex examples should
   focus on larger public apps and dependency-backed scenarios.

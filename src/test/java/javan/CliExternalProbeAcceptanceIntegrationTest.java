@@ -11,16 +11,14 @@ import org.junit.jupiter.api.parallel.ResourceLock;
 import org.junit.jupiter.api.parallel.Resources;
 
 import java.io.IOException;
-import java.io.StringReader;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -37,8 +35,6 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 @ResourceLock("native-cli-heavy")
 @ResourceLock(value = Resources.SYSTEM_PROPERTIES, mode = ResourceAccessMode.READ)
 final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupport {
-    private static final Path REAL_PROBES = Path.of("src/test/resources/projects/real-probes");
-
     @Test
     void realProbesDeclareCompilerOwnedGenericEvidence() throws Exception {
         final List<String> declaredTests = Arrays.stream(CliDependencyProjectIntegrationTest.class.getDeclaredMethods())
@@ -52,7 +48,7 @@ final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupp
                 .isNotBlank()
                 .contains("#"));
 
-        for (final ExternalProbe probe : realProbes()) {
+        for (final ExternalProbeCatalog.ExternalProbe probe : realProbes()) {
             final String[] parts = probe.genericEvidence().split("#", 2);
             assertThat(parts[0])
                 .as(probe.project() + " must point at the compiler-owned dependency test class")
@@ -227,9 +223,9 @@ final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupp
 
         assertThat(run.exitCode()).isZero();
         assertThat(run.stderr()).isEmpty();
-        final List<ExternalProbe> probes = realProbes(probesRoot);
+        final List<ExternalProbeCatalog.ExternalProbe> probes = realProbes(probesRoot);
         for (int index = 0; index < probes.size(); index++) {
-            final ExternalProbe probe = probes.get(index);
+            final ExternalProbeCatalog.ExternalProbe probe = probes.get(index);
             assertThat(run.stdout()).contains("ok " + (index + 1) + " - " + probe.projectDirectory() + " native probe");
         }
         assertThat(run.stdout()).contains("Acceptance passed: " + probes.size() + " checks");
@@ -241,22 +237,22 @@ final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupp
         writeProbe(probesRoot.resolve("beta"), "beta", "com.example", "beta-lib", "1.0.0", "beta-out\n");
         writeProbe(probesRoot.resolve("alpha"), "alpha", "com.example", "alpha-lib", "2.0.0", "alpha-out\n");
 
-        final List<ExternalProbe> probes = realProbes(probesRoot);
+        final List<ExternalProbeCatalog.ExternalProbe> probes = realProbes(probesRoot);
 
         assertThat(probes)
-            .extracting(ExternalProbe::project)
+            .extracting(ExternalProbeCatalog.ExternalProbe::project)
             .containsExactly("alpha", "beta");
         assertThat(probes)
-            .extracting(ExternalProbe::groupId)
+            .extracting(ExternalProbeCatalog.ExternalProbe::groupId)
             .containsExactly("com.example", "com.example");
         assertThat(probes)
-            .extracting(ExternalProbe::artifactId)
+            .extracting(ExternalProbeCatalog.ExternalProbe::artifactId)
             .containsExactly("alpha-lib", "beta-lib");
         assertThat(probes)
-            .extracting(ExternalProbe::version)
+            .extracting(ExternalProbeCatalog.ExternalProbe::version)
             .containsExactly("2.0.0", "1.0.0");
         assertThat(probes)
-            .extracting(ExternalProbe::expectedStdout)
+            .extracting(ExternalProbeCatalog.ExternalProbe::expectedStdout)
             .containsExactly("alpha-out\n", "beta-out\n");
     }
 
@@ -306,7 +302,7 @@ final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupp
         assertThat(run.stderr()).contains("Incomplete probe metadata");
     }
 
-    private void assertExternalProbeMatchesJvmOutput(final ExternalProbe probe, final Path artifact) throws Exception {
+    private void assertExternalProbeMatchesJvmOutput(final ExternalProbeCatalog.ExternalProbe probe, final Path artifact) throws Exception {
         final Path project = copyResourceProject("real-probes/" + probe.project(), probe.project());
         final String jvmOutput = runJvm(project, probe.mainClass(), List.of(artifact));
         final CliRun run = run(tempDir, "build", project.toString(), "--classpath", artifact.toString(), "--output", probe.project());
@@ -316,17 +312,21 @@ final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupp
         assertThat(jvmOutput).isEqualTo(probe.expectedStdout());
     }
 
-    private static List<ExternalProbe> realProbes() throws IOException {
-        return realProbes(REAL_PROBES);
+    private static List<ExternalProbeCatalog.ExternalProbe> realProbes() throws IOException {
+        return ExternalProbeCatalog.realProbes();
     }
 
-    private static List<ExternalProbe> realProbes(final Path probesRoot) throws IOException {
-        try (Stream<Path> paths = Files.list(probesRoot)) {
-            return paths
-                .filter(Files::isDirectory)
-                .sorted(Comparator.comparing(path -> path.getFileName().toString()))
-                .map(CliExternalProbeAcceptanceIntegrationTest::loadProbe)
-                .toList();
+    private static List<ExternalProbeCatalog.ExternalProbe> realProbes(final Path probesRoot) throws IOException {
+        return ExternalProbeCatalog.realProbes(probesRoot);
+    }
+
+    @Test
+    void realProbesStayOutOfCompilerOwnedDependencyTests() throws Exception {
+        final String genericTests = Files.readString(Path.of("src/test/java/javan/CliDependencyProjectIntegrationTest.java"));
+        for (final Pattern pattern : ExternalProbeCatalog.identityPatterns()) {
+            assertThat(pattern.matcher(genericTests).find())
+                .as("compiler-owned dependency coverage should stay free of external probe identities")
+                .isFalse();
         }
     }
 
@@ -386,45 +386,4 @@ final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupp
         scriptPath.toFile().setExecutable(true, false);
     }
 
-    private static ExternalProbe loadProbe(final Path projectDirectory) {
-        try {
-            final Properties properties = new Properties();
-            properties.load(new StringReader(Files.readString(projectDirectory.resolve("probe.properties"))));
-            return new ExternalProbe(
-                property(properties, "project"),
-                property(properties, "groupId"),
-                property(properties, "artifactId"),
-                property(properties, "version"),
-                properties.getProperty("mainClass", "com.acme.Main"),
-                properties.getProperty("genericEvidence", ""),
-                Files.readString(projectDirectory.resolve("expected.stdout")),
-                projectDirectory.toString().replace('\\', '/')
-            );
-        } catch (final IOException exception) {
-            throw new IllegalStateException("Unable to load external probe metadata from " + projectDirectory, exception);
-        }
-    }
-
-    private static String property(final Properties properties, final String key) {
-        final String value = properties.getProperty(key);
-        if (value == null || value.isBlank()) {
-            throw new IllegalStateException("Missing probe property: " + key);
-        }
-        return value;
-    }
-
-    private record ExternalProbe(
-        String project,
-        String groupId,
-        String artifactId,
-        String version,
-        String mainClass,
-        String genericEvidence,
-        String expectedStdout,
-        String projectDirectory
-    ) {
-        private String coordinate() {
-            return groupId + ":" + artifactId + ":" + version;
-        }
-    }
 }

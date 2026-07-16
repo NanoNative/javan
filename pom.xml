@@ -121,14 +121,10 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>${maven-surefire-plugin.version}</version>
                 <configuration>
-                    <argLine>@{surefireArgLine}</argLine>
+                    <argLine>@{surefireArgLine} -Djavan.childJacocoArgLine=@{surefireArgLine} -Djavan.childJacocoDir=${javan.jacoco.child.dir}</argLine>
                     <includes>
                         <include>**/*Test.java</include>
                     </includes>
-                    <systemPropertyVariables>
-                        <javan.childJacocoArgLine>${surefireArgLine}</javan.childJacocoArgLine>
-                        <javan.childJacocoDir>${javan.jacoco.child.dir}</javan.childJacocoDir>
-                    </systemPropertyVariables>
                 </configuration>
             </plugin>
             <plugin>

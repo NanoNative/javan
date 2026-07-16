@@ -76,6 +76,24 @@ final class CliTestHarnessTest {
         assertThat(CliTestHarness.currentJarCommand()).isEqualTo(java.nio.file.Path.of(bin).resolve("jar" + suffix).toString());
     }
 
+    @Test
+    void childCoveragePropertiesArePresentWhenJacocoAgentIsAttached() {
+        final boolean jacocoAttached = java.lang.management.ManagementFactory.getRuntimeMXBean()
+            .getInputArguments()
+            .stream()
+            .anyMatch(argument -> argument.startsWith("-javaagent:") && argument.contains("org.jacoco.agent"));
+        if (!jacocoAttached) {
+            return;
+        }
+
+        assertThat(System.getProperty("javan.childJacocoArgLine", ""))
+            .contains("-javaagent:")
+            .contains("org.jacoco.agent")
+            .contains("destfile=");
+        assertThat(System.getProperty("javan.childJacocoDir", ""))
+            .isNotBlank();
+    }
+
     private static void restoreProperty(final String key, final String value) {
         if (value == null) {
             System.clearProperty(key);

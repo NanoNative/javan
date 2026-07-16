@@ -119,6 +119,7 @@ final class ExternalProbeIsolationTest {
     void onlyDedicatedAcceptanceBoundaryTestsMayReferenceRealProbeInfrastructure() throws Exception {
         final Set<Path> allowed = Set.of(
             TEST_SOURCES.resolve("javan/CliExternalProbeAcceptanceIntegrationTest.java"),
+            TEST_SOURCES.resolve("javan/ExternalProbeCatalog.java"),
             TEST_SOURCES.resolve("javan/ExternalProbeIdentities.java"),
             TEST_SOURCES.resolve("javan/ExternalProbeIsolationTest.java"),
             TEST_SOURCES.resolve("javan/compat/CompatibilityReportsTest.java")
@@ -142,6 +143,9 @@ final class ExternalProbeIsolationTest {
                 assertThat(content)
                     .as(file + " should not use the external probe identity helper")
                     .doesNotContain("ExternalProbeIdentities");
+                assertThat(content)
+                    .as(file + " should not use the external probe catalog helper")
+                    .doesNotContain("ExternalProbeCatalog");
                 assertThat(content)
                     .as(file + " should not define or materialize external probe records")
                     .doesNotContain("record ExternalProbe(")

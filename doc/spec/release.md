@@ -83,7 +83,7 @@ sanitizer proof.
 - native-library C ABI smoke
 - negative rejection projects
 - native-profile runtime/codegen probes
-- optional TypeMap and Nano probes when local artifacts exist
+- optional external smoke probes when local artifacts exist
 
 Test-only projects live under `src/test/resources/projects`, not `examples`.
 
