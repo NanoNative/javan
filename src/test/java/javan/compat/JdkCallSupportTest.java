@@ -1364,6 +1364,42 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void booleanInstanceToStringIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Boolean",
+            "toString",
+            "()Ljava/lang/String;"
+        ))).isTrue();
+    }
+
+    @Test
+    void byteInstanceToStringIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Byte",
+            "toString",
+            "()Ljava/lang/String;"
+        ))).isTrue();
+    }
+
+    @Test
+    void shortInstanceToStringIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Short",
+            "toString",
+            "()Ljava/lang/String;"
+        ))).isTrue();
+    }
+
+    @Test
+    void characterInstanceToStringIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Character",
+            "toString",
+            "()Ljava/lang/String;"
+        ))).isTrue();
+    }
+
+    @Test
     void booleanArraysCopyOfIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Arrays",

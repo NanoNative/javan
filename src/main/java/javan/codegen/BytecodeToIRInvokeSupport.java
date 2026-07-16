@@ -1408,16 +1408,48 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.intExpression(IrExpression.intCall("javan_boolean_boolean_value", List.of(popObject(classFile, method, stack)))));
             return true;
         }
+        if ("java/lang/Boolean".equals(methodRef.owner()) && "toString".equals(methodRef.name()) && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
+            final IrExpression receiver = popObject(classFile, method, stack);
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_string_value_of_bool",
+                List.of(IrExpression.intCall("javan_boolean_boolean_value", List.of(receiver)))
+            )));
+            return true;
+        }
         if ("java/lang/Byte".equals(methodRef.owner()) && "byteValue".equals(methodRef.name()) && "()B".equals(methodRef.descriptor())) {
             stack.add(StackValue.intExpression(IrExpression.intCall("javan_byte_byte_value", List.of(popObject(classFile, method, stack)))));
+            return true;
+        }
+        if ("java/lang/Byte".equals(methodRef.owner()) && "toString".equals(methodRef.name()) && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
+            final IrExpression receiver = popObject(classFile, method, stack);
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_string_value_of_int",
+                List.of(IrExpression.intCall("javan_byte_byte_value", List.of(receiver)))
+            )));
             return true;
         }
         if ("java/lang/Short".equals(methodRef.owner()) && "shortValue".equals(methodRef.name()) && "()S".equals(methodRef.descriptor())) {
             stack.add(StackValue.intExpression(IrExpression.intCall("javan_short_short_value", List.of(popObject(classFile, method, stack)))));
             return true;
         }
+        if ("java/lang/Short".equals(methodRef.owner()) && "toString".equals(methodRef.name()) && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
+            final IrExpression receiver = popObject(classFile, method, stack);
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_string_value_of_int",
+                List.of(IrExpression.intCall("javan_short_short_value", List.of(receiver)))
+            )));
+            return true;
+        }
         if ("java/lang/Character".equals(methodRef.owner()) && "charValue".equals(methodRef.name()) && "()C".equals(methodRef.descriptor())) {
             stack.add(StackValue.intExpression(IrExpression.intCall("javan_character_char_value", List.of(popObject(classFile, method, stack)))));
+            return true;
+        }
+        if ("java/lang/Character".equals(methodRef.owner()) && "toString".equals(methodRef.name()) && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
+            final IrExpression receiver = popObject(classFile, method, stack);
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_string_value_of_char",
+                List.of(IrExpression.intCall("javan_character_char_value", List.of(receiver)))
+            )));
             return true;
         }
         if ("java/lang/Boolean".equals(methodRef.owner()) && "equals".equals(methodRef.name()) && "(Ljava/lang/Object;)Z".equals(methodRef.descriptor())) {

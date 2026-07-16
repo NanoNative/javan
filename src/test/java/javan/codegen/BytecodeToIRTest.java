@@ -13407,8 +13407,8 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void rejectsUnsupportedBooleanToStringInstanceCall() {
-        assertThatThrownBy(() -> lowerMain(method(
+    void lowersBooleanToStringInstanceCall() {
+        final IrFunction function = lowerMain(method(
             0x0008,
             "main",
             "(Ljava/lang/Boolean;)Ljava/lang/String;",
@@ -13417,11 +13417,77 @@ final class BytecodeToIRTest {
             plain(0, 42, "aload_0"),
             invokeVirtual(1, new MethodRef("java/lang/Boolean", "toString", "()Ljava/lang/String;")),
             plain(2, 176, "areturn")
-        )))
-            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
-                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
-                assertThat(exception.diagnostic().subject()).isEqualTo("invokevirtual java/lang/Boolean.toString()Ljava/lang/String;");
-            });
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_string_value_of_bool",
+                List.of(IrExpression.intCall("javan_boolean_boolean_value", List.of(IrExpression.objectLocal("arg0"))))
+            ))
+        );
+    }
+
+    @Test
+    void lowersByteToStringInstanceCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Byte;)Ljava/lang/String;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/Byte", "toString", "()Ljava/lang/String;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_string_value_of_int",
+                List.of(IrExpression.intCall("javan_byte_byte_value", List.of(IrExpression.objectLocal("arg0"))))
+            ))
+        );
+    }
+
+    @Test
+    void lowersShortToStringInstanceCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Short;)Ljava/lang/String;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/Short", "toString", "()Ljava/lang/String;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_string_value_of_int",
+                List.of(IrExpression.intCall("javan_short_short_value", List.of(IrExpression.objectLocal("arg0"))))
+            ))
+        );
+    }
+
+    @Test
+    void lowersCharacterToStringInstanceCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Character;)Ljava/lang/String;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/Character", "toString", "()Ljava/lang/String;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_string_value_of_char",
+                List.of(IrExpression.intCall("javan_character_char_value", List.of(IrExpression.objectLocal("arg0"))))
+            ))
+        );
     }
 
     @Test

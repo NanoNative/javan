@@ -145,6 +145,26 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void booleanWrapperPrintableBuildsAndMatchesJvmOutput() throws Exception {
+        assertPrimitiveWrapperPrintableBuildAndMatchJvmOutput("boolean-wrapper-printable", "Boolean", "Boolean.valueOf(true)");
+    }
+
+    @Test
+    void byteWrapperPrintableBuildsAndMatchesJvmOutput() throws Exception {
+        assertPrimitiveWrapperPrintableBuildAndMatchJvmOutput("byte-wrapper-printable", "Byte", "Byte.valueOf((byte) 12)");
+    }
+
+    @Test
+    void shortWrapperPrintableBuildsAndMatchesJvmOutput() throws Exception {
+        assertPrimitiveWrapperPrintableBuildAndMatchJvmOutput("short-wrapper-printable", "Short", "Short.valueOf((short) 34)");
+    }
+
+    @Test
+    void characterWrapperPrintableBuildsAndMatchesJvmOutput() throws Exception {
+        assertPrimitiveWrapperPrintableBuildAndMatchJvmOutput("character-wrapper-printable", "Character", "Character.valueOf('j')");
+    }
+
+    @Test
     void classLiteralGetNameBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("class-literal-get-name");
         writeJava(project, "com.acme.Main", """
@@ -2070,6 +2090,35 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                     System.out.println(value.resolveConstantDesc(null));
                     final Object widened = value.resolveConstantDesc(null);
                     System.out.println(widened);
+                }
+            }
+            """.formatted(wrapperType, wrapperExpression));
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/" + projectName).toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    private void assertPrimitiveWrapperPrintableBuildAndMatchJvmOutput(
+        final String projectName,
+        final String wrapperType,
+        final String wrapperExpression
+    ) throws Exception {
+        final Path project = project(projectName);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final %s value = %s;
+                    System.out.println(value.toString());
+                    System.out.println(value);
                 }
             }
             """.formatted(wrapperType, wrapperExpression));
