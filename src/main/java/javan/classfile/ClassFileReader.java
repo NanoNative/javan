@@ -352,6 +352,10 @@ public final class ClassFileReader {
     }
 
     private static Optional<Integer> intValue(final int opcode, final byte[] operands, final ConstantPool constantPool) {
+        final Optional<Integer> smallInteger = smallIntegerLiteral(opcode, operands);
+        if (smallInteger.isPresent()) {
+            return smallInteger;
+        }
         if (opcode == 18) {
             return constantPool.intValue(unsigned(operands[0]));
         }
@@ -359,6 +363,26 @@ public final class ClassFileReader {
             return constantPool.intValue(index16(operands, 0));
         }
         return Optional.empty();
+    }
+
+    private static Optional<Integer> smallIntegerLiteral(final int opcode, final byte[] operands) {
+        return switch (opcode) {
+            case 2 -> Optional.of(-1);
+            case 3 -> Optional.of(0);
+            case 4 -> Optional.of(1);
+            case 5 -> Optional.of(2);
+            case 6 -> Optional.of(3);
+            case 7 -> Optional.of(4);
+            case 8 -> Optional.of(5);
+            case 16 -> operands.length == 1 ? Optional.of((int) operands[0]) : Optional.empty();
+            case 17 -> operands.length == 2 ? Optional.of(signedShort(operands[0], operands[1])) : Optional.empty();
+            default -> Optional.empty();
+        };
+    }
+
+    private static int signedShort(final byte high, final byte low) {
+        final int unsigned = ((high & 0xFF) << 8) | (low & 0xFF);
+        return unsigned > Short.MAX_VALUE ? unsigned - 0x1_0000 : unsigned;
     }
 
     private static Optional<Long> longValue(final int opcode, final byte[] operands, final ConstantPool constantPool) {

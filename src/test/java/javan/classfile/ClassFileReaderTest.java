@@ -158,6 +158,42 @@ final class ClassFileReaderTest {
             });
     }
 
+    @Test
+    void readerNormalizesSmallIntegerLiteralInstructions() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(
+            minimalClassfile(
+                "ints/Literals",
+                new byte[]{
+                    2, // iconst_m1
+                    3, // iconst_0
+                    4, // iconst_1
+                    5, // iconst_2
+                    6, // iconst_3
+                    7, // iconst_4
+                    8, // iconst_5
+                    16, (byte) 0xFF, // bipush -1
+                    16, 1, // bipush 1
+                    17, (byte) 0xFF, (byte) 0xFE, // sipush -2
+                    17, 0, 2, // sipush 2
+                    (byte) 177 // return
+                }
+            ),
+            SOURCE
+        );
+
+        final List<Integer> literalValues = classFile.method("<init>", "()V")
+            .orElseThrow()
+            .code()
+            .orElseThrow()
+            .instructions()
+            .stream()
+            .filter(instruction -> instruction.intValue().isPresent())
+            .map(instruction -> instruction.intValue().orElseThrow())
+            .toList();
+
+        assertThat(literalValues).containsExactly(-1, 0, 1, 2, 3, 4, 5, -1, 1, -2, 2);
+    }
+
     private static void assertConstructorMetadata(final MemberMetadata constructor) {
         assertThat(constructor.name()).isEqualTo("<init>");
         assertThat(constructor.attributes()).containsExactly("Code");

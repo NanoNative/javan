@@ -1662,11 +1662,35 @@ final class VirtualThreadInvokePatternsTest {
     }
 
     private static Instruction instruction(final int offset, final int opcode, final String mnemonic) {
-        return new Instruction(offset, opcode, mnemonic, new byte[0], Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+        return new Instruction(
+            offset,
+            opcode,
+            mnemonic,
+            new byte[0],
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            normalizedIntValue(opcode, new byte[0]),
+            Optional.empty(),
+            Optional.empty()
+        );
     }
 
     private static Instruction instruction(final int offset, final int opcode, final String mnemonic, final MethodRef methodRef) {
-        return new Instruction(offset, opcode, mnemonic, new byte[0], Optional.of(methodRef), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+        return new Instruction(
+            offset,
+            opcode,
+            mnemonic,
+            new byte[0],
+            Optional.of(methodRef),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            normalizedIntValue(opcode, new byte[0]),
+            Optional.empty(),
+            Optional.empty()
+        );
     }
 
     private static Instruction classInstruction(final int offset, final int opcode, final String mnemonic, final String className) {
@@ -1678,7 +1702,19 @@ final class VirtualThreadInvokePatternsTest {
         for (int index = 0; index < operands.length; index++) {
             bytes[index] = (byte) operands[index];
         }
-        return new Instruction(offset, opcode, mnemonic, bytes, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+        return new Instruction(
+            offset,
+            opcode,
+            mnemonic,
+            bytes,
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            normalizedIntValue(opcode, bytes),
+            Optional.empty(),
+            Optional.empty()
+        );
     }
 
     private static Instruction stringInstruction(final int offset, final String value) {
@@ -1687,6 +1723,26 @@ final class VirtualThreadInvokePatternsTest {
 
     private static Instruction intInstruction(final int offset, final int opcode, final String mnemonic, final int value) {
         return new Instruction(offset, opcode, mnemonic, new byte[0], Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.of(value), Optional.empty(), Optional.empty());
+    }
+
+    private static Optional<Integer> normalizedIntValue(final int opcode, final byte[] operands) {
+        return switch (opcode) {
+            case 2 -> Optional.of(-1);
+            case 3 -> Optional.of(0);
+            case 4 -> Optional.of(1);
+            case 5 -> Optional.of(2);
+            case 6 -> Optional.of(3);
+            case 7 -> Optional.of(4);
+            case 8 -> Optional.of(5);
+            case 16 -> operands.length == 1 ? Optional.of((int) operands[0]) : Optional.empty();
+            case 17 -> operands.length == 2 ? Optional.of(signedShort(operands[0], operands[1])) : Optional.empty();
+            default -> Optional.empty();
+        };
+    }
+
+    private static int signedShort(final byte high, final byte low) {
+        final int unsigned = ((high & 0xFF) << 8) | (low & 0xFF);
+        return unsigned > Short.MAX_VALUE ? unsigned - 0x1_0000 : unsigned;
     }
 
     private static Instruction longInstruction(final int offset, final int opcode, final String mnemonic) {

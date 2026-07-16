@@ -530,18 +530,7 @@ public final class VirtualThreadInvokePatterns {
     }
 
     private static boolean isBooleanConstant(final Instruction instruction) {
-        return exactBooleanConstantValue(instruction).isPresent();
-    }
-
-    private static Optional<Boolean> exactBooleanConstantValue(final Instruction instruction) {
-        return switch (instruction.opcode()) {
-            case 3 -> Optional.of(false);
-            case 4 -> Optional.of(true);
-            case 16 -> booleanIntValue(instruction.operands().length == 1 ? (int) instruction.operands()[0] : null);
-            case 17 -> booleanIntValue(signedShortOperand(instruction));
-            case 18, 19 -> instruction.intValue().flatMap(VirtualThreadInvokePatterns::booleanIntValue);
-            default -> Optional.empty();
-        };
+        return instruction.intValue().flatMap(VirtualThreadInvokePatterns::booleanIntValue).isPresent();
     }
 
     private static Optional<Boolean> booleanIntValue(final Integer value) {
@@ -555,14 +544,6 @@ public final class VirtualThreadInvokePatterns {
             return Optional.of(true);
         }
         return Optional.empty();
-    }
-
-    private static Integer signedShortOperand(final Instruction instruction) {
-        if (instruction.operands().length != 2) {
-            return null;
-        }
-        final int unsigned = ((instruction.operands()[0] & 0xFF) << 8) | (instruction.operands()[1] & 0xFF);
-        return unsigned > Short.MAX_VALUE ? unsigned - 0x1_0000 : unsigned;
     }
 
     private static boolean isParameterObjectLoad(final MethodInfo method, final Instruction instruction) {
