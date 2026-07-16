@@ -502,6 +502,7 @@ public final class CompatibilityReports {
             pass("collections-empty-set"),
             pass("collections-singleton-list"),
             pass("collections-empty-list"),
+            pass("collections-singleton-map"),
             pass("list-of-varargs-gc"),
             pass("owned-buffer-realloc-validation"),
             pass("stringbuilder-setlength-overflow-panic"),

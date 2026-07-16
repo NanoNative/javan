@@ -7949,6 +7949,22 @@ final class RuntimeSourceMemorySections {
             return javan_map_new_with_capacity(0, 1);
         }
 
+        void* javan_map_singleton(void* key, void* value) {
+            void* key_root = key;
+            void* value_root = value;
+            void** javan_map_singleton_roots[] = {
+                (void**) &key_root,
+                (void**) &value_root
+            };
+            javan_root_frame_push(javan_map_singleton_roots, 2);
+            javan_object_map* map = javan_map_new_with_capacity(1, 1);
+            map->keys[0] = key_root;
+            map->values[0] = value_root;
+            map->length = 1;
+            javan_root_frame_pop(javan_map_singleton_roots);
+            return map;
+        }
+
         void* javan_map_copy_of(void* value) {
             javan_object_map* source = javan_map_checked(value);
             void** javan_map_copy_roots[] = {

@@ -217,6 +217,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksCollectionsSingletonMapAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Collections", "singletonMap", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksBooleanEqualsAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Boolean", "equals", "(Ljava/lang/Object;)Z")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

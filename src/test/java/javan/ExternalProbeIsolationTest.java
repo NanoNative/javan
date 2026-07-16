@@ -107,6 +107,7 @@ final class ExternalProbeIsolationTest {
         final List<Path> scanned = new ArrayList<>();
         scanned.addAll(markdownFiles(Path.of("doc")));
         scanned.add(TEST_RESOURCES.resolve("projects/README.md"));
+        scanned.add(SUPPORT_MATRIX_JSON);
         for (final Path file : scanned) {
             final String content = Files.readString(file);
             if (allowedDocs.contains(file)) {
