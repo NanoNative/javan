@@ -23,6 +23,7 @@ final class RuntimeSourceCoreSection {
         #include <sys/time.h>
         #else
         #include <arpa/inet.h>
+        #include <fcntl.h>
         #include <netinet/in.h>
         #include <netinet/tcp.h>
         #include <pthread.h>

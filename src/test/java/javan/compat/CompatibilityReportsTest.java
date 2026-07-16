@@ -77,12 +77,12 @@ final class CompatibilityReportsTest {
         assertThat(summary).contains(
             "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 5, \"leftCallables\": 3, \"coveragePercent\": \"40.0\"}",
             "\"exactJdkCallableAccounting\": {\"supportedCallables\": 2, \"explicitRejectedCallables\": 3, \"doneCallables\": 5, \"unknownCallables\": 0, \"totalCallables\": 5, \"donePercent\": \"100.0\"}",
-            "\"supportRows\": 136",
-            "\"passRows\": 136",
+            "\"supportRows\": 140",
+            "\"passRows\": 140",
             "\"scopedRows\": 0",
             "\"targetRows\": 0",
             "\"rejectedRows\": 0",
-            "\"accountedRows\": 136",
+            "\"accountedRows\": 140",
             "\"unaccountedRows\": 0"
         );
     }
@@ -158,6 +158,10 @@ final class CompatibilityReportsTest {
             "| `network-tcp-server-socket-timeout-round-trip` | pass |",
             "| `network-tcp-server-socket-accept-timeout-boundary` | pass |",
             "| `network-tcp-socket-stream-io` | pass |",
+            "| `network-tcp-socket-channel-null` | pass |",
+            "| `network-tcp-server-socket-channel-null` | pass |",
+            "| `network-tcp-socket-explicit-connect-lifecycle` | pass |",
+            "| `network-tcp-server-socket-explicit-bind-lifecycle` | pass |",
             "| `network-http-client-get-string` | pass |",
             "| `network-http-client-post-string-byte-array` | pass |",
             "| `network-http-client-put-byte-array` | pass |",
@@ -222,6 +226,10 @@ final class CompatibilityReportsTest {
             "\"feature\": \"network-tcp-server-socket-timeout-round-trip\"",
             "\"feature\": \"network-tcp-server-socket-accept-timeout-boundary\"",
             "\"feature\": \"network-tcp-socket-stream-io\"",
+            "\"feature\": \"network-tcp-socket-channel-null\"",
+            "\"feature\": \"network-tcp-server-socket-channel-null\"",
+            "\"feature\": \"network-tcp-socket-explicit-connect-lifecycle\"",
+            "\"feature\": \"network-tcp-server-socket-explicit-bind-lifecycle\"",
             "\"feature\": \"network-http-client-get-string\"",
             "\"feature\": \"network-http-client-post-string-byte-array\"",
             "\"feature\": \"network-http-client-put-byte-array\"",

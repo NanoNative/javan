@@ -274,6 +274,8 @@ final class RuntimeSourceMemorySections {
             int tcp_no_delay;
             int keep_alive;
             int reuse_address;
+            int receive_buffer_size;
+            int send_buffer_size;
             javan_inet_address* local_address;
             javan_inet_address* remote_address;
         } javan_socket;
@@ -286,7 +288,7 @@ final class RuntimeSourceMemorySections {
             int local_port;
             int so_timeout;
             int reuse_address;
-            int reserved0;
+            int receive_buffer_size;
             javan_inet_address* local_address;
         } javan_server_socket;
 
@@ -1493,27 +1495,37 @@ final class RuntimeSourceMemorySections {
                 javan_socket* socket = (javan_socket*) node->value;
                 if (socket->magic != JAVAN_SOCKET_MAGIC
                     || socket->fd < -1
-                    || socket->connected < 0
-                    || socket->closed < 0
-                    || socket->local_port < 0
+                    || (socket->connected != 0 && socket->connected != 1)
+                    || (socket->closed != 0 && socket->closed != 1)
+                    || (socket->bound != 0 && socket->bound != 1)
+                    || (socket->input_shutdown != 0 && socket->input_shutdown != 1)
+                    || (socket->output_shutdown != 0 && socket->output_shutdown != 1)
+                    || socket->local_port < -1
                     || socket->remote_port < 0
                     || socket->so_timeout < 0
+                    || socket->receive_buffer_size <= 0
+                    || socket->send_buffer_size <= 0
                     || (socket->tcp_no_delay != 0 && socket->tcp_no_delay != 1)
                     || (socket->keep_alive != 0 && socket->keep_alive != 1)
                     || (socket->reuse_address != 0 && socket->reuse_address != 1)
                     || socket->local_address == NULL
-                    || socket->remote_address == NULL) {
+                    || (socket->connected != 0 && socket->remote_address == NULL)
+                    || (socket->connected == 0 && socket->bound == 0 && socket->local_port != -1)
+                    || (socket->connected == 0 && socket->remote_port != 0)) {
                     javan_panic("invalid runtime socket metadata");
                 }
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_SERVER_SOCKET) {
                 javan_server_socket* socket = (javan_server_socket*) node->value;
                 if (socket->magic != JAVAN_SERVER_SOCKET_MAGIC
                     || socket->fd < -1
-                    || socket->closed < 0
-                    || socket->local_port < 0
+                    || (socket->bound != 0 && socket->bound != 1)
+                    || (socket->closed != 0 && socket->closed != 1)
+                    || socket->local_port < -1
                     || socket->so_timeout < 0
+                    || socket->receive_buffer_size <= 0
                     || (socket->reuse_address != 0 && socket->reuse_address != 1)
-                    || socket->local_address == NULL) {
+                    || (socket->bound != 0 && socket->local_address == NULL)
+                    || (socket->bound == 0 && socket->local_port != -1)) {
                     javan_panic("invalid runtime server socket metadata");
                 }
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_SOCKET_INPUT_STREAM) {

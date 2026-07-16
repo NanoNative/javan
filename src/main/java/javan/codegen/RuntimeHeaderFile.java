@@ -328,9 +328,12 @@ final class RuntimeHeaderFile {
         void* javan_inet_socket_address_get_host_string(void* value);
         void* javan_inet_socket_address_get_address(void* value);
         void* javan_inet_socket_address_to_string(void* value);
+        void* javan_socket_new(void);
         void* javan_socket_connect_host(void* host, int port);
         void* javan_socket_connect_host_config(void* host, int port, void* local_address, int local_port);
         void* javan_socket_connect_address_config(void* remote_address, int port, void* local_address, int local_port);
+        void javan_socket_connect_socket_address(void* value, void* address);
+        void javan_socket_connect_socket_address_timeout(void* value, void* address, int timeout_millis);
         int javan_socket_is_connected(void* value);
         int javan_socket_is_closed(void* value);
         int javan_socket_is_bound(void* value);
@@ -360,6 +363,7 @@ final class RuntimeHeaderFile {
         void* javan_socket_get_inet_address(void* value);
         void* javan_socket_get_local_socket_address(void* value);
         void* javan_socket_get_remote_socket_address(void* value);
+        void* javan_socket_get_channel(void* value);
         void* javan_socket_input_stream(void* value);
         void* javan_socket_output_stream(void* value);
         int javan_socket_input_stream_read(void* value);
@@ -374,8 +378,11 @@ final class RuntimeHeaderFile {
         void javan_socket_shutdown_output(void* value);
         void javan_socket_output_stream_close(void* value);
         void javan_socket_close(void* value);
+        void* javan_server_socket_new(void);
         void* javan_server_socket_bind(int port);
         void* javan_server_socket_bind_config(void* host, int port, int backlog);
+        void javan_server_socket_bind_socket_address(void* value, void* address);
+        void javan_server_socket_bind_socket_address_backlog(void* value, void* address, int backlog);
         void* javan_server_socket_get_inet_address(void* value);
         int javan_server_socket_is_bound(void* value);
         int javan_server_socket_is_closed(void* value);
@@ -387,6 +394,7 @@ final class RuntimeHeaderFile {
         int javan_server_socket_get_receive_buffer_size(void* value);
         void javan_server_socket_set_receive_buffer_size(void* value, int size);
         void* javan_server_socket_get_local_socket_address(void* value);
+        void* javan_server_socket_get_channel(void* value);
         void* javan_server_socket_accept(void* value);
         void javan_server_socket_close(void* value);
         void* javan_uri_create(void* value);

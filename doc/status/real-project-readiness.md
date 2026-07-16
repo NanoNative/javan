@@ -10,18 +10,40 @@ Probe summary:
 | Nano scheduler lifecycle | Smoke | `nano-scheduler` and `nano-scheduler-fixed-rate` build natively against the pinned Maven artifact and are exercised by the required external-probe acceptance gate plus focused CLI integration. | Broader Nano service graph and scheduler-adjacent runtime coverage beyond the current lifecycle slice. |
 | Nano HTTP service | Planned smoke | Nano-style `HttpServer` dependency now fails clearly with `JAVAN061` and reports `network/http`. | Broader HTTP service runtime, resources, thread/blocking model, and dev-console/reflection exclusion. |
 
-These external probes are intentionally excluded from `doc/status/support-matrix.*` and from
-the core JDK support ledger. They are compatibility smoke only, driven by per-probe metadata
-and exact stdout expectations under `src/test/resources/projects/real-probes/*`.
+These external probes are intentionally excluded from `doc/status/support-matrix.*`,
+`doc/status/jdk-compatibility.md`, and the core JDK support ledger. They are compatibility
+smoke only, driven by per-probe metadata and exact stdout expectations under
+`src/test/resources/projects/real-probes/*`.
+
+They are not static compiler knowledge. Upstream project code may change at any time. Javan is
+allowed to keep named smoke probes here only as compatibility evidence for the currently pinned
+artifacts; support claims must still be expressed in generic JDK/runtime terms elsewhere.
+
+Rule:
+
+- if a real probe breaks, fix the compiler/runtime gap in a generic JDK-support test first
+- then keep or update the external probe only as upstream compatibility smoke
+- never add a Nano- or TypeMap-named support row, intrinsic, substitution, or verifier rule
 
 Compiler-owned regression coverage for the same shapes lives under `src/test/java/javan/*`
 using synthetic dependency jars and projects. The external probes are allowed to fail only as
 real-project compatibility evidence, never as the definition of a JDK support claim.
+
+Boundary rules:
+
+- compiler-owned tests must stay generic and project-neutral
+- support rows, intrinsics, substitutions, and verifier rules must stay JDK/runtime-shaped
+- external project names may stay hardcoded only in:
+  - `src/test/resources/projects/real-probes/*`
+  - `src/test/java/javan/CliExternalProbeAcceptanceIntegrationTest.java`
+  - `src/test/java/javan/ExternalProbe*.java`
+  - this document
+
 When one of these probes finds a gap, the durable fix must be captured by compiler-owned tests
-that prove the JDK/runtime shape directly, without naming Nano or TypeMap in the core support line.
-Probe metadata under `src/test/resources/projects/real-probes/*` is intentionally the only place
-where those project identities are allowed to stay hardcoded for acceptance; Javan itself must not
-encode project-specific support rules.
+that prove the JDK/runtime shape directly, without naming the upstream project in the core support
+line. Probe metadata under `src/test/resources/projects/real-probes/*` and this dedicated ledger
+are intentionally the only places where those project identities may stay hardcoded for acceptance;
+Javan itself must not encode project-specific support rules.
 
 Current compatibility probes:
 

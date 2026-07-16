@@ -8988,6 +8988,28 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersSocketNoArgConstructorCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/net/Socket;",
+            2,
+            0,
+            classInstruction(0, 187, "new", "java/net/Socket"),
+            plain(1, 89, "dup"),
+            invokeSpecial(2, new MethodRef("java/net/Socket", "<init>", "()V")),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectNull()),
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_socket_new", List.of())),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
     void lowersSocketHostLocalBindConstructorCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -9062,6 +9084,29 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersSocketConnectSocketAddressCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/Socket;Ljava/net/SocketAddress;)V",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/net/Socket", "connect", "(Ljava/net/SocketAddress;)V")),
+            plain(3, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid(
+                "javan_socket_connect_socket_address",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
     void lowersServerSocketPortBacklogConstructorCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -9088,6 +9133,51 @@ final class BytecodeToIRTest {
                 )
             ),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersServerSocketNoArgConstructorCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/net/ServerSocket;",
+            2,
+            0,
+            classInstruction(0, 187, "new", "java/net/ServerSocket"),
+            plain(1, 89, "dup"),
+            invokeSpecial(2, new MethodRef("java/net/ServerSocket", "<init>", "()V")),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectNull()),
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_server_socket_new", List.of())),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersServerSocketBindSocketAddressCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/ServerSocket;Ljava/net/SocketAddress;)V",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/net/ServerSocket", "bind", "(Ljava/net/SocketAddress;)V")),
+            plain(3, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid(
+                "javan_server_socket_bind_socket_address",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ),
+            IrInstruction.returnVoid()
         );
     }
 
@@ -9372,6 +9462,44 @@ final class BytecodeToIRTest {
 
         assertThat(function.instructions()).containsExactly(
             IrInstruction.assignObject("object0", IrExpression.objectCall("javan_server_socket_get_local_socket_address", List.of(IrExpression.objectLocal("arg0")))),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersSocketGetChannelCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/Socket;)Ljava/nio/channels/SocketChannel;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/net/Socket", "getChannel", "()Ljava/nio/channels/SocketChannel;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_socket_get_channel", List.of(IrExpression.objectLocal("arg0")))),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersServerSocketGetChannelCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/ServerSocket;)Ljava/nio/channels/ServerSocketChannel;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/net/ServerSocket", "getChannel", "()Ljava/nio/channels/ServerSocketChannel;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_server_socket_get_channel", List.of(IrExpression.objectLocal("arg0")))),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }

@@ -11,8 +11,8 @@
     "rule": "done = supported variants + rejected variants; unknown leftovers must be 0 for a release-gated JDK"
   },
   "counts": {
-    "rows": 136,
-    "pass": 136,
+    "rows": 140,
+    "pass": 140,
     "scoped": 0,
     "target": 0,
     "rejected": 0
@@ -133,6 +133,10 @@
     {"feature": "network-tcp-server-socket-timeout-round-trip", "jdk25": "pass"},
     {"feature": "network-tcp-server-socket-accept-timeout-boundary", "jdk25": "pass"},
     {"feature": "network-tcp-socket-stream-io", "jdk25": "pass"},
+    {"feature": "network-tcp-socket-channel-null", "jdk25": "pass"},
+    {"feature": "network-tcp-server-socket-channel-null", "jdk25": "pass"},
+    {"feature": "network-tcp-socket-explicit-connect-lifecycle", "jdk25": "pass"},
+    {"feature": "network-tcp-server-socket-explicit-bind-lifecycle", "jdk25": "pass"},
     {"feature": "network-http-client-get-string", "jdk25": "pass"},
     {"feature": "network-http-client-post-string-byte-array", "jdk25": "pass"},
     {"feature": "network-http-client-put-byte-array", "jdk25": "pass"},

@@ -37,6 +37,55 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 @ResourceLock(value = Resources.SYSTEM_PROPERTIES, mode = ResourceAccessMode.READ)
 final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     @Test
+    void socketExplicitConnectLifecycleBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
+                try (java.net.Socket socket = server.accept()) {
+                    socket.getOutputStream().flush();
+                } catch (final Exception exception) {
+                    throw new IllegalStateException(exception);
+                }
+            });
+            final Path project = project("socket-explicit-connect-lifecycle");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.net.InetSocketAddress;
+                import java.net.Socket;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final Socket socket = new Socket();
+                        System.out.println(socket.isConnected());
+                        System.out.println(socket.isBound());
+                        System.out.println(socket.getInetAddress() == null);
+                        System.out.println(socket.getRemoteSocketAddress() == null);
+                        socket.connect(new InetSocketAddress("127.0.0.1", %d));
+                        System.out.println(socket.isConnected());
+                        System.out.println(socket.isBound());
+                        System.out.println(socket.getInetAddress().getHostAddress());
+                        System.out.println(socket.getPort());
+                        System.out.println(socket.getLocalPort() > 0);
+                        socket.close();
+                    }
+                }
+                """.formatted(port));
+
+            final String jvmOutput = runJvm(project, "com.acme.Main");
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            assertThat(process(project, List.of(project.resolve(".javan/bin/socket-explicit-connect-lifecycle").toString())).stdout())
+                .isEqualTo(jvmOutput);
+            accepted.get(5, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
     void socketConnectStateBuildsAndTalksToLoopbackServer() throws Exception {
         final int port = freeTcpPort();
         try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
@@ -4174,6 +4223,100 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void socketGetChannelBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("socket-get-channel");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.ServerSocket;
+            import java.net.Socket;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ServerSocket server = new ServerSocket(0);
+                    final Socket client = new Socket("127.0.0.1", server.getLocalPort());
+                    final Socket accepted = server.accept();
+                    System.out.println(client.getChannel() == null);
+                    accepted.close();
+                    client.close();
+                    server.close();
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/socket-get-channel").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void serverSocketGetChannelBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("server-socket-get-channel");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.ServerSocket;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ServerSocket server = new ServerSocket(0);
+                    System.out.println(server.getChannel() == null);
+                    server.close();
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/server-socket-get-channel").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void serverSocketExplicitBindLifecycleBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("server-socket-explicit-bind-lifecycle");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.InetSocketAddress;
+            import java.net.ServerSocket;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ServerSocket server = new ServerSocket();
+                    System.out.println(server.isBound());
+                    System.out.println(server.getLocalSocketAddress() == null);
+                    server.bind(new InetSocketAddress("127.0.0.1", 0));
+                    System.out.println(server.isBound());
+                    System.out.println(server.getLocalPort() > 0);
+                    System.out.println(server.getInetAddress().getHostAddress());
+                    System.out.println(server.getLocalSocketAddress() != null);
+                    server.close();
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/server-socket-explicit-bind-lifecycle").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
     void buildRejectsReachableDisabledSocketRuntimeModuleForInetAddressLoopback() throws Exception {
         assertBuildRejectsDisabledRuntimeModule("disabled-socket-build", "socket", """
             package com.acme;
@@ -4192,53 +4335,59 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void checkRejectsReachableSocketAndReportsNetworkRuntimeModules() throws Exception {
-        final Path project = project("unsupported-socket");
+    void checkAcceptsReachableSocketLifecycleAndReportsNetworkRuntimeModules() throws Exception {
+        final Path project = project("socket-lifecycle-runtime-modules");
         writeJava(project, "com.acme.Main", """
             package com.acme;
+
+            import java.net.Socket;
 
             public final class Main {
                 private Main() {
                 }
 
                 public static void main(final String[] args) throws Exception {
-                    new java.net.Socket();
+                    final Socket socket = new Socket();
+                    System.out.println(socket.isConnected());
                 }
             }
             """);
 
         final CliRun run = run(tempDir, "check", project.toString());
 
-        assertThat(run.exitCode()).isEqualTo(2);
-        assertThat(run.stderr()).contains("error[JAVAN061]", "java/net/Socket.<init>()V", "network/socket");
+        assertThat(run.exitCode()).isZero();
         assertThat(Files.readString(project.resolve(".javan/reports/runtime-features.json"))).contains(
-            "\"reachableRuntimeModules\": [\"core\", \"network\", \"socket\"]",
+            "\"network\"",
+            "\"socket\"",
             "\"status\": \"pass\""
         );
     }
 
     @Test
-    void checkRejectsReachableServerSocketAndReportsNetworkRuntimeModules() throws Exception {
-        final Path project = project("unsupported-server-socket");
+    void checkAcceptsReachableServerSocketLifecycleAndReportsNetworkRuntimeModules() throws Exception {
+        final Path project = project("server-socket-lifecycle-runtime-modules");
         writeJava(project, "com.acme.Main", """
             package com.acme;
+
+            import java.net.ServerSocket;
 
             public final class Main {
                 private Main() {
                 }
 
                 public static void main(final String[] args) throws Exception {
-                    new java.net.ServerSocket();
+                    final ServerSocket server = new ServerSocket();
+                    System.out.println(server.isBound());
                 }
             }
             """);
 
         final CliRun run = run(tempDir, "check", project.toString());
 
-        assertThat(run.exitCode()).isEqualTo(2);
-        assertThat(run.stderr()).contains("error[JAVAN061]", "java/net/ServerSocket.<init>()V", "network/socket");
+        assertThat(run.exitCode()).isZero();
         assertThat(Files.readString(project.resolve(".javan/reports/runtime-features.json"))).contains(
-            "\"reachableRuntimeModules\": [\"core\", \"network\", \"socket\"]",
+            "\"network\"",
+            "\"socket\"",
             "\"status\": \"pass\""
         );
     }

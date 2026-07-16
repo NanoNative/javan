@@ -453,17 +453,13 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void staticVerifierRejectsReachableSocketCallWithNetworkDiagnostic() {
+    void staticVerifierAcceptsReachableSocketLifecycleCall() {
         final List<Diagnostic> diagnostics = verifyInstruction(
             instruction(0, 183, "invokespecial", new MethodRef("java/net/Socket", "<init>", "()V")),
             true
         );
 
-        assertThat(diagnostics).hasSize(1);
-        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN061");
-        assertThat(diagnostics.getFirst().message()).isEqualTo("unsupported reachable network API");
-        assertThat(diagnostics.getFirst().subject()).isEqualTo("java/net/Socket.<init>()V");
-        assertThat(diagnostics.getFirst().reason()).contains("network/socket");
+        assertThat(diagnostics).isEmpty();
     }
 
     @Test

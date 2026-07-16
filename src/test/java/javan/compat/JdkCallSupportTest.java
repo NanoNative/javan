@@ -97,6 +97,42 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void socketNoArgConstructorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/Socket",
+            "<init>",
+            "()V"
+        ))).isTrue();
+    }
+
+    @Test
+    void socketConnectSocketAddressIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/Socket",
+            "connect",
+            "(Ljava/net/SocketAddress;)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void serverSocketNoArgConstructorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/ServerSocket",
+            "<init>",
+            "()V"
+        ))).isTrue();
+    }
+
+    @Test
+    void serverSocketBindSocketAddressIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/ServerSocket",
+            "bind",
+            "(Ljava/net/SocketAddress;)V"
+        ))).isTrue();
+    }
+
+    @Test
     void inetAddressGetByAddressIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/net/InetAddress",
@@ -120,6 +156,24 @@ final class JdkCallSupportTest {
             "java/net/InetAddress",
             "getAddress",
             "()[B"
+        ))).isTrue();
+    }
+
+    @Test
+    void socketGetChannelIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/Socket",
+            "getChannel",
+            "()Ljava/nio/channels/SocketChannel;"
+        ))).isTrue();
+    }
+
+    @Test
+    void serverSocketGetChannelIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/ServerSocket",
+            "getChannel",
+            "()Ljava/nio/channels/ServerSocketChannel;"
         ))).isTrue();
     }
 
