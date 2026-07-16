@@ -2397,6 +2397,23 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersBipushNegativeBoundaryThroughNormalizedIntMetadata() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()I",
+            1,
+            0,
+            plainOperands(0, 16, "bipush", 0x80),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intLiteral(-128))
+        );
+    }
+
+    @Test
     void lowersSipushThroughNormalizedIntMetadata() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -2410,6 +2427,40 @@ final class BytecodeToIRTest {
 
         assertThat(function.instructions()).containsExactly(
             IrInstruction.returnInt(IrExpression.intLiteral(300))
+        );
+    }
+
+    @Test
+    void lowersSipushNegativeBoundaryThroughNormalizedIntMetadata() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()I",
+            1,
+            0,
+            plainOperands(0, 17, "sipush", 0x80, 0x00),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intLiteral(-32768))
+        );
+    }
+
+    @Test
+    void lowersSipushPositiveBoundaryThroughNormalizedIntMetadata() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()I",
+            1,
+            0,
+            plainOperands(0, 17, "sipush", 0x7F, 0xFF),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intLiteral(32767))
         );
     }
 

@@ -194,6 +194,60 @@ final class ClassFileReaderTest {
         assertThat(literalValues).containsExactly(-1, 0, 1, 2, 3, 4, 5, -1, 1, -2, 2);
     }
 
+    @Test
+    void readerNormalizesBipushSignedBoundaryLiterals() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(
+            minimalClassfile(
+                "ints/BipushBoundaries",
+                new byte[]{
+                    16, (byte) 0x80,
+                    16, (byte) 0x7F,
+                    (byte) 177
+                }
+            ),
+            SOURCE
+        );
+
+        final List<Integer> literalValues = classFile.method("<init>", "()V")
+            .orElseThrow()
+            .code()
+            .orElseThrow()
+            .instructions()
+            .stream()
+            .filter(instruction -> instruction.intValue().isPresent())
+            .map(instruction -> instruction.intValue().orElseThrow())
+            .toList();
+
+        assertThat(literalValues).containsExactly(-128, 127);
+    }
+
+    @Test
+    void readerNormalizesSipushSignedBoundaryLiterals() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(
+            minimalClassfile(
+                "ints/SipushBoundaries",
+                new byte[]{
+                    17, (byte) 0x80, (byte) 0x00,
+                    17, (byte) 0x7F, (byte) 0xFF,
+                    (byte) 177
+                }
+            ),
+            SOURCE
+        );
+
+        final List<Integer> literalValues = classFile.method("<init>", "()V")
+            .orElseThrow()
+            .code()
+            .orElseThrow()
+            .instructions()
+            .stream()
+            .filter(instruction -> instruction.intValue().isPresent())
+            .map(instruction -> instruction.intValue().orElseThrow())
+            .toList();
+
+        assertThat(literalValues).containsExactly(-32768, 32767);
+    }
+
     private static void assertConstructorMetadata(final MemberMetadata constructor) {
         assertThat(constructor.name()).isEqualTo("<init>");
         assertThat(constructor.attributes()).containsExactly("Code");
