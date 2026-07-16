@@ -349,6 +349,156 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksSunAwtCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("sun/awt/SunToolkit", "createNewAppContext", "()Lsun/awt/AppContext;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksJavadocCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("jdk/javadoc/internal/doclets/toolkit/util/Utils", "isDeprecated", "(Ljavax/lang/model/element/Element;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksJshellCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("jdk/jshell/JShell", "builder", "()Ljdk/jshell/JShell$Builder;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksInternalJshellCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("jdk/internal/jshell/tool/JShellTool", "start", "(Ljava/lang/String[])V")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksBcelGenericCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("com/sun/org/apache/bcel/internal/generic/InstructionList", "append", "(Lcom/sun/org/apache/bcel/internal/generic/Instruction;)Lcom/sun/org/apache/bcel/internal/generic/InstructionHandle;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksBcelClassfileCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("com/sun/org/apache/bcel/internal/classfile/JavaClass", "getMethods", "()[Lcom/sun/org/apache/bcel/internal/classfile/Method;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksXercesCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("com/sun/org/apache/xerces/internal/util/XMLChar", "isValid", "(I)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksXmlCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("com/sun/org/apache/xml/internal/security/Init", "init", "()V")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksXalanCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("com/sun/org/apache/xalan/internal/lib/ExsltStrings", "align", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksJlineCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("jdk/internal/org/jline/utils/AttributedString", "toAnsi", "()Ljava/lang/String;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksCommonmarkCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("jdk/internal/org/commonmark/node/Text", "getLiteral", "()Ljava/lang/String;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksExampleDebugCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("com/sun/tools/example/debug/tty/TTY", "main", "([Ljava/lang/String;)V")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksXalanCompilerCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("com/sun/org/apache/xalan/internal/xsltc/compiler/Parser", "createAST", "(Lcom/sun/org/apache/xalan/internal/xsltc/compiler/SyntaxTreeNode;)V")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksXercesDomCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("com/sun/org/apache/xerces/internal/dom/CoreDocumentImpl", "createElement", "(Ljava/lang/String;)Lorg/w3c/dom/Element;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksXmlDtmCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("com/sun/org/apache/xml/internal/dtm/ref/DTMNodeProxy", "getNodeName", "()Ljava/lang/String;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksXmlSerializerCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("com/sun/org/apache/xml/internal/serializer/ToXMLStream", "startElement", "(Ljava/lang/String;)V")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksCharsetExtCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("sun/nio/cs/ext/Big5", "contains", "(Ljava/nio/charset/Charset;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksPrintCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("sun/print/PSPrinterJob", "getXRes", "()D")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksXmlUtilsCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("com/sun/org/apache/xml/internal/utils/PrefixResolverDefault", "getNamespaceForPrefix", "(Ljava/lang/String;)Ljava/lang/String;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksXsltcDomCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("com/sun/org/apache/xalan/internal/xsltc/dom/SAXImpl", "getDocumentURI", "()Ljava/lang/String;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksXercesXsCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("com/sun/org/apache/xerces/internal/impl/xs/XMLSchemaValidator", "getFeatureDefault", "(Ljava/lang/String;)Ljava/lang/Boolean;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksXmlDsigDomCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("org/jcp/xml/dsig/internal/dom/DOMReference", "getDigestInputStream", "()Ljava/io/InputStream;")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksJdepsCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("com/sun/tools/jdeps/JdepsTask", "run", "([Ljava/lang/String;)I")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksJlinkCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("jdk/tools/jlink/internal/JlinkTask", "run", "([Ljava/lang/String;)I")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksJconsoleCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("sun/tools/jconsole/JConsole", "main", "([Ljava/lang/String;)V")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
     void marksStringBuilderCharSequenceConstructorAsExplicitRejected() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/StringBuilder", "<init>", "(Ljava/lang/CharSequence;)V")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);

@@ -348,16 +348,91 @@ final class JdkCallableAccounting {
         if (owner.startsWith("com/sun/media/sound/")) {
             return true;
         }
+        if (owner.startsWith("com/sun/org/apache/bcel/internal/generic/")) {
+            return true;
+        }
+        if (owner.startsWith("com/sun/org/apache/bcel/internal/classfile/")) {
+            return true;
+        }
+        if (owner.startsWith("com/sun/org/apache/xerces/internal/")) {
+            return true;
+        }
+        if (owner.startsWith("com/sun/org/apache/xml/internal/")) {
+            return true;
+        }
+        if (owner.startsWith("com/sun/org/apache/xalan/internal/")) {
+            return true;
+        }
+        if (owner.startsWith("jdk/internal/org/jline/")) {
+            return true;
+        }
+        if (owner.startsWith("jdk/internal/org/commonmark/")) {
+            return true;
+        }
+        if (owner.startsWith("com/sun/tools/example/debug/")) {
+            return true;
+        }
+        if (owner.startsWith("com/sun/org/apache/xalan/internal/xsltc/compiler/")) {
+            return true;
+        }
+        if (owner.startsWith("com/sun/org/apache/xerces/internal/dom/")) {
+            return true;
+        }
+        if (owner.startsWith("com/sun/org/apache/xml/internal/dtm/")) {
+            return true;
+        }
+        if (owner.startsWith("com/sun/org/apache/xml/internal/serializer/")) {
+            return true;
+        }
+        if (owner.startsWith("com/sun/org/apache/xml/internal/utils/")) {
+            return true;
+        }
+        if (owner.startsWith("com/sun/org/apache/xalan/internal/xsltc/dom/")) {
+            return true;
+        }
+        if (owner.startsWith("com/sun/org/apache/xerces/internal/impl/xs/")) {
+            return true;
+        }
+        if (owner.startsWith("org/jcp/xml/dsig/internal/dom/")) {
+            return true;
+        }
+        if (owner.startsWith("com/sun/tools/jdeps/")) {
+            return true;
+        }
         if (owner.startsWith("sun/font/")) {
             return true;
         }
         if (owner.startsWith("sun/lwawt/")) {
             return true;
         }
+        if (owner.startsWith("sun/awt/")) {
+            return true;
+        }
+        if (owner.startsWith("sun/nio/cs/ext/")) {
+            return true;
+        }
+        if (owner.startsWith("sun/print/")) {
+            return true;
+        }
         if (owner.startsWith("sun/jvm/hotspot/")) {
             return true;
         }
+        if (owner.startsWith("jdk/javadoc/internal/doclets/")) {
+            return true;
+        }
+        if (owner.startsWith("jdk/jshell/")) {
+            return true;
+        }
+        if (owner.startsWith("jdk/internal/jshell/")) {
+            return true;
+        }
+        if (owner.startsWith("jdk/tools/jlink/internal/")) {
+            return true;
+        }
         if (owner.startsWith("sun/util/resources/cldr/ext/")) {
+            return true;
+        }
+        if (owner.startsWith("sun/tools/jconsole/")) {
             return true;
         }
         if ("sun/misc/Unsafe".equals(owner)) {
