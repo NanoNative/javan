@@ -1517,6 +1517,36 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void collectionsEmptyListBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("collections-empty-list");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Collections;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<String> values = Collections.emptyList();
+                    System.out.println(values.isEmpty());
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/collections-empty-list").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n0\n");
+    }
+
+    @Test
     void booleanEqualsBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("boolean-equals");
         writeJava(project, "com.acme.Main", """

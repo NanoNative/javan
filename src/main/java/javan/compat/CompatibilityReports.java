@@ -499,6 +499,7 @@ public final class CompatibilityReports {
             pass("library-structured-last-error-fields"),
             pass("deduplication-plan"),
             pass("hashmap-realloc-gc"),
+            pass("collections-empty-list"),
             pass("list-of-varargs-gc"),
             pass("owned-buffer-realloc-validation"),
             pass("stringbuilder-setlength-overflow-panic"),

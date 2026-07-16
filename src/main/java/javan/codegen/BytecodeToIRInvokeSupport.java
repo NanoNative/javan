@@ -3227,6 +3227,10 @@ final class BytecodeToIRInvokeSupport {
             return true;
         }
         if ("java/util/Collections".equals(owner)) {
+            if ("emptyList".equals(name) && "()Ljava/util/List;".equals(descriptor)) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_of", List.of(IrExpression.intLiteral(0)))));
+                return true;
+            }
             if ("emptyMap".equals(name) && "()Ljava/util/Map;".equals(descriptor)) {
                 stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_empty", List.of())));
                 return true;
