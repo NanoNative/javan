@@ -2870,6 +2870,83 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersLdcwStringLiteral() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/lang/String;",
+            1,
+            0,
+            wideStringConstant(0, "hello"),
+            plain(1, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.stringLiteral("hello"))
+        );
+    }
+
+    @Test
+    void lowersLdcwIntLiteral() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()I",
+            1,
+            0,
+            wideIntConstant(0, 7),
+            plain(1, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intLiteral(7))
+        );
+    }
+
+    @Test
+    void lowersLdcwFloatLiteral() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()F",
+            1,
+            0,
+            wideFloatConstant(0, 1.5f),
+            plain(1, 174, "freturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnFloat(IrExpression.floatLiteral(1.5f))
+        );
+    }
+
+    @Test
+    void lowersLdcwClassLiteral() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/lang/Class;",
+            1,
+            0,
+            classInstruction(0, 19, "ldc_w", "java/lang/String"),
+            plain(1, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_runtime_class_literal",
+                List.of(
+                    IrExpression.stringLiteral("java.lang.String"),
+                    IrExpression.intLiteral(-2001),
+                    IrExpression.intLiteral(0),
+                    IrExpression.intLiteral(0),
+                    IrExpression.intLiteral(0)
+                )
+            ))
+        );
+    }
+
+    @Test
     void lowersIincToIntLocalAddAssignment() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -21138,6 +21215,63 @@ final class BytecodeToIRTest {
             Optional.empty(),
             Optional.empty(),
             Optional.of(constantPoolTag)
+        );
+    }
+
+    private static Instruction wideStringConstant(final int offset, final String value) {
+        return new Instruction(
+            offset,
+            19,
+            "ldc_w",
+            new byte[0],
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(value),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(8)
+        );
+    }
+
+    private static Instruction wideIntConstant(final int offset, final int value) {
+        return new Instruction(
+            offset,
+            19,
+            "ldc_w",
+            new byte[0],
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(value),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(3)
+        );
+    }
+
+    private static Instruction wideFloatConstant(final int offset, final float value) {
+        return new Instruction(
+            offset,
+            19,
+            "ldc_w",
+            new byte[0],
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(value),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(4)
         );
     }
 
