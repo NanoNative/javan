@@ -29,6 +29,10 @@ product knowledge, not a support allowlist, and not a stable contract. The compi
 and support line must remain generic so the same regressions still make sense after the probe set
 changes.
 
+That includes the current pinned third-party smoke set. Those artifacts may evolve independently.
+Javan must not encode their names, packages, or semantics anywhere in the compiler-owned support
+line.
+
 Read that literally: upstream project identities are not part of javan's compiler knowledge. They
 are moving upstream artifacts. Javan is only allowed to know them inside the dedicated
 external-smoke boundary. Compiler-owned tests must stay generic even when an external probe breaks.

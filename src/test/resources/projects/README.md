@@ -20,3 +20,5 @@ sample with complete user-facing instructions.
 
 When an external probe finds a bug, the permanent regression belongs in a generic JDK/runtime test
 under `src/test/java/javan`, not in a probe-specific support rule or probe-named compiler test.
+The current pinned external probes may change independently, while the durable Javan regression
+and support line stays generic.

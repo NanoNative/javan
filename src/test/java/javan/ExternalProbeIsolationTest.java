@@ -98,6 +98,36 @@ final class ExternalProbeIsolationTest {
     }
 
     @Test
+    void onlyDedicatedExternalSmokeDocsMayReferenceProbeInfrastructure() throws Exception {
+        final Set<Path> allowedDocs = Set.of(
+            Path.of("doc/status/real-project-readiness.md"),
+            Path.of("doc/spec/examples-and-test-projects.md"),
+            Path.of("src/test/resources/projects/README.md")
+        );
+        final List<Path> scanned = new ArrayList<>();
+        scanned.addAll(markdownFiles(Path.of("doc")));
+        scanned.add(TEST_RESOURCES.resolve("projects/README.md"));
+        for (final Path file : scanned) {
+            final String content = Files.readString(file);
+            if (allowedDocs.contains(file)) {
+                assertThat(content)
+                    .as(file + " should remain the dedicated place that documents external probe infrastructure")
+                    .contains("real-probes");
+                continue;
+            }
+            assertThat(content)
+                .as(file + " should not reference the dedicated external probe directory")
+                .doesNotContain("real-probes");
+            assertThat(content)
+                .as(file + " should not reference probe metadata files")
+                .doesNotContain("probe.properties");
+            assertThat(content)
+                .as(file + " should not reference the shared external probe build helper")
+                .doesNotContain("build-real-probe.sh");
+        }
+    }
+
+    @Test
     void coreStatusDocsStayIndependentOfExternalProbeIdentities() throws Exception {
         assertTextExcludesExternalProbeIdentities(Files.readString(SUPPORT_MATRIX), SUPPORT_MATRIX);
         assertTextExcludesExternalProbeIdentities(Files.readString(SUPPORT_MATRIX_JSON), SUPPORT_MATRIX_JSON);
@@ -336,6 +366,15 @@ final class ExternalProbeIsolationTest {
             for (final Path file : sourceFiles) {
                 assertTextExcludesExternalProbeIdentities(Files.readString(file), file);
             }
+        }
+    }
+
+    private static List<Path> markdownFiles(final Path root) throws IOException {
+        try (Stream<Path> files = Files.walk(root)) {
+            return files
+                .filter(path -> path.toString().endsWith(".md"))
+                .sorted(Comparator.comparing(Path::toString))
+                .toList();
         }
     }
 

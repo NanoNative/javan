@@ -43,6 +43,10 @@ Optional real-project probes:
   back to a compiler-owned generic regression all live in per-probe metadata and in the dedicated
   ledger at `doc/status/real-project-readiness.md`.
 
+The current pinned set is acceptance evidence only. Upstream artifact names and package structure
+must stay out of the compiler-owned support line, which has to remain generic enough that those
+probes can change without renaming Javan tests, support rows, or verifier rules.
+
 Each probe owns its own `probe.properties`, `expected.stdout`, and `build-example.sh`.
 The acceptance harness only iterates probe directories; it does not hardcode library-specific
 support claims into the compiler-owned test line.
