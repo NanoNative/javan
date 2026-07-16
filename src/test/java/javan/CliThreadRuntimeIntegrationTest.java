@@ -4047,6 +4047,94 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void scheduledExecutorServiceFutureCompletedStateBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-scheduled-executor-service-future-completed-state");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.Future;
+            import java.util.concurrent.ScheduledExecutorService;
+            import java.util.concurrent.ScheduledThreadPoolExecutor;
+            import java.util.concurrent.TimeUnit;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ScheduledExecutorService executor = new ScheduledThreadPoolExecutor(1);
+                    final Future<?> future = executor.schedule(new Task(), 0L, TimeUnit.MILLISECONDS);
+                    executor.shutdown();
+                    System.out.println(executor.awaitTermination(1L, TimeUnit.SECONDS));
+                    System.out.println(future.isDone());
+                    System.out.println(future.isCancelled());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-scheduled-executor-service-future-completed-state").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void scheduledExecutorServiceFutureCancelledStateBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-scheduled-executor-service-future-cancelled-state");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.Future;
+            import java.util.concurrent.ScheduledExecutorService;
+            import java.util.concurrent.ScheduledThreadPoolExecutor;
+            import java.util.concurrent.TimeUnit;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ScheduledExecutorService executor = new ScheduledThreadPoolExecutor(1);
+                    final Future<?> future = executor.schedule(new Task(), 200L, TimeUnit.MILLISECONDS);
+                    System.out.println(future.cancel(true));
+                    System.out.println(future.isDone());
+                    System.out.println(future.isCancelled());
+                    executor.shutdown();
+                    System.out.println(executor.awaitTermination(1L, TimeUnit.SECONDS));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println("unexpected");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-scheduled-executor-service-future-cancelled-state").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
     void scheduledExecutorServiceScheduleBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("thread-scheduled-executor-service-schedule");
         writeJava(project, "com.acme.Main", """

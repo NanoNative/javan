@@ -8768,6 +8768,125 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void staticVerifierAcceptsReachableScheduledFutureStateQueriesFromScheduledExecutorServiceAlias() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    6,
+                    2,
+                    new byte[0],
+                    0,
+                    List.of(
+                        classInstruction(0, 187, "new", "java/util/concurrent/ScheduledThreadPoolExecutor"),
+                        instruction(1, 89, "dup"),
+                        instruction(2, 4, "iconst_1"),
+                        instruction(3, 183, "invokespecial", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+                        instruction(4, 75, "astore_0"),
+                        instruction(5, 42, "aload_0"),
+                        instruction(6, 76, "astore_1"),
+                        instruction(7, 43, "aload_1"),
+                        classInstruction(8, 187, "new", "com/acme/Task"),
+                        instruction(9, 89, "dup"),
+                        instruction(10, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        instruction(11, 9, "lconst_0"),
+                        instruction(12, 178, "getstatic", new FieldRef("java/util/concurrent/TimeUnit", "SECONDS", "Ljava/util/concurrent/TimeUnit;")),
+                        instruction(13, 185, "invokeinterface", new MethodRef("java/util/concurrent/ScheduledExecutorService", "schedule", "(Ljava/lang/Runnable;JLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;")),
+                        instruction(14, 77, "astore_2"),
+                        instruction(15, 44, "aload_2"),
+                        instruction(16, 185, "invokeinterface", new MethodRef("java/util/concurrent/Future", "isDone", "()Z")),
+                        instruction(17, 87, "pop"),
+                        instruction(18, 44, "aload_2"),
+                        instruction(19, 185, "invokeinterface", new MethodRef("java/util/concurrent/Future", "isCancelled", "()Z")),
+                        instruction(20, 87, "pop"),
+                        instruction(21, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableScheduledFutureCancelFromScheduledExecutorServiceFixedDelayAlias() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    8,
+                    3,
+                    new byte[0],
+                    0,
+                    List.of(
+                        classInstruction(0, 187, "new", "java/util/concurrent/ScheduledThreadPoolExecutor"),
+                        instruction(1, 89, "dup"),
+                        instruction(2, 4, "iconst_1"),
+                        instruction(3, 183, "invokespecial", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+                        instruction(4, 75, "astore_0"),
+                        instruction(5, 42, "aload_0"),
+                        instruction(6, 76, "astore_1"),
+                        instruction(7, 43, "aload_1"),
+                        classInstruction(8, 187, "new", "com/acme/Task"),
+                        instruction(9, 89, "dup"),
+                        instruction(10, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        instruction(11, 9, "lconst_0"),
+                        instruction(12, 10, "lconst_1"),
+                        instruction(13, 178, "getstatic", new FieldRef("java/util/concurrent/TimeUnit", "SECONDS", "Ljava/util/concurrent/TimeUnit;")),
+                        instruction(14, 185, "invokeinterface", new MethodRef("java/util/concurrent/ScheduledExecutorService", "scheduleWithFixedDelay", "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;")),
+                        instruction(15, 77, "astore_2"),
+                        instruction(16, 44, "aload_2"),
+                        instruction(17, 4, "iconst_1"),
+                        instruction(18, 185, "invokeinterface", new MethodRef("java/util/concurrent/Future", "cancel", "(Z)Z")),
+                        instruction(19, 87, "pop"),
+                        instruction(20, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
     void staticVerifierAcceptsReachableInheritedScheduledThreadPoolExecutorShutdownViaExecutorServiceAlias() {
         final ClassFile scheduler = classWithMethods(
             "com/acme/Scheduler",
