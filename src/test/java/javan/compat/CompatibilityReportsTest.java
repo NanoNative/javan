@@ -76,12 +76,12 @@ final class CompatibilityReportsTest {
         assertThat(summary).contains(
             "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 5, \"leftCallables\": 3, \"coveragePercent\": \"40.0\"}",
             "\"exactJdkCallableAccounting\": {\"supportedCallables\": 2, \"explicitRejectedCallables\": 3, \"doneCallables\": 5, \"unknownCallables\": 0, \"totalCallables\": 5, \"donePercent\": \"100.0\"}",
-            "\"supportRows\": 159",
-            "\"passRows\": 159",
+            "\"supportRows\": 160",
+            "\"passRows\": 160",
             "\"scopedRows\": 0",
             "\"targetRows\": 0",
             "\"rejectedRows\": 0",
-            "\"accountedRows\": 159",
+            "\"accountedRows\": 160",
             "\"unaccountedRows\": 0"
         );
     }
@@ -122,6 +122,7 @@ final class CompatibilityReportsTest {
             "| `library-retained-input-ownership` | pass |",
             "| `library-negative-byte-array-rejection` | pass |",
             "| `hashmap-realloc-gc` | pass |",
+            "| `collections-empty-set` | pass |",
             "| `collections-empty-list` | pass |",
             "| `list-of-varargs-gc` | pass |",
             "| `owned-buffer-realloc-validation` | pass |",
@@ -215,6 +216,7 @@ final class CompatibilityReportsTest {
             "\"feature\": \"resource-loader-instance-stream\"",
             "\"feature\": \"string-intrinsics\"",
             "\"feature\": \"library-c-result-wrapper-success\"",
+            "\"feature\": \"collections-empty-set\"",
             "\"feature\": \"collections-empty-list\"",
             "\"feature\": \"network-address-runtime\"",
             "\"feature\": \"network-inetaddress-get-by-name-literal-host\"",

@@ -148,6 +148,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void collectionsEmptySetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Collections",
+            "emptySet",
+            "()Ljava/util/Set;"
+        ))).isTrue();
+    }
+
+    @Test
     void stringHashCodeIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/String",

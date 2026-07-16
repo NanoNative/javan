@@ -8651,6 +8651,23 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersCollectionsEmptySetToRuntimeHelper() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/util/Set;",
+            1,
+            0,
+            invokeStatic(0, new MethodRef("java/util/Collections", "emptySet", "()Ljava/util/Set;")),
+            plain(1, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall("javan_set_empty", List.of()))
+        );
+    }
+
+    @Test
     void lowersBooleanEqualsToRuntimeHelper() {
         final IrFunction function = lowerMain(method(
             0x0008,

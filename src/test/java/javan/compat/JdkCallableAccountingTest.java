@@ -205,6 +205,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksCollectionsEmptySetAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Collections", "emptySet", "()Ljava/util/Set;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksBooleanEqualsAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Boolean", "equals", "(Ljava/lang/Object;)Z")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

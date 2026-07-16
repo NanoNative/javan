@@ -7810,6 +7810,10 @@ final class RuntimeSourceMemorySections {
             return javan_list_new_with_capacity(0, 0);
         }
 
+        void* javan_set_empty(void) {
+            return javan_list_new_with_capacity(0, 1);
+        }
+
         void* javan_set_unmodifiable(void* value) {
             javan_object_list* set = javan_list_checked(value);
             if (set->immutable != 0 && set->backing != NULL && (set->view_flags & JAVAN_LIST_VIEW_UNMODIFIABLE) != 0) {
