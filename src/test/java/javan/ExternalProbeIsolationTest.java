@@ -160,8 +160,7 @@ final class ExternalProbeIsolationTest {
             TEST_SOURCES.resolve("javan/CliExternalProbeAcceptanceIntegrationTest.java"),
             TEST_SOURCES.resolve("javan/ExternalProbeCatalog.java"),
             TEST_SOURCES.resolve("javan/ExternalProbeIdentities.java"),
-            TEST_SOURCES.resolve("javan/ExternalProbeIsolationTest.java"),
-            TEST_SOURCES.resolve("javan/compat/CompatibilityReportsTest.java")
+            TEST_SOURCES.resolve("javan/ExternalProbeIsolationTest.java")
         );
         try (Stream<Path> files = Files.walk(TEST_SOURCES)) {
             final List<Path> sourceFiles = files

@@ -32,6 +32,11 @@ The acceptance harness now reads all real-probe metadata through one shared test
 catalog is allowed to load probe names and coordinates from metadata; the harness itself and the
 compiler-owned support line must stay project-neutral.
 
+The acceptance harness must also stay directory-name neutral. Probe metadata may use a project
+name that differs from the on-disk probe directory; the harness must copy and run the probe from
+the catalog-provided directory path rather than assuming any external identity maps to a fixed
+resource name.
+
 They are not static compiler knowledge. Upstream project code may change at any time. Javan is
 allowed to keep named smoke probes here only as compatibility evidence for the currently pinned
 artifacts; support claims must still be expressed in generic JDK/runtime terms elsewhere.

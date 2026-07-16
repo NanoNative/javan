@@ -235,14 +235,20 @@ final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupp
     @Test
     void realProbeDiscoveryIsDirectoryMetadataDriven() throws Exception {
         final Path probesRoot = tempDir.resolve("real-probes");
-        writeProbe(probesRoot.resolve("beta"), "beta", "com.example", "beta-lib", "1.0.0", "beta-out\n");
-        writeProbe(probesRoot.resolve("alpha"), "alpha", "com.example", "alpha-lib", "2.0.0", "alpha-out\n");
+        writeProbe(probesRoot.resolve("zeta-dir"), "beta", "com.example", "beta-lib", "1.0.0", "beta-out\n");
+        writeProbe(probesRoot.resolve("alpha-dir"), "alpha", "com.example", "alpha-lib", "2.0.0", "alpha-out\n");
 
         final List<ExternalProbeCatalog.ExternalProbe> probes = realProbes(probesRoot);
 
         assertThat(probes)
             .extracting(ExternalProbeCatalog.ExternalProbe::project)
             .containsExactly("alpha", "beta");
+        assertThat(probes)
+            .extracting(ExternalProbeCatalog.ExternalProbe::projectDirectory)
+            .containsExactly(
+                probesRoot.resolve("alpha-dir").toString().replace('\\', '/'),
+                probesRoot.resolve("zeta-dir").toString().replace('\\', '/')
+            );
         assertThat(probes)
             .extracting(ExternalProbeCatalog.ExternalProbe::groupId)
             .containsExactly("com.example", "com.example");
@@ -304,7 +310,7 @@ final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupp
     }
 
     private void assertExternalProbeMatchesJvmOutput(final ExternalProbeCatalog.ExternalProbe probe, final Path artifact) throws Exception {
-        final Path project = copyResourceProject("real-probes/" + probe.project(), probe.project());
+        final Path project = copyProjectDirectory(Path.of(probe.projectDirectory()), probe.project());
         final String jvmOutput = runJvm(project, probe.mainClass(), List.of(artifact));
         final CliRun run = run(tempDir, "build", project.toString(), "--classpath", artifact.toString(), "--output", probe.project());
 

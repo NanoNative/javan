@@ -68,6 +68,10 @@ abstract class CliIntegrationSupport {
 
     protected final Path copyResourceProject(final String resourceName, final String projectName) throws Exception {
         final Path source = Path.of("src/test/resources/projects").resolve(resourceName);
+        return copyProjectDirectory(source, projectName);
+    }
+
+    protected final Path copyProjectDirectory(final Path source, final String projectName) throws Exception {
         final Path target = tempDir.resolve(projectName);
         try (var paths = Files.walk(source)) {
             for (final Path path : paths.toList()) {
