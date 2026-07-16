@@ -3744,6 +3744,94 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void virtualThreadExecutorAwaitTerminationBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-executor-await-termination");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.ExecutorService;
+            import java.util.concurrent.Executors;
+            import java.util.concurrent.TimeUnit;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+                    executor.execute(new Task());
+                    executor.shutdown();
+                    System.out.println(executor.awaitTermination(1L, TimeUnit.SECONDS));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println("task");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-executor-await-termination").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void virtualThreadExecutorShutdownNowBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-executor-shutdown-now");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.List;
+            import java.util.concurrent.ExecutorService;
+            import java.util.concurrent.Executors;
+            import java.util.concurrent.TimeUnit;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+                    executor.submit(new Task());
+                    final List<Runnable> pending = executor.shutdownNow();
+                    System.out.println(pending.size());
+                    System.out.println(executor.awaitTermination(1L, TimeUnit.SECONDS));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            import java.util.concurrent.locks.LockSupport;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    while (!Thread.currentThread().isInterrupted()) {
+                        LockSupport.parkNanos(1_000_000L);
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-executor-shutdown-now").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
     void scheduledThreadPoolExecutorScheduleBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("thread-scheduled-executor-schedule");
         writeJava(project, "com.acme.Main", """

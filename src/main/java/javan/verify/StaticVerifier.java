@@ -1375,7 +1375,10 @@ public final class StaticVerifier {
         if (isExecutorExecute(methodRef) || isExecutorServiceSubmit(methodRef)) {
             return supportsVirtualThreadExecutorTaskSubmission(classes, instructions, instructionIndex);
         }
-        if (isExecutorServiceShutdown(methodRef) || isExecutorServiceClose(methodRef)) {
+        if (isExecutorServiceShutdown(methodRef)
+            || isExecutorServiceShutdownNow(methodRef)
+            || isExecutorServiceAwaitTermination(methodRef)
+            || isExecutorServiceClose(methodRef)) {
             return supportedVirtualThreadExecutorReceiver(classes, instructions, instructionIndex);
         }
         if (isFutureCancel(methodRef)) {
@@ -1825,9 +1828,17 @@ public final class StaticVerifier {
         final int instructionIndex
     ) {
         final Optional<MethodRef> methodRef = instructions.get(instructionIndex).methodRef();
-        if (methodRef.isPresent()
-            && (isExecutorServiceShutdown(methodRef.orElseThrow()) || isExecutorServiceClose(methodRef.orElseThrow()))) {
-            return supportedVirtualThreadExecutorProducer(classes, instructions, instructionIndex - 1);
+        if (methodRef.isPresent()) {
+            final MethodRef target = methodRef.orElseThrow();
+            if (isExecutorServiceShutdown(target)
+                || isExecutorServiceShutdownNow(target)
+                || isExecutorServiceClose(target)) {
+                return supportedVirtualThreadExecutorProducer(classes, instructions, instructionIndex - 1);
+            }
+            if (isExecutorServiceAwaitTermination(target)) {
+                return instructionIndex >= 3
+                    && supportedVirtualThreadExecutorProducer(classes, instructions, instructionIndex - 3);
+            }
         }
         final int receiverIndex = VirtualThreadInvokePatterns.virtualThreadReceiverProducerIndex(instructions, instructionIndex);
         if (receiverIndex < 0) {

@@ -5378,6 +5378,32 @@ final class BytecodeToIRInvokeSupport {
             ));
             return true;
         }
+        if (VirtualThreadInvokePatterns.isExecutorServiceAwaitTermination(methodRef)
+            && hasReceiverKind(stack, methodRef, StackKind.VIRTUAL_THREAD_EXECUTOR)) {
+            final IrExpression unit = popObject(classFile, method, stack);
+            final IrExpression timeout = popLong(classFile, method, stack);
+            final StackValue executor = popVirtualThreadExecutor(classFile, method, instruction, stack);
+            pushIntCall(
+                instructions,
+                stack,
+                localDeclarations,
+                "javan_virtual_thread_executor_await_termination",
+                List.of(executor.expression().orElse(IrExpression.objectNull()), timeout, unit)
+            );
+            return true;
+        }
+        if (VirtualThreadInvokePatterns.isExecutorServiceShutdownNow(methodRef)
+            && hasReceiverKind(stack, methodRef, StackKind.VIRTUAL_THREAD_EXECUTOR)) {
+            final StackValue executor = popVirtualThreadExecutor(classFile, method, instruction, stack);
+            pushObjectCall(
+                instructions,
+                stack,
+                localDeclarations,
+                "javan_virtual_thread_executor_shutdown_now",
+                List.of(executor.expression().orElse(IrExpression.objectNull()))
+            );
+            return true;
+        }
         if (VirtualThreadInvokePatterns.isExecutorServiceClose(methodRef)
             && hasReceiverKind(stack, methodRef, StackKind.VIRTUAL_THREAD_EXECUTOR)) {
             final StackValue executor = popVirtualThreadExecutor(classFile, method, instruction, stack);
