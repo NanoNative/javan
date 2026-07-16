@@ -157,6 +157,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void collectionsSingletonListIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Collections",
+            "singletonList",
+            "(Ljava/lang/Object;)Ljava/util/List;"
+        ))).isTrue();
+    }
+
+    @Test
     void stringHashCodeIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/String",

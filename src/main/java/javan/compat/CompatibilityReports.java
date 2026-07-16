@@ -500,6 +500,7 @@ public final class CompatibilityReports {
             pass("deduplication-plan"),
             pass("hashmap-realloc-gc"),
             pass("collections-empty-set"),
+            pass("collections-singleton-list"),
             pass("collections-empty-list"),
             pass("list-of-varargs-gc"),
             pass("owned-buffer-realloc-validation"),

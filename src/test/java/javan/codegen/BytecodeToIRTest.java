@@ -8668,6 +8668,26 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersCollectionsSingletonListToRuntimeHelper() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Object;)Ljava/util/List;",
+            2,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeStatic(1, new MethodRef("java/util/Collections", "singletonList", "(Ljava/lang/Object;)Ljava/util/List;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(
+                IrExpression.objectCall("javan_list_of", List.of(IrExpression.intLiteral(1), IrExpression.objectLocal("arg0")))
+            )
+        );
+    }
+
+    @Test
     void lowersBooleanEqualsToRuntimeHelper() {
         final IrFunction function = lowerMain(method(
             0x0008,
