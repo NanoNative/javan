@@ -545,7 +545,7 @@ public final class VirtualThreadInvokePatterns {
 
     private static boolean isParameterBooleanLoad(final MethodInfo method, final Instruction instruction) {
         final int slot = intLoadSlot(instruction);
-        return slot >= 0 && parameterTypeAtSlot(method, slot) == IrType.INT;
+        return slot >= 0 && parameterDescriptorAtSlot(method, slot) == 'Z';
     }
 
     private static IrType parameterTypeAtSlot(final MethodInfo method, final int slot) {
@@ -560,6 +560,65 @@ public final class VirtualThreadInvokePatterns {
             };
         }
         return null;
+    }
+
+    private static char parameterDescriptorAtSlot(final MethodInfo method, final int slot) {
+        final String descriptor = method.descriptor();
+        int index = 1;
+        int localSlot = 0;
+        while (descriptor.charAt(index) != ')') {
+            final char type = descriptor.charAt(index);
+            if ("BCISZ".indexOf(type) >= 0) {
+                if (localSlot == slot) {
+                    return type;
+                }
+                localSlot++;
+                index++;
+                continue;
+            }
+            if ("JFD".indexOf(type) >= 0) {
+                if (localSlot == slot) {
+                    return type;
+                }
+                localSlot += type == 'J' || type == 'D' ? 2 : 1;
+                index++;
+                continue;
+            }
+            if (type == 'L') {
+                if (localSlot == slot) {
+                    return type;
+                }
+                final int end = descriptor.indexOf(';', index);
+                if (end < 0) {
+                    return 0;
+                }
+                localSlot++;
+                index = end + 1;
+                continue;
+            }
+            if (type == '[') {
+                if (localSlot == slot) {
+                    return type;
+                }
+                localSlot++;
+                index++;
+                while (descriptor.charAt(index) == '[') {
+                    index++;
+                }
+                if (descriptor.charAt(index) == 'L') {
+                    final int end = descriptor.indexOf(';', index);
+                    if (end < 0) {
+                        return 0;
+                    }
+                    index = end + 1;
+                } else {
+                    index++;
+                }
+                continue;
+            }
+            return 0;
+        }
+        return 0;
     }
 
     private static int longLoadSlot(final Instruction instruction) {
