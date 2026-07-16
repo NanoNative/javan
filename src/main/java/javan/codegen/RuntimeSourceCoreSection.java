@@ -27,6 +27,7 @@ final class RuntimeSourceCoreSection {
         #include <netinet/in.h>
         #include <netinet/tcp.h>
         #include <pthread.h>
+        #include <sched.h>
         #include <sys/socket.h>
         #include <sys/wait.h>
         #include <unistd.h>
@@ -44,6 +45,8 @@ final class RuntimeSourceCoreSection {
         static void* javan_string_copy(const char* value);
         static int javan_socket_native_close(int fd);
         static void javan_sleep_micros(unsigned long micros);
+        static void javan_os_thread_yield(void);
+        static void javan_cpu_spin_wait_hint(void);
         static JAVAN_THREAD_LOCAL char javan_last_error_value[512];
         static JAVAN_THREAD_LOCAL char javan_last_error_code_value[64];
         static JAVAN_THREAD_LOCAL char javan_last_error_summary_value[128];
@@ -72,6 +75,28 @@ final class RuntimeSourceCoreSection {
             Sleep(millis);
         #else
             usleep((useconds_t) micros);
+        #endif
+        }
+
+        static void javan_os_thread_yield(void) {
+        #if defined(_WIN32)
+            if (SwitchToThread() == 0) {
+                Sleep(0U);
+            }
+        #else
+            (void) sched_yield();
+        #endif
+        }
+
+        static void javan_cpu_spin_wait_hint(void) {
+        #if defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
+            YieldProcessor();
+        #elif defined(__i386__) || defined(__x86_64__)
+            __asm__ __volatile__("pause");
+        #elif defined(__aarch64__) || defined(__arm__)
+            __asm__ __volatile__("yield");
+        #else
+            (void) 0;
         #endif
         }
 

@@ -9,8 +9,8 @@ External project names do not belong in this matrix; this ledger stays compiler-
 
 | Measure | Count |
 | --- | ---: |
-| rows | 141 |
-| pass | 141 |
+| rows | 147 |
+| pass | 147 |
 | scoped | 0 |
 | target | 0 |
 | rejected | 0 |
@@ -157,9 +157,15 @@ Status mapping:
 | `platform-thread-current-thread-inventory` | pass |
 | `platform-thread-live-root-registry` | pass |
 | `platform-thread-finished-thread-reclaim` | pass |
+| `platform-thread-yield` | pass |
+| `platform-thread-on-spin-wait` | pass |
 | `platform-thread-sleep-uninterrupted` | pass |
+| `platform-thread-sleep-millis-nanos-uninterrupted` | pass |
 | `platform-thread-sleep-entry-interrupted-same-method-catch` | pass |
+| `platform-thread-sleep-millis-nanos-entry-interrupted-same-method-catch` | pass |
 | `platform-thread-join-entry-interrupted-same-method-catch` | pass |
+| `platform-thread-join-timeout` | pass |
+| `platform-thread-join-millis-nanos-timeout` | pass |
 | `scheduled-executor-fixed-delay` | pass |
 | `platform-thread-current-thread-start-build-reject` | pass |
 | `platform-thread-current-thread-join-build-reject` | pass |

@@ -551,6 +551,8 @@ public final class CompatibilityReports {
             pass("platform-thread-current-thread-inventory"),
             pass("platform-thread-live-root-registry"),
             pass("platform-thread-finished-thread-reclaim"),
+            pass("platform-thread-yield"),
+            pass("platform-thread-on-spin-wait"),
             pass("platform-thread-sleep-uninterrupted"),
             pass("platform-thread-sleep-millis-nanos-uninterrupted"),
             pass("platform-thread-sleep-entry-interrupted-same-method-catch"),

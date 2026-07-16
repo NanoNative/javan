@@ -205,6 +205,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void threadYieldIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Thread",
+            "yield",
+            "()V"
+        ))).isTrue();
+    }
+
+    @Test
+    void threadOnSpinWaitIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Thread",
+            "onSpinWait",
+            "()V"
+        ))).isTrue();
+    }
+
+    @Test
     void threadBuilderUnstartedRequiresThreadsRuntimeModule() {
         assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
             "java/lang/Thread$Builder$OfVirtual",

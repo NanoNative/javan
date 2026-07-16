@@ -76,12 +76,12 @@ final class CompatibilityReportsTest {
         assertThat(summary).contains(
             "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 5, \"leftCallables\": 3, \"coveragePercent\": \"40.0\"}",
             "\"exactJdkCallableAccounting\": {\"supportedCallables\": 2, \"explicitRejectedCallables\": 3, \"doneCallables\": 5, \"unknownCallables\": 0, \"totalCallables\": 5, \"donePercent\": \"100.0\"}",
-            "\"supportRows\": 145",
-            "\"passRows\": 145",
+            "\"supportRows\": 147",
+            "\"passRows\": 147",
             "\"scopedRows\": 0",
             "\"targetRows\": 0",
             "\"rejectedRows\": 0",
-            "\"accountedRows\": 145",
+            "\"accountedRows\": 147",
             "\"unaccountedRows\": 0"
         );
     }
@@ -173,6 +173,8 @@ final class CompatibilityReportsTest {
             "| `platform-thread-current-thread-inventory` | pass |",
             "| `platform-thread-live-root-registry` | pass |",
             "| `platform-thread-finished-thread-reclaim` | pass |",
+            "| `platform-thread-yield` | pass |",
+            "| `platform-thread-on-spin-wait` | pass |",
             "| `platform-thread-sleep-uninterrupted` | pass |",
             "| `platform-thread-sleep-millis-nanos-uninterrupted` | pass |",
             "| `platform-thread-sleep-entry-interrupted-same-method-catch` | pass |",
@@ -246,6 +248,8 @@ final class CompatibilityReportsTest {
             "\"feature\": \"platform-thread-current-thread-inventory\"",
             "\"feature\": \"platform-thread-live-root-registry\"",
             "\"feature\": \"platform-thread-finished-thread-reclaim\"",
+            "\"feature\": \"platform-thread-yield\"",
+            "\"feature\": \"platform-thread-on-spin-wait\"",
             "\"feature\": \"platform-thread-sleep-uninterrupted\"",
             "\"feature\": \"platform-thread-sleep-millis-nanos-uninterrupted\"",
             "\"feature\": \"platform-thread-sleep-entry-interrupted-same-method-catch\"",

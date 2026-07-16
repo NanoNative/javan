@@ -2245,6 +2245,56 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void threadYieldBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-yield");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("before");
+                    Thread.yield();
+                    System.out.println("after");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-yield").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOnSpinWaitBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-on-spin-wait");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("before");
+                    Thread.onSpinWait();
+                    System.out.println("after");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-on-spin-wait").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void threadSleepUninterruptedBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("thread-sleep-uninterrupted");
         writeJava(project, "com.acme.Main", """

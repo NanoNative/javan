@@ -155,6 +155,8 @@ public final class JdkCallSupport {
         runtime("AtomicReference.get", "java/util/concurrent/atomic/AtomicReference", "get", "()Ljava/lang/Object;"),
         runtime("AtomicReference.set", "java/util/concurrent/atomic/AtomicReference", "set", "(Ljava/lang/Object;)V"),
         runtime("Thread.currentThread", "java/lang/Thread", "currentThread", "()Ljava/lang/Thread;"),
+        runtime("Thread.yield", "java/lang/Thread", "yield", "()V"),
+        runtime("Thread.onSpinWait", "java/lang/Thread", "onSpinWait", "()V"),
         runtime("Thread.sleep", "java/lang/Thread", "sleep", "(J)V", "(JI)V"),
         runtime("Thread.interrupted", "java/lang/Thread", "interrupted", "()Z"),
         runtime("Thread.interrupt", "java/lang/Thread", "interrupt", "()V"),

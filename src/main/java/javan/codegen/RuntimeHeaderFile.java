@@ -527,6 +527,8 @@ final class RuntimeHeaderFile {
         void javan_thread_sleep_millis(long long millis);
         int javan_thread_sleep_millis_interruptible(long long millis);
         int javan_thread_sleep_millis_nanos_interruptible(long long millis, int nanos);
+        void javan_thread_yield(void);
+        void javan_thread_on_spin_wait(void);
         int javan_thread_interrupted(void);
         void javan_thread_interrupt(void* value);
         int javan_thread_is_interrupted(void* value);

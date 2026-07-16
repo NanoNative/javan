@@ -4340,6 +4340,14 @@ final class RuntimeSourceMemorySections {
             return javan_thread_sleep_nanos_interruptible(javan_current_thread_object(), total_nanos);
         }
 
+        void javan_thread_yield(void) {
+            javan_os_thread_yield();
+        }
+
+        void javan_thread_on_spin_wait(void) {
+            javan_cpu_spin_wait_hint();
+        }
+
         int javan_thread_interrupted(void) {
             javan_runtime_lock_enter();
             javan_thread* thread = javan_current_thread_object();

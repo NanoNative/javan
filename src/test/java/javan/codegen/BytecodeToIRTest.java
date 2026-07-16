@@ -6956,6 +6956,42 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersThreadYieldStaticCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()V",
+            0,
+            0,
+            invokeStatic(0, new MethodRef("java/lang/Thread", "yield", "()V")),
+            plain(1, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid("javan_thread_yield", List.of()),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
+    void lowersThreadOnSpinWaitStaticCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()V",
+            0,
+            0,
+            invokeStatic(0, new MethodRef("java/lang/Thread", "onSpinWait", "()V")),
+            plain(1, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid("javan_thread_on_spin_wait", List.of()),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
     void lowersLockSupportParkStaticCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -9949,7 +9985,7 @@ final class BytecodeToIRTest {
 
     @Test
     void lowerThreadStaticCallReturnsFalseForUnsupportedMethod() {
-        final MethodRef methodRef = new MethodRef("java/lang/Thread", "yield", "()V");
+        final MethodRef methodRef = new MethodRef("java/lang/Thread", "activeCount", "()I");
         final boolean lowered = BytecodeToIRInvokeSupport.lowerThreadStaticCall(
             sinkClass(),
             method(0x0008, "main", "()V", 0, 0, plain(0, 177, "return")),
@@ -10088,8 +10124,8 @@ final class BytecodeToIRTest {
             Map.of(),
             sinkClass(),
             method(0x0008, "main", "(Ljava/lang/Thread;)V", 1, 1, plain(0, 177, "return")),
-            invokeVirtual(0, new MethodRef("java/lang/Thread", "join", "(J)V")),
-            new MethodRef("java/lang/Thread", "join", "(J)V"),
+            invokeVirtual(0, new MethodRef("java/lang/Thread", "join", "(I)V")),
+            new MethodRef("java/lang/Thread", "join", "(I)V"),
             new ArrayList<>(),
             new ArrayList<>(List.of(BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("arg0")))),
             new LinkedHashMap<>(),

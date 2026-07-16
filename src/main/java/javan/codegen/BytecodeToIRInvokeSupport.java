@@ -2045,6 +2045,14 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_thread_current", List.of())));
             return true;
         }
+        if ("yield".equals(methodRef.name()) && "()V".equals(methodRef.descriptor())) {
+            instructions.add(IrInstruction.callStaticVoid("javan_thread_yield", List.of()));
+            return true;
+        }
+        if ("onSpinWait".equals(methodRef.name()) && "()V".equals(methodRef.descriptor())) {
+            instructions.add(IrInstruction.callStaticVoid("javan_thread_on_spin_wait", List.of()));
+            return true;
+        }
         if ("sleep".equals(methodRef.name()) && "(J)V".equals(methodRef.descriptor())) {
             lowerInterruptAwareThreadWait(
                 classFile,
