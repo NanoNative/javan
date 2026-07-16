@@ -16,16 +16,16 @@ import java.util.jar.JarFile;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 
+/*
+ * Compiler-owned dependency and packaging scenarios.
+ *
+ * These tests stay generic on purpose. Real third-party example projects belong in
+ * CliExternalProbeAcceptanceIntegrationTest so core support claims never depend on
+ * any external project identity.
+ */
 @Execution(SAME_THREAD)
 @ResourceLock("native-cli-heavy")
 @ResourceLock(value = Resources.SYSTEM_PROPERTIES, mode = ResourceAccessMode.READ)
-/**
- * Compiler-owned dependency and packaging scenarios.
- *
- * <p>These tests stay generic on purpose. Real third-party example projects belong in
- * {@link CliExternalProbeAcceptanceIntegrationTest} so core support claims never depend on
- * Nano, TypeMap, or any other external project identity.
- */
 final class CliDependencyProjectIntegrationTest extends CliIntegrationSupport {
     @Test
     void dependencyJarStaticIntMethodBuilds() throws Exception {
