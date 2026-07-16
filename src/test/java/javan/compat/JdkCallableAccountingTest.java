@@ -1069,6 +1069,30 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksServerSocketGetLocalSocketAddressAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/net/ServerSocket", "getLocalSocketAddress", "()Ljava/net/SocketAddress;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksSocketGetLocalAddressAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/net/Socket", "getLocalAddress", "()Ljava/net/InetAddress;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksSocketGetLocalSocketAddressAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/net/Socket", "getLocalSocketAddress", "()Ljava/net/SocketAddress;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksSocketGetRemoteSocketAddressAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/net/Socket", "getRemoteSocketAddress", "()Ljava/net/SocketAddress;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksInetAddressGetByNameAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/net/InetAddress", "getByName", "(Ljava/lang/String;)Ljava/net/InetAddress;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

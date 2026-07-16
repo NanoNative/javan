@@ -4446,7 +4446,10 @@ final class BytecodeToIRInvokeSupport {
                 && !"isClosed".equals(methodRef.name())
                 && !"getPort".equals(methodRef.name())
                 && !"getLocalPort".equals(methodRef.name())
+                && !"getLocalAddress".equals(methodRef.name())
                 && !"getInetAddress".equals(methodRef.name())
+                && !"getLocalSocketAddress".equals(methodRef.name())
+                && !"getRemoteSocketAddress".equals(methodRef.name())
                 && !"getInputStream".equals(methodRef.name())
                 && !"getOutputStream".equals(methodRef.name())
                 && !"close".equals(methodRef.name())) {
@@ -4469,8 +4472,20 @@ final class BytecodeToIRInvokeSupport {
                 pushIntCall(instructions, stack, localDeclarations, "javan_socket_get_local_port", List.of(receiver));
                 return true;
             }
+            if ("getLocalAddress".equals(methodRef.name()) && "()Ljava/net/InetAddress;".equals(methodRef.descriptor())) {
+                pushObjectCall(instructions, stack, localDeclarations, "javan_socket_get_local_address", List.of(receiver));
+                return true;
+            }
             if ("getInetAddress".equals(methodRef.name()) && "()Ljava/net/InetAddress;".equals(methodRef.descriptor())) {
                 pushObjectCall(instructions, stack, localDeclarations, "javan_socket_get_inet_address", List.of(receiver));
+                return true;
+            }
+            if ("getLocalSocketAddress".equals(methodRef.name()) && "()Ljava/net/SocketAddress;".equals(methodRef.descriptor())) {
+                pushObjectCall(instructions, stack, localDeclarations, "javan_socket_get_local_socket_address", List.of(receiver));
+                return true;
+            }
+            if ("getRemoteSocketAddress".equals(methodRef.name()) && "()Ljava/net/SocketAddress;".equals(methodRef.descriptor())) {
+                pushObjectCall(instructions, stack, localDeclarations, "javan_socket_get_remote_socket_address", List.of(receiver));
                 return true;
             }
             if ("getInputStream".equals(methodRef.name()) && "()Ljava/io/InputStream;".equals(methodRef.descriptor())) {
@@ -4498,6 +4513,7 @@ final class BytecodeToIRInvokeSupport {
         }
         if (!"getInetAddress".equals(methodRef.name())
             && !"getLocalPort".equals(methodRef.name())
+            && !"getLocalSocketAddress".equals(methodRef.name())
             && !"accept".equals(methodRef.name())
             && !"close".equals(methodRef.name())) {
             return false;
@@ -4509,6 +4525,10 @@ final class BytecodeToIRInvokeSupport {
         }
         if ("getLocalPort".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
             pushIntCall(instructions, stack, localDeclarations, "javan_server_socket_get_local_port", List.of(receiver));
+            return true;
+        }
+        if ("getLocalSocketAddress".equals(methodRef.name()) && "()Ljava/net/SocketAddress;".equals(methodRef.descriptor())) {
+            pushObjectCall(instructions, stack, localDeclarations, "javan_server_socket_get_local_socket_address", List.of(receiver));
             return true;
         }
         if ("accept".equals(methodRef.name()) && "()Ljava/net/Socket;".equals(methodRef.descriptor())) {

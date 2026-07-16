@@ -1,7 +1,7 @@
 package javan.codegen;
 
 final class RuntimeSourcePlatformSection {
-    private static final String SOURCE_TAIL = """
+    private static final String SOURCE_TAIL_A = """
         static javan_string_builder* javan_stringbuilder_checked(void* value) {
             if (value == NULL) {
                 javan_panic("null string builder");
@@ -1058,6 +1058,9 @@ final class RuntimeSourcePlatformSection {
             return bytes[15] == 1 ? 1 : 0;
         }
 
+        """;
+
+    private static final String SOURCE_TAIL_B = """
         static void javan_inet_address_format_ipv6(const unsigned char* bytes, char* host_address, unsigned long host_address_size) {
             int written = snprintf(
                 host_address,
@@ -1509,8 +1512,22 @@ final class RuntimeSourcePlatformSection {
             return javan_socket_checked(value)->local_port;
         }
 
+        void* javan_socket_get_local_address(void* value) {
+            return javan_socket_checked(value)->local_address;
+        }
+
         void* javan_socket_get_inet_address(void* value) {
             return javan_socket_checked(value)->remote_address;
+        }
+
+        void* javan_socket_get_local_socket_address(void* value) {
+            javan_socket* socket = javan_socket_checked(value);
+            return javan_inet_socket_address_from_address((void*) socket->local_address, socket->local_port);
+        }
+
+        void* javan_socket_get_remote_socket_address(void* value) {
+            javan_socket* socket = javan_socket_checked(value);
+            return javan_inet_socket_address_from_address((void*) socket->remote_address, socket->remote_port);
         }
 
         void* javan_socket_input_stream(void* value) {
@@ -1718,6 +1735,11 @@ final class RuntimeSourcePlatformSection {
             return javan_server_socket_checked(value)->local_address;
         }
 
+        void* javan_server_socket_get_local_socket_address(void* value) {
+            javan_server_socket* socket = javan_server_socket_checked(value);
+            return javan_inet_socket_address_from_address((void*) socket->local_address, socket->local_port);
+        }
+
         void* javan_server_socket_accept(void* value) {
         #if defined(_WIN32)
             (void) value;
@@ -1750,6 +1772,6 @@ final class RuntimeSourcePlatformSection {
     }
 
     static String tail() {
-        return SOURCE_TAIL;
+        return SOURCE_TAIL_A.concat(SOURCE_TAIL_B);
     }
 }

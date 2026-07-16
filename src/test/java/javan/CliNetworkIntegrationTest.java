@@ -122,6 +122,88 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void socketLocalAddressBuildsAndReportsIpv4Loopback() throws Exception {
+        final int port = freeTcpPort();
+        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
+                try (java.net.Socket socket = server.accept()) {
+                    socket.getOutputStream().flush();
+                } catch (final Exception exception) {
+                    throw new IllegalStateException(exception);
+                }
+            });
+            final Path project = project("socket-local-address-ipv4");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.net.Socket;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final Socket socket = new Socket("127.0.0.1", %d);
+                        System.out.println(socket.getLocalAddress().getHostAddress());
+                        socket.close();
+                    }
+                }
+                """.formatted(port));
+
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            assertThat(process(project, List.of(project.resolve(".javan/bin/socket-local-address-ipv4").toString())).stdout())
+                .isEqualTo("127.0.0.1\n");
+            accepted.get(5, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
+    void socketSocketAddressObjectsBuildAndExposePortsAndHosts() throws Exception {
+        final int port = freeTcpPort();
+        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
+                try (java.net.Socket socket = server.accept()) {
+                    socket.getOutputStream().flush();
+                } catch (final Exception exception) {
+                    throw new IllegalStateException(exception);
+                }
+            });
+            final Path project = project("socket-socket-address-objects");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.net.InetSocketAddress;
+                import java.net.Socket;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final Socket socket = new Socket("127.0.0.1", %d);
+                        final InetSocketAddress local = (InetSocketAddress) socket.getLocalSocketAddress();
+                        final InetSocketAddress remote = (InetSocketAddress) socket.getRemoteSocketAddress();
+                        System.out.println(local.getAddress().getHostAddress());
+                        System.out.println(local.getPort() > 0);
+                        System.out.println(remote.getAddress().getHostAddress());
+                        System.out.println(remote.getPort());
+                        socket.close();
+                    }
+                }
+                """.formatted(port));
+
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            assertThat(process(project, List.of(project.resolve(".javan/bin/socket-socket-address-objects").toString())).stdout())
+                .isEqualTo("127.0.0.1\ntrue\n127.0.0.1\n" + port + "\n");
+            accepted.get(5, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
     void serverSocketAcceptBuildsAndAcceptsLoopbackClient() throws Exception {
         final int port = freeTcpPort();
         final Path project = project("server-socket-accept");
@@ -348,6 +430,37 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/server-socket-get-inet-address-ipv6").toString())).stdout())
             .isEqualTo("0:0:0:0:0:0:0:1\n");
+    }
+
+    @Test
+    void serverSocketLocalSocketAddressBuildsAndReportsBoundEndpoint() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("server-socket-local-socket-address");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.InetSocketAddress;
+            import java.net.ServerSocket;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ServerSocket server = new ServerSocket(%d, 2);
+                    final InetSocketAddress address = (InetSocketAddress) server.getLocalSocketAddress();
+                    System.out.println(address.getAddress().getHostAddress());
+                    System.out.println(address.getPort());
+                    server.close();
+                }
+            }
+            """.formatted(port));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/server-socket-local-socket-address").toString())).stdout())
+            .isEqualTo("127.0.0.1\n" + port + "\n");
     }
 
     @Test
