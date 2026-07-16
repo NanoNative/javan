@@ -1742,6 +1742,37 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void setOfSingletonBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("set-of-singleton");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Set<String> values = Set.of("x");
+                    System.out.println(values.isEmpty());
+                    System.out.println(values.size());
+                    System.out.println(values.contains("x"));
+                    System.out.println(values.contains("y"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/set-of-singleton").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("false\n1\ntrue\nfalse\n");
+    }
+
+    @Test
     void booleanEqualsBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("boolean-equals");
         writeJava(project, "com.acme.Main", """

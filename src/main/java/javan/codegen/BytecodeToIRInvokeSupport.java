@@ -3270,7 +3270,15 @@ final class BytecodeToIRInvokeSupport {
             return true;
         }
         if (!"java/util/List".equals(owner)) {
-            return false;
+            if (!"java/util/Set".equals(owner)) {
+                return false;
+            }
+            if (!"of".equals(name) || !"(Ljava/lang/Object;)Ljava/util/Set;".equals(descriptor)) {
+                return false;
+            }
+            final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_set_singleton", arguments)));
+            return true;
         }
         if ("copyOf".equals(name)) {
             if (!"(Ljava/util/Collection;)Ljava/util/List;".equals(descriptor)) {

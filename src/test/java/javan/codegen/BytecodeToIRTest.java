@@ -8750,6 +8750,26 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersSetOfSingletonToRuntimeHelper() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Object;)Ljava/util/Set;",
+            2,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeStatic(1, new MethodRef("java/util/Set", "of", "(Ljava/lang/Object;)Ljava/util/Set;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(
+                IrExpression.objectCall("javan_set_singleton", List.of(IrExpression.objectLocal("arg0")))
+            )
+        );
+    }
+
+    @Test
     void lowersBooleanEqualsToRuntimeHelper() {
         final IrFunction function = lowerMain(method(
             0x0008,
