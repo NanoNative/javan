@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 @ResourceLock(value = Resources.SYSTEM_PROPERTIES, mode = ResourceAccessMode.READ)
 final class CliRuntimeReportingIntegrationTest extends CliIntegrationSupport {
     @Test
-    void reportShowsReachableNetworkRuntimeModuleNamesAfterUnsupportedCheck() throws Exception {
+    void reportShowsReachableNetworkRuntimeModuleNamesAfterSocketCheck() throws Exception {
         final Path project = project("unsupported-network-report");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -36,7 +36,7 @@ final class CliRuntimeReportingIntegrationTest extends CliIntegrationSupport {
         final CliRun check = run(tempDir, "check", project.toString());
         final CliRun report = run(tempDir, "report", project.toString());
 
-        assertThat(check.exitCode()).isEqualTo(2);
+        assertThat(check.exitCode()).isZero();
         assertThat(report.exitCode()).isZero();
         assertThat(Files.readString(project.resolve(".javan/reports/report.md"))).contains(
             "reachableRuntimeModuleNames: `core, network, socket`",
@@ -137,6 +137,15 @@ final class CliRuntimeReportingIntegrationTest extends CliIntegrationSupport {
             "\"enabled\": true",
             "\"collectionState\": \"linked-not-run\""
         );
+        assertThat(Files.readString(project.resolve(".javan/reports/virtual-threads.json"))).contains(
+            "\"profilingSupported\": true",
+            "\"profilingCollected\": false"
+        );
+        assertThat(Files.readString(project.resolve(".javan/reports/virtual-threads.md"))).contains(
+            "- profilingSupported: `true`",
+            "- profilingCollected: `false`",
+            "Virtual-thread profiling hooks are linked through runtime-profiling.*, but the current run has not collected counters yet."
+        );
         assertThat(Files.readString(project.resolve(".javan/reports/report.md"))).contains(
             "| `runtime-profiling` | present |",
             "status: `ready`",
@@ -197,11 +206,22 @@ final class CliRuntimeReportingIntegrationTest extends CliIntegrationSupport {
             "- threadStartCalls: `1`",
             "- threadJoinCalls: `1`"
         );
+        assertThat(Files.readString(project.resolve(".javan/reports/virtual-threads.json"))).contains(
+            "\"profilingSupported\": true",
+            "\"profilingCollected\": true"
+        );
+        assertThat(Files.readString(project.resolve(".javan/reports/virtual-threads.md"))).contains(
+            "- profilingSupported: `true`",
+            "- profilingCollected: `true`",
+            "Virtual-thread profiling counters are collected through runtime-profiling.* for the current host-thread-backed slice."
+        );
         assertThat(Files.readString(project.resolve(".javan/reports/report.md"))).contains(
             "| `runtime-profiling` | present |",
             "status: `collected`",
             "platformThreadObjectsCreated: `1`",
-            "virtualThreadObjectsCreated: `1`"
+            "virtualThreadObjectsCreated: `1`",
+            "| `virtual-threads` | present |",
+            "profilingCollected: `true`"
         );
     }
 

@@ -139,6 +139,17 @@ public final class ProjectReports {
         virtualThreadReports.write(reports, diagnostics, classes, callGraph);
     }
 
+    /**
+     * Refreshes virtual-thread runtime status from existing profiling reports without changing the
+     * last recorded reachability summary.
+     *
+     * @param outputDirectory project output directory
+     * @throws IOException when reading or writing fails
+     */
+    public void refreshVirtualThreadRuntimeStatus(final Path outputDirectory) throws IOException {
+        virtualThreadReports.refresh(outputDirectory.resolve("reports"));
+    }
+
     private static String jsonList(final List<String> values) {
         final StringBuilder result = new StringBuilder("[");
         for (int index = 0; index < values.size(); index++) {

@@ -43,6 +43,55 @@ final class VirtualThreadReportsTest {
     }
 
     @Test
+    void refreshPromotesProfilingStateWhileKeepingExistingReachabilitySummary() throws Exception {
+        new VirtualThreadReports().write(tempDir);
+        Files.writeString(tempDir.resolve("runtime-profiling.json"), """
+            {
+              "status": "collected",
+              "requested": true,
+              "enabled": true,
+              "collectionState": "collected"
+            }
+            """);
+
+        new VirtualThreadReports().refresh(tempDir);
+
+        assertThat(Files.readString(tempDir.resolve("virtual-threads.json"))).contains(
+            "\"profilingSupported\": true",
+            "\"profilingCollected\": true",
+            "\"reachableApiScan\": \"not-collected\"",
+            "\"reachableVirtualStartSites\": 0"
+        );
+        assertThat(Files.readString(tempDir.resolve("virtual-threads.md"))).contains(
+            "- profilingSupported: `true`",
+            "- profilingCollected: `true`",
+            "- reachableApiScan: `not-collected`",
+            "Virtual-thread profiling counters are collected through runtime-profiling.* for the current host-thread-backed slice."
+        );
+    }
+
+    @Test
+    void refreshFallsBackWhenRuntimeProfilingReportIsMalformed() throws Exception {
+        new VirtualThreadReports().write(tempDir);
+        Files.writeString(tempDir.resolve("runtime-profiling.json"), """
+            {
+              "enabled": tru
+            """);
+
+        new VirtualThreadReports().refresh(tempDir);
+
+        assertThat(Files.readString(tempDir.resolve("virtual-threads.json"))).contains(
+            "\"profilingSupported\": false",
+            "\"profilingCollected\": false",
+            "\"reachableApiScan\": \"not-collected\""
+        );
+        assertThat(Files.readString(tempDir.resolve("virtual-threads.md"))).contains(
+            "- profilingSupported: `false`",
+            "- profilingCollected: `false`"
+        );
+    }
+
+    @Test
     void writeReportsScannedReachableVirtualThreadSupportAndUnsupportedCounts() throws Exception {
         final EntryPoint main = new EntryPoint("com/acme/Main", "main", "()V");
         final EntryPoint helper = new EntryPoint("com/acme/Helper", "helper", "()V");

@@ -457,6 +457,7 @@ public final class Javan {
     }
 
     private void writeUnifiedReport(final Path outputDirectory) throws IOException {
+        reports.refreshVirtualThreadRuntimeStatus(outputDirectory);
         reportSummarizer.write(outputDirectory);
     }
 
