@@ -692,6 +692,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void socketGetReuseAddressIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/Socket",
+            "getReuseAddress",
+            "()Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void socketSetReuseAddressIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/Socket",
+            "setReuseAddress",
+            "(Z)V"
+        ))).isTrue();
+    }
+
+    @Test
     void serverSocketGetSoTimeoutIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/net/ServerSocket",

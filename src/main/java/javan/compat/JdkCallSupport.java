@@ -467,6 +467,8 @@ public final class JdkCallSupport {
         runtime("Socket.setTcpNoDelay", "java/net/Socket", "setTcpNoDelay", "(Z)V"),
         runtime("Socket.getKeepAlive", "java/net/Socket", "getKeepAlive", "()Z"),
         runtime("Socket.setKeepAlive", "java/net/Socket", "setKeepAlive", "(Z)V"),
+        runtime("Socket.getReuseAddress", "java/net/Socket", "getReuseAddress", "()Z"),
+        runtime("Socket.setReuseAddress", "java/net/Socket", "setReuseAddress", "(Z)V"),
         runtime("Socket.getLocalAddress", "java/net/Socket", "getLocalAddress", "()Ljava/net/InetAddress;"),
         runtime("Socket.getInetAddress", "java/net/Socket", "getInetAddress", "()Ljava/net/InetAddress;"),
         runtime("Socket.getLocalSocketAddress", "java/net/Socket", "getLocalSocketAddress", "()Ljava/net/SocketAddress;"),

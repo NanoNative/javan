@@ -266,6 +266,7 @@ final class RuntimeSourceMemorySections {
             int so_timeout;
             int tcp_no_delay;
             int keep_alive;
+            int reuse_address;
             javan_inet_address* local_address;
             javan_inet_address* remote_address;
         } javan_socket;
@@ -1488,6 +1489,7 @@ final class RuntimeSourceMemorySections {
                     || socket->so_timeout < 0
                     || (socket->tcp_no_delay != 0 && socket->tcp_no_delay != 1)
                     || (socket->keep_alive != 0 && socket->keep_alive != 1)
+                    || (socket->reuse_address != 0 && socket->reuse_address != 1)
                     || socket->local_address == NULL
                     || socket->remote_address == NULL) {
                     javan_panic("invalid runtime socket metadata");

@@ -113,6 +113,7 @@
     {"feature": "network-tcp-socket-socket-address", "jdk25": "pass"},
     {"feature": "network-tcp-socket-tcp-nodelay", "jdk25": "pass"},
     {"feature": "network-tcp-socket-keepalive", "jdk25": "pass"},
+    {"feature": "network-tcp-socket-reuse-address", "jdk25": "pass"},
     {"feature": "network-tcp-socket-timeout-round-trip", "jdk25": "pass"},
     {"feature": "network-tcp-socket-read-timeout-boundary", "jdk25": "pass"},
     {"feature": "network-tcp-server-socket-local-socket-address", "jdk25": "pass"},

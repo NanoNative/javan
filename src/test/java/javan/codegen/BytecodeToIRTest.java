@@ -7776,6 +7776,25 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersSocketGetReuseAddressCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/Socket;)Z",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/net/Socket", "getReuseAddress", "()Z")),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignInt("int0", IrExpression.intCall("javan_socket_get_reuse_address", List.of(IrExpression.objectLocal("arg0")))),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
+        );
+    }
+
+    @Test
     void lowersSocketSetKeepAliveCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -7791,6 +7810,26 @@ final class BytecodeToIRTest {
 
         assertThat(function.instructions()).containsExactly(
             IrInstruction.callStaticVoid("javan_socket_set_keep_alive", List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"))),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
+    void lowersSocketSetReuseAddressCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/Socket;Z)V",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 27, "iload_1"),
+            invokeVirtual(2, new MethodRef("java/net/Socket", "setReuseAddress", "(Z)V")),
+            plain(3, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid("javan_socket_set_reuse_address", List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"))),
             IrInstruction.returnVoid()
         );
     }

@@ -336,6 +336,8 @@ final class RuntimeHeaderFile {
         void javan_socket_set_tcp_no_delay(void* value, int enabled);
         int javan_socket_get_keep_alive(void* value);
         void javan_socket_set_keep_alive(void* value, int enabled);
+        int javan_socket_get_reuse_address(void* value);
+        void javan_socket_set_reuse_address(void* value, int enabled);
         void* javan_socket_get_local_address(void* value);
         void* javan_socket_get_inet_address(void* value);
         void* javan_socket_get_local_socket_address(void* value);

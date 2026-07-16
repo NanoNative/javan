@@ -546,6 +546,16 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void jdkCallSupportAcceptsSocketGetReuseAddressCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/Socket", "getReuseAddress", "()Z"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsSocketSetReuseAddressCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/Socket", "setReuseAddress", "(Z)V"))).isTrue();
+    }
+
+    @Test
     void jdkCallSupportAcceptsServerSocketGetSoTimeoutCall() {
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/ServerSocket", "getSoTimeout", "()I"))).isTrue();
     }
@@ -643,6 +653,26 @@ final class CoreBehaviorTest {
     void staticVerifierAcceptsReachableSocketSetSoTimeoutCall() {
         final List<Diagnostic> diagnostics = verifyInstruction(
             instruction(0, 182, "invokevirtual", new MethodRef("java/net/Socket", "setSoTimeout", "(I)V")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableSocketGetReuseAddressCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 182, "invokevirtual", new MethodRef("java/net/Socket", "getReuseAddress", "()Z")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableSocketSetReuseAddressCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 182, "invokevirtual", new MethodRef("java/net/Socket", "setReuseAddress", "(Z)V")),
             true
         );
 

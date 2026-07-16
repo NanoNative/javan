@@ -78,12 +78,12 @@ final class CompatibilityReportsTest {
         assertThat(summary).contains(
             "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 5, \"leftCallables\": 3, \"coveragePercent\": \"40.0\"}",
             "\"exactJdkCallableAccounting\": {\"supportedCallables\": 2, \"explicitRejectedCallables\": 3, \"doneCallables\": 5, \"unknownCallables\": 0, \"totalCallables\": 5, \"donePercent\": \"100.0\"}",
-            "\"supportRows\": 122",
-            "\"passRows\": 122",
+            "\"supportRows\": 123",
+            "\"passRows\": 123",
             "\"scopedRows\": 0",
             "\"targetRows\": 0",
             "\"rejectedRows\": 0",
-            "\"accountedRows\": 122",
+            "\"accountedRows\": 123",
             "\"unaccountedRows\": 0"
         );
     }
@@ -139,6 +139,7 @@ final class CompatibilityReportsTest {
             "| `network-tcp-socket-socket-address` | pass |",
             "| `network-tcp-socket-tcp-nodelay` | pass |",
             "| `network-tcp-socket-keepalive` | pass |",
+            "| `network-tcp-socket-reuse-address` | pass |",
             "| `network-tcp-socket-timeout-round-trip` | pass |",
             "| `network-tcp-socket-read-timeout-boundary` | pass |",
             "| `network-tcp-server-socket-local-socket-address` | pass |",
@@ -193,6 +194,7 @@ final class CompatibilityReportsTest {
             "\"feature\": \"network-tcp-socket-socket-address\"",
             "\"feature\": \"network-tcp-socket-tcp-nodelay\"",
             "\"feature\": \"network-tcp-socket-keepalive\"",
+            "\"feature\": \"network-tcp-socket-reuse-address\"",
             "\"feature\": \"network-tcp-socket-timeout-round-trip\"",
             "\"feature\": \"network-tcp-socket-read-timeout-boundary\"",
             "\"feature\": \"network-tcp-server-socket-local-socket-address\"",

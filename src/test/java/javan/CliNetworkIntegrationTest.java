@@ -358,6 +358,48 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void socketReuseAddressRoundTripBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
+                try (java.net.Socket socket = server.accept()) {
+                    socket.getOutputStream().flush();
+                } catch (final Exception exception) {
+                    throw new IllegalStateException(exception);
+                }
+            });
+            final Path project = project("socket-reuse-address-round-trip");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.net.Socket;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final Socket socket = new Socket("127.0.0.1", %d);
+                        System.out.println(socket.getReuseAddress());
+                        socket.setReuseAddress(false);
+                        System.out.println(socket.getReuseAddress());
+                        socket.setReuseAddress(true);
+                        System.out.println(socket.getReuseAddress());
+                        socket.close();
+                    }
+                }
+                """.formatted(port));
+
+            final String jvmOutput = runJvm(project, "com.acme.Main");
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            assertThat(process(project, List.of(project.resolve(".javan/bin/socket-reuse-address-round-trip").toString())).stdout()).isEqualTo(jvmOutput);
+            accepted.get(5, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
     void socketSoTimeoutRoundTripBuildsAndMatchesJvmOutput() throws Exception {
         final int port = freeTcpPort();
         try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {

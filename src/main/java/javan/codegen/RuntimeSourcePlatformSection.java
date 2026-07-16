@@ -1401,9 +1401,10 @@ final class RuntimeSourcePlatformSection {
             *remote_port_out = javan_socket_port_from_sockaddr((const struct sockaddr*) &remote_address);
         }
 
-        static void javan_socket_populate_options(int fd, int* tcp_no_delay_out, int* keep_alive_out) {
+        static void javan_socket_populate_options(int fd, int* tcp_no_delay_out, int* keep_alive_out, int* reuse_address_out) {
             *tcp_no_delay_out = javan_socket_getsockopt_flag(fd, IPPROTO_TCP, TCP_NODELAY, "socket TCP_NODELAY lookup failed");
             *keep_alive_out = javan_socket_getsockopt_flag(fd, SOL_SOCKET, SO_KEEPALIVE, "socket SO_KEEPALIVE lookup failed");
+            *reuse_address_out = javan_socket_getsockopt_flag(fd, SOL_SOCKET, SO_REUSEADDR, "socket SO_REUSEADDR lookup failed");
         }
 
         static void* javan_socket_wrap_connected_fd(int fd) {
@@ -1418,13 +1419,14 @@ final class RuntimeSourcePlatformSection {
             int remote_port = 0;
             int tcp_no_delay = 0;
             int keep_alive = 0;
+            int reuse_address = 0;
             void** javan_socket_wrap_roots[] = {
                 (void**) &local_address,
                 (void**) &remote_address
             };
             javan_root_frame_push(javan_socket_wrap_roots, 2);
             javan_socket_populate_names(fd, &local_address, &local_port, &remote_address, &remote_port);
-            javan_socket_populate_options(fd, &tcp_no_delay, &keep_alive);
+            javan_socket_populate_options(fd, &tcp_no_delay, &keep_alive, &reuse_address);
             javan_socket* socket = (javan_socket*) javan_alloc(sizeof(javan_socket));
             void* socket_root = (void*) socket;
             void** javan_socket_owner_roots[] = {
@@ -1442,6 +1444,7 @@ final class RuntimeSourcePlatformSection {
             socket->so_timeout = 0;
             socket->tcp_no_delay = tcp_no_delay;
             socket->keep_alive = keep_alive;
+            socket->reuse_address = reuse_address;
             socket->local_address = (javan_inet_address*) local_address;
             socket->remote_address = (javan_inet_address*) remote_address;
             javan_update_runtime_allocation_kind((void*) socket, JAVAN_RUNTIME_KIND_SOCKET);
@@ -1634,6 +1637,22 @@ final class RuntimeSourcePlatformSection {
             javan_socket* socket = javan_socket_open_checked(value);
             javan_socket_setsockopt_flag(socket->fd, SOL_SOCKET, SO_KEEPALIVE, enabled, "socket SO_KEEPALIVE update failed");
             socket->keep_alive = enabled == 0 ? 0 : 1;
+        #endif
+        }
+
+        int javan_socket_get_reuse_address(void* value) {
+            return javan_socket_checked(value)->reuse_address;
+        }
+
+        void javan_socket_set_reuse_address(void* value, int enabled) {
+        #if defined(_WIN32)
+            (void) value;
+            (void) enabled;
+            javan_socket_runtime_unsupported();
+        #else
+            javan_socket* socket = javan_socket_open_checked(value);
+            javan_socket_setsockopt_flag(socket->fd, SOL_SOCKET, SO_REUSEADDR, enabled, "socket SO_REUSEADDR update failed");
+            socket->reuse_address = enabled == 0 ? 0 : 1;
         #endif
         }
 

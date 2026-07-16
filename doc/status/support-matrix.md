@@ -121,6 +121,7 @@ Status mapping:
 | `network-tcp-socket-socket-address` | pass |
 | `network-tcp-socket-tcp-nodelay` | pass |
 | `network-tcp-socket-keepalive` | pass |
+| `network-tcp-socket-reuse-address` | pass |
 | `network-tcp-socket-timeout-round-trip` | pass |
 | `network-tcp-socket-read-timeout-boundary` | pass |
 | `network-tcp-server-socket-local-socket-address` | pass |
