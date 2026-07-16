@@ -13,7 +13,7 @@ be understandable as real user-facing samples.
 | `acceptance` | end-to-end public-entrypoint checks used by release validation |
 | `native-profile` | one-assumption supported native runtime/codegen scenarios |
 | `negative` | deterministic rejection scenarios |
-| `real-probes` | external smoke probes against pinned third-party artifacts |
+| `real-probes` | external smoke probes against pinned third-party artifacts; each probe declares its own metadata and exact expected stdout, and CI resolves artifacts from that metadata |
 
 Promote a test project to `example/` or a future public examples folder only after rewriting it into a production-grade
 sample with complete user-facing instructions.

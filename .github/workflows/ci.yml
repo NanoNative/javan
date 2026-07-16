@@ -87,8 +87,9 @@ jobs:
 
       - name: Prefetch real probe artifacts
         run: |
-          mvn -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" dependency:get -Dartifact=berlin.yuna:type-map:2025.06.1521025 -Dtransitive=false
-          mvn -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" dependency:get -Dartifact=org.nanonative:nano:2025.11.3131219 -Dtransitive=false
+          .github/scripts/list-real-probe-artifacts.sh | while IFS= read -r artifact; do
+            mvn -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" dependency:get -Dartifact="$artifact" -Dtransitive=false
+          done
 
       - name: Verify Maven suite
         run: |

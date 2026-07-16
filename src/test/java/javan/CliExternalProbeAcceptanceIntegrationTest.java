@@ -48,10 +48,33 @@ final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupp
 
     @Test
     void acceptanceRealProbesFailWhenRequiredArtifactsAreMissing() throws Exception {
+        final Path probesRoot = tempDir.resolve("real-probes");
+        writeProbeProject(
+            probesRoot.resolve("alpha"),
+            "alpha",
+            "com.example",
+            "alpha-lib",
+            "1.0.0",
+            "com.example.alpha.AlphaValue",
+            """
+                package com.acme;
+
+                import com.example.alpha.AlphaValue;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) {
+                        System.out.println(AlphaValue.text());
+                    }
+                }
+                """,
+            "alpha\n"
+        );
         final Path repo = tempDir.resolve("empty-maven-repo");
         Files.createDirectories(repo);
         final Path wrapper = acceptanceWrapper();
-        final ExternalProbe firstProbe = realProbes().getFirst();
 
         final ProcessResult run = process(
             tempDir,
@@ -61,77 +84,106 @@ final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupp
                 "JAVAN_BIN", wrapper.toString(),
                 "JAVAN_ACCEPTANCE_ONLY", "real-probes",
                 "JAVAN_REQUIRE_REAL_PROBES", "true",
-                "JAVAN_MAVEN_REPO", repo.toString()
+                "JAVAN_MAVEN_REPO", repo.toString(),
+                "JAVAN_REAL_PROBES_DIR", probesRoot.toString()
             )
         );
 
         assertThat(run.exitCode()).isEqualTo(1);
         assertThat(run.stdout()).isEmpty();
-        assertThat(run.stderr()).contains("not ok - " + firstProbe.projectDirectory() + " missing dependency");
+        assertThat(run.stderr()).contains("not ok - " + probesRoot.resolve("alpha").toString().replace('\\', '/') + " missing dependency");
     }
 
     @Test
     void acceptanceRealProbesHonorConfiguredMavenRepository() throws Exception {
+        final Path probesRoot = tempDir.resolve("real-probes");
+        writeProbeProject(
+            probesRoot.resolve("alpha"),
+            "alpha",
+            "com.example",
+            "alpha-lib",
+            "1.0.0",
+            "com.example.alpha.AlphaValue",
+            """
+                package com.acme;
+
+                import com.example.alpha.AlphaValue;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) {
+                        System.out.println(AlphaValue.text());
+                    }
+                }
+                """,
+            "alpha\n"
+        );
+        writeProbeProject(
+            probesRoot.resolve("beta"),
+            "beta",
+            "com.example",
+            "beta-lib",
+            "2.0.0",
+            "com.example.beta.BetaNumber",
+            """
+                package com.acme;
+
+                import com.example.beta.BetaNumber;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) {
+                        System.out.println(BetaNumber.value());
+                    }
+                }
+                """,
+            "42\n"
+        );
         final Path repo = tempDir.resolve("custom-maven-repo");
-        final Path typeMapJar = dependencyJar("fake-typemap", Map.of(
-            "berlin.yuna.typemap.model.Pair", """
-                package berlin.yuna.typemap.model;
+        installMavenCoordinate(
+            repo,
+            "com.example",
+            "alpha-lib",
+            "1.0.0",
+            dependencyJar("fake-alpha-lib", Map.of(
+                "com.example.alpha.AlphaValue", """
+                    package com.example.alpha;
 
-                public final class Pair<L, R> {
-                    private final L key;
-                    private final R value;
+                    public final class AlphaValue {
+                        private AlphaValue() {
+                        }
 
-                    public Pair(final L key, final R value) {
-                        this.key = key;
-                        this.value = value;
+                        public static String text() {
+                            return "alpha";
+                        }
                     }
+                    """
+            ))
+        );
+        installMavenCoordinate(
+            repo,
+            "com.example",
+            "beta-lib",
+            "2.0.0",
+            dependencyJar("fake-beta-lib", Map.of(
+                "com.example.beta.BetaNumber", """
+                    package com.example.beta;
 
-                    public L getKey() {
-                        return key;
+                    public final class BetaNumber {
+                        private BetaNumber() {
+                        }
+
+                        public static int value() {
+                            return 42;
+                        }
                     }
-
-                    public R getValue() {
-                        return value;
-                    }
-                }
-                """
-        ));
-        final Path nanoJar = dependencyJar("fake-nano", Map.of(
-            "org.nanonative.nano.services.metric.model.MetricUpdate", """
-                package org.nanonative.nano.services.metric.model;
-
-                public record MetricUpdate(Object timestamp, String name, Object value, Object tags) {
-                }
-                """,
-            "org.nanonative.nano.helper.NanoUtils", """
-                package org.nanonative.nano.helper;
-
-                public final class NanoUtils {
-                    private NanoUtils() {
-                    }
-
-                    public static String formatDuration(final long nanos) {
-                        return "1m 5s";
-                    }
-                }
-                """,
-            "org.nanonative.nano.core.model.Scheduler", """
-                package org.nanonative.nano.core.model;
-
-                import java.util.concurrent.ScheduledThreadPoolExecutor;
-
-                public final class Scheduler extends ScheduledThreadPoolExecutor {
-                    public Scheduler(final String name) {
-                        super(1);
-                    }
-                }
-                """
-        ));
-
-        for (final ExternalProbe probe : realProbes()) {
-            final Path jar = "type-map".equals(probe.artifactId()) ? typeMapJar : nanoJar;
-            installMavenCoordinate(repo, probe.groupId(), probe.artifactId(), probe.version(), jar);
-        }
+                    """
+            ))
+        );
         final Path wrapper = acceptanceWrapper();
 
         final ProcessResult run = process(
@@ -142,17 +194,19 @@ final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupp
                 "JAVAN_BIN", wrapper.toString(),
                 "JAVAN_ACCEPTANCE_ONLY", "real-probes",
                 "JAVAN_REQUIRE_REAL_PROBES", "true",
-                "JAVAN_MAVEN_REPO", repo.toString()
+                "JAVAN_MAVEN_REPO", repo.toString(),
+                "JAVAN_REAL_PROBES_DIR", probesRoot.toString()
             )
         );
 
         assertThat(run.exitCode()).isZero();
         assertThat(run.stderr()).isEmpty();
-        for (int index = 0; index < realProbes().size(); index++) {
-            final ExternalProbe probe = realProbes().get(index);
+        final List<ExternalProbe> probes = realProbes(probesRoot);
+        for (int index = 0; index < probes.size(); index++) {
+            final ExternalProbe probe = probes.get(index);
             assertThat(run.stdout()).contains("ok " + (index + 1) + " - " + probe.projectDirectory() + " native probe");
         }
-        assertThat(run.stdout()).contains("Acceptance passed: " + realProbes().size() + " checks");
+        assertThat(run.stdout()).contains("Acceptance passed: " + probes.size() + " checks");
     }
 
     @Test
@@ -178,6 +232,52 @@ final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupp
         assertThat(probes)
             .extracting(ExternalProbe::expectedStdout)
             .containsExactly("alpha-out\n", "beta-out\n");
+    }
+
+    @Test
+    void realProbeArtifactListingIsMetadataDrivenAndDeduplicated() throws Exception {
+        final Path probesRoot = tempDir.resolve("real-probes");
+        writeProbe(probesRoot.resolve("beta"), "beta", "com.example", "beta-lib", "1.0.0", "beta-out\n");
+        writeProbe(probesRoot.resolve("alpha"), "alpha", "com.example", "alpha-lib", "2.0.0", "alpha-out\n");
+        writeProbe(probesRoot.resolve("alpha-copy"), "alpha-copy", "com.example", "alpha-lib", "2.0.0", "alpha-copy-out\n");
+
+        final ProcessResult run = process(
+            tempDir,
+            List.of("sh", Path.of(".github/scripts/list-real-probe-artifacts.sh").toAbsolutePath().normalize().toString(), probesRoot.toString()),
+            Duration.ofSeconds(20)
+        );
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stderr()).isEmpty();
+        assertThat(run.stdout()).isEqualTo("""
+            com.example:alpha-lib:2.0.0
+            com.example:beta-lib:1.0.0
+            """);
+    }
+
+    @Test
+    void realProbeArtifactListingFailsClearlyWhenMetadataIsIncomplete() throws Exception {
+        final Path probesRoot = tempDir.resolve("real-probes");
+        final Path brokenProbe = probesRoot.resolve("broken");
+        Files.createDirectories(brokenProbe);
+        Files.writeString(
+            brokenProbe.resolve("probe.properties"),
+            """
+                project=broken
+                groupId=com.example
+                artifactId=broken-lib
+                """
+        );
+
+        final ProcessResult run = process(
+            tempDir,
+            List.of("sh", Path.of(".github/scripts/list-real-probe-artifacts.sh").toAbsolutePath().normalize().toString(), probesRoot.toString()),
+            Duration.ofSeconds(20)
+        );
+
+        assertThat(run.exitCode()).isEqualTo(1);
+        assertThat(run.stdout()).isEmpty();
+        assertThat(run.stderr()).contains("Incomplete probe metadata");
     }
 
     private void assertExternalProbeMatchesJvmOutput(final ExternalProbe probe, final Path artifact) throws Exception {
@@ -221,6 +321,42 @@ final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupp
                 + "version=" + version + "\n"
         );
         Files.writeString(probeDirectory.resolve("expected.stdout"), expectedStdout);
+    }
+
+    private static void writeProbeProject(
+        final Path probeDirectory,
+        final String project,
+        final String groupId,
+        final String artifactId,
+        final String version,
+        final String dependencyClassName,
+        final String mainSource,
+        final String expectedStdout
+    ) throws IOException {
+        writeProbe(probeDirectory, project, groupId, artifactId, version, expectedStdout);
+        final Path source = probeDirectory.resolve("src/main/java/com/acme/Main.java");
+        Files.createDirectories(source.getParent());
+        Files.writeString(source, mainSource);
+        final String dependencyPath = groupId.replace('.', '/') + "/" + artifactId + "/" + version + "/" + artifactId + "-" + version + ".jar";
+        final String script = """
+            #!/bin/sh
+            set -eu
+
+            ROOT=$(pwd)
+            MAVEN_REPO=${JAVAN_MAVEN_REPO:-"$HOME/.m2/repository"}
+            DEP_JAR="$MAVEN_REPO/%s"
+
+            if [ ! -f "$DEP_JAR" ]; then
+              echo "Dependency not found. Set JAVAN_MAVEN_REPO or install %s." >&2
+              exit 3
+            fi
+
+            "$JAVAN" build "$ROOT" --classpath "$DEP_JAR" --output %s >/dev/null
+            "$ROOT/.javan/bin/%s"
+            """.formatted(dependencyPath, dependencyClassName, project, project);
+        final Path scriptPath = probeDirectory.resolve("build-example.sh");
+        Files.writeString(scriptPath, script);
+        scriptPath.toFile().setExecutable(true, false);
     }
 
     private static ExternalProbe loadProbe(final Path projectDirectory) {

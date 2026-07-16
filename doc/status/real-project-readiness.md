@@ -37,7 +37,8 @@ Current compatibility probes:
   and `awaitTermination(...)` through the real `Scheduler` type.
 
 `.github/scripts/acceptance.sh` now auto-discovers probe directories and CI prefetches the pinned
-artifacts before `mvn verify`, so the five probes are required in the external-probe acceptance gate.
+artifacts from probe metadata via `.github/scripts/list-real-probe-artifacts.sh` before `mvn verify`,
+so the five probes are required in the external-probe acceptance gate.
 Local runs still skip cleanly when the declared dependency is absent.
 
 These probes prove that the backend can consume real dependency bytecode for simple object constructors, object fields, object returns, object arrays, records, scalar long/float/double operations, primitive arrays, basic enum names, closed-world virtual/interface dispatch, static fields, reachable class initializers, javac string concatenation, basic string intrinsics, exact `LambdaMetafactory` `Function`/`Predicate` bridges into `Optional.filter`, `Optional.map`, and `Map.computeIfAbsent`, selected Nano static helper code, direct same-method exception catches, uncaught panic-style exceptions, and concrete instance calls.
