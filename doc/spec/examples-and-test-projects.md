@@ -49,12 +49,15 @@ support claims into the compiler-owned test line.
 
 The current probe set may change over time. Adding or removing a probe must not require product
 code changes unless the underlying generic Java/runtime gap is real and independently reproduced in
-the compiler-owned test line.
+the compiler-owned test line. Upstream identities belong only in probe metadata and the tiny probe
+sources that import those external classes; acceptance harness code, compiler-owned tests, support
+ledgers, workflow scripts, and public examples must stay project-neutral.
 
 Boundary:
 
-- probe names may stay in probe metadata, probe READMEs, and the dedicated external-smoke docs
-- probe names must stay out of support rows, JDK coverage ledgers, and compiler-owned regression tests
+- probe names may stay only in probe metadata and the tiny probe source files that import upstream classes
+- probe names must stay out of support rows, JDK coverage ledgers, compiler-owned regression tests, docs, workflow scripts, and public examples
+- probe names must stay out of the public `example/` showcase and all non-probe test resources
 - upstream probe changes are allowed; Javan support claims must still be expressed in generic JDK/runtime terms
 
 These are not core compiler/runtime support tests. They are allowed to prove "Javan can compile

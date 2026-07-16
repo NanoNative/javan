@@ -20,6 +20,10 @@ These external probes are intentionally excluded from `doc/status/support-matrix
 smoke only, driven by per-probe metadata and exact stdout expectations under
 `src/test/resources/projects/real-probes/*`.
 
+The probe directories themselves are intentionally generic `artifact-*` names. Upstream
+identities stay in `probe.properties` and the tiny Java source that imports the external
+classes, not in compiler-owned directory labels.
+
 The current pinned set is just a moving slice of published third-party artifacts. That is not
 product knowledge, not a support allowlist, and not a stable contract. The compiler-owned test
 and support line must remain generic so the same regressions still make sense after the probe set

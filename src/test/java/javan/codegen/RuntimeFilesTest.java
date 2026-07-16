@@ -1,6 +1,7 @@
 package javan.codegen;
 
 import javan.TestProcesses;
+import javan.build.ResourceBundler;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Execution;
@@ -10,6 +11,7 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -31,6 +33,17 @@ final class RuntimeFilesTest {
             "return \"aarch64\";",
             "return \"x86_64\";"
         );
+    }
+
+    @Test
+    void resourceSectionEscapesNonPrintableResourcePathsWithoutStringFormat() throws Exception {
+        final Path source = Files.write(tempDir.resolve("raw.bin"), new byte[]{1});
+
+        final String section = RuntimeSourceResourceSection.render(
+            List.of(new ResourceBundler.ResourceFile("assets/\u0001.bin", source, 1))
+        );
+
+        assertThat(section).contains("assets/\\001.bin");
     }
 
     @Test
@@ -266,6 +279,22 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void writeIncludesAllocationLookupCacheForHotPaths() throws Exception {
+        final Path runtime = new RuntimeFiles().write(tempDir);
+
+        assertThat(Files.readString(runtime)).contains(
+            "#define JAVAN_ALLOCATION_CACHE_SIZE 4",
+            "static void* javan_allocation_cache_values[JAVAN_ALLOCATION_CACHE_SIZE];",
+            "static javan_allocation_node* javan_allocation_cache_nodes[JAVAN_ALLOCATION_CACHE_SIZE];",
+            "static javan_allocation_node* javan_allocation_cache_lookup(void* value) {",
+            "javan_allocation_cache_store(value, node);",
+            "javan_allocation_cache_remove(value);",
+            "if (previous == NULL) {",
+            "javan_allocation_node* cached = javan_allocation_cache_lookup(value);"
+        );
+    }
+
+    @Test
     void writeEmitsHeapMetadataAccountingAndValidationHooks() throws Exception {
         final Path runtime = new RuntimeFiles().write(tempDir);
 
@@ -384,10 +413,19 @@ final class RuntimeFilesTest {
 
         assertThat(Files.readString(runtime)).contains(
             "typedef struct javan_root_frame",
+            "#define JAVAN_ROOT_FRAME_CACHE_LIMIT 32",
             "JavanTypeDescriptor* javan_type_descriptors_value = NULL;",
             "void javan_register_type_descriptors(JavanTypeDescriptor* descriptors, int count)",
             "void javan_root_frame_push(void*** roots, int count)",
             "void javan_root_frame_pop(void*** roots)",
+            "static JAVAN_THREAD_LOCAL javan_root_frame* javan_root_frame_cache_value = NULL;",
+            "static JAVAN_THREAD_LOCAL int javan_root_frame_cache_count_value = 0;",
+            "static javan_root_frame* javan_root_frame_take(void) {",
+            "static void javan_root_frame_release(javan_root_frame* frame) {",
+            "static void javan_root_frame_cache_cleanup(void) {",
+            "javan_root_frame* frame = javan_root_frame_take();",
+            "javan_root_frame_release(frame);",
+            "javan_root_frame_cache_cleanup();",
             "int javan_heap_type_descriptor_count(void)",
             "int javan_heap_root_frame_depth(void)",
             "int javan_heap_frame_root_count(void)",
@@ -761,6 +799,107 @@ final class RuntimeFilesTest {
         );
 
         assertThat(stdout).isEqualTo("cannot detach current thread with live root frames\n");
+    }
+
+    @Test
+    void runtimeThreadDetachCurrentSucceedsAfterRepeatedBalancedRootFrames() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                for (int index = 0; index < 128; index++) {
+                    void* current = javan_thread_current();
+                    void** roots[] = {
+                        (void**) &current
+                    };
+                    javan_root_frame_push(roots, 1);
+                    javan_root_frame_pop(roots);
+                }
+                printf("before=%lu:%d:%d\\n",
+                    javan_heap_registered_thread_roots(),
+                    javan_heap_current_thread_root_present(),
+                    javan_heap_root_frame_depth());
+                javan_thread_detach_current();
+                printf("after=%lu:%d:%d\\n",
+                    javan_heap_registered_thread_roots(),
+                    javan_heap_current_thread_root_present(),
+                    javan_heap_root_frame_depth());
+                (void) javan_thread_current();
+                printf("reboot=%lu:%d:%d\\n",
+                    javan_heap_registered_thread_roots(),
+                    javan_heap_current_thread_root_present(),
+                    javan_heap_root_frame_depth());
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            before=1:1:0
+            after=0:0:0
+            reboot=1:1:0
+            """
+        );
+    }
+
+    @Test
+    void runtimeRecoverablePanicsUnwindCachedRootFramesAndStillAllowDetach() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <setjmp.h>
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                for (int index = 0; index < 64; index++) {
+                    void* current = javan_thread_current();
+                    void** roots[] = {
+                        (void**) &current
+                    };
+                    jmp_buf target;
+                    javan_panic_set_target(&target);
+                    if (setjmp(target) != 0) {
+                        javan_clear_error();
+                        continue;
+                    }
+                    javan_root_frame_push(roots, 1);
+                    javan_panic("recoverable cached root frame probe");
+                }
+                printf("before=%d:%lu:%d\\n",
+                    javan_heap_root_frame_depth(),
+                    javan_heap_registered_thread_roots(),
+                    javan_heap_current_thread_root_present());
+                javan_thread_detach_current();
+                javan_gc_collect();
+                printf("after=%d:%lu:%d:%lu\\n",
+                    javan_heap_root_frame_depth(),
+                    javan_heap_registered_thread_roots(),
+                    javan_heap_current_thread_root_present(),
+                    javan_heap_live_allocations());
+                (void) javan_thread_current();
+                printf("reboot=%d:%lu:%d\\n",
+                    javan_heap_root_frame_depth(),
+                    javan_heap_registered_thread_roots(),
+                    javan_heap_current_thread_root_present());
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            before=0:1:1
+            after=0:0:0:0
+            reboot=0:1:1
+            """
+        );
     }
 
     @Test

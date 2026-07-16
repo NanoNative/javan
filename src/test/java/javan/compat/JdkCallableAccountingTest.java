@@ -259,6 +259,18 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksAwtCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/awt/Component", "setVisible", "(Z)V")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
+    void marksSwingCallableAsExplicitRejected() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("javax/swing/JButton", "<init>", "()V")))
+            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+    }
+
+    @Test
     void marksStringBuilderCharSequenceConstructorAsExplicitRejected() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/StringBuilder", "<init>", "(Ljava/lang/CharSequence;)V")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);

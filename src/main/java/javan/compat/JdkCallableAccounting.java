@@ -303,10 +303,16 @@ final class JdkCallableAccounting {
         if (owner.startsWith("java/util/logging/")) {
             return true;
         }
+        if (owner.startsWith("java/awt/")) {
+            return true;
+        }
         if (owner.startsWith("java/beans/")) {
             if (JdkCallSupport.isPlatformThrowable(owner)) {
                 return false;
             }
+            return true;
+        }
+        if (owner.startsWith("javax/swing/")) {
             return true;
         }
         if (owner.startsWith("java/util/concurrent/locks/")) {

@@ -309,6 +309,83 @@ final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupp
         assertThat(run.stderr()).contains("Incomplete probe metadata");
     }
 
+    @Test
+    void sharedRealProbeBuildScriptResolvesMetadataDrivenArtifactAndBuilds() throws Exception {
+        final Path repo = tempDir.resolve("custom-maven-repo");
+        installMavenCoordinate(
+            repo,
+            "com.example",
+            "alpha-lib",
+            "1.0.0",
+            dependencyJar("fake-alpha-lib", Map.of(
+                "com.example.alpha.AlphaValue", """
+                    package com.example.alpha;
+
+                    public final class AlphaValue {
+                        private AlphaValue() {
+                        }
+
+                        public static String text() {
+                            return "alpha";
+                        }
+                    }
+                    """
+            ))
+        );
+
+        final Path probesRoot = tempDir.resolve("real-probes");
+        final Path probe = probesRoot.resolve("alpha");
+        writeProbeProject(
+            probe,
+            "alpha",
+            "com.example",
+            "alpha-lib",
+            "1.0.0",
+            "com.example.alpha.AlphaValue",
+            """
+                package com.acme;
+
+                import com.example.alpha.AlphaValue;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) {
+                        System.out.println(AlphaValue.text());
+                    }
+                }
+                """,
+            "alpha\n"
+        );
+
+        final Path helper = probe.getParent().resolve("build-real-probe.sh");
+        Files.copy(Path.of("src/test/resources/projects/real-probes/build-real-probe.sh"), helper);
+        final Path wrapper = probe.resolve("build-example.sh");
+        writeExecutableScript(wrapper, """
+            #!/bin/sh
+            set -eu
+
+            ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+            exec "$ROOT/../build-real-probe.sh" "$ROOT"
+            """);
+        assertThat(helper.toFile().setExecutable(true)).isTrue();
+
+        final ProcessResult run = process(
+            probe,
+            List.of("sh", wrapper.toString()),
+            Duration.ofSeconds(60),
+            Map.of(
+                "JAVAN", acceptanceWrapper().toString(),
+                "JAVAN_MAVEN_REPO", repo.toString()
+            )
+        );
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stderr()).isEmpty();
+        assertThat(run.stdout()).isEqualTo("alpha\n");
+    }
+
     private void assertExternalProbeMatchesJvmOutput(final ExternalProbeCatalog.ExternalProbe probe, final Path artifact) throws Exception {
         final Path project = copyProjectDirectory(Path.of(probe.projectDirectory()), probe.project());
         final String jvmOutput = runJvm(project, probe.mainClass(), List.of(artifact));

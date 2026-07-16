@@ -11,8 +11,8 @@
     "rule": "done = supported variants + rejected variants; unknown leftovers must be 0 for a release-gated JDK"
   },
   "counts": {
-    "rows": 156,
-    "pass": 156,
+    "rows": 158,
+    "pass": 158,
     "scoped": 0,
     "target": 0,
     "rejected": 0
@@ -71,6 +71,8 @@
     {"feature": "resource-file-copy", "jdk25": "pass"},
     {"feature": "resource-stale-removal", "jdk25": "pass"},
     {"feature": "native-resource-distribution", "jdk25": "pass"},
+    {"feature": "resource-system-loader-stream", "jdk25": "pass"},
+    {"feature": "resource-loader-instance-stream", "jdk25": "pass"},
     {"feature": "library-static-int-export", "jdk25": "pass"},
     {"feature": "library-string-export", "jdk25": "pass"},
     {"feature": "library-byte-array-export", "jdk25": "pass"},

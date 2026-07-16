@@ -76,12 +76,12 @@ final class CompatibilityReportsTest {
         assertThat(summary).contains(
             "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 5, \"leftCallables\": 3, \"coveragePercent\": \"40.0\"}",
             "\"exactJdkCallableAccounting\": {\"supportedCallables\": 2, \"explicitRejectedCallables\": 3, \"doneCallables\": 5, \"unknownCallables\": 0, \"totalCallables\": 5, \"donePercent\": \"100.0\"}",
-            "\"supportRows\": 156",
-            "\"passRows\": 156",
+            "\"supportRows\": 158",
+            "\"passRows\": 158",
             "\"scopedRows\": 0",
             "\"targetRows\": 0",
             "\"rejectedRows\": 0",
-            "\"accountedRows\": 156",
+            "\"accountedRows\": 158",
             "\"unaccountedRows\": 0"
         );
     }
@@ -115,6 +115,8 @@ final class CompatibilityReportsTest {
             "| `polymorphic-virtual` | pass |",
             "| `interface-polymorphic` | pass |",
             "| `string-intrinsics` | pass |",
+            "| `resource-system-loader-stream` | pass |",
+            "| `resource-loader-instance-stream` | pass |",
             "| `library-last-error-abi` | pass |",
             "| `library-c-result-wrapper-success` | pass |",
             "| `library-retained-input-ownership` | pass |",
@@ -208,6 +210,8 @@ final class CompatibilityReportsTest {
             "\"feature\": \"interface-dispatch\"",
             "\"feature\": \"polymorphic-virtual\"",
             "\"feature\": \"interface-polymorphic\"",
+            "\"feature\": \"resource-system-loader-stream\"",
+            "\"feature\": \"resource-loader-instance-stream\"",
             "\"feature\": \"string-intrinsics\"",
             "\"feature\": \"library-c-result-wrapper-success\"",
             "\"feature\": \"network-address-runtime\"",
