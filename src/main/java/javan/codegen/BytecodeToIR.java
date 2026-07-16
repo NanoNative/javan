@@ -52,17 +52,18 @@ public final class BytecodeToIR {
     static final int CLASS_EXACT_STRING = -2001;
     static final int CLASS_EXACT_OBJECT = -2002;
     static final int CLASS_EXACT_CLASS = -2003;
-    static final int CLASS_EXACT_ARRAY_LIST = -2004;
-    static final int CLASS_EXACT_HASH_MAP = -2005;
-    static final int CLASS_EXACT_PRIMITIVE_BOOLEAN = -2006;
-    static final int CLASS_EXACT_PRIMITIVE_BYTE = -2007;
-    static final int CLASS_EXACT_PRIMITIVE_SHORT = -2008;
-    static final int CLASS_EXACT_PRIMITIVE_CHAR = -2009;
-    static final int CLASS_EXACT_PRIMITIVE_INT = -2010;
-    static final int CLASS_EXACT_PRIMITIVE_LONG = -2011;
-    static final int CLASS_EXACT_PRIMITIVE_FLOAT = -2012;
-    static final int CLASS_EXACT_PRIMITIVE_DOUBLE = -2013;
-    static final int CLASS_EXACT_PRIMITIVE_VOID = -2014;
+    static final int CLASS_EXACT_CLASS_LOADER = -2004;
+    static final int CLASS_EXACT_ARRAY_LIST = -2005;
+    static final int CLASS_EXACT_HASH_MAP = -2006;
+    static final int CLASS_EXACT_PRIMITIVE_BOOLEAN = -2007;
+    static final int CLASS_EXACT_PRIMITIVE_BYTE = -2008;
+    static final int CLASS_EXACT_PRIMITIVE_SHORT = -2009;
+    static final int CLASS_EXACT_PRIMITIVE_CHAR = -2010;
+    static final int CLASS_EXACT_PRIMITIVE_INT = -2011;
+    static final int CLASS_EXACT_PRIMITIVE_LONG = -2012;
+    static final int CLASS_EXACT_PRIMITIVE_FLOAT = -2013;
+    static final int CLASS_EXACT_PRIMITIVE_DOUBLE = -2014;
+    static final int CLASS_EXACT_PRIMITIVE_VOID = -2015;
 
     /**
      * Lowers reachable methods to IR.
@@ -1791,6 +1792,7 @@ public final class BytecodeToIR {
         final StackKind kind
     ) {
         if (kind == StackKind.SOCKET_INPUT_STREAM
+            || kind == StackKind.RESOURCE_INPUT_STREAM
             || kind == StackKind.SOCKET_OUTPUT_STREAM
             || kind == StackKind.VIRTUAL_THREAD_BUILDER
             || kind == StackKind.VIRTUAL_THREAD_FACTORY
@@ -2793,6 +2795,7 @@ public final class BytecodeToIR {
         PRINT_STREAM,
         ERROR_PRINT_STREAM,
         SOCKET_INPUT_STREAM,
+        RESOURCE_INPUT_STREAM,
         SOCKET_OUTPUT_STREAM,
         INT,
         LONG,
@@ -2867,6 +2870,10 @@ public final class BytecodeToIR {
 
         static StackValue socketInputStream(final IrExpression expression) {
             return new StackValue(StackKind.SOCKET_INPUT_STREAM, Optional.empty(), Optional.of(expression), Optional.empty());
+        }
+
+        static StackValue resourceInputStream(final IrExpression expression) {
+            return new StackValue(StackKind.RESOURCE_INPUT_STREAM, Optional.empty(), Optional.of(expression), Optional.empty());
         }
 
         static StackValue socketOutputStream(final IrExpression expression) {
