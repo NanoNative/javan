@@ -49,9 +49,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksInheritableThreadLocalConstructorAsExplicitRejected() {
+    void marksInheritableThreadLocalConstructorAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/InheritableThreadLocal", "<init>", "()V")))
-            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
     @Test

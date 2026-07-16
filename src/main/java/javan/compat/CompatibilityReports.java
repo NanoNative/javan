@@ -560,6 +560,7 @@ public final class CompatibilityReports {
             pass("platform-thread-sleep-millis-nanos-uninterrupted"),
             pass("platform-thread-sleep-entry-interrupted-same-method-catch"),
             pass("platform-thread-sleep-millis-nanos-entry-interrupted-same-method-catch"),
+            pass("platform-thread-inheritable-threadlocal"),
             pass("platform-thread-join-entry-interrupted-same-method-catch"),
             pass("platform-thread-join-timeout"),
             pass("platform-thread-join-millis-nanos-timeout"),

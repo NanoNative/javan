@@ -3391,6 +3391,108 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void inheritableThreadLocalStateIsInheritedByStartedThreadBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-inheritable-threadlocal-started-thread-inheritance");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final InheritableThreadLocal<String> local = new InheritableThreadLocal<>();
+                    local.set("main");
+                    final Thread worker = new Thread(new Task(local));
+                    worker.start();
+                    worker.join();
+                    System.out.println(local.get());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                private final InheritableThreadLocal<String> local;
+
+                public Task(final InheritableThreadLocal<String> local) {
+                    this.local = local;
+                }
+
+                @Override
+                public void run() {
+                    System.out.println(local.get());
+                    local.set("worker");
+                    System.out.println(local.get());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-inheritable-threadlocal-started-thread-inheritance").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void inheritableThreadLocalBuildWritesCleanThreadAndUnifiedReports() throws Exception {
+        final Path project = project("thread-inheritable-threadlocal-clean-report");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final InheritableThreadLocal<String> local = new InheritableThreadLocal<>();
+                    local.set("main");
+                    final Thread worker = new Thread(new Task(local));
+                    worker.start();
+                    worker.join();
+                    System.out.println(local.get());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                private final InheritableThreadLocal<String> local;
+
+                public Task(final InheritableThreadLocal<String> local) {
+                    this.local = local;
+                }
+
+                @Override
+                public void run() {
+                    System.out.println(local.get());
+                }
+            }
+            """);
+
+        final CliRun build = run(tempDir, "build", project.toString());
+        final CliRun report = run(tempDir, "report", project.toString());
+
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        assertThat(report.exitCode()).isZero();
+        assertThat(Files.readString(project.resolve(".javan/reports/threads.json"))).contains(
+            "\"errors\": 0",
+            "\"concurrencyRuntime\": 0"
+        ).doesNotContain(
+            "InheritableThreadLocal.<init>()",
+            "\"code\": \"JAVAN177\""
+        );
+        assertThat(Files.readString(project.resolve(".javan/reports/report.json"))).contains(
+            "{\"name\": \"threads\", \"status\": \"present\"",
+            "\"errors\": 0"
+        );
+    }
+
+    @Test
     void virtualThreadExecutorSubmitBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("thread-executor-submit");
         writeJava(project, "com.acme.Main", """

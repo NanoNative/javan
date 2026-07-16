@@ -181,6 +181,10 @@ public final class JdkCallSupport {
         runtime("ThreadLocal.get", "java/lang/ThreadLocal", "get", "()Ljava/lang/Object;"),
         runtime("ThreadLocal.set", "java/lang/ThreadLocal", "set", "(Ljava/lang/Object;)V"),
         runtime("ThreadLocal.remove", "java/lang/ThreadLocal", "remove", "()V"),
+        runtime("InheritableThreadLocal.<init>", "java/lang/InheritableThreadLocal", "<init>", "()V"),
+        runtime("InheritableThreadLocal.get", "java/lang/InheritableThreadLocal", "get", "()Ljava/lang/Object;"),
+        runtime("InheritableThreadLocal.set", "java/lang/InheritableThreadLocal", "set", "(Ljava/lang/Object;)V"),
+        runtime("InheritableThreadLocal.remove", "java/lang/InheritableThreadLocal", "remove", "()V"),
         runtime("CharSequence.length", "java/lang/CharSequence", "length", "()I"),
         runtime("CharSequence.charAt", "java/lang/CharSequence", "charAt", "(I)C"),
         intrinsic("Character.isWhitespace", "java/lang/Character", "isWhitespace", "(C)Z"),
@@ -1019,7 +1023,7 @@ public final class JdkCallSupport {
         if ("java/util/concurrent/locks/LockSupport".equals(owner)) {
             return List.of("threads");
         }
-        if ("java/lang/ThreadLocal".equals(owner)) {
+        if ("java/lang/ThreadLocal".equals(owner) || "java/lang/InheritableThreadLocal".equals(owner)) {
             return List.of("threads");
         }
         if ("java/util/concurrent/ThreadFactory".equals(owner)) {

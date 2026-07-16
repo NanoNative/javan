@@ -1226,7 +1226,7 @@ public final class StaticVerifier {
             return !isSupportedThreadLocalRuntimeCall(methodRef);
         }
         if ("java/lang/InheritableThreadLocal".equals(owner)) {
-            return true;
+            return !isSupportedThreadLocalRuntimeCall(methodRef);
         }
         if ("java/util/concurrent/Executors".equals(owner)) {
             return true;
@@ -1276,7 +1276,8 @@ public final class StaticVerifier {
     }
 
     private static boolean isSupportedThreadLocalRuntimeCall(final MethodRef methodRef) {
-        if (!"java/lang/ThreadLocal".equals(methodRef.owner())) {
+        if (!"java/lang/ThreadLocal".equals(methodRef.owner())
+            && !"java/lang/InheritableThreadLocal".equals(methodRef.owner())) {
             return false;
         }
         if ("<init>".equals(methodRef.name())) {

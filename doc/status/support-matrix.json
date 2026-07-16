@@ -11,8 +11,8 @@
     "rule": "done = supported variants + rejected variants; unknown leftovers must be 0 for a release-gated JDK"
   },
   "counts": {
-    "rows": 151,
-    "pass": 151,
+    "rows": 152,
+    "pass": 152,
     "scoped": 0,
     "target": 0,
     "rejected": 0
@@ -158,6 +158,7 @@
     {"feature": "platform-thread-sleep-millis-nanos-uninterrupted", "jdk25": "pass"},
     {"feature": "platform-thread-sleep-entry-interrupted-same-method-catch", "jdk25": "pass"},
     {"feature": "platform-thread-sleep-millis-nanos-entry-interrupted-same-method-catch", "jdk25": "pass"},
+    {"feature": "platform-thread-inheritable-threadlocal", "jdk25": "pass"},
     {"feature": "platform-thread-join-entry-interrupted-same-method-catch", "jdk25": "pass"},
     {"feature": "platform-thread-join-timeout", "jdk25": "pass"},
     {"feature": "platform-thread-join-millis-nanos-timeout", "jdk25": "pass"},

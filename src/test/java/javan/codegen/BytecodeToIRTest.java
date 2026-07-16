@@ -7132,6 +7132,12 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersInheritableThreadLocalConstructorPredicateForSupportedSignature() {
+        assertThat(BytecodeToIRInvokeSupport.lowerThreadLocalConstructor(new MethodRef("java/lang/InheritableThreadLocal", "<init>", "()V")))
+            .isTrue();
+    }
+
+    @Test
     void lowersThreadLocalConstructorPredicateRejectsWrongOwner() {
         assertThat(BytecodeToIRInvokeSupport.lowerThreadLocalConstructor(new MethodRef("java/lang/Object", "<init>", "()V")))
             .isFalse();
@@ -7409,6 +7415,29 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersInheritableThreadLocalGetToRuntimeHelperWithTemporaryLocal() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/InheritableThreadLocal;)Ljava/lang/Object;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/InheritableThreadLocal", "get", "()Ljava/lang/Object;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall("javan_thread_local_get", List.of(IrExpression.objectLocal("arg0")))
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
     void lowersThreadLocalSetToRuntimeHelper() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -7419,6 +7448,29 @@ final class BytecodeToIRTest {
             plain(0, 42, "aload_0"),
             plain(1, 43, "aload_1"),
             invokeVirtual(2, new MethodRef("java/lang/ThreadLocal", "set", "(Ljava/lang/Object;)V")),
+            plain(3, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid(
+                "javan_thread_local_set",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
+    void lowersInheritableThreadLocalSetToRuntimeHelper() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/InheritableThreadLocal;Ljava/lang/Object;)V",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/lang/InheritableThreadLocal", "set", "(Ljava/lang/Object;)V")),
             plain(3, 177, "return")
         ));
 
@@ -7454,6 +7506,28 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersInheritableThreadLocalRemoveToRuntimeHelper() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/InheritableThreadLocal;)V",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/InheritableThreadLocal", "remove", "()V")),
+            plain(2, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid(
+                "javan_thread_local_remove",
+                List.of(IrExpression.objectLocal("arg0"))
+            ),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
     void lowerThreadLocalInstanceCallRejectsUnsupportedMethodShape() {
         assertThat(BytecodeToIRInvokeSupport.lowerThreadLocalInstanceCall(
             new MethodRef("java/lang/ThreadLocal", "initialValue", "()Ljava/lang/Object;"),
@@ -7475,6 +7549,28 @@ final class BytecodeToIRTest {
             List.of(),
             IrExpression.objectLocal("arg0")
         )).isFalse();
+    }
+
+    @Test
+    void lowersNewInheritableThreadLocalToDedicatedRuntimeHelper() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()V",
+            2,
+            0,
+            classInstruction(0, 187, "new", "java/lang/InheritableThreadLocal"),
+            plain(1, 89, "dup"),
+            invokeSpecial(2, new MethodRef("java/lang/InheritableThreadLocal", "<init>", "()V")),
+            plain(5, 87, "pop"),
+            plain(6, 177, "return")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_inheritable_thread_local_new", List.of())),
+            IrInstruction.returnVoid()
+        );
     }
 
     @Test

@@ -5210,7 +5210,7 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void staticVerifierWarnsAboutUnreachableInheritableThreadLocalConstructor() {
+    void staticVerifierAcceptsUnreachableInheritableThreadLocalConstructor() {
         final ClassFile main = classWithMethods(
             "com/acme/Main",
             "java/lang/Object",
@@ -5238,10 +5238,7 @@ final class CoreBehaviorTest {
 
         final List<Diagnostic> diagnostics = new StaticVerifier().verify(Map.of(main.name(), main), List.of());
 
-        assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
-            assertThat(diagnostic.code()).isEqualTo("JAVAN177");
-            assertThat(diagnostic.subject()).isEqualTo("InheritableThreadLocal.<init>()");
-        });
+        assertThat(diagnostics).isEmpty();
     }
 
     @Test

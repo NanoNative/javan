@@ -525,6 +525,7 @@ final class RuntimeHeaderFile {
         void javan_thread_detach_current(void);
         void javan_thread_set_target(void* value, void* target);
         void* javan_thread_local_new(void);
+        void* javan_inheritable_thread_local_new(void);
         void* javan_thread_local_get(void* value);
         void javan_thread_local_set(void* value, void* thread_local_value);
         void javan_thread_local_remove(void* value);

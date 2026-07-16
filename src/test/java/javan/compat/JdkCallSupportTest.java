@@ -268,6 +268,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void inheritableThreadLocalGetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/InheritableThreadLocal",
+            "get",
+            "()Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void inheritableThreadLocalSetRequiresThreadsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/lang/InheritableThreadLocal",
+            "set",
+            "(Ljava/lang/Object;)V"
+        ))).containsExactly("threads");
+    }
+
+    @Test
     void builtinCollectionInstanceOfTargetIsSupported() {
         assertThat(JdkCallSupport.builtinInstanceOfTargetId("java/util/Collection"))
             .contains(JdkCallSupport.BUILTIN_INSTANCEOF_COLLECTION);

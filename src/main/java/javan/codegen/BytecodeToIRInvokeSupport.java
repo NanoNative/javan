@@ -3255,7 +3255,8 @@ final class BytecodeToIRInvokeSupport {
     }
 
     static boolean lowerThreadLocalConstructor(final MethodRef methodRef) {
-        return "java/lang/ThreadLocal".equals(methodRef.owner())
+        return ("java/lang/ThreadLocal".equals(methodRef.owner())
+            || "java/lang/InheritableThreadLocal".equals(methodRef.owner()))
             && "<init>".equals(methodRef.name())
             && "()V".equals(methodRef.descriptor());
     }
@@ -3321,7 +3322,7 @@ final class BytecodeToIRInvokeSupport {
         final List<StackValue> stack,
         final Map<Integer, IrLocal> localDeclarations
     ) {
-        if (!"java/lang/ThreadLocal".equals(methodRef.owner()) || !JdkCallSupport.isSupported(methodRef)) {
+        if (!isThreadLocalOwner(methodRef.owner()) || !JdkCallSupport.isSupported(methodRef)) {
             return false;
         }
         final MethodDescriptor descriptor = MethodDescriptor.parse(methodRef.descriptor());
@@ -3440,7 +3441,7 @@ final class BytecodeToIRInvokeSupport {
         final List<IrExpression> arguments,
         final IrExpression receiver
     ) {
-        if (!"java/lang/ThreadLocal".equals(methodRef.owner())) {
+        if (!isThreadLocalOwner(methodRef.owner())) {
             return false;
         }
         if ("get".equals(methodRef.name()) && "()Ljava/lang/Object;".equals(methodRef.descriptor())) {
@@ -3456,6 +3457,11 @@ final class BytecodeToIRInvokeSupport {
             return true;
         }
         return false;
+    }
+
+    private static boolean isThreadLocalOwner(final String owner) {
+        return "java/lang/ThreadLocal".equals(owner)
+            || "java/lang/InheritableThreadLocal".equals(owner);
     }
 
     static boolean lowerJdkCollectionInstanceCall(
@@ -6680,11 +6686,14 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.objectExpression(local));
             return;
         }
-        if ("java/lang/ThreadLocal".equals(owner)) {
+        if ("java/lang/ThreadLocal".equals(owner) || "java/lang/InheritableThreadLocal".equals(owner)) {
             final String localName = "object" + localDeclarations.size();
             localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
             final IrExpression local = IrExpression.objectLocal(localName);
-            instructions.add(IrInstruction.assignObject(localName, IrExpression.objectCall("javan_thread_local_new", List.of())));
+            final String helper = "java/lang/InheritableThreadLocal".equals(owner)
+                ? "javan_inheritable_thread_local_new"
+                : "javan_thread_local_new";
+            instructions.add(IrInstruction.assignObject(localName, IrExpression.objectCall(helper, List.of())));
             stack.add(StackValue.objectExpression(local));
             return;
         }

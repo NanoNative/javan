@@ -318,9 +318,7 @@ final class JdkCallableAccounting {
         if ("sun/misc/Unsafe".equals(owner)) {
             return true;
         }
-        return "java/lang/InheritableThreadLocal".equals(owner)
-            && "<init>".equals(methodName)
-            && "()V".equals(descriptor);
+        return false;
     }
 
     private static boolean isInternalStringHelperOwner(final String owner) {

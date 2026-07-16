@@ -1071,6 +1071,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_TYPE_JAVA_TIME_DURATION -1007
         #define JAVAN_TYPE_JAVA_LANG_THREAD -1008
         #define JAVAN_TYPE_JAVA_LANG_THREAD_LOCAL -1009
+        #define JAVAN_TYPE_JAVA_LANG_INHERITABLE_THREAD_LOCAL -1017
         #define JAVAN_TYPE_JAVA_TIME_FORMAT_DATE_TIME_FORMATTER -1010
         #define JAVAN_TYPE_JAVA_TIME_FORMAT_DATE_TIME_FORMATTER_BUILDER -1011
         #define JAVAN_TYPE_JAVA_TIME_FORMAT_TEXT_STYLE -1012
@@ -1102,6 +1103,7 @@ final class RuntimeSourceMemorySections {
                 || type_id == JAVAN_TYPE_JAVA_TIME_DURATION
                 || type_id == JAVAN_TYPE_JAVA_LANG_THREAD
                 || type_id == JAVAN_TYPE_JAVA_LANG_THREAD_LOCAL
+                || type_id == JAVAN_TYPE_JAVA_LANG_INHERITABLE_THREAD_LOCAL
                 || type_id == JAVAN_TYPE_JAVA_TIME_FORMAT_DATE_TIME_FORMATTER
                 || type_id == JAVAN_TYPE_JAVA_TIME_FORMAT_DATE_TIME_FORMATTER_BUILDER
                 || type_id == JAVAN_TYPE_JAVA_TIME_FORMAT_TEXT_STYLE
@@ -2376,7 +2378,7 @@ final class RuntimeSourceMemorySections {
         } javan_duration;
 
         typedef struct {
-            int reserved;
+            int inheritable;
         } javan_thread_local;
 
         typedef struct javan_thread {
@@ -2959,6 +2961,9 @@ final class RuntimeSourceMemorySections {
             if (type_id == JAVAN_TYPE_JAVA_LANG_THREAD_LOCAL) {
                 return javan_runtime_class_literal("java.lang.ThreadLocal", JAVAN_TYPE_JAVA_LANG_THREAD_LOCAL, 0, 0, 0);
             }
+            if (type_id == JAVAN_TYPE_JAVA_LANG_INHERITABLE_THREAD_LOCAL) {
+                return javan_runtime_class_literal("java.lang.InheritableThreadLocal", JAVAN_TYPE_JAVA_LANG_INHERITABLE_THREAD_LOCAL, 0, 0, 0);
+            }
             if (type_id == JAVAN_TYPE_JAVA_TIME_DURATION) {
                 return javan_runtime_class_literal("java.time.Duration", JAVAN_TYPE_JAVA_TIME_DURATION, 0, 0, 0);
             }
@@ -3400,11 +3405,22 @@ final class RuntimeSourceMemorySections {
             return value;
         }
 
-        void* javan_thread_local_new(void) {
+        static void* javan_thread_local_new_with_inheritance(int inheritable) {
             javan_thread_local* object = (javan_thread_local*) javan_alloc(sizeof(javan_thread_local));
-            object->reserved = 0;
-            javan_register_object((void*) object, JAVAN_TYPE_JAVA_LANG_THREAD_LOCAL);
+            object->inheritable = inheritable == 0 ? 0 : 1;
+            javan_register_object(
+                (void*) object,
+                inheritable == 0 ? JAVAN_TYPE_JAVA_LANG_THREAD_LOCAL : JAVAN_TYPE_JAVA_LANG_INHERITABLE_THREAD_LOCAL
+            );
             return object;
+        }
+
+        void* javan_thread_local_new(void) {
+            return javan_thread_local_new_with_inheritance(0);
+        }
+
+        void* javan_inheritable_thread_local_new(void) {
+            return javan_thread_local_new_with_inheritance(1);
         }
 
         void* javan_integer_value_of(int value) {
@@ -4043,10 +4059,16 @@ final class RuntimeSourceMemorySections {
             if (value == NULL) {
                 javan_panic("null ThreadLocal");
             }
-            if (javan_registered_type_id(value) != JAVAN_TYPE_JAVA_LANG_THREAD_LOCAL) {
+            const int type_id = javan_registered_type_id(value);
+            if (type_id != JAVAN_TYPE_JAVA_LANG_THREAD_LOCAL
+                && type_id != JAVAN_TYPE_JAVA_LANG_INHERITABLE_THREAD_LOCAL) {
                 javan_panic("unsupported ThreadLocal object");
             }
             return (javan_thread_local*) value;
+        }
+
+        static int javan_thread_local_is_inheritable(void* value) {
+            return javan_require_thread_local(value)->inheritable != 0;
         }
 
         static javan_object_map* javan_thread_local_storage(javan_thread* thread) {
@@ -4073,6 +4095,42 @@ final class RuntimeSourceMemorySections {
                 }
             }
             return -1;
+        }
+
+        static void javan_thread_local_inherit_storage(javan_thread* parent, javan_thread* child) {
+            if (parent == NULL || child == NULL || parent->thread_locals == NULL) {
+                return;
+            }
+            javan_object_map* parent_storage = javan_map_checked(parent->thread_locals);
+            int inheritable_entries = 0;
+            for (int index = 0; index < parent_storage->length; index++) {
+                if (javan_thread_local_is_inheritable(parent_storage->keys[index])) {
+                    inheritable_entries++;
+                }
+            }
+            if (inheritable_entries == 0) {
+                return;
+            }
+            javan_object_map* child_storage = javan_thread_local_storage(child);
+            for (int index = 0; index < parent_storage->length; index++) {
+                if (!javan_thread_local_is_inheritable(parent_storage->keys[index])) {
+                    continue;
+                }
+                void* key_root = parent_storage->keys[index];
+                void* value_root = parent_storage->values[index];
+                void** javan_thread_local_inherit_roots[] = {
+                    (void**) &child_storage,
+                    (void**) &key_root,
+                    (void**) &value_root
+                };
+                javan_root_frame_push(javan_thread_local_inherit_roots, 3);
+                javan_map_ensure_capacity(child_storage, child_storage->length + 1);
+                child_storage->keys[child_storage->length] = key_root;
+                child_storage->values[child_storage->length] = value_root;
+                child_storage->length++;
+                child_storage->mod_count++;
+                javan_root_frame_pop(javan_thread_local_inherit_roots);
+            }
         }
 
         void* javan_thread_local_get(void* value) {
@@ -4542,9 +4600,11 @@ final class RuntimeSourceMemorySections {
             if (thread == javan_current_thread_object() || thread->started != 0) {
                 javan_panic("Thread.start duplicate is not supported yet");
             }
+            javan_thread* parent = javan_current_thread_object();
             javan_thread_enter_live_root(value);
             javan_runtime_lock_enter();
             javan_profile_thread_start_calls_value++;
+            javan_thread_local_inherit_storage(parent, thread);
             javan_runtime_lock_leave();
             #if defined(_WIN32)
             thread->native_handle = (void*) _beginthreadex(NULL, 0, javan_thread_host_start, value, 0, NULL);

@@ -9,8 +9,8 @@ External project names do not belong in this matrix; this ledger stays compiler-
 
 | Measure | Count |
 | --- | ---: |
-| rows | 151 |
-| pass | 151 |
+| rows | 152 |
+| pass | 152 |
 | scoped | 0 |
 | target | 0 |
 | rejected | 0 |
@@ -166,6 +166,7 @@ Status mapping:
 | `platform-thread-sleep-millis-nanos-uninterrupted` | pass |
 | `platform-thread-sleep-entry-interrupted-same-method-catch` | pass |
 | `platform-thread-sleep-millis-nanos-entry-interrupted-same-method-catch` | pass |
+| `platform-thread-inheritable-threadlocal` | pass |
 | `platform-thread-join-entry-interrupted-same-method-catch` | pass |
 | `platform-thread-join-timeout` | pass |
 | `platform-thread-join-millis-nanos-timeout` | pass |
