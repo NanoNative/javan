@@ -502,6 +502,13 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if ("java/lang/Class".equals(methodRef.owner())
+            && "isPrimitive".equals(methodRef.name())
+            && "()Z".equals(methodRef.descriptor())) {
+            final IrExpression receiver = popObject(classFile, method, stack);
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_class_is_primitive", List.of(receiver))));
+            return;
+        }
+        if ("java/lang/Class".equals(methodRef.owner())
             && "isAssignableFrom".equals(methodRef.name())
             && "(Ljava/lang/Class;)Z".equals(methodRef.descriptor())) {
             final IrExpression source = popObject(classFile, method, stack);
@@ -521,6 +528,13 @@ final class BytecodeToIRInvokeSupport {
             && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
             final IrExpression receiver = popObject(classFile, method, stack);
             pushObjectCall(instructions, stack, localDeclarations, "javan_class_descriptor_string", List.of(receiver));
+            return;
+        }
+        if ("java/lang/Class".equals(methodRef.owner())
+            && "getComponentType".equals(methodRef.name())
+            && "()Ljava/lang/Class;".equals(methodRef.descriptor())) {
+            final IrExpression receiver = popObject(classFile, method, stack);
+            pushObjectCall(instructions, stack, localDeclarations, "javan_class_component_type", List.of(receiver));
             return;
         }
         if ("java/lang/Class".equals(methodRef.owner())
@@ -6896,6 +6910,7 @@ final class BytecodeToIRInvokeSupport {
             case "java/lang/Long" -> Optional.of(primitiveClassLiteral("long", BytecodeToIR.CLASS_EXACT_PRIMITIVE_LONG));
             case "java/lang/Float" -> Optional.of(primitiveClassLiteral("float", BytecodeToIR.CLASS_EXACT_PRIMITIVE_FLOAT));
             case "java/lang/Double" -> Optional.of(primitiveClassLiteral("double", BytecodeToIR.CLASS_EXACT_PRIMITIVE_DOUBLE));
+            case "java/lang/Void" -> Optional.of(primitiveClassLiteral("void", BytecodeToIR.CLASS_EXACT_PRIMITIVE_VOID));
             default -> Optional.empty();
         };
     }

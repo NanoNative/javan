@@ -5534,6 +5534,27 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void runtimeClassGetComponentTypeMatchesComponentTypeSemantics() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* klass = javan_runtime_class_literal("[Ljava.lang.String;", 0, 0, 1, 0);
+                void* component = javan_class_component_type(klass);
+                printf("%s\\n", (char*) javan_runtime_class_get_name(component));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("java.lang.String\n");
+    }
+
+    @Test
     void runtimeReferenceClassArrayTypeReturnsReferenceArrayName() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
@@ -5573,6 +5594,66 @@ final class RuntimeFilesTest {
         );
 
         assertThat(stdout).isEqualTo("[I\n");
+    }
+
+    @Test
+    void runtimePrimitiveClassIsPrimitiveReturnsTrue() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* klass = javan_runtime_class_literal("int", -2010, 0, 0, 0);
+                printf("%d\\n", javan_class_is_primitive(klass));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("1\n");
+    }
+
+    @Test
+    void runtimeReferenceClassIsPrimitiveReturnsFalse() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* klass = javan_runtime_class_literal("java.lang.String", -2001, 0, 0, 0);
+                printf("%d\\n", javan_class_is_primitive(klass));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("0\n");
+    }
+
+    @Test
+    void runtimeVoidPrimitiveClassGetNameReturnsVoid() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* klass = javan_runtime_class_literal("void", -2014, 0, 0, 0);
+                printf("%s\\n", (char*) javan_runtime_class_get_name(klass));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("void\n");
     }
 
     @Test

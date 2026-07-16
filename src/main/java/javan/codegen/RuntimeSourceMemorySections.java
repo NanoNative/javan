@@ -3106,6 +3106,10 @@ final class RuntimeSourceMemorySections {
             return javan_runtime_class_checked(class_value)->is_array;
         }
 
+        int javan_class_is_primitive(void* class_value) {
+            return javan_runtime_class_is_primitive_exact_type_id(javan_runtime_class_checked(class_value)->exact_type_id);
+        }
+
         int javan_class_is_assignable_from(void* target, void* source) {
             void* target_root = target;
             void* source_root = source;

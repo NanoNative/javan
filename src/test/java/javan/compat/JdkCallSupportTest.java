@@ -40,6 +40,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void classIsPrimitiveIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Class",
+            "isPrimitive",
+            "()Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void classGetComponentTypeIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Class",
+            "getComponentType",
+            "()Ljava/lang/Class;"
+        ))).isTrue();
+    }
+
+    @Test
     void threadLocalGetIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef("java/lang/ThreadLocal", "get", "()Ljava/lang/Object;")))
             .isTrue();
