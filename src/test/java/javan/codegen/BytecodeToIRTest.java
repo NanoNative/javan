@@ -3024,6 +3024,58 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersLdcArrayClassLiteral() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/lang/Class;",
+            1,
+            0,
+            classInstruction(0, 18, "ldc", "[Ljava/lang/String;"),
+            plain(1, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_runtime_class_literal",
+                List.of(
+                    IrExpression.stringLiteral("[Ljava.lang.String;"),
+                    IrExpression.intLiteral(0),
+                    IrExpression.intLiteral(0),
+                    IrExpression.intLiteral(1),
+                    IrExpression.intLiteral(0)
+                )
+            ))
+        );
+    }
+
+    @Test
+    void lowersWrapperClassLiteral() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/lang/Class;",
+            1,
+            0,
+            classInstruction(0, 18, "ldc", "java/lang/Integer"),
+            plain(1, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_runtime_class_literal",
+                List.of(
+                    IrExpression.stringLiteral("java.lang.Integer"),
+                    IrExpression.intLiteral(BytecodeToIR.TYPE_JAVA_LANG_INTEGER),
+                    IrExpression.intLiteral(0),
+                    IrExpression.intLiteral(0),
+                    IrExpression.intLiteral(0)
+                )
+            ))
+        );
+    }
+
+    @Test
     void lowersLdc2wLongLiteral() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -14330,6 +14382,32 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersIntegerTypeFieldToPrimitiveClassLiteral() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/lang/Class;",
+            1,
+            0,
+            getStatic(0, new FieldRef("java/lang/Integer", "TYPE", "Ljava/lang/Class;")),
+            plain(1, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_runtime_class_literal",
+                List.of(
+                    IrExpression.stringLiteral("int"),
+                    IrExpression.intLiteral(BytecodeToIR.CLASS_EXACT_PRIMITIVE_INT),
+                    IrExpression.intLiteral(0),
+                    IrExpression.intLiteral(0),
+                    IrExpression.intLiteral(0)
+                )
+            ))
+        );
+    }
+
+    @Test
     void lowersSystemErrFieldToRuntimeObjectCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -14376,6 +14454,63 @@ final class BytecodeToIRTest {
             .isInstanceOf(DiagnosticException.class)
             .hasMessageContaining("error[JAVAN040]")
             .hasMessageContaining("getstatic java/lang/System.in:Ljava/io/InputStream;");
+    }
+
+    @Test
+    void lowersClassDescriptorStringToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Class;)Ljava/lang/String;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/Class", "descriptorString", "()Ljava/lang/String;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_class_descriptor_string", List.of(IrExpression.objectLocal("arg0")))),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersClassComponentTypeToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Class;)Ljava/lang/Class;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/Class", "componentType", "()Ljava/lang/Class;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_class_component_type", List.of(IrExpression.objectLocal("arg0")))),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersClassArrayTypeToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Class;)Ljava/lang/Class;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/Class", "arrayType", "()Ljava/lang/Class;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_class_array_type", List.of(IrExpression.objectLocal("arg0")))),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
     }
 
     @Test

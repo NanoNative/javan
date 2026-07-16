@@ -55,6 +55,7 @@ final class ExternalProbeCatalog {
                 require(properties, "version"),
                 properties.getProperty("mainClass", "com.acme.Main"),
                 properties.getProperty("genericEvidence", ""),
+                parseOptionalCsv(properties.getProperty("identityPackages", "")),
                 Files.readString(projectDirectory.resolve("expected.stdout")),
                 projectDirectory.toString().replace('\\', '/')
             );
@@ -74,6 +75,10 @@ final class ExternalProbeCatalog {
         final Pattern normalized = normalizedArtifactWord(probe.artifactId());
         if (normalized != null) {
             patterns.add(normalized);
+        }
+        for (final String identityPackage : probe.identityPackages()) {
+            patterns.add(exactLiteral(identityPackage));
+            patterns.add(exactLiteral(identityPackage.replace('.', '/')));
         }
         return patterns;
     }
@@ -109,6 +114,18 @@ final class ExternalProbeCatalog {
         return value;
     }
 
+    private static List<String> parseOptionalCsv(final String value) {
+        if (value == null || value.isBlank()) {
+            return List.of();
+        }
+        return java.util.Arrays.stream(value.split(","))
+            .map(String::trim)
+            .filter(entry -> !entry.isBlank())
+            .distinct()
+            .sorted()
+            .toList();
+    }
+
     record ExternalProbe(
         String project,
         String groupId,
@@ -116,6 +133,7 @@ final class ExternalProbeCatalog {
         String version,
         String mainClass,
         String genericEvidence,
+        List<String> identityPackages,
         String expectedStdout,
         String projectDirectory
     ) {

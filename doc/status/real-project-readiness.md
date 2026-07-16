@@ -49,7 +49,12 @@ Rule:
 
 - if a real probe breaks, fix the compiler/runtime gap in a generic JDK-support test first
 - then keep or update the external probe only as upstream compatibility smoke
-- never add a Nano- or TypeMap-named support row, intrinsic, substitution, or verifier rule
+- never add an upstream-project-named support row, intrinsic, substitution, or verifier rule
+
+The metadata fence also covers upstream package identities. Probe metadata declares the external
+package roots that are allowed only inside the dedicated smoke boundary, and isolation tests fail
+if those package names leak into compiler-owned tests, support ledgers, product code, or workflow
+scripts.
 
 Compiler-owned regression coverage for the same shapes lives under `src/test/java/javan/*`
 using synthetic dependency jars and projects. The external probes are allowed to fail only as
@@ -93,8 +98,8 @@ Compiler-owned generic equivalents:
 | Scheduled executor subclass with fixed-rate scheduling plus shutdown/awaitTermination before first fire | `CliDependencyProjectIntegrationTest.dependencyJarScheduledExecutorFixedRateBuilds` |
 
 That mapping is the rule: when an external probe breaks, the permanent fix belongs in one of these
-generic compiler-owned dependency tests or a new generic equivalent, not in a Nano/TypeMap-specific
-support row.
+generic compiler-owned dependency tests or a new generic equivalent, not in an upstream-project-
+specific support row.
 
 `.github/scripts/acceptance.sh` now auto-discovers probe directories and CI prefetches the pinned
 artifacts from probe metadata via `.github/scripts/list-real-probe-artifacts.sh` before `mvn verify`,

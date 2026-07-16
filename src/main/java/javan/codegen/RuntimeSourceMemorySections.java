@@ -435,6 +435,15 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_CLASS_EXACT_CLASS -2003
         #define JAVAN_CLASS_EXACT_ARRAY_LIST -2004
         #define JAVAN_CLASS_EXACT_HASH_MAP -2005
+        #define JAVAN_CLASS_EXACT_PRIMITIVE_BOOLEAN -2006
+        #define JAVAN_CLASS_EXACT_PRIMITIVE_BYTE -2007
+        #define JAVAN_CLASS_EXACT_PRIMITIVE_SHORT -2008
+        #define JAVAN_CLASS_EXACT_PRIMITIVE_CHAR -2009
+        #define JAVAN_CLASS_EXACT_PRIMITIVE_INT -2010
+        #define JAVAN_CLASS_EXACT_PRIMITIVE_LONG -2011
+        #define JAVAN_CLASS_EXACT_PRIMITIVE_FLOAT -2012
+        #define JAVAN_CLASS_EXACT_PRIMITIVE_DOUBLE -2013
+        #define JAVAN_CLASS_EXACT_PRIMITIVE_VOID -2014
 
         typedef struct javan_process_result {
             int exit_code;
@@ -2647,26 +2656,28 @@ final class RuntimeSourceMemorySections {
             if (binary_name == NULL || binary_name[0] == '\\0' || assignable_count < 0) {
                 javan_panic("invalid runtime class name");
             }
-            void* state_root = NULL;
-            void* assignable_root = NULL;
-            void** roots[] = {
-                (void**) &state_root,
-                (void**) &assignable_root
-            };
-            javan_root_frame_push(roots, 2);
-            state_root = javan_alloc(sizeof(javan_runtime_class_state));
+            unsigned long binary_name_length = (unsigned long) strlen(binary_name) + 1UL;
+            unsigned long assignable_offset = sizeof(javan_runtime_class_state) + binary_name_length;
+            unsigned long assignable_alignment = sizeof(int);
+            if ((assignable_offset % assignable_alignment) != 0UL) {
+                assignable_offset += assignable_alignment - (assignable_offset % assignable_alignment);
+            }
+            unsigned long assignable_bytes = assignable_count > 0
+                ? (unsigned long) assignable_count * sizeof(int)
+                : 0UL;
+            void* state_root = javan_alloc(assignable_offset + assignable_bytes);
             javan_runtime_class_state* state = (javan_runtime_class_state*) state_root;
+            char* stored_binary_name = ((char*) state_root) + sizeof(javan_runtime_class_state);
             state->magic = JAVAN_RUNTIME_CLASS_MAGIC;
             state->exact_type_id = exact_type_id;
             state->is_enum = is_enum != 0 ? 1 : 0;
             state->is_array = is_array != 0 ? 1 : 0;
             state->assignable_count = assignable_count;
             state->assignable_type_ids = NULL;
-            state->binary_name = binary_name;
+            memcpy(stored_binary_name, binary_name, binary_name_length);
+            state->binary_name = stored_binary_name;
             if (assignable_count > 0) {
-                assignable_root = javan_alloc((unsigned long) assignable_count * sizeof(int));
-                javan_update_runtime_allocation_kind(assignable_root, JAVAN_RUNTIME_KIND_OWNED_BUFFER);
-                state->assignable_type_ids = (int*) assignable_root;
+                state->assignable_type_ids = (int*) (((char*) state_root) + assignable_offset);
                 va_list arguments;
                 va_start(arguments, assignable_count);
                 for (int index = 0; index < assignable_count; index++) {
@@ -2675,8 +2686,190 @@ final class RuntimeSourceMemorySections {
                 va_end(arguments);
             }
             javan_update_runtime_allocation_kind(state_root, JAVAN_RUNTIME_KIND_CLASS);
-            javan_root_frame_pop(roots);
             return state_root;
+        }
+
+        static int javan_runtime_class_primitive_descriptor_char(int exact_type_id) {
+            switch (exact_type_id) {
+                case JAVAN_CLASS_EXACT_PRIMITIVE_BOOLEAN:
+                    return 'Z';
+                case JAVAN_CLASS_EXACT_PRIMITIVE_BYTE:
+                    return 'B';
+                case JAVAN_CLASS_EXACT_PRIMITIVE_SHORT:
+                    return 'S';
+                case JAVAN_CLASS_EXACT_PRIMITIVE_CHAR:
+                    return 'C';
+                case JAVAN_CLASS_EXACT_PRIMITIVE_INT:
+                    return 'I';
+                case JAVAN_CLASS_EXACT_PRIMITIVE_LONG:
+                    return 'J';
+                case JAVAN_CLASS_EXACT_PRIMITIVE_FLOAT:
+                    return 'F';
+                case JAVAN_CLASS_EXACT_PRIMITIVE_DOUBLE:
+                    return 'D';
+                case JAVAN_CLASS_EXACT_PRIMITIVE_VOID:
+                    return 'V';
+                default:
+                    return 0;
+            }
+        }
+
+        static const char* javan_runtime_class_primitive_array_binary_name(int exact_type_id) {
+            switch (exact_type_id) {
+                case JAVAN_CLASS_EXACT_PRIMITIVE_BOOLEAN:
+                    return "[Z";
+                case JAVAN_CLASS_EXACT_PRIMITIVE_BYTE:
+                    return "[B";
+                case JAVAN_CLASS_EXACT_PRIMITIVE_SHORT:
+                    return "[S";
+                case JAVAN_CLASS_EXACT_PRIMITIVE_CHAR:
+                    return "[C";
+                case JAVAN_CLASS_EXACT_PRIMITIVE_INT:
+                    return "[I";
+                case JAVAN_CLASS_EXACT_PRIMITIVE_LONG:
+                    return "[J";
+                case JAVAN_CLASS_EXACT_PRIMITIVE_FLOAT:
+                    return "[F";
+                case JAVAN_CLASS_EXACT_PRIMITIVE_DOUBLE:
+                    return "[D";
+                default:
+                    return NULL;
+            }
+        }
+
+        static int javan_runtime_class_is_primitive_exact_type_id(int exact_type_id) {
+            switch (exact_type_id) {
+                case JAVAN_CLASS_EXACT_PRIMITIVE_BOOLEAN:
+                case JAVAN_CLASS_EXACT_PRIMITIVE_BYTE:
+                case JAVAN_CLASS_EXACT_PRIMITIVE_SHORT:
+                case JAVAN_CLASS_EXACT_PRIMITIVE_CHAR:
+                case JAVAN_CLASS_EXACT_PRIMITIVE_INT:
+                case JAVAN_CLASS_EXACT_PRIMITIVE_LONG:
+                case JAVAN_CLASS_EXACT_PRIMITIVE_FLOAT:
+                case JAVAN_CLASS_EXACT_PRIMITIVE_DOUBLE:
+                case JAVAN_CLASS_EXACT_PRIMITIVE_VOID:
+                    return 1;
+                default:
+                    return 0;
+            }
+        }
+
+        static int javan_runtime_class_known_exact_type_id(const char* binary_name) {
+            if (strcmp(binary_name, "java.lang.String") == 0) {
+                return JAVAN_CLASS_EXACT_STRING;
+            }
+            if (strcmp(binary_name, "java.lang.Object") == 0) {
+                return JAVAN_CLASS_EXACT_OBJECT;
+            }
+            if (strcmp(binary_name, "java.lang.Class") == 0) {
+                return JAVAN_CLASS_EXACT_CLASS;
+            }
+            if (strcmp(binary_name, "java.util.ArrayList") == 0) {
+                return JAVAN_CLASS_EXACT_ARRAY_LIST;
+            }
+            if (strcmp(binary_name, "java.util.HashMap") == 0) {
+                return JAVAN_CLASS_EXACT_HASH_MAP;
+            }
+            if (strcmp(binary_name, "boolean") == 0) {
+                return JAVAN_CLASS_EXACT_PRIMITIVE_BOOLEAN;
+            }
+            if (strcmp(binary_name, "byte") == 0) {
+                return JAVAN_CLASS_EXACT_PRIMITIVE_BYTE;
+            }
+            if (strcmp(binary_name, "short") == 0) {
+                return JAVAN_CLASS_EXACT_PRIMITIVE_SHORT;
+            }
+            if (strcmp(binary_name, "char") == 0) {
+                return JAVAN_CLASS_EXACT_PRIMITIVE_CHAR;
+            }
+            if (strcmp(binary_name, "int") == 0) {
+                return JAVAN_CLASS_EXACT_PRIMITIVE_INT;
+            }
+            if (strcmp(binary_name, "long") == 0) {
+                return JAVAN_CLASS_EXACT_PRIMITIVE_LONG;
+            }
+            if (strcmp(binary_name, "float") == 0) {
+                return JAVAN_CLASS_EXACT_PRIMITIVE_FLOAT;
+            }
+            if (strcmp(binary_name, "double") == 0) {
+                return JAVAN_CLASS_EXACT_PRIMITIVE_DOUBLE;
+            }
+            if (strcmp(binary_name, "void") == 0) {
+                return JAVAN_CLASS_EXACT_PRIMITIVE_VOID;
+            }
+            return 0;
+        }
+
+        static int javan_runtime_class_type_id_for_binary_name(const char* binary_name) {
+            for (int index = 0; index < javan_type_descriptor_count_value; index++) {
+                JavanTypeDescriptor* descriptor = &javan_type_descriptors_value[index];
+                if (descriptor->name != NULL && strcmp(descriptor->name, binary_name) == 0) {
+                    return descriptor->type_id;
+                }
+            }
+            return 0;
+        }
+
+        static void* javan_runtime_class_from_binary_name(const char* binary_name) {
+            int exact_type_id = javan_runtime_class_known_exact_type_id(binary_name);
+            if (exact_type_id != 0) {
+                return javan_runtime_class_literal(binary_name, exact_type_id, 0, binary_name[0] == '[' ? 1 : 0, 0);
+            }
+            int type_id = javan_runtime_class_type_id_for_binary_name(binary_name);
+            if (type_id != 0) {
+                JavanTypeDescriptor* descriptor = javan_type_descriptor_for(type_id);
+                if (descriptor != NULL) {
+                    return javan_runtime_class_literal(binary_name, type_id, descriptor->is_enum, 0, 1, type_id);
+                }
+            }
+            return javan_runtime_class_literal(binary_name, 0, 0, binary_name[0] == '[' ? 1 : 0, 0);
+        }
+
+        static void* javan_runtime_class_component_type_from_binary_name(const char* binary_name) {
+            if (binary_name == NULL || binary_name[0] != '[') {
+                return NULL;
+            }
+            const char* component_descriptor = binary_name + 1;
+            if (component_descriptor[0] == '[') {
+                return javan_runtime_class_from_binary_name(component_descriptor);
+            }
+            if (component_descriptor[0] == 'L') {
+                unsigned long descriptor_length = (unsigned long) strlen(component_descriptor);
+                if (descriptor_length < 2UL || component_descriptor[descriptor_length - 1UL] != ';') {
+                    javan_panic("unsupported array class metadata");
+                }
+                unsigned long binary_length = descriptor_length - 2UL;
+                char* component_binary_name = (char*) javan_raw_calloc_retry(binary_length + 1UL);
+                if (component_binary_name == NULL) {
+                    javan_panic("out of memory");
+                }
+                memcpy(component_binary_name, component_descriptor + 1, binary_length);
+                component_binary_name[binary_length] = '\\0';
+                void* result = javan_runtime_class_from_binary_name(component_binary_name);
+                free(component_binary_name);
+                return result;
+            }
+            switch (component_descriptor[0]) {
+                case 'Z':
+                    return javan_runtime_class_literal("boolean", JAVAN_CLASS_EXACT_PRIMITIVE_BOOLEAN, 0, 0, 0);
+                case 'B':
+                    return javan_runtime_class_literal("byte", JAVAN_CLASS_EXACT_PRIMITIVE_BYTE, 0, 0, 0);
+                case 'S':
+                    return javan_runtime_class_literal("short", JAVAN_CLASS_EXACT_PRIMITIVE_SHORT, 0, 0, 0);
+                case 'C':
+                    return javan_runtime_class_literal("char", JAVAN_CLASS_EXACT_PRIMITIVE_CHAR, 0, 0, 0);
+                case 'I':
+                    return javan_runtime_class_literal("int", JAVAN_CLASS_EXACT_PRIMITIVE_INT, 0, 0, 0);
+                case 'J':
+                    return javan_runtime_class_literal("long", JAVAN_CLASS_EXACT_PRIMITIVE_LONG, 0, 0, 0);
+                case 'F':
+                    return javan_runtime_class_literal("float", JAVAN_CLASS_EXACT_PRIMITIVE_FLOAT, 0, 0, 0);
+                case 'D':
+                    return javan_runtime_class_literal("double", JAVAN_CLASS_EXACT_PRIMITIVE_DOUBLE, 0, 0, 0);
+                default:
+                    javan_panic("unsupported array class metadata");
+                    return NULL;
+            }
         }
 
         void* javan_virtual_thread_builder_new(void) {
@@ -2871,7 +3064,10 @@ final class RuntimeSourceMemorySections {
             }
             if (state->is_array != 0) {
                 javan_allocation_node* node = javan_find_allocation(object_value, NULL);
-                return node != NULL && node->kind == JAVAN_HEAP_KIND_ARRAY ? 1 : 0;
+                if (node == NULL || node->kind != JAVAN_HEAP_KIND_ARRAY) {
+                    return 0;
+                }
+                return javan_class_is_assignable_from((void*) state, javan_object_get_class(object_value));
             }
             return 0;
         }
@@ -2911,21 +3107,35 @@ final class RuntimeSourceMemorySections {
         }
 
         int javan_class_is_assignable_from(void* target, void* source) {
-            javan_runtime_class_state* target_state = javan_runtime_class_checked(target);
-            javan_runtime_class_state* source_state = javan_runtime_class_checked(source);
+            void* target_root = target;
+            void* source_root = source;
+            void* target_component = NULL;
+            void* source_component = NULL;
+            void** roots[] = {
+                (void**) &target_root,
+                (void**) &source_root,
+                (void**) &target_component,
+                (void**) &source_component
+            };
+            javan_root_frame_push(roots, 4);
+            int result = 0;
+            javan_runtime_class_state* target_state = javan_runtime_class_checked(target_root);
+            javan_runtime_class_state* source_state = javan_runtime_class_checked(source_root);
             if (strcmp(target_state->binary_name, source_state->binary_name) == 0) {
-                return 1;
+                result = 1;
+            } else if (target_state->exact_type_id == JAVAN_CLASS_EXACT_OBJECT) {
+                result = javan_runtime_class_is_primitive_exact_type_id(source_state->exact_type_id) == 0 ? 1 : 0;
+            } else if (source_state->exact_type_id != 0) {
+                result = javan_runtime_class_accepts_type_id(target_state, source_state->exact_type_id);
+            } else if (target_state->is_array != 0 && source_state->is_array != 0) {
+                target_component = javan_runtime_class_component_type_from_binary_name(target_state->binary_name);
+                source_component = javan_runtime_class_component_type_from_binary_name(source_state->binary_name);
+                if (target_component != NULL && source_component != NULL) {
+                    result = javan_class_is_assignable_from(target_component, source_component);
+                }
             }
-            if (target_state->exact_type_id == JAVAN_CLASS_EXACT_OBJECT) {
-                return 1;
-            }
-            if (source_state->exact_type_id != 0) {
-                return javan_runtime_class_accepts_type_id(target_state, source_state->exact_type_id);
-            }
-            if (target_state->is_array != 0 && source_state->is_array != 0) {
-                return 1;
-            }
-            return 0;
+            javan_root_frame_pop(roots);
+            return result;
         }
 
         void* javan_object_get_class(void* value) {
@@ -3018,7 +3228,139 @@ final class RuntimeSourceMemorySections {
         }
 
         void* javan_runtime_class_get_name(void* value) {
-            return javan_string_from(javan_runtime_class_checked(value)->binary_name);
+            void* class_root = value;
+            void* result = NULL;
+            void** roots[] = {
+                (void**) &class_root,
+                (void**) &result
+            };
+            javan_root_frame_push(roots, 2);
+            result = javan_string_from(javan_runtime_class_checked(class_root)->binary_name);
+            javan_root_frame_pop(roots);
+            return result;
+        }
+
+        void* javan_class_descriptor_string(void* class_value) {
+            void* class_root = class_value;
+            void* result = NULL;
+            void** roots[] = {
+                (void**) &class_root,
+                (void**) &result
+            };
+            javan_root_frame_push(roots, 2);
+            javan_runtime_class_state* state = javan_runtime_class_checked(class_root);
+            int primitive_descriptor = javan_runtime_class_primitive_descriptor_char(state->exact_type_id);
+            if (primitive_descriptor != 0) {
+                char descriptor[2];
+                descriptor[0] = (char) primitive_descriptor;
+                descriptor[1] = '\\0';
+                result = javan_string_from(descriptor);
+                javan_root_frame_pop(roots);
+                return result;
+            }
+            unsigned long binary_length = (unsigned long) strlen(state->binary_name);
+            if (state->is_array != 0) {
+                char* descriptor = (char*) javan_raw_calloc_retry(binary_length + 1UL);
+                if (descriptor == NULL) {
+                    javan_panic("out of memory");
+                }
+                int in_object_component = 0;
+                for (unsigned long index = 0; index < binary_length; index++) {
+                    char ch = state->binary_name[index];
+                    if (ch == 'L') {
+                        in_object_component = 1;
+                    } else if (ch == ';') {
+                        in_object_component = 0;
+                    } else if (in_object_component != 0 && ch == '.') {
+                        ch = '/';
+                    }
+                    descriptor[index] = ch;
+                }
+                descriptor[binary_length] = '\\0';
+                result = javan_string_from(descriptor);
+                free(descriptor);
+                javan_root_frame_pop(roots);
+                return result;
+            }
+            char* descriptor = (char*) javan_raw_calloc_retry(binary_length + 3UL);
+            if (descriptor == NULL) {
+                javan_panic("out of memory");
+            }
+            descriptor[0] = 'L';
+            for (unsigned long index = 0; index < binary_length; index++) {
+                char ch = state->binary_name[index];
+                descriptor[index + 1UL] = ch == '.' ? '/' : ch;
+            }
+            descriptor[binary_length + 1UL] = ';';
+            descriptor[binary_length + 2UL] = '\\0';
+            result = javan_string_from(descriptor);
+            free(descriptor);
+            javan_root_frame_pop(roots);
+            return result;
+        }
+
+        void* javan_class_component_type(void* class_value) {
+            void* class_root = class_value;
+            void* result = NULL;
+            void** roots[] = {
+                (void**) &class_root,
+                (void**) &result
+            };
+            javan_root_frame_push(roots, 2);
+            javan_runtime_class_state* state = javan_runtime_class_checked(class_root);
+            if (state->is_array == 0) {
+                javan_root_frame_pop(roots);
+                return NULL;
+            }
+            result = javan_runtime_class_component_type_from_binary_name(state->binary_name);
+            javan_root_frame_pop(roots);
+            return result;
+        }
+
+        void* javan_class_array_type(void* class_value) {
+            void* class_root = class_value;
+            void* result = NULL;
+            void** roots[] = {
+                (void**) &class_root,
+                (void**) &result
+            };
+            javan_root_frame_push(roots, 2);
+            javan_runtime_class_state* state = javan_runtime_class_checked(class_root);
+            if (state->exact_type_id == JAVAN_CLASS_EXACT_PRIMITIVE_VOID) {
+                javan_panic("Class.arrayType unsupported for void");
+            }
+            const char* primitive_array_binary_name = javan_runtime_class_primitive_array_binary_name(state->exact_type_id);
+            if (primitive_array_binary_name != NULL) {
+                result = javan_runtime_class_from_binary_name(primitive_array_binary_name);
+                javan_root_frame_pop(roots);
+                return result;
+            }
+            unsigned long binary_length = (unsigned long) strlen(state->binary_name);
+            if (state->is_array != 0) {
+                char* array_binary_name = (char*) javan_raw_calloc_retry(binary_length + 2UL);
+                if (array_binary_name == NULL) {
+                    javan_panic("out of memory");
+                }
+                array_binary_name[0] = '[';
+                memcpy(array_binary_name + 1, state->binary_name, binary_length + 1UL);
+                result = javan_runtime_class_from_binary_name(array_binary_name);
+                free(array_binary_name);
+                javan_root_frame_pop(roots);
+                return result;
+            }
+            char* array_binary_name = (char*) javan_raw_calloc_retry(binary_length + 4UL);
+            if (array_binary_name == NULL) {
+                javan_panic("out of memory");
+            }
+            array_binary_name[0] = '[';
+            array_binary_name[1] = 'L';
+            memcpy(array_binary_name + 2, state->binary_name, binary_length);
+            array_binary_name[binary_length + 2UL] = ';';
+            array_binary_name[binary_length + 3UL] = '\\0';
+            result = javan_runtime_class_from_binary_name(array_binary_name);
+            free(array_binary_name);
+            javan_root_frame_pop(roots);
+            return result;
         }
 
         int javan_class_exact_type_id(void* class_value) {

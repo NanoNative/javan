@@ -1,11 +1,13 @@
-# Nano Duration Probe
+# External Static Duration Probe
 
-Builds a small app against Nano and compiles it to a native executable with `javan`.
+Builds a small app against the currently pinned published duration-helper artifact and compiles it
+to a native executable with `javan`.
 
-This probe is derived from `YunaBraska/nano example`'s `/load1` handler, which
-uses `NanoUtils.formatDuration(...)` for response data. It intentionally does not start
-`HttpServer` and does not include `DevConsoleService`, because the current native profile
-does not support the full Nano service graph yet.
+This is external compatibility smoke only. The durable compiler regression for this shape lives in
+the generic Javan test line and does not name the upstream project.
+
+The probe intentionally stays on one helper call. It does not start a service graph and does not
+make any broader framework support claim.
 
 By default the script uses the local Maven Nano jar:
 

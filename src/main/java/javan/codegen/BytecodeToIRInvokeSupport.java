@@ -160,6 +160,11 @@ final class BytecodeToIRInvokeSupport {
                 return;
             }
         }
+        final Optional<IrExpression> primitiveClassField = supportedPrimitiveClassField(fieldRef);
+        if (primitiveClassField.isPresent()) {
+            stack.add(StackValue.objectExpression(primitiveClassField.orElseThrow()));
+            return;
+        }
         if (supportedVirtualThreadFactoryStaticField(classes, method, instruction, fieldRef)) {
             stack.add(StackValue.virtualThreadFactory(IrExpression.objectStaticField(fieldRef.owner(), fieldRef.name())));
             return;
@@ -509,6 +514,27 @@ final class BytecodeToIRInvokeSupport {
             && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
             final IrExpression receiver = popObject(classFile, method, stack);
             pushObjectCall(instructions, stack, localDeclarations, "javan_runtime_class_get_name", List.of(receiver));
+            return;
+        }
+        if ("java/lang/Class".equals(methodRef.owner())
+            && "descriptorString".equals(methodRef.name())
+            && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
+            final IrExpression receiver = popObject(classFile, method, stack);
+            pushObjectCall(instructions, stack, localDeclarations, "javan_class_descriptor_string", List.of(receiver));
+            return;
+        }
+        if ("java/lang/Class".equals(methodRef.owner())
+            && "componentType".equals(methodRef.name())
+            && "()Ljava/lang/Class;".equals(methodRef.descriptor())) {
+            final IrExpression receiver = popObject(classFile, method, stack);
+            pushObjectCall(instructions, stack, localDeclarations, "javan_class_component_type", List.of(receiver));
+            return;
+        }
+        if ("java/lang/Class".equals(methodRef.owner())
+            && "arrayType".equals(methodRef.name())
+            && "()Ljava/lang/Class;".equals(methodRef.descriptor())) {
+            final IrExpression receiver = popObject(classFile, method, stack);
+            pushObjectCall(instructions, stack, localDeclarations, "javan_class_array_type", List.of(receiver));
             return;
         }
         if ("java/lang/String".equals(methodRef.owner())
@@ -6784,7 +6810,7 @@ final class BytecodeToIRInvokeSupport {
                 "javan_runtime_class_literal",
                 List.of(
                     IrExpression.stringLiteral(binaryClassName(jvmName)),
-                    IrExpression.intLiteral(-2001),
+                    IrExpression.intLiteral(BytecodeToIR.CLASS_EXACT_STRING),
                     IrExpression.intLiteral(0),
                     IrExpression.intLiteral(0),
                     IrExpression.intLiteral(0)
@@ -6796,7 +6822,7 @@ final class BytecodeToIRInvokeSupport {
                 "javan_runtime_class_literal",
                 List.of(
                     IrExpression.stringLiteral(binaryClassName(jvmName)),
-                    IrExpression.intLiteral(-2002),
+                    IrExpression.intLiteral(BytecodeToIR.CLASS_EXACT_OBJECT),
                     IrExpression.intLiteral(0),
                     IrExpression.intLiteral(0),
                     IrExpression.intLiteral(0)
@@ -6808,9 +6834,34 @@ final class BytecodeToIRInvokeSupport {
                 "javan_runtime_class_literal",
                 List.of(
                     IrExpression.stringLiteral(binaryClassName(jvmName)),
-                    IrExpression.intLiteral(-2003),
+                    IrExpression.intLiteral(BytecodeToIR.CLASS_EXACT_CLASS),
                     IrExpression.intLiteral(0),
                     IrExpression.intLiteral(0),
+                    IrExpression.intLiteral(0)
+                )
+            );
+        }
+        final Optional<Integer> wrapperTypeId = platformWrapperTypeId(jvmName);
+        if (wrapperTypeId.isPresent()) {
+            return IrExpression.objectCall(
+                "javan_runtime_class_literal",
+                List.of(
+                    IrExpression.stringLiteral(binaryClassName(jvmName)),
+                    IrExpression.intLiteral(wrapperTypeId.orElseThrow()),
+                    IrExpression.intLiteral(0),
+                    IrExpression.intLiteral(0),
+                    IrExpression.intLiteral(0)
+                )
+            );
+        }
+        if (jvmName.startsWith("[")) {
+            return IrExpression.objectCall(
+                "javan_runtime_class_literal",
+                List.of(
+                    IrExpression.stringLiteral(binaryClassName(jvmName)),
+                    IrExpression.intLiteral(0),
+                    IrExpression.intLiteral(0),
+                    IrExpression.intLiteral(1),
                     IrExpression.intLiteral(0)
                 )
             );
@@ -6830,6 +6881,36 @@ final class BytecodeToIRInvokeSupport {
             return IrExpression.objectCall("javan_runtime_class_literal", arguments);
         }
         throw unsupported(classFile, method, instruction);
+    }
+
+    private static Optional<IrExpression> supportedPrimitiveClassField(final FieldRef fieldRef) {
+        if (!"Ljava/lang/Class;".equals(fieldRef.descriptor()) || !"TYPE".equals(fieldRef.name())) {
+            return Optional.empty();
+        }
+        return switch (fieldRef.owner()) {
+            case "java/lang/Boolean" -> Optional.of(primitiveClassLiteral("boolean", BytecodeToIR.CLASS_EXACT_PRIMITIVE_BOOLEAN));
+            case "java/lang/Byte" -> Optional.of(primitiveClassLiteral("byte", BytecodeToIR.CLASS_EXACT_PRIMITIVE_BYTE));
+            case "java/lang/Short" -> Optional.of(primitiveClassLiteral("short", BytecodeToIR.CLASS_EXACT_PRIMITIVE_SHORT));
+            case "java/lang/Character" -> Optional.of(primitiveClassLiteral("char", BytecodeToIR.CLASS_EXACT_PRIMITIVE_CHAR));
+            case "java/lang/Integer" -> Optional.of(primitiveClassLiteral("int", BytecodeToIR.CLASS_EXACT_PRIMITIVE_INT));
+            case "java/lang/Long" -> Optional.of(primitiveClassLiteral("long", BytecodeToIR.CLASS_EXACT_PRIMITIVE_LONG));
+            case "java/lang/Float" -> Optional.of(primitiveClassLiteral("float", BytecodeToIR.CLASS_EXACT_PRIMITIVE_FLOAT));
+            case "java/lang/Double" -> Optional.of(primitiveClassLiteral("double", BytecodeToIR.CLASS_EXACT_PRIMITIVE_DOUBLE));
+            default -> Optional.empty();
+        };
+    }
+
+    private static IrExpression primitiveClassLiteral(final String binaryName, final int exactTypeId) {
+        return IrExpression.objectCall(
+            "javan_runtime_class_literal",
+            List.of(
+                IrExpression.stringLiteral(binaryName),
+                IrExpression.intLiteral(exactTypeId),
+                IrExpression.intLiteral(0),
+                IrExpression.intLiteral(0),
+                IrExpression.intLiteral(0)
+            )
+        );
     }
 
     static String binaryClassName(final String jvmName) {

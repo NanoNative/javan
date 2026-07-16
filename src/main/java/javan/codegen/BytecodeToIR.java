@@ -49,6 +49,20 @@ public final class BytecodeToIR {
     static final int TYPE_JAVA_LANG_BYTE = -1015;
     static final int TYPE_JAVA_LANG_SHORT = -1016;
     static final int TYPE_JAVA_LANG_CHARACTER = -1014;
+    static final int CLASS_EXACT_STRING = -2001;
+    static final int CLASS_EXACT_OBJECT = -2002;
+    static final int CLASS_EXACT_CLASS = -2003;
+    static final int CLASS_EXACT_ARRAY_LIST = -2004;
+    static final int CLASS_EXACT_HASH_MAP = -2005;
+    static final int CLASS_EXACT_PRIMITIVE_BOOLEAN = -2006;
+    static final int CLASS_EXACT_PRIMITIVE_BYTE = -2007;
+    static final int CLASS_EXACT_PRIMITIVE_SHORT = -2008;
+    static final int CLASS_EXACT_PRIMITIVE_CHAR = -2009;
+    static final int CLASS_EXACT_PRIMITIVE_INT = -2010;
+    static final int CLASS_EXACT_PRIMITIVE_LONG = -2011;
+    static final int CLASS_EXACT_PRIMITIVE_FLOAT = -2012;
+    static final int CLASS_EXACT_PRIMITIVE_DOUBLE = -2013;
+    static final int CLASS_EXACT_PRIMITIVE_VOID = -2014;
 
     /**
      * Lowers reachable methods to IR.

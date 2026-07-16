@@ -508,6 +508,9 @@ final class RuntimeHeaderFile {
         void* javan_virtual_thread_executor_get_class(void* value);
         void* javan_runtime_class_literal(const char* binary_name, int exact_type_id, int is_enum, int is_array, int assignable_count, ...);
         void* javan_runtime_class_get_name(void* value);
+        void* javan_class_descriptor_string(void* class_value);
+        void* javan_class_component_type(void* class_value);
+        void* javan_class_array_type(void* class_value);
         int javan_class_exact_type_id(void* class_value);
         int javan_class_is_instance(void* class_value, void* object_value);
         void* javan_class_cast(void* class_value, void* object_value);

@@ -13,6 +13,33 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 final class JdkCallSupportTest {
     @Test
+    void classDescriptorStringIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Class",
+            "descriptorString",
+            "()Ljava/lang/String;"
+        ))).isTrue();
+    }
+
+    @Test
+    void classComponentTypeIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Class",
+            "componentType",
+            "()Ljava/lang/Class;"
+        ))).isTrue();
+    }
+
+    @Test
+    void classArrayTypeIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Class",
+            "arrayType",
+            "()Ljava/lang/Class;"
+        ))).isTrue();
+    }
+
+    @Test
     void threadLocalGetIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef("java/lang/ThreadLocal", "get", "()Ljava/lang/Object;")))
             .isTrue();

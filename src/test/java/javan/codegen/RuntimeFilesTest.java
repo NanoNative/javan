@@ -62,7 +62,7 @@ final class RuntimeFilesTest {
                 return 0;
             }
             """,
-            "128"
+            "512"
         );
 
         assertThat(stderr).isEqualTo("7\n");
@@ -80,7 +80,7 @@ final class RuntimeFilesTest {
                 return 0;
             }
             """,
-            "128"
+            "4096"
         );
 
         assertThat(stdout).isEqualTo("null");
@@ -98,7 +98,7 @@ final class RuntimeFilesTest {
                 return 0;
             }
             """,
-            "128"
+            "4096"
         );
 
         assertThat(stdout).isEqualTo("7\n");
@@ -5489,6 +5489,154 @@ final class RuntimeFilesTest {
         );
 
         assertThat(stdout).isEqualTo("[Ljava.lang.String;\n");
+    }
+
+    @Test
+    void runtimeClassDescriptorStringConvertsObjectArrayNameToDescriptor() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* klass = javan_runtime_class_literal("[Ljava.lang.String;", 0, 0, 1, 0);
+                printf("%s\\n", (char*) javan_class_descriptor_string(klass));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("[Ljava/lang/String;\n");
+    }
+
+    @Test
+    void runtimePrimitiveArrayClassComponentTypeReturnsPrimitiveName() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* array = javan_int_array_new(1);
+                void* klass = javan_object_get_class(array);
+                void* component = javan_class_component_type(klass);
+                printf("%s\\n", (char*) javan_runtime_class_get_name(component));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("int\n");
+    }
+
+    @Test
+    void runtimeReferenceClassArrayTypeReturnsReferenceArrayName() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* klass = javan_runtime_class_literal("java.lang.String", -2001, 0, 0, 0);
+                void* array_type = javan_class_array_type(klass);
+                printf("%s\\n", (char*) javan_runtime_class_get_name(array_type));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("[Ljava.lang.String;\n");
+    }
+
+    @Test
+    void runtimePrimitiveClassArrayTypeReturnsPrimitiveArrayName() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* klass = javan_runtime_class_literal("int", -2010, 0, 0, 0);
+                void* array_type = javan_class_array_type(klass);
+                printf("%s\\n", (char*) javan_runtime_class_get_name(array_type));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("[I\n");
+    }
+
+    @Test
+    void runtimeArrayAssignableFromUsesComponentTypes() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* object_array = NULL;
+                void* string_array = NULL;
+                void* int_array = NULL;
+                void** roots[] = {
+                    (void**) &object_array,
+                    (void**) &string_array,
+                    (void**) &int_array
+                };
+                javan_root_frame_push(roots, 3);
+                object_array = javan_runtime_class_literal("[Ljava.lang.Object;", 0, 0, 1, 0);
+                string_array = javan_runtime_class_literal("[Ljava.lang.String;", 0, 0, 1, 0);
+                int_array = javan_runtime_class_literal("[I", 0, 0, 1, 0);
+                printf("%d:%d:%d\\n",
+                    javan_class_is_assignable_from(object_array, string_array),
+                    javan_class_is_assignable_from(string_array, object_array),
+                    javan_class_is_assignable_from(object_array, int_array));
+                javan_root_frame_pop(roots);
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("1:0:0\n");
+    }
+
+    @Test
+    void runtimeObjectClassIsNotAssignableFromPrimitiveClass() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* object_class = NULL;
+                void* int_class = NULL;
+                void** roots[] = {
+                    (void**) &object_class,
+                    (void**) &int_class
+                };
+                javan_root_frame_push(roots, 2);
+                object_class = javan_runtime_class_literal("java.lang.Object", -2002, 0, 0, 0);
+                int_class = javan_runtime_class_literal("int", -2010, 0, 0, 0);
+                printf("%d\\n", javan_class_is_assignable_from(object_class, int_class));
+                javan_root_frame_pop(roots);
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("0\n");
     }
 
     @Test

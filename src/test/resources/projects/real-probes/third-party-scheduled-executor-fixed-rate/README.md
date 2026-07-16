@@ -1,11 +1,14 @@
-# Nano Fixed-Rate Scheduler Probe
+# External Fixed-Rate Scheduled Executor Probe
 
-Builds a small app against Nano's `Scheduler` and compiles it to a native executable
-with `javan`.
+Builds a small app against the currently pinned published scheduler artifact and compiles it to a
+native executable with `javan`.
 
-This probe exercises the fixed-rate scheduling slice through the real Nano artifact:
-the task is scheduled with a later first fire time, the scheduler shuts down before
-that time, and `awaitTermination(...)` returns `true`.
+This is external compatibility smoke only. The durable compiler regression for this shape lives in
+the generic Javan test line and does not name the upstream project.
+
+The probe exercises the fixed-rate scheduling slice through the pinned artifact: the task is
+scheduled with a later first fire time, the scheduler shuts down before that time, and
+`awaitTermination(...)` returns `true`.
 
 By default the script uses the local Maven Nano jar:
 

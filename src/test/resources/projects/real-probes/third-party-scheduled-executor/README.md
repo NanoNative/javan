@@ -1,10 +1,13 @@
-# Nano Scheduler Probe
+# External Scheduled Executor Probe
 
-Builds a small app against Nano's `Scheduler` and compiles it to a native executable
-with `javan`.
+Builds a small app against the currently pinned published scheduler artifact and compiles it to a
+native executable with `javan`.
 
-This probe exercises the current scheduled-executor lifecycle slice through the real
-Nano artifact: one scheduled task runs, the scheduler shuts down, and
+This is external compatibility smoke only. The durable compiler regression for this shape lives in
+the generic Javan test line and does not name the upstream project.
+
+The probe exercises the current scheduled-executor lifecycle slice through the pinned artifact:
+one scheduled task runs, the scheduler shuts down, and
 `awaitTermination(...)` returns `true`.
 
 By default the script uses the local Maven Nano jar:
