@@ -5657,6 +5657,46 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void runtimeReferenceArrayTypeNameReturnsDisplayName() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* klass = javan_runtime_class_literal("[Ljava.lang.String;", 0, 0, 1, 0);
+                printf("%s\\n", (char*) javan_class_type_name(klass));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("java.lang.String[]\n");
+    }
+
+    @Test
+    void runtimePrimitiveNestedArrayTypeNameReturnsDisplayName() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* klass = javan_runtime_class_literal("[[I", 0, 0, 1, 0);
+                printf("%s\\n", (char*) javan_class_type_name(klass));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("int[][]\n");
+    }
+
+    @Test
     void runtimeArrayAssignableFromUsesComponentTypes() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
