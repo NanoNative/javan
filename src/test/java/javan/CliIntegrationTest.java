@@ -1415,6 +1415,79 @@ final class CliIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void explicitClassesCheckIgnoresEmbeddedTestResourceProjectOutputs() throws Exception {
+        final Path project = project("explicit-classes-ignore-test-resource-outputs");
+        Files.writeString(project.resolve("pom.xml"), """
+            <project xmlns="http://maven.apache.org/POM/4.0.0"
+                     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                     xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+              <modelVersion>4.0.0</modelVersion>
+              <groupId>com.acme</groupId>
+              <artifactId>explicit-classes-ignore-test-resource-outputs</artifactId>
+              <version>1.0.0</version>
+            </project>
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    Helper.help();
+                    System.out.println("ok");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Helper", """
+            package com.acme;
+
+            public final class Helper {
+                private Helper() {
+                }
+
+                public static void help() {
+                }
+            }
+            """);
+        final Path fixtureSource = project.resolve("src/test/resources/projects/probe/src/main/java/com/acme/Helper.java");
+        Files.createDirectories(fixtureSource.getParent());
+        Files.writeString(fixtureSource, """
+            package com.acme;
+
+            public final class Helper {
+                private Helper() {
+                }
+
+                public static void shadow() {
+                }
+            }
+            """);
+        final Path fixtureClasses = project.resolve("src/test/resources/projects/probe/.javan/classes");
+        Files.createDirectories(fixtureClasses);
+        final ProcessResult compileFixture = process(project, List.of(
+            CliTestHarness.currentJavacCommand(),
+            "-d",
+            fixtureClasses.toString(),
+            fixtureSource.toString()
+        ));
+        assertThat(compileFixture.exitCode()).as(compileFixture.stderr()).isZero();
+
+        final CliRun run = run(tempDir,
+            "check",
+            project.toString(),
+            "--classes",
+            project.resolve("target/classes").toString(),
+            "--main",
+            "com.acme.Main"
+        );
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stderr()).isEmpty();
+    }
+
+    @Test
     void mainArgsArrayLengthBuildsAndUsesRuntimeArgs() throws Exception {
         final Path project = project("main-args");
         writeJava(project, "com.acme.Main", """

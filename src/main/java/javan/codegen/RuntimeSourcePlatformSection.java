@@ -1539,6 +1539,7 @@ final class RuntimeSourcePlatformSection {
 
         static int javan_socket_getsockopt_linger(int fd, const char* message) {
             struct linger value;
+            long long linger;
             socklen_t length = (socklen_t) sizeof(value);
             memset(&value, 0, sizeof(value));
             if (getsockopt(fd, SOL_SOCKET, SO_LINGER, (void*) &value, &length) != 0) {
@@ -1547,10 +1548,11 @@ final class RuntimeSourcePlatformSection {
             if (value.l_onoff == 0) {
                 return -1;
             }
-            if (value.l_linger < 0) {
+            linger = (long long) value.l_linger;
+            if (linger < 0) {
                 javan_panic(message);
             }
-            return value.l_linger > 65535 ? 65535 : value.l_linger;
+            return linger > 65535 ? 65535 : (int) linger;
         }
 
         static void javan_socket_setsockopt_linger(int fd, int enabled, int linger_seconds, const char* message) {
