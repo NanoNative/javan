@@ -672,6 +672,43 @@ final class CliRuntimeFeatureIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void reachableThreadJoinDurationBlockingWaitProducesThreadReports() throws Exception {
+        final Path project = project("thread-join-duration-blocking-report");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.time.Duration;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread thread = new Thread();
+                    thread.join(Duration.ofMillis(5L));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "check", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stdout()).contains("warning[JAVAN178]");
+        assertThat(run.stdout()).contains("Thread.join(Duration)");
+        assertThat(Files.readString(project.resolve(".javan/reports/threads.json"))).contains(
+            "\"diagnostics\": 1",
+            "\"warnings\": 1",
+            "\"blocking\": 1",
+            "\"joinWaits\": 1",
+            "\"subject\": \"Thread.join(Duration)\""
+        );
+        assertThat(Files.readString(project.resolve(".javan/reports/threads.md"))).contains(
+            "## warning[JAVAN178] reachable blocking wait",
+            "Thread.join(Duration)"
+        );
+    }
+
+    @Test
     void reachableRunnableBlockingWaitCollapsesToSingleThreadRoot() throws Exception {
         final Path project = project("thread-runnable-blocking-root-report");
         writeJava(project, "com.acme.Main", """

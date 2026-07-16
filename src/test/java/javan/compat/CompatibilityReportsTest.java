@@ -76,12 +76,12 @@ final class CompatibilityReportsTest {
         assertThat(summary).contains(
             "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 5, \"leftCallables\": 3, \"coveragePercent\": \"40.0\"}",
             "\"exactJdkCallableAccounting\": {\"supportedCallables\": 2, \"explicitRejectedCallables\": 3, \"doneCallables\": 5, \"unknownCallables\": 0, \"totalCallables\": 5, \"donePercent\": \"100.0\"}",
-            "\"supportRows\": 150",
-            "\"passRows\": 150",
+            "\"supportRows\": 151",
+            "\"passRows\": 151",
             "\"scopedRows\": 0",
             "\"targetRows\": 0",
             "\"rejectedRows\": 0",
-            "\"accountedRows\": 150",
+            "\"accountedRows\": 151",
             "\"unaccountedRows\": 0"
         );
     }
@@ -185,6 +185,7 @@ final class CompatibilityReportsTest {
             "| `platform-thread-join-entry-interrupted-same-method-catch` | pass |",
             "| `platform-thread-join-timeout` | pass |",
             "| `platform-thread-join-millis-nanos-timeout` | pass |",
+            "| `platform-thread-join-duration-timeout` | pass |",
             "| `scheduled-executor-fixed-delay` | pass |",
             "| `platform-thread-current-thread-start-build-reject` | pass |",
             "| `platform-thread-current-thread-join-build-reject` | pass |",
@@ -263,6 +264,7 @@ final class CompatibilityReportsTest {
             "\"feature\": \"platform-thread-join-entry-interrupted-same-method-catch\"",
             "\"feature\": \"platform-thread-join-timeout\"",
             "\"feature\": \"platform-thread-join-millis-nanos-timeout\"",
+            "\"feature\": \"platform-thread-join-duration-timeout\"",
             "\"feature\": \"scheduled-executor-fixed-delay\"",
             "\"feature\": \"platform-thread-current-thread-start-build-reject\"",
             "\"feature\": \"platform-thread-current-thread-join-build-reject\"",

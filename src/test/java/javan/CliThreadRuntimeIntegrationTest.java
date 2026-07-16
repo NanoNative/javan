@@ -2454,6 +2454,43 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void threadJoinDurationBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-join-duration");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.time.Duration;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread worker = new Thread(new Task(), "join-duration-worker");
+                    worker.start();
+                    System.out.println(worker.join(Duration.ofMillis(200L)));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println("done");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-join-duration").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void threadSetNameBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("thread-set-name");
         writeJava(project, "com.acme.Main", """

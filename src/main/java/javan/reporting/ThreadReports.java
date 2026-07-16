@@ -509,7 +509,8 @@ public final class ThreadReports {
     private static boolean isJoinWaitSubject(final String subject) {
         return "Thread.join()".equals(subject)
             || "Thread.join(long)".equals(subject)
-            || "Thread.join(long,int)".equals(subject);
+            || "Thread.join(long,int)".equals(subject)
+            || "Thread.join(Duration)".equals(subject);
     }
 
     private static List<MethodActivity> diagnosticOnlyMethods(final List<Diagnostic> diagnostics) {

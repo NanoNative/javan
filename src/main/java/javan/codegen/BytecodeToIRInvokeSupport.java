@@ -4000,6 +4000,32 @@ final class BytecodeToIRInvokeSupport {
             );
             return true;
         }
+        if ("join".equals(methodRef.name()) && "(Ljava/time/Duration;)Z".equals(methodRef.descriptor())) {
+            final List<StackValue> preservedPrefix = new ArrayList<>();
+            final int preservedPrefixSize = Math.max(0, stack.size() - 2);
+            for (int index = 0; index < preservedPrefixSize; index++) {
+                preservedPrefix.add(stack.get(index));
+            }
+            final IrExpression duration = popObjectForJdkCall(classFile, method, instruction, stack);
+            final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+            lowerInterruptAwareThreadWait(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                localDeclarations,
+                pendingExceptionHandlerStacks,
+                sourceLines,
+                false,
+                IrExpression.objectNull(),
+                "javan_thread_join_millis_interruptible",
+                List.of(receiver, IrExpression.longCall("javan_duration_to_millis", List.of(duration)))
+            );
+            stack.addAll(preservedPrefix);
+            stack.add(StackValue.intExpression(IrExpression.intLiteral(1)));
+            return true;
+        }
         final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
         if ("interrupt".equals(methodRef.name()) && "()V".equals(methodRef.descriptor())) {
             instructions.add(IrInstruction.callStaticVoid("javan_thread_interrupt", List.of(receiver)));

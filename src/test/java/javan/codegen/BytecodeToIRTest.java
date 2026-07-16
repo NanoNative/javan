@@ -8673,6 +8673,47 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersThreadJoinDurationInstanceCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Thread;Ljava/time/Duration;)Z",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/lang/Thread", "join", "(Ljava/time/Duration;)Z")),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).hasSize(7);
+        assertThat(function.instructions().get(0)).isEqualTo(IrInstruction.label("label_thread_wait_continue_2_0"));
+        assertThat(function.instructions().get(1)).isEqualTo(
+            IrInstruction.assignInt(
+                "int0",
+                IrExpression.intCall(
+                    "javan_thread_join_millis_interruptible",
+                    List.of(
+                        IrExpression.objectLocal("arg0"),
+                        IrExpression.longCall("javan_duration_to_millis", List.of(IrExpression.objectLocal("arg1")))
+                    )
+                )
+            )
+        );
+        assertThat(function.instructions().get(2)).isEqualTo(IrInstruction.branchIf(
+            "label_thread_wait_success_2_0",
+            IrExpression.intComparison("==", IrExpression.intLocal("int0"), IrExpression.intLiteral(0))
+        ));
+        assertThat(function.instructions().get(3)).isEqualTo(IrInstruction.label("label_thread_wait_interrupted_2_0"));
+        assertThat(function.instructions().get(4)).satisfies(instruction -> {
+            assertThat(instruction.op()).isEqualTo(IrInstruction.Op.PANIC);
+            assertThat(instruction.expression()).contains(IrExpression.stringLiteral("java/lang/InterruptedException"));
+        });
+        assertThat(function.instructions().get(5)).isEqualTo(IrInstruction.label("label_thread_wait_success_2_0"));
+        assertThat(function.instructions().get(6)).isEqualTo(IrInstruction.returnInt(IrExpression.intLiteral(1)));
+    }
+
+    @Test
     void lowersInterruptedThreadSleepToSameMethodCatchHandler() {
         final MethodInfo main = methodWithHandlers(
             0x0008,
@@ -10376,6 +10417,35 @@ final class BytecodeToIRTest {
         );
 
         assertThat(lowered).isFalse();
+    }
+
+    @Test
+    void lowerJdkThreadInstanceCallPreservesPrefixStackForThreadJoinDuration() {
+        final List<IrInstruction> instructions = new ArrayList<>();
+        final List<BytecodeToIR.StackValue> stack = new ArrayList<>(List.of(
+            BytecodeToIR.StackValue.printStream(),
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("arg0")),
+            BytecodeToIR.StackValue.objectExpression(IrExpression.objectLocal("arg1"))
+        ));
+
+        final boolean lowered = BytecodeToIRInvokeSupport.lowerJdkThreadInstanceCall(
+            Map.of(),
+            sinkClass(),
+            method(0x0008, "main", "(Ljava/lang/Thread;Ljava/time/Duration;)V", 2, 2, plain(0, 177, "return")),
+            invokeVirtual(0, new MethodRef("java/lang/Thread", "join", "(Ljava/time/Duration;)Z")),
+            new MethodRef("java/lang/Thread", "join", "(Ljava/time/Duration;)Z"),
+            instructions,
+            stack,
+            new LinkedHashMap<>(),
+            new LinkedHashMap<>(),
+            new LinkedHashMap<>(),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(lowered).isTrue();
+        assertThat(stack).hasSize(2);
+        assertThat(stack.get(0).kind()).isEqualTo(BytecodeToIR.StackKind.PRINT_STREAM);
+        assertThat(stack.get(1).expression()).contains(IrExpression.intLiteral(1));
     }
 
     @Test

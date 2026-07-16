@@ -997,6 +997,12 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void jdkCallSupportClassifiesThreadJoinDurationRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new MethodRef("java/lang/Thread", "join", "(Ljava/time/Duration;)Z")))
+            .containsExactly("threads");
+    }
+
+    @Test
     void jdkCallSupportClassifiesThreadIsAliveRuntimeModule() {
         assertThat(JdkCallSupport.runtimeModules(new MethodRef("java/lang/Thread", "isAlive", "()Z")))
             .containsExactly("threads");
@@ -1136,6 +1142,7 @@ final class CoreBehaviorTest {
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "threadId", "()J"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "sleep", "(J)V"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "sleep", "(Ljava/time/Duration;)V"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "join", "(Ljava/time/Duration;)Z"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "interrupted", "()Z"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "interrupt", "()V"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "isInterrupted", "()Z"))).isTrue();
@@ -4389,6 +4396,45 @@ final class CoreBehaviorTest {
         assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
             assertThat(diagnostic.code()).isEqualTo("JAVAN178");
             assertThat(diagnostic.subject()).isEqualTo("Thread.join()");
+        });
+    }
+
+    @Test
+    void staticVerifierWarnsAboutReachableThreadJoinDurationBlockingWait() {
+        final String descriptor = "(Ljava/lang/Thread;Ljava/time/Duration;)V";
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "joinWorker",
+                descriptor,
+                Optional.of(new CodeAttribute(
+                    2,
+                    2,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 42, "aload_0"),
+                        instruction(1, 43, "aload_1"),
+                        instruction(2, 182, "invokevirtual", new MethodRef("java/lang/Thread", "join", "(Ljava/time/Duration;)Z")),
+                        instruction(3, 87, "pop"),
+                        instruction(4, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main),
+            List.of(new EntryPoint(main.name(), "joinWorker", descriptor))
+        );
+
+        assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
+            assertThat(diagnostic.code()).isEqualTo("JAVAN178");
+            assertThat(diagnostic.subject()).isEqualTo("Thread.join(Duration)");
         });
     }
 

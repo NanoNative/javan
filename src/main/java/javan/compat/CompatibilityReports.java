@@ -563,6 +563,7 @@ public final class CompatibilityReports {
             pass("platform-thread-join-entry-interrupted-same-method-catch"),
             pass("platform-thread-join-timeout"),
             pass("platform-thread-join-millis-nanos-timeout"),
+            pass("platform-thread-join-duration-timeout"),
             pass("scheduled-executor-fixed-delay"),
             pass("platform-thread-current-thread-start-build-reject"),
             pass("platform-thread-current-thread-join-build-reject"),

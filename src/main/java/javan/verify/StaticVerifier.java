@@ -934,6 +934,9 @@ public final class StaticVerifier {
             if ("(JI)V".equals(target.descriptor())) {
                 return Optional.of("Thread.join(long,int)");
             }
+            if ("(Ljava/time/Duration;)Z".equals(target.descriptor())) {
+                return Optional.of("Thread.join(Duration)");
+            }
         }
         return Optional.empty();
     }

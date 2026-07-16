@@ -172,7 +172,7 @@ public final class JdkCallSupport {
         runtime("Thread.getId", "java/lang/Thread", "getId", "()J"),
         runtime("Thread.threadId", "java/lang/Thread", "threadId", "()J"),
         runtime("Thread.start", "java/lang/Thread", "start", "()V"),
-        runtime("Thread.join", "java/lang/Thread", "join", "()V", "(J)V", "(JI)V"),
+        runtime("Thread.join", "java/lang/Thread", "join", "()V", "(J)V", "(JI)V", "(Ljava/time/Duration;)Z"),
         runtime("LockSupport.park", "java/util/concurrent/locks/LockSupport", "park", "()V"),
         runtime("LockSupport.parkNanos", "java/util/concurrent/locks/LockSupport", "parkNanos", "(J)V"),
         runtime("LockSupport.parkUntil", "java/util/concurrent/locks/LockSupport", "parkUntil", "(J)V"),
