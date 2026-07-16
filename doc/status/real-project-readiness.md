@@ -1,8 +1,8 @@
 # Real Project Readiness
 
-This ledger is the only place where named third-party compatibility probes are allowed to stay
-hardcoded. They are pinned moving snapshots of upstream artifacts, not compiler-owned support
-claims and not internal fixtures.
+This ledger is one of the dedicated external-smoke boundaries where named third-party
+compatibility probes may stay hardcoded. They are pinned moving snapshots of upstream
+artifacts, not compiler-owned support claims and not internal fixtures.
 
 Probe summary:
 
@@ -67,18 +67,15 @@ line. Probe metadata under `src/test/resources/projects/real-probes/*` and this 
 are intentionally the only places where those project identities may stay hardcoded for acceptance;
 Javan itself must not encode project-specific support rules.
 
-Current pinned compatibility snapshot:
+Current discovered compatibility snapshot:
 
-- TypeMap: `src/test/resources/projects/real-probes/typemap-pair` builds against the pinned Maven-cache TypeMap jar by default and prints `value`.
-- Nano metrics helper: `src/test/resources/projects/real-probes/nano-metric` builds against the pinned Maven-cache Nano jar by default and prints `requests`.
-- Nano duration example slice: `src/test/resources/projects/real-probes/nano-duration` builds against the pinned Maven-cache
-  Nano jar by default and prints `1m 5s` using `NanoUtils.formatDuration(long)`, the helper
-  used by the upstream example's `/load1` response path. `DevConsoleService` is not
-  included.
-- Nano scheduler lifecycle slice: `src/test/resources/projects/real-probes/nano-scheduler` and
-  `src/test/resources/projects/real-probes/nano-scheduler-fixed-rate` build against the pinned
-  Maven-cache Nano jar by default and prove one-shot scheduling, fixed-rate scheduling shutdown,
-  and `awaitTermination(...)` through the real `Scheduler` type.
+| Probe directory | Published artifact shape | Current native expectation | Compiler-owned generic evidence |
+| --- | --- | --- | --- |
+| `src/test/resources/projects/real-probes/typemap-pair` | third-party pair/accessor helper from a published dependency jar | prints `value` | `CliDependencyProjectIntegrationTest.dependencyJarGenericPairGetterBuilds` |
+| `src/test/resources/projects/real-probes/nano-metric` | third-party metric/update helper from a published dependency jar | prints `requests` | `CliDependencyProjectIntegrationTest.dependencyJarNullableRecordAccessorBuilds` |
+| `src/test/resources/projects/real-probes/nano-duration` | third-party static duration-format helper from a published dependency jar | prints `1m 5s` | `CliDependencyProjectIntegrationTest.dependencyJarStaticDurationFormatterBuilds` |
+| `src/test/resources/projects/real-probes/nano-scheduler` | third-party scheduler subclass using one-shot scheduling and shutdown | prints deterministic scheduler lifecycle output | `CliDependencyProjectIntegrationTest.dependencyJarScheduledExecutorSubclassBuilds` |
+| `src/test/resources/projects/real-probes/nano-scheduler-fixed-rate` | third-party scheduler subclass using fixed-rate scheduling, shutdown, and `awaitTermination(...)` | prints deterministic fixed-rate scheduler lifecycle output | `CliDependencyProjectIntegrationTest.dependencyJarScheduledExecutorFixedRateBuilds` |
 
 Compiler-owned generic equivalents:
 
@@ -99,7 +96,14 @@ artifacts from probe metadata via `.github/scripts/list-real-probe-artifacts.sh`
 so the current discovered probe set is required in the external-probe acceptance gate.
 Local runs still skip cleanly when the declared dependency is absent.
 
-These probes prove that the backend can consume real dependency bytecode for simple object constructors, object fields, object returns, object arrays, records, scalar long/float/double operations, primitive arrays, basic enum names, closed-world virtual/interface dispatch, static fields, reachable class initializers, javac string concatenation, basic string intrinsics, exact `LambdaMetafactory` `Function`/`Predicate` bridges into `Optional.filter`, `Optional.map`, and `Map.computeIfAbsent`, selected Nano static helper code, direct same-method exception catches, uncaught panic-style exceptions, and concrete instance calls.
+These probes prove that the backend can consume real dependency bytecode for simple object
+constructors, object fields, object returns, object arrays, records, scalar
+long/float/double operations, primitive arrays, basic enum names, closed-world
+virtual/interface dispatch, static fields, reachable class initializers, javac string
+concatenation, basic string intrinsics, exact `LambdaMetafactory` `Function`/`Predicate`
+bridges into `Optional.filter`, `Optional.map`, and `Map.computeIfAbsent`, selected
+third-party static helper code, direct same-method exception catches, uncaught panic-style
+exceptions, and concrete instance calls.
 
 Known blockers before broader real-project coverage:
 
@@ -112,17 +116,17 @@ This document stays at the compatibility-smoke level. Detailed compiler/runtime 
 belong in `doc/status/support-matrix.md`, `doc/status/jdk-compatibility.md`, and the
 compiler-owned tests under `src/test/java/javan/*`.
 
-Fresh Nano packaging may still fail if a broader Nano graph resolves a TypeMap version
-that does not provide `JsonDecoder.jsonTypeOf(String)`. The `src/test/resources/projects/real-probes/nano-metric` probe
-accepts explicit `NANO_JAR`, `NANO_CLASSPATH`, or `NANO_CLASSES` overrides for local investigation,
-but the release gate uses the pinned published Nano jar rather than a sibling checkout.
+Fresh external-service packaging may still fail when a broader third-party graph pulls in
+transitive API variants that the current dependency/runtime surface does not yet cover. The
+real probes accept explicit dependency overrides for local investigation, but the release gate
+uses the pinned published artifacts declared in probe metadata rather than sibling checkouts.
 
-Next gates before claiming Nano support:
+Next gates before claiming broader external-service compatibility:
 
 1. done: make the current real-probe set reproducible and required in at least one CI row
 2. done: add negative diagnostics for `Socket`, `ServerSocket`, `HttpClient`, and Nano-style `HttpServer`
 3. done: report reachable `network`, `socket`, and `http` usage even while unsupported
 4. implement TCP loopback support with close/ownership and sanitizer proof
 5. done partially: implement plain HTTP client loopback support for GET/string, POST+headers/byte[], and PUT byte[], plus raw loopback responder slices over `ServerSocket`/`Socket` for `GET /hello -> 200 pong`, unmatched-route `404`, POST body handling via `Content-Length`, sequential two-connection lifetime, method-plus-path dispatch, multi-class route-handler dispatch, request-header matching, response-header emission, and a request/response object model over router and service classes
-6. run the Nano example without dev console/reflection-heavy paths as a native service
+6. run a broader external service example without dev console or reflection-heavy paths as a native service
 7. add HTTPS/TLS/certificates after plain HTTP is stable

@@ -47,6 +47,10 @@ Each probe owns its own `probe.properties`, `expected.stdout`, and `build-exampl
 The acceptance harness only iterates probe directories; it does not hardcode library-specific
 support claims into the compiler-owned test line.
 
+The current probe set may change over time. Adding or removing a probe must not require product
+code changes unless the underlying generic Java/runtime gap is real and independently reproduced in
+the compiler-owned test line.
+
 Boundary:
 
 - probe names may stay in probe metadata, probe READMEs, and the dedicated external-smoke docs
