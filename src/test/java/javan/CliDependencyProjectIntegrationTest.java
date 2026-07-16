@@ -316,7 +316,7 @@ final class CliDependencyProjectIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void dependencyJarGenericPairGetterBuilds() throws Exception {
+    void dependencyJarGenericObjectGetterBuilds() throws Exception {
         final Path dependency = dependencyJar("pairlib", "dep.Pair", """
             package dep;
 
@@ -397,7 +397,7 @@ final class CliDependencyProjectIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void dependencyJarNullableRecordAccessorBuilds() throws Exception {
+    void dependencyJarNullableRecordStringAccessorBuilds() throws Exception {
         final Path dependency = dependencyJar("nullmetriclib", "dep.Metric", """
             package dep;
 
@@ -430,7 +430,7 @@ final class CliDependencyProjectIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void dependencyJarStaticDurationFormatterBuilds() throws Exception {
+    void dependencyJarStaticLongFormatterBuilds() throws Exception {
         final Path dependency = dependencyJar("durationlib", "dep.DurationFormatter", """
             package dep;
 
@@ -469,7 +469,7 @@ final class CliDependencyProjectIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void dependencyJarScheduledExecutorSubclassBuilds() throws Exception {
+    void dependencyJarScheduledExecutorOneShotBuilds() throws Exception {
         final Path dependency = dependencyJar("schedulerlib", "dep.Scheduler", """
             package dep;
 
@@ -520,7 +520,7 @@ final class CliDependencyProjectIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void dependencyJarScheduledExecutorFixedRateBuilds() throws Exception {
+    void dependencyJarScheduledExecutorFixedRatePreShutdownBuilds() throws Exception {
         final Path dependency = dependencyJar("fixedratelib", "dep.Scheduler", """
             package dep;
 
