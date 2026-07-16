@@ -9,8 +9,8 @@ External project names do not belong in this matrix; this ledger stays compiler-
 
 | Measure | Count |
 | --- | ---: |
-| rows | 108 |
-| pass | 108 |
+| rows | 110 |
+| pass | 110 |
 | scoped | 0 |
 | target | 0 |
 | rejected | 0 |
@@ -112,6 +112,8 @@ Status mapping:
 | `network-tcp-client-socket-ipv6-loopback` | pass |
 | `network-tcp-client-socket-address` | pass |
 | `network-tcp-server-socket` | pass |
+| `network-tcp-server-socket-backlog` | pass |
+| `network-tcp-server-socket-bind-address` | pass |
 | `network-tcp-socket-stream-io` | pass |
 | `network-http-client-get-string` | pass |
 | `network-http-client-post-string-byte-array` | pass |

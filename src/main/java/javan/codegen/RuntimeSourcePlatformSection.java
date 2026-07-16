@@ -1243,6 +1243,13 @@ final class RuntimeSourcePlatformSection {
             javan_panic("tcp sockets are not supported on this host yet");
         }
 
+        static int javan_server_socket_backlog_checked(int backlog) {
+            if (backlog <= 0) {
+                return 16;
+            }
+            return backlog;
+        }
+
         static void javan_socket_host_checked(const char* host, struct sockaddr_storage* address, socklen_t* address_length, int port) {
             if (port < 0 || port > 65535) {
                 javan_panic("socket port out of range");
@@ -1641,34 +1648,36 @@ final class RuntimeSourcePlatformSection {
         }
 
         void* javan_server_socket_bind(int port) {
+            return javan_server_socket_bind_config(NULL, port, 16);
+        }
+
+        void* javan_server_socket_bind_config(void* host_value, int port, int backlog) {
         #if defined(_WIN32)
+            (void) host_value;
             (void) port;
+            (void) backlog;
             javan_socket_runtime_unsupported();
             return NULL;
         #else
-            if (port < 0 || port > 65535) {
-                javan_panic("socket port out of range");
-            }
-            int fd = socket(AF_INET, SOCK_STREAM, 0);
+            const char* host = host_value == NULL ? "localhost" : (const char*) host_value;
+            struct sockaddr_storage address;
+            socklen_t address_length = 0;
+            javan_socket_host_checked(host, &address, &address_length, port);
+            int fd = socket(((struct sockaddr*) &address)->sa_family, SOCK_STREAM, 0);
             if (fd < 0) {
                 javan_panic("server socket open failed");
             }
             int reuse = 1;
             setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
-            struct sockaddr_in address;
-            memset(&address, 0, sizeof(address));
-            address.sin_family = AF_INET;
-            address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-            address.sin_port = htons((unsigned short) port);
-            if (bind(fd, (struct sockaddr*) &address, sizeof(address)) != 0) {
+            if (bind(fd, (struct sockaddr*) &address, address_length) != 0) {
                 javan_socket_native_close(fd);
                 javan_panic("server socket bind failed");
             }
-            if (listen(fd, 16) != 0) {
+            if (listen(fd, javan_server_socket_backlog_checked(backlog)) != 0) {
                 javan_socket_native_close(fd);
                 javan_panic("server socket listen failed");
             }
-            struct sockaddr_in bound;
+            struct sockaddr_storage bound;
             socklen_t bound_length = sizeof(bound);
             if (getsockname(fd, (struct sockaddr*) &bound, &bound_length) != 0) {
                 javan_socket_native_close(fd);
@@ -1690,7 +1699,7 @@ final class RuntimeSourcePlatformSection {
             socket->magic = JAVAN_SERVER_SOCKET_MAGIC;
             socket->fd = fd;
             socket->closed = 0;
-            socket->local_port = (int) ntohs(bound.sin_port);
+            socket->local_port = javan_socket_port_from_sockaddr((const struct sockaddr*) &bound);
             socket->reserved0 = 0;
             socket->reserved1 = 0;
             socket->local_address = (javan_inet_address*) local_address;

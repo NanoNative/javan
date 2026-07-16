@@ -2109,6 +2109,14 @@ final class BytecodeToIRInvokeSupport {
         final MethodRef methodRef,
         final List<StackValue> stack
     ) {
+        if ("getByName".equals(methodRef.name())
+            && "(Ljava/lang/String;)Ljava/net/InetAddress;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_inet_address_get_by_name",
+                List.of(popObject(classFile, method, stack))
+            )));
+            return true;
+        }
         if ("getLoopbackAddress".equals(methodRef.name())
             && "()Ljava/net/InetAddress;".equals(methodRef.descriptor())) {
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_inet_address_loopback", List.of())));
@@ -2419,6 +2427,34 @@ final class BytecodeToIRInvokeSupport {
             instructions.add(IrInstruction.assignObject(
                 receiver.value(),
                 IrExpression.objectCall("javan_server_socket_bind", arguments)
+            ));
+            return true;
+        }
+        if ("java/net/ServerSocket".equals(methodRef.owner())
+            && "<init>".equals(methodRef.name())
+            && "(II)V".equals(methodRef.descriptor())) {
+            instructions.add(IrInstruction.assignObject(
+                receiver.value(),
+                IrExpression.objectCall(
+                    "javan_server_socket_bind_config",
+                    List.of(IrExpression.objectNull(), arguments.get(0), arguments.get(1))
+                )
+            ));
+            return true;
+        }
+        if ("java/net/ServerSocket".equals(methodRef.owner())
+            && "<init>".equals(methodRef.name())
+            && "(IILjava/net/InetAddress;)V".equals(methodRef.descriptor())) {
+            instructions.add(IrInstruction.assignObject(
+                receiver.value(),
+                IrExpression.objectCall(
+                    "javan_server_socket_bind_config",
+                    List.of(
+                        IrExpression.objectCall("javan_inet_address_get_host_address", List.of(arguments.get(2))),
+                        arguments.get(0),
+                        arguments.get(1)
+                    )
+                )
             ));
             return true;
         }

@@ -314,6 +314,7 @@ final class RuntimeHeaderFile {
         long long javan_file_time_to_millis(void* value);
         void* javan_files_new_directory_stream(void* path);
         void* javan_inet_address_loopback(void);
+        void* javan_inet_address_get_by_name(void* host);
         void* javan_inet_address_get_host_address(void* value);
         void* javan_inet_address_get_host_name(void* value);
         void* javan_inet_address_get_canonical_host_name(void* value);
@@ -342,6 +343,7 @@ final class RuntimeHeaderFile {
         void javan_socket_output_stream_close(void* value);
         void javan_socket_close(void* value);
         void* javan_server_socket_bind(int port);
+        void* javan_server_socket_bind_config(void* host, int port, int backlog);
         int javan_server_socket_get_local_port(void* value);
         void* javan_server_socket_accept(void* value);
         void javan_server_socket_close(void* value);

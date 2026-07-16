@@ -1049,4 +1049,22 @@ final class JdkCallableAccountingTest {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/net/Socket", "<init>", "(Ljava/net/InetAddress;I)V")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
+
+    @Test
+    void marksServerSocketPortBacklogConstructorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/net/ServerSocket", "<init>", "(II)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksServerSocketPortBacklogAddressConstructorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/net/ServerSocket", "<init>", "(IILjava/net/InetAddress;)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksInetAddressGetByNameAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/net/InetAddress", "getByName", "(Ljava/lang/String;)Ljava/net/InetAddress;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
 }

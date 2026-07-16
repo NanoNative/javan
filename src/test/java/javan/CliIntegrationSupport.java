@@ -232,6 +232,24 @@ abstract class CliIntegrationSupport {
         throw new IllegalStateException("Timed out waiting for loopback socket on port " + port);
     }
 
+    protected static void connectLoopbackIpv6(final int port) {
+        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (System.nanoTime() < deadline) {
+            try (java.net.Socket socket = new java.net.Socket("::1", port)) {
+                socket.getOutputStream().flush();
+                return;
+            } catch (final IOException exception) {
+                try {
+                    Thread.sleep(25);
+                } catch (final InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("Interrupted while waiting for IPv6 loopback socket on port " + port, interrupted);
+                }
+            }
+        }
+        throw new IllegalStateException("Timed out waiting for IPv6 loopback socket on port " + port);
+    }
+
     protected static void writeLoopbackBytes(final int port, final byte[] bytes) {
         final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
         while (System.nanoTime() < deadline) {

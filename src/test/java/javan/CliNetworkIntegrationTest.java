@@ -164,6 +164,135 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void serverSocketBacklogConstructorBuildsAndAcceptsLoopbackClient() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("server-socket-backlog");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.ServerSocket;
+            import java.net.Socket;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ServerSocket server = new ServerSocket(%d, 2);
+                    System.out.println(server.getLocalPort());
+                    final Socket accepted = server.accept();
+                    System.out.println(accepted.isConnected());
+                    System.out.println(accepted.getInetAddress().getHostAddress());
+                    accepted.close();
+                    System.out.println(accepted.isClosed());
+                    server.close();
+                }
+            }
+            """.formatted(port));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Process process = new ProcessBuilder(project.resolve(".javan/bin/server-socket-backlog").toString())
+            .directory(project.toFile())
+            .start();
+        final CompletableFuture<String> stdout = CompletableFuture.supplyAsync(() -> readStream(process.getInputStream()));
+        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
+        connectLoopback(port);
+        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
+        assertThat(process.exitValue()).isZero();
+        assertThat(stdout.join()).isEqualTo(port + "\ntrue\n127.0.0.1\ntrue\n");
+        assertThat(stderr.join()).isEmpty();
+    }
+
+    @Test
+    void serverSocketBindAddressConstructorBuildsAndAcceptsIpv4LoopbackClient() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("server-socket-bind-address-ipv4");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.InetAddress;
+            import java.net.ServerSocket;
+            import java.net.Socket;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ServerSocket server = new ServerSocket(%d, 2, InetAddress.getByName("127.0.0.1"));
+                    System.out.println(server.getLocalPort());
+                    final Socket accepted = server.accept();
+                    System.out.println(accepted.isConnected());
+                    System.out.println(accepted.getInetAddress().getHostAddress());
+                    accepted.close();
+                    System.out.println(accepted.isClosed());
+                    server.close();
+                }
+            }
+            """.formatted(port));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Process process = new ProcessBuilder(project.resolve(".javan/bin/server-socket-bind-address-ipv4").toString())
+            .directory(project.toFile())
+            .start();
+        final CompletableFuture<String> stdout = CompletableFuture.supplyAsync(() -> readStream(process.getInputStream()));
+        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
+        connectLoopback(port);
+        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
+        assertThat(process.exitValue()).isZero();
+        assertThat(stdout.join()).isEqualTo(port + "\ntrue\n127.0.0.1\ntrue\n");
+        assertThat(stderr.join()).isEmpty();
+    }
+
+    @Test
+    void serverSocketBindAddressConstructorBuildsAndAcceptsIpv6LoopbackClient() throws Exception {
+        Assumptions.assumeTrue(ipv6LoopbackAvailable(), "IPv6 loopback is not available on this host");
+        final int port = freeTcpPort();
+        final Path project = project("server-socket-bind-address-ipv6");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.InetAddress;
+            import java.net.ServerSocket;
+            import java.net.Socket;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ServerSocket server = new ServerSocket(%d, 2, InetAddress.getByName("::1"));
+                    System.out.println(server.getLocalPort());
+                    final Socket accepted = server.accept();
+                    System.out.println(accepted.isConnected());
+                    System.out.println(accepted.getInetAddress().getHostAddress());
+                    accepted.close();
+                    System.out.println(accepted.isClosed());
+                    server.close();
+                }
+            }
+            """.formatted(port));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Process process = new ProcessBuilder(project.resolve(".javan/bin/server-socket-bind-address-ipv6").toString())
+            .directory(project.toFile())
+            .start();
+        final CompletableFuture<String> stdout = CompletableFuture.supplyAsync(() -> readStream(process.getInputStream()));
+        final CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
+        connectLoopbackIpv6(port);
+        assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
+        assertThat(process.exitValue()).isZero();
+        assertThat(stdout.join()).isEqualTo(port + "\ntrue\n0:0:0:0:0:0:0:1\ntrue\n");
+        assertThat(stderr.join()).isEmpty();
+    }
+
+    @Test
     void socketInputStreamReadByteBuildsAndReadsFromLoopbackServer() throws Exception {
         final int port = freeTcpPort();
         try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {

@@ -7676,6 +7676,71 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersServerSocketPortBacklogConstructorCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(II)Ljava/net/ServerSocket;",
+            4,
+            2,
+            classInstruction(0, 187, "new", "java/net/ServerSocket"),
+            plain(1, 89, "dup"),
+            plain(2, 26, "iload_0"),
+            plain(3, 27, "iload_1"),
+            invokeSpecial(4, new MethodRef("java/net/ServerSocket", "<init>", "(II)V")),
+            plain(5, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectNull()),
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_server_socket_bind_config",
+                    List.of(IrExpression.objectNull(), IrExpression.intLocal("arg0"), IrExpression.intLocal("arg1"))
+                )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersServerSocketPortBacklogAddressConstructorCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(IILjava/net/InetAddress;)Ljava/net/ServerSocket;",
+            5,
+            3,
+            classInstruction(0, 187, "new", "java/net/ServerSocket"),
+            plain(1, 89, "dup"),
+            plain(2, 26, "iload_0"),
+            plain(3, 27, "iload_1"),
+            plain(4, 44, "aload_2"),
+            invokeSpecial(5, new MethodRef("java/net/ServerSocket", "<init>", "(IILjava/net/InetAddress;)V")),
+            plain(6, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectNull()),
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_server_socket_bind_config",
+                    List.of(
+                        IrExpression.objectCall("javan_inet_address_get_host_address", List.of(IrExpression.objectLocal("arg2"))),
+                        IrExpression.intLocal("arg0"),
+                        IrExpression.intLocal("arg1")
+                    )
+                )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
     void lowersSocketCloseCall() {
         final IrFunction function = lowerMain(method(
             0x0008,

@@ -11,8 +11,8 @@
     "rule": "done = supported variants + rejected variants; unknown leftovers must be 0 for a release-gated JDK"
   },
   "counts": {
-    "rows": 108,
-    "pass": 108,
+    "rows": 110,
+    "pass": 110,
     "scoped": 0,
     "target": 0,
     "rejected": 0
@@ -104,6 +104,8 @@
     {"feature": "network-tcp-client-socket-ipv6-loopback", "jdk25": "pass"},
     {"feature": "network-tcp-client-socket-address", "jdk25": "pass"},
     {"feature": "network-tcp-server-socket", "jdk25": "pass"},
+    {"feature": "network-tcp-server-socket-backlog", "jdk25": "pass"},
+    {"feature": "network-tcp-server-socket-bind-address", "jdk25": "pass"},
     {"feature": "network-tcp-socket-stream-io", "jdk25": "pass"},
     {"feature": "network-http-client-get-string", "jdk25": "pass"},
     {"feature": "network-http-client-post-string-byte-array", "jdk25": "pass"},
