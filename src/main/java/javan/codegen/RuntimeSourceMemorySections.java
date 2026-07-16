@@ -1624,6 +1624,18 @@ final class RuntimeSourceMemorySections {
             if (node->runtime_kind == JAVAN_RUNTIME_KIND_INET_SOCKET_ADDRESS) {
                 return javan_inet_socket_address_to_string(value);
             }
+            if (node->type_id == JAVAN_TYPE_JAVA_LANG_INTEGER) {
+                return javan_string_value_of_int(javan_integer_int_value(value));
+            }
+            if (node->type_id == JAVAN_TYPE_JAVA_LANG_LONG) {
+                return javan_string_value_of_long(javan_long_long_value(value));
+            }
+            if (node->type_id == JAVAN_TYPE_JAVA_LANG_FLOAT) {
+                return javan_string_value_of_float(javan_float_float_value(value));
+            }
+            if (node->type_id == JAVAN_TYPE_JAVA_LANG_DOUBLE) {
+                return javan_string_value_of_double(javan_double_double_value(value));
+            }
             if (node->type_id == JAVAN_TYPE_JAVA_TIME_FORMAT_DATE_TIME_FORMATTER) {
                 return (void*) "DateTimeFormatter";
             }

@@ -125,6 +125,26 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void integerConstableMethodsBuildAndMatchJvmOutput() throws Exception {
+        assertNumericWrapperConstableMethodsBuildAndMatchJvmOutput("integer-constable-methods", "Integer", "Integer.valueOf(7)");
+    }
+
+    @Test
+    void longConstableMethodsBuildAndMatchJvmOutput() throws Exception {
+        assertNumericWrapperConstableMethodsBuildAndMatchJvmOutput("long-constable-methods", "Long", "Long.valueOf(9L)");
+    }
+
+    @Test
+    void floatConstableMethodsBuildAndMatchJvmOutput() throws Exception {
+        assertNumericWrapperConstableMethodsBuildAndMatchJvmOutput("float-constable-methods", "Float", "Float.valueOf(1.5f)");
+    }
+
+    @Test
+    void doubleConstableMethodsBuildAndMatchJvmOutput() throws Exception {
+        assertNumericWrapperConstableMethodsBuildAndMatchJvmOutput("double-constable-methods", "Double", "Double.valueOf(2.5d)");
+    }
+
+    @Test
     void classLiteralGetNameBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("class-literal-get-name");
         writeJava(project, "com.acme.Main", """
@@ -2029,6 +2049,37 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/system-exit").toString()));
 
         assertThat(nativeRun.exitCode()).isEqualTo(7);
+    }
+
+    private void assertNumericWrapperConstableMethodsBuildAndMatchJvmOutput(
+        final String projectName,
+        final String wrapperType,
+        final String wrapperExpression
+    ) throws Exception {
+        final Path project = project(projectName);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Throwable {
+                    final %s value = %s;
+                    System.out.println(value.describeConstable().orElseThrow());
+                    System.out.println(value.resolveConstantDesc(null));
+                    final Object widened = value.resolveConstantDesc(null);
+                    System.out.println(widened);
+                }
+            }
+            """.formatted(wrapperType, wrapperExpression));
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/" + projectName).toString())).stdout())
+            .isEqualTo(jvmOutput);
     }
 
 }

@@ -13323,8 +13323,8 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void rejectsUnsupportedIntegerToStringInstanceCall() {
-        assertThatThrownBy(() -> lowerMain(method(
+    void lowersIntegerToStringInstanceCall() {
+        final IrFunction function = lowerMain(method(
             0x0008,
             "main",
             "(Ljava/lang/Integer;)Ljava/lang/String;",
@@ -13333,16 +13333,19 @@ final class BytecodeToIRTest {
             plain(0, 42, "aload_0"),
             invokeVirtual(1, new MethodRef("java/lang/Integer", "toString", "()Ljava/lang/String;")),
             plain(2, 176, "areturn")
-        )))
-            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
-                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
-                assertThat(exception.diagnostic().subject()).isEqualTo("invokevirtual java/lang/Integer.toString()Ljava/lang/String;");
-            });
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_string_value_of_int",
+                List.of(IrExpression.intCall("javan_integer_int_value", List.of(IrExpression.objectLocal("arg0"))))
+            ))
+        );
     }
 
     @Test
-    void rejectsUnsupportedLongToStringInstanceCall() {
-        assertThatThrownBy(() -> lowerMain(method(
+    void lowersLongToStringInstanceCall() {
+        final IrFunction function = lowerMain(method(
             0x0008,
             "main",
             "(Ljava/lang/Long;)Ljava/lang/String;",
@@ -13351,16 +13354,19 @@ final class BytecodeToIRTest {
             plain(0, 42, "aload_0"),
             invokeVirtual(1, new MethodRef("java/lang/Long", "toString", "()Ljava/lang/String;")),
             plain(2, 176, "areturn")
-        )))
-            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
-                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
-                assertThat(exception.diagnostic().subject()).isEqualTo("invokevirtual java/lang/Long.toString()Ljava/lang/String;");
-            });
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_string_value_of_long",
+                List.of(IrExpression.longCall("javan_long_long_value", List.of(IrExpression.objectLocal("arg0"))))
+            ))
+        );
     }
 
     @Test
-    void rejectsUnsupportedFloatToStringInstanceCall() {
-        assertThatThrownBy(() -> lowerMain(method(
+    void lowersFloatToStringInstanceCall() {
+        final IrFunction function = lowerMain(method(
             0x0008,
             "main",
             "(Ljava/lang/Float;)Ljava/lang/String;",
@@ -13369,16 +13375,19 @@ final class BytecodeToIRTest {
             plain(0, 42, "aload_0"),
             invokeVirtual(1, new MethodRef("java/lang/Float", "toString", "()Ljava/lang/String;")),
             plain(2, 176, "areturn")
-        )))
-            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
-                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
-                assertThat(exception.diagnostic().subject()).isEqualTo("invokevirtual java/lang/Float.toString()Ljava/lang/String;");
-            });
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_string_value_of_float",
+                List.of(IrExpression.floatCall("javan_float_float_value", List.of(IrExpression.objectLocal("arg0"))))
+            ))
+        );
     }
 
     @Test
-    void rejectsUnsupportedDoubleToStringInstanceCall() {
-        assertThatThrownBy(() -> lowerMain(method(
+    void lowersDoubleToStringInstanceCall() {
+        final IrFunction function = lowerMain(method(
             0x0008,
             "main",
             "(Ljava/lang/Double;)Ljava/lang/String;",
@@ -13387,11 +13396,14 @@ final class BytecodeToIRTest {
             plain(0, 42, "aload_0"),
             invokeVirtual(1, new MethodRef("java/lang/Double", "toString", "()Ljava/lang/String;")),
             plain(2, 176, "areturn")
-        )))
-            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
-                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
-                assertThat(exception.diagnostic().subject()).isEqualTo("invokevirtual java/lang/Double.toString()Ljava/lang/String;");
-            });
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_string_value_of_double",
+                List.of(IrExpression.doubleCall("javan_double_double_value", List.of(IrExpression.objectLocal("arg0"))))
+            ))
+        );
     }
 
     @Test
@@ -18724,6 +18736,274 @@ final class BytecodeToIRTest {
                     "invokevirtual java/lang/String.resolveConstantDesc(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Class;"
                 );
             });
+    }
+
+    @Test
+    void lowersIntegerDescribeConstableToOptionalOfReceiver() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Integer;)Ljava/util/Optional;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/Integer", "describeConstable", "()Ljava/util/Optional;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_optional_of",
+                List.of(IrExpression.objectLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersIntegerResolveConstantDescTypedReturnToReceiver() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Integer;Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Integer;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef(
+                "java/lang/Integer",
+                "resolveConstantDesc",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Integer;"
+            )),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectLocal("arg0"))
+        );
+    }
+
+    @Test
+    void lowersIntegerResolveConstantDescObjectBridgeToReceiver() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Integer;Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Object;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef(
+                "java/lang/Integer",
+                "resolveConstantDesc",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Object;"
+            )),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectLocal("arg0"))
+        );
+    }
+
+    @Test
+    void lowersLongDescribeConstableToOptionalOfReceiver() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Long;)Ljava/util/Optional;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/Long", "describeConstable", "()Ljava/util/Optional;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_optional_of",
+                List.of(IrExpression.objectLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersLongResolveConstantDescTypedReturnToReceiver() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Long;Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Long;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef(
+                "java/lang/Long",
+                "resolveConstantDesc",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Long;"
+            )),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectLocal("arg0"))
+        );
+    }
+
+    @Test
+    void lowersLongResolveConstantDescObjectBridgeToReceiver() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Long;Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Object;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef(
+                "java/lang/Long",
+                "resolveConstantDesc",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Object;"
+            )),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectLocal("arg0"))
+        );
+    }
+
+    @Test
+    void lowersFloatDescribeConstableToOptionalOfReceiver() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Float;)Ljava/util/Optional;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/Float", "describeConstable", "()Ljava/util/Optional;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_optional_of",
+                List.of(IrExpression.objectLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersFloatResolveConstantDescTypedReturnToReceiver() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Float;Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Float;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef(
+                "java/lang/Float",
+                "resolveConstantDesc",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Float;"
+            )),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectLocal("arg0"))
+        );
+    }
+
+    @Test
+    void lowersFloatResolveConstantDescObjectBridgeToReceiver() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Float;Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Object;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef(
+                "java/lang/Float",
+                "resolveConstantDesc",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Object;"
+            )),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectLocal("arg0"))
+        );
+    }
+
+    @Test
+    void lowersDoubleDescribeConstableToOptionalOfReceiver() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Double;)Ljava/util/Optional;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/Double", "describeConstable", "()Ljava/util/Optional;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_optional_of",
+                List.of(IrExpression.objectLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersDoubleResolveConstantDescTypedReturnToReceiver() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Double;Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Double;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef(
+                "java/lang/Double",
+                "resolveConstantDesc",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Double;"
+            )),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectLocal("arg0"))
+        );
+    }
+
+    @Test
+    void lowersDoubleResolveConstantDescObjectBridgeToReceiver() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Double;Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Object;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef(
+                "java/lang/Double",
+                "resolveConstantDesc",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Object;"
+            )),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectLocal("arg0"))
+        );
     }
 
     @Test

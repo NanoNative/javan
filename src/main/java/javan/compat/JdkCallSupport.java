@@ -217,18 +217,74 @@ public final class JdkCallSupport {
             "([Ljava/lang/Object;II)[Ljava/lang/Object;"
         ),
         intrinsic("Integer.toString", "java/lang/Integer", "toString", "(I)Ljava/lang/String;"),
+        runtime("Integer.toString.instance", "java/lang/Integer", "toString", "()Ljava/lang/String;"),
         runtime("Integer.valueOf", "java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;"),
         runtime("Integer.intValue", "java/lang/Integer", "intValue", "()I"),
+        runtime(
+            "Integer.describeConstable",
+            "java/lang/Integer",
+            "describeConstable",
+            "()Ljava/util/Optional;"
+        ),
+        runtime(
+            "Integer.resolveConstantDesc",
+            "java/lang/Integer",
+            "resolveConstantDesc",
+            "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Integer;",
+            "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Object;"
+        ),
         intrinsic("Long.toString", "java/lang/Long", "toString", "(J)Ljava/lang/String;"),
+        runtime("Long.toString.instance", "java/lang/Long", "toString", "()Ljava/lang/String;"),
         runtime("Long.valueOf", "java/lang/Long", "valueOf", "(J)Ljava/lang/Long;"),
         runtime("Long.longValue", "java/lang/Long", "longValue", "()J"),
+        runtime(
+            "Long.describeConstable",
+            "java/lang/Long",
+            "describeConstable",
+            "()Ljava/util/Optional;"
+        ),
+        runtime(
+            "Long.resolveConstantDesc",
+            "java/lang/Long",
+            "resolveConstantDesc",
+            "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Long;",
+            "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Object;"
+        ),
         intrinsic("Float.toString", "java/lang/Float", "toString", "(F)Ljava/lang/String;"),
+        runtime("Float.toString.instance", "java/lang/Float", "toString", "()Ljava/lang/String;"),
         runtime("Float.valueOf", "java/lang/Float", "valueOf", "(F)Ljava/lang/Float;"),
         runtime("Float.floatValue", "java/lang/Float", "floatValue", "()F"),
+        runtime(
+            "Float.describeConstable",
+            "java/lang/Float",
+            "describeConstable",
+            "()Ljava/util/Optional;"
+        ),
+        runtime(
+            "Float.resolveConstantDesc",
+            "java/lang/Float",
+            "resolveConstantDesc",
+            "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Float;",
+            "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Object;"
+        ),
         intrinsic("Float.intBitsToFloat", "java/lang/Float", "intBitsToFloat", "(I)F"),
         intrinsic("Double.toString", "java/lang/Double", "toString", "(D)Ljava/lang/String;"),
+        runtime("Double.toString.instance", "java/lang/Double", "toString", "()Ljava/lang/String;"),
         runtime("Double.valueOf", "java/lang/Double", "valueOf", "(D)Ljava/lang/Double;"),
         runtime("Double.doubleValue", "java/lang/Double", "doubleValue", "()D"),
+        runtime(
+            "Double.describeConstable",
+            "java/lang/Double",
+            "describeConstable",
+            "()Ljava/util/Optional;"
+        ),
+        runtime(
+            "Double.resolveConstantDesc",
+            "java/lang/Double",
+            "resolveConstantDesc",
+            "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Double;",
+            "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Object;"
+        ),
         intrinsic("Double.longBitsToDouble", "java/lang/Double", "longBitsToDouble", "(J)D"),
         intrinsic("Boolean.toString", "java/lang/Boolean", "toString", "(Z)Ljava/lang/String;"),
         runtime("Boolean.valueOf", "java/lang/Boolean", "valueOf", "(Z)Ljava/lang/Boolean;"),

@@ -87,6 +87,78 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void runtimePrintObjectValuePrintsIntegerWrapper() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                javan_printstream_println_object(javan_system_out(), javan_integer_value_of(7));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("7\n");
+    }
+
+    @Test
+    void runtimePrintObjectValuePrintsLongWrapper() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                javan_printstream_println_object(javan_system_out(), javan_long_value_of(9LL));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("9\n");
+    }
+
+    @Test
+    void runtimePrintObjectValuePrintsFloatWrapper() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                javan_printstream_println_object(javan_system_out(), javan_float_value_of(1.5f));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("1.5\n");
+    }
+
+    @Test
+    void runtimePrintObjectValuePrintsDoubleWrapper() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                javan_printstream_println_object(javan_system_out(), javan_double_value_of(2.5));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("2.5\n");
+    }
+
+    @Test
     void writeTracksRuntimeAllocationsAndRegistersShutdownCleanup() throws Exception {
         final Path runtime = new RuntimeFiles().write(tempDir);
 

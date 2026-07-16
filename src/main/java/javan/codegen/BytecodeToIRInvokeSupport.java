@@ -549,10 +549,24 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_optional_of", List.of(receiver))));
             return;
         }
+        if (isDirectConstableWrapperOwner(methodRef.owner())
+            && "describeConstable".equals(methodRef.name())
+            && "()Ljava/util/Optional;".equals(methodRef.descriptor())) {
+            final IrExpression receiver = popObject(classFile, method, stack);
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_optional_of", List.of(receiver))));
+            return;
+        }
         if ("java/lang/String".equals(methodRef.owner())
             && "resolveConstantDesc".equals(methodRef.name())
             && ("(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/String;".equals(methodRef.descriptor())
             || "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Object;".equals(methodRef.descriptor()))) {
+            popObject(classFile, method, stack);
+            stack.add(StackValue.objectExpression(popObject(classFile, method, stack)));
+            return;
+        }
+        if (isDirectConstableWrapperOwner(methodRef.owner())
+            && "resolveConstantDesc".equals(methodRef.name())
+            && isDirectConstableWrapperResolveDescriptor(methodRef.owner(), methodRef.descriptor())) {
             popObject(classFile, method, stack);
             stack.add(StackValue.objectExpression(popObject(classFile, method, stack)));
             return;
@@ -1358,6 +1372,38 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.doubleExpression(IrExpression.doubleCall("javan_double_double_value", List.of(popObject(classFile, method, stack)))));
             return true;
         }
+        if ("java/lang/Integer".equals(methodRef.owner()) && "toString".equals(methodRef.name()) && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
+            final IrExpression receiver = popObject(classFile, method, stack);
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_string_value_of_int",
+                List.of(IrExpression.intCall("javan_integer_int_value", List.of(receiver)))
+            )));
+            return true;
+        }
+        if ("java/lang/Long".equals(methodRef.owner()) && "toString".equals(methodRef.name()) && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
+            final IrExpression receiver = popObject(classFile, method, stack);
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_string_value_of_long",
+                List.of(IrExpression.longCall("javan_long_long_value", List.of(receiver)))
+            )));
+            return true;
+        }
+        if ("java/lang/Float".equals(methodRef.owner()) && "toString".equals(methodRef.name()) && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
+            final IrExpression receiver = popObject(classFile, method, stack);
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_string_value_of_float",
+                List.of(IrExpression.floatCall("javan_float_float_value", List.of(receiver)))
+            )));
+            return true;
+        }
+        if ("java/lang/Double".equals(methodRef.owner()) && "toString".equals(methodRef.name()) && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
+            final IrExpression receiver = popObject(classFile, method, stack);
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_string_value_of_double",
+                List.of(IrExpression.doubleCall("javan_double_double_value", List.of(receiver)))
+            )));
+            return true;
+        }
         if ("java/lang/Boolean".equals(methodRef.owner()) && "booleanValue".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor())) {
             stack.add(StackValue.intExpression(IrExpression.intCall("javan_boolean_boolean_value", List.of(popObject(classFile, method, stack)))));
             return true;
@@ -1381,6 +1427,26 @@ final class BytecodeToIRInvokeSupport {
             return true;
         }
         return false;
+    }
+
+    private static boolean isDirectConstableWrapperOwner(final String owner) {
+        return "java/lang/Integer".equals(owner)
+            || "java/lang/Long".equals(owner)
+            || "java/lang/Float".equals(owner)
+            || "java/lang/Double".equals(owner);
+    }
+
+    private static boolean isDirectConstableWrapperResolveDescriptor(final String owner, final String descriptor) {
+        if ("(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Object;".equals(descriptor)) {
+            return true;
+        }
+        return switch (owner) {
+            case "java/lang/Integer" -> "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Integer;".equals(descriptor);
+            case "java/lang/Long" -> "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Long;".equals(descriptor);
+            case "java/lang/Float" -> "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Float;".equals(descriptor);
+            case "java/lang/Double" -> "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Double;".equals(descriptor);
+            default -> false;
+        };
     }
     static void lowerInstanceCall(
         final Map<String, ClassFile> classes,

@@ -1220,6 +1220,150 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void integerDescribeConstableIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Integer",
+            "describeConstable",
+            "()Ljava/util/Optional;"
+        ))).isTrue();
+    }
+
+    @Test
+    void integerInstanceToStringIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Integer",
+            "toString",
+            "()Ljava/lang/String;"
+        ))).isTrue();
+    }
+
+    @Test
+    void integerResolveConstantDescTypedReturnIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Integer",
+            "resolveConstantDesc",
+            "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Integer;"
+        ))).isTrue();
+    }
+
+    @Test
+    void integerResolveConstantDescObjectBridgeIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Integer",
+            "resolveConstantDesc",
+            "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void longDescribeConstableIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Long",
+            "describeConstable",
+            "()Ljava/util/Optional;"
+        ))).isTrue();
+    }
+
+    @Test
+    void longInstanceToStringIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Long",
+            "toString",
+            "()Ljava/lang/String;"
+        ))).isTrue();
+    }
+
+    @Test
+    void longResolveConstantDescTypedReturnIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Long",
+            "resolveConstantDesc",
+            "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Long;"
+        ))).isTrue();
+    }
+
+    @Test
+    void longResolveConstantDescObjectBridgeIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Long",
+            "resolveConstantDesc",
+            "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void floatDescribeConstableIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Float",
+            "describeConstable",
+            "()Ljava/util/Optional;"
+        ))).isTrue();
+    }
+
+    @Test
+    void floatInstanceToStringIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Float",
+            "toString",
+            "()Ljava/lang/String;"
+        ))).isTrue();
+    }
+
+    @Test
+    void floatResolveConstantDescTypedReturnIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Float",
+            "resolveConstantDesc",
+            "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Float;"
+        ))).isTrue();
+    }
+
+    @Test
+    void floatResolveConstantDescObjectBridgeIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Float",
+            "resolveConstantDesc",
+            "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void doubleDescribeConstableIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Double",
+            "describeConstable",
+            "()Ljava/util/Optional;"
+        ))).isTrue();
+    }
+
+    @Test
+    void doubleInstanceToStringIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Double",
+            "toString",
+            "()Ljava/lang/String;"
+        ))).isTrue();
+    }
+
+    @Test
+    void doubleResolveConstantDescTypedReturnIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Double",
+            "resolveConstantDesc",
+            "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Double;"
+        ))).isTrue();
+    }
+
+    @Test
+    void doubleResolveConstantDescObjectBridgeIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Double",
+            "resolveConstantDesc",
+            "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
     void booleanArraysCopyOfIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Arrays",
