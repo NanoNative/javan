@@ -1495,7 +1495,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void customFunctionalInterfaceLambdaFailsClearlyAtBuildTime() throws Exception {
+    void customFunctionalInterfaceLambdaBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("custom-functional-interface-lambda");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -1516,18 +1516,17 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
             }
             """);
 
+        final String jvmOutput = runJvm(project, "com.acme.Main");
         final CliRun run = run(tempDir, "build", project.toString());
 
-        assertThat(run.exitCode()).isEqualTo(2);
-        assertThat(run.stderr()).contains(
-            "error[JAVAN012]",
-            "com/acme/Main$Mapper.apply(Ljava/lang/String;)Ljava/lang/String;"
-        );
-        assertThat(project.resolve(".javan/bin/custom-functional-interface-lambda")).doesNotExist();
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/custom-functional-interface-lambda").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("demo!\n");
     }
 
     @Test
-    void capturedCustomFunctionalInterfaceLambdaFailsClearlyAtBuildTime() throws Exception {
+    void capturedCustomFunctionalInterfaceLambdaBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("captured-custom-functional-interface-lambda");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -1549,11 +1548,13 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
             }
             """);
 
+        final String jvmOutput = runJvm(project, "com.acme.Main");
         final CliRun run = run(tempDir, "build", project.toString());
 
-        assertThat(run.exitCode()).isEqualTo(2);
-        assertThat(run.stderr()).contains("error[JAVAN012]");
-        assertThat(project.resolve(".javan/bin/captured-custom-functional-interface-lambda")).doesNotExist();
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/captured-custom-functional-interface-lambda").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("demo!\n");
     }
 
     @Test
@@ -1597,8 +1598,9 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
 
         assertThat(run.exitCode()).isEqualTo(2);
         assertThat(run.stderr()).contains(
-            "error[JAVAN012]",
-            "com/acme/Main$ThrowingMapper.applyWithException(Ljava/lang/String;)Ljava/lang/String;"
+            "error[JAVAN014]",
+            "Class:\n  com/acme/Main$ThrowingMapper",
+            "Method:\n  apply(Ljava/lang/String;)Ljava/lang/String;"
         );
         assertThat(project.resolve(".javan/bin/default-method-functional-interface-lambda")).doesNotExist();
     }

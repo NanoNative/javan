@@ -2885,7 +2885,8 @@ final class BytecodeToIRInvokeSupport {
         final List<StackValue> stack,
         final Map<Integer, IrLocal> localDeclarations
     ) {
-        if (!isJdkCollectionOwner(methodRef.owner()) || !JdkCallSupport.isSupported(methodRef)) {
+        if ((!isJdkCollectionOwner(methodRef.owner()) && !"java/lang/CharSequence".equals(methodRef.owner()))
+            || !JdkCallSupport.isSupported(methodRef)) {
             return false;
         }
         if ("java/util/Map".equals(methodRef.owner())

@@ -1,11 +1,12 @@
 # Nano MetricUpdate Probe
 
-Builds a tiny app against local Nano classes and compiles it to a native executable with `javan`.
+Builds a tiny app against a Nano dependency and compiles it to a native executable with `javan`.
 
-By default the script uses `../../../nano/target/classes`.
-Override with `NANO_CLASSES=/path/to/nano/classes`.
+By default the script uses the pinned Maven-cache jar. Override with either:
 
-Nano must already have compiled classes. If local Nano packaging fails because its TypeMap dependency is out of sync, use the existing `target/classes` from the last successful Nano build or fix the Nano dependency first.
+- `NANO_JAR=/path/to/nano.jar`
+- `NANO_CLASSPATH=/path/to/dependency`
+- `NANO_CLASSES=/path/to/compiled/classes`
 
 ```sh
 ./build-example.sh

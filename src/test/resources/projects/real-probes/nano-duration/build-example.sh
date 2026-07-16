@@ -8,9 +8,9 @@ NANO_JAR=${NANO_JAR:-"$MAVEN_REPO/org/nanonative/nano/2025.11.3131219/nano-2025.
 
 if [ ! -f "$NANO_JAR" ]; then
   echo "Nano jar not found. Set NANO_JAR=/path/to/nano.jar" >&2
-  exit 2
+  exit 3
 fi
 
 rm -rf "$ROOT/.javan"
-"$JAVAN" build "$ROOT" --classpath "$NANO_JAR" --output nano-duration
+"$JAVAN" build "$ROOT" --classpath "$NANO_JAR" --output nano-duration >/dev/null
 "$ROOT/.javan/bin/nano-duration"

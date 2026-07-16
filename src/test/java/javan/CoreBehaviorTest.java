@@ -526,8 +526,8 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void jdkCallSupportRejectsInetAddressGetByNameCall() {
-        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/InetAddress", "getByName", "(Ljava/lang/String;)Ljava/net/InetAddress;"))).isFalse();
+    void jdkCallSupportAcceptsInetAddressGetByNameCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/InetAddress", "getByName", "(Ljava/lang/String;)Ljava/net/InetAddress;"))).isTrue();
     }
 
     @Test
@@ -585,17 +585,13 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void staticVerifierRejectsReachableInetAddressGetByNameCallWithNetworkDiagnostic() {
+    void staticVerifierAcceptsReachableInetAddressGetByNameCall() {
         final List<Diagnostic> diagnostics = verifyInstruction(
             instruction(0, 184, "invokestatic", new MethodRef("java/net/InetAddress", "getByName", "(Ljava/lang/String;)Ljava/net/InetAddress;")),
             true
         );
 
-        assertThat(diagnostics).hasSize(1);
-        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN061");
-        assertThat(diagnostics.getFirst().message()).isEqualTo("unsupported reachable network API");
-        assertThat(diagnostics.getFirst().subject()).isEqualTo("java/net/InetAddress.getByName(Ljava/lang/String;)Ljava/net/InetAddress;");
-        assertThat(diagnostics.getFirst().reason()).contains("network/socket");
+        assertThat(diagnostics).isEmpty();
     }
 
     @Test
@@ -870,7 +866,7 @@ final class CoreBehaviorTest {
 
     @Test
     void jdkCallSupportRejectsUnknownMapCall() {
-        assertThat(JdkCallSupport.isSupported(new MethodRef("java/util/Map", "entrySet", "()Ljava/util/Set;"))).isFalse();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/util/Map", "remove", "(Ljava/lang/Object;)Ljava/lang/Object;"))).isFalse();
     }
 
     @Test
@@ -1574,7 +1570,7 @@ final class CoreBehaviorTest {
                     "java/lang/Object",
                     0x0200,
                     List.of(),
-                    methodInfo("handle", "()V")
+                    new MethodInfo(0x0401, "handle", "()V", Optional.empty())
                 ),
                 "com/acme/HandlerImpl", classWithMethods(
                     "com/acme/HandlerImpl",
@@ -11370,7 +11366,7 @@ final class CoreBehaviorTest {
             "javan_gc_safe_point();"
         );
         assertThat(generated).doesNotContain("&javan_static_com_acme_State_field_count");
-        assertThat(generated.indexOf("javan_register_generated_roots();")).isLessThan(generated.indexOf("return 0;"));
+        assertThat(generated.indexOf("javan_register_generated_roots();")).isLessThan(generated.lastIndexOf("return 0;"));
     }
 
     @Test

@@ -2,7 +2,7 @@
 
 Builds a tiny app against a real TypeMap jar and compiles it to a native executable with `javan`.
 
-By default the script looks for the newest local jar under `../../../TypeMap/target`.
+By default the script uses the pinned Maven-cache jar.
 Override with `TYPEMAP_JAR=/path/to/type-map.jar`.
 
 ```sh

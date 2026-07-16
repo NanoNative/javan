@@ -649,7 +649,7 @@ final class CliDependencyProjectIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static String host(final String value) throws Exception {
-                    return InetAddress.getByName(value).getHostAddress();
+                    return InetAddress.getAllByName(value)[0].getHostAddress();
                 }
             }
             """);
@@ -676,10 +676,50 @@ final class CliDependencyProjectIntegrationTest extends CliIntegrationSupport {
             "error[JAVAN061]",
             "dep/Lookup",
             "host(Ljava/lang/String;)Ljava/lang/String;",
-            "java/net/InetAddress.getByName(Ljava/lang/String;)Ljava/net/InetAddress;",
+            "java/net/InetAddress.getAllByName(Ljava/lang/String;)[Ljava/net/InetAddress;",
             "network/socket"
         );
         assertThat(project.resolve(".javan/bin/dependency-live-network")).doesNotExist();
+    }
+
+    @Test
+    void dependencyJarInetAddressGetByNameIpv4LiteralBuilds() throws Exception {
+        final Path dependency = dependencyJar("dep-inet-address", "dep.Lookup", """
+            package dep;
+
+            import java.net.InetAddress;
+
+            public final class Lookup {
+                private Lookup() {
+                }
+
+                public static String host() throws Exception {
+                    return InetAddress.getByName("127.0.0.1").getHostAddress();
+                }
+            }
+            """);
+        final Path project = project("dependency-inet-address");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import dep.Lookup;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    System.out.println(Lookup.host());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main", List.of(dependency));
+        final CliRun run = run(tempDir, "build", project.toString(), "--classpath", dependency.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/dependency-inet-address").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("127.0.0.1\n");
     }
 
     @Test

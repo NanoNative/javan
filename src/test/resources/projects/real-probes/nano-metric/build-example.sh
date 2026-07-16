@@ -15,15 +15,11 @@ if [ -z "$NANO_CLASSPATH" ] && [ -n "${NANO_CLASSES:-}" ] && [ -d "$NANO_CLASSES
   NANO_CLASSPATH=$NANO_CLASSES
 fi
 
-if [ -z "$NANO_CLASSPATH" ] && [ -d "$ROOT/../../../nano/target/classes" ]; then
-  NANO_CLASSPATH=$ROOT/../../../nano/target/classes
-fi
-
 if [ -z "$NANO_CLASSPATH" ]; then
-  echo "Nano dependency not found. Set NANO_JAR=/path/to/nano.jar, NANO_CLASSPATH=/path/to/dependency, or NANO_CLASSES=/path/to/nano/target/classes" >&2
-  exit 2
+  echo "Nano dependency not found. Set NANO_JAR=/path/to/nano.jar, NANO_CLASSPATH=/path/to/dependency, or NANO_CLASSES=/path/to/compiled/classes" >&2
+  exit 3
 fi
 
 rm -rf "$ROOT/.javan"
-"$JAVAN" build "$ROOT" --classpath "$NANO_CLASSPATH" --output nano-metric
+"$JAVAN" build "$ROOT" --classpath "$NANO_CLASSPATH" --output nano-metric >/dev/null
 "$ROOT/.javan/bin/nano-metric"
