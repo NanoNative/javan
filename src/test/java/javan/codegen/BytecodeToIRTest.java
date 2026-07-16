@@ -2465,6 +2465,125 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersLconstZeroThroughNormalizedLongMetadata() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()J",
+            1,
+            0,
+            plain(0, 9, "lconst_0"),
+            plain(1, 173, "lreturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnLong(IrExpression.longLiteral(0L))
+        );
+    }
+
+    @Test
+    void lowersLconstOneThroughNormalizedLongMetadata() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()J",
+            1,
+            0,
+            plain(0, 10, "lconst_1"),
+            plain(1, 173, "lreturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnLong(IrExpression.longLiteral(1L))
+        );
+    }
+
+    @Test
+    void lowersFconstZeroThroughNormalizedFloatMetadata() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()F",
+            1,
+            0,
+            plain(0, 11, "fconst_0"),
+            plain(1, 174, "freturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnFloat(IrExpression.floatLiteral(0.0f))
+        );
+    }
+
+    @Test
+    void lowersFconstOneThroughNormalizedFloatMetadata() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()F",
+            1,
+            0,
+            plain(0, 12, "fconst_1"),
+            plain(1, 174, "freturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnFloat(IrExpression.floatLiteral(1.0f))
+        );
+    }
+
+    @Test
+    void lowersFconstTwoThroughNormalizedFloatMetadata() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()F",
+            1,
+            0,
+            plain(0, 13, "fconst_2"),
+            plain(1, 174, "freturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnFloat(IrExpression.floatLiteral(2.0f))
+        );
+    }
+
+    @Test
+    void lowersDconstZeroThroughNormalizedDoubleMetadata() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()D",
+            1,
+            0,
+            plain(0, 14, "dconst_0"),
+            plain(1, 175, "dreturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnDouble(IrExpression.doubleLiteral(0.0d))
+        );
+    }
+
+    @Test
+    void lowersDconstOneThroughNormalizedDoubleMetadata() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()D",
+            1,
+            0,
+            plain(0, 15, "dconst_1"),
+            plain(1, 175, "dreturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnDouble(IrExpression.doubleLiteral(1.0d))
+        );
+    }
+
+    @Test
     void rejectsUnsupportedOpcodeOutsideNop() {
         assertThatThrownBy(() -> lowerMain(method(
             0x0008,
@@ -20740,7 +20859,9 @@ final class BytecodeToIRTest {
             Optional.empty(),
             Optional.empty(),
             normalizedIntValue(opcode, bytes),
-            Optional.empty(),
+            normalizedLongValue(opcode),
+            normalizedFloatValue(opcode),
+            normalizedDoubleValue(opcode),
             Optional.empty()
         );
     }
@@ -20756,6 +20877,31 @@ final class BytecodeToIRTest {
             case 8 -> Optional.of(5);
             case 16 -> operands.length == 1 ? Optional.of((int) operands[0]) : Optional.empty();
             case 17 -> operands.length == 2 ? Optional.of(signedShortFromOperands(operands)) : Optional.empty();
+            default -> Optional.empty();
+        };
+    }
+
+    private static Optional<Long> normalizedLongValue(final int opcode) {
+        return switch (opcode) {
+            case 9 -> Optional.of(0L);
+            case 10 -> Optional.of(1L);
+            default -> Optional.empty();
+        };
+    }
+
+    private static Optional<Float> normalizedFloatValue(final int opcode) {
+        return switch (opcode) {
+            case 11 -> Optional.of(0.0f);
+            case 12 -> Optional.of(1.0f);
+            case 13 -> Optional.of(2.0f);
+            default -> Optional.empty();
+        };
+    }
+
+    private static Optional<Double> normalizedDoubleValue(final int opcode) {
+        return switch (opcode) {
+            case 14 -> Optional.of(0.0d);
+            case 15 -> Optional.of(1.0d);
             default -> Optional.empty();
         };
     }

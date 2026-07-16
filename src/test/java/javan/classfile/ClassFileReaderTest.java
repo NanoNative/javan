@@ -248,6 +248,39 @@ final class ClassFileReaderTest {
         assertThat(literalValues).containsExactly(-32768, 32767);
     }
 
+    @Test
+    void readerNormalizesWideSmallLiteralInstructions() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(
+            minimalClassfile(
+                "wide/Literals",
+                new byte[]{
+                    9,  // lconst_0
+                    10, // lconst_1
+                    11, // fconst_0
+                    12, // fconst_1
+                    13, // fconst_2
+                    14, // dconst_0
+                    15, // dconst_1
+                    (byte) 177
+                }
+            ),
+            SOURCE
+        );
+
+        final List<Instruction> instructions = classFile.method("<init>", "()V")
+            .orElseThrow()
+            .code()
+            .orElseThrow()
+            .instructions();
+
+        assertThat(instructions.stream().filter(instruction -> instruction.longValue().isPresent()).map(instruction -> instruction.longValue().orElseThrow()).toList())
+            .containsExactly(0L, 1L);
+        assertThat(instructions.stream().filter(instruction -> instruction.floatValue().isPresent()).map(instruction -> instruction.floatValue().orElseThrow()).toList())
+            .containsExactly(0.0f, 1.0f, 2.0f);
+        assertThat(instructions.stream().filter(instruction -> instruction.doubleValue().isPresent()).map(instruction -> instruction.doubleValue().orElseThrow()).toList())
+            .containsExactly(0.0d, 1.0d);
+    }
+
     private static void assertConstructorMetadata(final MemberMetadata constructor) {
         assertThat(constructor.name()).isEqualTo("<init>");
         assertThat(constructor.attributes()).containsExactly("Code");

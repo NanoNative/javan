@@ -517,16 +517,12 @@ public final class BytecodeToIR {
                 break;
             case 9:
             case 10:
-                stack.add(StackValue.longExpression(IrExpression.longLiteral(instruction.opcode() - 9L)));
-                break;
             case 11:
             case 12:
             case 13:
-                stack.add(StackValue.floatExpression(IrExpression.floatLiteral(instruction.opcode() - 11.0f)));
-                break;
             case 14:
             case 15:
-                stack.add(StackValue.doubleExpression(IrExpression.doubleLiteral(instruction.opcode() - 14.0)));
+                BytecodeToIRInvokeSupport.pushConstant(classes, classFile, method, instruction, stack);
                 break;
             case 16:
             case 17:

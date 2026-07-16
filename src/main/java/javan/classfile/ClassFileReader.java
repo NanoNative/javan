@@ -386,6 +386,10 @@ public final class ClassFileReader {
     }
 
     private static Optional<Long> longValue(final int opcode, final byte[] operands, final ConstantPool constantPool) {
+        final Optional<Long> smallLong = smallLongLiteral(opcode);
+        if (smallLong.isPresent()) {
+            return smallLong;
+        }
         if (opcode == 20) {
             return constantPool.longValue(index16(operands, 0));
         }
@@ -393,6 +397,10 @@ public final class ClassFileReader {
     }
 
     private static Optional<Float> floatValue(final int opcode, final byte[] operands, final ConstantPool constantPool) {
+        final Optional<Float> smallFloat = smallFloatLiteral(opcode);
+        if (smallFloat.isPresent()) {
+            return smallFloat;
+        }
         if (opcode == 18) {
             return constantPool.floatValue(unsigned(operands[0]));
         }
@@ -403,10 +411,39 @@ public final class ClassFileReader {
     }
 
     private static Optional<Double> doubleValue(final int opcode, final byte[] operands, final ConstantPool constantPool) {
+        final Optional<Double> smallDouble = smallDoubleLiteral(opcode);
+        if (smallDouble.isPresent()) {
+            return smallDouble;
+        }
         if (opcode == 20) {
             return constantPool.doubleValue(index16(operands, 0));
         }
         return Optional.empty();
+    }
+
+    private static Optional<Long> smallLongLiteral(final int opcode) {
+        return switch (opcode) {
+            case 9 -> Optional.of(0L);
+            case 10 -> Optional.of(1L);
+            default -> Optional.empty();
+        };
+    }
+
+    private static Optional<Float> smallFloatLiteral(final int opcode) {
+        return switch (opcode) {
+            case 11 -> Optional.of(0.0f);
+            case 12 -> Optional.of(1.0f);
+            case 13 -> Optional.of(2.0f);
+            default -> Optional.empty();
+        };
+    }
+
+    private static Optional<Double> smallDoubleLiteral(final int opcode) {
+        return switch (opcode) {
+            case 14 -> Optional.of(0.0d);
+            case 15 -> Optional.of(1.0d);
+            default -> Optional.empty();
+        };
     }
 
     private static int instructionLength(final byte[] bytecode, final int offset) throws IOException {
