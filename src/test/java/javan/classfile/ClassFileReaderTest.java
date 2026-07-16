@@ -310,6 +310,30 @@ final class ClassFileReaderTest {
     }
 
     @Test
+    void readerDecodesWideLongLiteral() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(classfileWithWideLongLiteral(new byte[]{20, 0, 5, (byte) 177}, 9L), SOURCE);
+
+        final Instruction instruction = classFile.method("demo", "()V").orElseThrow().code().orElseThrow().instructions().getFirst();
+
+        assertThat(instruction.mnemonic()).isEqualTo("ldc2_w");
+        assertThat(instruction.constantPoolTag()).contains(5);
+        assertThat(instruction.longValue()).contains(9L);
+        assertThat(instruction.doubleValue()).isEmpty();
+    }
+
+    @Test
+    void readerDecodesWideDoubleLiteral() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(classfileWithWideDoubleLiteral(new byte[]{20, 0, 5, (byte) 177}, 2.5d), SOURCE);
+
+        final Instruction instruction = classFile.method("demo", "()V").orElseThrow().code().orElseThrow().instructions().getFirst();
+
+        assertThat(instruction.mnemonic()).isEqualTo("ldc2_w");
+        assertThat(instruction.constantPoolTag()).contains(6);
+        assertThat(instruction.doubleValue()).contains(2.5d);
+        assertThat(instruction.longValue()).isEmpty();
+    }
+
+    @Test
     void readerNormalizesSmallIntegerLiteralInstructions() throws Exception {
         final ClassFile classFile = new ClassFileReader().read(
             minimalClassfile(
@@ -803,10 +827,10 @@ final class ClassFileReaderTest {
             .u2(0)
             .u2(1)
             .u2(0x0009)
-            .u2(6)
             .u2(7)
-            .u2(1)
             .u2(8)
+            .u2(1)
+            .u2(9)
             .u4(12L + code.length)
             .u2(2)
             .u2(1)
@@ -839,10 +863,10 @@ final class ClassFileReaderTest {
             .u2(0)
             .u2(1)
             .u2(0x0009)
-            .u2(6)
             .u2(7)
-            .u2(1)
             .u2(8)
+            .u2(1)
+            .u2(9)
             .u4(12L + code.length)
             .u2(2)
             .u2(1)
@@ -882,6 +906,78 @@ final class ClassFileReaderTest {
             .u2(9)
             .u4(12L + code.length)
             .u2(2)
+            .u2(1)
+            .u4(code.length)
+            .bytes(code)
+            .u2(0)
+            .u2(0)
+            .u2(0)
+            .toByteArray();
+    }
+
+    private static byte[] classfileWithWideLongLiteral(final byte[] code, final long value) {
+        return new Bytes()
+            .u4(0xCAFEBABEL)
+            .u2(0)
+            .u2(65)
+            .u2(10)
+            .utf8("sample/WideLongDemo")
+            .classInfo(1)
+            .utf8("java/lang/Object")
+            .classInfo(3)
+            .rawLong(value)
+            .utf8("demo")
+            .utf8("()V")
+            .utf8("Code")
+            .u2(0x0021)
+            .u2(2)
+            .u2(4)
+            .u2(0)
+            .u2(0)
+            .u2(1)
+            .u2(0x0009)
+            .u2(7)
+            .u2(8)
+            .u2(1)
+            .u2(9)
+            .u4(12L + code.length)
+            .u2(4)
+            .u2(1)
+            .u4(code.length)
+            .bytes(code)
+            .u2(0)
+            .u2(0)
+            .u2(0)
+            .toByteArray();
+    }
+
+    private static byte[] classfileWithWideDoubleLiteral(final byte[] code, final double value) {
+        return new Bytes()
+            .u4(0xCAFEBABEL)
+            .u2(0)
+            .u2(65)
+            .u2(10)
+            .utf8("sample/WideDoubleDemo")
+            .classInfo(1)
+            .utf8("java/lang/Object")
+            .classInfo(3)
+            .rawDouble(value)
+            .utf8("demo")
+            .utf8("()V")
+            .utf8("Code")
+            .u2(0x0021)
+            .u2(2)
+            .u2(4)
+            .u2(0)
+            .u2(0)
+            .u2(1)
+            .u2(0x0009)
+            .u2(7)
+            .u2(8)
+            .u2(1)
+            .u2(9)
+            .u4(12L + code.length)
+            .u2(4)
             .u2(1)
             .u4(code.length)
             .bytes(code)

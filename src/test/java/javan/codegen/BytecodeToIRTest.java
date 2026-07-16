@@ -2947,6 +2947,40 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersLdc2wLongLiteral() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()J",
+            1,
+            0,
+            wideLongConstant(0, 9L),
+            plain(1, 173, "lreturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnLong(IrExpression.longLiteral(9L))
+        );
+    }
+
+    @Test
+    void lowersLdc2wDoubleLiteral() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()D",
+            1,
+            0,
+            wideDoubleConstant(0, 2.5d),
+            plain(1, 175, "dreturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnDouble(IrExpression.doubleLiteral(2.5d))
+        );
+    }
+
+    @Test
     void lowersIincToIntLocalAddAssignment() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -21272,6 +21306,44 @@ final class BytecodeToIRTest {
             Optional.empty(),
             Optional.empty(),
             Optional.of(4)
+        );
+    }
+
+    private static Instruction wideLongConstant(final int offset, final long value) {
+        return new Instruction(
+            offset,
+            20,
+            "ldc2_w",
+            new byte[0],
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(value),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(5)
+        );
+    }
+
+    private static Instruction wideDoubleConstant(final int offset, final double value) {
+        return new Instruction(
+            offset,
+            20,
+            "ldc2_w",
+            new byte[0],
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(value),
+            Optional.empty(),
+            Optional.of(6)
         );
     }
 
