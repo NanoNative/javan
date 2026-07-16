@@ -2117,6 +2117,14 @@ final class BytecodeToIRInvokeSupport {
             )));
             return true;
         }
+        if ("getAllByName".equals(methodRef.name())
+            && "(Ljava/lang/String;)[Ljava/net/InetAddress;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_inet_address_get_all_by_name",
+                List.of(popObject(classFile, method, stack))
+            )));
+            return true;
+        }
         if ("getLoopbackAddress".equals(methodRef.name())
             && "()Ljava/net/InetAddress;".equals(methodRef.descriptor())) {
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_inet_address_loopback", List.of())));

@@ -502,6 +502,7 @@ public final class CompatibilityReports {
             pass("stringbuilder-setlength-overflow-panic"),
             pass("network-address-runtime"),
             pass("network-inetaddress-get-by-name-literal-host"),
+            pass("network-inetaddress-get-all-by-name-literal-host"),
             pass("network-tcp-client-socket"),
             pass("network-tcp-client-socket-ipv6-loopback"),
             pass("network-tcp-client-socket-address"),

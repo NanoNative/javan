@@ -315,6 +315,7 @@ final class RuntimeHeaderFile {
         void* javan_files_new_directory_stream(void* path);
         void* javan_inet_address_loopback(void);
         void* javan_inet_address_get_by_name(void* host);
+        void* javan_inet_address_get_all_by_name(void* host);
         void* javan_inet_address_get_host_address(void* value);
         void* javan_inet_address_get_host_name(void* value);
         void* javan_inet_address_get_canonical_host_name(void* value);

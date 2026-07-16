@@ -7586,6 +7586,42 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersInetAddressGetByNameStaticCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/String;)Ljava/net/InetAddress;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeStatic(1, new MethodRef("java/net/InetAddress", "getByName", "(Ljava/lang/String;)Ljava/net/InetAddress;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall("javan_inet_address_get_by_name", List.of(IrExpression.objectLocal("arg0"))))
+        );
+    }
+
+    @Test
+    void lowersInetAddressGetAllByNameStaticCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/String;)[Ljava/net/InetAddress;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeStatic(1, new MethodRef("java/net/InetAddress", "getAllByName", "(Ljava/lang/String;)[Ljava/net/InetAddress;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall("javan_inet_address_get_all_by_name", List.of(IrExpression.objectLocal("arg0"))))
+        );
+    }
+
+    @Test
     void lowersInetAddressHostNameCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -8218,7 +8254,7 @@ final class BytecodeToIRTest {
         final boolean lowered = BytecodeToIRInvokeSupport.lowerInetAddressIntrinsic(
             sinkClass(),
             method(0x0008, "main", "()V", 0, 0, plain(0, 177, "return")),
-            new MethodRef("java/net/InetAddress", "getAllByName", "(Ljava/lang/String;)[Ljava/net/InetAddress;"),
+            new MethodRef("java/net/InetAddress", "getLocalHost", "()Ljava/net/InetAddress;"),
             new ArrayList<>()
         );
 

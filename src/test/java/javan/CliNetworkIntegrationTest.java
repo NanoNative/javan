@@ -2782,6 +2782,115 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void inetAddressGetAllByNameIpv4LiteralBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("inet-address-get-all-by-name-ipv4");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.InetAddress;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final InetAddress[] addresses = InetAddress.getAllByName("127.0.0.1");
+                    System.out.println(addresses.length);
+                    System.out.println(addresses[0].getHostAddress());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/inet-address-get-all-by-name-ipv4").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void inetAddressGetAllByNameLocalhostBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("inet-address-get-all-by-name-localhost");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.InetAddress;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final InetAddress[] addresses = InetAddress.getAllByName("localhost");
+                    System.out.println(addresses.length);
+                    System.out.println(addresses[0].getHostAddress());
+                    System.out.println(addresses[0].getHostName());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/inet-address-get-all-by-name-localhost").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void inetAddressGetAllByNameIpv6LiteralBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("inet-address-get-all-by-name-ipv6-literal");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.InetAddress;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final InetAddress[] addresses = InetAddress.getAllByName("2001:db8::1");
+                    System.out.println(addresses.length);
+                    System.out.println(addresses[0].getHostAddress());
+                    System.out.println(addresses[0].getHostName());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/inet-address-get-all-by-name-ipv6-literal").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void inetAddressGetAllByNameDnsHostFailsClearlyAtRuntime() throws Exception {
+        final Path project = project("inet-address-get-all-by-name-dns-runtime-fail");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.InetAddress;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    System.out.println(InetAddress.getAllByName("example.com")[0].getHostAddress());
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/inet-address-get-all-by-name-dns-runtime-fail").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("unsupported inet address host");
+    }
+
+    @Test
     void inetAddressGetByNameDnsHostFailsClearlyAtRuntime() throws Exception {
         final Path project = project("inet-address-get-by-name-dns-runtime-fail");
         writeJava(project, "com.acme.Main", """

@@ -638,7 +638,7 @@ final class CliDependencyProjectIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void reachableUnsupportedNetworkCallInsideDependencyFailsClearly() throws Exception {
+    void dependencyJarInetAddressGetAllByNameIpv4LiteralBuilds() throws Exception {
         final Path dependency = dependencyJar("dep-live-network", "dep.Lookup", """
             package dep;
 
@@ -669,17 +669,12 @@ final class CliDependencyProjectIntegrationTest extends CliIntegrationSupport {
             }
             """);
 
+        final String jvmOutput = runJvm(project, "com.acme.Main", List.of(dependency));
         final CliRun run = run(tempDir, "build", project.toString(), "--classpath", dependency.toString());
 
-        assertThat(run.exitCode()).isEqualTo(2);
-        assertThat(run.stderr()).contains(
-            "error[JAVAN061]",
-            "dep/Lookup",
-            "host(Ljava/lang/String;)Ljava/lang/String;",
-            "java/net/InetAddress.getAllByName(Ljava/lang/String;)[Ljava/net/InetAddress;",
-            "network/socket"
-        );
-        assertThat(project.resolve(".javan/bin/dependency-live-network")).doesNotExist();
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/dependency-live-network").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("127.0.0.1\n");
     }
 
     @Test
@@ -720,6 +715,46 @@ final class CliDependencyProjectIntegrationTest extends CliIntegrationSupport {
         assertThat(run.exitCode()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/dependency-inet-address").toString())).stdout()).isEqualTo(jvmOutput);
         assertThat(jvmOutput).isEqualTo("127.0.0.1\n");
+    }
+
+    @Test
+    void dependencyJarInetAddressGetAllByNameDnsHostFailsClearlyAtRuntime() throws Exception {
+        final Path dependency = dependencyJar("dep-live-network-runtime-fail", "dep.Lookup", """
+            package dep;
+
+            import java.net.InetAddress;
+
+            public final class Lookup {
+                private Lookup() {
+                }
+
+                public static String host(final String value) throws Exception {
+                    return InetAddress.getAllByName(value)[0].getHostAddress();
+                }
+            }
+            """);
+        final Path project = project("dependency-live-network-runtime-fail");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import dep.Lookup;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    System.out.println(Lookup.host("example.com"));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString(), "--classpath", dependency.toString());
+
+        assertThat(run.exitCode()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/dependency-live-network-runtime-fail").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("unsupported inet address host");
     }
 
     @Test

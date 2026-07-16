@@ -1125,6 +1125,20 @@ final class RuntimeSourcePlatformSection {
             return javan_inet_address_new(host_address, host_name);
         }
 
+        void* javan_inet_address_get_all_by_name(void* host) {
+            void* address_root = javan_inet_address_get_by_name(host);
+            void* array_root = NULL;
+            void** javan_inet_address_all_roots[] = {
+                (void**) &address_root,
+                (void**) &array_root
+            };
+            javan_root_frame_push(javan_inet_address_all_roots, 2);
+            array_root = javan_object_array_new(1);
+            javan_object_array_set(array_root, 0, address_root);
+            javan_root_frame_pop(javan_inet_address_all_roots);
+            return array_root;
+        }
+
         void* javan_inet_address_get_host_address(void* value) {
             return javan_inet_address_checked(value)->host_address;
         }

@@ -531,6 +531,11 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void jdkCallSupportAcceptsInetAddressGetAllByNameCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/InetAddress", "getAllByName", "(Ljava/lang/String;)[Ljava/net/InetAddress;"))).isTrue();
+    }
+
+    @Test
     void jdkCallSupportAcceptsServerSocketPortConstructor() {
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/ServerSocket", "<init>", "(I)V"))).isTrue();
     }
@@ -588,6 +593,16 @@ final class CoreBehaviorTest {
     void staticVerifierAcceptsReachableInetAddressGetByNameCall() {
         final List<Diagnostic> diagnostics = verifyInstruction(
             instruction(0, 184, "invokestatic", new MethodRef("java/net/InetAddress", "getByName", "(Ljava/lang/String;)Ljava/net/InetAddress;")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableInetAddressGetAllByNameCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 184, "invokestatic", new MethodRef("java/net/InetAddress", "getAllByName", "(Ljava/lang/String;)[Ljava/net/InetAddress;")),
             true
         );
 

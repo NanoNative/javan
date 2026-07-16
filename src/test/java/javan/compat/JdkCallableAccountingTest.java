@@ -1133,4 +1133,10 @@ final class JdkCallableAccountingTest {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/net/InetAddress", "getByName", "(Ljava/lang/String;)Ljava/net/InetAddress;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
+
+    @Test
+    void marksInetAddressGetAllByNameAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/net/InetAddress", "getAllByName", "(Ljava/lang/String;)[Ljava/net/InetAddress;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
 }

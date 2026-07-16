@@ -893,7 +893,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void main(final String[] args) {
-                    final CharSequence value = "nano";
+                    final CharSequence value = "text";
                     System.out.println(value.length());
                 }
             }
@@ -918,7 +918,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void main(final String[] args) {
-                    final CharSequence value = "nano";
+                    final CharSequence value = "text";
                     System.out.println((int) value.charAt(1));
                 }
             }
