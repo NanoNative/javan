@@ -484,6 +484,7 @@ final class RuntimeHeaderFile {
         void* javan_virtual_thread_builder_new(void);
         void* javan_virtual_thread_builder_name(void* value, void* name);
         void* javan_virtual_thread_builder_name_counter(void* value, void* prefix, long long start);
+        void* javan_virtual_thread_builder_inherit_inheritable_thread_locals(void* value, int enabled);
         void* javan_virtual_thread_builder_factory(void* value);
         void* javan_virtual_thread_builder_start(void* value, void* runnable);
         void* javan_virtual_thread_builder_unstarted(void* value, void* runnable);

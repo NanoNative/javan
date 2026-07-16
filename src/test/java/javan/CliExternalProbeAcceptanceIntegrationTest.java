@@ -28,7 +28,8 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
  * External example compatibility smoke only.
  *
  * <p>These probes prove that javan can consume selected real third-party artifacts, but they do
- * not define JDK support rows or compiler-owned scenario coverage.
+ * not define JDK support rows or compiler-owned scenario coverage. This harness must stay
+ * metadata-driven and must not hardcode individual probe identities.
  */
 @Execution(SAME_THREAD)
 @Tag("external-probe")

@@ -6683,6 +6683,98 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void staticVerifierRejectsReachableGenericThreadBuilderInheritInheritableThreadLocalsParameter() {
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "(Ljava/lang/Thread$Builder$OfVirtual;)V",
+                Optional.of(new CodeAttribute(
+                    2,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 42, "aload_0"),
+                        instruction(1, 3, "iconst_0"),
+                        instruction(2, 185, "invokeinterface", new MethodRef(
+                            "java/lang/Thread$Builder$OfVirtual",
+                            "inheritInheritableThreadLocals",
+                            "(Z)Ljava/lang/Thread$Builder$OfVirtual;"
+                        )),
+                        instruction(3, 87, "pop"),
+                        instruction(4, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main),
+            List.of(new EntryPoint(main.name(), "main", "(Ljava/lang/Thread$Builder$OfVirtual;)V"))
+        );
+
+        assertThat(diagnostics)
+            .extracting(Diagnostic::code, Diagnostic::subject)
+            .containsExactly(tuple("JAVAN077", "Thread.Builder.OfVirtual.inheritInheritableThreadLocals(boolean)"));
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableThreadOfVirtualBuilderDisableInheritanceStart() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    2,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instruction(1, 3, "iconst_0"),
+                        instruction(2, 185, "invokeinterface", new MethodRef(
+                            "java/lang/Thread$Builder$OfVirtual",
+                            "inheritInheritableThreadLocals",
+                            "(Z)Ljava/lang/Thread$Builder$OfVirtual;"
+                        )),
+                        classInstruction(3, 187, "new", "com/acme/Task"),
+                        instruction(4, 89, "dup"),
+                        instruction(5, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        instruction(6, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "start", "(Ljava/lang/Runnable;)Ljava/lang/Thread;")),
+                        instruction(7, 87, "pop"),
+                        instruction(8, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
     void staticVerifierRejectsReachableThreadOfVirtualFactoryAliasSlotMismatch() {
         final ClassFile task = classWithMethods(
             "com/acme/Task",

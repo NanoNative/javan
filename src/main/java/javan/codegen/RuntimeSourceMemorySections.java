@@ -135,7 +135,7 @@ final class RuntimeSourceMemorySections {
             int magic;
             int counter_mode;
             int closed;
-            int reserved0;
+            int inherit_inheritable_thread_locals;
             long long next_counter;
             void* fixed_name;
             void* counter_prefix;
@@ -2387,6 +2387,7 @@ final class RuntimeSourceMemorySections {
             int completed;
             int future_cancelled;
             int virtual_thread;
+            int inherit_inheritable_thread_locals;
             int daemon;
             int priority;
             int park_permit;
@@ -2574,7 +2575,7 @@ final class RuntimeSourceMemorySections {
             state->magic = magic;
             state->counter_mode = 0;
             state->closed = 0;
-            state->reserved0 = 0;
+            state->inherit_inheritable_thread_locals = 1;
             state->next_counter = 0;
             state->fixed_name = NULL;
             state->counter_prefix = NULL;
@@ -2653,6 +2654,12 @@ final class RuntimeSourceMemorySections {
             return value;
         }
 
+        void* javan_virtual_thread_builder_inherit_inheritable_thread_locals(void* value, int enabled) {
+            javan_virtual_thread_name_state* state = javan_virtual_thread_builder_checked(value);
+            state->inherit_inheritable_thread_locals = enabled != 0 ? 1 : 0;
+            return value;
+        }
+
         static void* javan_virtual_thread_name_state_next_name(javan_virtual_thread_name_state* state) {
             if (state == NULL) {
                 javan_panic("invalid virtual thread naming state");
@@ -2695,6 +2702,7 @@ final class RuntimeSourceMemorySections {
             );
             javan_virtual_thread_name_state* factory = javan_virtual_thread_factory_checked(factory_value);
             factory->counter_mode = builder->counter_mode;
+            factory->inherit_inheritable_thread_locals = builder->inherit_inheritable_thread_locals;
             factory->next_counter = builder->next_counter;
             factory->fixed_name = builder->fixed_name;
             factory->counter_prefix = builder->counter_prefix;
@@ -2720,6 +2728,7 @@ final class RuntimeSourceMemorySections {
             javan_root_frame_push(roots, 4);
             name_value = javan_virtual_thread_name_state_next_name((javan_virtual_thread_name_state*) state_root);
             thread_value = javan_thread_new_virtual();
+            ((javan_thread*) thread_value)->inherit_inheritable_thread_locals = ((javan_virtual_thread_name_state*) state_root)->inherit_inheritable_thread_locals;
             if (name_value != NULL) {
                 javan_thread_set_name(thread_value, name_value);
             }
@@ -3397,6 +3406,7 @@ final class RuntimeSourceMemorySections {
             object->completed = 0;
             object->future_cancelled = 0;
             object->virtual_thread = 0;
+            object->inherit_inheritable_thread_locals = 1;
             object->daemon = 0;
             object->priority = 5;
             object->park_permit = 0;
@@ -4682,7 +4692,9 @@ final class RuntimeSourceMemorySections {
             javan_thread_enter_live_root(value);
             javan_runtime_lock_enter();
             javan_profile_thread_start_calls_value++;
-            javan_thread_local_inherit_storage(parent, thread);
+            if (thread->inherit_inheritable_thread_locals != 0) {
+                javan_thread_local_inherit_storage(parent, thread);
+            }
             javan_runtime_lock_leave();
             #if defined(_WIN32)
             thread->native_handle = (void*) _beginthreadex(NULL, 0, javan_thread_host_start, value, 0, NULL);

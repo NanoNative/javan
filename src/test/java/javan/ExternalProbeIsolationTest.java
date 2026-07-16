@@ -23,8 +23,6 @@ final class ExternalProbeIsolationTest {
     private static final Path SCRIPT_SOURCES = Path.of(".github/scripts");
     private static final Path DOC_STATUS = Path.of("doc/status");
     private static final Path TEST_RESOURCES = Path.of("src/test/resources");
-    private static final Path EXTERNAL_ACCEPTANCE_TEST =
-        TEST_SOURCES.resolve("javan/CliExternalProbeAcceptanceIntegrationTest.java");
     private static final Path SUPPORT_MATRIX = DOC_STATUS.resolve("support-matrix.md");
     private static final Path SUPPORT_MATRIX_JSON = DOC_STATUS.resolve("support-matrix.json");
     private static final Path JDK_COMPATIBILITY = DOC_STATUS.resolve("jdk-compatibility.md");
@@ -39,8 +37,8 @@ final class ExternalProbeIsolationTest {
     }
 
     @Test
-    void compilerOwnedTestsStayIndependentOfExternalProbeIdentities() throws Exception {
-        assertSourcesExcludeExternalProbeIdentities(TEST_SOURCES, List.of(EXTERNAL_ACCEPTANCE_TEST));
+    void testSourcesStayIndependentOfExternalProbeIdentities() throws Exception {
+        assertSourcesExcludeExternalProbeIdentities(TEST_SOURCES, List.of());
     }
 
     @Test
@@ -194,6 +192,12 @@ final class ExternalProbeIsolationTest {
                     .doesNotContain("ExternalProbe::");
             }
         }
+    }
+
+    @Test
+    void acceptanceBoundaryHarnessStaysMetadataDrivenWithoutHardcodedProbeIdentities() throws Exception {
+        final Path acceptanceTest = TEST_SOURCES.resolve("javan/CliExternalProbeAcceptanceIntegrationTest.java");
+        assertTextExcludesExternalProbeIdentities(Files.readString(acceptanceTest), acceptanceTest);
     }
 
     private static void assertSourcesExcludeExternalProbeIdentities(final Path root, final List<Path> excludedFiles) throws Exception {

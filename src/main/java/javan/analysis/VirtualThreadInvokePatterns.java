@@ -50,6 +50,19 @@ public final class VirtualThreadInvokePatterns {
             || "(Ljava/lang/String;J)Ljava/lang/Thread$Builder$OfVirtual;".equals(methodRef.descriptor());
     }
 
+    public static boolean isThreadBuilderOfVirtualInheritInheritableThreadLocals(final MethodRef methodRef) {
+        if (!isThreadBuilderVirtualOwner(methodRef.owner())) {
+            return false;
+        }
+        if (!"inheritInheritableThreadLocals".equals(methodRef.name())) {
+            return false;
+        }
+        if ("java/lang/Thread$Builder".equals(methodRef.owner())) {
+            return "(Z)Ljava/lang/Thread$Builder;".equals(methodRef.descriptor());
+        }
+        return "(Z)Ljava/lang/Thread$Builder$OfVirtual;".equals(methodRef.descriptor());
+    }
+
     public static int virtualThreadBuilderNameProducerOffset(final MethodRef methodRef) {
         return methodRef.descriptor().contains(";J)") ? 3 : 2;
     }

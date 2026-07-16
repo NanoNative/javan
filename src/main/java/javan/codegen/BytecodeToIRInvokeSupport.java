@@ -4335,6 +4335,9 @@ final class BytecodeToIRInvokeSupport {
                     transparentProducerIndex - VirtualThreadInvokePatterns.virtualThreadBuilderNameProducerOffset(methodRef.orElseThrow())
                 );
             }
+            if (isVirtualThreadBuilderInheritInheritableThreadLocals(methodRef.orElseThrow())) {
+                return supportedVirtualThreadBuilderProducer(classes, instructions, transparentProducerIndex - 2);
+            }
         }
         if (transparentProducerIndex < 1) {
             return false;
@@ -4505,6 +4508,10 @@ final class BytecodeToIRInvokeSupport {
 
     private static boolean isThreadBuilderOfVirtualName(final MethodRef methodRef) {
         return VirtualThreadInvokePatterns.isThreadBuilderOfVirtualName(methodRef);
+    }
+
+    private static boolean isVirtualThreadBuilderInheritInheritableThreadLocals(final MethodRef methodRef) {
+        return VirtualThreadInvokePatterns.isThreadBuilderOfVirtualInheritInheritableThreadLocals(methodRef);
     }
 
     private static int localLoadSlot(final Instruction instruction) {
@@ -5310,6 +5317,15 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.virtualThreadBuilder(IrExpression.objectCall(
                 "javan_virtual_thread_builder_name_counter",
                 List.of(builder.expression().orElse(IrExpression.objectNull()), prefix, start)
+            )));
+            return true;
+        }
+        if (isVirtualThreadBuilderInheritInheritableThreadLocals(methodRef)) {
+            final IrExpression enabled = popInt(classFile, method, stack);
+            final StackValue builder = popVirtualThreadBuilder(classFile, method, instruction, stack);
+            stack.add(StackValue.virtualThreadBuilder(IrExpression.objectCall(
+                "javan_virtual_thread_builder_inherit_inheritable_thread_locals",
+                List.of(builder.expression().orElse(IrExpression.objectNull()), enabled)
             )));
             return true;
         }

@@ -8057,6 +8057,43 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersThreadOfVirtualBuilderDisableInheritanceStartInterfaceCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Runnable;)Ljava/lang/Thread;",
+            2,
+            1,
+            invokeStatic(0, new MethodRef("java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;")),
+            plain(1, 3, "iconst_0"),
+            invokeInterface(2, new MethodRef("java/lang/Thread$Builder$OfVirtual", "inheritInheritableThreadLocals", "(Z)Ljava/lang/Thread$Builder$OfVirtual;")),
+            plain(3, 42, "aload_0"),
+            invokeInterface(4, new MethodRef("java/lang/Thread$Builder$OfVirtual", "start", "(Ljava/lang/Runnable;)Ljava/lang/Thread;")),
+            plain(5, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_virtual_thread_builder_start",
+                    List.of(
+                        IrExpression.objectCall(
+                            "javan_virtual_thread_builder_inherit_inheritable_thread_locals",
+                            List.of(
+                                IrExpression.objectCall("javan_virtual_thread_builder_new", List.of()),
+                                IrExpression.intLiteral(0)
+                            )
+                        ),
+                        IrExpression.objectLocal("arg0")
+                    )
+                )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
     void lowersThreadOfVirtualBuilderUnstartedInterfaceCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -8175,6 +8212,49 @@ final class BytecodeToIRTest {
                         IrExpression.objectCall(
                             "javan_virtual_thread_builder_factory",
                             List.of(IrExpression.objectCall("javan_virtual_thread_builder_new", List.of()))
+                        ),
+                        IrExpression.objectLocal("arg0")
+                    )
+                )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersThreadOfVirtualBuilderDisableInheritanceFactoryNewThreadInterfaceCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Runnable;)Ljava/lang/Thread;",
+            2,
+            1,
+            invokeStatic(0, new MethodRef("java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;")),
+            plain(1, 3, "iconst_0"),
+            invokeInterface(2, new MethodRef("java/lang/Thread$Builder$OfVirtual", "inheritInheritableThreadLocals", "(Z)Ljava/lang/Thread$Builder$OfVirtual;")),
+            invokeInterface(3, new MethodRef("java/lang/Thread$Builder$OfVirtual", "factory", "()Ljava/util/concurrent/ThreadFactory;")),
+            plain(4, 42, "aload_0"),
+            invokeInterface(5, new MethodRef("java/util/concurrent/ThreadFactory", "newThread", "(Ljava/lang/Runnable;)Ljava/lang/Thread;")),
+            plain(6, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_virtual_thread_factory_new_thread",
+                    List.of(
+                        IrExpression.objectCall(
+                            "javan_virtual_thread_builder_factory",
+                            List.of(
+                                IrExpression.objectCall(
+                                    "javan_virtual_thread_builder_inherit_inheritable_thread_locals",
+                                    List.of(
+                                        IrExpression.objectCall("javan_virtual_thread_builder_new", List.of()),
+                                        IrExpression.intLiteral(0)
+                                    )
+                                )
+                            )
                         ),
                         IrExpression.objectLocal("arg0")
                     )

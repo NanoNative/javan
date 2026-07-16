@@ -1331,6 +1331,21 @@ public final class StaticVerifier {
             }
             return false;
         }
+        if (isThreadBuilderVirtualInheritInheritableThreadLocals(methodRef)) {
+            for (int candidateIndex = instructionIndex + 1; candidateIndex < instructions.size(); candidateIndex++) {
+                if (supportsVirtualThreadBuilderStartFromRoot(classes, instructions, candidateIndex, instructionIndex)
+                    || supportsVirtualThreadBuilderUnstartedFromRoot(classes, instructions, candidateIndex, instructionIndex)
+                    || supportsVirtualThreadFactoryNewThreadFromRoot(classes, instructions, candidateIndex, instructionIndex)
+                    || supportsVirtualThreadExecutorFactoryFromRoot(classes, instructions, candidateIndex, instructionIndex)
+                    || supportsVirtualThreadBuilderObservationFromRoot(classes, instructions, candidateIndex, instructionIndex)
+                    || supportsVirtualThreadFactoryObservationFromRoot(classes, instructions, candidateIndex, instructionIndex)
+                    || supportsDiscardedVirtualThreadBuilderFromRoot(classes, instructions, candidateIndex, instructionIndex)
+                    || supportsDiscardedVirtualThreadFactoryFromRoot(classes, instructions, candidateIndex, instructionIndex)) {
+                    return true;
+                }
+            }
+            return false;
+        }
         if (isThreadBuilderVirtualFactory(methodRef)) {
             for (int candidateIndex = instructionIndex + 1; candidateIndex < instructions.size(); candidateIndex++) {
                 if (supportsVirtualThreadFactoryNewThreadFromRoot(classes, instructions, candidateIndex, instructionIndex)
@@ -1592,6 +1607,9 @@ public final class StaticVerifier {
                 -1
             );
         }
+        if (isThreadBuilderVirtualInheritInheritableThreadLocals(rootMethodRef.orElseThrow())) {
+            return supportedVirtualThreadBuilderProducer(classes, instructions, rootProducerIndex - 2, -1);
+        }
         if (isThreadBuilderVirtualFactory(rootMethodRef.orElseThrow())) {
             return supportedVirtualThreadBuilderProducer(classes, instructions, rootProducerIndex - 1, -1);
         }
@@ -1698,6 +1716,14 @@ public final class StaticVerifier {
                     rootProducerIndex
                 );
             }
+            if (isThreadBuilderVirtualInheritInheritableThreadLocals(methodRef.orElseThrow())) {
+                return supportedVirtualThreadBuilderProducer(
+                    classes,
+                    instructions,
+                    transparentProducerIndex - 2,
+                    rootProducerIndex
+                );
+            }
         }
         if (transparentProducerIndex < 2) {
             return false;
@@ -1728,10 +1754,14 @@ public final class StaticVerifier {
             return false;
         }
         final Optional<MethodRef> methodRef = instructions.get(rootProducerIndex).methodRef();
-        if (methodRef.isEmpty() || !isThreadBuilderVirtualName(methodRef.orElseThrow())) {
+        if (methodRef.isEmpty()
+            || (!isThreadBuilderVirtualName(methodRef.orElseThrow())
+            && !isThreadBuilderVirtualInheritInheritableThreadLocals(methodRef.orElseThrow()))) {
             return false;
         }
-        final int receiverIndex = rootProducerIndex - virtualThreadBuilderNameProducerOffset(methodRef.orElseThrow());
+        final int receiverIndex = isThreadBuilderVirtualName(methodRef.orElseThrow())
+            ? rootProducerIndex - virtualThreadBuilderNameProducerOffset(methodRef.orElseThrow())
+            : rootProducerIndex - 2;
         if (receiverIndex < 0) {
             return false;
         }
@@ -2169,6 +2199,10 @@ public final class StaticVerifier {
         return VirtualThreadInvokePatterns.isThreadBuilderOfVirtualName(methodRef);
     }
 
+    private static boolean isThreadBuilderVirtualInheritInheritableThreadLocals(final MethodRef methodRef) {
+        return VirtualThreadInvokePatterns.isThreadBuilderOfVirtualInheritInheritableThreadLocals(methodRef);
+    }
+
     private static int virtualThreadBuilderNameProducerOffset(final MethodRef methodRef) {
         return VirtualThreadInvokePatterns.virtualThreadBuilderNameProducerOffset(methodRef);
     }
@@ -2338,6 +2372,9 @@ public final class StaticVerifier {
             if ("name".equals(methodRef.name())) {
                 return "Thread.Builder.name(...)";
             }
+            if ("inheritInheritableThreadLocals".equals(methodRef.name())) {
+                return "Thread.Builder.inheritInheritableThreadLocals(boolean)";
+            }
             if ("factory".equals(methodRef.name())) {
                 return "Thread.Builder.factory()";
             }
@@ -2351,6 +2388,9 @@ public final class StaticVerifier {
             }
             if ("name".equals(methodRef.name())) {
                 return "Thread.Builder.OfVirtual.name(...)";
+            }
+            if ("inheritInheritableThreadLocals".equals(methodRef.name())) {
+                return "Thread.Builder.OfVirtual.inheritInheritableThreadLocals(boolean)";
             }
             if ("factory".equals(methodRef.name())) {
                 return "Thread.Builder.OfVirtual.factory()";

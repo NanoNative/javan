@@ -25,7 +25,8 @@ at an existing compiler-owned generic regression test, so a real-project smoke c
 without a project-neutral proof in the main javan test line.
 
 The acceptance harness now reads all real-probe metadata through one shared test-only catalog. The
-catalog is allowed to know probe names and coordinates; compiler-owned support tests are not.
+catalog is allowed to load probe names and coordinates from metadata; the harness itself and the
+compiler-owned support line must stay project-neutral.
 
 They are not static compiler knowledge. Upstream project code may change at any time. Javan is
 allowed to keep named smoke probes here only as compatibility evidence for the currently pinned
@@ -51,10 +52,10 @@ Boundary rules:
 - support rows, intrinsics, substitutions, and verifier rules must stay JDK/runtime-shaped
 - external project names may stay hardcoded only in:
   - `src/test/resources/projects/real-probes/*`
-  - `src/test/java/javan/CliExternalProbeAcceptanceIntegrationTest.java`
-  - `src/test/java/javan/ExternalProbeCatalog.java`
-  - `src/test/java/javan/ExternalProbe*.java`
   - this document
+
+The dedicated acceptance harness, generic dependency regressions, and status dashboards are all
+expected to remain metadata-driven and free of hardcoded probe identities.
 
 When one of these probes finds a gap, the durable fix must be captured by compiler-owned tests
 that prove the JDK/runtime shape directly, without naming the upstream project in the core support

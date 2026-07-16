@@ -205,6 +205,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void typedThreadBuilderInheritInheritableThreadLocalsIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Thread$Builder$OfVirtual",
+            "inheritInheritableThreadLocals",
+            "(Z)Ljava/lang/Thread$Builder$OfVirtual;"
+        ))).isTrue();
+    }
+
+    @Test
     void threadYieldIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/Thread",
@@ -1153,6 +1162,15 @@ final class JdkCallSupportTest {
             "java/lang/Thread$Builder$OfVirtual",
             "name",
             "(Ljava/lang/String;J)Ljava/lang/Thread$Builder$OfVirtual;"
+        ))).containsExactly("threads");
+    }
+
+    @Test
+    void typedThreadBuilderInheritInheritableThreadLocalsRequiresThreadsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/lang/Thread$Builder$OfVirtual",
+            "inheritInheritableThreadLocals",
+            "(Z)Ljava/lang/Thread$Builder$OfVirtual;"
         ))).containsExactly("threads");
     }
 
