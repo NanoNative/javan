@@ -35,6 +35,7 @@ fi
 PASS_COUNT=0
 NATIVE_PROFILE_PROJECTS=src/test/resources/projects/native-profile
 NEGATIVE_PROJECTS=src/test/resources/projects/negative
+REAL_PROBES=${JAVAN_REAL_PROBES_DIR:-src/test/resources/projects/real-probes}
 
 pass() {
   PASS_COUNT=$((PASS_COUNT + 1))
@@ -546,119 +547,60 @@ accepts_native_library() {
   pass "$project C ABI smoke"
 }
 
-accepts_optional_typemap_probe() {
-  MAVEN_REPO=${JAVAN_MAVEN_REPO:-${MAVEN_REPO_LOCAL:-$HOME/.m2/repository}}
-  if [ -z "${TYPEMAP_JAR:-}" ] && [ -f "$MAVEN_REPO/berlin/yuna/type-map/2025.06.1521025/type-map-2025.06.1521025.jar" ]; then
-    TYPEMAP_JAR=$MAVEN_REPO/berlin/yuna/type-map/2025.06.1521025/type-map-2025.06.1521025.jar
-    export TYPEMAP_JAR
+accepts_optional_real_probe_dir() {
+  probe_dir=$1
+  probe_name=$(basename "$probe_dir")
+  stdout_file="$TMP/$probe_name.out"
+  stderr_file="$TMP/$probe_name.err"
+  expected_file="$probe_dir/expected.stdout"
+
+  if [ ! -x "$probe_dir/build-example.sh" ]; then
+    fail "$probe_dir missing build-example.sh"
   fi
-  if [ -z "${TYPEMAP_JAR:-}" ] && [ -z "${JAVAN_MAVEN_REPO:-}" ] && ls "$ROOT"/../../TypeMap/target/type-map-*.jar >/dev/null 2>&1; then
-    TYPEMAP_JAR=$(find "$ROOT"/../../TypeMap/target -maxdepth 1 -name 'type-map-*.jar' | sort | tail -1)
-    export TYPEMAP_JAR
+  if [ ! -f "$expected_file" ]; then
+    fail "$probe_dir missing expected.stdout"
   fi
-  if [ -z "${TYPEMAP_JAR:-}" ]; then
-    if [ "${JAVAN_REQUIRE_REAL_PROBES:-}" = "true" ]; then
-      fail "src/test/resources/projects/real-probes/typemap-pair missing TYPEMAP_JAR"
-    fi
-    pass "src/test/resources/projects/real-probes/typemap-pair skipped without TYPEMAP_JAR"
+
+  set +e
+  (
+    cd "$probe_dir" &&
+      JAVAN="$JAVAN_BIN" ./build-example.sh
+  ) >"$stdout_file" 2>"$stderr_file"
+  exit_code=$?
+  set -e
+
+  if [ "$exit_code" -eq 0 ]; then
+    cmp "$expected_file" "$stdout_file" >/dev/null || fail "$probe_dir output mismatch"
+    pass "$probe_dir native probe"
     return 0
   fi
-  (cd "$ROOT/src/test/resources/projects/real-probes/typemap-pair" && JAVAN="$JAVAN_BIN" ./build-example.sh) \
-    >"$TMP/typemap.out" 2>"$TMP/typemap.err" || fail "src/test/resources/projects/real-probes/typemap-pair"
-  assert_contains "$TMP/typemap.out" "value"
-  pass "src/test/resources/projects/real-probes/typemap-pair native probe"
+
+  if [ "$exit_code" -eq 3 ]; then
+    if [ "${JAVAN_REQUIRE_REAL_PROBES:-}" = "true" ]; then
+      fail "$probe_dir missing dependency"
+    fi
+    pass "$probe_dir skipped without dependency"
+    return 0
+  fi
+
+  printf '%s\n' "Command failed: $probe_dir/build-example.sh" >&2
+  printf '%s\n' "--- stdout" >&2
+  cat "$stdout_file" >&2
+  printf '%s\n' "--- stderr" >&2
+  cat "$stderr_file" >&2
+  fail "$probe_dir"
 }
 
-accepts_optional_nano_probe() {
-  MAVEN_REPO=${JAVAN_MAVEN_REPO:-${MAVEN_REPO_LOCAL:-$HOME/.m2/repository}}
-  if [ -z "${NANO_JAR:-}" ] && [ -f "$MAVEN_REPO/org/nanonative/nano/2025.11.3131219/nano-2025.11.3131219.jar" ]; then
-    NANO_JAR=$MAVEN_REPO/org/nanonative/nano/2025.11.3131219/nano-2025.11.3131219.jar
-    export NANO_JAR
-  fi
-  if [ -z "${NANO_JAR:-}" ] && [ -z "${NANO_CLASSES:-}" ] && [ -z "${JAVAN_MAVEN_REPO:-}" ] && [ -d "$ROOT/../../nano/target/classes" ]; then
-    NANO_CLASSES=$ROOT/../../nano/target/classes
-    export NANO_CLASSES
-  fi
-  if [ -z "${NANO_JAR:-}" ] && [ -z "${NANO_CLASSES:-}" ]; then
-    if [ "${JAVAN_REQUIRE_REAL_PROBES:-}" = "true" ]; then
-      fail "src/test/resources/projects/real-probes/nano-metric missing Nano dependency"
-    fi
-    pass "src/test/resources/projects/real-probes/nano-metric skipped without Nano dependency"
-    return 0
-  fi
-  (cd "$ROOT/src/test/resources/projects/real-probes/nano-metric" && JAVAN="$JAVAN_BIN" ./build-example.sh) \
-    >"$TMP/nano.out" 2>"$TMP/nano.err" || fail "src/test/resources/projects/real-probes/nano-metric"
-  assert_contains "$TMP/nano.out" "requests"
-  pass "src/test/resources/projects/real-probes/nano-metric native probe"
-}
-
-accepts_optional_nano_duration_probe() {
-  MAVEN_REPO=${JAVAN_MAVEN_REPO:-${MAVEN_REPO_LOCAL:-$HOME/.m2/repository}}
-  if [ -z "${NANO_JAR:-}" ] && [ -f "$MAVEN_REPO/org/nanonative/nano/2025.11.3131219/nano-2025.11.3131219.jar" ]; then
-    NANO_JAR=$MAVEN_REPO/org/nanonative/nano/2025.11.3131219/nano-2025.11.3131219.jar
-    export NANO_JAR
-  fi
-  if [ -z "${NANO_JAR:-}" ]; then
-    if [ "${JAVAN_REQUIRE_REAL_PROBES:-}" = "true" ]; then
-      fail "src/test/resources/projects/real-probes/nano-duration missing NANO_JAR"
-    fi
-    pass "src/test/resources/projects/real-probes/nano-duration skipped without NANO_JAR"
-    return 0
-  fi
-  (cd "$ROOT/src/test/resources/projects/real-probes/nano-duration" && JAVAN="$JAVAN_BIN" ./build-example.sh) \
-    >"$TMP/nano-duration.out" 2>"$TMP/nano-duration.err" || fail "src/test/resources/projects/real-probes/nano-duration"
-  assert_contains "$TMP/nano-duration.out" "1m 5s"
-  pass "src/test/resources/projects/real-probes/nano-duration native probe"
-}
-
-accepts_optional_nano_scheduler_probe() {
-  MAVEN_REPO=${JAVAN_MAVEN_REPO:-${MAVEN_REPO_LOCAL:-$HOME/.m2/repository}}
-  if [ -z "${NANO_JAR:-}" ] && [ -f "$MAVEN_REPO/org/nanonative/nano/2025.11.3131219/nano-2025.11.3131219.jar" ]; then
-    NANO_JAR=$MAVEN_REPO/org/nanonative/nano/2025.11.3131219/nano-2025.11.3131219.jar
-    export NANO_JAR
-  fi
-  if [ -z "${NANO_JAR:-}" ]; then
-    if [ "${JAVAN_REQUIRE_REAL_PROBES:-}" = "true" ]; then
-      fail "src/test/resources/projects/real-probes/nano-scheduler missing NANO_JAR"
-    fi
-    pass "src/test/resources/projects/real-probes/nano-scheduler skipped without NANO_JAR"
-    return 0
-  fi
-  (cd "$ROOT/src/test/resources/projects/real-probes/nano-scheduler" && JAVAN="$JAVAN_BIN" ./build-example.sh) \
-    >"$TMP/nano-scheduler.out" 2>"$TMP/nano-scheduler.err" || fail "src/test/resources/projects/real-probes/nano-scheduler"
-  assert_contains "$TMP/nano-scheduler.out" "tick"
-  assert_contains "$TMP/nano-scheduler.out" "true"
-  pass "src/test/resources/projects/real-probes/nano-scheduler native probe"
-}
-
-accepts_optional_nano_fixed_rate_scheduler_probe() {
-  MAVEN_REPO=${JAVAN_MAVEN_REPO:-${MAVEN_REPO_LOCAL:-$HOME/.m2/repository}}
-  if [ -z "${NANO_JAR:-}" ] && [ -f "$MAVEN_REPO/org/nanonative/nano/2025.11.3131219/nano-2025.11.3131219.jar" ]; then
-    NANO_JAR=$MAVEN_REPO/org/nanonative/nano/2025.11.3131219/nano-2025.11.3131219.jar
-    export NANO_JAR
-  fi
-  if [ -z "${NANO_JAR:-}" ]; then
-    if [ "${JAVAN_REQUIRE_REAL_PROBES:-}" = "true" ]; then
-      fail "src/test/resources/projects/real-probes/nano-scheduler-fixed-rate missing NANO_JAR"
-    fi
-    pass "src/test/resources/projects/real-probes/nano-scheduler-fixed-rate skipped without NANO_JAR"
-    return 0
-  fi
-  (cd "$ROOT/src/test/resources/projects/real-probes/nano-scheduler-fixed-rate" && JAVAN="$JAVAN_BIN" ./build-example.sh) \
-    >"$TMP/nano-scheduler-fixed-rate.out" 2>"$TMP/nano-scheduler-fixed-rate.err" || fail "src/test/resources/projects/real-probes/nano-scheduler-fixed-rate"
-  assert_contains "$TMP/nano-scheduler-fixed-rate.out" "true"
-  assert_contains "$TMP/nano-scheduler-fixed-rate.out" "done"
-  pass "src/test/resources/projects/real-probes/nano-scheduler-fixed-rate native probe"
+accepts_optional_real_probes() {
+  for probe_dir in $(find "$REAL_PROBES" -mindepth 1 -maxdepth 1 -type d | sort); do
+    accepts_optional_real_probe_dir "$probe_dir"
+  done
 }
 
 cd "$ROOT"
 
 if [ "${JAVAN_ACCEPTANCE_ONLY:-}" = "real-probes" ]; then
-  accepts_optional_typemap_probe
-  accepts_optional_nano_probe
-  accepts_optional_nano_duration_probe
-  accepts_optional_nano_scheduler_probe
-  accepts_optional_nano_fixed_rate_scheduler_probe
+  accepts_optional_real_probes
   printf '%s\n' "Acceptance passed: $PASS_COUNT checks"
   exit 0
 fi
@@ -869,8 +811,6 @@ rejects_check "$NEGATIVE_PROJECTS/unsupported-socket" "error[JAVAN061]"
 rejects_check "$NEGATIVE_PROJECTS/unsupported-server-socket" "error[JAVAN061]"
 rejects_check "$NEGATIVE_PROJECTS/unsupported-http-server-dependency" "error[JAVAN061]"
 
-accepts_optional_typemap_probe
-accepts_optional_nano_probe
-accepts_optional_nano_duration_probe
+accepts_optional_real_probes
 
 printf '%s\n' "Acceptance passed: $PASS_COUNT checks"
