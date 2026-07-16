@@ -21,5 +21,5 @@ if [ -z "$NANO_CLASSPATH" ]; then
 fi
 
 rm -rf "$ROOT/.javan"
-"$JAVAN" build "$ROOT" --classpath "$NANO_CLASSPATH" --output nano-metric >/dev/null
-"$ROOT/.javan/bin/nano-metric"
+"$JAVAN" build "$ROOT" --classpath "$NANO_CLASSPATH" --output third-party-nullable-record >/dev/null
+"$ROOT/.javan/bin/third-party-nullable-record"

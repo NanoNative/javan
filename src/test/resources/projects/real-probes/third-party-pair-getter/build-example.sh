@@ -12,5 +12,5 @@ if [ -z "$TYPEMAP_JAR" ] || [ ! -f "$TYPEMAP_JAR" ]; then
 fi
 
 rm -rf "$ROOT/.javan"
-"$JAVAN" build "$ROOT" --classpath "$TYPEMAP_JAR" --output typemap-pair >/dev/null
-"$ROOT/.javan/bin/typemap-pair"
+"$JAVAN" build "$ROOT" --classpath "$TYPEMAP_JAR" --output third-party-pair-getter >/dev/null
+"$ROOT/.javan/bin/third-party-pair-getter"

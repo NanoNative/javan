@@ -12,5 +12,5 @@ if [ ! -f "$NANO_JAR" ]; then
 fi
 
 rm -rf "$ROOT/.javan"
-"$JAVAN" build "$ROOT" --classpath "$NANO_JAR" --output nano-scheduler-fixed-rate >/dev/null
-"$ROOT/.javan/bin/nano-scheduler-fixed-rate"
+"$JAVAN" build "$ROOT" --classpath "$NANO_JAR" --output third-party-scheduled-executor-fixed-rate >/dev/null
+"$ROOT/.javan/bin/third-party-scheduled-executor-fixed-rate"

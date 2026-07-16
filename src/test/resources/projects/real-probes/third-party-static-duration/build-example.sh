@@ -12,5 +12,5 @@ if [ ! -f "$NANO_JAR" ]; then
 fi
 
 rm -rf "$ROOT/.javan"
-"$JAVAN" build "$ROOT" --classpath "$NANO_JAR" --output nano-duration >/dev/null
-"$ROOT/.javan/bin/nano-duration"
+"$JAVAN" build "$ROOT" --classpath "$NANO_JAR" --output third-party-static-duration >/dev/null
+"$ROOT/.javan/bin/third-party-static-duration"

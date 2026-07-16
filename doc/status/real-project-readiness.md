@@ -76,11 +76,11 @@ Current discovered compatibility snapshot:
 
 | Probe directory | Published artifact shape | Current native expectation | Compiler-owned generic evidence |
 | --- | --- | --- | --- |
-| `src/test/resources/projects/real-probes/typemap-pair` | third-party pair/accessor helper from a published dependency jar | prints `value` | `CliDependencyProjectIntegrationTest.dependencyJarGenericPairGetterBuilds` |
-| `src/test/resources/projects/real-probes/nano-metric` | third-party metric/update helper from a published dependency jar | prints `requests` | `CliDependencyProjectIntegrationTest.dependencyJarNullableRecordAccessorBuilds` |
-| `src/test/resources/projects/real-probes/nano-duration` | third-party static duration-format helper from a published dependency jar | prints `1m 5s` | `CliDependencyProjectIntegrationTest.dependencyJarStaticDurationFormatterBuilds` |
-| `src/test/resources/projects/real-probes/nano-scheduler` | third-party scheduler subclass using one-shot scheduling and shutdown | prints deterministic scheduler lifecycle output | `CliDependencyProjectIntegrationTest.dependencyJarScheduledExecutorSubclassBuilds` |
-| `src/test/resources/projects/real-probes/nano-scheduler-fixed-rate` | third-party scheduler subclass using fixed-rate scheduling, shutdown, and `awaitTermination(...)` | prints deterministic fixed-rate scheduler lifecycle output | `CliDependencyProjectIntegrationTest.dependencyJarScheduledExecutorFixedRateBuilds` |
+| `src/test/resources/projects/real-probes/third-party-pair-getter` | third-party pair/accessor helper from a published dependency jar | prints `value` | `CliDependencyProjectIntegrationTest.dependencyJarGenericPairGetterBuilds` |
+| `src/test/resources/projects/real-probes/third-party-nullable-record` | third-party metric/update helper from a published dependency jar | prints `requests` | `CliDependencyProjectIntegrationTest.dependencyJarNullableRecordAccessorBuilds` |
+| `src/test/resources/projects/real-probes/third-party-static-duration` | third-party static duration-format helper from a published dependency jar | prints `1m 5s` | `CliDependencyProjectIntegrationTest.dependencyJarStaticDurationFormatterBuilds` |
+| `src/test/resources/projects/real-probes/third-party-scheduled-executor` | third-party scheduler subclass using one-shot scheduling and shutdown | prints deterministic scheduler lifecycle output | `CliDependencyProjectIntegrationTest.dependencyJarScheduledExecutorSubclassBuilds` |
+| `src/test/resources/projects/real-probes/third-party-scheduled-executor-fixed-rate` | third-party scheduler subclass using fixed-rate scheduling, shutdown, and `awaitTermination(...)` | prints deterministic fixed-rate scheduler lifecycle output | `CliDependencyProjectIntegrationTest.dependencyJarScheduledExecutorFixedRateBuilds` |
 
 Compiler-owned generic equivalents:
 
