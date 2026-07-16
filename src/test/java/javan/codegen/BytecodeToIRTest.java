@@ -2870,6 +2870,83 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersLdcStringLiteral() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/lang/String;",
+            1,
+            0,
+            stringConstant(0, "hello"),
+            plain(1, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.stringLiteral("hello"))
+        );
+    }
+
+    @Test
+    void lowersLdcIntLiteral() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()I",
+            1,
+            0,
+            intConstant(0, 7),
+            plain(1, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intLiteral(7))
+        );
+    }
+
+    @Test
+    void lowersLdcFloatLiteral() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()F",
+            1,
+            0,
+            floatConstant(0, 1.5f),
+            plain(1, 174, "freturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnFloat(IrExpression.floatLiteral(1.5f))
+        );
+    }
+
+    @Test
+    void lowersLdcClassLiteral() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/lang/Class;",
+            1,
+            0,
+            classInstruction(0, 18, "ldc", "java/lang/String"),
+            plain(1, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_runtime_class_literal",
+                List.of(
+                    IrExpression.stringLiteral("java.lang.String"),
+                    IrExpression.intLiteral(-2001),
+                    IrExpression.intLiteral(0),
+                    IrExpression.intLiteral(0),
+                    IrExpression.intLiteral(0)
+                )
+            ))
+        );
+    }
+
+    @Test
     void lowersLdcwStringLiteral() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -21268,6 +21345,44 @@ final class BytecodeToIRTest {
             Optional.empty(),
             Optional.empty(),
             Optional.of(8)
+        );
+    }
+
+    private static Instruction intConstant(final int offset, final int value) {
+        return new Instruction(
+            offset,
+            18,
+            "ldc",
+            new byte[0],
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(value),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(3)
+        );
+    }
+
+    private static Instruction floatConstant(final int offset, final float value) {
+        return new Instruction(
+            offset,
+            18,
+            "ldc",
+            new byte[0],
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(value),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(4)
         );
     }
 
