@@ -6641,7 +6641,22 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.doubleExpression(IrExpression.doubleLiteral(instruction.doubleValue().orElseThrow())));
             return;
         }
+        if (isLiteralOpcode(instruction.opcode())) {
+            throw unsupportedLiteralConstant(classFile, method, instruction);
+        }
         throw unsupported(classFile, method, instruction);
+    }
+
+    private static boolean isLiteralOpcode(final int opcode) {
+        return switch (opcode) {
+            case 2, 3, 4, 5, 6, 7, 8,
+                 9, 10,
+                 11, 12, 13,
+                 14, 15,
+                 16, 17,
+                 18, 19, 20 -> true;
+            default -> false;
+        };
     }
 
     private static IrExpression classLiteralExpression(

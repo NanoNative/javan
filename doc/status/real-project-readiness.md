@@ -20,9 +20,9 @@ smoke only, driven by per-probe metadata and exact stdout expectations under
 
 Read that literally: upstream project identities are not part of javan's compiler knowledge. They
 are moving upstream artifacts. Javan is only allowed to know them inside the dedicated
-external-smoke boundary. If one of them exposes a compiler gap, the permanent fix belongs in a
-generic JDK/runtime regression first, then the probe stays only as a published-artifact
-compatibility check.
+external-smoke boundary. Compiler-owned tests must stay generic even when an external probe breaks.
+If one of them exposes a compiler gap, the permanent fix belongs in a generic JDK/runtime
+regression first, then the probe stays only as a published-artifact compatibility check.
 
 Each probe now also declares `genericEvidence=...` in `probe.properties`. That metadata must point
 at an existing compiler-owned generic regression test, so a real-project smoke case cannot exist
@@ -124,7 +124,7 @@ uses the pinned published artifacts declared in probe metadata rather than sibli
 Next gates before claiming broader external-service compatibility:
 
 1. done: make the current real-probe set reproducible and required in at least one CI row
-2. done: add negative diagnostics for `Socket`, `ServerSocket`, `HttpClient`, and Nano-style `HttpServer`
+2. done: add negative diagnostics for `Socket`, `ServerSocket`, `HttpClient`, and external `HttpServer`-shaped services
 3. done: report reachable `network`, `socket`, and `http` usage even while unsupported
 4. implement TCP loopback support with close/ownership and sanitizer proof
 5. done partially: implement plain HTTP client loopback support for GET/string, POST+headers/byte[], and PUT byte[], plus raw loopback responder slices over `ServerSocket`/`Socket` for `GET /hello -> 200 pong`, unmatched-route `404`, POST body handling via `Content-Length`, sequential two-connection lifetime, method-plus-path dispatch, multi-class route-handler dispatch, request-header matching, response-header emission, and a request/response object model over router and service classes

@@ -2162,6 +2162,22 @@ public final class BytecodeToIR {
         ));
     }
 
+    static DiagnosticException unsupportedLiteralConstant(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction
+    ) {
+        return new DiagnosticException(Diagnostic.error(
+            "JAVAN040",
+            "literal bytecode is missing decoded constant metadata",
+            classFile.name(),
+            method.name() + method.descriptor(),
+            instructionSubject(instruction),
+            "This instruction should already carry a decoded constant value before native lowering starts. The classfile is malformed or the decoder does not understand this literal shape yet.",
+            "Use a valid classfile for this target JDK version, or keep this code on the JVM until Javan decodes this literal form."
+        ));
+    }
+
     static DiagnosticException invalidStack(
         final ClassFile classFile,
         final MethodInfo method,

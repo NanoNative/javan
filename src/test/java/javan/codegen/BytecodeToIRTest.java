@@ -2600,6 +2600,132 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void rejectsMalformedBipushWithoutDecodedLiteralMetadata() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "()I",
+            1,
+            0,
+            rawPlain(0, 16, "bipush"),
+            plain(1, 172, "ireturn")
+        )))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("bipush");
+                assertThat(exception).hasMessageContaining("literal bytecode is missing decoded constant metadata");
+            });
+    }
+
+    @Test
+    void rejectsMalformedSipushWithoutDecodedLiteralMetadata() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "()I",
+            1,
+            0,
+            rawPlain(0, 17, "sipush"),
+            plain(1, 172, "ireturn")
+        )))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("sipush");
+                assertThat(exception).hasMessageContaining("literal bytecode is missing decoded constant metadata");
+            });
+    }
+
+    @Test
+    void rejectsMalformedLconstWithoutDecodedLiteralMetadata() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "()J",
+            1,
+            0,
+            rawPlain(0, 10, "lconst_1"),
+            plain(1, 173, "lreturn")
+        )))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("lconst_1");
+                assertThat(exception).hasMessageContaining("literal bytecode is missing decoded constant metadata");
+            });
+    }
+
+    @Test
+    void rejectsMalformedFconstWithoutDecodedLiteralMetadata() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "()F",
+            1,
+            0,
+            rawPlain(0, 13, "fconst_2"),
+            plain(1, 174, "freturn")
+        )))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("fconst_2");
+                assertThat(exception).hasMessageContaining("literal bytecode is missing decoded constant metadata");
+            });
+    }
+
+    @Test
+    void rejectsMalformedDconstWithoutDecodedLiteralMetadata() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "()D",
+            1,
+            0,
+            rawPlain(0, 15, "dconst_1"),
+            plain(1, 175, "dreturn")
+        )))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("dconst_1");
+                assertThat(exception).hasMessageContaining("literal bytecode is missing decoded constant metadata");
+            });
+    }
+
+    @Test
+    void rejectsMalformedLdcWithoutDecodedLiteralMetadata() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "()I",
+            1,
+            0,
+            rawPlain(0, 18, "ldc"),
+            plain(1, 172, "ireturn")
+        )))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("ldc");
+                assertThat(exception).hasMessageContaining("literal bytecode is missing decoded constant metadata");
+            });
+    }
+
+    @Test
+    void rejectsMalformedLdc2wWithoutDecodedLiteralMetadata() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "()J",
+            1,
+            0,
+            rawPlain(0, 20, "ldc2_w"),
+            plain(1, 173, "lreturn")
+        )))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("ldc2_w");
+                assertThat(exception).hasMessageContaining("literal bytecode is missing decoded constant metadata");
+            });
+    }
+
+    @Test
     void lowersIincToIntLocalAddAssignment() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -20844,6 +20970,10 @@ final class BytecodeToIRTest {
         return plainOperands(offset, opcode, mnemonic);
     }
 
+    private static Instruction rawPlain(final int offset, final int opcode, final String mnemonic) {
+        return rawPlainOperands(offset, opcode, mnemonic);
+    }
+
     private static Instruction plainOperands(final int offset, final int opcode, final String mnemonic, final int... operands) {
         final byte[] bytes = new byte[operands.length];
         for (int index = 0; index < operands.length; index++) {
@@ -20862,6 +20992,28 @@ final class BytecodeToIRTest {
             normalizedLongValue(opcode),
             normalizedFloatValue(opcode),
             normalizedDoubleValue(opcode),
+            Optional.empty()
+        );
+    }
+
+    private static Instruction rawPlainOperands(final int offset, final int opcode, final String mnemonic, final int... operands) {
+        final byte[] bytes = new byte[operands.length];
+        for (int index = 0; index < operands.length; index++) {
+            bytes[index] = (byte) operands[index];
+        }
+        return new Instruction(
+            offset,
+            opcode,
+            mnemonic,
+            bytes,
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
             Optional.empty()
         );
     }
