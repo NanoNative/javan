@@ -1083,8 +1083,8 @@ final class CliRuntimeFeatureIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void checkRejectsReachableThirdPartyHttpServerDependencyAndReportsHttpRuntimeModules() throws Exception {
-        final Path project = project("unsupported-third-party-http-server-dependency");
+    void checkRejectsReachableExternalHttpServerDependencyAndReportsHttpRuntimeModules() throws Exception {
+        final Path project = project("unsupported-external-http-server-dependency");
         writeJava(project, "com.acme.Main", """
             package com.acme;
 

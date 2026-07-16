@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.nio.charset.MalformedInputException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
@@ -23,6 +24,7 @@ final class ExternalProbeIsolationTest {
     private static final Path SCRIPT_SOURCES = Path.of(".github/scripts");
     private static final Path DOC_STATUS = Path.of("doc/status");
     private static final Path TEST_RESOURCES = Path.of("src/test/resources");
+    private static final Path PUBLIC_EXAMPLE = Path.of("example");
     private static final Path SUPPORT_MATRIX = DOC_STATUS.resolve("support-matrix.md");
     private static final Path SUPPORT_MATRIX_JSON = DOC_STATUS.resolve("support-matrix.json");
     private static final Path JDK_COMPATIBILITY = DOC_STATUS.resolve("jdk-compatibility.md");
@@ -70,20 +72,26 @@ final class ExternalProbeIsolationTest {
     }
 
     @Test
+    void publicExampleStaysIndependentOfExternalProbeIdentities() throws Exception {
+        try (Stream<Path> files = Files.walk(PUBLIC_EXAMPLE)) {
+            final List<Path> exampleFiles = files
+                .filter(Files::isRegularFile)
+                .sorted(Comparator.comparing(Path::toString))
+                .toList();
+            for (final Path file : exampleFiles) {
+                assertTextExcludesExternalProbeIdentitiesIfText(file);
+            }
+        }
+    }
+
+    @Test
     void onlyDedicatedExternalSmokeDocsMayNameExternalProbeIdentities() throws Exception {
-        final Set<Path> allowed = Set.of(
-            DOC_STATUS.resolve("real-project-readiness.md"),
-            Path.of("src/test/resources/projects/README.md")
-        );
         try (Stream<Path> files = Files.walk(Path.of("doc"))) {
             final List<Path> markdownFiles = files
                 .filter(path -> path.toString().endsWith(".md"))
                 .sorted(Comparator.comparing(Path::toString))
                 .toList();
             for (final Path file : markdownFiles) {
-                if (allowed.contains(file)) {
-                    continue;
-                }
                 assertTextExcludesExternalProbeIdentities(Files.readString(file), file);
             }
         }
@@ -128,6 +136,26 @@ final class ExternalProbeIsolationTest {
             .isNotEmpty()
             .doesNotHaveDuplicates()
             .allSatisfy(project -> assertThat(project).isNotBlank());
+    }
+
+    @Test
+    void externalProbeProjectLabelsStayGenericAndProjectNeutral() throws Exception {
+        for (final ExternalProbeCatalog.ExternalProbe probe : ExternalProbeCatalog.realProbes()) {
+            assertThat(probe.project())
+                .as(probe.projectDirectory() + " must keep a generic artifact-smoke label")
+                .startsWith("artifact-");
+            assertThat(probe.project().toLowerCase(java.util.Locale.ROOT))
+                .as(probe.projectDirectory() + " project label must stay free of upstream group and artifact names")
+                .doesNotContain(probe.groupId().toLowerCase(java.util.Locale.ROOT))
+                .doesNotContain(probe.artifactId().toLowerCase(java.util.Locale.ROOT));
+            for (final String identityPackage : probe.identityPackages()) {
+                assertThat(probe.project().toLowerCase(java.util.Locale.ROOT))
+                    .as(probe.projectDirectory() + " project label must stay free of upstream package names")
+                    .doesNotContain(identityPackage.toLowerCase(java.util.Locale.ROOT))
+                    .doesNotContain(identityPackage.replace('.', '/').toLowerCase(java.util.Locale.ROOT))
+                    .doesNotContain(identityPackage.replace(".", "").toLowerCase(java.util.Locale.ROOT));
+            }
+        }
     }
 
     @Test
@@ -199,6 +227,81 @@ final class ExternalProbeIsolationTest {
         assertTextExcludesExternalProbeIdentities(Files.readString(acceptanceTest), acceptanceTest);
     }
 
+    @Test
+    void externalProbeBuildScriptsStayMetadataDrivenAndProjectNeutral() throws Exception {
+        final Path helper = TEST_RESOURCES.resolve("projects/real-probes/build-real-probe.sh");
+        final String helperContent = Files.readString(helper);
+
+        assertThat(helperContent)
+            .contains("probe.properties")
+            .contains("JAVAN_PROBE_CLASSPATH")
+            .contains("JAVAN_PROBE_ARTIFACT")
+            .contains("JAVAN_PROBE_CLASSES");
+        assertOnlyGenericProbeOverrides(helperContent, helper);
+        assertTextExcludesExternalProbeIdentities(helperContent, helper);
+
+        for (final ExternalProbeCatalog.ExternalProbe probe : ExternalProbeCatalog.realProbes()) {
+            final Path script = Path.of(probe.projectDirectory()).resolve("build-example.sh");
+            final String content = Files.readString(script);
+            assertThat(content)
+                .as(script + " should delegate to the shared metadata-driven resolver")
+                .contains("../build-real-probe.sh")
+                .doesNotContain("JAVAN_PROBE_MAVEN_COORDINATE");
+            assertOnlyGenericProbeOverrides(content, script);
+            assertTextExcludesExternalProbeIdentities(content, script);
+        }
+    }
+
+    @Test
+    void externalProbeNonSourceFilesStayGenericOutsideProbeMetadata() throws Exception {
+        for (final ExternalProbeCatalog.ExternalProbe probe : ExternalProbeCatalog.realProbes()) {
+            final Path root = Path.of(probe.projectDirectory());
+            try (Stream<Path> files = Files.walk(root)) {
+                final List<Path> nonSourceFiles = files
+                    .filter(Files::isRegularFile)
+                    .filter(file -> !isGeneratedProbeArtifact(root, file))
+                    .filter(file -> !file.toString().endsWith(".java"))
+                    .filter(file -> !file.getFileName().toString().equals("probe.properties"))
+                    .sorted(Comparator.comparing(Path::toString))
+                    .toList();
+                for (final Path file : nonSourceFiles) {
+                    assertTextExcludesExternalProbeIdentitiesIfText(file);
+                }
+            }
+        }
+    }
+
+    @Test
+    void externalProbeReadmesStayGenericAndMetadataDriven() throws Exception {
+        for (final ExternalProbeCatalog.ExternalProbe probe : ExternalProbeCatalog.realProbes()) {
+            final Path readme = Path.of(probe.projectDirectory()).resolve("README.md");
+            final String content = Files.readString(readme);
+            assertThat(content)
+                .as(readme + " should describe the generic probe override surface")
+                .contains("probe.properties")
+                .contains("JAVAN_MAVEN_REPO");
+            assertOnlyGenericProbeOverrides(content, readme);
+            assertTextExcludesExternalProbeIdentities(content, readme);
+        }
+    }
+
+    private static void assertOnlyGenericProbeOverrides(final String content, final Path file) {
+        final Pattern probeOverride = Pattern.compile("\\b[A-Z][A-Z0-9_]*_(?:JAR|COORDINATE|CLASSPATH|CLASSES)\\b");
+        final List<String> matches = new ArrayList<>();
+        final java.util.regex.Matcher matcher = probeOverride.matcher(content);
+        while (matcher.find()) {
+            final String token = matcher.group();
+            if (!token.equals("JAVAN_PROBE_CLASSPATH")
+                && !token.equals("JAVAN_PROBE_ARTIFACT")
+                && !token.equals("JAVAN_PROBE_CLASSES")) {
+                matches.add(token);
+            }
+        }
+        assertThat(matches)
+            .as(file + " should keep only generic probe override variables")
+            .isEmpty();
+    }
+
     private static void assertSourcesExcludeExternalProbeIdentities(final Path root, final List<Path> excludedFiles) throws Exception {
         final List<Pattern> forbiddenPatterns = ExternalProbeIdentities.identityPatterns();
         try (Stream<Path> files = Files.walk(root)) {
@@ -211,6 +314,17 @@ final class ExternalProbeIsolationTest {
                 assertTextExcludesExternalProbeIdentities(Files.readString(file), file);
             }
         }
+    }
+
+    private static boolean isGeneratedProbeArtifact(final Path root, final Path file) {
+        final Path relative = root.relativize(file);
+        for (final Path segment : relative) {
+            final String name = segment.toString();
+            if (".javan".equals(name) || "target".equals(name) || "build".equals(name) || "out".equals(name)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void assertTextExcludesExternalProbeIdentities(final String content, final Path file) throws IOException {

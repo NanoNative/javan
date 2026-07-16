@@ -10,16 +10,14 @@ The probe exercises the fixed-rate scheduling slice through the pinned artifact:
 scheduled with a later first fire time, the scheduler shuts down before that time, and
 `awaitTermination(...)` returns `true`.
 
-By default the script uses the local Maven Nano jar:
+By default the script resolves the pinned artifact from `probe.properties` through
+`JAVAN_MAVEN_REPO` or `~/.m2/repository`.
+
+Override with one of:
 
 ```sh
-~/.m2/repository/org/nanonative/nano/2025.11.3131219/nano-2025.11.3131219.jar
-```
-
-Override with:
-
-```sh
-NANO_JAR=/path/to/nano.jar ./build-example.sh
+JAVAN_PROBE_ARTIFACT=/path/to/dependency.jar ./build-example.sh
+JAVAN_PROBE_CLASSPATH=/path/to/classpath-entry ./build-example.sh
 ```
 
 Run:

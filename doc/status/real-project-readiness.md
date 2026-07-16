@@ -1,8 +1,10 @@
 # Real Project Readiness
 
-This ledger is one of the dedicated external-smoke boundaries where named third-party
-compatibility probes may stay hardcoded. They are pinned moving snapshots of upstream
-artifacts, not compiler-owned support claims and not internal fixtures.
+This ledger describes the dedicated external-smoke boundary without teaching Javan any
+upstream project identity. Hardcoded upstream coordinates and package names belong only in
+the probe metadata and tiny probe sources under `src/test/resources/projects/real-probes/*`.
+They are pinned moving snapshots of upstream artifacts, not compiler-owned support claims
+and not internal fixtures.
 
 Probe summary:
 
@@ -18,6 +20,11 @@ These external probes are intentionally excluded from `doc/status/support-matrix
 smoke only, driven by per-probe metadata and exact stdout expectations under
 `src/test/resources/projects/real-probes/*`.
 
+The current pinned set is just a moving slice of published third-party artifacts. That is not
+product knowledge, not a support allowlist, and not a stable contract. The compiler-owned test
+and support line must remain generic so the same regressions still make sense after the probe set
+changes.
+
 Read that literally: upstream project identities are not part of javan's compiler knowledge. They
 are moving upstream artifacts. Javan is only allowed to know them inside the dedicated
 external-smoke boundary. Compiler-owned tests must stay generic even when an external probe breaks.
@@ -29,13 +36,17 @@ at an existing compiler-owned generic regression test, so a real-project smoke c
 without a project-neutral proof in the main javan test line.
 
 The acceptance harness now reads all real-probe metadata through one shared test-only catalog. The
-catalog is allowed to load probe names and coordinates from metadata; the harness itself and the
-compiler-owned support line must stay project-neutral.
+catalog is allowed to load probe names and coordinates from metadata; the harness itself, this
+ledger, and the compiler-owned support line must stay project-neutral.
 
 The acceptance harness must also stay directory-name neutral. Probe metadata may use a project
 name that differs from the on-disk probe directory; the harness must copy and run the probe from
 the catalog-provided directory path rather than assuming any external identity maps to a fixed
 resource name.
+
+Local probe helper scripts now follow the same rule: they resolve classpaths from the current
+probe's `probe.properties` metadata and generic `JAVAN_PROBE_*` overrides instead of probe-named
+environment variables or hardcoded artifact paths.
 
 They are not static compiler knowledge. Upstream project code may change at any time. Javan is
 allowed to keep named smoke probes here only as compatibility evidence for the currently pinned
@@ -65,29 +76,19 @@ Boundary rules:
 - compiler-owned tests must stay generic and project-neutral
 - support rows, intrinsics, substitutions, and verifier rules must stay JDK/runtime-shaped
 - external project names may stay hardcoded only in:
-  - `src/test/resources/projects/real-probes/*`
-  - this document
+  - `src/test/resources/projects/real-probes/*/probe.properties`
+  - `src/test/resources/projects/real-probes/*/src/main/java/**`
 
 The dedicated acceptance harness, generic dependency regressions, and status dashboards are all
 expected to remain metadata-driven and free of hardcoded probe identities.
 
 When one of these probes finds a gap, the durable fix must be captured by compiler-owned tests
 that prove the JDK/runtime shape directly, without naming the upstream project in the core support
-line. Probe metadata under `src/test/resources/projects/real-probes/*` and this dedicated ledger
-are intentionally the only places where those project identities may stay hardcoded for acceptance;
+line. Probe metadata and tiny probe source under `src/test/resources/projects/real-probes/*` are
+intentionally the only places where those project identities may stay hardcoded for acceptance;
 Javan itself must not encode project-specific support rules.
 
-Current discovered compatibility snapshot:
-
-| Probe directory | Published artifact shape | Current native expectation | Compiler-owned generic evidence |
-| --- | --- | --- | --- |
-| `src/test/resources/projects/real-probes/third-party-pair-getter` | third-party pair/accessor helper from a published dependency jar | prints `value` | `CliDependencyProjectIntegrationTest.dependencyJarGenericPairGetterBuilds` |
-| `src/test/resources/projects/real-probes/third-party-nullable-record` | third-party metric/update helper from a published dependency jar | prints `requests` | `CliDependencyProjectIntegrationTest.dependencyJarNullableRecordAccessorBuilds` |
-| `src/test/resources/projects/real-probes/third-party-static-duration` | third-party static duration-format helper from a published dependency jar | prints `1m 5s` | `CliDependencyProjectIntegrationTest.dependencyJarStaticDurationFormatterBuilds` |
-| `src/test/resources/projects/real-probes/third-party-scheduled-executor` | third-party scheduler subclass using one-shot scheduling and shutdown | prints deterministic scheduler lifecycle output | `CliDependencyProjectIntegrationTest.dependencyJarScheduledExecutorSubclassBuilds` |
-| `src/test/resources/projects/real-probes/third-party-scheduled-executor-fixed-rate` | third-party scheduler subclass using fixed-rate scheduling, shutdown, and `awaitTermination(...)` | prints deterministic fixed-rate scheduler lifecycle output | `CliDependencyProjectIntegrationTest.dependencyJarScheduledExecutorFixedRateBuilds` |
-
-Compiler-owned generic equivalents:
+Current discovered compatibility shapes:
 
 | External probe shape | Compiler-owned regression evidence |
 | --- | --- |
@@ -112,7 +113,7 @@ long/float/double operations, primitive arrays, basic enum names, closed-world
 virtual/interface dispatch, static fields, reachable class initializers, javac string
 concatenation, basic string intrinsics, exact `LambdaMetafactory` `Function`/`Predicate`
 bridges into `Optional.filter`, `Optional.map`, and `Map.computeIfAbsent`, selected
-third-party static helper code, direct same-method exception catches, uncaught panic-style
+external dependency helper code, direct same-method exception catches, uncaught panic-style
 exceptions, and concrete instance calls.
 
 Known blockers before broader real-project coverage:

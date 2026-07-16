@@ -9,16 +9,14 @@ the generic Javan test line and does not name the upstream project.
 The probe intentionally stays on one helper call. It does not start a service graph and does not
 make any broader framework support claim.
 
-By default the script uses the local Maven Nano jar:
+By default the script resolves the pinned artifact from `probe.properties` through
+`JAVAN_MAVEN_REPO` or `~/.m2/repository`.
+
+Override with one of:
 
 ```sh
-~/.m2/repository/org/nanonative/nano/2025.11.3131219/nano-2025.11.3131219.jar
-```
-
-Override with:
-
-```sh
-NANO_JAR=/path/to/nano.jar ./build-example.sh
+JAVAN_PROBE_ARTIFACT=/path/to/dependency.jar ./build-example.sh
+JAVAN_PROBE_CLASSPATH=/path/to/classpath-entry ./build-example.sh
 ```
 
 Run:
