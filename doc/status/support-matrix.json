@@ -11,8 +11,8 @@
     "rule": "done = supported variants + rejected variants; unknown leftovers must be 0 for a release-gated JDK"
   },
   "counts": {
-    "rows": 140,
-    "pass": 140,
+    "rows": 141,
+    "pass": 141,
     "scoped": 0,
     "target": 0,
     "rejected": 0
@@ -152,6 +152,7 @@
     {"feature": "platform-thread-sleep-uninterrupted", "jdk25": "pass"},
     {"feature": "platform-thread-sleep-entry-interrupted-same-method-catch", "jdk25": "pass"},
     {"feature": "platform-thread-join-entry-interrupted-same-method-catch", "jdk25": "pass"},
+    {"feature": "scheduled-executor-fixed-delay", "jdk25": "pass"},
     {"feature": "platform-thread-current-thread-start-build-reject", "jdk25": "pass"},
     {"feature": "platform-thread-current-thread-join-build-reject", "jdk25": "pass"},
     {"feature": "platform-thread-duplicate-start-build-reject", "jdk25": "pass"},

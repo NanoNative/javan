@@ -3979,8 +3979,10 @@ final class BytecodeToIRInvokeSupport {
                         || VirtualThreadInvokePatterns.isExecutorServiceSubmit(target)
                         || VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorSchedule(target)
                         || VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorScheduleAtFixedRate(target)
+                        || VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorScheduleWithFixedDelay(target)
                         || VirtualThreadInvokePatterns.isScheduledExecutorServiceSchedule(target)
-                        || VirtualThreadInvokePatterns.isScheduledExecutorServiceScheduleAtFixedRate(target)) {
+                        || VirtualThreadInvokePatterns.isScheduledExecutorServiceScheduleAtFixedRate(target)
+                        || VirtualThreadInvokePatterns.isScheduledExecutorServiceScheduleWithFixedDelay(target)) {
                         sawRunnableThreadConstruction = true;
                         final Optional<EntryPoint> resolved = inferVirtualThreadTarget(classes, instructions, index);
                         if (resolved.isPresent()) {
@@ -4040,8 +4042,10 @@ final class BytecodeToIRInvokeSupport {
                         || VirtualThreadInvokePatterns.isExecutorServiceSubmit(target)
                         || VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorSchedule(target)
                         || VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorScheduleAtFixedRate(target)
+                        || VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorScheduleWithFixedDelay(target)
                         || VirtualThreadInvokePatterns.isScheduledExecutorServiceSchedule(target)
-                        || VirtualThreadInvokePatterns.isScheduledExecutorServiceScheduleAtFixedRate(target)) {
+                        || VirtualThreadInvokePatterns.isScheduledExecutorServiceScheduleAtFixedRate(target)
+                        || VirtualThreadInvokePatterns.isScheduledExecutorServiceScheduleWithFixedDelay(target)) {
                         return true;
                     }
                 }
@@ -5268,6 +5272,22 @@ final class BytecodeToIRInvokeSupport {
                 localDeclarations,
                 "javan_scheduled_thread_pool_executor_schedule_at_fixed_rate",
                 List.of(executor.expression().orElse(IrExpression.objectNull()), runnable, initialDelay, period, unit)
+            );
+            return true;
+        }
+        if (VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorScheduleWithFixedDelay(methodRef)
+            || VirtualThreadInvokePatterns.isScheduledExecutorServiceScheduleWithFixedDelay(methodRef)) {
+            final IrExpression unit = popObject(classFile, method, stack);
+            final IrExpression delay = popLong(classFile, method, stack);
+            final IrExpression initialDelay = popLong(classFile, method, stack);
+            final IrExpression runnable = popObject(classFile, method, stack);
+            final StackValue executor = popScheduledThreadPoolExecutor(classFile, method, instruction, stack);
+            pushObjectCall(
+                instructions,
+                stack,
+                localDeclarations,
+                "javan_scheduled_thread_pool_executor_schedule_with_fixed_delay",
+                List.of(executor.expression().orElse(IrExpression.objectNull()), runnable, initialDelay, delay, unit)
             );
             return true;
         }

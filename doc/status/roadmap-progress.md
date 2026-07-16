@@ -27,13 +27,13 @@ Status words are exact. No colors, no mood lighting.
 | Self-check reachable classes | 232 | Current branch verification of `java -cp target/classes javan.Main check target/classes --main javan.Main` on current Javan classes. |
 | Self-check reachable methods | 2,774 | Same current-branch self-check. |
 | Self-check diagnostics | 0 | Current Javan source shape is clean for reachable native self-build analysis. |
-| Scenario ledger done | 140/140 | Named compiler-owned support scenarios with explicit pass/reject status. |
+| Scenario ledger done | 141/141 | Named compiler-owned support scenarios with explicit pass/reject status. |
 | Scenario ledger left | 0 | No named support scenario rows remain outside `pass`/`rejected`. |
-| Exact supported JDK callables | 1179/233225 (0.5%) | Lower-bound callable-member coverage on the scanned Temurin JDK 25.0.2 image for members that already match the exact native support registry on the current branch baseline. |
-| Exact explicit rejected JDK callables | 21679 | Deterministic callable-member rejects currently counted exactly from forbidden APIs, verifier-backed monitor/concurrency members, the deliberate `jdk.jfr.*` owner family, `sun.misc.Unsafe`, the exact `String` regex/formatter/text-normalization plus binary/charset/code-point family, the current exact `StringBuilder`, `StringBuffer`, plus `AbstractStringBuilder` char-sequence/string-buffer/code-point/stream/repeat family, the internal `StringLatin1`, `StringUTF16`, `StringConcatHelper`, plus `StringCoding` owner families including their nested helper classes, the internal `CharacterData*` owner family, the internal `ConditionalSpecialCasing`, `ConditionalSpecialCasing$Entry`, and `String$CaseInsensitiveComparator` owners, the full `java.util.regex.*` owner namespace, the full `java.util.function.*` owner namespace except `java/util/function/Consumer.accept(Ljava/lang/Object;)V`, the full `java.lang.module.*` owner namespace, the full `java.util.stream.*` owner namespace, the full `java.text.*` owner namespace, the full `java.util.zip.*` owner namespace, the full `java.time.format.*` owner namespace, the full `java.math.*` owner namespace, the full `java.nio.charset.*` owner namespace, the full `java.util.concurrent.atomic.*` owner namespace, the full `java.lang.foreign.*` owner namespace, the full `java.lang.invoke.*` owner namespace except the `StringConcatFactory*` bootstrap carve-out and invoke-package platform-throwable owners, the full `java.lang.classfile.*` owner namespace except platform-throwable owners, the full `java.security.*` owner namespace except `java.security.cert.*` and platform-throwable owners, the full `java.security.cert.*` owner namespace except platform-throwable owners, the full `java.time.chrono.*` owner namespace, the full `java.util.logging.*` owner namespace, the full `java.beans.*` owner namespace except platform-throwable owners, plus the full `java.util.concurrent.locks.*` owner namespace. |
-| Exact done JDK callables | 22858/233225 (9.8%) | Lower-bound supported-plus-explicitly-rejected callable-member accounting on the scanned Temurin JDK 25.0.2 image for the current branch baseline. |
-| Exact unknown JDK callables | 210367 | Callable members on the scanned Temurin JDK 25.0.2 image not yet counted as supported or explicitly rejected. |
-| Exact supported JDK callables left | 232046 | Callables on the scanned Temurin JDK 25.0.2 image that are not yet in the exact supported callable ledger. |
+| Exact supported JDK callables | 1181/267886 (0.4%) | Lower-bound callable-member coverage on the scanned JDK 25.0.1 image for members that already match the exact native support registry on the current branch baseline. |
+| Exact explicit rejected JDK callables | 21187 | Deterministic callable-member rejects currently counted exactly from forbidden APIs, verifier-backed monitor/concurrency members, the deliberate `jdk.jfr.*` owner family, `sun.misc.Unsafe`, the exact `String` regex/formatter/text-normalization plus binary/charset/code-point family, the current exact `StringBuilder`, `StringBuffer`, plus `AbstractStringBuilder` char-sequence/string-buffer/code-point/stream/repeat family, the internal `StringLatin1`, `StringUTF16`, `StringConcatHelper`, plus `StringCoding` owner families including their nested helper classes, the internal `CharacterData*` owner family, the internal `ConditionalSpecialCasing`, `ConditionalSpecialCasing$Entry`, and `String$CaseInsensitiveComparator` owners, the full `java.util.regex.*` owner namespace, the full `java.util.function.*` owner namespace except `java/util/function/Consumer.accept(Ljava/lang/Object;)V`, the full `java.lang.module.*` owner namespace, the full `java.util.stream.*` owner namespace, the full `java.text.*` owner namespace, the full `java.util.zip.*` owner namespace, the full `java.time.format.*` owner namespace, the full `java.math.*` owner namespace, the full `java.nio.charset.*` owner namespace, the full `java.util.concurrent.atomic.*` owner namespace, the full `java.lang.foreign.*` owner namespace, the full `java.lang.invoke.*` owner namespace except the `StringConcatFactory*` bootstrap carve-out and invoke-package platform-throwable owners, the full `java.lang.classfile.*` owner namespace except platform-throwable owners, the full `java.security.*` owner namespace except `java.security.cert.*` and platform-throwable owners, the full `java.security.cert.*` owner namespace except platform-throwable owners, the full `java.time.chrono.*` owner namespace, the full `java.util.logging.*` owner namespace, the full `java.beans.*` owner namespace except platform-throwable owners, plus the full `java.util.concurrent.locks.*` owner namespace. |
+| Exact done JDK callables | 22368/267886 (8.3%) | Lower-bound supported-plus-explicitly-rejected callable-member accounting on the scanned JDK 25.0.1 image for the current branch baseline. |
+| Exact unknown JDK callables | 245518 | Callable members on the scanned JDK 25.0.1 image not yet counted as supported or explicitly rejected. |
+| Exact supported JDK callables left | 266705 | Callables on the scanned JDK 25.0.1 image that are not yet in the exact supported callable ledger. |
 | Flow-qualified rejected JDK call shapes | 0 | Separate diagnostic-shape ledger exists now; the current self-check profile has no such diagnostics. |
 | Full first-JDK release gate | 0.0% | Inventory and exact supported callable counts exist, but supported/rejected/unknown accounting for the first release-gated JDK is still incomplete. |
 | CI package target rows | 4 | Linux x64, Linux aarch64, macOS x64, macOS aarch64 are configured. |
@@ -48,8 +48,8 @@ Release accounting rule: a JDK or feature area is not "done" until
 
 | Measure | Done | Total | % | Meaning |
 | --- | ---: | ---: | ---: | --- |
-| Scenario rows fully passing | 140 | 140 | 100.0% | Named deterministic compiler-owned support scenarios implemented and tested. |
-| Scenario rows implemented or scoped | 140 | 140 | 100.0% | Rows with working behavior or an explicit scoped subset. |
+| Scenario rows fully passing | 141 | 141 | 100.0% | Named deterministic compiler-owned support scenarios implemented and tested. |
+| Scenario rows implemented or scoped | 141 | 141 | 100.0% | Rows with working behavior or an explicit scoped subset. |
 | Roadmap rows fully done | 4 | 38 | 10.5% | Big product rows release-gated for their stated scope. |
 | Roadmap rows with implementation evidence | 25 | 38 | 65.8% | Rows marked `Done`, `Partial`, `In progress`, or `Blocked`. |
 | Remote release rows proven | 0 | 4 | 0.0% | Configured Linux/macOS package rows passed on remote CI. |
@@ -60,11 +60,11 @@ Current active inventory: `JDK 25`
 
 | JDK inventory item | Count | Native support claim today |
 | --- | ---: | --- |
-| modules | 69 | inventoried, not fully support-accounted |
-| classes | 27,344 | inventoried, not fully support-accounted |
-| fields | 106,323 | inventoried, not fully support-accounted |
-| constructors | 30,159 | inventoried, not fully support-accounted |
-| methods | 203,066 | inventoried, not fully support-accounted |
+| modules | 84 | inventoried, not fully support-accounted |
+| classes | 32,482 | inventoried, not fully support-accounted |
+| fields | 118,632 | inventoried, not fully support-accounted |
+| constructors | 35,209 | inventoried, not fully support-accounted |
+| methods | 232,677 | inventoried, not fully support-accounted |
 
 This inventory is complete for the scanned image. Exact supported callable-member
 accounting now exists as a lower-bound progress signal, but full native
@@ -77,6 +77,7 @@ movement is tracked separately in `doc/status/real-project-readiness.md`.
 
 | Milestone | Status | Verified result |
 | --- | --- | --- |
+| M161: scheduled-executor fixed-delay bridge | Done | Added deterministic support for `ScheduledThreadPoolExecutor.scheduleWithFixedDelay(...)` and `ScheduledExecutorService.scheduleWithFixedDelay(...)` on the current scheduler runtime slice. Support-registry, reachability, verifier-adjacent dispatch inference, IR lowering, compatibility accounting, and native/JVM parity are now covered with compiler-owned tests, and shutdown-before-first-fire now matches JVM behavior for fixed-delay tasks without naming Nano or TypeMap in the core support line. |
 | M160: explicit socket lifecycle bridge | Done | Added deterministic support for unconnected `Socket()` plus explicit `Socket.connect(SocketAddress)` and unbound `ServerSocket()` plus explicit `ServerSocket.bind(SocketAddress)` lifecycle transitions, including focused support-registry, verifier, IR-lowering, compatibility-accounting, runtime-module reporting, and native/JVM parity coverage on generic compiler-owned probes. |
 | M159: socket channel null bridge | Done | Added deterministic support for `Socket.getChannel()` and `ServerSocket.getChannel()` as null-returning channel parity on the current constructor/runtime slice, with focused support, IR-lowering, compatibility-accounting, and native/JVM parity tests. |
 | M158: inetaddress named-byte-address bridge | Done | Added deterministic support for `InetAddress.getByAddress(String,byte[])` with separate host-name vs canonical-host-name runtime storage, focused support/IR/accounting coverage, native/JVM parity for named loopback, named non-loopback, null-name fallback, IPv6 named loopback, and clear illegal-length rejection. |

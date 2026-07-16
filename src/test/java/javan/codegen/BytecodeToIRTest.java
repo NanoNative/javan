@@ -6263,6 +6263,30 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowerProgramRejectsUnknownExecutorReceiverForScheduledScheduleWithFixedDelay() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/concurrent/ScheduledExecutorService;Ljava/lang/Runnable;)V",
+            8,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            plain(2, 9, "lconst_0"),
+            plain(3, 10, "lconst_1"),
+            getStatic(4, new FieldRef("java/util/concurrent/TimeUnit", "SECONDS", "Ljava/util/concurrent/TimeUnit;")),
+            invokeInterface(5, new MethodRef("java/util/concurrent/ScheduledExecutorService", "scheduleWithFixedDelay", "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;")),
+            plain(6, 87, "pop"),
+            plain(7, 177, "return")
+        )))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN049");
+                assertThat(exception.diagnostic().subject()).isEqualTo("invokeinterface java/util/concurrent/ScheduledExecutorService.scheduleWithFixedDelay(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;");
+                assertThat(exception.diagnostic().reason()).isEqualTo("Expected scheduled thread pool executor receiver value on the bytecode stack, but found object.");
+            });
+    }
+
+    @Test
     void lowerProgramRejectsUnknownExecutorReceiverForScheduledShutdownNow() {
         assertUnknownExecutorReceiverRejected(method(
             0x0008,
@@ -6436,6 +6460,58 @@ final class BytecodeToIRTest {
             plain(12, 10, "lconst_1"),
             getStatic(13, new FieldRef("java/util/concurrent/TimeUnit", "SECONDS", "Ljava/util/concurrent/TimeUnit;")),
             invokeInterface(14, new MethodRef("java/util/concurrent/ScheduledExecutorService", "scheduleAtFixedRate", "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;")),
+            plain(15, 87, "pop"),
+            plain(16, 177, "return")
+        );
+        final ClassFile task = classFile(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            List.of(),
+            List.of(
+                method(0, "<init>", "()V", 0, 1, plain(0, 177, "return")),
+                method(0, "run", "()V", 0, 1, plain(0, 177, "return"))
+            )
+        );
+        final EntryPoint entryPoint = new EntryPoint("com/acme/Main", "main", "()V");
+        final EntryPoint taskRun = new EntryPoint("com/acme/Task", "run", "()V");
+        final Map<String, ClassFile> classes = new LinkedHashMap<>();
+        classes.put("com/acme/Main", classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(main)));
+        classes.put(task.name(), task);
+
+        final IrProgram program = new BytecodeToIR().lower(
+            classes,
+            new CallGraph(entryPoint, List.of(entryPoint, taskRun), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.dispatches()).extracting(IrDispatch::symbol).contains("javan_dispatch_java_lang_Runnable_run___V");
+    }
+
+    @Test
+    void lowerProgramAddsRunnableDispatchForScheduledExecutorServiceScheduleWithFixedDelay() {
+        final MethodInfo main = method(
+            0x0008,
+            "main",
+            "()V",
+            8,
+            1,
+            classInstruction(0, 187, "new", "java/util/concurrent/ScheduledThreadPoolExecutor"),
+            plain(1, 89, "dup"),
+            plain(2, 4, "iconst_1"),
+            invokeSpecial(3, new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+            plain(4, 75, "astore_0"),
+            plain(5, 42, "aload_0"),
+            plain(6, 76, "astore_1"),
+            plain(7, 43, "aload_1"),
+            classInstruction(8, 187, "new", "com/acme/Task"),
+            plain(9, 89, "dup"),
+            invokeSpecial(10, new MethodRef("com/acme/Task", "<init>", "()V")),
+            plain(11, 9, "lconst_0"),
+            plain(12, 10, "lconst_1"),
+            getStatic(13, new FieldRef("java/util/concurrent/TimeUnit", "SECONDS", "Ljava/util/concurrent/TimeUnit;")),
+            invokeInterface(14, new MethodRef("java/util/concurrent/ScheduledExecutorService", "scheduleWithFixedDelay", "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;")),
             plain(15, 87, "pop"),
             plain(16, 177, "return")
         );

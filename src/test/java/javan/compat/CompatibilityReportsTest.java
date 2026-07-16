@@ -76,12 +76,12 @@ final class CompatibilityReportsTest {
         assertThat(summary).contains(
             "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 5, \"leftCallables\": 3, \"coveragePercent\": \"40.0\"}",
             "\"exactJdkCallableAccounting\": {\"supportedCallables\": 2, \"explicitRejectedCallables\": 3, \"doneCallables\": 5, \"unknownCallables\": 0, \"totalCallables\": 5, \"donePercent\": \"100.0\"}",
-            "\"supportRows\": 140",
-            "\"passRows\": 140",
+            "\"supportRows\": 141",
+            "\"passRows\": 141",
             "\"scopedRows\": 0",
             "\"targetRows\": 0",
             "\"rejectedRows\": 0",
-            "\"accountedRows\": 140",
+            "\"accountedRows\": 141",
             "\"unaccountedRows\": 0"
         );
     }
@@ -176,6 +176,7 @@ final class CompatibilityReportsTest {
             "| `platform-thread-sleep-uninterrupted` | pass |",
             "| `platform-thread-sleep-entry-interrupted-same-method-catch` | pass |",
             "| `platform-thread-join-entry-interrupted-same-method-catch` | pass |",
+            "| `scheduled-executor-fixed-delay` | pass |",
             "| `platform-thread-current-thread-start-build-reject` | pass |",
             "| `platform-thread-current-thread-join-build-reject` | pass |",
             "| `platform-thread-duplicate-start-build-reject` | pass |",
@@ -244,6 +245,7 @@ final class CompatibilityReportsTest {
             "\"feature\": \"platform-thread-sleep-uninterrupted\"",
             "\"feature\": \"platform-thread-sleep-entry-interrupted-same-method-catch\"",
             "\"feature\": \"platform-thread-join-entry-interrupted-same-method-catch\"",
+            "\"feature\": \"scheduled-executor-fixed-delay\"",
             "\"feature\": \"platform-thread-current-thread-start-build-reject\"",
             "\"feature\": \"platform-thread-current-thread-join-build-reject\"",
             "\"feature\": \"platform-thread-duplicate-start-build-reject\"",

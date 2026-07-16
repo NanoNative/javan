@@ -457,6 +457,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void scheduledThreadPoolExecutorScheduleWithFixedDelayIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/ScheduledThreadPoolExecutor",
+            "scheduleWithFixedDelay",
+            "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"
+        ))).isTrue();
+    }
+
+    @Test
     void executorAwaitTerminationIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/concurrent/ExecutorService",
@@ -533,6 +542,15 @@ final class JdkCallSupportTest {
         assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
             "java/util/concurrent/ScheduledExecutorService",
             "scheduleAtFixedRate",
+            "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"
+        ))).containsExactly("threads");
+    }
+
+    @Test
+    void scheduledExecutorServiceScheduleWithFixedDelayRequiresThreadsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/concurrent/ScheduledExecutorService",
+            "scheduleWithFixedDelay",
             "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"
         ))).containsExactly("threads");
     }
@@ -654,6 +672,34 @@ final class JdkCallSupportTest {
         )).contains(new javan.classfile.MethodRef(
             "java/util/concurrent/ScheduledThreadPoolExecutor",
             "scheduleAtFixedRate",
+            "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"
+        ));
+    }
+
+    @Test
+    void normalizesInheritedScheduledThreadPoolExecutorScheduleWithFixedDelayCallFromApplicationSubclass() {
+        final ClassFile scheduler = new ClassFile(
+            69,
+            "com/acme/Scheduler",
+            "java/util/concurrent/ScheduledThreadPoolExecutor",
+            0,
+            List.of(),
+            List.of(),
+            List.of(new MethodInfo(0, "<init>", "(I)V", Optional.empty())),
+            Path.of("Scheduler.class"),
+            true
+        );
+
+        assertThat(JdkCallSupport.normalizeInheritedSupportedJdkCall(
+            Map.of(scheduler.name(), scheduler),
+            new javan.classfile.MethodRef(
+                "com/acme/Scheduler",
+                "scheduleWithFixedDelay",
+                "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"
+            )
+        )).contains(new javan.classfile.MethodRef(
+            "java/util/concurrent/ScheduledThreadPoolExecutor",
+            "scheduleWithFixedDelay",
             "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"
         ));
     }

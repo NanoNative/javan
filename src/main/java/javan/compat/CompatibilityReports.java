@@ -554,6 +554,7 @@ public final class CompatibilityReports {
             pass("platform-thread-sleep-uninterrupted"),
             pass("platform-thread-sleep-entry-interrupted-same-method-catch"),
             pass("platform-thread-join-entry-interrupted-same-method-catch"),
+            pass("scheduled-executor-fixed-delay"),
             pass("platform-thread-current-thread-start-build-reject"),
             pass("platform-thread-current-thread-join-build-reject"),
             pass("platform-thread-duplicate-start-build-reject"),

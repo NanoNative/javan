@@ -4143,7 +4143,9 @@ final class RuntimeSourceMemorySections {
         }
 
         static int javan_thread_scheduler_closed(javan_thread* thread) {
-            if (thread == NULL || thread->schedule_mode != 2 || thread->scheduled_executor == NULL) {
+            if (thread == NULL
+                || (thread->schedule_mode != 2 && thread->schedule_mode != 3)
+                || thread->scheduled_executor == NULL) {
                 return 0;
             }
             return javan_scheduled_thread_pool_executor_checked(thread->scheduled_executor)->closed != 0;
@@ -4201,15 +4203,20 @@ final class RuntimeSourceMemorySections {
                         thread->scheduled_first_run_started = 1;
                         javan_thread_run_target(target);
                     }
-                    if (thread->schedule_mode != 2 || thread->scheduled_period_nanos <= 0LL) {
+                    if ((thread->schedule_mode != 2 && thread->schedule_mode != 3) || thread->scheduled_period_nanos <= 0LL) {
                         break;
                     }
                     if (javan_thread_current_interrupted_peek() != 0) {
                         (void) javan_thread_interrupted();
                         break;
                     }
-                    next_fire += thread->scheduled_period_nanos;
-                    long long remaining = next_fire - javan_system_nano_time();
+                    long long remaining;
+                    if (thread->schedule_mode == 2) {
+                        next_fire += thread->scheduled_period_nanos;
+                        remaining = next_fire - javan_system_nano_time();
+                    } else {
+                        remaining = thread->scheduled_period_nanos;
+                    }
                     if (remaining > 0LL && javan_thread_sleep_nanos_interruptible(thread, remaining) != 0) {
                         break;
                     }
@@ -4595,6 +4602,56 @@ final class RuntimeSourceMemorySections {
             return thread_value;
         }
 
+        """;
+
+    private static final String SOURCE_HEAP_ALLOC_SCHEDULE_FIXED_DELAY = """
+        void* javan_scheduled_thread_pool_executor_schedule_with_fixed_delay(
+            void* value,
+            void* runnable,
+            long long initial_delay,
+            long long delay,
+            void* unit
+        ) {
+            void* executor_root = value;
+            void* runnable_root = runnable;
+            void* unit_root = unit;
+            void* thread_value = NULL;
+            void** roots[] = {
+                (void**) &executor_root,
+                (void**) &runnable_root,
+                (void**) &unit_root,
+                (void**) &thread_value
+            };
+            javan_root_frame_push(roots, 4);
+            javan_scheduled_thread_pool_executor_state* state = javan_scheduled_thread_pool_executor_checked(executor_root);
+            if (state->closed != 0) {
+                javan_panic("scheduled thread pool executor is closed");
+            }
+            if (delay <= 0LL) {
+                javan_panic("non-positive scheduleWithFixedDelay delay");
+            }
+            if (state->thread_factory != NULL) {
+                thread_value = javan_virtual_thread_factory_new_thread(state->thread_factory, runnable_root);
+            } else {
+                thread_value = javan_thread_new_virtual();
+                javan_thread_set_target(thread_value, runnable_root);
+            }
+            javan_thread_set_scheduled_task(
+                thread_value,
+                executor_root,
+                3,
+                javan_time_unit_to_nanos(unit_root, initial_delay),
+                javan_time_unit_to_nanos(unit_root, delay)
+            );
+            javan_thread_start(thread_value);
+            javan_list_append_raw(state->threads, thread_value);
+            javan_root_frame_pop(roots);
+            return thread_value;
+        }
+
+        """;
+
+    private static final String SOURCE_HEAP_ALLOC_TAIL_CONTINUED = """
         void javan_scheduled_thread_pool_executor_shutdown(void* value) {
             javan_scheduled_thread_pool_executor_checked(value)->closed = 1;
         }
@@ -7178,6 +7235,8 @@ final class RuntimeSourceMemorySections {
         result = result + SOURCE_HEAP_ALLOC_EXECUTOR;
         result = result + SOURCE_HEAP_ALLOC_DATE_TIME;
         result = result + SOURCE_HEAP_ALLOC_TAIL;
+        result = result + SOURCE_HEAP_ALLOC_SCHEDULE_FIXED_DELAY;
+        result = result + SOURCE_HEAP_ALLOC_TAIL_CONTINUED;
         result = result + SOURCE_HEAP_ATOMIC_INTEGER;
         return result;
     }

@@ -152,6 +152,13 @@ public final class VirtualThreadInvokePatterns {
             .equals(methodRef.descriptor());
     }
 
+    public static boolean isScheduledThreadPoolExecutorScheduleWithFixedDelay(final MethodRef methodRef) {
+        return "java/util/concurrent/ScheduledThreadPoolExecutor".equals(methodRef.owner())
+            && "scheduleWithFixedDelay".equals(methodRef.name())
+            && "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"
+            .equals(methodRef.descriptor());
+    }
+
     public static boolean isScheduledExecutorServiceSchedule(final MethodRef methodRef) {
         return "java/util/concurrent/ScheduledExecutorService".equals(methodRef.owner())
             && "schedule".equals(methodRef.name())
@@ -162,6 +169,13 @@ public final class VirtualThreadInvokePatterns {
     public static boolean isScheduledExecutorServiceScheduleAtFixedRate(final MethodRef methodRef) {
         return "java/util/concurrent/ScheduledExecutorService".equals(methodRef.owner())
             && "scheduleAtFixedRate".equals(methodRef.name())
+            && "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"
+            .equals(methodRef.descriptor());
+    }
+
+    public static boolean isScheduledExecutorServiceScheduleWithFixedDelay(final MethodRef methodRef) {
+        return "java/util/concurrent/ScheduledExecutorService".equals(methodRef.owner())
+            && "scheduleWithFixedDelay".equals(methodRef.name())
             && "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"
             .equals(methodRef.descriptor());
     }

@@ -8113,6 +8113,66 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void reachabilityTracksScheduledExecutorServiceScheduleWithFixedDelayTask() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    8,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        classInstruction(0, 187, "new", "java/util/concurrent/ScheduledThreadPoolExecutor"),
+                        instruction(1, 89, "dup"),
+                        instruction(2, 4, "iconst_1"),
+                        instruction(3, 183, "invokespecial", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+                        instruction(4, 75, "astore_0"),
+                        instruction(5, 42, "aload_0"),
+                        instruction(6, 76, "astore_1"),
+                        instruction(7, 43, "aload_1"),
+                        classInstruction(8, 187, "new", "com/acme/Task"),
+                        instruction(9, 89, "dup"),
+                        instruction(10, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        instruction(11, 9, "lconst_0"),
+                        instruction(12, 10, "lconst_1"),
+                        instruction(13, 178, "getstatic", new FieldRef("java/util/concurrent/TimeUnit", "SECONDS", "Ljava/util/concurrent/TimeUnit;")),
+                        instruction(14, 185, "invokeinterface", new MethodRef("java/util/concurrent/ScheduledExecutorService", "scheduleWithFixedDelay", "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;")),
+                        instruction(15, 87, "pop"),
+                        instruction(16, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(graph.reachableMethods()).contains(new EntryPoint(task.name(), "run", "()V"));
+        assertThat(graph.callEdges()).contains(new CallEdge(
+            new EntryPoint(main.name(), "main", "()V"),
+            new EntryPoint(task.name(), "run", "()V"),
+            CallEdge.Kind.THREAD_START_TASK
+        ));
+    }
+
+    @Test
     void staticVerifierAcceptsReachableVirtualThreadExecutorExecute() {
         final ClassFile task = classWithMethods(
             "com/acme/Task",

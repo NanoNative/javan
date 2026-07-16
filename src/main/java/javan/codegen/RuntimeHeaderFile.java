@@ -475,6 +475,7 @@ final class RuntimeHeaderFile {
         void javan_scheduled_thread_pool_executor_init_full(void* value, int core_pool_size, void* thread_factory, void* rejected_execution_handler);
         void* javan_scheduled_thread_pool_executor_schedule(void* value, void* runnable, long long delay, void* unit);
         void* javan_scheduled_thread_pool_executor_schedule_at_fixed_rate(void* value, void* runnable, long long initial_delay, long long period, void* unit);
+        void* javan_scheduled_thread_pool_executor_schedule_with_fixed_delay(void* value, void* runnable, long long initial_delay, long long delay, void* unit);
         void javan_scheduled_thread_pool_executor_shutdown(void* value);
         int javan_scheduled_thread_pool_executor_await_termination(void* value, long long timeout, void* unit);
         void* javan_scheduled_thread_pool_executor_shutdown_now(void* value);

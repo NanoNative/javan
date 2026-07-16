@@ -165,6 +165,13 @@ final class VirtualThreadInvokePatternsTest {
                 "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"
             )
         )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorScheduleWithFixedDelay(
+            new MethodRef(
+                "java/util/concurrent/ScheduledThreadPoolExecutor",
+                "scheduleWithFixedDelay",
+                "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"
+            )
+        )).isTrue();
         assertThat(VirtualThreadInvokePatterns.isScheduledExecutorServiceSchedule(
             new MethodRef(
                 "java/util/concurrent/ScheduledExecutorService",
@@ -176,6 +183,13 @@ final class VirtualThreadInvokePatternsTest {
             new MethodRef(
                 "java/util/concurrent/ScheduledExecutorService",
                 "scheduleAtFixedRate",
+                "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"
+            )
+        )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isScheduledExecutorServiceScheduleWithFixedDelay(
+            new MethodRef(
+                "java/util/concurrent/ScheduledExecutorService",
+                "scheduleWithFixedDelay",
                 "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"
             )
         )).isTrue();

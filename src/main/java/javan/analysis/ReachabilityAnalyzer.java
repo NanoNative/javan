@@ -152,8 +152,10 @@ public final class ReachabilityAnalyzer {
             || isExecutorSubmit(target)
             || isScheduledThreadPoolExecutorSchedule(target)
             || isScheduledThreadPoolExecutorScheduleAtFixedRate(target)
+            || isScheduledThreadPoolExecutorScheduleWithFixedDelay(target)
             || isScheduledExecutorServiceSchedule(target)
-            || isScheduledExecutorServiceScheduleAtFixedRate(target)) {
+            || isScheduledExecutorServiceScheduleAtFixedRate(target)
+            || isScheduledExecutorServiceScheduleWithFixedDelay(target)) {
             final List<EntryPoint> targets = virtualThreadTargets(classes, current);
             if (!targets.isEmpty()) {
                 work.addAll(targets);
@@ -579,12 +581,20 @@ public final class ReachabilityAnalyzer {
         return VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorScheduleAtFixedRate(target);
     }
 
+    private static boolean isScheduledThreadPoolExecutorScheduleWithFixedDelay(final MethodRef target) {
+        return VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorScheduleWithFixedDelay(target);
+    }
+
     private static boolean isScheduledExecutorServiceSchedule(final MethodRef target) {
         return VirtualThreadInvokePatterns.isScheduledExecutorServiceSchedule(target);
     }
 
     private static boolean isScheduledExecutorServiceScheduleAtFixedRate(final MethodRef target) {
         return VirtualThreadInvokePatterns.isScheduledExecutorServiceScheduleAtFixedRate(target);
+    }
+
+    private static boolean isScheduledExecutorServiceScheduleWithFixedDelay(final MethodRef target) {
+        return VirtualThreadInvokePatterns.isScheduledExecutorServiceScheduleWithFixedDelay(target);
     }
 
     private static boolean isExecutorServiceShutdown(final MethodRef target) {
@@ -680,8 +690,10 @@ public final class ReachabilityAnalyzer {
                 && !isExecutorSubmit(target)
                 && !isScheduledThreadPoolExecutorSchedule(target)
                 && !isScheduledThreadPoolExecutorScheduleAtFixedRate(target)
+                && !isScheduledThreadPoolExecutorScheduleWithFixedDelay(target)
                 && !isScheduledExecutorServiceSchedule(target)
-                && !isScheduledExecutorServiceScheduleAtFixedRate(target)) {
+                && !isScheduledExecutorServiceScheduleAtFixedRate(target)
+                && !isScheduledExecutorServiceScheduleWithFixedDelay(target)) {
                 continue;
             }
             final Optional<EntryPoint> inferredTarget = inferVirtualThreadTarget(classes, instructions, index);
@@ -1050,8 +1062,10 @@ public final class ReachabilityAnalyzer {
                         || isExecutorSubmit(target)
                         || isScheduledThreadPoolExecutorSchedule(target)
                         || isScheduledThreadPoolExecutorScheduleAtFixedRate(target)
+                        || isScheduledThreadPoolExecutorScheduleWithFixedDelay(target)
                         || isScheduledExecutorServiceSchedule(target)
-                        || isScheduledExecutorServiceScheduleAtFixedRate(target)) {
+                        || isScheduledExecutorServiceScheduleAtFixedRate(target)
+                        || isScheduledExecutorServiceScheduleWithFixedDelay(target)) {
                         return true;
                     }
                 }
