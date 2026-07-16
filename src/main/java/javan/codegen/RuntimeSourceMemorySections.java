@@ -3975,10 +3975,15 @@ final class RuntimeSourceMemorySections {
 
         void javan_thread_set_name(void* value, void* name) {
             javan_thread* thread = javan_require_thread(value);
+            javan_objects_require_non_null_msg(name, "null Thread name");
+            thread->name = (char*) name;
+        }
+
+        void javan_thread_set_name_nullable(void* value, void* name) {
             if (name == NULL) {
                 return;
             }
-            thread->name = (char*) name;
+            javan_thread_set_name(value, name);
         }
 
         void javan_thread_set_daemon(void* value, int daemon) {

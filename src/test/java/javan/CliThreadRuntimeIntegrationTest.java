@@ -2371,6 +2371,58 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void threadSetNameBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-set-name");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Thread worker = new Thread();
+                    worker.setName("renamed-worker");
+                    System.out.println(worker.getName());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-set-name").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadSetNameNullFailsClearlyAtRuntime() throws Exception {
+        final Path project = project("thread-set-name-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Thread worker = new Thread();
+                    worker.setName(null);
+                    System.out.println("unreachable");
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/thread-set-name-null").toString()));
+        assertThat(nativeRun.exitCode()).isEqualTo(1);
+        assertThat(nativeRun.stdout()).isEmpty();
+        assertThat(nativeRun.stderr()).contains("null Thread name");
+    }
+
+    @Test
     void threadSleepUninterruptedBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("thread-sleep-uninterrupted");
         writeJava(project, "com.acme.Main", """

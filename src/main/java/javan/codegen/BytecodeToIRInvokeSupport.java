@@ -3928,6 +3928,12 @@ final class BytecodeToIRInvokeSupport {
             instructions.add(IrInstruction.callStaticVoid("javan_thread_set_priority", List.of(receiver, priority)));
             return true;
         }
+        if ("setName".equals(methodRef.name()) && "(Ljava/lang/String;)V".equals(methodRef.descriptor())) {
+            final IrExpression name = popObjectForJdkCall(classFile, method, instruction, stack);
+            final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+            instructions.add(IrInstruction.callStaticVoid("javan_thread_set_name", List.of(receiver, name)));
+            return true;
+        }
         if ("join".equals(methodRef.name()) && "(J)V".equals(methodRef.descriptor())) {
             final IrExpression millis = popLong(classFile, method, stack);
             final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
@@ -5584,7 +5590,7 @@ final class BytecodeToIRInvokeSupport {
         localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
         final IrExpression thread = IrExpression.objectLocal(localName);
         instructions.add(IrInstruction.assignObject(localName, IrExpression.objectCall("javan_thread_new_virtual", List.of())));
-        instructions.add(IrInstruction.callStaticVoid("javan_thread_set_name", List.of(thread, name)));
+        instructions.add(IrInstruction.callStaticVoid("javan_thread_set_name_nullable", List.of(thread, name)));
         instructions.add(IrInstruction.callStaticVoid("javan_thread_set_target", List.of(thread, runnable)));
         if (start) {
             instructions.add(IrInstruction.callStaticVoid("javan_thread_start", List.of(thread)));

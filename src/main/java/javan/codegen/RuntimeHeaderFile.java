@@ -516,6 +516,7 @@ final class RuntimeHeaderFile {
         void* javan_thread_current(void);
         void* javan_thread_get_name(void* value);
         void javan_thread_set_name(void* value, void* name);
+        void javan_thread_set_name_nullable(void* value, void* name);
         void javan_thread_set_daemon(void* value, int daemon);
         int javan_thread_is_daemon(void* value);
         void javan_thread_set_priority(void* value, int priority);

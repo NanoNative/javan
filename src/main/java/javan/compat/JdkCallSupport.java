@@ -159,6 +159,7 @@ public final class JdkCallSupport {
         runtime("Thread.onSpinWait", "java/lang/Thread", "onSpinWait", "()V"),
         runtime("Thread.getPriority", "java/lang/Thread", "getPriority", "()I"),
         runtime("Thread.setPriority", "java/lang/Thread", "setPriority", "(I)V"),
+        runtime("Thread.setName", "java/lang/Thread", "setName", "(Ljava/lang/String;)V"),
         runtime("Thread.sleep", "java/lang/Thread", "sleep", "(J)V", "(JI)V"),
         runtime("Thread.interrupted", "java/lang/Thread", "interrupted", "()Z"),
         runtime("Thread.interrupt", "java/lang/Thread", "interrupt", "()V"),

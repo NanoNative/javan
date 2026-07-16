@@ -7492,7 +7492,7 @@ final class BytecodeToIRTest {
 
         assertThat(function.instructions()).containsExactly(
             IrInstruction.assignObject("object0", IrExpression.objectCall("javan_thread_new_virtual", List.of())),
-            IrInstruction.callStaticVoid("javan_thread_set_name", List.of(IrExpression.objectLocal("object0"), IrExpression.objectNull())),
+            IrInstruction.callStaticVoid("javan_thread_set_name_nullable", List.of(IrExpression.objectLocal("object0"), IrExpression.objectNull())),
             IrInstruction.callStaticVoid("javan_thread_set_target", List.of(IrExpression.objectLocal("object0"), IrExpression.objectLocal("arg0"))),
             IrInstruction.callStaticVoid("javan_thread_start", List.of(IrExpression.objectLocal("object0"))),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
@@ -8411,6 +8411,26 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).containsExactly(
             IrInstruction.assignObject("object0", IrExpression.objectCall("javan_thread_get_name", List.of(IrExpression.objectLocal("arg0")))),
             IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersThreadSetNameInstanceCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Thread;Ljava/lang/String;)V",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/lang/Thread", "setName", "(Ljava/lang/String;)V")),
+            plain(3, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid("javan_thread_set_name", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))),
+            IrInstruction.returnVoid()
         );
     }
 

@@ -241,6 +241,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void threadSetNameIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Thread",
+            "setName",
+            "(Ljava/lang/String;)V"
+        ))).isTrue();
+    }
+
+    @Test
     void threadBuilderUnstartedRequiresThreadsRuntimeModule() {
         assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
             "java/lang/Thread$Builder$OfVirtual",

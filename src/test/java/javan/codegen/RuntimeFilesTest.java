@@ -465,6 +465,7 @@ final class RuntimeFilesTest {
             "void* javan_thread_current(void) {",
             "void* javan_thread_get_name(void* value) {",
             "void javan_thread_set_name(void* value, void* name) {",
+            "void javan_thread_set_name_nullable(void* value, void* name) {",
             "void javan_thread_detach_current(void) {",
             "javan_panic(\"cannot detach current thread with live root frames\")",
             "javan_panic(\"cannot detach current thread with live native resources\")",
