@@ -674,6 +674,42 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void socketGetSoTimeoutIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/Socket",
+            "getSoTimeout",
+            "()I"
+        ))).isTrue();
+    }
+
+    @Test
+    void socketSetSoTimeoutIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/Socket",
+            "setSoTimeout",
+            "(I)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void serverSocketGetSoTimeoutIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/ServerSocket",
+            "getSoTimeout",
+            "()I"
+        ))).isTrue();
+    }
+
+    @Test
+    void serverSocketSetSoTimeoutIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/net/ServerSocket",
+            "setSoTimeout",
+            "(I)V"
+        ))).isTrue();
+    }
+
+    @Test
     void consumerAcceptIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/function/Consumer",

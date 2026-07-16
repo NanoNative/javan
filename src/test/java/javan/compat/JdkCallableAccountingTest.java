@@ -1075,6 +1075,18 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksServerSocketGetSoTimeoutAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/net/ServerSocket", "getSoTimeout", "()I")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksServerSocketSetSoTimeoutAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/net/ServerSocket", "setSoTimeout", "(I)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksServerSocketSetReuseAddressAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/net/ServerSocket", "setReuseAddress", "(Z)V")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
@@ -1101,6 +1113,18 @@ final class JdkCallableAccountingTest {
     @Test
     void marksSocketGetKeepAliveAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/net/Socket", "getKeepAlive", "()Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksSocketGetSoTimeoutAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/net/Socket", "getSoTimeout", "()I")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksSocketSetSoTimeoutAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/net/Socket", "setSoTimeout", "(I)V")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 

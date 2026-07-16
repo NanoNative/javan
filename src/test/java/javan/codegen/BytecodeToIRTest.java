@@ -7679,6 +7679,45 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersSocketGetSoTimeoutCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/Socket;)I",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/net/Socket", "getSoTimeout", "()I")),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignInt("int0", IrExpression.intCall("javan_socket_get_so_timeout", List.of(IrExpression.objectLocal("arg0")))),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
+        );
+    }
+
+    @Test
+    void lowersSocketSetSoTimeoutCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/Socket;I)V",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 27, "iload_1"),
+            invokeVirtual(2, new MethodRef("java/net/Socket", "setSoTimeout", "(I)V")),
+            plain(3, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid("javan_socket_set_so_timeout", List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"))),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
     void lowersSocketGetTcpNoDelayCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -7889,6 +7928,45 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).containsExactly(
             IrInstruction.assignInt("int0", IrExpression.intCall("javan_server_socket_get_reuse_address", List.of(IrExpression.objectLocal("arg0")))),
             IrInstruction.returnInt(IrExpression.intLocal("int0"))
+        );
+    }
+
+    @Test
+    void lowersServerSocketGetSoTimeoutCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/ServerSocket;)I",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/net/ServerSocket", "getSoTimeout", "()I")),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignInt("int0", IrExpression.intCall("javan_server_socket_get_so_timeout", List.of(IrExpression.objectLocal("arg0")))),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
+        );
+    }
+
+    @Test
+    void lowersServerSocketSetSoTimeoutCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/ServerSocket;I)V",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 27, "iload_1"),
+            invokeVirtual(2, new MethodRef("java/net/ServerSocket", "setSoTimeout", "(I)V")),
+            plain(3, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid("javan_server_socket_set_so_timeout", List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"))),
+            IrInstruction.returnVoid()
         );
     }
 

@@ -4455,6 +4455,8 @@ final class BytecodeToIRInvokeSupport {
                 && !"isClosed".equals(methodRef.name())
                 && !"getPort".equals(methodRef.name())
                 && !"getLocalPort".equals(methodRef.name())
+                && !"getSoTimeout".equals(methodRef.name())
+                && !"setSoTimeout".equals(methodRef.name())
                 && !"getTcpNoDelay".equals(methodRef.name())
                 && !"setTcpNoDelay".equals(methodRef.name())
                 && !"getKeepAlive".equals(methodRef.name())
@@ -4480,6 +4482,12 @@ final class BytecodeToIRInvokeSupport {
                 instructions.add(IrInstruction.callStaticVoid("javan_socket_set_keep_alive", List.of(receiver, enabled)));
                 return true;
             }
+            if ("setSoTimeout".equals(methodRef.name()) && "(I)V".equals(methodRef.descriptor())) {
+                final IrExpression timeout = popInt(classFile, method, stack);
+                final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+                instructions.add(IrInstruction.callStaticVoid("javan_socket_set_so_timeout", List.of(receiver, timeout)));
+                return true;
+            }
             final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
             if ("isConnected".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor())) {
                 pushIntCall(instructions, stack, localDeclarations, "javan_socket_is_connected", List.of(receiver));
@@ -4495,6 +4503,10 @@ final class BytecodeToIRInvokeSupport {
             }
             if ("getLocalPort".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
                 pushIntCall(instructions, stack, localDeclarations, "javan_socket_get_local_port", List.of(receiver));
+                return true;
+            }
+            if ("getSoTimeout".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
+                pushIntCall(instructions, stack, localDeclarations, "javan_socket_get_so_timeout", List.of(receiver));
                 return true;
             }
             if ("getTcpNoDelay".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor())) {
@@ -4546,12 +4558,20 @@ final class BytecodeToIRInvokeSupport {
         }
         if (!"getInetAddress".equals(methodRef.name())
             && !"getLocalPort".equals(methodRef.name())
+            && !"getSoTimeout".equals(methodRef.name())
+            && !"setSoTimeout".equals(methodRef.name())
             && !"getReuseAddress".equals(methodRef.name())
             && !"setReuseAddress".equals(methodRef.name())
             && !"getLocalSocketAddress".equals(methodRef.name())
             && !"accept".equals(methodRef.name())
             && !"close".equals(methodRef.name())) {
             return false;
+        }
+        if ("setSoTimeout".equals(methodRef.name()) && "(I)V".equals(methodRef.descriptor())) {
+            final IrExpression timeout = popInt(classFile, method, stack);
+            final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+            instructions.add(IrInstruction.callStaticVoid("javan_server_socket_set_so_timeout", List.of(receiver, timeout)));
+            return true;
         }
         if ("setReuseAddress".equals(methodRef.name()) && "(Z)V".equals(methodRef.descriptor())) {
             final IrExpression enabled = popInt(classFile, method, stack);
@@ -4566,6 +4586,10 @@ final class BytecodeToIRInvokeSupport {
         }
         if ("getLocalPort".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
             pushIntCall(instructions, stack, localDeclarations, "javan_server_socket_get_local_port", List.of(receiver));
+            return true;
+        }
+        if ("getSoTimeout".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
+            pushIntCall(instructions, stack, localDeclarations, "javan_server_socket_get_so_timeout", List.of(receiver));
             return true;
         }
         if ("getReuseAddress".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor())) {

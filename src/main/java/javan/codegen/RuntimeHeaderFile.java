@@ -330,6 +330,8 @@ final class RuntimeHeaderFile {
         int javan_socket_is_closed(void* value);
         int javan_socket_get_port(void* value);
         int javan_socket_get_local_port(void* value);
+        int javan_socket_get_so_timeout(void* value);
+        void javan_socket_set_so_timeout(void* value, int timeout_millis);
         int javan_socket_get_tcp_no_delay(void* value);
         void javan_socket_set_tcp_no_delay(void* value, int enabled);
         int javan_socket_get_keep_alive(void* value);
@@ -354,6 +356,8 @@ final class RuntimeHeaderFile {
         void* javan_server_socket_bind_config(void* host, int port, int backlog);
         void* javan_server_socket_get_inet_address(void* value);
         int javan_server_socket_get_local_port(void* value);
+        int javan_server_socket_get_so_timeout(void* value);
+        void javan_server_socket_set_so_timeout(void* value, int timeout_millis);
         int javan_server_socket_get_reuse_address(void* value);
         void javan_server_socket_set_reuse_address(void* value, int enabled);
         void* javan_server_socket_get_local_socket_address(void* value);

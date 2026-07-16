@@ -1349,6 +1349,41 @@ final class RuntimeSourcePlatformSection {
             }
         }
 
+        static int javan_socket_timeout_checked(int timeout_millis) {
+            if (timeout_millis < 0) {
+                javan_panic("negative socket timeout");
+            }
+            return timeout_millis;
+        }
+
+        static void javan_socket_apply_receive_timeout(int fd, int timeout_millis, const char* message) {
+            struct timeval timeout;
+            timeout.tv_sec = (time_t) (timeout_millis / 1000);
+            timeout.tv_usec = (suseconds_t) ((timeout_millis % 1000) * 1000);
+            if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, (const void*) &timeout, (socklen_t) sizeof(timeout)) != 0) {
+                javan_panic(message);
+            }
+        }
+
+        static void javan_socket_wait_readable(int fd, int timeout_millis, const char* timeout_message, const char* wait_message) {
+            if (timeout_millis <= 0) {
+                return;
+            }
+            fd_set read_set;
+            FD_ZERO(&read_set);
+            FD_SET(fd, &read_set);
+            struct timeval timeout;
+            timeout.tv_sec = (time_t) (timeout_millis / 1000);
+            timeout.tv_usec = (suseconds_t) ((timeout_millis % 1000) * 1000);
+            int ready = select(fd + 1, &read_set, NULL, NULL, &timeout);
+            if (ready == 0) {
+                javan_panic(timeout_message);
+            }
+            if (ready < 0) {
+                javan_panic(wait_message);
+            }
+        }
+
         static void javan_socket_populate_names(int fd, void** local_address_out, int* local_port_out, void** remote_address_out, int* remote_port_out) {
             struct sockaddr_storage local_address;
             socklen_t local_length = sizeof(local_address);
@@ -1404,6 +1439,7 @@ final class RuntimeSourcePlatformSection {
             socket->closed = 0;
             socket->local_port = local_port;
             socket->remote_port = remote_port;
+            socket->so_timeout = 0;
             socket->tcp_no_delay = tcp_no_delay;
             socket->keep_alive = keep_alive;
             socket->local_address = (javan_inet_address*) local_address;
@@ -1552,6 +1588,23 @@ final class RuntimeSourcePlatformSection {
             return javan_socket_checked(value)->local_port;
         }
 
+        int javan_socket_get_so_timeout(void* value) {
+            return javan_socket_checked(value)->so_timeout;
+        }
+
+        void javan_socket_set_so_timeout(void* value, int timeout_millis) {
+        #if defined(_WIN32)
+            (void) value;
+            (void) timeout_millis;
+            javan_socket_runtime_unsupported();
+        #else
+            javan_socket* socket = javan_socket_open_checked(value);
+            int timeout = javan_socket_timeout_checked(timeout_millis);
+            javan_socket_apply_receive_timeout(socket->fd, timeout, "socket SO_RCVTIMEO update failed");
+            socket->so_timeout = timeout;
+        #endif
+        }
+
         int javan_socket_get_tcp_no_delay(void* value) {
             return javan_socket_checked(value)->tcp_no_delay;
         }
@@ -1618,9 +1671,13 @@ final class RuntimeSourcePlatformSection {
         #else
             javan_socket_input_stream_value* stream = javan_socket_input_stream_checked(value);
             javan_socket* socket = javan_socket_open_checked((void*) stream->socket);
+            javan_socket_wait_readable(socket->fd, socket->so_timeout, "socket read timed out", "socket read wait failed");
             unsigned char byte = 0;
             ssize_t result = recv(socket->fd, &byte, 1, 0);
             if (result < 0) {
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    javan_panic("socket read timed out");
+                }
                 javan_panic("socket read failed");
             }
             if (result == 0) {
@@ -1653,8 +1710,12 @@ final class RuntimeSourcePlatformSection {
             }
             javan_socket_input_stream_value* stream = javan_socket_input_stream_checked(value);
             javan_socket* socket = javan_socket_open_checked((void*) stream->socket);
+            javan_socket_wait_readable(socket->fd, socket->so_timeout, "socket read timed out", "socket read wait failed");
             ssize_t result = recv(socket->fd, bytes->values + offset, (size_t) length, 0);
             if (result < 0) {
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    javan_panic("socket read timed out");
+                }
                 javan_panic("socket read failed");
             }
             if (result == 0) {
@@ -1788,8 +1849,9 @@ final class RuntimeSourcePlatformSection {
             socket->fd = fd;
             socket->closed = 0;
             socket->local_port = javan_socket_port_from_sockaddr((const struct sockaddr*) &bound);
+            socket->so_timeout = 0;
             socket->reuse_address = javan_socket_getsockopt_flag(fd, SOL_SOCKET, SO_REUSEADDR, "server socket SO_REUSEADDR lookup failed");
-            socket->reserved1 = 0;
+            socket->reserved0 = 0;
             socket->local_address = (javan_inet_address*) local_address;
             javan_update_runtime_allocation_kind((void*) socket, JAVAN_RUNTIME_KIND_SERVER_SOCKET);
             javan_root_frame_pop(javan_server_socket_owner_roots);
@@ -1800,6 +1862,26 @@ final class RuntimeSourcePlatformSection {
 
         int javan_server_socket_get_local_port(void* value) {
             return javan_server_socket_checked(value)->local_port;
+        }
+
+        int javan_server_socket_get_so_timeout(void* value) {
+            return javan_server_socket_checked(value)->so_timeout;
+        }
+
+        void javan_server_socket_set_so_timeout(void* value, int timeout_millis) {
+        #if defined(_WIN32)
+            (void) value;
+            (void) timeout_millis;
+            javan_socket_runtime_unsupported();
+        #else
+            javan_server_socket* socket = javan_server_socket_checked(value);
+            if (socket->closed != 0 || socket->fd < 0) {
+                javan_panic("server socket is closed");
+            }
+            int timeout = javan_socket_timeout_checked(timeout_millis);
+            javan_socket_apply_receive_timeout(socket->fd, timeout, "server socket SO_RCVTIMEO update failed");
+            socket->so_timeout = timeout;
+        #endif
         }
 
         void* javan_server_socket_get_inet_address(void* value) {
@@ -1840,8 +1922,12 @@ final class RuntimeSourcePlatformSection {
             if (server->closed != 0 || server->fd < 0) {
                 javan_panic("server socket is closed");
             }
+            javan_socket_wait_readable(server->fd, server->so_timeout, "server socket accept timed out", "server socket accept wait failed");
             int accepted = accept(server->fd, NULL, NULL);
             if (accepted < 0) {
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    javan_panic("server socket accept timed out");
+                }
                 javan_panic("server socket accept failed");
             }
             return javan_socket_wrap_connected_fd(accepted);

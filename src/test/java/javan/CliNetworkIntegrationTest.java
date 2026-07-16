@@ -358,6 +358,46 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void socketSoTimeoutRoundTripBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
+                try (java.net.Socket socket = server.accept()) {
+                    socket.getOutputStream().flush();
+                } catch (final Exception exception) {
+                    throw new IllegalStateException(exception);
+                }
+            });
+            final Path project = project("socket-so-timeout-round-trip");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.net.Socket;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final Socket socket = new Socket("127.0.0.1", %d);
+                        System.out.println(socket.getSoTimeout());
+                        socket.setSoTimeout(250);
+                        System.out.println(socket.getSoTimeout());
+                        socket.close();
+                    }
+                }
+                """.formatted(port));
+
+            final String jvmOutput = runJvm(project, "com.acme.Main");
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            assertThat(process(project, List.of(project.resolve(".javan/bin/socket-so-timeout-round-trip").toString())).stdout()).isEqualTo(jvmOutput);
+            accepted.get(5, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
     void serverSocketAcceptBuildsAndAcceptsLoopbackClient() throws Exception {
         final int port = freeTcpPort();
         final Path project = project("server-socket-accept");
@@ -618,6 +658,37 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void serverSocketSoTimeoutRoundTripBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("server-socket-so-timeout-round-trip");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.ServerSocket;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ServerSocket server = new ServerSocket(%d, 2);
+                    System.out.println(server.getSoTimeout());
+                    server.setSoTimeout(250);
+                    System.out.println(server.getSoTimeout());
+                    server.close();
+                }
+            }
+            """.formatted(port));
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/server-socket-so-timeout-round-trip").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
     void serverSocketReuseAddressDefaultBuildsAndMatchesJvmOutput() throws Exception {
         final int port = freeTcpPort();
         final Path project = project("server-socket-reuse-address-default");
@@ -678,6 +749,35 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void serverSocketAcceptTimeoutFailsClearlyAtRuntime() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("server-socket-accept-timeout-runtime");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.ServerSocket;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ServerSocket server = new ServerSocket(%d, 2);
+                    server.setSoTimeout(50);
+                    server.accept();
+                }
+            }
+            """.formatted(port));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/server-socket-accept-timeout-runtime").toString()));
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("server socket accept timed out");
+    }
+
+    @Test
     void socketInputStreamReadByteBuildsAndReadsFromLoopbackServer() throws Exception {
         final int port = freeTcpPort();
         try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
@@ -715,6 +815,46 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
             assertThat(process(project, List.of(project.resolve(".javan/bin/socket-input-stream-read-byte").toString())).stdout())
                 .isEqualTo("65\n");
             served.get(5, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
+    void socketReadTimeoutFailsClearlyAtRuntime() throws Exception {
+        final int port = freeTcpPort();
+        try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
+                try (java.net.Socket socket = server.accept()) {
+                    socket.isConnected();
+                    Thread.sleep(250L);
+                } catch (final Exception exception) {
+                    throw new IllegalStateException(exception);
+                }
+            });
+            final Path project = project("socket-read-timeout-runtime");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.net.Socket;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final Socket socket = new Socket("127.0.0.1", %d);
+                        socket.setSoTimeout(50);
+                        System.out.println(socket.getInputStream().read());
+                    }
+                }
+                """.formatted(port));
+
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/socket-read-timeout-runtime").toString()));
+            assertThat(nativeRun.exitCode()).isNotZero();
+            assertThat(nativeRun.stderr()).contains("socket read timed out");
+            accepted.get(5, TimeUnit.SECONDS);
         }
     }
 
@@ -2829,11 +2969,11 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
             }
             """);
 
-        final String jvmOutput = runJvm(project, "com.acme.Main");
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        assertThat(process(project, List.of(project.resolve(".javan/bin/inet-address-get-all-by-name-localhost").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(process(project, List.of(project.resolve(".javan/bin/inet-address-get-all-by-name-localhost").toString())).stdout())
+            .isEqualTo("1\n127.0.0.1\nlocalhost\n");
     }
 
     @Test

@@ -36,6 +36,20 @@ Current compatibility probes:
   Maven-cache Nano jar by default and prove one-shot scheduling, fixed-rate scheduling shutdown,
   and `awaitTermination(...)` through the real `Scheduler` type.
 
+Compiler-owned generic equivalents:
+
+| External probe shape | Compiler-owned regression evidence |
+| --- | --- |
+| Pair getter from third-party jar | `CliDependencyProjectIntegrationTest.dependencyJarGenericPairGetterBuilds` |
+| Nullable multi-field record constructor plus accessor | `CliDependencyProjectIntegrationTest.dependencyJarNullableRecordAccessorBuilds` |
+| Static helper returning formatted duration text | `CliDependencyProjectIntegrationTest.dependencyJarStaticDurationFormatterBuilds` |
+| Scheduled executor subclass with one-shot task | `CliDependencyProjectIntegrationTest.dependencyJarScheduledExecutorSubclassBuilds` |
+| Scheduled executor subclass with fixed-rate scheduling plus shutdown/awaitTermination before first fire | `CliDependencyProjectIntegrationTest.dependencyJarScheduledExecutorFixedRateBuilds` |
+
+That mapping is the rule: when an external probe breaks, the permanent fix belongs in one of these
+generic compiler-owned dependency tests or a new generic equivalent, not in a Nano/TypeMap-specific
+support row.
+
 `.github/scripts/acceptance.sh` now auto-discovers probe directories and CI prefetches the pinned
 artifacts from probe metadata via `.github/scripts/list-real-probe-artifacts.sh` before `mvn verify`,
 so the five probes are required in the external-probe acceptance gate.

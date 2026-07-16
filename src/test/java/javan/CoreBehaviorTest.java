@@ -536,6 +536,26 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void jdkCallSupportAcceptsSocketGetSoTimeoutCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/Socket", "getSoTimeout", "()I"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsSocketSetSoTimeoutCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/Socket", "setSoTimeout", "(I)V"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsServerSocketGetSoTimeoutCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/ServerSocket", "getSoTimeout", "()I"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsServerSocketSetSoTimeoutCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/ServerSocket", "setSoTimeout", "(I)V"))).isTrue();
+    }
+
+    @Test
     void jdkCallSupportAcceptsServerSocketPortConstructor() {
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/ServerSocket", "<init>", "(I)V"))).isTrue();
     }
@@ -603,6 +623,46 @@ final class CoreBehaviorTest {
     void staticVerifierAcceptsReachableInetAddressGetAllByNameCall() {
         final List<Diagnostic> diagnostics = verifyInstruction(
             instruction(0, 184, "invokestatic", new MethodRef("java/net/InetAddress", "getAllByName", "(Ljava/lang/String;)[Ljava/net/InetAddress;")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableSocketGetSoTimeoutCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 182, "invokevirtual", new MethodRef("java/net/Socket", "getSoTimeout", "()I")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableSocketSetSoTimeoutCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 182, "invokevirtual", new MethodRef("java/net/Socket", "setSoTimeout", "(I)V")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableServerSocketGetSoTimeoutCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 182, "invokevirtual", new MethodRef("java/net/ServerSocket", "getSoTimeout", "()I")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableServerSocketSetSoTimeoutCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 182, "invokevirtual", new MethodRef("java/net/ServerSocket", "setSoTimeout", "(I)V")),
             true
         );
 

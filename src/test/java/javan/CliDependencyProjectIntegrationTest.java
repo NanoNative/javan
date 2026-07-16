@@ -390,6 +390,39 @@ final class CliDependencyProjectIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void dependencyJarNullableRecordAccessorBuilds() throws Exception {
+        final Path dependency = dependencyJar("nullmetriclib", "dep.Metric", """
+            package dep;
+
+            public record Metric(String tenant, String name, String type, String unit) {
+            }
+            """);
+        final Path project = project("dependency-nullable-record");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import dep.Metric;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Metric metric = new Metric(null, "requests", null, null);
+                    System.out.println(metric.name());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main", List.of(dependency));
+        final CliRun run = run(tempDir, "build", project.toString(), "--classpath", dependency.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/dependency-nullable-record").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("requests\n");
+    }
+
+    @Test
     void dependencyJarStaticDurationFormatterBuilds() throws Exception {
         final Path dependency = dependencyJar("durationlib", "dep.DurationFormatter", """
             package dep;
@@ -477,6 +510,59 @@ final class CliDependencyProjectIntegrationTest extends CliIntegrationSupport {
         assertThat(run.exitCode()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/dependency-scheduler").toString())).stdout()).isEqualTo(jvmOutput);
         assertThat(jvmOutput).isEqualTo("tick\ntrue\n");
+    }
+
+    @Test
+    void dependencyJarScheduledExecutorFixedRateBuilds() throws Exception {
+        final Path dependency = dependencyJar("fixedratelib", "dep.Scheduler", """
+            package dep;
+
+            import java.util.concurrent.ScheduledThreadPoolExecutor;
+
+            public final class Scheduler extends ScheduledThreadPoolExecutor {
+                public Scheduler(final String name) {
+                    super(1);
+                }
+            }
+            """);
+        final Path project = project("dependency-scheduler-fixed-rate");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import dep.Scheduler;
+            import java.util.concurrent.TimeUnit;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Scheduler scheduler = new Scheduler("probe");
+                    scheduler.scheduleAtFixedRate(new Task(), 200L, 50L, TimeUnit.MILLISECONDS);
+                    Thread.sleep(20L);
+                    scheduler.shutdown();
+                    System.out.println(scheduler.awaitTermination(1L, TimeUnit.SECONDS));
+                    System.out.println("done");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println("tick");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main", List.of(dependency));
+        final CliRun run = run(tempDir, "build", project.toString(), "--classpath", dependency.toString());
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/dependency-scheduler-fixed-rate").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\ndone\n");
     }
 
     @Test
