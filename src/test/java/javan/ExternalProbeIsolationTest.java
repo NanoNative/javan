@@ -136,6 +136,14 @@ final class ExternalProbeIsolationTest {
     }
 
     @Test
+    void coreStatusDocsStayIndependentOfExternalProbeProjectLabels() throws Exception {
+        assertTextExcludesExternalProbeProjectLabels(Files.readString(SUPPORT_MATRIX), SUPPORT_MATRIX);
+        assertTextExcludesExternalProbeProjectLabels(Files.readString(SUPPORT_MATRIX_JSON), SUPPORT_MATRIX_JSON);
+        assertTextExcludesExternalProbeProjectLabels(Files.readString(JDK_COMPATIBILITY), JDK_COMPATIBILITY);
+        assertTextExcludesExternalProbeProjectLabels(Files.readString(ROADMAP_PROGRESS), ROADMAP_PROGRESS);
+    }
+
+    @Test
     void milestoneHistoryStaysIndependentOfExternalProbeIdentities() throws Exception {
         final String roadmap = Files.readString(ROADMAP_PROGRESS);
         final int start = roadmap.indexOf("## Recent Milestones");
@@ -161,11 +169,33 @@ final class ExternalProbeIsolationTest {
     }
 
     @Test
+    void generatedCompatibilityOutputsStayIndependentOfExternalProbeProjectLabels() throws Exception {
+        new CompatibilityReports().write(
+            tempDir,
+            tempDir.resolve(".javan"),
+            List.of(minimalClass("", "com/acme/Main")),
+            List.of(minimalClass("java.base", "java/lang/Object")),
+            List.of()
+        );
+
+        assertTextExcludesExternalProbeProjectLabels(Files.readString(tempDir.resolve("doc/status/support-matrix.md")), SUPPORT_MATRIX);
+        assertTextExcludesExternalProbeProjectLabels(Files.readString(tempDir.resolve("doc/status/support-matrix.json")), SUPPORT_MATRIX_JSON);
+        assertTextExcludesExternalProbeProjectLabels(Files.readString(tempDir.resolve("doc/status/jdk-compatibility.md")), JDK_COMPATIBILITY);
+    }
+
+    @Test
     void externalProbeMetadataLoadsFromDedicatedSmokeProjects() throws Exception {
         assertThat(ExternalProbeIdentities.projectNames())
             .isNotEmpty()
             .doesNotHaveDuplicates()
             .allSatisfy(project -> assertThat(project).isNotBlank());
+    }
+
+    @Test
+    void shortPlainArtifactIdsStillProduceForbiddenIdentityPatterns() throws Exception {
+        final String sample = new String(new char[]{'n', 'a', 'n', 'o'});
+        assertThat(ExternalProbeIdentities.identityPatterns())
+            .anySatisfy(pattern -> assertThat(pattern.matcher(sample).find()).isTrue());
     }
 
     @Test
@@ -394,6 +424,14 @@ final class ExternalProbeIsolationTest {
             assertThat(pattern.matcher(content).find())
                 .as(file + " should stay free of external probe identity pattern " + pattern)
                 .isFalse();
+        }
+    }
+
+    private static void assertTextExcludesExternalProbeProjectLabels(final String content, final Path file) throws IOException {
+        for (final String projectLabel : ExternalProbeIdentities.projectNames()) {
+            assertThat(content)
+                .as(file + " should stay free of external probe project label " + projectLabel)
+                .doesNotContain(projectLabel);
         }
     }
 

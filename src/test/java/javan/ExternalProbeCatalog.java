@@ -89,7 +89,7 @@ final class ExternalProbeCatalog {
 
     private static Pattern artifactPattern(final String artifactId) {
         final boolean plainWord = artifactId.chars().allMatch(character -> Character.isLetterOrDigit(character) || character == '_');
-        if (plainWord && artifactId.length() < 6) {
+        if (plainWord && artifactId.length() < 4) {
             return null;
         }
         if (plainWord) {

@@ -47,6 +47,10 @@ The current pinned set is acceptance evidence only. Upstream artifact names and 
 must stay out of the compiler-owned support line, which has to remain generic enough that those
 probes can change without renaming Javan tests, support rows, or verifier rules.
 
+The same rule applies to the current probe labels themselves. Directory names like
+`artifact-*` are disposable smoke handles, not compiler/runtime feature names, and must not leak
+into support matrices, JDK accounting, or compiler-owned regression names.
+
 Each probe owns its own `probe.properties`, `expected.stdout`, and `build-example.sh`.
 The acceptance harness only iterates probe directories; it does not hardcode library-specific
 support claims into the compiler-owned test line.

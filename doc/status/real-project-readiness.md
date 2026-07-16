@@ -24,6 +24,10 @@ The probe directories themselves are intentionally generic `artifact-*` names. U
 identities stay in `probe.properties` and the tiny Java source that imports the external
 classes, not in compiler-owned directory labels.
 
+Those probe labels are not product vocabulary either. They are temporary smoke handles for the
+current pinned external set, and they are allowed to change without renaming compiler-owned tests,
+support ledgers, or JDK accounting.
+
 The current pinned set is just a moving slice of published third-party artifacts. That is not
 product knowledge, not a support allowlist, and not a stable contract. The compiler-owned test
 and support line must remain generic so the same regressions still make sense after the probe set
@@ -73,6 +77,8 @@ Rule:
 - if a real probe breaks, fix the compiler/runtime gap in a generic JDK-support test first
 - then keep or update the external probe only as upstream compatibility smoke
 - never add an upstream-project-named support row, intrinsic, substitution, or verifier rule
+- never add a probe-project label such as `artifact-*` to compiler-owned support rows, JDK
+  accounting, or milestone ledgers
 
 The metadata fence also covers upstream package identities. Probe metadata declares the external
 package roots that are allowed only inside the dedicated smoke boundary, and isolation tests fail
