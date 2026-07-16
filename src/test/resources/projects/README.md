@@ -18,6 +18,9 @@ be understandable as real user-facing samples.
 Promote a test project to `example/` or a future public examples folder only after rewriting it into a production-grade
 sample with complete user-facing instructions.
 
+Generated outputs do not belong here. Real-probe helper runs must leave no `.javan/`, `target/`, `build/`, or `out/`
+directories behind under `src/test/resources/projects/real-probes`.
+
 When an external probe finds a bug, the permanent regression belongs in a generic JDK/runtime test
 under `src/test/java/javan`, not in a probe-specific support rule or probe-named compiler test.
 The current pinned external probes may change independently, while the durable Javan regression

@@ -368,6 +368,25 @@ final class ExternalProbeIsolationTest {
         }
     }
 
+    @Test
+    void realProbeResourceDirectoriesStayFreeOfGeneratedBuildOutputs() throws Exception {
+        for (final ExternalProbeCatalog.ExternalProbe probe : ExternalProbeCatalog.realProbes()) {
+            final Path root = Path.of(probe.projectDirectory());
+            assertThat(root.resolve(".javan"))
+                .as(root + " should not keep generated .javan output in source control or local test resources")
+                .doesNotExist();
+            assertThat(root.resolve("target"))
+                .as(root + " should not keep generated target output in local test resources")
+                .doesNotExist();
+            assertThat(root.resolve("build"))
+                .as(root + " should not keep generated build output in local test resources")
+                .doesNotExist();
+            assertThat(root.resolve("out"))
+                .as(root + " should not keep generated out output in local test resources")
+                .doesNotExist();
+        }
+    }
+
     private static void assertOnlyGenericProbeOverrides(final String content, final Path file) {
         final Pattern probeOverride = Pattern.compile("\\b[A-Z][A-Z0-9_]*_(?:JAR|COORDINATE|CLASSPATH|CLASSES)\\b");
         final List<String> matches = new ArrayList<>();

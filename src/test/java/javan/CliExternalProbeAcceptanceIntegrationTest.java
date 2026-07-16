@@ -384,6 +384,7 @@ final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupp
         assertThat(run.exitCode()).isZero();
         assertThat(run.stderr()).isEmpty();
         assertThat(run.stdout()).isEqualTo("alpha\n");
+        assertThat(probe.resolve(".javan")).doesNotExist();
     }
 
     private void assertExternalProbeMatchesJvmOutput(final ExternalProbeCatalog.ExternalProbe probe, final Path artifact) throws Exception {

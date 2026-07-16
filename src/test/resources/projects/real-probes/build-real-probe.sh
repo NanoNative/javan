@@ -4,6 +4,12 @@ set -eu
 ROOT=${1:-$(pwd)}
 ROOT=$(CDPATH= cd -- "$ROOT" && pwd)
 PROBE_FILE=$ROOT/probe.properties
+TMP_ROOT=${TMPDIR:-/tmp}/javan-real-probe-$$
+WORKDIR=$TMP_ROOT/project
+
+mkdir -p "$TMP_ROOT"
+mkdir -p "$WORKDIR"
+trap 'rm -rf "$TMP_ROOT"' EXIT HUP INT TERM
 
 if [ ! -f "$PROBE_FILE" ]; then
   printf '%s\n' "Missing probe metadata: $PROBE_FILE" >&2
@@ -52,6 +58,7 @@ if [ -z "$classpath" ]; then
   exit 3
 fi
 
-rm -rf "$ROOT/.javan"
-"$JAVAN" build "$ROOT" --classpath "$classpath" --output "$project" >/dev/null
-"$ROOT/.javan/bin/$project"
+cp -R "$ROOT/." "$WORKDIR"
+rm -rf "$WORKDIR/.javan" "$WORKDIR/target" "$WORKDIR/build" "$WORKDIR/out"
+"$JAVAN" build "$WORKDIR" --classpath "$classpath" --output "$project" >/dev/null
+"$WORKDIR/.javan/bin/$project"
