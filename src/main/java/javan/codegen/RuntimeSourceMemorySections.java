@@ -3427,6 +3427,102 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        void* javan_class_simple_name(void* class_value) {
+            void* class_root = class_value;
+            void* result = NULL;
+            void** roots[] = {
+                (void**) &class_root,
+                (void**) &result
+            };
+            javan_root_frame_push(roots, 2);
+            javan_runtime_class_state* state = javan_runtime_class_checked(class_root);
+            const char* primitive_name = javan_runtime_class_primitive_type_name(state->exact_type_id);
+            if (primitive_name != NULL) {
+                result = javan_string_from(primitive_name);
+                javan_root_frame_pop(roots);
+                return result;
+            }
+            const char* binary_name = state->binary_name;
+            int dimensions = 0;
+            char* owned_base_name = NULL;
+            if (state->is_array != 0) {
+                while (binary_name[dimensions] == '[') {
+                    dimensions++;
+                }
+                const char* component = binary_name + dimensions;
+                switch (component[0]) {
+                    case 'Z':
+                        binary_name = "boolean";
+                        break;
+                    case 'B':
+                        binary_name = "byte";
+                        break;
+                    case 'S':
+                        binary_name = "short";
+                        break;
+                    case 'C':
+                        binary_name = "char";
+                        break;
+                    case 'I':
+                        binary_name = "int";
+                        break;
+                    case 'J':
+                        binary_name = "long";
+                        break;
+                    case 'F':
+                        binary_name = "float";
+                        break;
+                    case 'D':
+                        binary_name = "double";
+                        break;
+                    case 'L': {
+                        unsigned long component_length = (unsigned long) strlen(component);
+                        if (component_length < 2UL || component[component_length - 1UL] != ';') {
+                            javan_panic("unsupported array class metadata");
+                        }
+                        owned_base_name = (char*) javan_raw_calloc_retry(component_length - 1UL);
+                        if (owned_base_name == NULL) {
+                            javan_panic("out of memory");
+                        }
+                        memcpy(owned_base_name, component + 1, component_length - 2UL);
+                        owned_base_name[component_length - 2UL] = '\\0';
+                        binary_name = owned_base_name;
+                        break;
+                    }
+                    default:
+                        javan_panic("unsupported array class metadata");
+                }
+            }
+            const char* simple_name = binary_name;
+            const char* package_dot = strrchr(simple_name, '.');
+            if (package_dot != NULL) {
+                simple_name = package_dot + 1;
+            }
+            const char* member_dollar = strrchr(simple_name, '$');
+            if (member_dollar != NULL) {
+                simple_name = member_dollar + 1;
+            }
+            unsigned long simple_length = (unsigned long) strlen(simple_name);
+            unsigned long result_length = simple_length + ((unsigned long) dimensions * 2UL);
+            char* rendered = (char*) javan_raw_calloc_retry(result_length + 1UL);
+            if (rendered == NULL) {
+                free(owned_base_name);
+                javan_panic("out of memory");
+            }
+            memcpy(rendered, simple_name, simple_length);
+            for (int index = 0; index < dimensions; index++) {
+                unsigned long offset = simple_length + ((unsigned long) index * 2UL);
+                rendered[offset] = '[';
+                rendered[offset + 1UL] = ']';
+            }
+            rendered[result_length] = '\\0';
+            result = javan_string_from(rendered);
+            free(rendered);
+            free(owned_base_name);
+            javan_root_frame_pop(roots);
+            return result;
+        }
+
         void* javan_class_descriptor_string(void* class_value) {
             void* class_root = class_value;
             void* result = NULL;

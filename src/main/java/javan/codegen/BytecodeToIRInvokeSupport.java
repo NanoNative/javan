@@ -524,6 +524,13 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if ("java/lang/Class".equals(methodRef.owner())
+            && "getSimpleName".equals(methodRef.name())
+            && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
+            final IrExpression receiver = popObject(classFile, method, stack);
+            pushObjectCall(instructions, stack, localDeclarations, "javan_class_simple_name", List.of(receiver));
+            return;
+        }
+        if ("java/lang/Class".equals(methodRef.owner())
             && "getPackageName".equals(methodRef.name())
             && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
             final IrExpression receiver = popObject(classFile, method, stack);

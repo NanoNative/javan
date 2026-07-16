@@ -640,6 +640,160 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void classGetSimpleNameBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("class-get-simple-name");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(String.class.getSimpleName());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/class-get-simple-name").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("String\n");
+    }
+
+    @Test
+    void objectArrayClassGetSimpleNameBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("object-array-class-get-simple-name");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(String[].class.getSimpleName());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/object-array-class-get-simple-name").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("String[]\n");
+    }
+
+    @Test
+    void primitiveNestedArrayClassGetSimpleNameBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("primitive-nested-array-class-get-simple-name");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(int[][].class.getSimpleName());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/primitive-nested-array-class-get-simple-name").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("int[][]\n");
+    }
+
+    @Test
+    void memberClassGetSimpleNameBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("member-class-get-simple-name");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Map.Entry.class.getSimpleName());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/member-class-get-simple-name").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("Entry\n");
+    }
+
+    @Test
+    void memberArrayClassGetSimpleNameBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("member-array-class-get-simple-name");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Map.Entry[].class.getSimpleName());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/member-array-class-get-simple-name").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("Entry[]\n");
+    }
+
+    @Test
+    void voidTypeGetSimpleNameBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("void-type-get-simple-name");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Void.TYPE.getSimpleName());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/void-type-get-simple-name").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("void\n");
+    }
+
+    @Test
     void objectArrayClassGetPackageNameBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("object-array-class-get-package-name");
         writeJava(project, "com.acme.Main", """

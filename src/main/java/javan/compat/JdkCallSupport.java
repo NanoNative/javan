@@ -92,6 +92,7 @@ public final class JdkCallSupport {
         runtime("Class.isPrimitive", "java/lang/Class", "isPrimitive", "()Z"),
         runtime("Class.isAssignableFrom", "java/lang/Class", "isAssignableFrom", "(Ljava/lang/Class;)Z"),
         runtime("Class.getName", "java/lang/Class", "getName", "()Ljava/lang/String;"),
+        runtime("Class.getSimpleName", "java/lang/Class", "getSimpleName", "()Ljava/lang/String;"),
         runtime("Class.getPackageName", "java/lang/Class", "getPackageName", "()Ljava/lang/String;"),
         runtime("Class.getTypeName", "java/lang/Class", "getTypeName", "()Ljava/lang/String;"),
         runtime("Class.getComponentType", "java/lang/Class", "getComponentType", "()Ljava/lang/Class;"),

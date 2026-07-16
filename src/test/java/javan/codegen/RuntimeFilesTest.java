@@ -5677,6 +5677,86 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void runtimeReferenceClassSimpleNameReturnsLeafTypeName() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* klass = javan_runtime_class_literal("java.lang.String", -2001, 0, 0, 0);
+                printf("%s\\n", (char*) javan_class_simple_name(klass));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("String\n");
+    }
+
+    @Test
+    void runtimeReferenceArraySimpleNameReturnsDisplayName() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* klass = javan_runtime_class_literal("[Ljava.util.Map$Entry;", 0, 0, 1, 0);
+                printf("%s\\n", (char*) javan_class_simple_name(klass));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("Entry[]\n");
+    }
+
+    @Test
+    void runtimePrimitiveNestedArraySimpleNameReturnsDisplayName() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* klass = javan_runtime_class_literal("[[I", 0, 0, 1, 0);
+                printf("%s\\n", (char*) javan_class_simple_name(klass));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("int[][]\n");
+    }
+
+    @Test
+    void runtimeVoidSimpleNameReturnsVoid() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* klass = javan_runtime_class_literal("void", -2014, 0, 0, 0);
+                printf("%s\\n", (char*) javan_class_simple_name(klass));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("void\n");
+    }
+
+    @Test
     void runtimePrimitiveNestedArrayTypeNameReturnsDisplayName() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
