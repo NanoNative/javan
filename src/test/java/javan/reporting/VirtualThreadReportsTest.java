@@ -223,21 +223,23 @@ final class VirtualThreadReportsTest {
                 Diagnostic.error("JAVAN077", "", "", "", "Executor.execute(Runnable)", "", ""),
                 Diagnostic.warning("JAVAN177", "", "", "", "ExecutorService.submit(Runnable)", "", ""),
                 Diagnostic.warning("JAVAN177", "", "", "", "ExecutorService.close()", "", ""),
-                Diagnostic.warning("JAVAN177", "", "", "", "Future.cancel(boolean)", "", "")
+                Diagnostic.warning("JAVAN177", "", "", "", "Future.cancel(boolean)", "", ""),
+                Diagnostic.warning("JAVAN177", "", "", "", "Future.isDone()", "", ""),
+                Diagnostic.warning("JAVAN177", "", "", "", "Future.isCancelled()", "", "")
             ),
             classes,
             new CallGraph(main, List.of(main), List.of())
         );
 
         assertThat(Files.readString(tempDir.resolve("virtual-threads.json"))).contains(
-            "\"unsupportedExecutorApis\": 6",
+            "\"unsupportedExecutorApis\": 8",
             "\"unsupportedExecutorApisReachable\": 3",
-            "\"unsupportedExecutorApisUnreachable\": 3"
+            "\"unsupportedExecutorApisUnreachable\": 5"
         );
         assertThat(Files.readString(tempDir.resolve("virtual-threads.md"))).contains(
-            "- unsupportedExecutorApis: `6`",
+            "- unsupportedExecutorApis: `8`",
             "- unsupportedExecutorApisReachable: `3`",
-            "- unsupportedExecutorApisUnreachable: `3`"
+            "- unsupportedExecutorApisUnreachable: `5`"
         );
     }
 

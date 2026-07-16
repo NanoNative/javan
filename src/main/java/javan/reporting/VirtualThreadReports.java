@@ -25,7 +25,7 @@ public final class VirtualThreadReports {
     private static final String DIAGNOSTIC_SOURCE = "platform-thread-analysis-plus-virtual-builder-executor-park-slice";
     private static final String NEXT_GATE = "land remaining builder/factory/executor introspection such as getClass() plus scheduler/carrier runtime and runtime-backed profiling counters";
     private static final List<String> REASONS = List.of(
-        "Thread.startVirtualThread(Runnable), Thread.ofVirtual().start(Runnable), exact single-local-alias builder start, Thread.ofVirtual().unstarted(Runnable), exact single-local-alias builder unstarted, supported name(...) builder flows including name(String) and name(String,long), discarded standalone Thread.ofVirtual()/name(...)/factory() expressions, exact Object-local alias round-trips back into supported builder/factory/executor terminal calls via checkcast, runtime-backed builder/factory/executor printing plus toString()/hashCode()/equals(), reusable builder-name counters, factory snapshot naming, exact static helper wrappers around supported builder/factory flows including direct parameter pass-through into name(String) and name(String,long), Thread.ofVirtual().factory().newThread(Runnable), exact single-local-alias factory newThread, Executors.newVirtualThreadPerTaskExecutor(), Executors.newThreadPerTaskExecutor(ThreadFactory), Executor.execute(Runnable), ExecutorService.submit(Runnable), ExecutorService.shutdown(), ExecutorService.awaitTermination(long,TimeUnit), ExecutorService.shutdownNow(), ExecutorService.close(), and Future.cancel(boolean)/isDone()/isCancelled() on the current thread-backed future handle, Thread.isVirtual(), Thread.getName(), ThreadLocal base storage, and LockSupport.park()/parkNanos(long)/parkUntil(long)/unpark(Thread) are supported through the current host-thread runtime slice.",
+        "Thread.startVirtualThread(Runnable), Thread.ofVirtual().start(Runnable), exact single-local-alias builder start, Thread.ofVirtual().unstarted(Runnable), exact single-local-alias builder unstarted, supported name(...) builder flows including name(String) and name(String,long), discarded standalone Thread.ofVirtual()/name(...)/factory() expressions, exact Object-local alias round-trips back into supported builder/factory/executor terminal calls via checkcast, runtime-backed builder/factory/executor printing plus toString()/hashCode()/equals(), reusable builder-name counters, factory snapshot naming, exact static helper wrappers around supported builder/factory flows including direct parameter pass-through into name(String) and name(String,long), Thread.ofVirtual().factory().newThread(Runnable), exact single-local-alias factory newThread, Executors.newVirtualThreadPerTaskExecutor(), Executors.newThreadPerTaskExecutor(ThreadFactory), Executor.execute(Runnable), ExecutorService.submit(Runnable), ExecutorService.shutdown(), ExecutorService.awaitTermination(long,TimeUnit), ExecutorService.shutdownNow(), ExecutorService.close(), and Future.cancel(boolean)/isDone()/isCancelled() on the current thread-backed future handles produced by the supported executor and scheduler entrypoints, Thread.isVirtual(), Thread.getName(), ThreadLocal base storage, and LockSupport.park()/parkNanos(long)/parkUntil(long)/unpark(Thread) are supported through the current host-thread runtime slice.",
         "Broader builder/factory/executor introspection such as getClass(), scheduler/carrier behavior, blocking-I/O awareness, and richer virtual-thread runtime semantics are not linked yet and still fail clearly when reachable.",
         "Virtual-thread profiling counters are not collected yet."
     );
@@ -204,7 +204,9 @@ public final class VirtualThreadReports {
                 "Executor.execute(Runnable)",
                 "ExecutorService.submit(Runnable)",
                 "ExecutorService.close()",
-                "Future.cancel(boolean)"
+                "Future.cancel(boolean)",
+                "Future.isDone()",
+                "Future.isCancelled()"
             );
             final long unsupportedExecutorApisUnreachable = countExactSubjects(
                 diagnostics,
@@ -214,7 +216,9 @@ public final class VirtualThreadReports {
                 "Executor.execute(Runnable)",
                 "ExecutorService.submit(Runnable)",
                 "ExecutorService.close()",
-                "Future.cancel(boolean)"
+                "Future.cancel(boolean)",
+                "Future.isDone()",
+                "Future.isCancelled()"
             );
             return new Summary(
                 "reachable-method-scan",

@@ -6462,6 +6462,120 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowerProgramLowersScheduledFutureStateQueriesFromSchedule() {
+        final MethodInfo main = method(
+            0x0008,
+            "main",
+            "()V",
+            6,
+            2,
+            classInstruction(0, 187, "new", "java/util/concurrent/ScheduledThreadPoolExecutor"),
+            plain(1, 89, "dup"),
+            plain(2, 4, "iconst_1"),
+            invokeSpecial(3, new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+            plain(4, 75, "astore_0"),
+            plain(5, 42, "aload_0"),
+            classInstruction(6, 187, "new", "com/acme/Task"),
+            plain(7, 89, "dup"),
+            invokeSpecial(8, new MethodRef("com/acme/Task", "<init>", "()V")),
+            plain(9, 9, "lconst_0"),
+            getStatic(10, new FieldRef("java/util/concurrent/TimeUnit", "SECONDS", "Ljava/util/concurrent/TimeUnit;")),
+            invokeVirtual(11, new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "schedule", "(Ljava/lang/Runnable;JLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;")),
+            plain(12, 76, "astore_1"),
+            plain(13, 43, "aload_1"),
+            invokeInterface(14, new MethodRef("java/util/concurrent/Future", "isDone", "()Z")),
+            plain(15, 87, "pop"),
+            plain(16, 43, "aload_1"),
+            invokeInterface(17, new MethodRef("java/util/concurrent/Future", "isCancelled", "()Z")),
+            plain(18, 87, "pop"),
+            plain(19, 177, "return")
+        );
+        final ClassFile task = classFile(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            List.of(),
+            List.of(
+                method(0, "<init>", "()V", 0, 1, plain(0, 177, "return")),
+                method(0, "run", "()V", 0, 1, plain(0, 177, "return"))
+            )
+        );
+        final EntryPoint entryPoint = new EntryPoint("com/acme/Main", "main", "()V");
+        final EntryPoint taskRun = new EntryPoint("com/acme/Task", "run", "()V");
+        final Map<String, ClassFile> classes = new LinkedHashMap<>();
+        classes.put("com/acme/Main", classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(main)));
+        classes.put(task.name(), task);
+
+        final IrProgram program = new BytecodeToIR().lower(
+            classes,
+            new CallGraph(entryPoint, List.of(entryPoint, taskRun), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions().getFirst().instructions())
+            .extracting(IrInstruction::toString)
+            .anySatisfy(text -> assertThat(text).contains("javan_future_is_done"))
+            .anySatisfy(text -> assertThat(text).contains("javan_future_is_cancelled"));
+    }
+
+    @Test
+    void lowerProgramLowersScheduledFutureCancelFromFixedDelaySchedule() {
+        final MethodInfo main = method(
+            0x0008,
+            "main",
+            "()V",
+            8,
+            2,
+            classInstruction(0, 187, "new", "java/util/concurrent/ScheduledThreadPoolExecutor"),
+            plain(1, 89, "dup"),
+            plain(2, 4, "iconst_1"),
+            invokeSpecial(3, new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+            plain(4, 75, "astore_0"),
+            plain(5, 42, "aload_0"),
+            classInstruction(6, 187, "new", "com/acme/Task"),
+            plain(7, 89, "dup"),
+            invokeSpecial(8, new MethodRef("com/acme/Task", "<init>", "()V")),
+            plain(9, 9, "lconst_0"),
+            plain(10, 10, "lconst_1"),
+            getStatic(11, new FieldRef("java/util/concurrent/TimeUnit", "SECONDS", "Ljava/util/concurrent/TimeUnit;")),
+            invokeVirtual(12, new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "scheduleWithFixedDelay", "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;")),
+            plain(13, 76, "astore_1"),
+            plain(14, 43, "aload_1"),
+            plain(15, 4, "iconst_1"),
+            invokeInterface(16, new MethodRef("java/util/concurrent/Future", "cancel", "(Z)Z")),
+            plain(17, 87, "pop"),
+            plain(18, 177, "return")
+        );
+        final ClassFile task = classFile(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            List.of(),
+            List.of(
+                method(0, "<init>", "()V", 0, 1, plain(0, 177, "return")),
+                method(0, "run", "()V", 0, 1, plain(0, 177, "return"))
+            )
+        );
+        final EntryPoint entryPoint = new EntryPoint("com/acme/Main", "main", "()V");
+        final EntryPoint taskRun = new EntryPoint("com/acme/Task", "run", "()V");
+        final Map<String, ClassFile> classes = new LinkedHashMap<>();
+        classes.put("com/acme/Main", classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(main)));
+        classes.put(task.name(), task);
+
+        final IrProgram program = new BytecodeToIR().lower(
+            classes,
+            new CallGraph(entryPoint, List.of(entryPoint, taskRun), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions().getFirst().instructions())
+            .extracting(IrInstruction::toString)
+            .anySatisfy(text -> assertThat(text).contains("javan_future_cancel"));
+    }
+
+    @Test
     void lowerProgramAddsRunnableDispatchForScheduledThreadPoolExecutorSchedule() {
         final MethodInfo main = method(
             0x0008,

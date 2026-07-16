@@ -2024,6 +2024,16 @@ public final class StaticVerifier {
             && supportsVirtualThreadExecutorTaskSubmission(classes, instructions, transparentProducerIndex)) {
             return true;
         }
+        if (methodRef.isPresent()
+            && (VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorSchedule(methodRef.orElseThrow())
+                || VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorScheduleAtFixedRate(methodRef.orElseThrow())
+                || VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorScheduleWithFixedDelay(methodRef.orElseThrow())
+                || VirtualThreadInvokePatterns.isScheduledExecutorServiceSchedule(methodRef.orElseThrow())
+                || VirtualThreadInvokePatterns.isScheduledExecutorServiceScheduleAtFixedRate(methodRef.orElseThrow())
+                || VirtualThreadInvokePatterns.isScheduledExecutorServiceScheduleWithFixedDelay(methodRef.orElseThrow()))
+            && supportedScheduledFutureProducer(classes, instructions, transparentProducerIndex, methodRef.orElseThrow())) {
+            return true;
+        }
         final int loadSlot = localLoadSlot(producer);
         if (loadSlot < 0) {
             return false;
@@ -2033,6 +2043,33 @@ public final class StaticVerifier {
             return false;
         }
         return supportedVirtualThreadFutureProducer(classes, instructions, storeIndex - 1);
+    }
+
+    private static boolean supportedScheduledFutureProducer(
+        final Map<String, ClassFile> classes,
+        final List<Instruction> instructions,
+        final int instructionIndex,
+        final MethodRef methodRef
+    ) {
+        final int runnableProducerIndex;
+        if (VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorSchedule(methodRef)
+            || VirtualThreadInvokePatterns.isScheduledExecutorServiceSchedule(methodRef)) {
+            runnableProducerIndex = instructionIndex - 3;
+        } else if (VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorScheduleAtFixedRate(methodRef)
+            || VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorScheduleWithFixedDelay(methodRef)
+            || VirtualThreadInvokePatterns.isScheduledExecutorServiceScheduleAtFixedRate(methodRef)
+            || VirtualThreadInvokePatterns.isScheduledExecutorServiceScheduleWithFixedDelay(methodRef)) {
+            runnableProducerIndex = instructionIndex - 4;
+        } else {
+            return false;
+        }
+        final int runnableWidth = VirtualThreadInvokePatterns.runnableProducerInstructionWidth(instructions, runnableProducerIndex);
+        final int receiverIndex = runnableProducerIndex - runnableWidth;
+        if (receiverIndex < 0) {
+            return false;
+        }
+        return supportedScheduledThreadPoolExecutorProducer(classes, instructions, receiverIndex)
+            && supportedRunnableProducer(classes, instructions, runnableProducerIndex);
     }
 
     private static boolean supportedVirtualThreadFactoryStaticField(

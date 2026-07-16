@@ -5444,7 +5444,7 @@ final class BytecodeToIRInvokeSupport {
             final IrExpression delay = popLong(classFile, method, stack);
             final IrExpression runnable = popObject(classFile, method, stack);
             final StackValue executor = popScheduledThreadPoolExecutor(classFile, method, instruction, stack);
-            pushObjectCall(
+            pushThreadFutureCall(
                 instructions,
                 stack,
                 localDeclarations,
@@ -5460,7 +5460,7 @@ final class BytecodeToIRInvokeSupport {
             final IrExpression initialDelay = popLong(classFile, method, stack);
             final IrExpression runnable = popObject(classFile, method, stack);
             final StackValue executor = popScheduledThreadPoolExecutor(classFile, method, instruction, stack);
-            pushObjectCall(
+            pushThreadFutureCall(
                 instructions,
                 stack,
                 localDeclarations,
@@ -5476,7 +5476,7 @@ final class BytecodeToIRInvokeSupport {
             final IrExpression initialDelay = popLong(classFile, method, stack);
             final IrExpression runnable = popObject(classFile, method, stack);
             final StackValue executor = popScheduledThreadPoolExecutor(classFile, method, instruction, stack);
-            pushObjectCall(
+            pushThreadFutureCall(
                 instructions,
                 stack,
                 localDeclarations,

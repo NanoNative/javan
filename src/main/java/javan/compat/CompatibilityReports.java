@@ -790,8 +790,8 @@ public final class CompatibilityReports {
             countMatchingDiagnostics(diagnostics, "JAVAN177", "Thread.Builder.start(Runnable)", "Thread.Builder.unstarted(Runnable)", "Thread.Builder.name(...)", "Thread.Builder.factory()"),
             countMatchingDiagnostics(diagnostics, "JAVAN077", "Thread.ofVirtual()", "Thread.Builder.OfVirtual.", "Executors.newVirtualThreadPerTaskExecutor()"),
             countMatchingDiagnostics(diagnostics, "JAVAN177", "Thread.ofVirtual()", "Thread.Builder.OfVirtual.", "Executors.newVirtualThreadPerTaskExecutor()"),
-            countMatchingDiagnostics(diagnostics, "JAVAN077", "Executor.execute(Runnable)", "ExecutorService.submit(Runnable)", "ExecutorService.close()", "Future.cancel(boolean)", "Executors.newThreadPerTaskExecutor(ThreadFactory)"),
-            countMatchingDiagnostics(diagnostics, "JAVAN177", "Executor.execute(Runnable)", "ExecutorService.submit(Runnable)", "ExecutorService.close()", "Future.cancel(boolean)", "Executors.newThreadPerTaskExecutor(ThreadFactory)")
+            countMatchingDiagnostics(diagnostics, "JAVAN077", "Executor.execute(Runnable)", "ExecutorService.submit(Runnable)", "ExecutorService.close()", "Future.cancel(boolean)", "Future.isDone()", "Future.isCancelled()", "Executors.newThreadPerTaskExecutor(ThreadFactory)"),
+            countMatchingDiagnostics(diagnostics, "JAVAN177", "Executor.execute(Runnable)", "ExecutorService.submit(Runnable)", "ExecutorService.close()", "Future.cancel(boolean)", "Future.isDone()", "Future.isCancelled()", "Executors.newThreadPerTaskExecutor(ThreadFactory)")
         );
     }
 

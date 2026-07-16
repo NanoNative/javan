@@ -237,16 +237,26 @@ public final class VirtualThreadInvokePatterns {
         if (callIndex < 1 || callIndex > instructions.size()) {
             return -1;
         }
-        final Instruction producer = instructions.get(callIndex - 1);
+        return runnableProducerInstructionWidth(instructions, callIndex - 1);
+    }
+
+    public static int runnableProducerInstructionWidth(
+        final List<Instruction> instructions,
+        final int producerIndex
+    ) {
+        if (producerIndex < 0 || producerIndex >= instructions.size()) {
+            return -1;
+        }
+        final Instruction producer = instructions.get(producerIndex);
         if (localLoadSlot(producer) >= 0) {
             return 1;
         }
         final Optional<MethodRef> constructorRef = producer.methodRef();
         if (constructorRef.isPresent()
             && "<init>".equals(constructorRef.orElseThrow().name())
-            && callIndex >= 3
-            && instructions.get(callIndex - 2).opcode() == 89
-            && instructions.get(callIndex - 3).opcode() == 187) {
+            && producerIndex >= 2
+            && instructions.get(producerIndex - 1).opcode() == 89
+            && instructions.get(producerIndex - 2).opcode() == 187) {
             return 3;
         }
         return -1;
