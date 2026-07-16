@@ -1,6 +1,5 @@
 package javan.compat;
 
-import javan.ExternalProbeIdentities;
 import javan.verify.Diagnostic;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -252,8 +251,6 @@ final class CompatibilityReportsTest {
             "\"feature\": \"network-http-rejection\"",
             "\"feature\": \"network-runtime-feature-reporting\""
         );
-        assertExcludesExternalProbeIdentities(matrix);
-        assertExcludesExternalProbeIdentities(json);
     }
 
     @Test
@@ -272,15 +269,6 @@ final class CompatibilityReportsTest {
             "This ledger excludes external example or library probes.",
             "and never define a supported JDK member count."
         );
-        assertExcludesExternalProbeIdentities(compatibility);
-    }
-
-    @Test
-    void externalProbeIdentityAssertionsAreMetadataDriven() throws Exception {
-        assertThat(ExternalProbeIdentities.projectNames())
-            .isNotEmpty()
-            .doesNotHaveDuplicates()
-            .allSatisfy(project -> assertThat(project).isNotBlank());
     }
 
     @Test
@@ -588,14 +576,6 @@ final class CompatibilityReportsTest {
             } else {
                 System.setProperty("java.version", previous);
             }
-        }
-    }
-
-    private static void assertExcludesExternalProbeIdentities(final String content) throws Exception {
-        for (final var pattern : ExternalProbeIdentities.identityPatterns()) {
-            assertThat(pattern.matcher(content).find())
-                .as("generated compatibility output should exclude external probe identity pattern " + pattern)
-                .isFalse();
         }
     }
 

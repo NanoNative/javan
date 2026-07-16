@@ -1,6 +1,9 @@
 package javan;
 
+import javan.compat.ClassMetadata;
+import javan.compat.CompatibilityReports;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -24,6 +27,9 @@ final class ExternalProbeIsolationTest {
     private static final Path SUPPORT_MATRIX_JSON = DOC_STATUS.resolve("support-matrix.json");
     private static final Path JDK_COMPATIBILITY = DOC_STATUS.resolve("jdk-compatibility.md");
     private static final Path ROADMAP_PROGRESS = DOC_STATUS.resolve("roadmap-progress.md");
+
+    @TempDir
+    private Path tempDir;
 
     @Test
     void productionSourcesStayIndependentOfExternalProbeIdentities() throws Exception {
@@ -87,6 +93,29 @@ final class ExternalProbeIsolationTest {
     }
 
     @Test
+    void generatedCompatibilityOutputsStayIndependentOfExternalProbeIdentities() throws Exception {
+        new CompatibilityReports().write(
+            tempDir,
+            tempDir.resolve(".javan"),
+            List.of(minimalClass("", "com/acme/Main")),
+            List.of(minimalClass("java.base", "java/lang/Object")),
+            List.of()
+        );
+
+        assertTextExcludesExternalProbeIdentities(Files.readString(tempDir.resolve("doc/status/support-matrix.md")), SUPPORT_MATRIX);
+        assertTextExcludesExternalProbeIdentities(Files.readString(tempDir.resolve("doc/status/support-matrix.json")), SUPPORT_MATRIX_JSON);
+        assertTextExcludesExternalProbeIdentities(Files.readString(tempDir.resolve("doc/status/jdk-compatibility.md")), JDK_COMPATIBILITY);
+    }
+
+    @Test
+    void externalProbeMetadataLoadsFromDedicatedSmokeProjects() throws Exception {
+        assertThat(ExternalProbeIdentities.projectNames())
+            .isNotEmpty()
+            .doesNotHaveDuplicates()
+            .allSatisfy(project -> assertThat(project).isNotBlank());
+    }
+
+    @Test
     void onlyDedicatedAcceptanceBoundaryTestsMayReferenceRealProbeInfrastructure() throws Exception {
         final Set<Path> allowed = Set.of(
             TEST_SOURCES.resolve("javan/CliExternalProbeAcceptanceIntegrationTest.java"),
@@ -142,5 +171,25 @@ final class ExternalProbeIsolationTest {
                 .as(file + " should stay free of external probe identity pattern " + pattern)
                 .isFalse();
         }
+    }
+
+    private static ClassMetadata minimalClass(final String moduleName, final String name) {
+        return new ClassMetadata(
+            null,
+            false,
+            moduleName,
+            0,
+            69,
+            0,
+            name,
+            "java/lang/Object",
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of()
+        );
     }
 }
