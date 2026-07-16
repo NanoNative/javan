@@ -2178,6 +2178,22 @@ public final class BytecodeToIR {
         ));
     }
 
+    static DiagnosticException unsupportedDynamicConstant(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction
+    ) {
+        return new DiagnosticException(Diagnostic.error(
+            "JAVAN040",
+            "constant dynamic literal is not implemented by native code generation",
+            classFile.name(),
+            method.name() + method.descriptor(),
+            instructionSubject(instruction),
+            "This literal comes from a CONSTANT_Dynamic constant-pool entry. Javan does not yet evaluate or substitute dynamic constants safely during native lowering.",
+            "Keep this code on the JVM for now, or rewrite the reachable constant to a plain string/class/int/float/long/double literal."
+        ));
+    }
+
     static DiagnosticException invalidStack(
         final ClassFile classFile,
         final MethodInfo method,

@@ -159,6 +159,49 @@ final class ClassFileReaderTest {
     }
 
     @Test
+    void readerPreservesConstantDynamicTagForLdc() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(classfileWithConstantDynamicLiteral(new byte[]{18, 15, (byte) 177}, "Ljava/lang/String;"), SOURCE);
+
+        final Instruction instruction = classFile.method("demo", "()V").orElseThrow().code().orElseThrow().instructions().getFirst();
+
+        assertThat(instruction.mnemonic()).isEqualTo("ldc");
+        assertThat(instruction.constantPoolTag()).contains(17);
+        assertThat(instruction.className()).isEmpty();
+        assertThat(instruction.stringValue()).isEmpty();
+        assertThat(instruction.intValue()).isEmpty();
+        assertThat(instruction.floatValue()).isEmpty();
+        assertThat(instruction.dynamicRef()).isEmpty();
+    }
+
+    @Test
+    void readerPreservesConstantDynamicTagForLdcw() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(classfileWithConstantDynamicLiteral(new byte[]{19, 0, 15, (byte) 177}, "Ljava/lang/String;"), SOURCE);
+
+        final Instruction instruction = classFile.method("demo", "()V").orElseThrow().code().orElseThrow().instructions().getFirst();
+
+        assertThat(instruction.mnemonic()).isEqualTo("ldc_w");
+        assertThat(instruction.constantPoolTag()).contains(17);
+        assertThat(instruction.className()).isEmpty();
+        assertThat(instruction.stringValue()).isEmpty();
+        assertThat(instruction.intValue()).isEmpty();
+        assertThat(instruction.floatValue()).isEmpty();
+        assertThat(instruction.dynamicRef()).isEmpty();
+    }
+
+    @Test
+    void readerPreservesConstantDynamicTagForLdc2w() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(classfileWithConstantDynamicLiteral(new byte[]{20, 0, 15, (byte) 177}, "J"), SOURCE);
+
+        final Instruction instruction = classFile.method("demo", "()V").orElseThrow().code().orElseThrow().instructions().getFirst();
+
+        assertThat(instruction.mnemonic()).isEqualTo("ldc2_w");
+        assertThat(instruction.constantPoolTag()).contains(17);
+        assertThat(instruction.longValue()).isEmpty();
+        assertThat(instruction.doubleValue()).isEmpty();
+        assertThat(instruction.dynamicRef()).isEmpty();
+    }
+
+    @Test
     void readerNormalizesSmallIntegerLiteralInstructions() throws Exception {
         final ClassFile classFile = new ClassFileReader().read(
             minimalClassfile(
@@ -458,6 +501,58 @@ final class ClassFileReaderTest {
             .u2(8)
             .u2(10)
             .u2(11)
+            .toByteArray();
+    }
+
+    private static byte[] classfileWithConstantDynamicLiteral(final byte[] code, final String dynamicDescriptor) {
+        return new Bytes()
+            .u4(0xCAFEBABEL)
+            .u2(0)
+            .u2(65)
+            .u2(20)
+            .utf8("sample/CondyDemo")
+            .classInfo(1)
+            .utf8("java/lang/Object")
+            .classInfo(3)
+            .utf8("dyn")
+            .utf8(dynamicDescriptor)
+            .nameAndType(5, 6)
+            .utf8("bootstrap/Owner")
+            .classInfo(8)
+            .utf8("bootstrap")
+            .utf8("()V")
+            .nameAndType(10, 11)
+            .methodRef(9, 12)
+            .methodHandle(6, 13)
+            .dynamicEntry(17, 0, 7)
+            .utf8("demo")
+            .utf8("()V")
+            .utf8("Code")
+            .utf8("BootstrapMethods")
+            .u2(0x0021)
+            .u2(2)
+            .u2(4)
+            .u2(0)
+            .u2(0)
+            .u2(1)
+            .u2(0x0009)
+            .u2(16)
+            .u2(17)
+            .u2(1)
+            .u2(18)
+            .u4(12L + code.length)
+            .u2(2)
+            .u2(1)
+            .u4(code.length)
+            .bytes(code)
+            .u2(0)
+            .u2(0)
+            .u2(1)
+            .u2(19)
+            .u4(6)
+            .u2(1)
+            .u2(14)
+            .u2(0)
             .toByteArray();
     }
 

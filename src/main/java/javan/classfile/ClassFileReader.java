@@ -295,7 +295,8 @@ public final class ClassFileReader {
                 longValue(opcode, operands, constantPool),
                 floatValue(opcode, operands, constantPool),
                 doubleValue(opcode, operands, constantPool),
-                dynamicRef(opcode, operands, constantPool, bootstrapMethods)
+                dynamicRef(opcode, operands, constantPool, bootstrapMethods),
+                constantPoolTag(opcode, operands, constantPool)
             ));
             offset += length;
         }
@@ -417,6 +418,16 @@ public final class ClassFileReader {
         }
         if (opcode == 20) {
             return constantPool.doubleValue(index16(operands, 0));
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<Integer> constantPoolTag(final int opcode, final byte[] operands, final ConstantPool constantPool) {
+        if (opcode == 18) {
+            return constantPool.entryTag(unsigned(operands[0]));
+        }
+        if (opcode == 19 || opcode == 20) {
+            return constantPool.entryTag(index16(operands, 0));
         }
         return Optional.empty();
     }

@@ -126,6 +126,44 @@ public final class ConstantPool {
     }
 
     /**
+     * Resolves the raw constant-pool tag at the given index.
+     *
+     * @param index constant pool index
+     * @return constant-pool tag when the entry exists
+     */
+    public Optional<Integer> entryTag(final int index) {
+        final Object entry = entries[index];
+        if (entry instanceof Utf8Entry) {
+            return Optional.of(1);
+        }
+        if (entry instanceof RawEntry rawEntry) {
+            return Optional.of(rawEntry.tag());
+        }
+        if (entry instanceof ClassEntry) {
+            return Optional.of(7);
+        }
+        if (entry instanceof StringEntry) {
+            return Optional.of(8);
+        }
+        if (entry instanceof RefEntry refEntry) {
+            return Optional.of(refEntry.tag());
+        }
+        if (entry instanceof NameAndTypeEntry) {
+            return Optional.of(12);
+        }
+        if (entry instanceof MethodHandleEntry) {
+            return Optional.of(15);
+        }
+        if (entry instanceof MethodTypeEntry) {
+            return Optional.of(16);
+        }
+        if (entry instanceof DynamicEntry dynamicEntry) {
+            return Optional.of(dynamicEntry.tag());
+        }
+        return Optional.empty();
+    }
+
+    /**
      * Resolves a method reference.
      *
      * @param index constant pool index

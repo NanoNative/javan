@@ -2708,6 +2708,24 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void rejectsMalformedLdcwWithoutDecodedLiteralMetadata() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "()I",
+            1,
+            0,
+            rawPlain(0, 19, "ldc_w"),
+            plain(1, 172, "ireturn")
+        )))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("ldc_w");
+                assertThat(exception).hasMessageContaining("literal bytecode is missing decoded constant metadata");
+            });
+    }
+
+    @Test
     void rejectsMalformedLdc2wWithoutDecodedLiteralMetadata() {
         assertThatThrownBy(() -> lowerMain(method(
             0x0008,
@@ -2722,6 +2740,60 @@ final class BytecodeToIRTest {
                 assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
                 assertThat(exception.diagnostic().subject()).isEqualTo("ldc2_w");
                 assertThat(exception).hasMessageContaining("literal bytecode is missing decoded constant metadata");
+            });
+    }
+
+    @Test
+    void rejectsConstantDynamicLdcLiteral() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/lang/Object;",
+            1,
+            0,
+            constantDynamicLiteral(0, 18, "ldc"),
+            plain(1, 176, "areturn")
+        )))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("ldc");
+                assertThat(exception).hasMessageContaining("constant dynamic literal is not implemented by native code generation");
+            });
+    }
+
+    @Test
+    void rejectsConstantDynamicLdcwLiteral() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "()Ljava/lang/Object;",
+            1,
+            0,
+            constantDynamicLiteral(0, 19, "ldc_w"),
+            plain(1, 176, "areturn")
+        )))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("ldc_w");
+                assertThat(exception).hasMessageContaining("constant dynamic literal is not implemented by native code generation");
+            });
+    }
+
+    @Test
+    void rejectsConstantDynamicLdc2wLiteral() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "()J",
+            1,
+            0,
+            constantDynamicLiteral(0, 20, "ldc2_w"),
+            plain(1, 173, "lreturn")
+        )))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("ldc2_w");
+                assertThat(exception).hasMessageContaining("constant dynamic literal is not implemented by native code generation");
             });
     }
 
@@ -20972,6 +21044,25 @@ final class BytecodeToIRTest {
 
     private static Instruction rawPlain(final int offset, final int opcode, final String mnemonic) {
         return rawPlainOperands(offset, opcode, mnemonic);
+    }
+
+    private static Instruction constantDynamicLiteral(final int offset, final int opcode, final String mnemonic) {
+        return new Instruction(
+            offset,
+            opcode,
+            mnemonic,
+            new byte[0],
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(17)
+        );
     }
 
     private static Instruction plainOperands(final int offset, final int opcode, final String mnemonic, final int... operands) {
