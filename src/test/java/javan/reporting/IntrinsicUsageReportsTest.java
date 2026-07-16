@@ -59,6 +59,8 @@ final class IntrinsicUsageReportsTest {
         );
         assertThat(report.intrinsics()).containsExactly(
             new IntrinsicCallCount("Objects.requireNonNull", 0),
+            new IntrinsicCallCount("Objects.requireNonNullElse", 0),
+            new IntrinsicCallCount("Objects.toString", 0),
             new IntrinsicCallCount("Math.abs", 1),
             new IntrinsicCallCount("Math.min", 0),
             new IntrinsicCallCount("Math.max", 1),
@@ -98,6 +100,8 @@ final class IntrinsicUsageReportsTest {
         assertThat(Files.readString(tempDir.resolve("reports/intrinsics.json")))
             .contains(
                 "{\"name\": \"Objects.requireNonNull\", \"count\": 0}",
+                "{\"name\": \"Objects.requireNonNullElse\", \"count\": 0}",
+                "{\"name\": \"Objects.toString\", \"count\": 0}",
                 "{\"name\": \"Math.abs\", \"count\": 1}",
                 "{\"name\": \"Arrays.copyOf\", \"count\": 1}",
                 "{\"name\": \"Integer.toString\", \"count\": 1}",
@@ -157,6 +161,48 @@ final class IntrinsicUsageReportsTest {
     }
 
     @Test
+    void countsObjectsRequireNonNullElseAsSupportedIntrinsic() {
+        final IntrinsicUsageReports reports = new IntrinsicUsageReports();
+        final EntryPoint entry = new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V");
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classFile("com/acme/Main", method(
+                "main",
+                "([Ljava/lang/String;)V",
+                instruction("java/util/Objects", "requireNonNullElse", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")
+            ))
+        );
+
+        final IntrinsicUsageReport report = reports.analyze(classes, List.of(entry));
+
+        assertThat(report.intrinsics()).contains(new IntrinsicCallCount("Objects.requireNonNullElse", 1));
+        assertThat(report.supportedJdkCallSiteCount()).isEqualTo(1);
+        assertThat(report.unsupportedJdkCallCandidateCount()).isZero();
+        assertThat(report.unsupportedJdkCallCandidates()).isEmpty();
+    }
+
+    @Test
+    void countsObjectsToStringAsSupportedIntrinsic() {
+        final IntrinsicUsageReports reports = new IntrinsicUsageReports();
+        final EntryPoint entry = new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V");
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classFile("com/acme/Main", method(
+                "main",
+                "([Ljava/lang/String;)V",
+                instruction("java/util/Objects", "toString", "(Ljava/lang/Object;)Ljava/lang/String;")
+            ))
+        );
+
+        final IntrinsicUsageReport report = reports.analyze(classes, List.of(entry));
+
+        assertThat(report.intrinsics()).contains(new IntrinsicCallCount("Objects.toString", 1));
+        assertThat(report.supportedJdkCallSiteCount()).isEqualTo(1);
+        assertThat(report.unsupportedJdkCallCandidateCount()).isZero();
+        assertThat(report.unsupportedJdkCallCandidates()).isEmpty();
+    }
+
+    @Test
     void unsupportedOverloadsAreReportedAsUnsupportedCandidates() {
         final IntrinsicUsageReports reports = new IntrinsicUsageReports();
         final EntryPoint entry = new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V");
@@ -166,7 +212,7 @@ final class IntrinsicUsageReportsTest {
                 "main",
                 "([Ljava/lang/String;)V",
                 instruction("java/lang/Math", "abs", "(F)F"),
-                instruction("java/util/Objects", "requireNonNullElse", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")
+                instruction("java/util/Objects", "equals", "(Ljava/lang/Object;Ljava/lang/Object;)Z")
             ))
         );
 
@@ -175,14 +221,16 @@ final class IntrinsicUsageReportsTest {
         assertThat(report.intrinsics()).contains(
             new IntrinsicCallCount("Math.abs", 1),
             new IntrinsicCallCount("Arrays.copyOf", 0),
-            new IntrinsicCallCount("Objects.requireNonNull", 0)
+            new IntrinsicCallCount("Objects.requireNonNull", 0),
+            new IntrinsicCallCount("Objects.requireNonNullElse", 0),
+            new IntrinsicCallCount("Objects.toString", 0)
         );
         assertThat(report.runtimeCallSiteCount()).isZero();
         assertThat(report.supportedDirectJdkCallSiteCount()).isZero();
         assertThat(report.supportedJdkCallSiteCount()).isEqualTo(1);
         assertThat(report.unsupportedJdkCallCandidateCount()).isEqualTo(1);
         assertThat(report.unsupportedJdkCallCandidates()).containsExactly(
-            new UnsupportedJdkCallCandidate("java/util/Objects.requireNonNullElse(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;", 1)
+            new UnsupportedJdkCallCandidate("java/util/Objects.equals(Ljava/lang/Object;Ljava/lang/Object;)Z", 1)
         );
     }
 

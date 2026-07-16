@@ -530,6 +530,38 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if ("java/lang/Class".equals(methodRef.owner())
+            && "getResourceAsStream".equals(methodRef.name())
+            && "(Ljava/lang/String;)Ljava/io/InputStream;".equals(methodRef.descriptor())) {
+            final IrExpression name = popObject(classFile, method, stack);
+            final IrExpression receiver = popObject(classFile, method, stack);
+            final String localName = "object" + localDeclarations.size();
+            localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
+            instructions.add(IrInstruction.assignObject(localName, IrExpression.objectCall("javan_class_resource_as_stream", List.of(receiver, name))));
+            stack.add(StackValue.resourceInputStream(IrExpression.objectLocal(localName)));
+            return;
+        }
+        if ("java/lang/ClassLoader".equals(methodRef.owner())
+            && "getSystemResourceAsStream".equals(methodRef.name())
+            && "(Ljava/lang/String;)Ljava/io/InputStream;".equals(methodRef.descriptor())) {
+            final IrExpression name = popObject(classFile, method, stack);
+            final String localName = "object" + localDeclarations.size();
+            localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
+            instructions.add(IrInstruction.assignObject(localName, IrExpression.objectCall("javan_loader_resource_as_stream", List.of(name))));
+            stack.add(StackValue.resourceInputStream(IrExpression.objectLocal(localName)));
+            return;
+        }
+        if ("java/lang/ClassLoader".equals(methodRef.owner())
+            && "getResourceAsStream".equals(methodRef.name())
+            && "(Ljava/lang/String;)Ljava/io/InputStream;".equals(methodRef.descriptor())) {
+            final IrExpression name = popObject(classFile, method, stack);
+            final IrExpression receiver = popObject(classFile, method, stack);
+            final String localName = "object" + localDeclarations.size();
+            localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
+            instructions.add(IrInstruction.assignObject(localName, IrExpression.objectCall("javan_class_loader_resource_as_stream", List.of(receiver, name))));
+            stack.add(StackValue.resourceInputStream(IrExpression.objectLocal(localName)));
+            return;
+        }
+        if ("java/lang/Class".equals(methodRef.owner())
             && "getSimpleName".equals(methodRef.name())
             && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
             final IrExpression receiver = popObject(classFile, method, stack);
@@ -938,28 +970,55 @@ final class BytecodeToIRInvokeSupport {
         if ("java/io/InputStream".equals(methodRef.owner())) {
             final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
             final StackValue receiver = popObjectValue(classFile, method, instruction, stack);
-            if (receiver.kind() != StackKind.SOCKET_INPUT_STREAM) {
-                throw unsupportedSocketStreamReceiver(classFile, method, methodRef, "Socket.getInputStream()");
+            if (receiver.kind() == StackKind.SOCKET_INPUT_STREAM) {
+                if ("read".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
+                    stack.add(StackValue.intExpression(IrExpression.intCall("javan_socket_input_stream_read", List.of(receiver.expression().orElseThrow()))));
+                    return true;
+                }
+                if ("read".equals(methodRef.name()) && "([B)I".equals(methodRef.descriptor())) {
+                    pushIntCall(instructions, stack, localDeclarations, "javan_socket_input_stream_read_bytes",
+                        List.of(receiver.expression().orElseThrow(), arguments.getFirst()));
+                    return true;
+                }
+                if ("read".equals(methodRef.name()) && "([BII)I".equals(methodRef.descriptor())) {
+                    pushIntCall(instructions, stack, localDeclarations, "javan_socket_input_stream_read_bytes_range",
+                        List.of(receiver.expression().orElseThrow(), arguments.get(0), arguments.get(1), arguments.get(2)));
+                    return true;
+                }
+                if ("close".equals(methodRef.name()) && "()V".equals(methodRef.descriptor())) {
+                    instructions.add(IrInstruction.callStaticVoid("javan_socket_input_stream_close", List.of(receiver.expression().orElseThrow())));
+                    return true;
+                }
             }
-            if ("read".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
-                stack.add(StackValue.intExpression(IrExpression.intCall("javan_socket_input_stream_read", List.of(receiver.expression().orElseThrow()))));
-                return true;
+            if (receiver.kind() == StackKind.RESOURCE_INPUT_STREAM) {
+                if ("read".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
+                    stack.add(StackValue.intExpression(IrExpression.intCall("javan_resource_input_stream_read", List.of(receiver.expression().orElseThrow()))));
+                    return true;
+                }
+                if ("read".equals(methodRef.name()) && "([B)I".equals(methodRef.descriptor())) {
+                    pushIntCall(instructions, stack, localDeclarations, "javan_resource_input_stream_read_bytes",
+                        List.of(receiver.expression().orElseThrow(), arguments.getFirst()));
+                    return true;
+                }
+                if ("read".equals(methodRef.name()) && "([BII)I".equals(methodRef.descriptor())) {
+                    pushIntCall(instructions, stack, localDeclarations, "javan_resource_input_stream_read_bytes_range",
+                        List.of(receiver.expression().orElseThrow(), arguments.get(0), arguments.get(1), arguments.get(2)));
+                    return true;
+                }
+                if ("readAllBytes".equals(methodRef.name()) && "()[B".equals(methodRef.descriptor())) {
+                    pushObjectCall(instructions, stack, localDeclarations, "javan_resource_input_stream_read_all_bytes",
+                        List.of(receiver.expression().orElseThrow()));
+                    return true;
+                }
+                if ("close".equals(methodRef.name()) && "()V".equals(methodRef.descriptor())) {
+                    instructions.add(IrInstruction.callStaticVoid("javan_resource_input_stream_close", List.of(receiver.expression().orElseThrow())));
+                    return true;
+                }
             }
-            if ("read".equals(methodRef.name()) && "([B)I".equals(methodRef.descriptor())) {
-                pushIntCall(instructions, stack, localDeclarations, "javan_socket_input_stream_read_bytes",
-                    List.of(receiver.expression().orElseThrow(), arguments.getFirst()));
-                return true;
+            if (receiver.kind() == StackKind.SOCKET_INPUT_STREAM || receiver.kind() == StackKind.RESOURCE_INPUT_STREAM) {
+                return false;
             }
-            if ("read".equals(methodRef.name()) && "([BII)I".equals(methodRef.descriptor())) {
-                pushIntCall(instructions, stack, localDeclarations, "javan_socket_input_stream_read_bytes_range",
-                    List.of(receiver.expression().orElseThrow(), arguments.get(0), arguments.get(1), arguments.get(2)));
-                return true;
-            }
-            if ("close".equals(methodRef.name()) && "()V".equals(methodRef.descriptor())) {
-                instructions.add(IrInstruction.callStaticVoid("javan_socket_input_stream_close", List.of(receiver.expression().orElseThrow())));
-                return true;
-            }
-            return false;
+            throw unsupportedSpecializedStreamReceiver(classFile, method, methodRef);
         }
         if (!"java/io/OutputStream".equals(methodRef.owner())) {
             return false;
@@ -967,7 +1026,7 @@ final class BytecodeToIRInvokeSupport {
         final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
         final StackValue receiver = popObjectValue(classFile, method, instruction, stack);
         if (receiver.kind() != StackKind.SOCKET_OUTPUT_STREAM) {
-            throw unsupportedSocketStreamReceiver(classFile, method, methodRef, "Socket.getOutputStream()");
+            throw unsupportedSpecializedStreamReceiver(classFile, method, methodRef);
         }
         if ("write".equals(methodRef.name()) && "(I)V".equals(methodRef.descriptor())) {
             instructions.add(IrInstruction.callStaticVoid("javan_socket_output_stream_write", List.of(receiver.expression().orElseThrow(), arguments.getFirst())));
@@ -992,20 +1051,19 @@ final class BytecodeToIRInvokeSupport {
         }
         return false;
     }
-    static DiagnosticException unsupportedSocketStreamReceiver(
+    static DiagnosticException unsupportedSpecializedStreamReceiver(
         final ClassFile classFile,
         final MethodInfo method,
-        final MethodRef methodRef,
-        final String expectedSource
+        final MethodRef methodRef
     ) {
         return new DiagnosticException(Diagnostic.error(
             "JAVAN062",
-            "supported stream call requires a socket-derived stream",
+            "supported stream call requires a specialized native stream receiver",
             classFile.name(),
             method.name() + method.descriptor(),
             methodRef.display(),
-            "This release only supports " + methodRef.owner().replace('/', '.') + " calls when the receiver comes from " + expectedSource + ".",
-            "Use streams returned by java.net.Socket directly, or keep this code on the JVM until generic stream support lands."
+            "This release only supports " + methodRef.owner().replace('/', '.') + " calls on native stream receivers produced by the current runtime support slice.",
+            "Use Class.getResourceAsStream(String) for packaged resources, java.net.Socket streams for socket I/O, or keep this code on the JVM until broader stream support lands."
         ));
     }
     static boolean lowerPrintStreamCall(
@@ -1983,6 +2041,30 @@ final class BytecodeToIRInvokeSupport {
         if ("java/net/InetAddress".equals(methodRef.owner())) {
             return lowerInetAddressIntrinsic(classFile, method, methodRef, stack);
         }
+        if ("java/lang/ClassLoader".equals(methodRef.owner())) {
+            return lowerClassLoaderStaticCall(classFile, method, methodRef, stack);
+        }
+        return false;
+    }
+    static boolean lowerClassLoaderStaticCall(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final MethodRef methodRef,
+        final List<StackValue> stack
+    ) {
+        if ("getSystemClassLoader".equals(methodRef.name())
+            && "()Ljava/lang/ClassLoader;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_class_loader_system", List.of())));
+            return true;
+        }
+        if ("getSystemResourceAsStream".equals(methodRef.name())
+            && "(Ljava/lang/String;)Ljava/io/InputStream;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.resourceInputStream(IrExpression.objectCall(
+                "javan_loader_resource_as_stream",
+                List.of(popObject(classFile, method, stack))
+            )));
+            return true;
+        }
         return false;
     }
     static boolean lowerMathIntrinsic(
@@ -2512,6 +2594,23 @@ final class BytecodeToIRInvokeSupport {
             instructions.add(IrInstruction.assignObject(localName, value));
             instructions.add(IrInstruction.callStaticVoid("javan_objects_require_non_null_msg", List.of(local, message)));
             stack.add(StackValue.objectExpression(local));
+            return true;
+        }
+        if ("requireNonNullElse".equals(methodRef.name()) && "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(methodRef.descriptor())) {
+            final IrExpression fallback = popObject(classFile, method, stack);
+            final IrExpression value = popObject(classFile, method, stack);
+            pushObjectCall(instructions, stack, localDeclarations, "javan_objects_require_non_null_else", List.of(value, fallback));
+            return true;
+        }
+        if ("toString".equals(methodRef.name()) && "(Ljava/lang/Object;)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            final IrExpression value = popObject(classFile, method, stack);
+            pushObjectCall(instructions, stack, localDeclarations, "javan_printable_object_string", List.of(value));
+            return true;
+        }
+        if ("toString".equals(methodRef.name()) && "(Ljava/lang/Object;Ljava/lang/String;)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            final IrExpression defaultValue = popObject(classFile, method, stack);
+            final IrExpression value = popObject(classFile, method, stack);
+            pushObjectCall(instructions, stack, localDeclarations, "javan_objects_to_string_default", List.of(value, defaultValue));
             return true;
         }
         return false;
@@ -6876,6 +6975,18 @@ final class BytecodeToIRInvokeSupport {
                 List.of(
                     IrExpression.stringLiteral(binaryClassName(jvmName)),
                     IrExpression.intLiteral(BytecodeToIR.CLASS_EXACT_CLASS),
+                    IrExpression.intLiteral(0),
+                    IrExpression.intLiteral(0),
+                    IrExpression.intLiteral(0)
+                )
+            );
+        }
+        if ("java/lang/ClassLoader".equals(jvmName)) {
+            return IrExpression.objectCall(
+                "javan_runtime_class_literal",
+                List.of(
+                    IrExpression.stringLiteral(binaryClassName(jvmName)),
+                    IrExpression.intLiteral(BytecodeToIR.CLASS_EXACT_CLASS_LOADER),
                     IrExpression.intLiteral(0),
                     IrExpression.intLiteral(0),
                     IrExpression.intLiteral(0)

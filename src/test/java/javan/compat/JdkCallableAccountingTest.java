@@ -205,6 +205,24 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksObjectsRequireNonNullElseAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Objects", "requireNonNullElse", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksObjectsToStringObjectAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Objects", "toString", "(Ljava/lang/Object;)Ljava/lang/String;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksObjectsToStringObjectDefaultAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Objects", "toString", "(Ljava/lang/Object;Ljava/lang/String;)Ljava/lang/String;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksMapKeySetAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "keySet", "()Ljava/util/Set;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

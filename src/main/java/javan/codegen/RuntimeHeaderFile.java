@@ -101,6 +101,8 @@ final class RuntimeHeaderFile {
         void* javan_file_path_separator(void);
         void* javan_objects_require_non_null(void* value);
         void* javan_objects_require_non_null_msg(void* value, const char* message);
+        void* javan_objects_require_non_null_else(void* value, void* fallback);
+        void* javan_objects_to_string_default(void* value, void* default_value);
         typedef struct {
             signed char* data;
             int length;
@@ -370,8 +372,13 @@ final class RuntimeHeaderFile {
         int javan_socket_input_stream_read(void* value);
         int javan_socket_input_stream_read_bytes(void* value, void* bytes);
         int javan_socket_input_stream_read_bytes_range(void* value, void* bytes, int offset, int length);
+        int javan_resource_input_stream_read(void* value);
+        int javan_resource_input_stream_read_bytes(void* value, void* bytes);
+        int javan_resource_input_stream_read_bytes_range(void* value, void* bytes, int offset, int length);
+        void* javan_resource_input_stream_read_all_bytes(void* value);
         void javan_socket_shutdown_input(void* value);
         void javan_socket_input_stream_close(void* value);
+        void javan_resource_input_stream_close(void* value);
         void javan_socket_output_stream_write(void* value, int byte_value);
         void javan_socket_output_stream_write_bytes(void* value, void* bytes);
         void javan_socket_output_stream_write_bytes_range(void* value, void* bytes, int offset, int length);
@@ -509,6 +516,11 @@ final class RuntimeHeaderFile {
         void* javan_virtual_thread_executor_get_class(void* value);
         void* javan_runtime_class_literal(const char* binary_name, int exact_type_id, int is_enum, int is_array, int assignable_count, ...);
         void* javan_runtime_class_get_name(void* value);
+        int javan_is_system_class_loader(void* value);
+        void* javan_class_loader_system(void);
+        void* javan_class_resource_as_stream(void* class_value, void* name_value);
+        void* javan_class_loader_resource_as_stream(void* loader_value, void* name_value);
+        void* javan_loader_resource_as_stream(void* name_value);
         void* javan_class_simple_name(void* class_value);
         void* javan_class_package_name(void* class_value);
         void* javan_class_type_name(void* class_value);

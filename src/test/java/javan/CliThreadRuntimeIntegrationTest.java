@@ -5906,7 +5906,7 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void unsupportedJdkIntrinsicOverloadsFailClearly() throws Exception {
+    void unsupportedJdkUtilityCallsFailClearly() throws Exception {
         final Path objectsProject = project("unsupported-objects-overload");
         writeJava(objectsProject, "com.acme.Main", """
             package com.acme;
@@ -5918,7 +5918,7 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
                 }
 
                 public static void main(final String[] args) {
-                    Objects.requireNonNullElse(null, "fallback");
+                    System.out.println(Objects.equals(args, args));
                     System.out.println("unreachable");
                 }
             }
@@ -5929,12 +5929,14 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
         assertThat(objectsRun.exitCode()).isEqualTo(2);
         assertThat(objectsRun.stderr()).contains(
             "error[JAVAN031]",
-            "java/util/Objects.requireNonNullElse(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"
+            "java/util/Objects.equals(Ljava/lang/Object;Ljava/lang/Object;)Z"
         );
         assertThat(Files.readString(objectsProject.resolve(".javan/reports/intrinsics.json")))
             .contains(
                 "{\"name\": \"Objects.requireNonNull\", \"count\": 0}",
-                "{\"target\": \"java/util/Objects.requireNonNullElse(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;\", \"count\": 1}"
+                "{\"name\": \"Objects.requireNonNullElse\", \"count\": 0}",
+                "{\"name\": \"Objects.toString\", \"count\": 0}",
+                "{\"target\": \"java/util/Objects.equals(Ljava/lang/Object;Ljava/lang/Object;)Z\", \"count\": 1}"
             );
 
         final Path numberProject = project("unsupported-number-to-string-overload");

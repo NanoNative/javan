@@ -72,6 +72,8 @@ public final class JdkCallSupport {
 
     private static final List<SupportedCall> SUPPORTED_CALLS = List.of(
         intrinsic("Objects.requireNonNull", "java/util/Objects", "requireNonNull", "(Ljava/lang/Object;)Ljava/lang/Object;", "(Ljava/lang/Object;Ljava/lang/String;)Ljava/lang/Object;"),
+        intrinsic("Objects.requireNonNullElse", "java/util/Objects", "requireNonNullElse", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+        intrinsic("Objects.toString", "java/util/Objects", "toString", "(Ljava/lang/Object;)Ljava/lang/String;", "(Ljava/lang/Object;Ljava/lang/String;)Ljava/lang/String;"),
         intrinsic("Math.abs", "java/lang/Math", "abs", "(I)I", "(J)J", "(F)F", "(D)D"),
         intrinsic("Math.min", "java/lang/Math", "min", "(II)I", "(JJ)J"),
         intrinsic("Math.max", "java/lang/Math", "max", "(II)I", "(JJ)J"),
@@ -96,6 +98,10 @@ public final class JdkCallSupport {
         runtime("Class.getPackageName", "java/lang/Class", "getPackageName", "()Ljava/lang/String;"),
         runtime("Class.getTypeName", "java/lang/Class", "getTypeName", "()Ljava/lang/String;"),
         runtime("Class.getComponentType", "java/lang/Class", "getComponentType", "()Ljava/lang/Class;"),
+        runtime("Class.getResourceAsStream", "java/lang/Class", "getResourceAsStream", "(Ljava/lang/String;)Ljava/io/InputStream;"),
+        runtime("ClassLoader.getSystemClassLoader", "java/lang/ClassLoader", "getSystemClassLoader", "()Ljava/lang/ClassLoader;"),
+        runtime("ClassLoader.getSystemResourceAsStream", "java/lang/ClassLoader", "getSystemResourceAsStream", "(Ljava/lang/String;)Ljava/io/InputStream;"),
+        runtime("ClassLoader.getResourceAsStream", "java/lang/ClassLoader", "getResourceAsStream", "(Ljava/lang/String;)Ljava/io/InputStream;"),
         runtime("Class.descriptorString", "java/lang/Class", "descriptorString", "()Ljava/lang/String;"),
         runtime("Class.componentType", "java/lang/Class", "componentType", "()Ljava/lang/Class;"),
         runtime("Class.arrayType", "java/lang/Class", "arrayType", "()Ljava/lang/Class;"),
@@ -622,6 +628,7 @@ public final class JdkCallSupport {
         runtime("HttpResponse.statusCode", "java/net/http/HttpResponse", "statusCode", "()I"),
         runtime("HttpResponse.body", "java/net/http/HttpResponse", "body", "()Ljava/lang/Object;"),
         runtime("InputStream.read", "java/io/InputStream", "read", "()I", "([B)I", "([BII)I"),
+        runtime("InputStream.readAllBytes", "java/io/InputStream", "readAllBytes", "()[B"),
         runtime("InputStream.close", "java/io/InputStream", "close", "()V"),
         runtime("OutputStream.write", "java/io/OutputStream", "write", "(I)V", "([B)V", "([BII)V"),
         runtime("OutputStream.flush", "java/io/OutputStream", "flush", "()V"),
@@ -641,6 +648,7 @@ public final class JdkCallSupport {
         runtime("Optional.filter", "java/util/Optional", "filter", "(Ljava/util/function/Predicate;)Ljava/util/Optional;"),
         runtime("Optional.map", "java/util/Optional", "map", "(Ljava/util/function/Function;)Ljava/util/Optional;")
     );
+    private static final SupportedCallIndex SUPPORTED_CALL_INDEX = new SupportedCallIndex(SUPPORTED_CALLS);
 
     private JdkCallSupport() {
     }
@@ -958,8 +966,8 @@ public final class JdkCallSupport {
      * @return supported call metadata
      */
     public static Optional<SupportedCall> supportedCall(final MethodRef methodRef) {
-        for (final SupportedCall call : SUPPORTED_CALLS) {
-            if (call.matches(methodRef)) {
+        for (final SupportedCall call : SUPPORTED_CALL_INDEX.bucket(methodRef.owner(), methodRef.name())) {
+            if (call.containsDescriptor(methodRef.descriptor())) {
                 return Optional.of(call);
             }
         }
@@ -1102,8 +1110,20 @@ public final class JdkCallSupport {
         if ("java/util/concurrent/ThreadFactory".equals(owner)) {
             return List.of("threads");
         }
+        if ("java/lang/Class".equals(owner) && "getResourceAsStream".equals(name)) {
+            return List.of("resources");
+        }
+        if ("java/lang/ClassLoader".equals(owner)
+            && ("getSystemClassLoader".equals(name)
+            || "getSystemResourceAsStream".equals(name)
+            || "getResourceAsStream".equals(name))) {
+            return List.of("resources");
+        }
         if ("java/util/Arrays".equals(owner)) {
             return List.of("arrays");
+        }
+        if ("java/util/Objects".equals(owner) && "toString".equals(name)) {
+            return List.of("strings");
         }
         if (isStringRuntimeOwner(owner) || isNumberToStringCall(owner, name)) {
             return List.of("strings");
@@ -1434,6 +1454,65 @@ public final class JdkCallSupport {
             }
             return false;
         }
+    }
+
+    private static final class SupportedCallIndex {
+        private final List<String> owners = new java.util.ArrayList<>();
+        private final List<List<MethodBucket>> ownerBuckets = new java.util.ArrayList<>();
+
+        private SupportedCallIndex(final List<SupportedCall> calls) {
+            for (final SupportedCall call : calls) {
+                methodBucket(call.owner(), call.methodName()).calls().add(call);
+            }
+        }
+
+        private List<SupportedCall> bucket(final String owner, final String methodName) {
+            final List<MethodBucket> ownerBucket = existingOwnerBucket(owner);
+            if (ownerBucket == null) {
+                return List.of();
+            }
+            for (final MethodBucket bucket : ownerBucket) {
+                if (bucket.methodName().equals(methodName)) {
+                    return bucket.calls();
+                }
+            }
+            return List.of();
+        }
+
+        private MethodBucket methodBucket(final String owner, final String methodName) {
+            final List<MethodBucket> ownerBucket = ownerBucket(owner);
+            for (final MethodBucket bucket : ownerBucket) {
+                if (bucket.methodName().equals(methodName)) {
+                    return bucket;
+                }
+            }
+            final MethodBucket bucket = new MethodBucket(methodName, new java.util.ArrayList<>());
+            ownerBucket.add(bucket);
+            return bucket;
+        }
+
+        private List<MethodBucket> ownerBucket(final String owner) {
+            final List<MethodBucket> existing = existingOwnerBucket(owner);
+            if (existing != null) {
+                return existing;
+            }
+            final List<MethodBucket> bucket = new java.util.ArrayList<>();
+            owners.add(owner);
+            ownerBuckets.add(bucket);
+            return bucket;
+        }
+
+        private List<MethodBucket> existingOwnerBucket(final String owner) {
+            for (int index = 0; index < owners.size(); index++) {
+                if (owners.get(index).equals(owner)) {
+                    return ownerBuckets.get(index);
+                }
+            }
+            return null;
+        }
+    }
+
+    private record MethodBucket(String methodName, List<SupportedCall> calls) {
     }
 
     /**

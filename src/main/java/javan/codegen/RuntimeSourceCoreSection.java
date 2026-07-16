@@ -882,6 +882,20 @@ final class RuntimeSourceCoreSection {
             }
             return value;
         }
+
+        void* javan_objects_require_non_null_else(void* value, void* fallback) {
+            if (value != NULL) {
+                return value;
+            }
+            return javan_objects_require_non_null(fallback);
+        }
+
+        void* javan_objects_to_string_default(void* value, void* default_value) {
+            if (value == NULL) {
+                return default_value;
+            }
+            return javan_printable_object_string(value);
+        }
         """;
 
     private RuntimeSourceCoreSection() {

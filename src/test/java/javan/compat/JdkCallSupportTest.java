@@ -85,6 +85,42 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void objectsRequireNonNullElseIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Objects",
+            "requireNonNullElse",
+            "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void objectsToStringObjectIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Objects",
+            "toString",
+            "(Ljava/lang/Object;)Ljava/lang/String;"
+        ))).isTrue();
+    }
+
+    @Test
+    void objectsToStringObjectDefaultIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Objects",
+            "toString",
+            "(Ljava/lang/Object;Ljava/lang/String;)Ljava/lang/String;"
+        ))).isTrue();
+    }
+
+    @Test
+    void objectsToStringRequiresStringsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/Objects",
+            "toString",
+            "(Ljava/lang/Object;)Ljava/lang/String;"
+        ))).containsExactly("strings");
+    }
+
+    @Test
     void stringHashCodeIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/String",
