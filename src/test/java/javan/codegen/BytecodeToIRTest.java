@@ -7741,6 +7741,25 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersServerSocketGetInetAddressCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/net/ServerSocket;)Ljava/net/InetAddress;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/net/ServerSocket", "getInetAddress", "()Ljava/net/InetAddress;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_server_socket_get_inet_address", List.of(IrExpression.objectLocal("arg0")))),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
     void lowersSocketCloseCall() {
         final IrFunction function = lowerMain(method(
             0x0008,

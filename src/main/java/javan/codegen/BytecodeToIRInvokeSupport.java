@@ -4496,12 +4496,17 @@ final class BytecodeToIRInvokeSupport {
         if (!"java/net/ServerSocket".equals(methodRef.owner())) {
             return false;
         }
-        if (!"getLocalPort".equals(methodRef.name())
+        if (!"getInetAddress".equals(methodRef.name())
+            && !"getLocalPort".equals(methodRef.name())
             && !"accept".equals(methodRef.name())
             && !"close".equals(methodRef.name())) {
             return false;
         }
         final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+        if ("getInetAddress".equals(methodRef.name()) && "()Ljava/net/InetAddress;".equals(methodRef.descriptor())) {
+            pushObjectCall(instructions, stack, localDeclarations, "javan_server_socket_get_inet_address", List.of(receiver));
+            return true;
+        }
         if ("getLocalPort".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
             pushIntCall(instructions, stack, localDeclarations, "javan_server_socket_get_local_port", List.of(receiver));
             return true;

@@ -508,6 +508,7 @@ public final class CompatibilityReports {
             pass("network-tcp-server-socket"),
             pass("network-tcp-server-socket-backlog"),
             pass("network-tcp-server-socket-bind-address"),
+            pass("network-tcp-server-socket-local-address"),
             pass("network-tcp-socket-stream-io"),
             pass("network-http-client-get-string"),
             pass("network-http-client-post-string-byte-array"),

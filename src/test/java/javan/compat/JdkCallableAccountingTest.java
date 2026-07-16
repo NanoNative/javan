@@ -1063,6 +1063,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksServerSocketGetInetAddressAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/net/ServerSocket", "getInetAddress", "()Ljava/net/InetAddress;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksInetAddressGetByNameAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/net/InetAddress", "getByName", "(Ljava/lang/String;)Ljava/net/InetAddress;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

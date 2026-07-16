@@ -293,6 +293,64 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void serverSocketGetInetAddressBuildsForDefaultLoopbackBind() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("server-socket-get-inet-address-default");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.ServerSocket;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ServerSocket server = new ServerSocket(%d);
+                    System.out.println(server.getInetAddress().getHostAddress());
+                    server.close();
+                }
+            }
+            """.formatted(port));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/server-socket-get-inet-address-default").toString())).stdout())
+            .isEqualTo("127.0.0.1\n");
+    }
+
+    @Test
+    void serverSocketGetInetAddressBuildsForIpv6BindAddress() throws Exception {
+        Assumptions.assumeTrue(ipv6LoopbackAvailable(), "IPv6 loopback is not available on this host");
+        final int port = freeTcpPort();
+        final Path project = project("server-socket-get-inet-address-ipv6");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.net.InetAddress;
+            import java.net.ServerSocket;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ServerSocket server = new ServerSocket(%d, 2, InetAddress.getByName("::1"));
+                    System.out.println(server.getInetAddress().getHostAddress());
+                    server.close();
+                }
+            }
+            """.formatted(port));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/server-socket-get-inet-address-ipv6").toString())).stdout())
+            .isEqualTo("0:0:0:0:0:0:0:1\n");
+    }
+
+    @Test
     void socketInputStreamReadByteBuildsAndReadsFromLoopbackServer() throws Exception {
         final int port = freeTcpPort();
         try (java.net.ServerSocket server = new java.net.ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))) {

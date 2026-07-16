@@ -1714,6 +1714,10 @@ final class RuntimeSourcePlatformSection {
             return javan_server_socket_checked(value)->local_port;
         }
 
+        void* javan_server_socket_get_inet_address(void* value) {
+            return javan_server_socket_checked(value)->local_address;
+        }
+
         void* javan_server_socket_accept(void* value) {
         #if defined(_WIN32)
             (void) value;

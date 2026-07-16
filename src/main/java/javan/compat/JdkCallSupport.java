@@ -465,6 +465,7 @@ public final class JdkCallSupport {
         runtime("Socket.getOutputStream", "java/net/Socket", "getOutputStream", "()Ljava/io/OutputStream;"),
         runtime("Socket.close", "java/net/Socket", "close", "()V"),
         runtime("ServerSocket.<init>", "java/net/ServerSocket", "<init>", "(I)V", "(II)V", "(IILjava/net/InetAddress;)V"),
+        runtime("ServerSocket.getInetAddress", "java/net/ServerSocket", "getInetAddress", "()Ljava/net/InetAddress;"),
         runtime("ServerSocket.getLocalPort", "java/net/ServerSocket", "getLocalPort", "()I"),
         runtime("ServerSocket.accept", "java/net/ServerSocket", "accept", "()Ljava/net/Socket;"),
         runtime("ServerSocket.close", "java/net/ServerSocket", "close", "()V"),

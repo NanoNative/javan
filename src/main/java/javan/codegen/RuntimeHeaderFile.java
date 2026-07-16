@@ -344,6 +344,7 @@ final class RuntimeHeaderFile {
         void javan_socket_close(void* value);
         void* javan_server_socket_bind(int port);
         void* javan_server_socket_bind_config(void* host, int port, int backlog);
+        void* javan_server_socket_get_inet_address(void* value);
         int javan_server_socket_get_local_port(void* value);
         void* javan_server_socket_accept(void* value);
         void javan_server_socket_close(void* value);
