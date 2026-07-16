@@ -2062,6 +2062,25 @@ final class BytecodeToIRInvokeSupport {
             );
             return true;
         }
+        if ("sleep".equals(methodRef.name()) && "(JI)V".equals(methodRef.descriptor())) {
+            final IrExpression nanos = popInt(classFile, method, stack);
+            final IrExpression millis = popLong(classFile, method, stack);
+            lowerInterruptAwareThreadWait(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                localDeclarations,
+                pendingExceptionHandlerStacks,
+                sourceLines,
+                true,
+                IrExpression.stringLiteral("sleep interrupted"),
+                "javan_thread_sleep_millis_nanos_interruptible",
+                List.of(millis, nanos)
+            );
+            return true;
+        }
         if ("interrupted".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor())) {
             stack.add(StackValue.intExpression(IrExpression.intCall("javan_thread_interrupted", List.of())));
             return true;
@@ -3893,6 +3912,45 @@ final class BytecodeToIRInvokeSupport {
                 "javan_thread_set_daemon",
                 List.of(receiver, daemon)
             ));
+            return true;
+        }
+        if ("join".equals(methodRef.name()) && "(J)V".equals(methodRef.descriptor())) {
+            final IrExpression millis = popLong(classFile, method, stack);
+            final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+            lowerInterruptAwareThreadWait(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                localDeclarations,
+                pendingExceptionHandlerStacks,
+                sourceLines,
+                false,
+                IrExpression.objectNull(),
+                "javan_thread_join_millis_interruptible",
+                List.of(receiver, millis)
+            );
+            return true;
+        }
+        if ("join".equals(methodRef.name()) && "(JI)V".equals(methodRef.descriptor())) {
+            final IrExpression nanos = popInt(classFile, method, stack);
+            final IrExpression millis = popLong(classFile, method, stack);
+            final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);
+            lowerInterruptAwareThreadWait(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                localDeclarations,
+                pendingExceptionHandlerStacks,
+                sourceLines,
+                false,
+                IrExpression.objectNull(),
+                "javan_thread_join_millis_nanos_interruptible",
+                List.of(receiver, millis, nanos)
+            );
             return true;
         }
         final IrExpression receiver = popObjectForJdkCall(classFile, method, instruction, stack);

@@ -2271,6 +2271,33 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void threadSleepMillisNanosUninterruptedBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-sleep-millis-nanos-uninterrupted");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final long start = System.nanoTime();
+                    Thread.sleep(20L, 500_000);
+                    final long elapsedMillis = (System.nanoTime() - start) / 1_000_000L;
+                    System.out.println(elapsedMillis >= 20L);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-sleep-millis-nanos-uninterrupted").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
     void threadSleepInterruptedBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("thread-sleep-interrupted");
         writeJava(project, "com.acme.Main", """
@@ -2298,6 +2325,37 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/thread-sleep-interrupted").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadSleepMillisNanosInterruptedBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-sleep-millis-nanos-interrupted");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    Thread.currentThread().interrupt();
+                    try {
+                        Thread.sleep(25L, 500_000);
+                        System.out.println("ok");
+                    } catch (final InterruptedException interrupted) {
+                        System.out.println(interrupted.getMessage() == null);
+                        System.out.println(Thread.currentThread().isInterrupted());
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-sleep-millis-nanos-interrupted").toString())).stdout())
+            .isEqualTo(jvmOutput);
     }
 
     @Test
@@ -3866,6 +3924,88 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
                 "JAVAN_GC_SAFEPOINT_INTERVAL", "1"
             )
         ).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadJoinTimeoutBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-join-timeout");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread worker = new Thread(new SleepTask());
+                    worker.start();
+                    worker.join(1L);
+                    System.out.println(worker.isAlive());
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.SleepTask", """
+            package com.acme;
+
+            public final class SleepTask implements Runnable {
+                @Override
+                public void run() {
+                    try {
+                        Thread.sleep(500L);
+                    } catch (final InterruptedException interrupted) {
+                        System.out.println("interrupted");
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-join-timeout").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadJoinMillisNanosTimeoutBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-join-millis-nanos-timeout");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final Thread worker = new Thread(new SleepTask());
+                    worker.start();
+                    worker.join(0L, 500_000);
+                    System.out.println(worker.isAlive());
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.SleepTask", """
+            package com.acme;
+
+            public final class SleepTask implements Runnable {
+                @Override
+                public void run() {
+                    try {
+                        Thread.sleep(500L);
+                    } catch (final InterruptedException interrupted) {
+                        System.out.println("interrupted");
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-join-millis-nanos-timeout").toString())).stdout()).isEqualTo(jvmOutput);
     }
 
     @Test

@@ -15,6 +15,10 @@ These external probes are intentionally excluded from `doc/status/support-matrix
 smoke only, driven by per-probe metadata and exact stdout expectations under
 `src/test/resources/projects/real-probes/*`.
 
+Each probe now also declares `genericEvidence=...` in `probe.properties`. That metadata must point
+at an existing compiler-owned generic regression test, so a real-project smoke case cannot exist
+without a project-neutral proof in the main javan test line.
+
 They are not static compiler knowledge. Upstream project code may change at any time. Javan is
 allowed to keep named smoke probes here only as compatibility evidence for the currently pinned
 artifacts; support claims must still be expressed in generic JDK/runtime terms elsewhere.

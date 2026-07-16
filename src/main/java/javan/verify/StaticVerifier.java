@@ -223,11 +223,12 @@ public final class StaticVerifier {
         final List<Instruction> instructions = code.instructions();
         for (int index = 0; index < instructions.size(); index++) {
             final Instruction instruction = instructions.get(index);
-            if (invokesThreadSleep(instruction)) {
+            final Optional<String> threadSleepWait = threadSleepWaitSubject(instruction);
+            if (threadSleepWait.isPresent()) {
                 diagnostics.add(blockingWaitDiagnostic(
                     classFile,
                     method,
-                    "Thread.sleep(long)",
+                    threadSleepWait.orElseThrow(),
                     "This reachable code performs an explicit blocking wait. The current thread-analysis slice can identify the wait site, but it does not yet model whether the surrounding task is tiny, CPU-bound, or a broader scalability risk.",
                     "Keep explicit sleeps intentional, prefer event-driven or bounded coordination where high concurrency matters, and inspect thread reports before moving this flow into service-heavy or future virtual-thread workloads."
                 ));
@@ -244,12 +245,13 @@ public final class StaticVerifier {
                 ));
                 continue;
             }
-            if (invokesThreadLifecycle(instruction, "join")
+            final Optional<String> threadJoinWait = threadJoinWaitSubject(instruction);
+            if (threadJoinWait.isPresent()
                 && !blockingJoinCoveredByLifecycleGuard(instructions, index)) {
                 diagnostics.add(blockingWaitDiagnostic(
                     classFile,
                     method,
-                    "Thread.join()",
+                    threadJoinWait.orElseThrow(),
                     "This reachable code performs an explicit blocking wait for another thread to finish. The current thread-analysis slice can identify the join site, but it does not yet model throughput, queueing, or whether the caller is doing avoidable waiting.",
                     "Keep joins intentional, prefer tighter task ownership or bounded coordination where high concurrency matters, and inspect thread reports before scaling this flow out."
                 ));
@@ -823,17 +825,28 @@ public final class StaticVerifier {
     }
 
     private static boolean invokesThreadSleep(final Instruction instruction) {
+        return threadSleepWaitSubject(instruction).isPresent();
+    }
+
+    private static Optional<String> threadSleepWaitSubject(final Instruction instruction) {
         if (instruction.opcode() != 184) {
-            return false;
+            return Optional.empty();
         }
         final Optional<MethodRef> methodRef = instruction.methodRef();
         if (methodRef.isEmpty()) {
-            return false;
+            return Optional.empty();
         }
         final MethodRef target = methodRef.orElseThrow();
-        return "java/lang/Thread".equals(target.owner())
-            && "sleep".equals(target.name())
-            && "(J)V".equals(target.descriptor());
+        if (!"java/lang/Thread".equals(target.owner()) || !"sleep".equals(target.name())) {
+            return Optional.empty();
+        }
+        if ("(J)V".equals(target.descriptor())) {
+            return Optional.of("Thread.sleep(long)");
+        }
+        if ("(JI)V".equals(target.descriptor())) {
+            return Optional.of("Thread.sleep(long,int)");
+        }
+        return Optional.empty();
     }
 
     private static boolean invokesThreadStart(final List<Instruction> instructions, final int index) {
@@ -893,17 +906,36 @@ public final class StaticVerifier {
     }
 
     private static boolean invokesThreadLifecycle(final Instruction instruction, final String lifecycleMethod) {
+        return threadLifecycleSubject(instruction, lifecycleMethod).isPresent();
+    }
+
+    private static Optional<String> threadLifecycleSubject(final Instruction instruction, final String lifecycleMethod) {
         if (instruction.opcode() != 182) {
-            return false;
+            return Optional.empty();
         }
         final Optional<MethodRef> methodRef = instruction.methodRef();
         if (methodRef.isEmpty()) {
-            return false;
+            return Optional.empty();
         }
         final MethodRef target = methodRef.orElseThrow();
-        return "java/lang/Thread".equals(target.owner())
-            && lifecycleMethod.equals(target.name())
-            && "()V".equals(target.descriptor());
+        if (!"java/lang/Thread".equals(target.owner()) || !lifecycleMethod.equals(target.name())) {
+            return Optional.empty();
+        }
+        if ("start".equals(lifecycleMethod) && "()V".equals(target.descriptor())) {
+            return Optional.of("Thread.start()");
+        }
+        if ("join".equals(lifecycleMethod)) {
+            if ("()V".equals(target.descriptor())) {
+                return Optional.of("Thread.join()");
+            }
+            if ("(J)V".equals(target.descriptor())) {
+                return Optional.of("Thread.join(long)");
+            }
+            if ("(JI)V".equals(target.descriptor())) {
+                return Optional.of("Thread.join(long,int)");
+            }
+        }
+        return Optional.empty();
     }
 
     private static boolean isAstore(final int opcode) {
@@ -1092,25 +1124,25 @@ public final class StaticVerifier {
     }
 
     private static boolean isInterruptedWaitCall(final Instruction instruction) {
-        final Optional<MethodRef> methodRef = instruction.methodRef();
-        if (methodRef.isEmpty()) {
-            return false;
-        }
-        final MethodRef target = methodRef.orElseThrow();
         if (instruction.opcode() == 184) {
-            return "java/lang/Thread".equals(target.owner())
-                && "sleep".equals(target.name())
-                && "(J)V".equals(target.descriptor());
+            return threadSleepWaitSubject(instruction).isPresent();
         }
         if (instruction.opcode() == 182) {
+            final Optional<MethodRef> methodRef = instruction.methodRef();
+            if (methodRef.isEmpty()) {
+                return false;
+            }
+            final MethodRef target = methodRef.orElseThrow();
             if (isObjectWaitMethod(target)) {
                 return true;
             }
-            return "java/lang/Thread".equals(target.owner())
-                && "join".equals(target.name())
-                && "()V".equals(target.descriptor());
+            return threadJoinWaitSubject(instruction).isPresent();
         }
         return false;
+    }
+
+    private static Optional<String> threadJoinWaitSubject(final Instruction instruction) {
+        return threadLifecycleSubject(instruction, "join");
     }
 
     private static boolean unsupportedMonitorMethod(final MethodRef methodRef) {

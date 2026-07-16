@@ -8156,6 +8156,53 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersThreadSleepMillisNanosStaticCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(JI)V",
+            3,
+            3,
+            plain(0, 30, "lload_0"),
+            plain(1, 28, "iload_2"),
+            invokeStatic(2, new MethodRef("java/lang/Thread", "sleep", "(JI)V")),
+            plain(3, 177, "return")
+        ));
+
+        assertThat(function.instructions()).hasSize(10);
+        assertThat(function.instructions().get(0)).isEqualTo(IrInstruction.assignInt(
+            "int0",
+            IrExpression.intCall("javan_thread_interrupted", List.of())
+        ));
+        assertThat(function.instructions().get(1)).isEqualTo(IrInstruction.branchIf(
+            "label_thread_wait_continue_2_0",
+            IrExpression.intComparison("==", IrExpression.intLocal("int0"), IrExpression.intLiteral(0))
+        ));
+        assertThat(function.instructions().get(2)).isEqualTo(IrInstruction.jump("label_thread_wait_interrupted_2_0"));
+        assertThat(function.instructions().get(3)).isEqualTo(IrInstruction.label("label_thread_wait_continue_2_0"));
+        assertThat(function.instructions().get(4)).isEqualTo(
+            IrInstruction.assignInt(
+                "int1",
+                IrExpression.intCall(
+                "javan_thread_sleep_millis_nanos_interruptible",
+                    List.of(IrExpression.longLocal("arg0"), IrExpression.intLocal("arg1"))
+                )
+            )
+        );
+        assertThat(function.instructions().get(5)).isEqualTo(IrInstruction.branchIf(
+            "label_thread_wait_success_2_1",
+            IrExpression.intComparison("==", IrExpression.intLocal("int1"), IrExpression.intLiteral(0))
+        ));
+        assertThat(function.instructions().get(6)).isEqualTo(IrInstruction.label("label_thread_wait_interrupted_2_0"));
+        assertThat(function.instructions().get(7)).satisfies(instruction -> {
+            assertThat(instruction.op()).isEqualTo(IrInstruction.Op.PANIC);
+            assertThat(instruction.expression()).contains(IrExpression.stringLiteral("java/lang/InterruptedException"));
+        });
+        assertThat(function.instructions().get(8)).isEqualTo(IrInstruction.label("label_thread_wait_success_2_1"));
+        assertThat(function.instructions().get(9)).isEqualTo(IrInstruction.returnVoid());
+    }
+
+    @Test
     void lowersThreadInterruptInstanceCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -8320,6 +8367,83 @@ final class BytecodeToIRTest {
             assertThat(instruction.expression()).contains(IrExpression.stringLiteral("java/lang/InterruptedException"));
         });
         assertThat(function.instructions().get(5)).isEqualTo(IrInstruction.label("label_thread_wait_success_1_0"));
+        assertThat(function.instructions().get(6)).isEqualTo(IrInstruction.returnVoid());
+    }
+
+    @Test
+    void lowersThreadJoinMillisInstanceCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Thread;J)V",
+            3,
+            3,
+            plain(0, 42, "aload_0"),
+            plain(1, 31, "lload_1"),
+            invokeVirtual(2, new MethodRef("java/lang/Thread", "join", "(J)V")),
+            plain(3, 177, "return")
+        ));
+
+        assertThat(function.instructions()).hasSize(7);
+        assertThat(function.instructions().get(0)).isEqualTo(IrInstruction.label("label_thread_wait_continue_2_0"));
+        assertThat(function.instructions().get(1)).isEqualTo(
+            IrInstruction.assignInt(
+                "int0",
+                IrExpression.intCall(
+                    "javan_thread_join_millis_interruptible",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.longLocal("arg1"))
+                )
+            )
+        );
+        assertThat(function.instructions().get(2)).isEqualTo(IrInstruction.branchIf(
+            "label_thread_wait_success_2_0",
+            IrExpression.intComparison("==", IrExpression.intLocal("int0"), IrExpression.intLiteral(0))
+        ));
+        assertThat(function.instructions().get(3)).isEqualTo(IrInstruction.label("label_thread_wait_interrupted_2_0"));
+        assertThat(function.instructions().get(4)).satisfies(instruction -> {
+            assertThat(instruction.op()).isEqualTo(IrInstruction.Op.PANIC);
+            assertThat(instruction.expression()).contains(IrExpression.stringLiteral("java/lang/InterruptedException"));
+        });
+        assertThat(function.instructions().get(5)).isEqualTo(IrInstruction.label("label_thread_wait_success_2_0"));
+        assertThat(function.instructions().get(6)).isEqualTo(IrInstruction.returnVoid());
+    }
+
+    @Test
+    void lowersThreadJoinMillisNanosInstanceCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Thread;JI)V",
+            4,
+            4,
+            plain(0, 42, "aload_0"),
+            plain(1, 31, "lload_1"),
+            plain(2, 29, "iload_3"),
+            invokeVirtual(3, new MethodRef("java/lang/Thread", "join", "(JI)V")),
+            plain(4, 177, "return")
+        ));
+
+        assertThat(function.instructions()).hasSize(7);
+        assertThat(function.instructions().get(0)).isEqualTo(IrInstruction.label("label_thread_wait_continue_3_0"));
+        assertThat(function.instructions().get(1)).isEqualTo(
+            IrInstruction.assignInt(
+                "int0",
+                IrExpression.intCall(
+                    "javan_thread_join_millis_nanos_interruptible",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.longLocal("arg1"), IrExpression.intLocal("arg2"))
+                )
+            )
+        );
+        assertThat(function.instructions().get(2)).isEqualTo(IrInstruction.branchIf(
+            "label_thread_wait_success_3_0",
+            IrExpression.intComparison("==", IrExpression.intLocal("int0"), IrExpression.intLiteral(0))
+        ));
+        assertThat(function.instructions().get(3)).isEqualTo(IrInstruction.label("label_thread_wait_interrupted_3_0"));
+        assertThat(function.instructions().get(4)).satisfies(instruction -> {
+            assertThat(instruction.op()).isEqualTo(IrInstruction.Op.PANIC);
+            assertThat(instruction.expression()).contains(IrExpression.stringLiteral("java/lang/InterruptedException"));
+        });
+        assertThat(function.instructions().get(5)).isEqualTo(IrInstruction.label("label_thread_wait_success_3_0"));
         assertThat(function.instructions().get(6)).isEqualTo(IrInstruction.returnVoid());
     }
 

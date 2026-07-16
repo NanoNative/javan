@@ -10030,7 +10030,7 @@ final class CoreBehaviorTest {
     void staticVerifierRejectsInterruptedHandlerWithWrongJoinDescriptor() {
         final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
             instruction(0, 42, "aload_0"),
-            instruction(1, 182, "invokevirtual", new MethodRef("java/lang/Thread", "join", "(J)V")),
+            instruction(1, 182, "invokevirtual", new MethodRef("java/lang/Thread", "join", "(I)V")),
             instruction(2, 75, "astore_0")
         ), new CodeException(0, 2, 2, Optional.of("java/lang/InterruptedException")));
 

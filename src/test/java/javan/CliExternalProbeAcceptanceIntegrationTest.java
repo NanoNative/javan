@@ -12,9 +12,11 @@ import org.junit.jupiter.api.parallel.Resources;
 
 import java.io.IOException;
 import java.io.StringReader;
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +38,30 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 @ResourceLock(value = Resources.SYSTEM_PROPERTIES, mode = ResourceAccessMode.READ)
 final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupport {
     private static final Path REAL_PROBES = Path.of("src/test/resources/projects/real-probes");
+
+    @Test
+    void realProbesDeclareCompilerOwnedGenericEvidence() throws Exception {
+        final List<String> declaredTests = Arrays.stream(CliDependencyProjectIntegrationTest.class.getDeclaredMethods())
+            .map(Method::getName)
+            .sorted()
+            .toList();
+
+        assertThat(realProbes())
+            .allSatisfy(probe -> assertThat(probe.genericEvidence())
+                .as(probe.project() + " must declare generic compiler-owned evidence")
+                .isNotBlank()
+                .contains("#"));
+
+        for (final ExternalProbe probe : realProbes()) {
+            final String[] parts = probe.genericEvidence().split("#", 2);
+            assertThat(parts[0])
+                .as(probe.project() + " must point at the compiler-owned dependency test class")
+                .isEqualTo("CliDependencyProjectIntegrationTest");
+            assertThat(declaredTests)
+                .as(probe.project() + " must map to an existing generic compiler-owned regression test")
+                .contains(parts[1]);
+        }
+    }
 
     @TestFactory
     Stream<DynamicTest> pinnedArtifactProbesBuildAgainstPublishedArtifactsAndMatchJvmOutput() throws Exception {
@@ -319,6 +345,7 @@ final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupp
                 + "groupId=" + groupId + "\n"
                 + "artifactId=" + artifactId + "\n"
                 + "version=" + version + "\n"
+                + "genericEvidence=CliDependencyProjectIntegrationTest#dependencyJarStaticIntMethodBuilds\n"
         );
         Files.writeString(probeDirectory.resolve("expected.stdout"), expectedStdout);
     }
@@ -369,6 +396,7 @@ final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupp
                 property(properties, "artifactId"),
                 property(properties, "version"),
                 properties.getProperty("mainClass", "com.acme.Main"),
+                properties.getProperty("genericEvidence", ""),
                 Files.readString(projectDirectory.resolve("expected.stdout")),
                 projectDirectory.toString().replace('\\', '/')
             );
@@ -391,6 +419,7 @@ final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupp
         String artifactId,
         String version,
         String mainClass,
+        String genericEvidence,
         String expectedStdout,
         String projectDirectory
     ) {

@@ -4326,6 +4326,20 @@ final class RuntimeSourceMemorySections {
             return 0;
         }
 
+        int javan_thread_sleep_millis_nanos_interruptible(long long millis, int nanos) {
+            if (millis < 0) {
+                javan_panic("negative Thread.sleep millis");
+            }
+            if (nanos < 0 || nanos > 999999) {
+                javan_panic("invalid Thread.sleep nanos");
+            }
+            long long total_nanos = (millis * 1000000LL) + (long long) nanos;
+            if (total_nanos <= 0LL) {
+                return 0;
+            }
+            return javan_thread_sleep_nanos_interruptible(javan_current_thread_object(), total_nanos);
+        }
+
         int javan_thread_interrupted(void) {
             javan_runtime_lock_enter();
             javan_thread* thread = javan_current_thread_object();
@@ -4735,6 +4749,63 @@ final class RuntimeSourceMemorySections {
                 }
                 javan_sleep_micros(5000UL);
             }
+        }
+
+        int javan_thread_join_millis_nanos_interruptible(void* value, long long millis, int nanos) {
+            if (millis < 0) {
+                javan_panic("negative Thread.join millis");
+            }
+            if (nanos < 0 || nanos > 999999) {
+                javan_panic("invalid Thread.join nanos");
+            }
+            if (millis == 0LL && nanos == 0) {
+                return javan_thread_join_interruptible(value);
+            }
+            javan_thread* thread = javan_require_thread(value);
+            javan_thread* current = javan_current_thread_object();
+            if (thread == current) {
+                javan_panic("Thread.join on current thread is not supported yet");
+            }
+            long long total_nanos = (millis * 1000000LL) + (long long) nanos;
+            javan_runtime_lock_enter();
+            javan_profile_thread_join_calls_value++;
+            javan_runtime_lock_leave();
+            long long started = javan_system_nano_time();
+            while (1) {
+                javan_runtime_lock_enter();
+                int done = thread->started == 0 || thread->native_completion_signaled != 0;
+                javan_runtime_lock_leave();
+                if (done != 0) {
+                    return 0;
+                }
+                if (javan_thread_current_interrupted_peek() != 0) {
+                    (void) javan_thread_interrupted();
+                    javan_runtime_lock_enter();
+                    javan_profile_thread_join_interruptions_value++;
+                    javan_runtime_lock_leave();
+                    return 1;
+                }
+                long long elapsed = javan_system_nano_time() - started;
+                if (elapsed >= total_nanos) {
+                    return 0;
+                }
+                long long remaining = total_nanos - elapsed;
+                long long chunk_nanos = remaining > 5000000LL ? 5000000LL : remaining;
+                if (chunk_nanos <= 0LL) {
+                    return 0;
+                }
+                javan_sleep_micros((unsigned long) ((chunk_nanos + 999LL) / 1000LL));
+            }
+        }
+
+        int javan_thread_join_millis_interruptible(void* value, long long millis) {
+            if (millis < 0) {
+                javan_panic("negative Thread.join millis");
+            }
+            if (millis == 0LL) {
+                return javan_thread_join_interruptible(value);
+            }
+            return javan_thread_join_millis_nanos_interruptible(value, millis, 0);
         }
 
         void javan_thread_join(void* value) {

@@ -526,6 +526,7 @@ final class RuntimeHeaderFile {
         void javan_thread_local_remove(void* value);
         void javan_thread_sleep_millis(long long millis);
         int javan_thread_sleep_millis_interruptible(long long millis);
+        int javan_thread_sleep_millis_nanos_interruptible(long long millis, int nanos);
         int javan_thread_interrupted(void);
         void javan_thread_interrupt(void* value);
         int javan_thread_is_interrupted(void* value);
@@ -535,6 +536,8 @@ final class RuntimeHeaderFile {
         void javan_thread_start(void* value);
         void javan_thread_join(void* value);
         int javan_thread_join_interruptible(void* value);
+        int javan_thread_join_millis_interruptible(void* value, long long millis);
+        int javan_thread_join_millis_nanos_interruptible(void* value, long long millis, int nanos);
         void javan_thread_park(void);
         void javan_thread_park_nanos(long long nanos);
         void javan_thread_park_until(long long deadline_millis);
