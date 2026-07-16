@@ -1045,7 +1045,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/char-sequence-char-at").toString())).stdout()).isEqualTo(jvmOutput);
-        assertThat(jvmOutput).isEqualTo("97\n");
+        assertThat(jvmOutput).isEqualTo("101\n");
     }
 
     @Test
