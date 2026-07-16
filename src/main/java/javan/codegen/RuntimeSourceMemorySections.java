@@ -69,6 +69,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_RUNTIME_KIND_MAP_ENTRY 30
         #define JAVAN_RUNTIME_KIND_ATOMIC_INTEGER 31
         #define JAVAN_RUNTIME_KIND_ATOMIC_REFERENCE 32
+        #define JAVAN_RUNTIME_KIND_RESOURCE_INPUT_STREAM 33
         #define JAVAN_LIST_VIEW_UNMODIFIABLE 1
         #define JAVAN_BUILTIN_INSTANCEOF_COLLECTION 1
         #define JAVAN_BUILTIN_INSTANCEOF_MAP 2
@@ -311,6 +312,14 @@ final class RuntimeSourceMemorySections {
 
         typedef struct {
             int magic;
+            int position;
+            int length;
+            int reserved0;
+            void* bytes;
+        } javan_resource_input_stream_value;
+
+        typedef struct {
+            int magic;
             int port;
             int reserved0;
             int reserved1;
@@ -380,6 +389,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_SERVER_SOCKET_MAGIC 0x4a535352
         #define JAVAN_SOCKET_INPUT_STREAM_MAGIC 0x4a534953
         #define JAVAN_SOCKET_OUTPUT_STREAM_MAGIC 0x4a534f53
+        #define JAVAN_RESOURCE_INPUT_STREAM_MAGIC 0x4a525349
         #define JAVAN_URI_MAGIC 0x4a555249
         #define JAVAN_HTTP_CLIENT_MAGIC 0x4a485443
         #define JAVAN_HTTP_REQUEST_BUILDER_MAGIC 0x4a485442
@@ -433,17 +443,18 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_CLASS_EXACT_STRING -2001
         #define JAVAN_CLASS_EXACT_OBJECT -2002
         #define JAVAN_CLASS_EXACT_CLASS -2003
-        #define JAVAN_CLASS_EXACT_ARRAY_LIST -2004
-        #define JAVAN_CLASS_EXACT_HASH_MAP -2005
-        #define JAVAN_CLASS_EXACT_PRIMITIVE_BOOLEAN -2006
-        #define JAVAN_CLASS_EXACT_PRIMITIVE_BYTE -2007
-        #define JAVAN_CLASS_EXACT_PRIMITIVE_SHORT -2008
-        #define JAVAN_CLASS_EXACT_PRIMITIVE_CHAR -2009
-        #define JAVAN_CLASS_EXACT_PRIMITIVE_INT -2010
-        #define JAVAN_CLASS_EXACT_PRIMITIVE_LONG -2011
-        #define JAVAN_CLASS_EXACT_PRIMITIVE_FLOAT -2012
-        #define JAVAN_CLASS_EXACT_PRIMITIVE_DOUBLE -2013
-        #define JAVAN_CLASS_EXACT_PRIMITIVE_VOID -2014
+        #define JAVAN_CLASS_EXACT_CLASS_LOADER -2004
+        #define JAVAN_CLASS_EXACT_ARRAY_LIST -2005
+        #define JAVAN_CLASS_EXACT_HASH_MAP -2006
+        #define JAVAN_CLASS_EXACT_PRIMITIVE_BOOLEAN -2007
+        #define JAVAN_CLASS_EXACT_PRIMITIVE_BYTE -2008
+        #define JAVAN_CLASS_EXACT_PRIMITIVE_SHORT -2009
+        #define JAVAN_CLASS_EXACT_PRIMITIVE_CHAR -2010
+        #define JAVAN_CLASS_EXACT_PRIMITIVE_INT -2011
+        #define JAVAN_CLASS_EXACT_PRIMITIVE_LONG -2012
+        #define JAVAN_CLASS_EXACT_PRIMITIVE_FLOAT -2013
+        #define JAVAN_CLASS_EXACT_PRIMITIVE_DOUBLE -2014
+        #define JAVAN_CLASS_EXACT_PRIMITIVE_VOID -2015
 
         typedef struct javan_process_result {
             int exit_code;
@@ -457,6 +468,8 @@ final class RuntimeSourceMemorySections {
             struct javan_root_frame* next;
         } javan_root_frame;
 
+        #define JAVAN_ROOT_FRAME_CACHE_LIMIT 32
+
         typedef void (*javan_native_resource_cleanup)(void* value);
 
         typedef struct javan_native_resource_frame {
@@ -467,7 +480,18 @@ final class RuntimeSourceMemorySections {
 
         typedef struct javan_thread javan_thread;
 
+        #define JAVAN_ALLOCATION_CACHE_SIZE 4
+        typedef struct {
+            void** values;
+            javan_allocation_node** nodes;
+            int length;
+            int capacity;
+        } javan_allocation_registry;
+
         static javan_allocation_node* javan_allocations = NULL;
+        static void* javan_allocation_cache_values[JAVAN_ALLOCATION_CACHE_SIZE];
+        static javan_allocation_node* javan_allocation_cache_nodes[JAVAN_ALLOCATION_CACHE_SIZE];
+        static javan_allocation_registry javan_allocation_index = { NULL, NULL, 0, 0 };
         static int javan_allocator_cleanup_registered = 0;
         static int javan_allocator_cleaning = 0;
         static unsigned long javan_total_allocations_value = 0;
@@ -480,10 +504,12 @@ final class RuntimeSourceMemorySections {
         static void*** javan_static_roots_value = NULL;
         static int javan_static_root_count_value = 0;
         static JAVAN_THREAD_LOCAL javan_root_frame* javan_root_frames_value = NULL;
+        static JAVAN_THREAD_LOCAL javan_root_frame* javan_root_frame_cache_value = NULL;
         static JAVAN_THREAD_LOCAL javan_native_resource_frame* javan_native_resource_frames_value = NULL;
         static JAVAN_THREAD_LOCAL JavanPanicScope* javan_panic_scope_top = NULL;
         static JAVAN_THREAD_LOCAL int javan_root_frame_depth_value = 0;
         static JAVAN_THREAD_LOCAL int javan_frame_root_count_value = 0;
+        static JAVAN_THREAD_LOCAL int javan_root_frame_cache_count_value = 0;
         static int javan_heap_stress_initialized = 0;
         static unsigned long javan_heap_stress_interval = 0;
         static unsigned long javan_heap_stress_ticks = 0;
@@ -729,11 +755,48 @@ final class RuntimeSourceMemorySections {
             }
         }
 
+        static javan_root_frame* javan_root_frame_take(void) {
+            javan_root_frame* frame = javan_root_frame_cache_value;
+            if (frame != NULL) {
+                javan_root_frame_cache_value = frame->next;
+                frame->next = NULL;
+                javan_root_frame_cache_count_value--;
+                return frame;
+            }
+            return (javan_root_frame*) malloc(sizeof(javan_root_frame));
+        }
+
+        static void javan_root_frame_release(javan_root_frame* frame) {
+            if (frame == NULL) {
+                return;
+            }
+            if (javan_root_frame_cache_count_value < JAVAN_ROOT_FRAME_CACHE_LIMIT) {
+                frame->roots = NULL;
+                frame->count = 0;
+                frame->next = javan_root_frame_cache_value;
+                javan_root_frame_cache_value = frame;
+                javan_root_frame_cache_count_value++;
+                return;
+            }
+            free(frame);
+        }
+
+        static void javan_root_frame_cache_cleanup(void) {
+            javan_root_frame* frame = javan_root_frame_cache_value;
+            while (frame != NULL) {
+                javan_root_frame* next = frame->next;
+                free(frame);
+                frame = next;
+            }
+            javan_root_frame_cache_value = NULL;
+            javan_root_frame_cache_count_value = 0;
+        }
+
         static void javan_root_frame_cleanup(void) {
             javan_root_frame* frame = javan_root_frames_value;
             while (frame != NULL) {
                 javan_root_frame* next = frame->next;
-                free(frame);
+                javan_root_frame_release(frame);
                 frame = next;
             }
             javan_root_frames_value = NULL;
@@ -749,7 +812,7 @@ final class RuntimeSourceMemorySections {
             while (javan_root_frames_value != frame_limit && javan_root_frames_value != NULL) {
                 javan_root_frame* frame = javan_root_frames_value;
                 javan_root_frames_value = frame->next;
-                free(frame);
+                javan_root_frame_release(frame);
             }
             javan_root_frame_depth_value = depth;
             javan_frame_root_count_value = root_count;
@@ -826,8 +889,19 @@ final class RuntimeSourceMemorySections {
             javan_allocator_cleaning = 1;
             javan_native_resource_cleanup_all();
             javan_root_frame_cleanup();
+            javan_root_frame_cache_cleanup();
             javan_thread_root_cleanup();
             javan_object_registry_cleanup();
+            for (int index = 0; index < JAVAN_ALLOCATION_CACHE_SIZE; index++) {
+                javan_allocation_cache_values[index] = NULL;
+                javan_allocation_cache_nodes[index] = NULL;
+            }
+            free(javan_allocation_index.values);
+            free(javan_allocation_index.nodes);
+            javan_allocation_index.values = NULL;
+            javan_allocation_index.nodes = NULL;
+            javan_allocation_index.length = 0;
+            javan_allocation_index.capacity = 0;
             javan_allocation_node* node = javan_allocations;
             javan_allocations = NULL;
             while (node != NULL) {
@@ -996,6 +1070,57 @@ final class RuntimeSourceMemorySections {
             }
         }
 
+        static void javan_allocation_cache_remove(void* value) {
+            if (value == NULL) {
+                return;
+            }
+            for (int index = 0; index < JAVAN_ALLOCATION_CACHE_SIZE; index++) {
+                if (javan_allocation_cache_values[index] == value) {
+                    javan_allocation_cache_values[index] = NULL;
+                    javan_allocation_cache_nodes[index] = NULL;
+                }
+            }
+        }
+
+        static void javan_allocation_cache_store(void* value, javan_allocation_node* node) {
+            if (value == NULL || node == NULL) {
+                return;
+            }
+            javan_allocation_cache_remove(value);
+            for (int index = JAVAN_ALLOCATION_CACHE_SIZE - 1; index > 0; index--) {
+                javan_allocation_cache_values[index] = javan_allocation_cache_values[index - 1];
+                javan_allocation_cache_nodes[index] = javan_allocation_cache_nodes[index - 1];
+            }
+            javan_allocation_cache_values[0] = value;
+            javan_allocation_cache_nodes[0] = node;
+        }
+
+        static javan_allocation_node* javan_allocation_cache_lookup(void* value) {
+            if (value == NULL) {
+                return NULL;
+            }
+            for (int index = 0; index < JAVAN_ALLOCATION_CACHE_SIZE; index++) {
+                if (javan_allocation_cache_values[index] == value) {
+                    javan_allocation_node* node = javan_allocation_cache_nodes[index];
+                    if (index > 0 && node != NULL) {
+                        for (int shift = index; shift > 0; shift--) {
+                            javan_allocation_cache_values[shift] = javan_allocation_cache_values[shift - 1];
+                            javan_allocation_cache_nodes[shift] = javan_allocation_cache_nodes[shift - 1];
+                        }
+                        javan_allocation_cache_values[0] = value;
+                        javan_allocation_cache_nodes[0] = node;
+                    }
+                    return node;
+                }
+            }
+            return NULL;
+        }
+
+        static void javan_allocation_registry_ensure_capacity(int required);
+        static void javan_allocation_registry_put(void* value, javan_allocation_node* node);
+        static void javan_allocation_registry_remove(void* value);
+        static javan_allocation_node* javan_allocation_registry_lookup(void* value);
+
         static void javan_track_allocation(void* value, void* base, unsigned long size, int kind, int type_id) {
             javan_runtime_lock_enter();
             javan_allocator_ensure_cleanup();
@@ -1020,12 +1145,31 @@ final class RuntimeSourceMemorySections {
             node->array_class_name = NULL;
             node->next = javan_allocations;
             javan_allocations = node;
+            javan_allocation_cache_store(value, node);
+            javan_allocation_registry_put(value, node);
             javan_account_allocation(size);
             javan_heap_maybe_validate();
             javan_runtime_lock_leave();
         }
 
         static javan_allocation_node* javan_find_allocation(void* value, javan_allocation_node** previous) {
+            if (value == NULL) {
+                if (previous != NULL) {
+                    *previous = NULL;
+                }
+                return NULL;
+            }
+            if (previous == NULL) {
+                javan_allocation_node* cached = javan_allocation_cache_lookup(value);
+                if (cached != NULL) {
+                    return cached;
+                }
+                javan_allocation_node* indexed = javan_allocation_registry_lookup(value);
+                if (indexed != NULL) {
+                    javan_allocation_cache_store(value, indexed);
+                    return indexed;
+                }
+            }
             javan_allocation_node* prior = NULL;
             javan_allocation_node* node = javan_allocations;
             while (node != NULL) {
@@ -1033,6 +1177,7 @@ final class RuntimeSourceMemorySections {
                     if (previous != NULL) {
                         *previous = prior;
                     }
+                    javan_allocation_cache_store(value, node);
                     return node;
                 }
                 prior = node;
@@ -1189,6 +1334,7 @@ final class RuntimeSourceMemorySections {
                 || runtime_kind == JAVAN_RUNTIME_KIND_SERVER_SOCKET
                 || runtime_kind == JAVAN_RUNTIME_KIND_SOCKET_INPUT_STREAM
                 || runtime_kind == JAVAN_RUNTIME_KIND_SOCKET_OUTPUT_STREAM
+                || runtime_kind == JAVAN_RUNTIME_KIND_RESOURCE_INPUT_STREAM
                 || runtime_kind == JAVAN_RUNTIME_KIND_URI
                 || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_CLIENT
                 || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_REQUEST_BUILDER
@@ -1223,7 +1369,7 @@ final class RuntimeSourceMemorySections {
                 }
             }
             javan_allocator_ensure_cleanup();
-            javan_root_frame* frame = (javan_root_frame*) malloc(sizeof(javan_root_frame));
+            javan_root_frame* frame = javan_root_frame_take();
             if (frame == NULL) {
                 javan_runtime_lock_leave();
                 javan_panic("out of memory");
@@ -1252,7 +1398,7 @@ final class RuntimeSourceMemorySections {
             javan_root_frames_value = frame->next;
             javan_root_frame_depth_value--;
             javan_frame_root_count_value -= frame->count;
-            free(frame);
+            javan_root_frame_release(frame);
             javan_heap_maybe_validate();
             javan_runtime_lock_leave();
         }
@@ -1574,6 +1720,15 @@ final class RuntimeSourceMemorySections {
                 if (stream->magic != JAVAN_SOCKET_OUTPUT_STREAM_MAGIC || stream->socket == NULL) {
                     javan_panic("invalid runtime socket output stream metadata");
                 }
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_RESOURCE_INPUT_STREAM) {
+                javan_resource_input_stream_value* stream = (javan_resource_input_stream_value*) node->value;
+                if (stream->magic != JAVAN_RESOURCE_INPUT_STREAM_MAGIC
+                    || stream->bytes == NULL
+                    || stream->length < 0
+                    || stream->position < 0
+                    || stream->position > stream->length) {
+                    javan_panic("invalid runtime resource input stream metadata");
+                }
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_URI) {
                 javan_uri_value* uri = (javan_uri_value*) node->value;
                 if (uri->magic != JAVAN_URI_MAGIC
@@ -1632,6 +1787,9 @@ final class RuntimeSourceMemorySections {
         void* javan_printable_object_string(void* value) {
             if (value == NULL) {
                 return (void*) "null";
+            }
+            if (javan_is_system_class_loader(value) != 0) {
+                return (void*) "java.lang.ClassLoader$System";
             }
             javan_allocation_node* node = javan_find_allocation(value, NULL);
             if (node == NULL) {
@@ -2023,6 +2181,7 @@ final class RuntimeSourceMemorySections {
                 javan_panic("cannot reallocate exported runtime allocation");
             }
             javan_prepare_reallocation(node->size, actual_size);
+            uintptr_t original_address = (uintptr_t) value;
             void* next = realloc(value, actual_size);
             if (next == NULL) {
                 javan_gc_collect();
@@ -2032,9 +2191,15 @@ final class RuntimeSourceMemorySections {
                 }
             }
             javan_account_realloc(node->size, actual_size);
+            if ((uintptr_t) next != original_address) {
+                javan_allocation_cache_remove((void*) original_address);
+                javan_allocation_registry_remove((void*) original_address);
+            }
             node->value = next;
             node->base = next;
             node->size = actual_size;
+            javan_allocation_cache_store(next, node);
+            javan_allocation_registry_put(next, node);
             if (validate_after != 0) {
                 javan_heap_maybe_validate();
             }
@@ -2075,6 +2240,8 @@ final class RuntimeSourceMemorySections {
             }
             unsigned long size = node->size;
             void* base = node->base;
+            javan_allocation_cache_remove(value);
+            javan_allocation_registry_remove(value);
             free(node);
             free(base);
             javan_account_free(size);
@@ -2182,6 +2349,8 @@ final class RuntimeSourceMemorySections {
             }
             void* base = node->base;
             javan_account_free(node->size);
+            javan_allocation_cache_remove(value);
+            javan_allocation_registry_remove(value);
             free(node);
             free(base);
             javan_heap_maybe_validate();
@@ -2214,7 +2383,111 @@ final class RuntimeSourceMemorySections {
             }
             return index;
         }
+        """;
 
+    private static final String SOURCE_HEAP_TAIL_B = """
+        static void javan_allocation_registry_reinsert(
+            void** values,
+            javan_allocation_node** nodes,
+            int capacity,
+            void* value,
+            javan_allocation_node* node
+        ) {
+            int index = javan_registry_slot(values, capacity, value);
+            values[index] = value;
+            nodes[index] = node;
+        }
+
+        static void javan_allocation_registry_ensure_capacity(int required) {
+            if ((required * 2) < javan_allocation_index.capacity) {
+                return;
+            }
+            int old_capacity = javan_allocation_index.capacity;
+            void** old_values = javan_allocation_index.values;
+            javan_allocation_node** old_nodes = javan_allocation_index.nodes;
+            int next_capacity = old_capacity <= 0 ? 128 : old_capacity * 2;
+            while ((required * 2) >= next_capacity) {
+                next_capacity *= 2;
+            }
+            void** next_values = (void**) javan_raw_calloc_retry((unsigned long) next_capacity * sizeof(void*));
+            if (next_values == NULL) {
+                javan_panic("out of memory");
+            }
+            javan_allocation_node** next_nodes = (javan_allocation_node**) javan_raw_calloc_retry(
+                (unsigned long) next_capacity * sizeof(javan_allocation_node*)
+            );
+            if (next_nodes == NULL) {
+                free(next_values);
+                javan_panic("out of memory");
+            }
+            for (int index = 0; index < old_capacity; index++) {
+                if (old_values != NULL && old_values[index] != NULL && old_nodes[index] != NULL) {
+                    javan_allocation_registry_reinsert(next_values, next_nodes, next_capacity, old_values[index], old_nodes[index]);
+                }
+            }
+            free(old_values);
+            free(old_nodes);
+            javan_allocation_index.values = next_values;
+            javan_allocation_index.nodes = next_nodes;
+            javan_allocation_index.capacity = next_capacity;
+        }
+
+        static void javan_allocation_registry_put(void* value, javan_allocation_node* node) {
+            if (value == NULL || node == NULL) {
+                return;
+            }
+            javan_allocation_registry_ensure_capacity(javan_allocation_index.length + 1);
+            int index = javan_registry_slot(javan_allocation_index.values, javan_allocation_index.capacity, value);
+            if (javan_allocation_index.values[index] == NULL) {
+                javan_allocation_index.length++;
+            }
+            javan_allocation_index.values[index] = value;
+            javan_allocation_index.nodes[index] = node;
+        }
+
+        static void javan_allocation_registry_remove(void* value) {
+            if (value == NULL || javan_allocation_index.capacity <= 0) {
+                return;
+            }
+            int index = javan_registry_slot(javan_allocation_index.values, javan_allocation_index.capacity, value);
+            if (javan_allocation_index.values[index] != value) {
+                return;
+            }
+            javan_allocation_index.values[index] = NULL;
+            javan_allocation_index.nodes[index] = NULL;
+            javan_allocation_index.length--;
+            int next = (index + 1) & (javan_allocation_index.capacity - 1);
+            while (javan_allocation_index.values[next] != NULL) {
+                void* moved_value = javan_allocation_index.values[next];
+                javan_allocation_node* moved_node = javan_allocation_index.nodes[next];
+                javan_allocation_index.values[next] = NULL;
+                javan_allocation_index.nodes[next] = NULL;
+                javan_allocation_index.length--;
+                javan_allocation_registry_reinsert(
+                    javan_allocation_index.values,
+                    javan_allocation_index.nodes,
+                    javan_allocation_index.capacity,
+                    moved_value,
+                    moved_node
+                );
+                javan_allocation_index.length++;
+                next = (next + 1) & (javan_allocation_index.capacity - 1);
+            }
+        }
+
+        static javan_allocation_node* javan_allocation_registry_lookup(void* value) {
+            if (value == NULL || javan_allocation_index.capacity <= 0) {
+                return NULL;
+            }
+            int index = javan_registry_slot(javan_allocation_index.values, javan_allocation_index.capacity, value);
+            if (javan_allocation_index.values[index] != value) {
+                return NULL;
+            }
+            return javan_allocation_index.nodes[index];
+        }
+        """;
+
+    private static final String SOURCE_HEAP_TAIL_C = """
         static void javan_object_registry_reinsert(void** values, int* type_ids, int capacity, void* value, int type_id) {
             int index = javan_registry_slot(values, capacity, value);
             values[index] = value;
@@ -2764,6 +3037,9 @@ final class RuntimeSourceMemorySections {
             if (strcmp(binary_name, "java.lang.Class") == 0) {
                 return JAVAN_CLASS_EXACT_CLASS;
             }
+            if (strcmp(binary_name, "java.lang.ClassLoader") == 0) {
+                return JAVAN_CLASS_EXACT_CLASS_LOADER;
+            }
             if (strcmp(binary_name, "java.util.ArrayList") == 0) {
                 return JAVAN_CLASS_EXACT_ARRAY_LIST;
             }
@@ -3062,6 +3338,9 @@ final class RuntimeSourceMemorySections {
                 javan_allocation_node* node = javan_find_allocation(object_value, NULL);
                 return node != NULL && node->runtime_kind == JAVAN_RUNTIME_KIND_CLASS ? 1 : 0;
             }
+            if (state->exact_type_id == JAVAN_CLASS_EXACT_CLASS_LOADER) {
+                return javan_is_system_class_loader(object_value);
+            }
             if (state->is_array != 0) {
                 javan_allocation_node* node = javan_find_allocation(object_value, NULL);
                 if (node == NULL || node->kind != JAVAN_HEAP_KIND_ARRAY) {
@@ -3145,6 +3424,9 @@ final class RuntimeSourceMemorySections {
         void* javan_object_get_class(void* value) {
             if (value == NULL) {
                 javan_panic("null object");
+            }
+            if (javan_is_system_class_loader(value) != 0) {
+                return javan_runtime_class_literal("java.lang.ClassLoader", JAVAN_CLASS_EXACT_CLASS_LOADER, 0, 0, 0);
             }
             javan_allocation_node* node = javan_find_allocation(value, NULL);
             if (node != NULL && node->kind == JAVAN_HEAP_KIND_ARRAY) {
@@ -4757,6 +5039,7 @@ final class RuntimeSourceMemorySections {
             if (javan_native_resource_frames_value != NULL) {
                 javan_panic("cannot detach current thread with live native resources");
             }
+            javan_root_frame_cache_cleanup();
             javan_thread_leave_live_root(javan_current_thread_value);
             javan_current_thread_value = NULL;
         }
@@ -5914,6 +6197,11 @@ final class RuntimeSourceMemorySections {
                 if (stream != NULL && stream->magic == JAVAN_SOCKET_OUTPUT_STREAM_MAGIC) {
                     javan_gc_mark_value((void*) stream->socket);
                 }
+            } else if (runtime_kind == JAVAN_RUNTIME_KIND_RESOURCE_INPUT_STREAM) {
+                javan_resource_input_stream_value* stream = (javan_resource_input_stream_value*) value;
+                if (stream != NULL && stream->magic == JAVAN_RESOURCE_INPUT_STREAM_MAGIC) {
+                    javan_gc_mark_value(stream->bytes);
+                }
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_URI) {
                 javan_uri_value* uri = (javan_uri_value*) value;
                 if (uri != NULL && uri->magic == JAVAN_URI_MAGIC) {
@@ -6069,6 +6357,8 @@ final class RuntimeSourceMemorySections {
                     } else {
                         previous->next = next;
                     }
+                    javan_allocation_cache_remove(node->value);
+                    javan_allocation_registry_remove(node->value);
                     unsigned long size = node->size;
                     void* base = node->base;
                     free(node);
@@ -8232,6 +8522,8 @@ final class RuntimeSourceMemorySections {
 
     static String heapAlloc() {
         String result = SOURCE_HEAP_ALLOC_HEAD;
+        result = result + SOURCE_HEAP_TAIL_B;
+        result = result + SOURCE_HEAP_TAIL_C;
         result = result + SOURCE_HEAP_ALLOC_EXECUTOR;
         result = result + SOURCE_HEAP_ALLOC_DATE_TIME;
         result = result + SOURCE_HEAP_ALLOC_TAIL;

@@ -226,11 +226,11 @@ public final class Javan {
         final PrintStream out
     )
         throws IOException, InterruptedException {
+        final List<ResourceBundler.ResourceFile> resources = resourceBundler.bundle(check.layout());
         final Path mainC = cCodegen.generate(program, generated);
-        final Path runtimeC = runtimeFiles.write(generated);
+        final Path runtimeC = runtimeFiles.write(generated, resources);
         final Path output = check.layout().outputDirectory().resolve("bin").resolve(check.layout().outputName());
         final Path binary = nativeLinker.link(check.layout().root(), mainC, runtimeC, output);
-        resourceBundler.bundle(check.layout());
         runtimeContractReports.write(check.layout().outputDirectory(), "app", List.of(binary));
         runtimeFootprintReports.write(
             check.layout().outputDirectory(),
@@ -254,14 +254,14 @@ public final class Javan {
         final Options options,
         final PrintStream out
     ) throws IOException, InterruptedException {
+        final List<ResourceBundler.ResourceFile> resources = resourceBundler.bundle(check.layout());
         final Path libraryC = cCodegen.generateLibrary(program, generated, check.exports());
-        final Path runtimeC = runtimeFiles.write(generated);
+        final Path runtimeC = runtimeFiles.write(generated, resources);
         final List<Path> artifacts = new ArrayList<>();
         for (final LibraryFormat format : options.libraryFormats()) {
             final Path output = libraryArtifactPath(format, check.layout().outputDirectory(), check.layout().outputName());
             artifacts.add(linkLibraryFormat(format, check.layout().root(), libraryC, runtimeC, output));
         }
-        resourceBundler.bundle(check.layout());
         final List<Path> bindings = bindingGenerator.generate(
             check.layout().outputDirectory(),
             check.layout().outputName(),

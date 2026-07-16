@@ -5762,7 +5762,7 @@ final class RuntimeFilesTest {
 
             int main(void) {
                 javan_register_static_roots(0, 0);
-                void* klass = javan_runtime_class_literal("int", -2010, 0, 0, 0);
+                void* klass = javan_runtime_class_literal("int", -2011, 0, 0, 0);
                 void* array_type = javan_class_array_type(klass);
                 printf("%s\\n", (char*) javan_runtime_class_get_name(array_type));
                 return 0;
@@ -5783,7 +5783,7 @@ final class RuntimeFilesTest {
 
             int main(void) {
                 javan_register_static_roots(0, 0);
-                void* klass = javan_runtime_class_literal("int", -2010, 0, 0, 0);
+                void* klass = javan_runtime_class_literal("int", -2011, 0, 0, 0);
                 printf("%d\\n", javan_class_is_primitive(klass));
                 return 0;
             }
@@ -5823,7 +5823,7 @@ final class RuntimeFilesTest {
 
             int main(void) {
                 javan_register_static_roots(0, 0);
-                void* klass = javan_runtime_class_literal("void", -2014, 0, 0, 0);
+                void* klass = javan_runtime_class_literal("void", -2015, 0, 0, 0);
                 printf("%s\\n", (char*) javan_runtime_class_get_name(klass));
                 return 0;
             }
@@ -5923,7 +5923,7 @@ final class RuntimeFilesTest {
 
             int main(void) {
                 javan_register_static_roots(0, 0);
-                void* klass = javan_runtime_class_literal("void", -2014, 0, 0, 0);
+                void* klass = javan_runtime_class_literal("void", -2015, 0, 0, 0);
                 printf("%s\\n", (char*) javan_class_simple_name(klass));
                 return 0;
             }
@@ -5983,7 +5983,7 @@ final class RuntimeFilesTest {
 
             int main(void) {
                 javan_register_static_roots(0, 0);
-                void* klass = javan_runtime_class_literal("int", -2010, 0, 0, 0);
+                void* klass = javan_runtime_class_literal("int", -2011, 0, 0, 0);
                 printf("%s\\n", (char*) javan_class_package_name(klass));
                 return 0;
             }
@@ -6003,7 +6003,7 @@ final class RuntimeFilesTest {
 
             int main(void) {
                 javan_register_static_roots(0, 0);
-                void* klass = javan_runtime_class_literal("void", -2014, 0, 0, 0);
+                void* klass = javan_runtime_class_literal("void", -2015, 0, 0, 0);
                 printf("%s\\n", (char*) javan_class_package_name(klass));
                 return 0;
             }
@@ -6066,7 +6066,7 @@ final class RuntimeFilesTest {
                 };
                 javan_root_frame_push(roots, 2);
                 object_class = javan_runtime_class_literal("java.lang.Object", -2002, 0, 0, 0);
-                int_class = javan_runtime_class_literal("int", -2010, 0, 0, 0);
+                int_class = javan_runtime_class_literal("int", -2011, 0, 0, 0);
                 printf("%d\\n", javan_class_is_assignable_from(object_class, int_class));
                 javan_root_frame_pop(roots);
                 return 0;

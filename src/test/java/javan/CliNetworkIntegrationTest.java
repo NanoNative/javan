@@ -3263,7 +3263,7 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).isNotZero();
-        assertThat(run.stderr()).contains("error[JAVAN062]", "supported stream call requires a socket-derived stream");
+        assertThat(run.stderr()).contains("error[JAVAN062]", "supported stream call requires a specialized native stream receiver");
     }
 
     @Test

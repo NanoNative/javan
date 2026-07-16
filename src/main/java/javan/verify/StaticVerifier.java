@@ -39,33 +39,125 @@ public final class StaticVerifier {
      */
     public List<Diagnostic> verify(final Map<String, ClassFile> classes, final List<EntryPoint> reachable) {
         final List<Diagnostic> diagnostics = new ArrayList<>();
+        final ReachableEntries reachableEntries = new ReachableEntries(reachable);
+        final MethodRefFactsCache methodRefFacts = new MethodRefFactsCache(classes);
         for (final ClassFile classFile : classes.values()) {
             for (final MethodInfo method : classFile.methods()) {
-                final int isReachable = containsEntry(reachable, new EntryPoint(classFile.name(), method.name(), method.descriptor()));
-                diagnostics.addAll(verifyMethod(classes, classFile, method, isReachable));
+                final int isReachable = reachableEntries.contains(classFile.name(), method.name(), method.descriptor()) ? 1 : 0;
+                diagnostics.addAll(verifyMethod(classes, classFile, method, isReachable, methodRefFacts));
             }
         }
         return List.copyOf(diagnostics);
     }
 
-    private static int containsEntry(final List<EntryPoint> entries, final EntryPoint target) {
-        for (final EntryPoint entry : entries) {
-            if (entry.className().equals(target.className())) {
-                if (entry.methodName().equals(target.methodName())) {
-                    if (entry.descriptor().equals(target.descriptor())) {
-                        return 1;
-                    }
-                }
+    private static final class ReachableEntries {
+        private final List<String> owners = new ArrayList<>();
+        private final List<List<EntryPoint>> ownerBuckets = new ArrayList<>();
+
+        private ReachableEntries(final List<EntryPoint> entries) {
+            for (final EntryPoint entry : entries) {
+                ownerBucket(entry.className()).add(entry);
             }
         }
-        return 0;
+
+        private boolean contains(final String owner, final String methodName, final String descriptor) {
+            final List<EntryPoint> bucket = existingOwnerBucket(owner);
+            if (bucket == null) {
+                return false;
+            }
+            for (final EntryPoint entry : bucket) {
+                if (entry.methodName().equals(methodName) && entry.descriptor().equals(descriptor)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private List<EntryPoint> ownerBucket(final String owner) {
+            final List<EntryPoint> existing = existingOwnerBucket(owner);
+            if (existing != null) {
+                return existing;
+            }
+            final List<EntryPoint> bucket = new ArrayList<>();
+            owners.add(owner);
+            ownerBuckets.add(bucket);
+            return bucket;
+        }
+
+        private List<EntryPoint> existingOwnerBucket(final String owner) {
+            for (int index = 0; index < owners.size(); index++) {
+                if (owners.get(index).equals(owner)) {
+                    return ownerBuckets.get(index);
+                }
+            }
+            return null;
+        }
+    }
+
+    private static final class MethodRefFactsCache {
+        private final Map<String, ClassFile> classes;
+        private final List<String> owners = new ArrayList<>();
+        private final List<List<MethodRefFacts>> ownerBuckets = new ArrayList<>();
+
+        private MethodRefFactsCache(final Map<String, ClassFile> classes) {
+            this.classes = classes;
+        }
+
+        private MethodRefFacts resolve(final MethodRef original) {
+            final List<MethodRefFacts> bucket = ownerBucket(original.owner());
+            for (final MethodRefFacts facts : bucket) {
+                if (facts.methodName().equals(original.name()) && facts.descriptor().equals(original.descriptor())) {
+                    return facts;
+                }
+            }
+            final MethodRef target = JdkCallSupport.normalizeInheritedSupportedJdkCall(classes, original).orElse(original);
+            final MethodRefFacts facts = new MethodRefFacts(
+                original.name(),
+                original.descriptor(),
+                target,
+                JdkCallSupport.isJdkCall(target),
+                JdkCallSupport.isSupported(target)
+            );
+            bucket.add(facts);
+            return facts;
+        }
+
+        private List<MethodRefFacts> ownerBucket(final String owner) {
+            final List<MethodRefFacts> existing = existingOwnerBucket(owner);
+            if (existing != null) {
+                return existing;
+            }
+            final List<MethodRefFacts> bucket = new ArrayList<>();
+            owners.add(owner);
+            ownerBuckets.add(bucket);
+            return bucket;
+        }
+
+        private List<MethodRefFacts> existingOwnerBucket(final String owner) {
+            for (int index = 0; index < owners.size(); index++) {
+                if (owners.get(index).equals(owner)) {
+                    return ownerBuckets.get(index);
+                }
+            }
+            return null;
+        }
+    }
+
+    private record MethodRefFacts(
+        String methodName,
+        String descriptor,
+        MethodRef target,
+        boolean jdkCall,
+        boolean supported
+    ) {
     }
 
     private List<Diagnostic> verifyMethod(
         final Map<String, ClassFile> classes,
         final ClassFile classFile,
         final MethodInfo method,
-        final int reachable
+        final int reachable,
+        final MethodRefFactsCache methodRefFacts
     ) {
         final List<Diagnostic> diagnostics = new ArrayList<>();
         if (reachable == 1 && method.isNative()) {
@@ -134,7 +226,8 @@ public final class StaticVerifier {
                     application,
                     unsupportedStringConstant,
                     hasMonitorInstructions,
-                    exactVirtualThreadWrapperMethod
+                    exactVirtualThreadWrapperMethod,
+                    methodRefFacts
                 ));
             }
         }
@@ -314,7 +407,8 @@ public final class StaticVerifier {
         final int application,
         final int unsupportedStringConstant,
         final int hasMonitorInstructions,
-        final int exactVirtualThreadWrapperMethod
+        final int exactVirtualThreadWrapperMethod,
+        final MethodRefFactsCache methodRefFacts
     ) {
         final List<Diagnostic> diagnostics = new ArrayList<>();
         if (reachable == 0 && application == 0) {
@@ -322,8 +416,8 @@ public final class StaticVerifier {
         }
         final Optional<MethodRef> methodRef = instruction.methodRef();
         if (methodRef.isPresent()) {
-            final MethodRef target = JdkCallSupport.normalizeInheritedSupportedJdkCall(classes, methodRef.orElseThrow())
-                .orElse(methodRef.orElseThrow());
+            final MethodRefFacts facts = methodRefFacts.resolve(methodRef.orElseThrow());
+            final MethodRef target = facts.target();
             final int unsupportedMonitorMethod = unsupportedMonitorMethod(target) ? 1 : 0;
             final int unsupportedConcurrencyApi = unsupportedConcurrencyRuntimeApi(
                 classes,
@@ -344,11 +438,12 @@ public final class StaticVerifier {
             if (unsupportedConcurrencyApi == 1) {
                 diagnostics.add(concurrencyRuntimeDiagnostic(classFile, method, target, reachable));
             }
-            if (NetworkApiSupport.isNetworkCall(target) && !JdkCallSupport.isSupported(target)) {
+            if (NetworkApiSupport.isNetworkCall(target) && !facts.supported()) {
                 diagnostics.add(networkCallDiagnostic(classFile, method, target, reachable));
             } else if (unsupportedMonitorMethod == 0
                 && unsupportedConcurrencyApi == 0
-                && unsupportedJdkCall(target)
+                && facts.jdkCall()
+                && !facts.supported()
                 && !ignoredGeneratedEnumValueOfCall(classFile, method, target, reachable)) {
                 diagnostics.add(jdkCallDiagnostic(classFile, method, target, reachable));
             }
@@ -2477,16 +2572,6 @@ public final class StaticVerifier {
 
     private static boolean isPlatformThrowable(final String owner) {
         return JdkCallSupport.isPlatformThrowable(owner);
-    }
-
-    private static boolean unsupportedJdkCall(final MethodRef methodRef) {
-        if (!JdkCallSupport.isJdkCall(methodRef)) {
-            return false;
-        }
-        if (JdkCallSupport.isSupported(methodRef)) {
-            return false;
-        }
-        return true;
     }
 
     private static boolean ignoredGeneratedEnumValueOfCall(

@@ -350,11 +350,31 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void bytecodeSupportClassificationMatchesPublishedOpcodeTables() {
+        final List<Integer> supported = BytecodeSupport.nativeSupportedOpcodes();
+        final List<Integer> known = BytecodeSupport.knownOpcodes();
+
+        for (int opcode = 0; opcode <= 201; opcode++) {
+            final BytecodeSupport.Status expected = supported.contains(opcode)
+                ? BytecodeSupport.Status.NATIVE_SUPPORTED
+                : known.contains(opcode)
+                    ? BytecodeSupport.Status.RECOGNIZED_REJECTED
+                    : BytecodeSupport.Status.UNKNOWN_FATAL;
+            assertThat(BytecodeSupport.classify(opcode))
+                .as("opcode %s", opcode)
+                .isEqualTo(expected);
+        }
+    }
+
+    @Test
     void forbiddenRulesRejectDynamicApis() {
         final ForbiddenApiRules rules = new ForbiddenApiRules();
 
         assertThat(rules.forbiddenReason(new MethodRef("java/lang/Class", "forName", "(Ljava/lang/String;)Ljava/lang/Class;"))).isPresent();
         assertThat(rules.forbiddenReason(new MethodRef("java/lang/ClassLoader", "loadClass", "(Ljava/lang/String;)Ljava/lang/Class;"))).isPresent();
+        assertThat(rules.forbiddenReason(new MethodRef("java/lang/ClassLoader", "getSystemClassLoader", "()Ljava/lang/ClassLoader;"))).isEmpty();
+        assertThat(rules.forbiddenReason(new MethodRef("java/lang/ClassLoader", "getSystemResourceAsStream", "(Ljava/lang/String;)Ljava/io/InputStream;"))).isEmpty();
+        assertThat(rules.forbiddenReason(new MethodRef("java/lang/ClassLoader", "getResourceAsStream", "(Ljava/lang/String;)Ljava/io/InputStream;"))).isEmpty();
         assertThat(rules.forbiddenReason(new MethodRef("java/lang/ClassLoader$NativeLibrary", "load", "()V"))).isPresent();
         assertThat(rules.forbiddenReason(new MethodRef("java/lang/reflect/Proxy", "newProxyInstance", "()Ljava/lang/Object;"))).isPresent();
         assertThat(rules.forbiddenReason(new MethodRef("java/lang/reflect/Method", "invoke", "()V"))).isPresent();
@@ -599,6 +619,43 @@ final class CoreBehaviorTest {
     @Test
     void jdkCallSupportAcceptsSocketInputStreamReadCall() {
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/io/InputStream", "read", "()I"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsClassGetResourceAsStreamCall() {
+        final MethodRef method = new MethodRef("java/lang/Class", "getResourceAsStream", "(Ljava/lang/String;)Ljava/io/InputStream;");
+
+        assertThat(JdkCallSupport.isSupported(method)).isTrue();
+        assertThat(JdkCallSupport.runtimeModules(method)).containsExactly("resources");
+    }
+
+    @Test
+    void jdkCallSupportAcceptsInputStreamReadAllBytesCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/io/InputStream", "readAllBytes", "()[B"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsClassLoaderGetSystemResourceAsStreamCall() {
+        final MethodRef method = new MethodRef("java/lang/ClassLoader", "getSystemResourceAsStream", "(Ljava/lang/String;)Ljava/io/InputStream;");
+
+        assertThat(JdkCallSupport.isSupported(method)).isTrue();
+        assertThat(JdkCallSupport.runtimeModules(method)).containsExactly("resources");
+    }
+
+    @Test
+    void jdkCallSupportAcceptsClassLoaderGetSystemClassLoaderCall() {
+        final MethodRef method = new MethodRef("java/lang/ClassLoader", "getSystemClassLoader", "()Ljava/lang/ClassLoader;");
+
+        assertThat(JdkCallSupport.isSupported(method)).isTrue();
+        assertThat(JdkCallSupport.runtimeModules(method)).containsExactly("resources");
+    }
+
+    @Test
+    void jdkCallSupportAcceptsClassLoaderInstanceResourceStreamCall() {
+        final MethodRef method = new MethodRef("java/lang/ClassLoader", "getResourceAsStream", "(Ljava/lang/String;)Ljava/io/InputStream;");
+
+        assertThat(JdkCallSupport.isSupported(method)).isTrue();
+        assertThat(JdkCallSupport.runtimeModules(method)).containsExactly("resources");
     }
 
     @Test
@@ -4033,7 +4090,7 @@ final class CoreBehaviorTest {
             "java/lang/Object",
             0,
             List.of(),
-            hostOnlyInputStreamReadMethod("(Ljava/io/InputStream;Ljava/nio/file/Path;)Ljavan/classfile/ClassFile;")
+            hostOnlyUnsupportedInputStreamMethod("(Ljava/io/InputStream;Ljava/nio/file/Path;)Ljavan/classfile/ClassFile;")
         );
 
         final List<Diagnostic> diagnostics = new StaticVerifier().verify(Map.of(reader.name(), reader), List.of());
@@ -4048,7 +4105,7 @@ final class CoreBehaviorTest {
             "java/lang/Object",
             0,
             List.of(),
-            hostOnlyInputStreamReadMethod("(Ljava/io/InputStream;Ljava/nio/file/Path;)Ljavan/compat/ClassMetadata;")
+            hostOnlyUnsupportedInputStreamMethod("(Ljava/io/InputStream;Ljava/nio/file/Path;)Ljavan/compat/ClassMetadata;")
         );
 
         final List<Diagnostic> diagnostics = new StaticVerifier().verify(Map.of(reader.name(), reader), List.of());
@@ -4064,7 +4121,7 @@ final class CoreBehaviorTest {
             "java/lang/Object",
             0,
             List.of(),
-            hostOnlyInputStreamReadMethod(descriptor)
+            hostOnlyUnsupportedInputStreamMethod(descriptor)
         );
 
         final List<Diagnostic> diagnostics = new StaticVerifier().verify(
@@ -12499,7 +12556,7 @@ final class CoreBehaviorTest {
         );
     }
 
-    private static MethodInfo hostOnlyInputStreamReadMethod(final String descriptor) {
+    private static MethodInfo hostOnlyUnsupportedInputStreamMethod(final String descriptor) {
         return new MethodInfo(
             0,
             "read",
@@ -12511,8 +12568,9 @@ final class CoreBehaviorTest {
                 0,
                 List.of(
                     instruction(0, 42, "aload_0"),
-                    instruction(1, 182, "invokevirtual", new MethodRef("java/io/InputStream", "readAllBytes", "()[B")),
-                    instruction(2, 176, "areturn")
+                    instruction(1, 4, "iconst_1"),
+                    instruction(2, 182, "invokevirtual", new MethodRef("java/io/InputStream", "readNBytes", "(I)[B")),
+                    instruction(3, 176, "areturn")
                 )
             ))
         );

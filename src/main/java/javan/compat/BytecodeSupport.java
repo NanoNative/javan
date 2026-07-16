@@ -46,13 +46,13 @@ public final class BytecodeSupport {
      * @return support status
      */
     public static Status classify(final int opcode) {
-        if (contains(NATIVE_SUPPORTED, opcode)) {
-            return Status.NATIVE_SUPPORTED;
+        if (opcode < 0 || opcode > 201) {
+            return Status.UNKNOWN_FATAL;
         }
-        if (contains(KNOWN_JVM, opcode)) {
+        if (recognizedRejectedOpcode(opcode)) {
             return Status.RECOGNIZED_REJECTED;
         }
-        return Status.UNKNOWN_FATAL;
+        return Status.NATIVE_SUPPORTED;
     }
 
     /**
@@ -86,13 +86,16 @@ public final class BytecodeSupport {
         return listOf(NATIVE_SUPPORTED);
     }
 
-    private static boolean contains(final int[] values, final int target) {
-        for (final int value : values) {
-            if (value == target) {
-                return true;
-            }
-        }
-        return false;
+    private static boolean recognizedRejectedOpcode(final int opcode) {
+        return switch (opcode) {
+            case 88, 90, 91, 92, 93, 94, 95,
+                114, 115, 116, 117,
+                137, 138, 139, 140, 141, 142, 143, 144,
+                168, 169,
+                194, 195, 196, 197,
+                200, 201 -> true;
+            default -> false;
+        };
     }
 
     private static List<Integer> listOf(final int[] values) {

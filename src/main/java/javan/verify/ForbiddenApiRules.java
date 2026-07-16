@@ -20,6 +20,12 @@ public final class ForbiddenApiRules {
         if ("java/lang/Class".equals(owner) && "forName".equals(name)) {
             return Optional.of("dynamic class loading is not supported");
         }
+        if ("java/lang/ClassLoader".equals(owner)
+            && ("getSystemResourceAsStream".equals(name)
+            || "getSystemClassLoader".equals(name)
+            || "getResourceAsStream".equals(name))) {
+            return Optional.empty();
+        }
         if ("java/lang/ClassLoader".equals(owner) || owner.startsWith("java/lang/ClassLoader$")) {
             return Optional.of("class loaders are dynamic runtime infrastructure");
         }
