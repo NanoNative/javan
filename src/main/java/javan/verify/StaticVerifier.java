@@ -1272,6 +1272,7 @@ public final class StaticVerifier {
     private static boolean isVirtualThreadWrapperInternalCall(final MethodRef methodRef) {
         return isThreadOfVirtual(methodRef)
             || isThreadBuilderVirtualName(methodRef)
+            || isThreadBuilderVirtualInheritInheritableThreadLocals(methodRef)
             || isThreadBuilderVirtualFactory(methodRef);
     }
 

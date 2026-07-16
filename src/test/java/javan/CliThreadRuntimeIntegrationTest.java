@@ -752,6 +752,48 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void threadOfVirtualStartViaInheritanceStaticBuilderHelperBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-start-inheritance-static-helper");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                static final InheritableThreadLocal<String> LOCAL = new InheritableThreadLocal<>();
+
+                private Main() {
+                }
+
+                private static Thread.Builder.OfVirtual builder(final boolean inherit) {
+                    return Thread.ofVirtual().inheritInheritableThreadLocals(inherit);
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    LOCAL.set("main");
+                    final Thread worker = builder(false).start(new Task());
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Main.LOCAL.get());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-start-inheritance-static-helper").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
     void threadOfVirtualBuilderAliasStartBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("virtual-thread-builder-alias-start");
         writeJava(project, "com.acme.Main", """
@@ -1521,6 +1563,51 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-factory-parameterized-static-helper").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadOfVirtualFactoryViaInheritanceStaticHelperBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("virtual-thread-builder-factory-inheritance-static-helper");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.ThreadFactory;
+
+            public final class Main {
+                static final InheritableThreadLocal<String> LOCAL = new InheritableThreadLocal<>();
+
+                private Main() {
+                }
+
+                private static ThreadFactory factory(final boolean inherit) {
+                    return Thread.ofVirtual().inheritInheritableThreadLocals(inherit).factory();
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    LOCAL.set("main");
+                    final Thread worker = factory(false).newThread(new Task());
+                    worker.start();
+                    worker.join();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println(Main.LOCAL.get());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/virtual-thread-builder-factory-inheritance-static-helper").toString())).stdout())
             .isEqualTo(jvmOutput);
     }
 

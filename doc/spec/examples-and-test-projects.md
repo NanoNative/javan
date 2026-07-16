@@ -54,12 +54,13 @@ Boundary:
 - upstream probe changes are allowed; Javan support claims must still be expressed in generic JDK/runtime terms
 
 These are not core compiler/runtime support tests. They are allowed to prove "Javan can compile
-this real artifact today", but they are not allowed to define "Javan supports this JDK feature".
-Core support tests must stay compiler-owned, deterministic, and independent of external project
-semantics. When a real probe finds a bug, the fix must land with a synthetic compiler-owned
-regression test that proves the underlying JDK/runtime shape without depending on any external
-project identity. External probes are allowed to answer only one question: "does Javan compile
-this pinned real artifact today?" They are not allowed to answer "is this Java feature supported?"
+this pinned real artifact today", but they are not allowed to define "Javan supports this JDK
+feature". Core support tests must stay compiler-owned, deterministic, and independent of external
+project semantics. When a real probe finds a bug, the fix must land with a synthetic
+compiler-owned regression test that proves the underlying JDK/runtime shape without depending on
+any external project identity. External probes are allowed to answer only one question: "does
+Javan compile this pinned real artifact today?" They are not allowed to answer "is this Java
+feature supported?"
 
 Javan must not learn probe-specific semantics from these projects. If an upstream real probe
 changes, the probe metadata and smoke assets may change, but the durable compiler/runtime

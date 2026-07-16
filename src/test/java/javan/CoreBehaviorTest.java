@@ -3170,6 +3170,127 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void reachabilityTracksThreadOfVirtualStartViaInheritanceStaticBuilderHelper() {
+        final EntryPoint main = new EntryPoint("com/acme/Main", "main", "()V");
+        final EntryPoint helper = new EntryPoint("com/acme/Main", "builder", "(Z)Ljava/lang/Thread$Builder$OfVirtual;");
+        final EntryPoint run = new EntryPoint("com/acme/Task", "run", "()V");
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo(
+                        "main",
+                        "()V",
+                        instruction(0, 3, "iconst_0"),
+                        instruction(1, 184, "invokestatic", new MethodRef("com/acme/Main", "builder", "(Z)Ljava/lang/Thread$Builder$OfVirtual;")),
+                        classInstruction(2, 187, "new", "com/acme/Task"),
+                        instruction(3, 89, "dup"),
+                        instruction(4, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        instruction(5, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "start", "(Ljava/lang/Runnable;)Ljava/lang/Thread;")),
+                        instruction(6, 75, "astore_0"),
+                        instruction(7, 42, "aload_0"),
+                        instruction(8, 182, "invokevirtual", new MethodRef("java/lang/Thread", "join", "()V")),
+                        instruction(9, 177, "return")
+                    ),
+                    new MethodInfo(
+                        0x0008,
+                        "builder",
+                        "(Z)Ljava/lang/Thread$Builder$OfVirtual;",
+                        Optional.of(new CodeAttribute(
+                            2,
+                            1,
+                            new byte[0],
+                            0,
+                            List.of(
+                                instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;")),
+                                instruction(1, 26, "iload_0"),
+                                instruction(2, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "inheritInheritableThreadLocals", "(Z)Ljava/lang/Thread$Builder$OfVirtual;")),
+                                instruction(3, 176, "areturn")
+                            )
+                        ))
+                    )
+                ),
+                "com/acme/Task", classWithMethods(
+                    "com/acme/Task",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/lang/Runnable"),
+                    methodInfo("<init>", "()V"),
+                    methodInfo("run", "()V")
+                )
+            ),
+            List.of(main)
+        );
+
+        assertThat(graph.reachableMethods()).contains(helper);
+        assertThat(graph.callEdges()).contains(new CallEdge(main, run, CallEdge.Kind.THREAD_START_TASK));
+    }
+
+    @Test
+    void reachabilityTracksThreadOfVirtualFactoryViaInheritanceStaticHelper() {
+        final EntryPoint main = new EntryPoint("com/acme/Main", "main", "()V");
+        final EntryPoint helper = new EntryPoint("com/acme/Main", "factory", "(Z)Ljava/util/concurrent/ThreadFactory;");
+        final EntryPoint run = new EntryPoint("com/acme/Task", "run", "()V");
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo(
+                        "main",
+                        "()V",
+                        instruction(0, 3, "iconst_0"),
+                        instruction(1, 184, "invokestatic", new MethodRef("com/acme/Main", "factory", "(Z)Ljava/util/concurrent/ThreadFactory;")),
+                        classInstruction(2, 187, "new", "com/acme/Task"),
+                        instruction(3, 89, "dup"),
+                        instruction(4, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        instruction(5, 185, "invokeinterface", new MethodRef("java/util/concurrent/ThreadFactory", "newThread", "(Ljava/lang/Runnable;)Ljava/lang/Thread;")),
+                        instruction(6, 75, "astore_0"),
+                        instruction(7, 42, "aload_0"),
+                        instruction(8, 182, "invokevirtual", new MethodRef("java/lang/Thread", "start", "()V")),
+                        instruction(9, 177, "return")
+                    ),
+                    new MethodInfo(
+                        0x0008,
+                        "factory",
+                        "(Z)Ljava/util/concurrent/ThreadFactory;",
+                        Optional.of(new CodeAttribute(
+                            2,
+                            1,
+                            new byte[0],
+                            0,
+                            List.of(
+                                instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;")),
+                                instruction(1, 26, "iload_0"),
+                                instruction(2, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "inheritInheritableThreadLocals", "(Z)Ljava/lang/Thread$Builder$OfVirtual;")),
+                                instruction(3, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "factory", "()Ljava/util/concurrent/ThreadFactory;")),
+                                instruction(4, 176, "areturn")
+                            )
+                        ))
+                    )
+                ),
+                "com/acme/Task", classWithMethods(
+                    "com/acme/Task",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/lang/Runnable"),
+                    methodInfo("<init>", "()V"),
+                    methodInfo("run", "()V")
+                )
+            ),
+            List.of(main)
+        );
+
+        assertThat(graph.reachableMethods()).contains(helper);
+        assertThat(graph.callEdges()).contains(new CallEdge(main, run, CallEdge.Kind.THREAD_START_TASK));
+    }
+
+    @Test
     void reachabilityFallsBackToRunnableTargetsForThreadOfVirtualStartWithRunnableParameterAlias() {
         final EntryPoint main = new EntryPoint("com/acme/Main", "main", "(Ljava/lang/Runnable;)V");
         final EntryPoint run = new EntryPoint("com/acme/Task", "run", "()V");
@@ -5471,6 +5592,118 @@ final class CoreBehaviorTest {
             List.of(
                 new EntryPoint(main.name(), "main", "()V"),
                 new EntryPoint(main.name(), "factory", "()Ljava/util/concurrent/ThreadFactory;")
+            )
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableThreadOfVirtualStartViaInheritanceStaticBuilderHelper() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            methodInfo(
+                "main",
+                "()V",
+                instruction(0, 3, "iconst_0"),
+                instruction(1, 184, "invokestatic", new MethodRef("com/acme/Main", "builder", "(Z)Ljava/lang/Thread$Builder$OfVirtual;")),
+                classInstruction(2, 187, "new", "com/acme/Task"),
+                instruction(3, 89, "dup"),
+                instruction(4, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                instruction(5, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "start", "(Ljava/lang/Runnable;)Ljava/lang/Thread;")),
+                instruction(6, 87, "pop"),
+                instruction(7, 177, "return")
+            ),
+            new MethodInfo(
+                0x0008,
+                "builder",
+                "(Z)Ljava/lang/Thread$Builder$OfVirtual;",
+                Optional.of(new CodeAttribute(
+                    2,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instruction(1, 26, "iload_0"),
+                        instruction(2, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "inheritInheritableThreadLocals", "(Z)Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instruction(3, 176, "areturn")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", "()V"), new EntryPoint(main.name(), "builder", "(Z)Ljava/lang/Thread$Builder$OfVirtual;"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableThreadOfVirtualFactoryViaInheritanceStaticHelper() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            methodInfo(
+                "main",
+                "()V",
+                instruction(0, 3, "iconst_0"),
+                instruction(1, 184, "invokestatic", new MethodRef("com/acme/Main", "factory", "(Z)Ljava/util/concurrent/ThreadFactory;")),
+                classInstruction(2, 187, "new", "com/acme/Task"),
+                instruction(3, 89, "dup"),
+                instruction(4, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                instruction(5, 185, "invokeinterface", new MethodRef("java/util/concurrent/ThreadFactory", "newThread", "(Ljava/lang/Runnable;)Ljava/lang/Thread;")),
+                instruction(6, 87, "pop"),
+                instruction(7, 177, "return")
+            ),
+            new MethodInfo(
+                0x0008,
+                "factory",
+                "(Z)Ljava/util/concurrent/ThreadFactory;",
+                Optional.of(new CodeAttribute(
+                    2,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instruction(1, 26, "iload_0"),
+                        instruction(2, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "inheritInheritableThreadLocals", "(Z)Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instruction(3, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "factory", "()Ljava/util/concurrent/ThreadFactory;")),
+                        instruction(4, 176, "areturn")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(
+                new EntryPoint(main.name(), "main", "()V"),
+                new EntryPoint(main.name(), "factory", "(Z)Ljava/util/concurrent/ThreadFactory;")
             )
         );
 

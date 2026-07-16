@@ -409,9 +409,9 @@ public final class VirtualThreadInvokePatterns {
         }
         index++;
         while (index < instructions.size() - 1) {
-            final NameStep nameStep = nameStepAt(method, instructions, index);
-            if (nameStep != NameStep.NONE) {
-                index += nameStep.width;
+            final BuilderStep builderStep = builderStepAt(method, instructions, index);
+            if (builderStep != BuilderStep.NONE) {
+                index += builderStep.width;
                 continue;
             }
             if (requireFactory
@@ -444,21 +444,33 @@ public final class VirtualThreadInvokePatterns {
             && isSupportedBuilderWrapperCall(classes, methodRef.orElseThrow());
     }
 
-    private static NameStep nameStepAt(
+    private static BuilderStep builderStepAt(
         final MethodInfo method,
         final List<Instruction> instructions,
         final int index
     ) {
         if (index >= instructions.size()) {
-            return NameStep.NONE;
+            return BuilderStep.NONE;
         }
+        final BuilderStep inheritStep = inheritStepAt(method, instructions, index);
+        if (inheritStep != BuilderStep.NONE) {
+            return inheritStep;
+        }
+        return nameStepAt(method, instructions, index);
+    }
+
+    private static BuilderStep nameStepAt(
+        final MethodInfo method,
+        final List<Instruction> instructions,
+        final int index
+    ) {
         if (!isStringConstant(instructions.get(index))) {
             if (isParameterObjectLoad(method, instructions.get(index))
                 && index + 1 < instructions.size()
                 && instructions.get(index + 1).methodRef().isPresent()
                 && isThreadBuilderOfVirtualName(instructions.get(index + 1).methodRef().orElseThrow())
                 && !instructions.get(index + 1).methodRef().orElseThrow().descriptor().contains(";J)")) {
-                return NameStep.PARAMETER_STRING;
+                return BuilderStep.PARAMETER_STRING;
             }
             if (isParameterObjectLoad(method, instructions.get(index))
                 && index + 2 < instructions.size()
@@ -466,24 +478,47 @@ public final class VirtualThreadInvokePatterns {
                 && instructions.get(index + 2).methodRef().isPresent()
                 && isThreadBuilderOfVirtualName(instructions.get(index + 2).methodRef().orElseThrow())
                 && instructions.get(index + 2).methodRef().orElseThrow().descriptor().contains(";J)")) {
-                return NameStep.PARAMETER_STRING_LONG;
+                return BuilderStep.PARAMETER_STRING_LONG;
             }
-            return NameStep.NONE;
+            return BuilderStep.NONE;
         }
         if (index + 1 < instructions.size()
             && instructions.get(index + 1).methodRef().isPresent()
             && isThreadBuilderOfVirtualName(instructions.get(index + 1).methodRef().orElseThrow())
             && !instructions.get(index + 1).methodRef().orElseThrow().descriptor().contains(";J)")) {
-            return NameStep.STRING;
+            return BuilderStep.STRING;
         }
         if (index + 2 < instructions.size()
             && isLongConstant(instructions.get(index + 1))
             && instructions.get(index + 2).methodRef().isPresent()
             && isThreadBuilderOfVirtualName(instructions.get(index + 2).methodRef().orElseThrow())
             && instructions.get(index + 2).methodRef().orElseThrow().descriptor().contains(";J)")) {
-            return NameStep.STRING_LONG;
+            return BuilderStep.STRING_LONG;
         }
-        return NameStep.NONE;
+        return BuilderStep.NONE;
+    }
+
+    private static BuilderStep inheritStepAt(
+        final MethodInfo method,
+        final List<Instruction> instructions,
+        final int index
+    ) {
+        if (index >= instructions.size()) {
+            return BuilderStep.NONE;
+        }
+        if (isBooleanConstant(instructions.get(index))
+            && index + 1 < instructions.size()
+            && instructions.get(index + 1).methodRef().isPresent()
+            && isThreadBuilderOfVirtualInheritInheritableThreadLocals(instructions.get(index + 1).methodRef().orElseThrow())) {
+            return BuilderStep.BOOLEAN;
+        }
+        if (isParameterBooleanLoad(method, instructions.get(index))
+            && index + 1 < instructions.size()
+            && instructions.get(index + 1).methodRef().isPresent()
+            && isThreadBuilderOfVirtualInheritInheritableThreadLocals(instructions.get(index + 1).methodRef().orElseThrow())) {
+            return BuilderStep.PARAMETER_BOOLEAN;
+        }
+        return BuilderStep.NONE;
     }
 
     private static boolean isStringConstant(final Instruction instruction) {
@@ -494,6 +529,10 @@ public final class VirtualThreadInvokePatterns {
         return instruction.opcode() == 9 || instruction.opcode() == 10 || instruction.opcode() == 20;
     }
 
+    private static boolean isBooleanConstant(final Instruction instruction) {
+        return instruction.opcode() == 3 || instruction.opcode() == 4;
+    }
+
     private static boolean isParameterObjectLoad(final MethodInfo method, final Instruction instruction) {
         final int slot = localLoadSlot(instruction);
         return slot >= 0 && parameterTypeAtSlot(method, slot) == IrType.OBJECT;
@@ -502,6 +541,11 @@ public final class VirtualThreadInvokePatterns {
     private static boolean isParameterLongLoad(final MethodInfo method, final Instruction instruction) {
         final int slot = longLoadSlot(instruction);
         return slot >= 0 && parameterTypeAtSlot(method, slot) == IrType.LONG;
+    }
+
+    private static boolean isParameterBooleanLoad(final MethodInfo method, final Instruction instruction) {
+        final int slot = intLoadSlot(instruction);
+        return slot >= 0 && parameterTypeAtSlot(method, slot) == IrType.INT;
     }
 
     private static IrType parameterTypeAtSlot(final MethodInfo method, final int slot) {
@@ -529,6 +573,17 @@ public final class VirtualThreadInvokePatterns {
         };
     }
 
+    private static int intLoadSlot(final Instruction instruction) {
+        return switch (instruction.opcode()) {
+            case 21 -> instruction.operands()[0] & 0xFF;
+            case 26 -> 0;
+            case 27 -> 1;
+            case 28 -> 2;
+            case 29 -> 3;
+            default -> -1;
+        };
+    }
+
     private static boolean returnsVirtualThreadBuilder(final String descriptor) {
         return descriptor.endsWith(")Ljava/lang/Thread$Builder;")
             || descriptor.endsWith(")Ljava/lang/Thread$Builder$OfVirtual;");
@@ -541,16 +596,18 @@ public final class VirtualThreadInvokePatterns {
     private record ResolvedMethod(ClassFile classFile, MethodInfo method) {
     }
 
-    private enum NameStep {
+    private enum BuilderStep {
         NONE(0),
         STRING(2),
         STRING_LONG(3),
         PARAMETER_STRING(2),
-        PARAMETER_STRING_LONG(3);
+        PARAMETER_STRING_LONG(3),
+        BOOLEAN(2),
+        PARAMETER_BOOLEAN(2);
 
         private final int width;
 
-        NameStep(final int width) {
+        BuilderStep(final int width) {
             this.width = width;
         }
     }

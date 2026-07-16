@@ -1,24 +1,28 @@
 # Real Project Readiness
 
+This ledger is the only place where named third-party compatibility probes are allowed to stay
+hardcoded. They are pinned moving snapshots of upstream artifacts, not compiler-owned support
+claims and not internal fixtures.
+
 Probe summary:
 
-| Project | Probe status | Current evidence | Missing release gate |
+| Probe class | Probe status | Current evidence | Missing release gate |
 | --- | --- | --- | --- |
-| TypeMap | Smoke | `typemap-pair` builds natively against the pinned Maven artifact and is exercised by the required external-probe acceptance gate plus focused CLI integration. | Broader TypeMap dependency graph and quieter unreachable-dependency diagnostics. |
-| Nano metrics helper | Smoke | `nano-metric` builds natively against the pinned Maven artifact and is exercised by the required external-probe acceptance gate plus focused CLI integration. | Broader Nano dependency graph and quieter unreachable-dependency diagnostics. |
-| Nano duration helper | Smoke | `nano-duration` builds natively against the pinned Maven artifact and is exercised by the required external-probe acceptance gate plus focused CLI integration. | Broader Nano helper surface and quieter unreachable-dependency diagnostics. |
-| Nano scheduler lifecycle | Smoke | `nano-scheduler` and `nano-scheduler-fixed-rate` build natively against the pinned Maven artifact and are exercised by the required external-probe acceptance gate plus focused CLI integration. | Broader Nano service graph and scheduler-adjacent runtime coverage beyond the current lifecycle slice. |
-| Nano HTTP service | Planned smoke | Nano-style `HttpServer` dependency now fails clearly with `JAVAN061` and reports `network/http`. | Broader HTTP service runtime, resources, thread/blocking model, and dev-console/reflection exclusion. |
+| External library artifact smoke | Smoke | One pinned third-party library probe builds natively against its published artifact and is exercised by the required external-probe acceptance gate plus focused CLI integration. | Broader external-library dependency graphs and quieter unreachable-dependency diagnostics. |
+| External helper/library smoke | Smoke | Several pinned third-party helper/library probes build natively against their published artifacts and are exercised by the required external-probe acceptance gate plus focused CLI integration. | Broader helper surfaces, broader dependency graphs, and quieter unreachable-dependency diagnostics. |
+| External scheduler/runtime smoke | Smoke | Several pinned third-party scheduler/runtime probes build natively against their published artifacts and are exercised by the required external-probe acceptance gate plus focused CLI integration. | Broader service graphs and scheduler-adjacent runtime coverage beyond the current lifecycle slice. |
+| External HTTP service smoke | Planned smoke | One pinned external HTTP-service-shaped probe currently fails clearly with `JAVAN061` and reports `network/http`. | Broader HTTP service runtime, resources, thread/blocking model, and dev-console/reflection exclusion. |
 
 These external probes are intentionally excluded from `doc/status/support-matrix.*`,
 `doc/status/jdk-compatibility.md`, and the core JDK support ledger. They are compatibility
 smoke only, driven by per-probe metadata and exact stdout expectations under
 `src/test/resources/projects/real-probes/*`.
 
-Read that literally: Nano and TypeMap are not part of javan's compiler knowledge. They are moving
-upstream projects. Javan is only allowed to know them inside the dedicated external-smoke boundary.
-If one of them exposes a compiler gap, the permanent fix belongs in a generic JDK/runtime regression
-first, then the probe stays only as a published-artifact compatibility check.
+Read that literally: upstream project identities are not part of javan's compiler knowledge. They
+are moving upstream artifacts. Javan is only allowed to know them inside the dedicated
+external-smoke boundary. If one of them exposes a compiler gap, the permanent fix belongs in a
+generic JDK/runtime regression first, then the probe stays only as a published-artifact
+compatibility check.
 
 Each probe now also declares `genericEvidence=...` in `probe.properties`. That metadata must point
 at an existing compiler-owned generic regression test, so a real-project smoke case cannot exist
@@ -63,10 +67,10 @@ line. Probe metadata under `src/test/resources/projects/real-probes/*` and this 
 are intentionally the only places where those project identities may stay hardcoded for acceptance;
 Javan itself must not encode project-specific support rules.
 
-Current compatibility probes:
+Current pinned compatibility snapshot:
 
 - TypeMap: `src/test/resources/projects/real-probes/typemap-pair` builds against the pinned Maven-cache TypeMap jar by default and prints `value`.
-- Nano: `src/test/resources/projects/real-probes/nano-metric` builds against the pinned Maven-cache Nano jar by default and prints `requests`.
+- Nano metrics helper: `src/test/resources/projects/real-probes/nano-metric` builds against the pinned Maven-cache Nano jar by default and prints `requests`.
 - Nano duration example slice: `src/test/resources/projects/real-probes/nano-duration` builds against the pinned Maven-cache
   Nano jar by default and prints `1m 5s` using `NanoUtils.formatDuration(long)`, the helper
   used by the upstream example's `/load1` response path. `DevConsoleService` is not
@@ -104,9 +108,9 @@ Known blockers before broader real-project coverage:
 - richer Java semantic coverage, especially general try/catch/finally lowering, broader dynamic-call sites, wider enum/class-introspection edges, and full UTF-16 string semantics
 - more dependency-version variance proof, because pinned artifact smoke is not the same as broad upstream-version compatibility
 
-This document stays at the compatibility-smoke level. Detailed compiler/runtime support claims belong in
-`doc/status/support-matrix.md`, `doc/status/jdk-compatibility.md`, and the compiler-owned tests under
-`src/test/java/javan/*`.
+This document stays at the compatibility-smoke level. Detailed compiler/runtime support claims
+belong in `doc/status/support-matrix.md`, `doc/status/jdk-compatibility.md`, and the
+compiler-owned tests under `src/test/java/javan/*`.
 
 Fresh Nano packaging may still fail if a broader Nano graph resolves a TypeMap version
 that does not provide `JsonDecoder.jsonTypeOf(String)`. The `src/test/resources/projects/real-probes/nano-metric` probe

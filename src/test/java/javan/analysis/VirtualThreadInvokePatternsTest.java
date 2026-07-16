@@ -510,6 +510,40 @@ final class VirtualThreadInvokePatternsTest {
     }
 
     @Test
+    void detectsSupportedStaticBuilderWrapperMethodWithInheritanceToggle() {
+        final ClassFile owner = classFile(
+            "com/acme/Main",
+            new MethodInfo(
+                0x0008,
+                "builder",
+                "()Ljava/lang/Thread$Builder$OfVirtual;",
+                Optional.of(new CodeAttribute(
+                    2,
+                    0,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instruction(1, 3, "iconst_0"),
+                        instruction(2, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "inheritInheritableThreadLocals", "(Z)Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instruction(3, 176, "areturn")
+                    )
+                ))
+            )
+        );
+
+        assertThat(VirtualThreadInvokePatterns.isSupportedBuilderWrapperMethod(
+            Map.of(owner.name(), owner),
+            owner,
+            owner.method("builder", "()Ljava/lang/Thread$Builder$OfVirtual;").orElseThrow()
+        )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isSupportedBuilderWrapperCall(
+            Map.of(owner.name(), owner),
+            new MethodRef(owner.name(), "builder", "()Ljava/lang/Thread$Builder$OfVirtual;")
+        )).isTrue();
+    }
+
+    @Test
     void detectsSupportedStaticFactoryWrapperMethodWithParameterPassThrough() {
         final ClassFile owner = classFile(
             "com/acme/Main",
@@ -542,6 +576,41 @@ final class VirtualThreadInvokePatternsTest {
         assertThat(VirtualThreadInvokePatterns.isSupportedFactoryWrapperCall(
             Map.of(owner.name(), owner),
             new MethodRef(owner.name(), "factory", "(Ljava/lang/String;J)Ljava/util/concurrent/ThreadFactory;")
+        )).isTrue();
+    }
+
+    @Test
+    void detectsSupportedStaticFactoryWrapperMethodWithInheritanceParameterPassThrough() {
+        final ClassFile owner = classFile(
+            "com/acme/Main",
+            new MethodInfo(
+                0x0008,
+                "factory",
+                "(Z)Ljava/util/concurrent/ThreadFactory;",
+                Optional.of(new CodeAttribute(
+                    2,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instruction(1, 26, "iload_0"),
+                        instruction(2, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "inheritInheritableThreadLocals", "(Z)Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instruction(3, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "factory", "()Ljava/util/concurrent/ThreadFactory;")),
+                        instruction(4, 176, "areturn")
+                    )
+                ))
+            )
+        );
+
+        assertThat(VirtualThreadInvokePatterns.isSupportedFactoryWrapperMethod(
+            Map.of(owner.name(), owner),
+            owner,
+            owner.method("factory", "(Z)Ljava/util/concurrent/ThreadFactory;").orElseThrow()
+        )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isSupportedFactoryWrapperCall(
+            Map.of(owner.name(), owner),
+            new MethodRef(owner.name(), "factory", "(Z)Ljava/util/concurrent/ThreadFactory;")
         )).isTrue();
     }
 
