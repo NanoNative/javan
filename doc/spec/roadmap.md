@@ -222,13 +222,29 @@ Open acceptance criteria:
   directories/jars, in deterministic classpath order; no user-authored resource configuration
   file is part of the product contract
 - an ordered resource index records normalized names, origins, sizes, checksums, duplicates,
-  and classpath shadowing before native code generation. Symlinked resource inputs are rejected;
-  virtual directories are synthesized from indexed descendants, and empty directories exist only
+  and classpath shadowing before native code generation. Filesystem symlinks are resolved and
+  flattened at build time: the link path remains the logical resource name, target file bytes or
+  directory descendants are indexed beneath that name, and no symlink identity reaches the
+  packaged artifact. Resolution is cycle-safe and records the logical path, link path, resolved
+  source, and checksum; dangling, cyclic, unreadable, or non-file/non-directory targets fail with
+  a stable diagnostic. Targets outside declared resource roots are allowed with a provenance
+  warning and participate fully in build fingerprints. Distinct logical aliases of the same real
+  target are retained independently; cycle detection follows the active traversal chain instead
+  of globally deduplicating resolved targets
+- virtual directories are synthesized from indexed descendants, and empty directories exist only
   when an explicit directory entry is present and retained
 - reachable constant and finite-set lookups through `Class.getResource*`,
   `ClassLoader.getResource*`, and `Module.getResourceAsStream` retain exactly the matching
   resources, including requested `.class` entries, while preserving package-relative, absolute,
   module, first-match `getResource`, all-match `getResources`, and classpath-order rules
+- `META-INF/**` participates in the same index and standard lookup rules as every other resource.
+  Acceptance covers `Class.getResource*("/META-INF/...")`,
+  `ClassLoader.getResource*("META-INF/...")`, and module lookup, plus immutable `Files`/`Path`/
+  `File` reads and synthesized directory listings when resource intent is proven.
+  `META-INF/services` remains both readable resource data and service-provider metadata.
+  `META-INF/MANIFEST.MF` exposes the effective bytes for each origin after documented Javan
+  synthesis or merging; signature entries remain opaque readable bytes, without claiming native
+  signature verification or that embedding them signs the executable
 - reachable directory enumeration retains the matching descendants; a genuinely unbounded name
   retains the finite resolved resource universe with a warning and complete size report instead
   of requesting registration
@@ -253,17 +269,21 @@ Open acceptance criteria:
 - every automatic filesystem-to-resource redirect emits a build warning and report entry with
   the source call site, original path flow, selected resource origin, and JVM/jar semantic
   difference
-- writes, deletes, moves, links, symlink following, watches, locks, memory mapping, permission
+- a flattened build-input link appears as an ordinary read-only file or directory at runtime:
+  `Files.isSymbolicLink` returns false and `Files.readSymbolicLink` throws `NotLinkException`.
+  Writes, deletes, moves, link creation, watches, locks, memory mapping, permission
   changes, and other host-filesystem-only operations on a proven resource path fail at build time
   with a stable diagnostic, or deterministically at runtime when only tagged runtime provenance
   is available. Copying an embedded resource out to a writable filesystem path may be supported
   as explicit materialization; mutation of the embedded resource may not
-- acceptance proves standard `Class`, `ClassLoader`, and `Module` lookups return equivalent bytes
-  and classpath precedence from plain class output, packaged jars, and native executables,
-  including dependency-jar resources and duplicate names. Native-only `Path`/`File` adaptation,
-  nested listings, and unsupported mutation diagnostics are verified separately and always report
-  the deliberate JVM/jar semantic difference; native listing order is a deterministic Javan
-  contract, not a claim about unspecified JVM/jar enumeration order
+- acceptance proves standard `Class`, `ClassLoader`, and `Module` lookups return indexed bytes and
+  classpath precedence from plain class output, packaged jars, and native executables, including
+  dependency-jar resources and duplicate names. Resources unchanged by packaging have equivalent
+  bytes across corresponding JVM and native forms; artifact-owned metadata such as an effective
+  manifest is checked against its documented artifact-specific bytes. Native-only `Path`/`File`
+  adaptation, nested listings, and unsupported mutation diagnostics are verified separately and
+  always report the deliberate JVM/jar semantic difference; native listing order is a
+  deterministic Javan contract, not a claim about unspecified JVM/jar enumeration order
 - deterministic resource compression and checksum reporting
 
 ## 0.285 Memory And Runtime Correctness
@@ -388,12 +408,19 @@ Open core Javan acceptance criteria:
   option-shaped or when the project root is inferred, for example `javan run -- Alice`
 - support compiler-derived startup properties without requiring `-D` on every value. Generated
   native launchers accept Java-compatible leading `-Dkey` or `-Dkey=value` and a friendly
-  `--properties key=value... --` zone ending at `--` or end of input; `javan run` accepts the same
-  forms, consumes them before `main(String[])`, and preserves a literal escape through the
-  app-argument `--` boundary. Missing and explicit-empty `-D` values both produce an empty string
+  `--properties key=value... --` zone ending at an exact standalone `--` or end of input; every
+  token inside the zone must be a valid assignment, and an ordinary token is an error rather than
+  an implicit app-argument boundary. `javan run` accepts the same forms, consumes them before
+  `main(String[])`, and preserves a literal escape through the app-argument `--` boundary. Missing
+  and explicit-empty `-D` values both produce an empty string
 - never reinterpret arbitrary bare `key=value` or `--key=value` application arguments as system
   properties. Startup assignments split at the first `=`, allow empty values, reject empty keys,
   and use deterministic last-assignment-wins precedence
+- consume process arguments as already-tokenized `argv` values without a second quote or escape
+  parser. Each property assignment occupies one argument and preserves spaces, quote characters,
+  and additional `=` characters after the first `=`. Shell quotes group a value and are removed by
+  the shell; quote characters that survive into `argv` are literal data. As with JVM and native
+  process arguments generally, a NUL character cannot be represented
 - analyze reachable `System.getProperty` and `System.getenv` calls and write
   `.javan/reports/runtime-inputs.json` plus `.md` with constant/finite/dynamic keys, defaults, call
   sites, and requiredness only when it is provable. Supplied values and secrets never enter reports
@@ -421,10 +448,17 @@ javan run . --properties mode=prod server.port=8080 -- input.txt
 javan run . input.txt -Dmode=prod
 javan run . -- --properties mode=prod
 .javan/bin/app --properties mode=prod -- input.txt
+javan run . "Alice Smith" 42
+javan run . -- --message "hello world"
+javan run . -Dmessage="hello world" input.txt
+javan run . --properties 'display.name=Alice Smith' 'url=https://example.test/?a=b' empty= -- input.txt
+javan run . --properties 'message=He said "hello"' -- input.txt
 ```
 
 The sixth form passes `-Dmode=prod` literally because `input.txt` already started app arguments;
-the seventh passes `--properties mode=prod` literally through the explicit boundary.
+the seventh passes `--properties mode=prod` literally through the explicit boundary. In the
+quoted forms, the shell passes each grouped value as one argument; the URL is split only at its
+first `=`, and the double quotes inside the final single-quoted value remain part of that value.
 
 Open external-integration acceptance criteria:
 
