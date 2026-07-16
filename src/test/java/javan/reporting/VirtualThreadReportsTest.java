@@ -92,6 +92,40 @@ final class VirtualThreadReportsTest {
     }
 
     @Test
+    void refreshFallsBackWhenExistingLongFieldIsMalformed() throws Exception {
+        Files.writeString(tempDir.resolve("virtual-threads.json"), """
+            {
+              "reachableApiScan": "reachable-method-scan",
+              "reachableVirtualStartSites": 9223372036854775808,
+              "reachableVirtualStartMethods": 7,
+              "reachableIsVirtualSites": 3,
+              "unsupportedBuilderApis": 2,
+              "unsupportedBuilderApisReachable": 1,
+              "unsupportedBuilderApisUnreachable": 1,
+              "unsupportedExecutorApis": 4,
+              "unsupportedExecutorApisReachable": 2,
+              "unsupportedExecutorApisUnreachable": 2
+            }
+            """);
+
+        new VirtualThreadReports().refresh(tempDir);
+
+        assertThat(Files.readString(tempDir.resolve("virtual-threads.json"))).contains(
+            "\"reachableApiScan\": \"reachable-method-scan\"",
+            "\"reachableVirtualStartSites\": 0",
+            "\"reachableVirtualStartMethods\": 7",
+            "\"reachableIsVirtualSites\": 3",
+            "\"unsupportedBuilderApis\": 2",
+            "\"unsupportedExecutorApis\": 4"
+        );
+        assertThat(Files.readString(tempDir.resolve("virtual-threads.md"))).contains(
+            "- reachableApiScan: `reachable-method-scan`",
+            "- reachableVirtualStartSites: `0`",
+            "- reachableVirtualStartMethods: `7`"
+        );
+    }
+
+    @Test
     void writeReportsScannedReachableVirtualThreadSupportAndUnsupportedCounts() throws Exception {
         final EntryPoint main = new EntryPoint("com/acme/Main", "main", "()V");
         final EntryPoint helper = new EntryPoint("com/acme/Helper", "helper", "()V");

@@ -22,6 +22,7 @@ import java.util.Optional;
  * Writes stable virtual-thread status reports for the current supported slice.
  */
 public final class VirtualThreadReports {
+    private static final String LONG_MIN_VALUE_LITERAL = "-9223372036854775808";
     private static final String STATUS = "partial";
     private static final String DIAGNOSTIC_SOURCE = "platform-thread-analysis-plus-virtual-builder-executor-park-slice";
     private static final String NEXT_GATE = "land remaining builder/factory/executor introspection such as getClass() plus scheduler/carrier runtime and runtime-backed profiling counters";
@@ -241,21 +242,77 @@ public final class VirtualThreadReports {
         if (start < 0) {
             return defaultValue;
         }
+        final int end = longFieldEnd(content, start);
+        if (end <= start) {
+            return defaultValue;
+        }
+        final long parsed = parseLongDecimal(content, start, end);
+        if (parsed == Long.MIN_VALUE && !isLiteralLongMinValue(content, start, end)) {
+            return defaultValue;
+        }
+        return parsed;
+    }
+
+    private static int longFieldEnd(final String content, final int start) {
         int end = start;
         if (end < content.length() && content.charAt(end) == '-') {
             end++;
         }
-        while (end < content.length() && Character.isDigit(content.charAt(end))) {
+        final int digitsStart = end;
+        while (end < content.length() && isAsciiDigit(content.charAt(end))) {
             end++;
         }
-        if (end == start) {
-            return defaultValue;
+        if (digitsStart == end) {
+            return -1;
         }
-        try {
-            return Long.parseLong(content.substring(start, end));
-        } catch (final NumberFormatException ignored) {
-            return defaultValue;
+        return end;
+    }
+
+    private static boolean isAsciiDigit(final char value) {
+        return value >= '0' && value <= '9';
+    }
+
+    private static long parseLongDecimal(final String content, final int start, final int end) {
+        boolean negative = false;
+        int index = start;
+        if (content.charAt(index) == '-') {
+            negative = true;
+            index++;
         }
+        long result = 0L;
+        final long limit = negative ? Long.MIN_VALUE : -Long.MAX_VALUE;
+        final long multMin = limit / 10L;
+        while (index < end) {
+            final int digit = content.charAt(index) - '0';
+            if (result < multMin) {
+                return Long.MIN_VALUE;
+            }
+            result *= 10L;
+            if (result < limit + digit) {
+                return Long.MIN_VALUE;
+            }
+            result -= digit;
+            index++;
+        }
+        if (negative) {
+            return result;
+        }
+        if (result == Long.MIN_VALUE) {
+            return Long.MIN_VALUE;
+        }
+        return 0L - result;
+    }
+
+    private static boolean isLiteralLongMinValue(final String content, final int start, final int end) {
+        if (end - start != LONG_MIN_VALUE_LITERAL.length()) {
+            return false;
+        }
+        for (int index = 0; index < LONG_MIN_VALUE_LITERAL.length(); index++) {
+            if (content.charAt(start + index) != LONG_MIN_VALUE_LITERAL.charAt(index)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static int valueStart(final String content, final String name) {

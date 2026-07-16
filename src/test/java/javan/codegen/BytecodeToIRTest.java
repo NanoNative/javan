@@ -12282,6 +12282,27 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersStringHashCodeToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/String;)I",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/String", "hashCode", "()I")),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_string_hash_code",
+                List.of(IrExpression.objectLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
     void lowersStringIsEmptyToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -12729,6 +12750,24 @@ final class BytecodeToIRTest {
             .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
                 assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
                 assertThat(exception.diagnostic().subject()).isEqualTo("invokevirtual java/lang/String.length()Z");
+            });
+    }
+
+    @Test
+    void rejectsUnsupportedStringHashCodeWithStringDescriptor() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/String;)Ljava/lang/String;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/String", "hashCode", "()Ljava/lang/String;")),
+            plain(2, 176, "areturn")
+        )))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject()).isEqualTo("invokevirtual java/lang/String.hashCode()Ljava/lang/String;");
             });
     }
 

@@ -6636,6 +6636,61 @@ final class RuntimeSourceMemorySections {
             return (int) strlen(value);
         }
 
+        int javan_string_hash_code(const char* value) {
+            if (value == NULL) {
+                javan_panic("null string");
+            }
+            const unsigned char* current = (const unsigned char*) value;
+            uint32_t hash = 0U;
+            while (*current != 0U) {
+                unsigned int code_point = 0U;
+                unsigned char first = *current++;
+                if ((first & 0x80U) == 0U) {
+                    code_point = first;
+                } else if ((first & 0xE0U) == 0xC0U) {
+                    unsigned char second = *current++;
+                    if ((second & 0xC0U) != 0x80U) {
+                        javan_panic("invalid UTF-8 string");
+                    }
+                    code_point = ((unsigned int) (first & 0x1FU) << 6) | (unsigned int) (second & 0x3FU);
+                } else if ((first & 0xF0U) == 0xE0U) {
+                    unsigned char second = *current++;
+                    unsigned char third = *current++;
+                    if ((second & 0xC0U) != 0x80U || (third & 0xC0U) != 0x80U) {
+                        javan_panic("invalid UTF-8 string");
+                    }
+                    code_point = ((unsigned int) (first & 0x0FU) << 12)
+                        | ((unsigned int) (second & 0x3FU) << 6)
+                        | (unsigned int) (third & 0x3FU);
+                } else if ((first & 0xF8U) == 0xF0U) {
+                    unsigned char second = *current++;
+                    unsigned char third = *current++;
+                    unsigned char fourth = *current++;
+                    if ((second & 0xC0U) != 0x80U || (third & 0xC0U) != 0x80U || (fourth & 0xC0U) != 0x80U) {
+                        javan_panic("invalid UTF-8 string");
+                    }
+                    code_point = ((unsigned int) (first & 0x07U) << 18)
+                        | ((unsigned int) (second & 0x3FU) << 12)
+                        | ((unsigned int) (third & 0x3FU) << 6)
+                        | (unsigned int) (fourth & 0x3FU);
+                } else {
+                    javan_panic("invalid UTF-8 string");
+                }
+                if (code_point <= 0xFFFFU) {
+                    hash = (hash * 31U) + code_point;
+                } else if (code_point <= 0x10FFFFU) {
+                    unsigned int adjusted = code_point - 0x10000U;
+                    unsigned int high = 0xD800U + (adjusted >> 10);
+                    unsigned int low = 0xDC00U + (adjusted & 0x3FFU);
+                    hash = (hash * 31U) + high;
+                    hash = (hash * 31U) + low;
+                } else {
+                    javan_panic("invalid UTF-8 string");
+                }
+            }
+            return (int) hash;
+        }
+
         int javan_string_is_empty(const char* value) {
             return javan_string_length(value) == 0;
         }

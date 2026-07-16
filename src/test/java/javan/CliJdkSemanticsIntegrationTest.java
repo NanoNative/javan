@@ -96,6 +96,55 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void stringHashCodeBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-hash-code");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("javan".hashCode());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-hash-code").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("100899468\n");
+    }
+
+    @Test
+    void stringHashCodeFromUtf16CharArrayBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("string-hash-code-utf16-char-array");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final char[] chars = new char[] {'x', '\\uD83D', '\\uDE42', 'y'};
+                    System.out.println(new String(chars).hashCode());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/string-hash-code-utf16-char-array").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("58536956\n");
+    }
+
+    @Test
     void stringConstableMethodsBuildAndMatchJvmOutput() throws Exception {
         final Path project = project("string-constable-methods");
         writeJava(project, "com.acme.Main", """

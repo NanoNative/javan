@@ -85,6 +85,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void stringHashCodeIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/String",
+            "hashCode",
+            "()I"
+        ))).isTrue();
+    }
+
+    @Test
     void threadLocalGetIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef("java/lang/ThreadLocal", "get", "()Ljava/lang/Object;")))
             .isTrue();

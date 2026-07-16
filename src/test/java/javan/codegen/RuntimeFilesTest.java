@@ -5492,6 +5492,45 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void runtimeAsciiStringHashCodeMatchesJavaValue() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                printf("%d\\n", javan_string_hash_code("javan"));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("100899468\n");
+    }
+
+    @Test
+    void runtimeSupplementaryUtf8StringHashCodeMatchesJavaUtf16Semantics() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                const char* value = "x" "\\xF0\\x9F\\x99\\x82" "y";
+                printf("%d\\n", javan_string_hash_code(value));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("58536956\n");
+    }
+
+    @Test
     void runtimeClassDescriptorStringConvertsObjectArrayNameToDescriptor() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """

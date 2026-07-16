@@ -212,6 +212,7 @@ final class RuntimeHeaderFile {
         void* javan_string_from(const char* value);
         void* javan_string_from_chars(void* array, int offset, int count);
         int javan_string_length(const char* value);
+        int javan_string_hash_code(const char* value);
         int javan_string_is_empty(const char* value);
         int javan_string_char_at(const char* value, int index);
         int javan_string_index_of_char(const char* value, int ch);

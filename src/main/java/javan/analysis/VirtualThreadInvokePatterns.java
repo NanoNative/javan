@@ -530,20 +530,12 @@ public final class VirtualThreadInvokePatterns {
     }
 
     private static boolean isBooleanConstant(final Instruction instruction) {
-        return instruction.intValue().flatMap(VirtualThreadInvokePatterns::booleanIntValue).isPresent();
-    }
-
-    private static Optional<Boolean> booleanIntValue(final Integer value) {
-        if (value == null) {
-            return Optional.empty();
+        final Optional<Integer> intValue = instruction.intValue();
+        if (intValue.isEmpty()) {
+            return false;
         }
-        if (value == 0) {
-            return Optional.of(false);
-        }
-        if (value == 1) {
-            return Optional.of(true);
-        }
-        return Optional.empty();
+        final int value = intValue.get();
+        return value == 0 || value == 1;
     }
 
     private static boolean isParameterObjectLoad(final MethodInfo method, final Instruction instruction) {

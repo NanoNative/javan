@@ -1885,7 +1885,7 @@ public final class CCodegen {
                     return "javan_object_array_new("
                         + expression(expression.arguments().get(0))
                         + ", "
-                        + emitCStringLiteral(expression.value().isBlank() ? "[Ljava.lang.Object;" : expression.value())
+                        + emitCStringLiteral(Strings2.isBlank(expression.value()) ? "[Ljava.lang.Object;" : expression.value())
                         + ")";
                 case OBJECT_ARRAY_LOAD:
                     return "javan_object_array_get("
