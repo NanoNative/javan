@@ -1381,8 +1381,8 @@ public final class StaticVerifier {
             || isExecutorServiceClose(methodRef)) {
             return supportedVirtualThreadExecutorReceiver(classes, instructions, instructionIndex);
         }
-        if (isFutureCancel(methodRef)) {
-            return true;
+        if (isFutureCancel(methodRef) || isFutureIsDone(methodRef) || isFutureIsCancelled(methodRef)) {
+            return supportedVirtualThreadFutureReceiver(classes, instructions, instructionIndex, methodRef);
         }
         if (isVirtualThreadExecutorObservationMethod(methodRef)) {
             return supportedVirtualThreadExecutorObservationReceiver(classes, instructions, instructionIndex, methodRef);
@@ -1860,6 +1860,26 @@ public final class StaticVerifier {
         return supportedVirtualThreadExecutorProducer(classes, instructions, receiverIndex);
     }
 
+    private static boolean supportedVirtualThreadFutureReceiver(
+        final Map<String, ClassFile> classes,
+        final List<Instruction> instructions,
+        final int instructionIndex,
+        final MethodRef methodRef
+    ) {
+        final int receiverIndex;
+        if (isFutureCancel(methodRef)) {
+            receiverIndex = instructionIndex - 2;
+        } else if (isFutureIsDone(methodRef) || isFutureIsCancelled(methodRef)) {
+            receiverIndex = instructionIndex - 1;
+        } else {
+            return false;
+        }
+        if (receiverIndex < 0) {
+            return false;
+        }
+        return supportedVirtualThreadFutureProducer(classes, instructions, receiverIndex);
+    }
+
     private static boolean supportedScheduledThreadPoolExecutorReceiver(
         final Map<String, ClassFile> classes,
         final List<Instruction> instructions,
@@ -1986,6 +2006,33 @@ public final class StaticVerifier {
             return false;
         }
         return supportedVirtualThreadExecutorProducer(classes, instructions, storeIndex - 1);
+    }
+
+    private static boolean supportedVirtualThreadFutureProducer(
+        final Map<String, ClassFile> classes,
+        final List<Instruction> instructions,
+        final int producerIndex
+    ) {
+        final int transparentProducerIndex = VirtualThreadInvokePatterns.transparentReferenceProducerIndex(instructions, producerIndex);
+        if (transparentProducerIndex < 0) {
+            return false;
+        }
+        final Instruction producer = instructions.get(transparentProducerIndex);
+        final Optional<MethodRef> methodRef = producer.methodRef();
+        if (methodRef.isPresent()
+            && isExecutorServiceSubmit(methodRef.orElseThrow())
+            && supportsVirtualThreadExecutorTaskSubmission(classes, instructions, transparentProducerIndex)) {
+            return true;
+        }
+        final int loadSlot = localLoadSlot(producer);
+        if (loadSlot < 0) {
+            return false;
+        }
+        final int storeIndex = VirtualThreadInvokePatterns.previousLocalStoreIndex(instructions, transparentProducerIndex - 1, loadSlot);
+        if (storeIndex < 0) {
+            return false;
+        }
+        return supportedVirtualThreadFutureProducer(classes, instructions, storeIndex - 1);
     }
 
     private static boolean supportedVirtualThreadFactoryStaticField(
@@ -2131,6 +2178,14 @@ public final class StaticVerifier {
 
     private static boolean isFutureCancel(final MethodRef methodRef) {
         return VirtualThreadInvokePatterns.isFutureCancel(methodRef);
+    }
+
+    private static boolean isFutureIsDone(final MethodRef methodRef) {
+        return VirtualThreadInvokePatterns.isFutureIsDone(methodRef);
+    }
+
+    private static boolean isFutureIsCancelled(final MethodRef methodRef) {
+        return VirtualThreadInvokePatterns.isFutureIsCancelled(methodRef);
     }
 
     private static boolean isScheduledThreadPoolExecutorConstructor(final MethodRef methodRef) {
@@ -2299,8 +2354,16 @@ public final class StaticVerifier {
                 return "ExecutorService.close()";
             }
         }
-        if ("java/util/concurrent/Future".equals(owner) && "cancel".equals(methodRef.name())) {
-            return "Future.cancel(boolean)";
+        if ("java/util/concurrent/Future".equals(owner)) {
+            if ("cancel".equals(methodRef.name())) {
+                return "Future.cancel(boolean)";
+            }
+            if ("isDone".equals(methodRef.name())) {
+                return "Future.isDone()";
+            }
+            if ("isCancelled".equals(methodRef.name())) {
+                return "Future.isCancelled()";
+            }
         }
         return methodRef.display();
     }

@@ -116,6 +116,30 @@ final class ExternalProbeIsolationTest {
     }
 
     @Test
+    void externalProbeGenericEvidenceTargetsStayProjectNeutral() throws Exception {
+        final Path genericCoverageSource = TEST_SOURCES.resolve("javan/CliDependencyProjectIntegrationTest.java");
+        final String genericCoverage = Files.readString(genericCoverageSource);
+
+        for (final ExternalProbeCatalog.ExternalProbe probe : ExternalProbeCatalog.realProbes()) {
+            final String[] parts = probe.genericEvidence().split("#", 2);
+            assertThat(parts)
+                .as(probe.project() + " must point at a generic evidence class and method")
+                .hasSize(2);
+            assertThat(parts[0])
+                .as(probe.project() + " must keep generic evidence in the compiler-owned dependency suite")
+                .isEqualTo("CliDependencyProjectIntegrationTest");
+            assertThat(genericCoverage)
+                .as(probe.project() + " must point at an existing compiler-owned generic regression")
+                .contains("void " + parts[1] + "(");
+            for (final Pattern pattern : ExternalProbeIdentities.identityPatterns()) {
+                assertThat(pattern.matcher(parts[1]).find())
+                    .as(probe.project() + " generic evidence method name must stay free of external probe identities")
+                    .isFalse();
+            }
+        }
+    }
+
+    @Test
     void onlyDedicatedAcceptanceBoundaryTestsMayReferenceRealProbeInfrastructure() throws Exception {
         final Set<Path> allowed = Set.of(
             TEST_SOURCES.resolve("javan/CliExternalProbeAcceptanceIntegrationTest.java"),

@@ -151,6 +151,12 @@ final class VirtualThreadInvokePatternsTest {
         assertThat(VirtualThreadInvokePatterns.isFutureCancel(
             new MethodRef("java/util/concurrent/Future", "cancel", "(Z)Z")
         )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isFutureIsDone(
+            new MethodRef("java/util/concurrent/Future", "isDone", "()Z")
+        )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isFutureIsCancelled(
+            new MethodRef("java/util/concurrent/Future", "isCancelled", "()Z")
+        )).isTrue();
         assertThat(VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorSchedule(
             new MethodRef(
                 "java/util/concurrent/ScheduledThreadPoolExecutor",

@@ -138,6 +138,18 @@ public final class VirtualThreadInvokePatterns {
             && "(Z)Z".equals(methodRef.descriptor());
     }
 
+    public static boolean isFutureIsDone(final MethodRef methodRef) {
+        return "java/util/concurrent/Future".equals(methodRef.owner())
+            && "isDone".equals(methodRef.name())
+            && "()Z".equals(methodRef.descriptor());
+    }
+
+    public static boolean isFutureIsCancelled(final MethodRef methodRef) {
+        return "java/util/concurrent/Future".equals(methodRef.owner())
+            && "isCancelled".equals(methodRef.name())
+            && "()Z".equals(methodRef.descriptor());
+    }
+
     public static boolean isScheduledThreadPoolExecutorSchedule(final MethodRef methodRef) {
         return "java/util/concurrent/ScheduledThreadPoolExecutor".equals(methodRef.owner())
             && "schedule".equals(methodRef.name())

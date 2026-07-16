@@ -125,6 +125,8 @@ public final class JdkCallSupport {
         runtime("ExecutorService.hashCode", "java/util/concurrent/ExecutorService", "hashCode", "()I"),
         runtime("ExecutorService.equals", "java/util/concurrent/ExecutorService", "equals", "(Ljava/lang/Object;)Z"),
         runtime("Future.cancel", "java/util/concurrent/Future", "cancel", "(Z)Z"),
+        runtime("Future.isDone", "java/util/concurrent/Future", "isDone", "()Z"),
+        runtime("Future.isCancelled", "java/util/concurrent/Future", "isCancelled", "()Z"),
         runtime("ScheduledThreadPoolExecutor.<init>", "java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V"),
         runtime("ScheduledThreadPoolExecutor.<init>", "java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(ILjava/util/concurrent/ThreadFactory;Ljava/util/concurrent/RejectedExecutionHandler;)V"),
         runtime("ScheduledThreadPoolExecutor.awaitTermination", "java/util/concurrent/ScheduledThreadPoolExecutor", "awaitTermination", "(JLjava/util/concurrent/TimeUnit;)Z"),

@@ -457,6 +457,20 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void futureStateQueriesAreSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/Future",
+            "isDone",
+            "()Z"
+        ))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/Future",
+            "isCancelled",
+            "()Z"
+        ))).isTrue();
+    }
+
+    @Test
     void dateTimeFormatterBuilderAppendPatternIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/time/format/DateTimeFormatterBuilder",

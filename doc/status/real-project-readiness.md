@@ -15,6 +15,11 @@ These external probes are intentionally excluded from `doc/status/support-matrix
 smoke only, driven by per-probe metadata and exact stdout expectations under
 `src/test/resources/projects/real-probes/*`.
 
+Read that literally: Nano and TypeMap are not part of javan's compiler knowledge. They are moving
+upstream projects. Javan is only allowed to know them inside the dedicated external-smoke boundary.
+If one of them exposes a compiler gap, the permanent fix belongs in a generic JDK/runtime regression
+first, then the probe stays only as a published-artifact compatibility check.
+
 Each probe now also declares `genericEvidence=...` in `probe.properties`. That metadata must point
 at an existing compiler-owned generic regression test, so a real-project smoke case cannot exist
 without a project-neutral proof in the main javan test line.

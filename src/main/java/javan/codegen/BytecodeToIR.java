@@ -1774,6 +1774,7 @@ public final class BytecodeToIR {
             || kind == StackKind.VIRTUAL_THREAD_BUILDER
             || kind == StackKind.VIRTUAL_THREAD_FACTORY
             || kind == StackKind.VIRTUAL_THREAD_EXECUTOR
+            || kind == StackKind.THREAD_FUTURE
             || kind == StackKind.SCHEDULED_THREAD_POOL_EXECUTOR) {
             objectLocalKinds.put(slot, kind);
             return;
@@ -2700,6 +2701,7 @@ public final class BytecodeToIR {
         VIRTUAL_THREAD_BUILDER,
         VIRTUAL_THREAD_FACTORY,
         VIRTUAL_THREAD_EXECUTOR,
+        THREAD_FUTURE,
         SCHEDULED_THREAD_POOL_EXECUTOR,
         LAMBDA_FUNCTION,
         LAMBDA_PREDICATE,
@@ -2752,6 +2754,10 @@ public final class BytecodeToIR {
 
         static StackValue virtualThreadExecutor(final IrExpression expression) {
             return new StackValue(StackKind.VIRTUAL_THREAD_EXECUTOR, Optional.empty(), Optional.of(expression), Optional.empty());
+        }
+
+        static StackValue threadFuture(final IrExpression expression) {
+            return new StackValue(StackKind.THREAD_FUTURE, Optional.empty(), Optional.of(expression), Optional.empty());
         }
 
         static StackValue scheduledThreadPoolExecutor(final IrExpression expression) {

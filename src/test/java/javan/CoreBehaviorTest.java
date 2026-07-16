@@ -9580,6 +9580,63 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void staticVerifierAcceptsReachableVirtualThreadFutureStateQueries() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    4,
+                    2,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/util/concurrent/Executors", "newVirtualThreadPerTaskExecutor", "()Ljava/util/concurrent/ExecutorService;")),
+                        instruction(1, 75, "astore_0"),
+                        instruction(2, 42, "aload_0"),
+                        classInstruction(3, 187, "new", "com/acme/Task"),
+                        instruction(4, 89, "dup"),
+                        instruction(5, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        instruction(6, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "submit", "(Ljava/lang/Runnable;)Ljava/util/concurrent/Future;")),
+                        instruction(7, 76, "astore_1"),
+                        instruction(8, 43, "aload_1"),
+                        instruction(9, 185, "invokeinterface", new MethodRef("java/util/concurrent/Future", "isDone", "()Z")),
+                        instruction(10, 87, "pop"),
+                        instruction(11, 43, "aload_1"),
+                        instruction(12, 4, "iconst_1"),
+                        instruction(13, 185, "invokeinterface", new MethodRef("java/util/concurrent/Future", "cancel", "(Z)Z")),
+                        instruction(14, 87, "pop"),
+                        instruction(15, 43, "aload_1"),
+                        instruction(16, 185, "invokeinterface", new MethodRef("java/util/concurrent/Future", "isCancelled", "()Z")),
+                        instruction(17, 87, "pop"),
+                        instruction(18, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
     void staticVerifierRejectsMalformedVirtualThreadBuilderToStringDescriptor() {
         final ClassFile main = classWithMethods(
             "com/acme/Main",

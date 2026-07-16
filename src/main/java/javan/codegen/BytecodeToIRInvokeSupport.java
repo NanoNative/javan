@@ -3676,6 +3676,19 @@ final class BytecodeToIRInvokeSupport {
         instructions.add(IrInstruction.assignObject(localName, IrExpression.objectCall(symbol, arguments)));
         stack.add(StackValue.objectExpression(IrExpression.objectLocal(localName)));
     }
+
+    static void pushThreadFutureCall(
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final String symbol,
+        final List<IrExpression> arguments
+    ) {
+        final String localName = "object" + localDeclarations.size();
+        localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
+        instructions.add(IrInstruction.assignObject(localName, IrExpression.objectCall(symbol, arguments)));
+        stack.add(StackValue.threadFuture(IrExpression.objectLocal(localName)));
+    }
     static void lowerInterruptAwareThreadWait(
         final ClassFile classFile,
         final MethodInfo method,
@@ -5360,7 +5373,7 @@ final class BytecodeToIRInvokeSupport {
             && hasReceiverKind(stack, methodRef, StackKind.VIRTUAL_THREAD_EXECUTOR)) {
             final IrExpression runnable = popObject(classFile, method, instruction, stack);
             final StackValue executor = popVirtualThreadExecutor(classFile, method, instruction, stack);
-            pushObjectCall(
+            pushThreadFutureCall(
                 instructions,
                 stack,
                 localDeclarations,
@@ -5641,13 +5654,35 @@ final class BytecodeToIRInvokeSupport {
         }
         if (VirtualThreadInvokePatterns.isFutureCancel(methodRef)) {
             final IrExpression mayInterruptIfRunning = popInt(classFile, method, stack);
-            final IrExpression future = popObject(classFile, method, stack);
+            final StackValue future = popThreadFuture(classFile, method, instruction, stack);
             pushIntCall(
                 instructions,
                 stack,
                 localDeclarations,
                 "javan_future_cancel",
-                List.of(future, mayInterruptIfRunning)
+                List.of(future.expression().orElse(IrExpression.objectNull()), mayInterruptIfRunning)
+            );
+            return true;
+        }
+        if (VirtualThreadInvokePatterns.isFutureIsDone(methodRef)) {
+            final StackValue future = popThreadFuture(classFile, method, instruction, stack);
+            pushIntCall(
+                instructions,
+                stack,
+                localDeclarations,
+                "javan_future_is_done",
+                List.of(future.expression().orElse(IrExpression.objectNull()))
+            );
+            return true;
+        }
+        if (VirtualThreadInvokePatterns.isFutureIsCancelled(methodRef)) {
+            final StackValue future = popThreadFuture(classFile, method, instruction, stack);
+            pushIntCall(
+                instructions,
+                stack,
+                localDeclarations,
+                "javan_future_is_cancelled",
+                List.of(future.expression().orElse(IrExpression.objectNull()))
             );
             return true;
         }
@@ -5759,6 +5794,22 @@ final class BytecodeToIRInvokeSupport {
             throw invalidStack(classFile, method, instruction, wrongStackTypeReason("scheduled thread pool executor receiver", executor.kind()));
         }
         return executor;
+    }
+
+    private static StackValue popThreadFuture(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<StackValue> stack
+    ) {
+        if (stack.isEmpty()) {
+            throw invalidStack(classFile, method, instruction, "A thread-backed Future receiver was expected on the bytecode stack.");
+        }
+        final StackValue future = pop(stack);
+        if (future.kind() != StackKind.THREAD_FUTURE) {
+            throw invalidStack(classFile, method, instruction, wrongStackTypeReason("thread-backed Future receiver", future.kind()));
+        }
+        return future;
     }
 
     private static boolean isVirtualThreadBuilderName(final MethodRef methodRef) {

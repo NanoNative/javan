@@ -2385,6 +2385,7 @@ final class RuntimeSourceMemorySections {
             int interrupted;
             int started;
             int completed;
+            int future_cancelled;
             int virtual_thread;
             int daemon;
             int priority;
@@ -3394,6 +3395,7 @@ final class RuntimeSourceMemorySections {
             object->interrupted = 0;
             object->started = 0;
             object->completed = 0;
+            object->future_cancelled = 0;
             object->virtual_thread = 0;
             object->daemon = 0;
             object->priority = 5;
@@ -3916,6 +3918,7 @@ final class RuntimeSourceMemorySections {
             }
             thread->started = 1;
             thread->completed = 0;
+            thread->future_cancelled = 0;
         }
 
         static void javan_thread_mark_completed(javan_thread* thread) {
@@ -4009,6 +4012,7 @@ final class RuntimeSourceMemorySections {
             javan_runtime_lock_enter();
             thread->started = 0;
             thread->completed = 0;
+            thread->future_cancelled = 0;
             javan_runtime_lock_leave();
             javan_thread_root_unregister(value);
         }
@@ -4512,16 +4516,36 @@ final class RuntimeSourceMemorySections {
         int javan_future_cancel(void* value, int may_interrupt_if_running) {
             javan_thread* thread = javan_require_thread(value);
             javan_runtime_lock_enter();
-            int already_done = thread->started == 0 || thread->completed != 0;
-            javan_runtime_lock_leave();
+            int already_done = thread->completed != 0 || thread->future_cancelled != 0;
             if (already_done != 0) {
+                javan_runtime_lock_leave();
                 return 0;
             }
             if (may_interrupt_if_running == 0) {
+                javan_runtime_lock_leave();
                 return 0;
             }
-            javan_thread_interrupt(value);
+            thread->future_cancelled = 1;
+            thread->interrupted = 1;
+            javan_profile_thread_interrupt_calls_value++;
+            javan_runtime_lock_leave();
             return 1;
+        }
+
+        int javan_future_is_done(void* value) {
+            javan_thread* thread = javan_require_thread(value);
+            javan_runtime_lock_enter();
+            int done = thread->completed != 0 || thread->future_cancelled != 0;
+            javan_runtime_lock_leave();
+            return done;
+        }
+
+        int javan_future_is_cancelled(void* value) {
+            javan_thread* thread = javan_require_thread(value);
+            javan_runtime_lock_enter();
+            int cancelled = thread->future_cancelled != 0;
+            javan_runtime_lock_leave();
+            return cancelled;
         }
 
         void javan_thread_park(void) {

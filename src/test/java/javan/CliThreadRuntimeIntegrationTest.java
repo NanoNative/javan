@@ -3832,6 +3832,94 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void virtualThreadExecutorFutureCompletedStateBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-executor-future-completed-state");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.ExecutorService;
+            import java.util.concurrent.Executors;
+            import java.util.concurrent.Future;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+                    final Future<?> future = executor.submit(new Task());
+                    executor.close();
+                    System.out.println(future.isDone());
+                    System.out.println(future.isCancelled());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-executor-future-completed-state").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void virtualThreadExecutorFutureCancelledStateBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-executor-future-cancelled-state");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.ExecutorService;
+            import java.util.concurrent.Executors;
+            import java.util.concurrent.Future;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+                    final Future<?> future = executor.submit(new Task());
+                    System.out.println(future.cancel(true));
+                    System.out.println(future.isDone());
+                    System.out.println(future.isCancelled());
+                    executor.close();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            import java.util.concurrent.locks.LockSupport;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    while (!Thread.currentThread().isInterrupted()) {
+                        LockSupport.parkNanos(1_000_000L);
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-executor-future-cancelled-state").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
     void scheduledThreadPoolExecutorScheduleBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("thread-scheduled-executor-schedule");
         writeJava(project, "com.acme.Main", """
