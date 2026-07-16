@@ -3920,6 +3920,55 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void virtualThreadExecutorFutureCancelFalseRunningTaskBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-executor-future-cancel-false-running");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.ExecutorService;
+            import java.util.concurrent.Executors;
+            import java.util.concurrent.Future;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+                    final Future<?> future = executor.submit(new Task());
+                    Thread.sleep(50L);
+                    System.out.println(future.cancel(false));
+                    executor.close();
+                    System.out.println(future.isDone());
+                    System.out.println(future.isCancelled());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    try {
+                        Thread.sleep(150L);
+                        System.out.println("completed");
+                    } catch (final InterruptedException interrupted) {
+                        System.out.println("interrupted");
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-executor-future-cancel-false-running").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
     void scheduledThreadPoolExecutorScheduleBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("thread-scheduled-executor-schedule");
         writeJava(project, "com.acme.Main", """
@@ -4043,6 +4092,50 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/thread-scheduled-future-cancelled-state").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void scheduledFutureCancelFalseBeforeFirstRunBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-scheduled-future-cancel-false-before-run");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.Future;
+            import java.util.concurrent.ScheduledThreadPoolExecutor;
+            import java.util.concurrent.TimeUnit;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(1);
+                    final Future<?> future = executor.schedule(new Task(), 200L, TimeUnit.MILLISECONDS);
+                    System.out.println(future.cancel(false));
+                    executor.shutdown();
+                    System.out.println(executor.awaitTermination(1L, TimeUnit.SECONDS));
+                    System.out.println(future.isDone());
+                    System.out.println(future.isCancelled());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Task", """
+            package com.acme;
+
+            public final class Task implements Runnable {
+                @Override
+                public void run() {
+                    System.out.println("unexpected");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-scheduled-future-cancel-false-before-run").toString())).stdout())
             .isEqualTo(jvmOutput);
     }
 

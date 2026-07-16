@@ -4310,6 +4310,9 @@ final class RuntimeSourceMemorySections {
                     (void) javan_thread_interrupted();
                     return 1;
                 }
+                if (thread != NULL && thread->future_cancelled != 0) {
+                    return 2;
+                }
                 if (javan_thread_scheduler_closed(thread) != 0) {
                     return 2;
                 }
@@ -4332,7 +4335,7 @@ final class RuntimeSourceMemorySections {
             void** javan_thread_start_roots[] = { &value, &target };
             javan_root_frame_push(javan_thread_start_roots, 2);
             if (thread->schedule_mode == 0) {
-                if (target != NULL) {
+                if (thread->future_cancelled == 0 && target != NULL) {
                     javan_thread_run_target(target);
                 }
             } else {
@@ -4345,6 +4348,9 @@ final class RuntimeSourceMemorySections {
                     return;
                 }
                 while (1) {
+                    if (thread->future_cancelled != 0) {
+                        break;
+                    }
                     if (javan_thread_scheduler_closed(thread) != 0) {
                         break;
                     }
@@ -4521,13 +4527,11 @@ final class RuntimeSourceMemorySections {
                 javan_runtime_lock_leave();
                 return 0;
             }
-            if (may_interrupt_if_running == 0) {
-                javan_runtime_lock_leave();
-                return 0;
-            }
             thread->future_cancelled = 1;
-            thread->interrupted = 1;
-            javan_profile_thread_interrupt_calls_value++;
+            if (may_interrupt_if_running != 0) {
+                thread->interrupted = 1;
+                javan_profile_thread_interrupt_calls_value++;
+            }
             javan_runtime_lock_leave();
             return 1;
         }
