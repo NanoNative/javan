@@ -2389,6 +2389,7 @@ final class RuntimeSourceMemorySections {
             int park_permit;
             int schedule_mode;
             int scheduled_first_run_started;
+            long long id;
             char* name;
             long long scheduled_initial_delay_nanos;
             long long scheduled_period_nanos;
@@ -2409,6 +2410,16 @@ final class RuntimeSourceMemorySections {
         } javan_thread;
 
         static long long javan_platform_thread_name_counter_value = 0;
+        static long long javan_thread_id_counter_value = 1;
+
+        static long long javan_thread_next_id(void) {
+            long long next = 0;
+            javan_runtime_lock_enter();
+            next = javan_thread_id_counter_value;
+            javan_thread_id_counter_value++;
+            javan_runtime_lock_leave();
+            return next;
+        }
 
         static char* javan_thread_copy_default_platform_name(void) {
             char buffer[32];
@@ -3334,6 +3345,7 @@ final class RuntimeSourceMemorySections {
             object->park_permit = 0;
             object->schedule_mode = 0;
             object->scheduled_first_run_started = 0;
+            object->id = javan_thread_next_id();
             object->name = NULL;
             object->scheduled_initial_delay_nanos = 0LL;
             object->scheduled_period_nanos = 0LL;
@@ -4003,6 +4015,10 @@ final class RuntimeSourceMemorySections {
 
         int javan_thread_get_priority(void* value) {
             return javan_require_thread(value)->priority;
+        }
+
+        long long javan_thread_get_id(void* value) {
+            return javan_require_thread(value)->id;
         }
 
         void javan_thread_detach_current(void) {

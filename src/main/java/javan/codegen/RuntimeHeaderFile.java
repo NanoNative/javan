@@ -521,6 +521,7 @@ final class RuntimeHeaderFile {
         int javan_thread_is_daemon(void* value);
         void javan_thread_set_priority(void* value, int priority);
         int javan_thread_get_priority(void* value);
+        long long javan_thread_get_id(void* value);
         void javan_thread_detach_current(void);
         void javan_thread_set_target(void* value, void* target);
         void* javan_thread_local_new(void);

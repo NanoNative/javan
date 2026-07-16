@@ -2371,6 +2371,63 @@ final class CliThreadRuntimeIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void threadGetIdBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-get-id");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Thread current = Thread.currentThread();
+                    final Thread first = new Thread();
+                    final Thread second = new Thread();
+                    System.out.println(current.getId() > 0L);
+                    System.out.println(first.getId() > 0L);
+                    System.out.println(second.getId() > 0L);
+                    System.out.println(first.getId() != second.getId());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-get-id").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void threadThreadIdBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("thread-thread-id");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Thread current = Thread.currentThread();
+                    final Thread fresh = new Thread("worker");
+                    System.out.println(current.threadId() > 0L);
+                    System.out.println(current.threadId() == current.getId());
+                    System.out.println(fresh.threadId() > 0L);
+                    System.out.println(fresh.threadId() == fresh.getId());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/thread-thread-id").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void threadSetNameBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("thread-set-name");
         writeJava(project, "com.acme.Main", """

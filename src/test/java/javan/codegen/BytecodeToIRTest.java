@@ -8415,6 +8415,42 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersThreadGetIdInstanceCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Thread;)J",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/Thread", "getId", "()J")),
+            plain(2, 173, "lreturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnLong(IrExpression.longCall("javan_thread_get_id", List.of(IrExpression.objectLocal("arg0"))))
+        );
+    }
+
+    @Test
+    void lowersThreadThreadIdInstanceCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Thread;)J",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/Thread", "threadId", "()J")),
+            plain(2, 173, "lreturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnLong(IrExpression.longCall("javan_thread_get_id", List.of(IrExpression.objectLocal("arg0"))))
+        );
+    }
+
+    @Test
     void lowersThreadSetNameInstanceCall() {
         final IrFunction function = lowerMain(method(
             0x0008,

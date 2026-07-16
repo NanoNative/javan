@@ -169,6 +169,8 @@ public final class JdkCallSupport {
         runtime("Thread.isAlive", "java/lang/Thread", "isAlive", "()Z"),
         runtime("Thread.isVirtual", "java/lang/Thread", "isVirtual", "()Z"),
         runtime("Thread.getName", "java/lang/Thread", "getName", "()Ljava/lang/String;"),
+        runtime("Thread.getId", "java/lang/Thread", "getId", "()J"),
+        runtime("Thread.threadId", "java/lang/Thread", "threadId", "()J"),
         runtime("Thread.start", "java/lang/Thread", "start", "()V"),
         runtime("Thread.join", "java/lang/Thread", "join", "()V", "(J)V", "(JI)V"),
         runtime("LockSupport.park", "java/util/concurrent/locks/LockSupport", "park", "()V"),

@@ -4011,6 +4011,14 @@ final class BytecodeToIRInvokeSupport {
             pushObjectCall(instructions, stack, localDeclarations, "javan_thread_get_name", List.of(receiver));
             return true;
         }
+        if ("getId".equals(methodRef.name()) && "()J".equals(methodRef.descriptor())) {
+            stack.add(StackValue.longExpression(IrExpression.longCall("javan_thread_get_id", List.of(receiver))));
+            return true;
+        }
+        if ("threadId".equals(methodRef.name()) && "()J".equals(methodRef.descriptor())) {
+            stack.add(StackValue.longExpression(IrExpression.longCall("javan_thread_get_id", List.of(receiver))));
+            return true;
+        }
         if ("start".equals(methodRef.name()) && "()V".equals(methodRef.descriptor())) {
             instructions.add(IrInstruction.callStaticVoid("javan_thread_start", List.of(receiver)));
             return true;
