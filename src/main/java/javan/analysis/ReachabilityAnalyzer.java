@@ -110,7 +110,12 @@ public final class ReachabilityAnalyzer {
     }
 
     private static boolean sameEntry(final EntryPoint left, final EntryPoint right) {
-        return left.sameAs(right);
+        if (left == right) {
+            return true;
+        }
+        return left.className().equals(right.className())
+            && left.methodName().equals(right.methodName())
+            && left.descriptor().equals(right.descriptor());
     }
 
     private static Optional<MethodInfo> method(final Map<String, ClassFile> classes, final EntryPoint entryPoint) {

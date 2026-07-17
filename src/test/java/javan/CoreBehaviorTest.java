@@ -1140,7 +1140,7 @@ final class CoreBehaviorTest {
 
     @Test
     void jdkCallSupportRejectsUnknownIteratorCall() {
-        assertThat(JdkCallSupport.isSupported(new MethodRef("java/util/Iterator", "remove", "()V"))).isFalse();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/util/Iterator", "forEachRemaining", "(Ljava/util/function/BiConsumer;)V"))).isFalse();
     }
 
     @Test

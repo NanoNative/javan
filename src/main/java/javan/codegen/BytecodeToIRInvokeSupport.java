@@ -4751,6 +4751,9 @@ final class BytecodeToIRInvokeSupport {
         if ("java/util/ListIterator".equals(owner)) {
             return true;
         }
+        if ("java/lang/Iterable".equals(owner)) {
+            return true;
+        }
         if ("java/util/Map$Entry".equals(owner)) {
             return true;
         }
