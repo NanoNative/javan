@@ -822,6 +822,130 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void mapRemoveKeyValueMatchingEntryBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-remove-key-value-match");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.LinkedHashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, String> values = new LinkedHashMap<>();
+                    values.put("first", "a");
+                    values.put("second", "b");
+                    System.out.println(values.remove("first", "a"));
+                    System.out.println(values.size());
+                    System.out.println(values.containsKey("first"));
+                    System.out.println(values.keySet().toArray()[0]);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-remove-key-value-match").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n1\nfalse\nsecond\n");
+    }
+
+    @Test
+    void mapRemoveKeyValueMismatchedValueBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-remove-key-value-mismatch");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, String> values = new HashMap<>();
+                    values.put("left", "right");
+                    System.out.println(values.remove("left", "wrong"));
+                    System.out.println(values.size());
+                    System.out.println(values.get("left"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-remove-key-value-mismatch").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("false\n1\nright\n");
+    }
+
+    @Test
+    void mapRemoveKeyValuePresentNullBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-remove-key-value-present-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, String> values = new HashMap<>();
+                    values.put("nullable", null);
+                    System.out.println(values.remove("nullable", null));
+                    System.out.println(values.containsKey("nullable"));
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-remove-key-value-present-null").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\nfalse\n0\n");
+    }
+
+    @Test
+    void mapRemoveKeyValueMissingNullBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-remove-key-value-missing-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, String> values = new HashMap<>();
+                    System.out.println(values.remove("missing", null));
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-remove-key-value-missing-null").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("false\n0\n");
+    }
+
+    @Test
     void mapCopyOfBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("map-copy-of");
         writeJava(project, "com.acme.Main", """

@@ -520,6 +520,7 @@ public final class CompatibilityReports {
             pass("collections-unmodifiable-map"),
             pass("map-entry"),
             pass("map-remove"),
+            pass("map-remove-key-value"),
             pass("map-of-singleton"),
             pass("map-of-pair"),
             pass("map-of-triple"),

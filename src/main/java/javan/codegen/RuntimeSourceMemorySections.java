@@ -2316,6 +2316,7 @@ final class RuntimeSourceMemorySections {
         static void javan_map_ensure_capacity(javan_object_map* map, int required);
         void* javan_hashmap_new(void);
         void* javan_map_remove(void* value, void* key);
+        int javan_map_remove_entry(void* value, void* key, void* expected_value);
         void* javan_materialized_lambda_new(int target_id);
         int javan_materialized_lambda_target_id(void* value);
         static javan_thread* javan_current_thread_object(void);
@@ -9424,6 +9425,27 @@ final class RuntimeSourceMemorySections {
             map->values[map->length] = NULL;
             map->mod_count++;
             return previous;
+        }
+
+        int javan_map_remove_entry(void* value, void* key, void* expected_value) {
+            javan_object_map* map = javan_map_checked(value);
+            javan_map_mutable_checked(map);
+            int index = javan_map_find(map, key);
+            if (index < 0) {
+                return 0;
+            }
+            if (javan_object_equals(javan_map_value_unchecked(map, index), expected_value) == 0) {
+                return 0;
+            }
+            for (int cursor = index + 1; cursor < map->length; cursor++) {
+                map->keys[cursor - 1] = map->keys[cursor];
+                map->values[cursor - 1] = map->values[cursor];
+            }
+            map->length--;
+            map->keys[map->length] = NULL;
+            map->values[map->length] = NULL;
+            map->mod_count++;
+            return 1;
         }
 
         int javan_map_contains_key(void* value, void* key) {
