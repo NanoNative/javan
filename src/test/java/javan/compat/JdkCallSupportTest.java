@@ -214,11 +214,29 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void hashSetRemoveIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/HashSet",
+            "remove",
+            "(Ljava/lang/Object;)Z"
+        ))).isTrue();
+    }
+
+    @Test
     void hashSetContainsAllIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/HashSet",
             "containsAll",
             "(Ljava/util/Collection;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void hashSetClearIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/HashSet",
+            "clear",
+            "()V"
         ))).isTrue();
     }
 
@@ -268,11 +286,29 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void linkedHashSetRemoveIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/LinkedHashSet",
+            "remove",
+            "(Ljava/lang/Object;)Z"
+        ))).isTrue();
+    }
+
+    @Test
     void linkedHashSetContainsAllIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/LinkedHashSet",
             "containsAll",
             "(Ljava/util/Collection;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void linkedHashSetClearIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/LinkedHashSet",
+            "clear",
+            "()V"
         ))).isTrue();
     }
 
@@ -331,6 +367,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void collectionRemoveIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Collection",
+            "remove",
+            "(Ljava/lang/Object;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void collectionClearIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Collection",
+            "clear",
+            "()V"
+        ))).isTrue();
+    }
+
+    @Test
     void listToArrayIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/List",
@@ -363,6 +417,24 @@ final class JdkCallSupportTest {
             "java/util/Set",
             "containsAll",
             "(Ljava/util/Collection;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void setRemoveIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Set",
+            "remove",
+            "(Ljava/lang/Object;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void setClearIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Set",
+            "clear",
+            "()V"
         ))).isTrue();
     }
 
@@ -1122,6 +1194,15 @@ final class JdkCallSupportTest {
             "java/util/HashSet",
             "contains",
             "(Ljava/lang/Object;)Z"
+        ))).containsExactly("collections");
+    }
+
+    @Test
+    void collectionClearRequiresCollectionsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/Collection",
+            "clear",
+            "()V"
         ))).containsExactly("collections");
     }
 

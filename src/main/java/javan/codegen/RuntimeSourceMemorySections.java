@@ -7781,6 +7781,25 @@ final class RuntimeSourceMemorySections {
             return 0;
         }
 
+        int javan_list_remove(void* value, void* element) {
+            javan_object_list* list = javan_list_checked(value);
+            javan_list_mutable_checked(list);
+            int length = javan_list_logical_length(list);
+            for (int index = 0; index < length; index++) {
+                if (javan_object_equals(javan_list_get_unchecked(list, index), element) == 0) {
+                    continue;
+                }
+                if (index + 1 < length) {
+                    memmove(list->values + index, list->values + index + 1, (unsigned long) (length - index - 1) * sizeof(void*));
+                }
+                list->length--;
+                list->values[list->length] = NULL;
+                list->mod_count++;
+                return 1;
+            }
+            return 0;
+        }
+
         int javan_list_contains_all(void* value, void* other) {
             javan_object_list* list = javan_list_checked(value);
             javan_object_list* probe = javan_list_checked(other);
@@ -7798,6 +7817,18 @@ final class RuntimeSourceMemorySections {
             }
             javan_root_frame_pop(javan_list_contains_all_roots);
             return 1;
+        }
+
+        void javan_list_clear(void* value) {
+            javan_object_list* list = javan_list_checked(value);
+            javan_list_mutable_checked(list);
+            int length = javan_list_logical_length(list);
+            if (length == 0) {
+                return;
+            }
+            memset(list->values, 0, (unsigned long) length * sizeof(void*));
+            list->length = 0;
+            list->mod_count++;
         }
 
         void* javan_list_get(void* value, int index) {

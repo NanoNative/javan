@@ -9,8 +9,8 @@ External project names do not belong in this matrix; this ledger stays compiler-
 
 | Measure | Count |
 | --- | ---: |
-| rows | 226 |
-| pass | 226 |
+| rows | 234 |
+| pass | 234 |
 | scoped | 0 |
 | target | 0 |
 | rejected | 0 |
@@ -110,14 +110,22 @@ Status mapping:
 | `collections-unmodifiable-set` | pass |
 | `collections-unmodifiable-list` | pass |
 | `collection-contains-all` | pass |
+| `collection-remove` | pass |
+| `collection-clear` | pass |
 | `list-contains-all` | pass |
 | `set-contains-all` | pass |
+| `set-remove` | pass |
+| `set-clear` | pass |
 | `hashset-collection-constructor` | pass |
 | `linkedhashset-collection-constructor` | pass |
 | `hashset-static-factory` | pass |
 | `linkedhashset-static-factory` | pass |
 | `hashset-direct-owner-read-surface` | pass |
+| `hashset-direct-owner-remove` | pass |
+| `hashset-direct-owner-clear` | pass |
 | `linkedhashset-direct-owner-read-surface` | pass |
+| `linkedhashset-direct-owner-remove` | pass |
+| `linkedhashset-direct-owner-clear` | pass |
 | `hashmap-capacity-constructor` | pass |
 | `linkedhashmap-capacity-constructor` | pass |
 | `hashmap-load-factor-constructor` | pass |

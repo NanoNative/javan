@@ -19909,6 +19909,25 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersHashSetClearToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/HashSet;)V",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/util/HashSet", "clear", "()V")),
+            plain(2, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid("javan_list_clear", List.of(IrExpression.objectLocal("arg0"))),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
     void lowersHashSetIteratorToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -19946,6 +19965,28 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).containsExactly(
             IrInstruction.returnInt(IrExpression.intCall(
                 "javan_list_contains_all",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersLinkedHashSetRemoveToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/LinkedHashSet;Ljava/lang/Object;)Z",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/util/LinkedHashSet", "remove", "(Ljava/lang/Object;)Z")),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_list_remove",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
             ))
         );
@@ -20220,6 +20261,47 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersCollectionRemoveToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/Collection;Ljava/lang/Object;)Z",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeInterface(2, new MethodRef("java/util/Collection", "remove", "(Ljava/lang/Object;)Z")),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_list_remove",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersCollectionClearToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/Collection;)V",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeInterface(1, new MethodRef("java/util/Collection", "clear", "()V")),
+            plain(2, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid("javan_list_clear", List.of(IrExpression.objectLocal("arg0"))),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
     void lowersListToArrayToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -20302,6 +20384,47 @@ final class BytecodeToIRTest {
                 "javan_list_contains_all",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
             ))
+        );
+    }
+
+    @Test
+    void lowersSetRemoveToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/Set;Ljava/lang/Object;)Z",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeInterface(2, new MethodRef("java/util/Set", "remove", "(Ljava/lang/Object;)Z")),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_list_remove",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersSetClearToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/Set;)V",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeInterface(1, new MethodRef("java/util/Set", "clear", "()V")),
+            plain(2, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid("javan_list_clear", List.of(IrExpression.objectLocal("arg0"))),
+            IrInstruction.returnVoid()
         );
     }
 

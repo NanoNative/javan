@@ -244,14 +244,50 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksCollectionRemoveAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Collection", "remove", "(Ljava/lang/Object;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksCollectionClearAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Collection", "clear", "()V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksSetRemoveAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Set", "remove", "(Ljava/lang/Object;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksSetClearAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Set", "clear", "()V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksHashSetContainsAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/HashSet", "contains", "(Ljava/lang/Object;)Z")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
     @Test
+    void marksHashSetRemoveAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/HashSet", "remove", "(Ljava/lang/Object;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksHashSetContainsAllAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/HashSet", "containsAll", "(Ljava/util/Collection;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksHashSetClearAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/HashSet", "clear", "()V")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
@@ -286,8 +322,20 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksLinkedHashSetRemoveAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/LinkedHashSet", "remove", "(Ljava/lang/Object;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksLinkedHashSetContainsAllAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/LinkedHashSet", "containsAll", "(Ljava/util/Collection;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksLinkedHashSetClearAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/LinkedHashSet", "clear", "()V")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 

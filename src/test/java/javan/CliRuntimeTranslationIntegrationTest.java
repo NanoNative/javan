@@ -1212,6 +1212,268 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void collectionRemoveBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("collection-remove");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Collection;
+            import java.util.HashSet;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final HashSet<String> base = HashSet.newHashSet(3);
+                    base.add("alpha");
+                    base.add("beta");
+                    base.add("gamma");
+                    final Collection<String> values = base;
+                    System.out.println(values.remove("beta"));
+                    System.out.println(values.contains("beta"));
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/collection-remove").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\nfalse\n2\n");
+    }
+
+    @Test
+    void collectionClearBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("collection-clear");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Collection;
+            import java.util.HashSet;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final HashSet<String> base = HashSet.newHashSet(3);
+                    base.add("alpha");
+                    base.add("beta");
+                    base.add("gamma");
+                    final Collection<String> values = base;
+                    values.clear();
+                    System.out.println(values.isEmpty());
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/collection-clear").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n0\n");
+    }
+
+    @Test
+    void setRemoveBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("set-remove");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashSet;
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Set<String> values = HashSet.newHashSet(3);
+                    values.add("alpha");
+                    values.add("beta");
+                    values.add("gamma");
+                    System.out.println(values.remove("alpha"));
+                    System.out.println(values.contains("alpha"));
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/set-remove").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\nfalse\n2\n");
+    }
+
+    @Test
+    void setClearBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("set-clear");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashSet;
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Set<String> values = HashSet.newHashSet(3);
+                    values.add("alpha");
+                    values.add("beta");
+                    values.add("gamma");
+                    values.clear();
+                    System.out.println(values.isEmpty());
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/set-clear").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n0\n");
+    }
+
+    @Test
+    void hashSetDirectOwnerRemoveBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("hashset-direct-owner-remove");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashSet;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final HashSet<String> values = HashSet.newHashSet(3);
+                    values.add("alpha");
+                    values.add("beta");
+                    values.add("gamma");
+                    System.out.println(values.remove("gamma"));
+                    System.out.println(values.contains("gamma"));
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/hashset-direct-owner-remove").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\nfalse\n2\n");
+    }
+
+    @Test
+    void hashSetDirectOwnerClearBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("hashset-direct-owner-clear");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashSet;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final HashSet<String> values = HashSet.newHashSet(3);
+                    values.add("alpha");
+                    values.add("beta");
+                    values.add("gamma");
+                    values.clear();
+                    System.out.println(values.isEmpty());
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/hashset-direct-owner-clear").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n0\n");
+    }
+
+    @Test
+    void linkedHashSetDirectOwnerRemoveBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("linkedhashset-direct-owner-remove");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.LinkedHashSet;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final LinkedHashSet<String> values = LinkedHashSet.newLinkedHashSet(3);
+                    values.add("alpha");
+                    values.add("beta");
+                    values.add("gamma");
+                    System.out.println(values.remove("beta"));
+                    System.out.println(values.contains("beta"));
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/linkedhashset-direct-owner-remove").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\nfalse\n2\n");
+    }
+
+    @Test
+    void linkedHashSetDirectOwnerClearBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("linkedhashset-direct-owner-clear");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.LinkedHashSet;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final LinkedHashSet<String> values = LinkedHashSet.newLinkedHashSet(3);
+                    values.add("alpha");
+                    values.add("beta");
+                    values.add("gamma");
+                    values.clear();
+                    System.out.println(values.isEmpty());
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/linkedhashset-direct-owner-clear").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n0\n");
+    }
+
+    @Test
     void linkedHashMapValuesBuildAndMatchJvmOutput() throws Exception {
         final Path project = project("linkedhashmap-values");
         writeJava(project, "com.acme.Main", """
