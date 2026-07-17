@@ -7316,7 +7316,7 @@ final class RuntimeSourceMemorySections {
             return result;
         }
         """;
-    private static final String SOURCE_COLLECTIONS = """
+    private static final String SOURCE_COLLECTIONS_HEAD = """
         static int javan_probably_string_key(void* value) {
             if (value == NULL) {
                 return 0;
@@ -8465,7 +8465,9 @@ final class RuntimeSourceMemorySections {
             }
             return -1;
         }
+        """;
 
+    private static final String SOURCE_COLLECTIONS_TAIL = """
         void* javan_hashmap_new(void) {
             return javan_map_new_with_capacity(0, 0);
         }
@@ -8599,6 +8601,65 @@ final class RuntimeSourceMemorySections {
             map->values[3] = fourth_value_root;
             map->length = 4;
             javan_root_frame_pop(javan_map_quadruple_roots);
+            return map;
+        }
+
+        void* javan_map_quintuple(void* first_key, void* first_value, void* second_key, void* second_value, void* third_key, void* third_value, void* fourth_key, void* fourth_value, void* fifth_key, void* fifth_value) {
+            if (first_key == NULL || first_value == NULL
+                || second_key == NULL || second_value == NULL
+                || third_key == NULL || third_value == NULL
+                || fourth_key == NULL || fourth_value == NULL
+                || fifth_key == NULL || fifth_value == NULL) {
+                javan_panic("null Map.of entry");
+            }
+            if (javan_object_equals(first_key, second_key) != 0
+                || javan_object_equals(first_key, third_key) != 0
+                || javan_object_equals(first_key, fourth_key) != 0
+                || javan_object_equals(first_key, fifth_key) != 0
+                || javan_object_equals(second_key, third_key) != 0
+                || javan_object_equals(second_key, fourth_key) != 0
+                || javan_object_equals(second_key, fifth_key) != 0
+                || javan_object_equals(third_key, fourth_key) != 0
+                || javan_object_equals(third_key, fifth_key) != 0
+                || javan_object_equals(fourth_key, fifth_key) != 0) {
+                javan_panic("duplicate Map.of key");
+            }
+            void* first_key_root = first_key;
+            void* first_value_root = first_value;
+            void* second_key_root = second_key;
+            void* second_value_root = second_value;
+            void* third_key_root = third_key;
+            void* third_value_root = third_value;
+            void* fourth_key_root = fourth_key;
+            void* fourth_value_root = fourth_value;
+            void* fifth_key_root = fifth_key;
+            void* fifth_value_root = fifth_value;
+            void** javan_map_quintuple_roots[] = {
+                (void**) &first_key_root,
+                (void**) &first_value_root,
+                (void**) &second_key_root,
+                (void**) &second_value_root,
+                (void**) &third_key_root,
+                (void**) &third_value_root,
+                (void**) &fourth_key_root,
+                (void**) &fourth_value_root,
+                (void**) &fifth_key_root,
+                (void**) &fifth_value_root
+            };
+            javan_root_frame_push(javan_map_quintuple_roots, 10);
+            javan_object_map* map = javan_map_new_with_capacity(5, 1);
+            map->keys[0] = first_key_root;
+            map->values[0] = first_value_root;
+            map->keys[1] = second_key_root;
+            map->values[1] = second_value_root;
+            map->keys[2] = third_key_root;
+            map->values[2] = third_value_root;
+            map->keys[3] = fourth_key_root;
+            map->values[3] = fourth_value_root;
+            map->keys[4] = fifth_key_root;
+            map->values[4] = fifth_value_root;
+            map->length = 5;
+            javan_root_frame_pop(javan_map_quintuple_roots);
             return map;
         }
 
@@ -9216,6 +9277,8 @@ final class RuntimeSourceMemorySections {
     }
 
     static String collections() {
-        return SOURCE_COLLECTIONS;
+        String result = SOURCE_COLLECTIONS_HEAD;
+        result = result + SOURCE_COLLECTIONS_TAIL;
+        return result;
     }
 }

@@ -509,6 +509,7 @@ public final class CompatibilityReports {
             pass("map-of-pair"),
             pass("map-of-triple"),
             pass("map-of-quadruple"),
+            pass("map-of-quintuple"),
             pass("set-copy-of"),
             pass("set-of-empty"),
             pass("set-of-singleton"),

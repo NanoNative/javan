@@ -1990,6 +1990,146 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void mapOfQuintupleBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-of-quintuple");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, Integer> values = Map.of("a", 1, "b", 2, "c", 3, "d", 4, "e", 5);
+                    System.out.println(values.isEmpty());
+                    System.out.println(values.size());
+                    System.out.println(values.containsKey("a"));
+                    System.out.println(values.containsKey("b"));
+                    System.out.println(values.containsKey("c"));
+                    System.out.println(values.containsKey("d"));
+                    System.out.println(values.containsKey("e"));
+                    System.out.println(values.containsKey("missing"));
+                    System.out.println(values.get("a"));
+                    System.out.println(values.get("b"));
+                    System.out.println(values.get("c"));
+                    System.out.println(values.get("d"));
+                    System.out.println(values.get("e"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-of-quintuple").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("false\n5\ntrue\ntrue\ntrue\ntrue\ntrue\nfalse\n1\n2\n3\n4\n5\n");
+    }
+
+    @Test
+    void mapOfQuintupleDuplicateFirstSecondFailsAtRuntime() throws Exception {
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-duplicate-first-second", "Map.of(\"same\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfQuintupleDuplicateFirstThirdFailsAtRuntime() throws Exception {
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-duplicate-first-third", "Map.of(\"same\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfQuintupleDuplicateFirstFourthFailsAtRuntime() throws Exception {
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-duplicate-first-fourth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfQuintupleDuplicateFirstFifthFailsAtRuntime() throws Exception {
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-duplicate-first-fifth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfQuintupleDuplicateSecondThirdFailsAtRuntime() throws Exception {
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-duplicate-second-third", "Map.of(\"a\", 1, \"same\", 2, \"same\", 3, \"d\", 4, \"e\", 5);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfQuintupleDuplicateSecondFourthFailsAtRuntime() throws Exception {
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-duplicate-second-fourth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"same\", 4, \"e\", 5);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfQuintupleDuplicateSecondFifthFailsAtRuntime() throws Exception {
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-duplicate-second-fifth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"same\", 5);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfQuintupleDuplicateThirdFourthFailsAtRuntime() throws Exception {
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-duplicate-third-fourth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"same\", 4, \"e\", 5);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfQuintupleDuplicateThirdFifthFailsAtRuntime() throws Exception {
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-duplicate-third-fifth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"same\", 5);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfQuintupleDuplicateFourthFifthFailsAtRuntime() throws Exception {
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-duplicate-fourth-fifth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"same\", 5);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfQuintupleNullFirstKeyFailsAtRuntime() throws Exception {
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-null-first-key", "Map.of((String) null, 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfQuintupleNullFirstValueFailsAtRuntime() throws Exception {
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-null-first-value", "Map.of(\"a\", (Integer) null, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfQuintupleNullSecondKeyFailsAtRuntime() throws Exception {
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-null-second-key", "Map.of(\"a\", 1, (String) null, 2, \"c\", 3, \"d\", 4, \"e\", 5);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfQuintupleNullSecondValueFailsAtRuntime() throws Exception {
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-null-second-value", "Map.of(\"a\", 1, \"b\", (Integer) null, \"c\", 3, \"d\", 4, \"e\", 5);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfQuintupleNullThirdKeyFailsAtRuntime() throws Exception {
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-null-third-key", "Map.of(\"a\", 1, \"b\", 2, (String) null, 3, \"d\", 4, \"e\", 5);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfQuintupleNullThirdValueFailsAtRuntime() throws Exception {
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-null-third-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", (Integer) null, \"d\", 4, \"e\", 5);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfQuintupleNullFourthKeyFailsAtRuntime() throws Exception {
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-null-fourth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, (String) null, 4, \"e\", 5);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfQuintupleNullFourthValueFailsAtRuntime() throws Exception {
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-null-fourth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", (Integer) null, \"e\", 5);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfQuintupleNullFifthKeyFailsAtRuntime() throws Exception {
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-null-fifth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, (String) null, 5);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfQuintupleNullFifthValueFailsAtRuntime() throws Exception {
+        assertMapOfQuintupleFailureAtRuntime("map-of-quintuple-null-fifth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", (Integer) null);", "null Map.of entry");
+    }
+
+    @Test
     void setOfEmptyBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("set-of-empty");
         writeJava(project, "com.acme.Main", """
@@ -4099,6 +4239,36 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     private void assertMapOfQuadrupleFailureAtRuntime(
+        final String projectName,
+        final String statement,
+        final String expectedMessage
+    ) throws Exception {
+        final Path project = project(projectName);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    %s
+                }
+            }
+            """.formatted(statement));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/" + projectName).toString()));
+
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains(expectedMessage);
+    }
+
+    private void assertMapOfQuintupleFailureAtRuntime(
         final String projectName,
         final String statement,
         final String expectedMessage
