@@ -1282,6 +1282,28 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void staticVerifierAcceptsReachableTypedExactCatchNullFallibleApplyMethod() {
+        final MethodInfo method = exactCatchNullFallibleApplyMethod(
+            "com/acme/ThrowingMapper",
+            "(Ljava/lang/String;)Ljava/lang/String;"
+        );
+        final ClassFile functionOrNull = classWithMethods(
+            "com/acme/ThrowingMapper",
+            "java/lang/Object",
+            0x0200,
+            List.of(),
+            method
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(functionOrNull.name(), functionOrNull),
+            List.of(new EntryPoint("com/acme/ThrowingMapper", "apply", "(Ljava/lang/String;)Ljava/lang/String;"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
     void exactMethodSupportDetectsTemporalOfLoopFallbackShape() {
         final MethodInfo method = exactTemporalOfLoopFallbackMethod();
         final ClassFile register = classWithMethods(
@@ -12772,10 +12794,20 @@ final class CoreBehaviorTest {
     }
 
     private static MethodInfo exactCatchNullFallibleApplyMethod() {
+        return exactCatchNullFallibleApplyMethod(
+            "com/acme/FallibleFunction",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
+        );
+    }
+
+    private static MethodInfo exactCatchNullFallibleApplyMethod(
+        final String owner,
+        final String descriptor
+    ) {
         return new MethodInfo(
             0,
             "apply",
-            "(Ljava/lang/Object;)Ljava/lang/Object;",
+            descriptor,
             Optional.of(new CodeAttribute(
                 2,
                 3,
@@ -12785,7 +12817,7 @@ final class CoreBehaviorTest {
                 List.of(
                     instruction(0, 42, "aload_0"),
                     instruction(1, 43, "aload_1"),
-                    instruction(2, 185, "invokeinterface", new MethodRef("com/acme/FallibleFunction", "applyWithException", "(Ljava/lang/Object;)Ljava/lang/Object;")),
+                    instruction(2, 185, "invokeinterface", new MethodRef(owner, "applyWithException", descriptor)),
                     instruction(7, 176, "areturn"),
                     instruction(8, 77, "astore_2"),
                     instruction(9, 1, "aconst_null"),

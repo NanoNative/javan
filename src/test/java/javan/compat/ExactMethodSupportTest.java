@@ -95,6 +95,17 @@ final class ExactMethodSupportTest {
     }
 
     @Test
+    void catchNullFunctionApplyAcceptsTypedReferenceInterfaceShape() {
+        final MethodInfo method = exactCatchNullFallibleApplyMethod(
+            "com/acme/ThrowingMapper",
+            "(Ljava/lang/String;)Ljava/lang/String;"
+        );
+        final ClassFile owner = classWithMethods("com/acme/ThrowingMapper", "java/lang/Object", 0x0200, List.of(), method);
+
+        assertThat(ExactMethodSupport.isExactCatchNullFunctionOrNullApplyMethod(owner, method)).isTrue();
+    }
+
+    @Test
     void catchNullFunctionApplyRejectsStaticMethod() {
         final MethodInfo method = copyMethod(exactCatchNullFallibleApplyMethod(), 0x0008, "apply", "(Ljava/lang/Object;)Ljava/lang/Object;");
         final ClassFile owner = classWithMethods("com/acme/FallibleFunction", "java/lang/Object", 0x0200, List.of(), method);
@@ -113,6 +124,17 @@ final class ExactMethodSupportTest {
     @Test
     void catchNullFunctionApplyRejectsWrongDescriptor() {
         final MethodInfo method = copyMethod(exactCatchNullFallibleApplyMethod(), 0, "apply", "(Ljava/lang/Object;)Ljava/lang/String;");
+        final ClassFile owner = classWithMethods("com/acme/FallibleFunction", "java/lang/Object", 0x0200, List.of(), method);
+
+        assertThat(ExactMethodSupport.isExactCatchNullFunctionOrNullApplyMethod(owner, method)).isFalse();
+    }
+
+    @Test
+    void catchNullFunctionApplyRejectsPrimitiveInputDescriptor() {
+        final MethodInfo method = exactCatchNullFallibleApplyMethod(
+            "com/acme/FallibleFunction",
+            "(I)Ljava/lang/String;"
+        );
         final ClassFile owner = classWithMethods("com/acme/FallibleFunction", "java/lang/Object", 0x0200, List.of(), method);
 
         assertThat(ExactMethodSupport.isExactCatchNullFunctionOrNullApplyMethod(owner, method)).isFalse();
@@ -600,10 +622,20 @@ final class ExactMethodSupportTest {
     }
 
     private static MethodInfo exactCatchNullFallibleApplyMethod() {
+        return exactCatchNullFallibleApplyMethod(
+            "com/acme/FallibleFunction",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
+        );
+    }
+
+    private static MethodInfo exactCatchNullFallibleApplyMethod(
+        final String owner,
+        final String descriptor
+    ) {
         return new MethodInfo(
             0,
             "apply",
-            "(Ljava/lang/Object;)Ljava/lang/Object;",
+            descriptor,
             Optional.of(new CodeAttribute(
                 2,
                 3,
@@ -613,7 +645,7 @@ final class ExactMethodSupportTest {
                 List.of(
                     instruction(0, 42, "aload_0"),
                     instruction(1, 43, "aload_1"),
-                    instruction(2, 185, "invokeinterface", new MethodRef("com/acme/FallibleFunction", "applyWithException", "(Ljava/lang/Object;)Ljava/lang/Object;")),
+                    instruction(2, 185, "invokeinterface", new MethodRef(owner, "applyWithException", descriptor)),
                     instruction(7, 176, "areturn"),
                     instruction(8, 77, "astore_2"),
                     instruction(9, 1, "aconst_null"),

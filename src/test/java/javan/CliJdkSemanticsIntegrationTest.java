@@ -8797,7 +8797,7 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void defaultMethodFunctionalInterfaceLambdaFailsClearlyAtBuildTime() throws Exception {
+    void defaultMethodFunctionalInterfaceMethodReferenceBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("default-method-functional-interface-lambda");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -8833,15 +8833,62 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
             }
             """);
 
+        final String jvmOutput = runJvm(project, "com.acme.Main");
         final CliRun run = run(tempDir, "build", project.toString());
 
-        assertThat(run.exitCode()).isEqualTo(2);
-        assertThat(run.stderr()).contains(
-            "error[JAVAN014]",
-            "Class:\n  com/acme/Main$ThrowingMapper",
-            "Method:\n  apply(Ljava/lang/String;)Ljava/lang/String;"
-        );
-        assertThat(project.resolve(".javan/bin/default-method-functional-interface-lambda")).doesNotExist();
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/default-method-functional-interface-lambda").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("demo\nnull\n");
+    }
+
+    @Test
+    void defaultMethodFunctionalInterfaceConcreteImplementationBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("default-method-functional-interface-concrete");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final ThrowingMapper trim = new TrimMapper();
+                    System.out.println(trim.apply(" demo "));
+                    System.out.println(trim.apply(null));
+                }
+
+                private static final class TrimMapper implements ThrowingMapper {
+                    @Override
+                    public String applyWithException(final String value) throws Exception {
+                        if (value == null) {
+                            throw new Exception("missing");
+                        }
+                        return value.trim();
+                    }
+                }
+
+                interface ThrowingMapper {
+                    String applyWithException(String value) throws Exception;
+
+                    default String apply(final String value) {
+                        try {
+                            return applyWithException(value);
+                        } catch (final Exception ignored) {
+                            return null;
+                        }
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/default-method-functional-interface-concrete").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("demo\nnull\n");
     }
 
     @Test

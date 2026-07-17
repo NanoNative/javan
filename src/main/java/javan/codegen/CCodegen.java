@@ -8,9 +8,11 @@ import javan.classfile.MethodRef;
 import javan.ir.IrClass;
 import javan.ir.IrDispatch;
 import javan.ir.IrDispatchTarget;
+import javan.ir.IrExpression;
 import javan.ir.IrInstruction;
 import javan.ir.IrProgram;
 import javan.ir.IrSourceLocation;
+import javan.ir.IrType;
 import javan.util.Files2;
 import javan.util.Strings2;
 
@@ -40,7 +42,6 @@ public final class CCodegen {
     private static final String GENERATED_ENUM_BY_NAME_SYMBOL = "javan_generated_enum_by_name";
     private static final String GENERATED_ENUM_BY_ORDINAL_SYMBOL = "javan_generated_enum_by_ordinal";
     private static final String FALLIBLE_APPLY_METHOD_NAME = "applyWithException";
-    private static final String FALLIBLE_APPLY_METHOD_DESCRIPTOR = "(Ljava/lang/Object;)Ljava/lang/Object;";
 
     /**
      * Writes the generated C program.
@@ -486,7 +487,7 @@ public final class CCodegen {
     private static void emitExactFunctionOrNullHelpers(final IrProgram program, final StringBuilder c) {
         final java.util.Set<String> bridgeOwners = new java.util.LinkedHashSet<>();
         for (final IrFunction function : program.functions()) {
-            if ("apply".equals(function.name()) && "(Ljava/lang/Object;)Ljava/lang/Object;".equals(function.descriptor())) {
+            if ("apply".equals(function.name()) && isExactCatchNullBridge(function)) {
                 bridgeOwners.add(function.owner());
             }
         }
@@ -499,7 +500,7 @@ public final class CCodegen {
             if (!FALLIBLE_APPLY_METHOD_NAME.equals(function.name())) {
                 continue;
             }
-            if (!FALLIBLE_APPLY_METHOD_DESCRIPTOR.equals(function.descriptor())) {
+            if (!hasUnaryReferenceObjectShape(function)) {
                 continue;
             }
             concreteTargets.add(function);
@@ -535,6 +536,29 @@ public final class CCodegen {
         c.append("    }").append(System.lineSeparator());
         c.append("    return 0;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+    }
+
+    private static boolean isExactCatchNullBridge(final IrFunction function) {
+        if (!hasUnaryReferenceObjectShape(function)) {
+            return false;
+        }
+        if (function.instructions().size() != 1) {
+            return false;
+        }
+        final IrInstruction instruction = function.instructions().getFirst();
+        if (instruction.op() != IrInstruction.Op.RETURN_OBJECT || instruction.expression().isEmpty()) {
+            return false;
+        }
+        final IrExpression expression = instruction.expression().orElseThrow();
+        return expression.kind() == IrExpression.Kind.CALL
+            && EXACT_CATCH_NULL_APPLY_SYMBOL.equals(expression.value());
+    }
+
+    private static boolean hasUnaryReferenceObjectShape(final IrFunction function) {
+        return function.parameters().size() == 2
+            && function.parameters().get(0).type() == IrType.OBJECT
+            && function.parameters().get(1).type() == IrType.OBJECT
+            && function.returnType() == IrType.OBJECT;
     }
 
     private static void emitExactTemporalBridgeHelpers(final StringBuilder c) {

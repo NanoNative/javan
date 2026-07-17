@@ -765,7 +765,7 @@ public final class ReachabilityAnalyzer {
     }
 
     private static boolean isCatchNullFunctionalInterfaceCall(final Map<String, ClassFile> classes, final MethodRef target) {
-        if (!"(Ljava/lang/Object;)Ljava/lang/Object;".equals(target.descriptor())) {
+        if (!isSingleReferenceInputReferenceReturnDescriptor(target.descriptor())) {
             return false;
         }
         if (!"apply".equals(target.name()) && !"applyWithException".equals(target.name())) {
@@ -775,11 +775,28 @@ public final class ReachabilityAnalyzer {
         if (owner == null || !owner.isInterface()) {
             return false;
         }
-        final Optional<MethodInfo> apply = owner.method("apply", "(Ljava/lang/Object;)Ljava/lang/Object;");
-        final Optional<MethodInfo> fallibleApply = owner.method("applyWithException", "(Ljava/lang/Object;)Ljava/lang/Object;");
+        final Optional<MethodInfo> apply = owner.method("apply", target.descriptor());
+        final Optional<MethodInfo> fallibleApply = owner.method("applyWithException", target.descriptor());
         return apply.isPresent()
             && fallibleApply.isPresent()
             && ExactMethodSupport.isExactCatchNullFunctionOrNullApplyMethod(owner, apply.orElseThrow());
+    }
+
+    private static boolean isSingleReferenceInputReferenceReturnDescriptor(final String descriptor) {
+        if (descriptor == null || !descriptor.startsWith("(")) {
+            return false;
+        }
+        final int separator = descriptor.indexOf(')');
+        if (separator < 0 || separator + 1 >= descriptor.length()) {
+            return false;
+        }
+        final String parameterDescriptor = descriptor.substring(1, separator);
+        final String returnDescriptor = descriptor.substring(separator + 1);
+        return isReferenceDescriptor(parameterDescriptor) && isReferenceDescriptor(returnDescriptor);
+    }
+
+    private static boolean isReferenceDescriptor(final String descriptor) {
+        return descriptor.startsWith("L") || descriptor.startsWith("[");
     }
 
     private static boolean containsMethodRef(final List<MethodRef> values, final MethodRef target) {

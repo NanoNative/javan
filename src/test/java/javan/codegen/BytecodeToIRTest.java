@@ -663,6 +663,33 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersTypedExactCatchNullFallibleApplyMethodToHelperCall() {
+        final MethodInfo apply = exactCatchNullFallibleApplyMethod(
+            "com/acme/ThrowingMapper",
+            "(Ljava/lang/String;)Ljava/lang/String;"
+        );
+        final EntryPoint entryPoint = new EntryPoint("com/acme/ThrowingMapper", "apply", "(Ljava/lang/String;)Ljava/lang/String;");
+        final CallGraph graph = new CallGraph(entryPoint, List.of(entryPoint), List.of());
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/ThrowingMapper",
+                classFile("com/acme/ThrowingMapper", "java/lang/Object", 0x0200, List.of(), List.of(), List.of(apply))
+            ),
+            graph,
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).hasSize(1);
+        assertThat(program.functions().getFirst().locals()).isEmpty();
+        assertThat(program.functions().getFirst().instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_exact_catch_null_apply",
+                List.of(IrExpression.objectLocal("self"), IrExpression.objectLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
     void lowersExactTemporalOfMethodToExplicitUnsupportedRuntimeBridge() {
         final MethodInfo temporalOf = exactTemporalOfLoopFallbackMethod();
         final EntryPoint entryPoint = new EntryPoint(
@@ -26534,16 +26561,26 @@ final class BytecodeToIRTest {
     }
 
     private static MethodInfo exactCatchNullFallibleApplyMethod() {
+        return exactCatchNullFallibleApplyMethod(
+            "com/acme/FallibleFunction",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
+        );
+    }
+
+    private static MethodInfo exactCatchNullFallibleApplyMethod(
+        final String owner,
+        final String descriptor
+    ) {
         return methodWithHandlers(
             0,
             "apply",
-            "(Ljava/lang/Object;)Ljava/lang/Object;",
+            descriptor,
             2,
             3,
             List.of(new CodeException(0, 7, 8, Optional.of("java/lang/Exception"))),
             plain(0, 42, "aload_0"),
             plain(1, 43, "aload_1"),
-            invokeInterface(2, new MethodRef("com/acme/FallibleFunction", "applyWithException", "(Ljava/lang/Object;)Ljava/lang/Object;")),
+            invokeInterface(2, new MethodRef(owner, "applyWithException", descriptor)),
             plain(7, 176, "areturn"),
             plain(8, 77, "astore_2"),
             plain(9, 1, "aconst_null"),

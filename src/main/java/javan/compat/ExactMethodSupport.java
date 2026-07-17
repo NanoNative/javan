@@ -177,7 +177,7 @@ public final class ExactMethodSupport {
         if (!classFile.isInterface()) {
             return false;
         }
-        if (!"apply".equals(method.name()) || !OBJECT_TO_OBJECT_DESCRIPTOR.equals(method.descriptor())) {
+        if (!"apply".equals(method.name()) || !isSingleReferenceInputReferenceReturnDescriptor(method.descriptor())) {
             return false;
         }
         final Optional<CodeAttribute> code = method.code();
@@ -191,7 +191,7 @@ public final class ExactMethodSupport {
         if (instructions.size() != 7) {
             return false;
         }
-        final MethodRef fallibleApply = new MethodRef(classFile.name(), FALLIBLE_APPLY_METHOD_NAME, OBJECT_TO_OBJECT_DESCRIPTOR);
+        final MethodRef fallibleApply = new MethodRef(classFile.name(), FALLIBLE_APPLY_METHOD_NAME, method.descriptor());
         return sameInstruction(instructions, 0, 0, 42)
             && sameInstruction(instructions, 1, 1, 43)
             && sameMethodInstruction(instructions, 2, 2, 185, fallibleApply)
@@ -538,6 +538,23 @@ public final class ExactMethodSupport {
             && handler.endPc() == 7
             && handler.handlerPc() == 8
             && "java/lang/Exception".equals(handler.catchType().orElse(""));
+    }
+
+    private static boolean isSingleReferenceInputReferenceReturnDescriptor(final String descriptor) {
+        if (descriptor == null) {
+            return false;
+        }
+        final int separator = descriptor.indexOf(')');
+        if (separator < 0 || !descriptor.startsWith("(")) {
+            return false;
+        }
+        final String parameterDescriptor = descriptor.substring(1, separator);
+        final String returnDescriptor = descriptor.substring(separator + 1);
+        return isReferenceDescriptor(parameterDescriptor) && isReferenceDescriptor(returnDescriptor);
+    }
+
+    private static boolean isReferenceDescriptor(final String descriptor) {
+        return descriptor.startsWith("L") || descriptor.startsWith("[");
     }
 
     private static boolean hasExactTemporalOfLoopFallbackExceptionTable(final List<CodeException> handlers) {
