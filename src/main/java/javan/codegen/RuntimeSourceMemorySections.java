@@ -7780,6 +7780,25 @@ final class RuntimeSourceMemorySections {
             return 0;
         }
 
+        int javan_list_contains_all(void* value, void* other) {
+            javan_object_list* list = javan_list_checked(value);
+            javan_object_list* probe = javan_list_checked(other);
+            void** javan_list_contains_all_roots[] = {
+                (void**) &list,
+                (void**) &probe
+            };
+            javan_root_frame_push(javan_list_contains_all_roots, 2);
+            int probe_length = javan_list_logical_length(probe);
+            for (int index = 0; index < probe_length; index++) {
+                if (javan_list_contains(list, javan_list_get_unchecked(probe, index)) == 0) {
+                    javan_root_frame_pop(javan_list_contains_all_roots);
+                    return 0;
+                }
+            }
+            javan_root_frame_pop(javan_list_contains_all_roots);
+            return 1;
+        }
+
         void* javan_list_get(void* value, int index) {
             javan_object_list* list = javan_list_checked(value);
             javan_list_bounds_checked(list, index);

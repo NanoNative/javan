@@ -175,6 +175,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void collectionContainsAllIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Collection",
+            "containsAll",
+            "(Ljava/util/Collection;)Z"
+        ))).isTrue();
+    }
+
+    @Test
     void listToArrayIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/List",
@@ -184,11 +193,29 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void listContainsAllIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/List",
+            "containsAll",
+            "(Ljava/util/Collection;)Z"
+        ))).isTrue();
+    }
+
+    @Test
     void setToArrayIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Set",
             "toArray",
             "()[Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void setContainsAllIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Set",
+            "containsAll",
+            "(Ljava/util/Collection;)Z"
         ))).isTrue();
     }
 

@@ -289,14 +289,32 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksCollectionContainsAllAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Collection", "containsAll", "(Ljava/util/Collection;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksListToArrayAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/List", "toArray", "()[Ljava/lang/Object;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
     @Test
+    void marksListContainsAllAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/List", "containsAll", "(Ljava/util/Collection;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksSetToArrayAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Set", "toArray", "()[Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksSetContainsAllAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Set", "containsAll", "(Ljava/util/Collection;)Z")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 

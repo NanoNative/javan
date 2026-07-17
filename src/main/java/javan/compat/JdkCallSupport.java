@@ -472,13 +472,16 @@ public final class JdkCallSupport {
         runtime("List.size", "java/util/List", "size", "()I"),
         runtime("List.isEmpty", "java/util/List", "isEmpty", "()Z"),
         runtime("List.contains", "java/util/List", "contains", "(Ljava/lang/Object;)Z"),
+        runtime("List.containsAll", "java/util/List", "containsAll", "(Ljava/util/Collection;)Z"),
         runtime("List.toArray", "java/util/List", "toArray", "()[Ljava/lang/Object;"),
         runtime("Collection.size", "java/util/Collection", "size", "()I"),
         runtime("Collection.isEmpty", "java/util/Collection", "isEmpty", "()Z"),
         runtime("Collection.contains", "java/util/Collection", "contains", "(Ljava/lang/Object;)Z"),
+        runtime("Collection.containsAll", "java/util/Collection", "containsAll", "(Ljava/util/Collection;)Z"),
         runtime("Collection.toArray", "java/util/Collection", "toArray", "()[Ljava/lang/Object;"),
         runtime("Set.add", "java/util/Set", "add", "(Ljava/lang/Object;)Z"),
         runtime("Set.contains", "java/util/Set", "contains", "(Ljava/lang/Object;)Z"),
+        runtime("Set.containsAll", "java/util/Set", "containsAll", "(Ljava/util/Collection;)Z"),
         runtime("Set.size", "java/util/Set", "size", "()I"),
         runtime("Set.isEmpty", "java/util/Set", "isEmpty", "()Z"),
         runtime("Set.iterator", "java/util/Set", "iterator", "()Ljava/util/Iterator;"),
@@ -795,6 +798,9 @@ public final class JdkCallSupport {
         if ("contains".equals(name)) {
             return "(Ljava/lang/Object;)Z".equals(descriptor);
         }
+        if ("containsAll".equals(name)) {
+            return "(Ljava/util/Collection;)Z".equals(descriptor);
+        }
         if ("get".equals(name)) {
             return "(I)Ljava/lang/Object;".equals(descriptor);
         }
@@ -853,6 +859,9 @@ public final class JdkCallSupport {
         }
         if ("contains".equals(name)) {
             return "(Ljava/lang/Object;)Z".equals(descriptor);
+        }
+        if ("containsAll".equals(name)) {
+            return "(Ljava/util/Collection;)Z".equals(descriptor);
         }
         if ("toArray".equals(name)) {
             return "()[Ljava/lang/Object;".equals(descriptor);
