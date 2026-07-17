@@ -20726,6 +20726,124 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersArrayListSizeToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/ArrayList;)I",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/util/ArrayList", "size", "()I")),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall("javan_list_size", List.of(IrExpression.objectLocal("arg0"))))
+        );
+    }
+
+    @Test
+    void lowersArrayListIsEmptyToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/ArrayList;)Z",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/util/ArrayList", "isEmpty", "()Z")),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall("javan_list_is_empty", List.of(IrExpression.objectLocal("arg0"))))
+        );
+    }
+
+    @Test
+    void lowersArrayListContainsToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/ArrayList;Ljava/lang/Object;)Z",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/util/ArrayList", "contains", "(Ljava/lang/Object;)Z")),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_list_contains",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersArrayListGetToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/ArrayList;I)Ljava/lang/Object;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 27, "iload_1"),
+            invokeVirtual(2, new MethodRef("java/util/ArrayList", "get", "(I)Ljava/lang/Object;")),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall("javan_list_get", List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1")))
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersArrayListIteratorToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/ArrayList;)Ljava/util/Iterator;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/util/ArrayList", "iterator", "()Ljava/util/Iterator;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall("javan_list_iterator", List.of(IrExpression.objectLocal("arg0"))))
+        );
+    }
+
+    @Test
+    void lowersArrayListToArrayToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/ArrayList;)[Ljava/lang/Object;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/util/ArrayList", "toArray", "()[Ljava/lang/Object;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall("javan_list_to_array", List.of(IrExpression.objectLocal("arg0"))))
+        );
+    }
+
+    @Test
     void lowersListAddAtToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -21157,11 +21275,13 @@ final class BytecodeToIRTest {
             plain(3, 176, "areturn")
         ));
 
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.objectCall(
-                "javan_list_get",
-                List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"))
-            ))
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall("javan_list_get", List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1")))
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
 

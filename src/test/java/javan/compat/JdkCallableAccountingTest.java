@@ -316,6 +316,42 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksArrayListSizeAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "size", "()I")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksArrayListIsEmptyAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "isEmpty", "()Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksArrayListContainsAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "contains", "(Ljava/lang/Object;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksArrayListGetAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "get", "(I)Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksArrayListIteratorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "iterator", "()Ljava/util/Iterator;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksArrayListToArrayAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "toArray", "()[Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksSetAddAllAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Set", "addAll", "(Ljava/util/Collection;)Z")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

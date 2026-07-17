@@ -1493,6 +1493,46 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void arrayListDirectOwnerReadSurfaceBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("arraylist-direct-owner-read-surface");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.Iterator;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final ArrayList<String> values = new ArrayList<>(List.of("alpha", "beta", "gamma"));
+                    System.out.println(values.size());
+                    System.out.println(values.isEmpty());
+                    System.out.println(values.contains("beta"));
+                    System.out.println(values.get(1));
+                    final Iterator<String> iterator = values.iterator();
+                    System.out.println(iterator.next());
+                    System.out.println(iterator.next());
+                    System.out.println(iterator.next());
+                    final Object[] array = values.toArray();
+                    System.out.println(array[0]);
+                    System.out.println(array[1]);
+                    System.out.println(array[2]);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/arraylist-direct-owner-read-surface").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("3\nfalse\ntrue\nbeta\nalpha\nbeta\ngamma\nalpha\nbeta\ngamma\n");
+    }
+
+    @Test
     void hashSetDirectOwnerReadSurfaceBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("hashset-direct-owner-read-surface");
         writeJava(project, "com.acme.Main", """

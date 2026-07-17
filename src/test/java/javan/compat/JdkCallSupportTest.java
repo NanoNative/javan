@@ -313,6 +313,60 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void arrayListSizeIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/ArrayList",
+            "size",
+            "()I"
+        ))).isTrue();
+    }
+
+    @Test
+    void arrayListIsEmptyIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/ArrayList",
+            "isEmpty",
+            "()Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void arrayListContainsIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/ArrayList",
+            "contains",
+            "(Ljava/lang/Object;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void arrayListGetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/ArrayList",
+            "get",
+            "(I)Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void arrayListIteratorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/ArrayList",
+            "iterator",
+            "()Ljava/util/Iterator;"
+        ))).isTrue();
+    }
+
+    @Test
+    void arrayListToArrayIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/ArrayList",
+            "toArray",
+            "()[Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
     void setAddAllIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Set",
@@ -1428,6 +1482,15 @@ final class JdkCallSupportTest {
             "java/util/Collection",
             "retainAll",
             "(Ljava/util/Collection;)Z"
+        ))).containsExactly("collections");
+    }
+
+    @Test
+    void arrayListSizeRequiresCollectionsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/ArrayList",
+            "size",
+            "()I"
         ))).containsExactly("collections");
     }
 

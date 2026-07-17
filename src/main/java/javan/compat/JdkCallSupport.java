@@ -442,6 +442,12 @@ public final class JdkCallSupport {
         runtime("ArrayList.addAll", "java/util/ArrayList", "addAll", "(Ljava/util/Collection;)Z"),
         runtime("ArrayList.removeAll", "java/util/ArrayList", "removeAll", "(Ljava/util/Collection;)Z"),
         runtime("ArrayList.retainAll", "java/util/ArrayList", "retainAll", "(Ljava/util/Collection;)Z"),
+        runtime("ArrayList.size", "java/util/ArrayList", "size", "()I"),
+        runtime("ArrayList.isEmpty", "java/util/ArrayList", "isEmpty", "()Z"),
+        runtime("ArrayList.contains", "java/util/ArrayList", "contains", "(Ljava/lang/Object;)Z"),
+        runtime("ArrayList.get", "java/util/ArrayList", "get", "(I)Ljava/lang/Object;"),
+        runtime("ArrayList.iterator", "java/util/ArrayList", "iterator", "()Ljava/util/Iterator;"),
+        runtime("ArrayList.toArray", "java/util/ArrayList", "toArray", "()[Ljava/lang/Object;"),
         runtime("List.of", "java/util/List", "of", "()Ljava/util/List;"),
         runtime("List.of", "java/util/List", "of", "(Ljava/lang/Object;)Ljava/util/List;"),
         runtime("List.of", "java/util/List", "of", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;"),
@@ -943,6 +949,24 @@ public final class JdkCallSupport {
         }
         if ("retainAll".equals(name)) {
             return "(Ljava/util/Collection;)Z".equals(descriptor);
+        }
+        if ("size".equals(name)) {
+            return "()I".equals(descriptor);
+        }
+        if ("isEmpty".equals(name)) {
+            return "()Z".equals(descriptor);
+        }
+        if ("contains".equals(name)) {
+            return "(Ljava/lang/Object;)Z".equals(descriptor);
+        }
+        if ("get".equals(name)) {
+            return "(I)Ljava/lang/Object;".equals(descriptor);
+        }
+        if ("iterator".equals(name)) {
+            return "()Ljava/util/Iterator;".equals(descriptor);
+        }
+        if ("toArray".equals(name)) {
+            return "()[Ljava/lang/Object;".equals(descriptor);
         }
         return false;
     }
