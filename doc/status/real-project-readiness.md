@@ -48,6 +48,11 @@ Each probe now also declares `genericEvidence=...` in `probe.properties`. That m
 at an existing compiler-owned generic regression test, so a real-project smoke case cannot exist
 without a project-neutral proof in the main javan test line.
 
+If a smoke probe stands for a live upstream repository or example service, its repository name,
+marketing name, shorthand, and package roots must stay only in probe metadata such as
+`identityAliases` and `identityPackages`. Those aliases are treated as forbidden identities
+outside the dedicated smoke boundary.
+
 The acceptance harness now reads all real-probe metadata through one shared test-only catalog. The
 catalog is allowed to load probe names and coordinates from metadata; the harness itself, this
 ledger, and the compiler-owned support line must stay project-neutral.

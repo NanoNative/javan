@@ -58,6 +58,10 @@ Each probe owns its own `probe.properties`, `expected.stdout`, and `build-exampl
 The acceptance harness only iterates probe directories; it does not hardcode library-specific
 support claims into the compiler-owned test line.
 
+When a probe corresponds to an evolving public repository, that upstream identity must stay in
+probe metadata only. Use metadata fields such as `identityAliases` and `identityPackages` there,
+and keep compiler-owned tests, support ledgers, reports, and product code free of those names.
+
 The current probe set may change over time. Adding or removing a probe must not require product
 code changes unless the underlying generic Java/runtime gap is real and independently reproduced in
 the compiler-owned test line. Upstream identities belong only in probe metadata and the tiny probe

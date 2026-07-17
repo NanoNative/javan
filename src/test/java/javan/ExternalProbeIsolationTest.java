@@ -217,6 +217,43 @@ final class ExternalProbeIsolationTest {
     }
 
     @Test
+    void externalProbeIdentityPatternsIncludeOptionalUpstreamAliases() throws Exception {
+        final Path probesRoot = tempDir.resolve("external-probes");
+        final Path probeDirectory = probesRoot.resolve("artifact-smoke");
+        Files.createDirectories(probeDirectory.resolve("src/main/java/com/acme"));
+        Files.writeString(probeDirectory.resolve("probe.properties"), """
+            project=artifact-smoke
+            groupId=com.example
+            artifactId=example-lib
+            version=1.0.0
+            mainClass=com.acme.Main
+            genericEvidence=CliDependencyProjectIntegrationTest#dependencyJarStaticIntMethodBuilds
+            identityAliases=NanoNative/nano,type-map,TypeMap
+            identityPackages=com.example.lib
+            """);
+        Files.writeString(probeDirectory.resolve("expected.stdout"), "ok\n");
+        Files.writeString(probeDirectory.resolve("src/main/java/com/acme/Main.java"), """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("ok");
+                }
+            }
+            """);
+
+        final List<Pattern> patterns = ExternalProbeCatalog.identityPatterns(probesRoot);
+
+        assertThat(patterns)
+            .anySatisfy(pattern -> assertThat(pattern.matcher("NanoNative/nano").find()).isTrue())
+            .anySatisfy(pattern -> assertThat(pattern.matcher("type-map").find()).isTrue())
+            .anySatisfy(pattern -> assertThat(pattern.matcher("TypeMap").find()).isTrue());
+    }
+
+    @Test
     void externalProbeProjectLabelsStayGenericAndProjectNeutral() throws Exception {
         for (final ExternalProbeCatalog.ExternalProbe probe : ExternalProbeCatalog.realProbes()) {
             assertThat(probe.project())

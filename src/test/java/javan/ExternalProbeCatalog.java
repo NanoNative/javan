@@ -37,7 +37,11 @@ final class ExternalProbeCatalog {
     }
 
     static List<Pattern> identityPatterns() throws IOException {
-        return realProbes().stream()
+        return identityPatterns(REAL_PROBES);
+    }
+
+    static List<Pattern> identityPatterns(final Path probesRoot) throws IOException {
+        return realProbes(probesRoot).stream()
             .flatMap(probe -> patternsFor(probe).stream())
             .distinct()
             .sorted(Comparator.comparing(Pattern::pattern))
@@ -55,6 +59,7 @@ final class ExternalProbeCatalog {
                 require(properties, "version"),
                 properties.getProperty("mainClass", "com.acme.Main"),
                 properties.getProperty("genericEvidence", ""),
+                parseOptionalCsv(properties.getProperty("identityAliases", "")),
                 parseOptionalCsv(properties.getProperty("identityPackages", "")),
                 Files.readString(projectDirectory.resolve("expected.stdout")),
                 projectDirectory.toString().replace('\\', '/')
@@ -75,6 +80,17 @@ final class ExternalProbeCatalog {
         final Pattern normalized = normalizedArtifactWord(probe.artifactId());
         if (normalized != null) {
             patterns.add(normalized);
+        }
+        for (final String identityAlias : probe.identityAliases()) {
+            patterns.add(exactLiteral(identityAlias));
+            final Pattern aliasWord = artifactPattern(identityAlias);
+            if (aliasWord != null) {
+                patterns.add(aliasWord);
+            }
+            final Pattern normalizedAlias = normalizedArtifactWord(identityAlias);
+            if (normalizedAlias != null) {
+                patterns.add(normalizedAlias);
+            }
         }
         for (final String identityPackage : probe.identityPackages()) {
             patterns.add(exactLiteral(identityPackage));
@@ -133,6 +149,7 @@ final class ExternalProbeCatalog {
         String version,
         String mainClass,
         String genericEvidence,
+        List<String> identityAliases,
         List<String> identityPackages,
         String expectedStdout,
         String projectDirectory
