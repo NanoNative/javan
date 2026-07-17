@@ -1801,6 +1801,87 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void mapOfTripleBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-of-triple");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, Integer> values = Map.of("x", 7, "y", 9, "z", 11);
+                    System.out.println(values.isEmpty());
+                    System.out.println(values.size());
+                    System.out.println(values.containsKey("x"));
+                    System.out.println(values.containsKey("y"));
+                    System.out.println(values.containsKey("z"));
+                    System.out.println(values.containsKey("missing"));
+                    System.out.println(values.get("x"));
+                    System.out.println(values.get("y"));
+                    System.out.println(values.get("z"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-of-triple").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("false\n3\ntrue\ntrue\ntrue\nfalse\n7\n9\n11\n");
+    }
+
+    @Test
+    void mapOfTripleDuplicateFirstSecondFailsAtRuntime() throws Exception {
+        assertMapOfTripleFailureAtRuntime("map-of-triple-duplicate-first-second", "Map.of(\"same\", 1, \"same\", 2, \"z\", 3);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfTripleDuplicateFirstThirdFailsAtRuntime() throws Exception {
+        assertMapOfTripleFailureAtRuntime("map-of-triple-duplicate-first-third", "Map.of(\"same\", 1, \"y\", 2, \"same\", 3);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfTripleDuplicateSecondThirdFailsAtRuntime() throws Exception {
+        assertMapOfTripleFailureAtRuntime("map-of-triple-duplicate-second-third", "Map.of(\"x\", 1, \"same\", 2, \"same\", 3);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfTripleNullFirstKeyFailsAtRuntime() throws Exception {
+        assertMapOfTripleFailureAtRuntime("map-of-triple-null-first-key", "Map.of((String) null, 1, \"y\", 2, \"z\", 3);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfTripleNullFirstValueFailsAtRuntime() throws Exception {
+        assertMapOfTripleFailureAtRuntime("map-of-triple-null-first-value", "Map.of(\"x\", (Integer) null, \"y\", 2, \"z\", 3);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfTripleNullSecondKeyFailsAtRuntime() throws Exception {
+        assertMapOfTripleFailureAtRuntime("map-of-triple-null-second-key", "Map.of(\"x\", 1, (String) null, 2, \"z\", 3);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfTripleNullSecondValueFailsAtRuntime() throws Exception {
+        assertMapOfTripleFailureAtRuntime("map-of-triple-null-second-value", "Map.of(\"x\", 1, \"y\", (Integer) null, \"z\", 3);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfTripleNullThirdKeyFailsAtRuntime() throws Exception {
+        assertMapOfTripleFailureAtRuntime("map-of-triple-null-third-key", "Map.of(\"x\", 1, \"y\", 2, (String) null, 3);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfTripleNullThirdValueFailsAtRuntime() throws Exception {
+        assertMapOfTripleFailureAtRuntime("map-of-triple-null-third-value", "Map.of(\"x\", 1, \"y\", 2, \"z\", (Integer) null);", "null Map.of entry");
+    }
+
+    @Test
     void setOfEmptyBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("set-of-empty");
         writeJava(project, "com.acme.Main", """
@@ -3850,6 +3931,36 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     private void assertMapOfPairFailureAtRuntime(
+        final String projectName,
+        final String statement,
+        final String expectedMessage
+    ) throws Exception {
+        final Path project = project(projectName);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    %s
+                }
+            }
+            """.formatted(statement));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/" + projectName).toString()));
+
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains(expectedMessage);
+    }
+
+    private void assertMapOfTripleFailureAtRuntime(
         final String projectName,
         final String statement,
         final String expectedMessage

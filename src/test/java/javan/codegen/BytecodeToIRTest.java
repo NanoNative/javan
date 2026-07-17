@@ -8781,6 +8781,41 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersMapOfTripleToRuntimeHelper() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;",
+            6,
+            6,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            plain(2, 44, "aload_2"),
+            plain(3, 45, "aload_3"),
+            plainOperands(4, 25, "aload", 4),
+            plainOperands(5, 25, "aload", 5),
+            invokeStatic(6, new MethodRef("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;")),
+            plain(7, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(
+                IrExpression.objectCall(
+                    "javan_map_triple",
+                    List.of(
+                        IrExpression.objectLocal("arg0"),
+                        IrExpression.objectLocal("arg1"),
+                        IrExpression.objectLocal("arg2"),
+                        IrExpression.objectLocal("arg3"),
+                        IrExpression.objectLocal("arg4"),
+                        IrExpression.objectLocal("arg5")
+                    )
+                )
+            )
+        );
+    }
+
+    @Test
     void lowersSetOfEmptyToRuntimeHelper() {
         final IrFunction function = lowerMain(method(
             0x0008,

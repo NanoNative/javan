@@ -507,6 +507,7 @@ public final class CompatibilityReports {
             pass("collections-singleton-map"),
             pass("map-of-singleton"),
             pass("map-of-pair"),
+            pass("map-of-triple"),
             pass("set-copy-of"),
             pass("set-of-empty"),
             pass("set-of-singleton"),
