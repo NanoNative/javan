@@ -295,6 +295,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksSetOfOctupleAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksBooleanEqualsAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Boolean", "equals", "(Ljava/lang/Object;)Z")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

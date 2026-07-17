@@ -2880,6 +2880,223 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertSetOfSeptupleFailureAtRuntime("set-of-septuple-null-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", (String) null);", "null Set.of element");
     }
 
+    @Test
+    void setOfOctupleBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("set-of-octuple");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Set<String> values = Set.of("a", "b", "c", "d", "e", "f", "g", "h");
+                    System.out.println(values.size());
+                    System.out.println(values.contains("a"));
+                    System.out.println(values.contains("b"));
+                    System.out.println(values.contains("c"));
+                    System.out.println(values.contains("d"));
+                    System.out.println(values.contains("e"));
+                    System.out.println(values.contains("f"));
+                    System.out.println(values.contains("g"));
+                    System.out.println(values.contains("h"));
+                    System.out.println(values.contains("later"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/set-of-octuple").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("8\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\nfalse\n");
+    }
+
+    @Test
+    void setOfOctupleDuplicateFirstSecondFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-first-second", "Set.of(\"same\", \"same\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfOctupleDuplicateFirstThirdFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-first-third", "Set.of(\"same\", \"b\", \"same\", \"d\", \"e\", \"f\", \"g\", \"h\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfOctupleDuplicateFirstFourthFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-first-fourth", "Set.of(\"same\", \"b\", \"c\", \"same\", \"e\", \"f\", \"g\", \"h\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfOctupleDuplicateFirstFifthFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-first-fifth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"same\", \"f\", \"g\", \"h\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfOctupleDuplicateFirstSixthFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-first-sixth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"same\", \"g\", \"h\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfOctupleDuplicateFirstSeventhFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-first-seventh", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"f\", \"same\", \"h\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfOctupleDuplicateFirstEighthFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-first-eighth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"same\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfOctupleDuplicateSecondThirdFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-second-third", "Set.of(\"a\", \"same\", \"same\", \"d\", \"e\", \"f\", \"g\", \"h\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfOctupleDuplicateSecondFourthFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-second-fourth", "Set.of(\"a\", \"same\", \"c\", \"same\", \"e\", \"f\", \"g\", \"h\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfOctupleDuplicateSecondFifthFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-second-fifth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"same\", \"f\", \"g\", \"h\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfOctupleDuplicateSecondSixthFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-second-sixth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"same\", \"g\", \"h\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfOctupleDuplicateSecondSeventhFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-second-seventh", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"f\", \"same\", \"h\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfOctupleDuplicateSecondEighthFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-second-eighth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"f\", \"g\", \"same\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfOctupleDuplicateThirdFourthFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-third-fourth", "Set.of(\"a\", \"b\", \"same\", \"same\", \"e\", \"f\", \"g\", \"h\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfOctupleDuplicateThirdFifthFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-third-fifth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"same\", \"f\", \"g\", \"h\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfOctupleDuplicateThirdSixthFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-third-sixth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"same\", \"g\", \"h\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfOctupleDuplicateThirdSeventhFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-third-seventh", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"f\", \"same\", \"h\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfOctupleDuplicateThirdEighthFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-third-eighth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"f\", \"g\", \"same\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfOctupleDuplicateFourthFifthFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-fourth-fifth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"same\", \"f\", \"g\", \"h\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfOctupleDuplicateFourthSixthFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-fourth-sixth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"same\", \"g\", \"h\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfOctupleDuplicateFourthSeventhFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-fourth-seventh", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"f\", \"same\", \"h\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfOctupleDuplicateFourthEighthFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-fourth-eighth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"f\", \"g\", \"same\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfOctupleDuplicateFifthSixthFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-fifth-sixth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"same\", \"g\", \"h\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfOctupleDuplicateFifthSeventhFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-fifth-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"f\", \"same\", \"h\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfOctupleDuplicateFifthEighthFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-fifth-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"f\", \"g\", \"same\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfOctupleDuplicateSixthSeventhFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-sixth-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"same\", \"same\", \"h\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfOctupleDuplicateSixthEighthFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-sixth-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"same\", \"g\", \"same\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfOctupleDuplicateSeventhEighthFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-duplicate-seventh-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"same\", \"same\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfOctupleNullFirstFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-null-first", "Set.of((String) null, \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\");", "null Set.of element");
+    }
+
+    @Test
+    void setOfOctupleNullSecondFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-null-second", "Set.of(\"a\", (String) null, \"c\", \"d\", \"e\", \"f\", \"g\", \"h\");", "null Set.of element");
+    }
+
+    @Test
+    void setOfOctupleNullThirdFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-null-third", "Set.of(\"a\", \"b\", (String) null, \"d\", \"e\", \"f\", \"g\", \"h\");", "null Set.of element");
+    }
+
+    @Test
+    void setOfOctupleNullFourthFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-null-fourth", "Set.of(\"a\", \"b\", \"c\", (String) null, \"e\", \"f\", \"g\", \"h\");", "null Set.of element");
+    }
+
+    @Test
+    void setOfOctupleNullFifthFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-null-fifth", "Set.of(\"a\", \"b\", \"c\", \"d\", (String) null, \"f\", \"g\", \"h\");", "null Set.of element");
+    }
+
+    @Test
+    void setOfOctupleNullSixthFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-null-sixth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", (String) null, \"g\", \"h\");", "null Set.of element");
+    }
+
+    @Test
+    void setOfOctupleNullSeventhFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-null-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", (String) null, \"h\");", "null Set.of element");
+    }
+
+    @Test
+    void setOfOctupleNullEighthFailsAtRuntime() throws Exception {
+        assertSetOfOctupleFailureAtRuntime("set-of-octuple-null-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", (String) null);", "null Set.of element");
+    }
+
     private void assertSetOfQuintupleFailureAtRuntime(
         final String projectName,
         final String statement,
@@ -2941,6 +3158,36 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     private void assertSetOfSeptupleFailureAtRuntime(
+        final String projectName,
+        final String statement,
+        final String expectedMessage
+    ) throws Exception {
+        final Path project = project(projectName);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    %s
+                }
+            }
+            """.formatted(statement));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/" + projectName).toString()));
+
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains(expectedMessage);
+    }
+
+    private void assertSetOfOctupleFailureAtRuntime(
         final String projectName,
         final String statement,
         final String expectedMessage
