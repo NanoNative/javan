@@ -2526,6 +2526,272 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void mapOfOctupleBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-of-octuple");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, Integer> values = Map.of("a", 1, "b", 2, "c", 3, "d", 4, "e", 5, "f", 6, "g", 7, "h", 8);
+                    System.out.println(values.isEmpty());
+                    System.out.println(values.size());
+                    System.out.println(values.containsKey("a"));
+                    System.out.println(values.containsKey("b"));
+                    System.out.println(values.containsKey("c"));
+                    System.out.println(values.containsKey("d"));
+                    System.out.println(values.containsKey("e"));
+                    System.out.println(values.containsKey("f"));
+                    System.out.println(values.containsKey("g"));
+                    System.out.println(values.containsKey("h"));
+                    System.out.println(values.containsKey("missing"));
+                    System.out.println(values.get("a"));
+                    System.out.println(values.get("b"));
+                    System.out.println(values.get("c"));
+                    System.out.println(values.get("d"));
+                    System.out.println(values.get("e"));
+                    System.out.println(values.get("f"));
+                    System.out.println(values.get("g"));
+                    System.out.println(values.get("h"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-of-octuple").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("false\n8\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\nfalse\n1\n2\n3\n4\n5\n6\n7\n8\n");
+    }
+
+    @Test
+    void mapOfOctupleDuplicateFirstSecondFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-first-second", "Map.of(\"same\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfOctupleDuplicateFirstThirdFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-first-third", "Map.of(\"same\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfOctupleDuplicateFirstFourthFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-first-fourth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfOctupleDuplicateFirstFifthFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-first-fifth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfOctupleDuplicateFirstSixthFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-first-sixth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfOctupleDuplicateFirstSeventhFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-first-seventh", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfOctupleDuplicateFirstEighthFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-first-eighth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfOctupleDuplicateSecondThirdFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-second-third", "Map.of(\"a\", 1, \"same\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfOctupleDuplicateSecondFourthFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-second-fourth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfOctupleDuplicateSecondFifthFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-second-fifth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfOctupleDuplicateSecondSixthFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-second-sixth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfOctupleDuplicateSecondSeventhFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-second-seventh", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfOctupleDuplicateSecondEighthFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-second-eighth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfOctupleDuplicateThirdFourthFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-third-fourth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfOctupleDuplicateThirdFifthFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-third-fifth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfOctupleDuplicateThirdSixthFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-third-sixth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfOctupleDuplicateThirdSeventhFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-third-seventh", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfOctupleDuplicateThirdEighthFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-third-eighth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfOctupleDuplicateFourthFifthFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-fourth-fifth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfOctupleDuplicateFourthSixthFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-fourth-sixth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfOctupleDuplicateFourthSeventhFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-fourth-seventh", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfOctupleDuplicateFourthEighthFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-fourth-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfOctupleDuplicateFifthSixthFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-fifth-sixth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"same\", 6, \"g\", 7, \"h\", 8);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfOctupleDuplicateFifthSeventhFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-fifth-seventh", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"same\", 7, \"h\", 8);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfOctupleDuplicateFifthEighthFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-fifth-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"same\", 8);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfOctupleDuplicateSixthSeventhFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-sixth-seventh", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"same\", 7, \"h\", 8);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfOctupleDuplicateSixthEighthFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-sixth-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"same\", 8);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfOctupleDuplicateSeventhEighthFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-duplicate-seventh-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"same\", 8);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfOctupleNullFirstKeyFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-first-key", "Map.of((String) null, 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfOctupleNullFirstValueFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-first-value", "Map.of(\"a\", (Integer) null, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfOctupleNullSecondKeyFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-second-key", "Map.of(\"a\", 1, (String) null, 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfOctupleNullSecondValueFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-second-value", "Map.of(\"a\", 1, \"b\", (Integer) null, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfOctupleNullThirdKeyFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-third-key", "Map.of(\"a\", 1, \"b\", 2, (String) null, 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfOctupleNullThirdValueFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-third-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", (Integer) null, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfOctupleNullFourthKeyFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-fourth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, (String) null, 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfOctupleNullFourthValueFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-fourth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", (Integer) null, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfOctupleNullFifthKeyFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-fifth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, (String) null, 5, \"f\", 6, \"g\", 7, \"h\", 8);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfOctupleNullFifthValueFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-fifth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", (Integer) null, \"f\", 6, \"g\", 7, \"h\", 8);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfOctupleNullSixthKeyFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-sixth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, (String) null, 6, \"g\", 7, \"h\", 8);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfOctupleNullSixthValueFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-sixth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", (Integer) null, \"g\", 7, \"h\", 8);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfOctupleNullSeventhKeyFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-seventh-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, (String) null, 7, \"h\", 8);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfOctupleNullSeventhValueFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-seventh-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", (Integer) null, \"h\", 8);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfOctupleNullEighthKeyFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-eighth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, (String) null, 8);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfOctupleNullEighthValueFailsAtRuntime() throws Exception {
+        assertMapOfOctupleFailureAtRuntime("map-of-octuple-null-eighth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", (Integer) null);", "null Map.of entry");
+    }
+
+    @Test
     void setOfEmptyBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("set-of-empty");
         writeJava(project, "com.acme.Main", """
@@ -4845,6 +5111,36 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     private void assertMapOfSeptupleFailureAtRuntime(
+        final String projectName,
+        final String statement,
+        final String expectedMessage
+    ) throws Exception {
+        final Path project = project(projectName);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    %s
+                }
+            }
+            """.formatted(statement));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/" + projectName).toString()));
+
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains(expectedMessage);
+    }
+
+    private void assertMapOfOctupleFailureAtRuntime(
         final String projectName,
         final String statement,
         final String expectedMessage
