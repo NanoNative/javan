@@ -1793,6 +1793,64 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersHashMapComputeIfAbsentWithDirectFunctionLambdaToMapHelpersAndFunctionCall() {
+        final EntryPoint entryPoint = new EntryPoint("com/acme/Main", "loadOrComputeHashMapFunction", "(Ljava/util/HashMap;Ljava/lang/Object;)Ljava/lang/Object;");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    hashMapComputeIfAbsentDirectFunctionLambdaMethod(),
+                    mapComputeIfAbsentDirectFunctionLambdaImplementationMethod()
+                ))
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("loadOrComputeHashMapFunction")).singleElement().satisfies(function -> {
+            assertThat(function.locals()).containsExactly(
+                new IrLocal(IrType.OBJECT, "object0"),
+                new IrLocal(IrType.OBJECT, "object1"),
+                new IrLocal(IrType.OBJECT, "object2")
+            );
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.assignObject(
+                    "object0",
+                    IrExpression.objectCall("javan_map_get", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
+                ),
+                IrInstruction.branchIf(
+                    "label_map_compute_if_absent_present_3_1",
+                    IrExpression.objectComparison("!=", IrExpression.objectLocal("object0"), IrExpression.objectNull())
+                ),
+                IrInstruction.assignObject(
+                    "object2",
+                    IrExpression.objectCall(
+                        symbol("com/acme/Main", "lambda$compute$0", "(Ljava/lang/Object;)Ljava/lang/Object;"),
+                        List.of(IrExpression.objectLocal("arg1"))
+                    )
+                ),
+                IrInstruction.branchIf(
+                    "label_map_compute_if_absent_store_3_3",
+                    IrExpression.objectComparison("!=", IrExpression.objectLocal("object2"), IrExpression.objectNull())
+                ),
+                IrInstruction.assignObject("object1", IrExpression.objectLocal("object2")),
+                IrInstruction.jump("label_map_compute_if_absent_end_3_1"),
+                IrInstruction.label("label_map_compute_if_absent_store_3_3"),
+                IrInstruction.callStaticVoid(
+                    "javan_map_put",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.objectLocal("object2"))
+                ),
+                IrInstruction.assignObject("object1", IrExpression.objectLocal("object2")),
+                IrInstruction.jump("label_map_compute_if_absent_end_3_1"),
+                IrInstruction.label("label_map_compute_if_absent_present_3_1"),
+                IrInstruction.assignObject("object1", IrExpression.objectLocal("object0")),
+                IrInstruction.label("label_map_compute_if_absent_end_3_1"),
+                IrInstruction.returnObject(IrExpression.objectLocal("object1"))
+            );
+        });
+    }
+
+    @Test
     void rejectsMapComputeIfAbsentMapGetLambdaWithoutCapturedMapReceiver() {
         assertThatThrownBy(() -> lowerMain(mapComputeIfAbsentMapGetWithoutCaptureLambdaMethod()))
             .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
@@ -26672,6 +26730,42 @@ final class BytecodeToIRTest {
                 )
             )),
             invokeInterface(3, new MethodRef("java/util/Map", "computeIfAbsent", "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;")),
+            plain(8, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo hashMapComputeIfAbsentDirectFunctionLambdaMethod() {
+        return method(
+            0x0008,
+            "loadOrComputeHashMapFunction",
+            "(Ljava/util/HashMap;Ljava/lang/Object;)Ljava/lang/Object;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeDynamic(2, new DynamicRef(
+                "apply",
+                "()Ljava/util/function/Function;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "invokestatic com/acme/Main.lambda$compute$0:(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "(Ljava/lang/Object;)Ljava/lang/Object;"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;"),
+                    BootstrapArgument.methodHandle(
+                        6,
+                        new MethodRef("com/acme/Main", "lambda$compute$0", "(Ljava/lang/Object;)Ljava/lang/Object;")
+                    ),
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;")
+                )
+            )),
+            invokeVirtual(3, new MethodRef("java/util/HashMap", "computeIfAbsent", "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;")),
             plain(8, 176, "areturn")
         );
     }

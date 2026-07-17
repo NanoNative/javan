@@ -3536,9 +3536,7 @@ final class BytecodeToIRInvokeSupport {
             || !JdkCallSupport.isSupported(methodRef)) {
             return false;
         }
-        if ("java/util/Map".equals(methodRef.owner())
-            && "computeIfAbsent".equals(methodRef.name())
-            && "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;".equals(methodRef.descriptor())
+        if (isSupportedMapComputeIfAbsentOwner(methodRef)
             && hasTopStackKind(stack, StackKind.LAMBDA_FUNCTION)) {
             lowerMapComputeIfAbsentLambdaCall(classFile, method, instruction, instructions, stack, localDeclarations);
             return true;
@@ -3612,6 +3610,17 @@ final class BytecodeToIRInvokeSupport {
         instructions.add(IrInstruction.assignObject(resultLocal, IrExpression.objectLocal(existingLocal)));
         instructions.add(IrInstruction.label(endLabel));
         stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
+    }
+
+    private static boolean isSupportedMapComputeIfAbsentOwner(final MethodRef methodRef) {
+        if (!"computeIfAbsent".equals(methodRef.name())
+            || !"(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;".equals(methodRef.descriptor())) {
+            return false;
+        }
+        return "java/util/Map".equals(methodRef.owner())
+            || "java/util/HashMap".equals(methodRef.owner())
+            || "java/util/LinkedHashMap".equals(methodRef.owner())
+            || "java/util/TreeMap".equals(methodRef.owner());
     }
 
     static boolean lowerJdkCollectionConstructorCall(

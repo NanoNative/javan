@@ -4357,6 +4357,99 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void hashMapComputeIfAbsentCapturedLambdaBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("hashmap-compute-if-absent-captured-lambda");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashMap;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String suffix = "-value";
+                    final HashMap<String, String> values = new HashMap<>();
+                    System.out.println(values.computeIfAbsent("demo", key -> key + suffix));
+                    System.out.println(values.computeIfAbsent("demo", key -> "other"));
+                    System.out.println(values.get("demo"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/hashmap-compute-if-absent-captured-lambda").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("demo-value\ndemo-value\ndemo-value\n");
+    }
+
+    @Test
+    void linkedHashMapComputeIfAbsentCapturedLambdaBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("linkedhashmap-compute-if-absent-captured-lambda");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.LinkedHashMap;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String suffix = "-value";
+                    final LinkedHashMap<String, String> values = new LinkedHashMap<>();
+                    System.out.println(values.computeIfAbsent("demo", key -> key + suffix));
+                    System.out.println(values.computeIfAbsent("demo", key -> "other"));
+                    System.out.println(values.get("demo"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/linkedhashmap-compute-if-absent-captured-lambda").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("demo-value\ndemo-value\ndemo-value\n");
+    }
+
+    @Test
+    void treeMapComputeIfAbsentCapturedLambdaBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("treemap-compute-if-absent-captured-lambda");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.TreeMap;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String suffix = "-value";
+                    final TreeMap<String, String> values = new TreeMap<>();
+                    System.out.println(values.computeIfAbsent("demo", key -> key + suffix));
+                    System.out.println(values.computeIfAbsent("demo", key -> "other"));
+                    System.out.println(values.get("demo"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/treemap-compute-if-absent-captured-lambda").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("demo-value\ndemo-value\ndemo-value\n");
+    }
+
+    @Test
     void mapComputeMissingKeyBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("map-compute-missing");
         writeJava(project, "com.acme.Main", """

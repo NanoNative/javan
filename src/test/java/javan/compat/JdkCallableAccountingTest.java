@@ -220,6 +220,24 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksHashMapComputeIfAbsentAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/HashMap", "computeIfAbsent", "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksLinkedHashMapComputeIfAbsentAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/LinkedHashMap", "computeIfAbsent", "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksTreeMapComputeIfAbsentAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/TreeMap", "computeIfAbsent", "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksHashMapNewHashMapAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/HashMap", "newHashMap", "(I)Ljava/util/HashMap;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

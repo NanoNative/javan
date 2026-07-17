@@ -142,6 +142,33 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void hashMapComputeIfAbsentIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/HashMap",
+            "computeIfAbsent",
+            "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void linkedHashMapComputeIfAbsentIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/LinkedHashMap",
+            "computeIfAbsent",
+            "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void treeMapComputeIfAbsentIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/TreeMap",
+            "computeIfAbsent",
+            "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
     void collectionsEmptyListIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Collections",
