@@ -3,11 +3,14 @@ package javan.compat;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Execution;
 
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 
+@Execution(CONCURRENT)
 final class JavanNativeSubstitutionsTest {
     private static final String PROCESS_RUNNER_DESCRIPTOR =
         "(Ljava/nio/file/Path;Ljava/util/List;)Ljavan/util/ProcessRunner$Result;";

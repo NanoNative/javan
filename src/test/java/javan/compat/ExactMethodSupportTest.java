@@ -10,13 +10,16 @@ import javan.classfile.Instruction;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Execution;
 
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 
+@Execution(CONCURRENT)
 final class ExactMethodSupportTest {
     @Test
     void catchNullEnumLookupRejectsNonStaticMethod() {

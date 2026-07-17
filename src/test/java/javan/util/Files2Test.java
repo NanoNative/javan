@@ -2,6 +2,7 @@ package javan.util;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.Execution;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -9,7 +10,9 @@ import java.nio.file.attribute.FileTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 
+@Execution(CONCURRENT)
 final class Files2Test {
     @TempDir
     private Path tempDir;

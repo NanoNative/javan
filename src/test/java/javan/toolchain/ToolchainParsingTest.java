@@ -2,6 +2,7 @@ package javan.toolchain;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.Execution;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -11,7 +12,9 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 
+@Execution(CONCURRENT)
 final class ToolchainParsingTest {
     @TempDir
     private Path tempDir;
