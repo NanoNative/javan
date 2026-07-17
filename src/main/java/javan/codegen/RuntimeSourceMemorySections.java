@@ -9302,6 +9302,38 @@ final class RuntimeSourceMemorySections {
             return map;
         }
 
+        void* javan_map_of_entries(void* value) {
+            javan_array_header* header = javan_array_checked(value);
+            javan_array_kind_checked(header, JAVAN_ARRAY_KIND_OBJECT);
+            javan_object_array* entries = (javan_object_array*) header;
+            void* result_value = NULL;
+            void** javan_map_of_entries_roots[] = {
+                (void**) &entries,
+                (void**) &result_value
+            };
+            javan_root_frame_push(javan_map_of_entries_roots, 2);
+            result_value = javan_map_new_with_capacity(entries->length, 1);
+            javan_object_map* result = (javan_object_map*) result_value;
+            for (int index = 0; index < entries->length; index++) {
+                void* entry_value = entries->values[index];
+                if (entry_value == NULL) {
+                    javan_panic("null Map.ofEntries entry");
+                }
+                javan_map_entry_state* entry = javan_map_entry_checked(entry_value);
+                if (entry->key == NULL || entry->value == NULL) {
+                    javan_panic("null Map.of entry");
+                }
+                if (javan_map_find(result, entry->key) >= 0) {
+                    javan_panic("duplicate Map.of key");
+                }
+                result->keys[index] = entry->key;
+                result->values[index] = entry->value;
+                result->length = index + 1;
+            }
+            javan_root_frame_pop(javan_map_of_entries_roots);
+            return result;
+        }
+
         void* javan_map_copy_of(void* value) {
             javan_object_map* source = javan_map_checked(value);
             void** javan_map_copy_roots[] = {

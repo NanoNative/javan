@@ -9194,6 +9194,29 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersMapOfEntriesToRuntimeHelper() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "([Ljava/util/Map$Entry;)Ljava/util/Map;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeStatic(1, new MethodRef("java/util/Map", "ofEntries", "([Ljava/util/Map$Entry;)Ljava/util/Map;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(
+                IrExpression.objectCall(
+                    "javan_map_of_entries",
+                    List.of(IrExpression.objectLocal("arg0"))
+                )
+            )
+        );
+    }
+
+    @Test
     void lowersSetOfEmptyToRuntimeHelper() {
         final IrFunction function = lowerMain(method(
             0x0008,

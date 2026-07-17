@@ -3274,6 +3274,11 @@ final class BytecodeToIRInvokeSupport {
                 stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_decuple", arguments)));
                 return true;
             }
+            if ("ofEntries".equals(name) && "([Ljava/util/Map$Entry;)Ljava/util/Map;".equals(descriptor)) {
+                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_of_entries", arguments)));
+                return true;
+            }
             if (!"copyOf".equals(name) || !"(Ljava/util/Map;)Ljava/util/Map;".equals(descriptor)) {
                 return false;
             }

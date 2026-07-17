@@ -619,6 +619,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void mapOfEntriesIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Map",
+            "ofEntries",
+            "([Ljava/util/Map$Entry;)Ljava/util/Map;"
+        ))).isTrue();
+    }
+
+    @Test
     void stringHashCodeIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/String",

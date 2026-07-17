@@ -533,6 +533,7 @@ public final class CompatibilityReports {
             pass("map-of-octuple"),
             pass("map-of-nonuple"),
             pass("map-of-decuple"),
+            pass("map-of-entries"),
             pass("set-copy-of"),
             pass("set-of-empty"),
             pass("set-of-singleton"),

@@ -2265,6 +2265,63 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void mapOfEntriesBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-of-entries");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, Integer> values = Map.ofEntries(
+                        Map.entry("x", 7),
+                        Map.entry("y", 9),
+                        Map.entry("z", 11)
+                    );
+                    System.out.println(values.isEmpty());
+                    System.out.println(values.size());
+                    System.out.println(values.containsKey("x"));
+                    System.out.println(values.containsKey("y"));
+                    System.out.println(values.containsKey("z"));
+                    System.out.println(values.get("x"));
+                    System.out.println(values.get("y"));
+                    System.out.println(values.get("z"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-of-entries").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("false\n3\ntrue\ntrue\ntrue\n7\n9\n11\n");
+    }
+
+    @Test
+    void mapOfEntriesDuplicateKeyFailsAtRuntime() throws Exception {
+        assertMapOfEntriesFailureAtRuntime(
+            "map-of-entries-duplicate-key",
+            "Map.ofEntries(Map.entry(\"same\", 1), Map.entry(\"same\", 2));",
+            "duplicate Map.of key"
+        );
+    }
+
+    @Test
+    void mapOfEntriesNullEntryFailsAtRuntime() throws Exception {
+        assertMapOfEntriesFailureAtRuntime(
+            "map-of-entries-null-entry",
+            "Map.ofEntries(Map.entry(\"x\", 1), null);",
+            "null Map.ofEntries entry"
+        );
+    }
+
+    @Test
     void mapOfPairBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("map-of-pair");
         writeJava(project, "com.acme.Main", """
@@ -6543,6 +6600,36 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     private void assertMapOfDecupleFailureAtRuntime(
+        final String projectName,
+        final String statement,
+        final String expectedMessage
+    ) throws Exception {
+        final Path project = project(projectName);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    %s
+                }
+            }
+            """.formatted(statement));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/" + projectName).toString()));
+
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains(expectedMessage);
+    }
+
+    private void assertMapOfEntriesFailureAtRuntime(
         final String projectName,
         final String statement,
         final String expectedMessage
