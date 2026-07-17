@@ -76,12 +76,12 @@ final class CompatibilityReportsTest {
         assertThat(summary).contains(
             "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 5, \"leftCallables\": 3, \"coveragePercent\": \"40.0\"}",
             "\"exactJdkCallableAccounting\": {\"supportedCallables\": 2, \"explicitRejectedCallables\": 3, \"doneCallables\": 5, \"unknownCallables\": 0, \"totalCallables\": 5, \"donePercent\": \"100.0\"}",
-            "\"supportRows\": 183",
-            "\"passRows\": 183",
+            "\"supportRows\": 184",
+            "\"passRows\": 184",
             "\"scopedRows\": 0",
             "\"targetRows\": 0",
             "\"rejectedRows\": 0",
-            "\"accountedRows\": 183",
+            "\"accountedRows\": 184",
             "\"unaccountedRows\": 0"
         );
     }
@@ -134,6 +134,7 @@ final class CompatibilityReportsTest {
             "| `map-of-quadruple` | pass |",
             "| `map-of-quintuple` | pass |",
             "| `map-of-sextuple` | pass |",
+            "| `map-of-septuple` | pass |",
             "| `set-copy-of` | pass |",
             "| `set-of-empty` | pass |",
             "| `set-of-singleton` | pass |",
@@ -251,6 +252,7 @@ final class CompatibilityReportsTest {
             "\"feature\": \"map-of-quadruple\"",
             "\"feature\": \"map-of-quintuple\"",
             "\"feature\": \"map-of-sextuple\"",
+            "\"feature\": \"map-of-septuple\"",
             "\"feature\": \"set-copy-of\"",
             "\"feature\": \"set-of-empty\"",
             "\"feature\": \"set-of-singleton\"",

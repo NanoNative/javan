@@ -11,8 +11,8 @@
     "rule": "done = supported variants + rejected variants; unknown leftovers must be 0 for a release-gated JDK"
   },
   "counts": {
-    "rows": 183,
-    "pass": 183,
+    "rows": 184,
+    "pass": 184,
     "scoped": 0,
     "target": 0,
     "rejected": 0
@@ -109,6 +109,7 @@
     {"feature": "map-of-quadruple", "jdk25": "pass"},
     {"feature": "map-of-quintuple", "jdk25": "pass"},
     {"feature": "map-of-sextuple", "jdk25": "pass"},
+    {"feature": "map-of-septuple", "jdk25": "pass"},
     {"feature": "set-copy-of", "jdk25": "pass"},
     {"feature": "set-of-empty", "jdk25": "pass"},
     {"feature": "set-of-singleton", "jdk25": "pass"},

@@ -511,6 +511,7 @@ public final class CompatibilityReports {
             pass("map-of-quadruple"),
             pass("map-of-quintuple"),
             pass("map-of-sextuple"),
+            pass("map-of-septuple"),
             pass("set-copy-of"),
             pass("set-of-empty"),
             pass("set-of-singleton"),
