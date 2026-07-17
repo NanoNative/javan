@@ -20491,6 +20491,30 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersMapPutAllToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/Map;Ljava/util/Map;)V",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeInterface(2, new MethodRef("java/util/Map", "putAll", "(Ljava/util/Map;)V")),
+            plain(3, 177, "return")
+        ));
+
+        assertThat(function.locals()).isEmpty();
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid(
+                "javan_map_put_all",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
     void lowersMapGetToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,

@@ -519,6 +519,7 @@ public final class CompatibilityReports {
             pass("collections-singleton-map"),
             pass("collections-unmodifiable-map"),
             pass("map-entry"),
+            pass("map-put-all"),
             pass("map-remove"),
             pass("map-remove-key-value"),
             pass("map-contains-value"),

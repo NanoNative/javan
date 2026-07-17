@@ -789,6 +789,42 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void linkedHashMapPutAllBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("linkedhashmap-put-all");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.LinkedHashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, String> values = new LinkedHashMap<>();
+                    values.put("first", "keep");
+                    final Map<String, String> incoming = new LinkedHashMap<>();
+                    incoming.put("second", "two");
+                    incoming.put("first", "override");
+                    values.putAll(incoming);
+                    System.out.println(values.get("first"));
+                    System.out.println(values.get("second"));
+                    for (final String key : values.keySet()) {
+                        System.out.println(key);
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/linkedhashmap-put-all").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void mapRemoveExistingKeyBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("map-remove-existing");
         writeJava(project, "com.acme.Main", """
