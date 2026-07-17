@@ -520,6 +520,7 @@ public final class CompatibilityReports {
             pass("collections-unmodifiable-map"),
             pass("map-entry"),
             pass("map-put-all"),
+            pass("map-values"),
             pass("map-remove"),
             pass("map-remove-key-value"),
             pass("map-contains-value"),

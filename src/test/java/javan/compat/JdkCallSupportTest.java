@@ -1628,6 +1628,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void mapValuesIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Map",
+            "values",
+            "()Ljava/util/Collection;"
+        ))).isTrue();
+    }
+
+    @Test
     void booleanEqualsIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/Boolean",
