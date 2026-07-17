@@ -160,6 +160,19 @@ final class ExternalProbeIsolationTest {
     }
 
     @Test
+    void supportRowsStayCompilerOwnedAndFreeOfSmokeBoundaryVocabulary() throws Exception {
+        final List<String> forbiddenFragments = List.of("probe", "artifact", "external", "example");
+        for (final String feature : supportMatrixFeatures(Files.readString(SUPPORT_MATRIX_JSON))) {
+            final String normalized = feature.toLowerCase(java.util.Locale.ROOT);
+            for (final String forbiddenFragment : forbiddenFragments) {
+                assertThat(normalized)
+                    .as("support row " + feature + " must stay JDK/runtime-shaped, not smoke-boundary-shaped")
+                    .doesNotContain(forbiddenFragment);
+            }
+        }
+    }
+
+    @Test
     void milestoneHistoryStaysIndependentOfExternalProbeIdentities() throws Exception {
         final String roadmap = Files.readString(ROADMAP_PROGRESS);
         final int start = roadmap.indexOf("## Recent Milestones");
@@ -497,6 +510,16 @@ final class ExternalProbeIsolationTest {
                 .sorted(Comparator.comparing(Path::toString))
                 .toList();
         }
+    }
+
+    private static List<String> supportMatrixFeatures(final String json) {
+        final Pattern pattern = Pattern.compile("\"feature\"\\s*:\\s*\"([^\"]+)\"");
+        final List<String> features = new ArrayList<>();
+        final java.util.regex.Matcher matcher = pattern.matcher(json);
+        while (matcher.find()) {
+            features.add(matcher.group(1));
+        }
+        return features;
     }
 
     private static boolean isGeneratedProbeArtifact(final Path root, final Path file) {
