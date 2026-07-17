@@ -261,6 +261,23 @@ final class ExternalProbeIsolationTest {
     }
 
     @Test
+    void externalProbeGenericEvidenceMethodNamesStayBehaviorShaped() throws Exception {
+        final List<String> forbiddenFragments = List.of("probe", "artifact", "external");
+        for (final ExternalProbeCatalog.ExternalProbe probe : ExternalProbeCatalog.realProbes()) {
+            final String[] parts = probe.genericEvidence().split("#", 2);
+            assertThat(parts)
+                .as(probe.project() + " must point at a generic evidence class and method")
+                .hasSize(2);
+            final String methodName = parts[1].toLowerCase(java.util.Locale.ROOT);
+            for (final String forbiddenFragment : forbiddenFragments) {
+                assertThat(methodName)
+                    .as(probe.project() + " generic evidence method name must stay behavior-shaped, not smoke-boundary-shaped")
+                    .doesNotContain(forbiddenFragment);
+            }
+        }
+    }
+
+    @Test
     void onlyDedicatedAcceptanceBoundaryTestsMayReferenceRealProbeInfrastructure() throws Exception {
         final Set<Path> allowed = Set.of(
             TEST_SOURCES.resolve("javan/CliExternalProbeAcceptanceIntegrationTest.java"),
