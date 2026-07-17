@@ -388,8 +388,32 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksArrayListIndexOfAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "indexOf", "(Ljava/lang/Object;)I")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksArrayListLastIndexOfAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "lastIndexOf", "(Ljava/lang/Object;)I")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksListRemoveAtAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/List", "remove", "(I)Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksListIndexOfAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/List", "indexOf", "(Ljava/lang/Object;)I")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksListLastIndexOfAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/List", "lastIndexOf", "(Ljava/lang/Object;)I")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 

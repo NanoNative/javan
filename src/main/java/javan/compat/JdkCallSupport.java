@@ -448,6 +448,8 @@ public final class JdkCallSupport {
         runtime("ArrayList.get", "java/util/ArrayList", "get", "(I)Ljava/lang/Object;"),
         runtime("ArrayList.getFirst", "java/util/ArrayList", "getFirst", "()Ljava/lang/Object;"),
         runtime("ArrayList.getLast", "java/util/ArrayList", "getLast", "()Ljava/lang/Object;"),
+        runtime("ArrayList.indexOf", "java/util/ArrayList", "indexOf", "(Ljava/lang/Object;)I"),
+        runtime("ArrayList.lastIndexOf", "java/util/ArrayList", "lastIndexOf", "(Ljava/lang/Object;)I"),
         runtime("ArrayList.set", "java/util/ArrayList", "set", "(ILjava/lang/Object;)Ljava/lang/Object;"),
         runtime("ArrayList.remove", "java/util/ArrayList", "remove", "(I)Ljava/lang/Object;"),
         runtime("ArrayList.removeLast", "java/util/ArrayList", "removeLast", "()Ljava/lang/Object;"),
@@ -493,6 +495,8 @@ public final class JdkCallSupport {
         runtime("List.contains", "java/util/List", "contains", "(Ljava/lang/Object;)Z"),
         runtime("List.containsAll", "java/util/List", "containsAll", "(Ljava/util/Collection;)Z"),
         runtime("List.toArray", "java/util/List", "toArray", "()[Ljava/lang/Object;"),
+        runtime("List.indexOf", "java/util/List", "indexOf", "(Ljava/lang/Object;)I"),
+        runtime("List.lastIndexOf", "java/util/List", "lastIndexOf", "(Ljava/lang/Object;)I"),
         runtime("Collection.size", "java/util/Collection", "size", "()I"),
         runtime("Collection.isEmpty", "java/util/Collection", "isEmpty", "()Z"),
         runtime("Collection.contains", "java/util/Collection", "contains", "(Ljava/lang/Object;)Z"),
@@ -916,6 +920,12 @@ public final class JdkCallSupport {
         if ("getLast".equals(name)) {
             return "()Ljava/lang/Object;".equals(descriptor);
         }
+        if ("indexOf".equals(name)) {
+            return "(Ljava/lang/Object;)I".equals(descriptor);
+        }
+        if ("lastIndexOf".equals(name)) {
+            return "(Ljava/lang/Object;)I".equals(descriptor);
+        }
         if ("remove".equals(name)) {
             return "(I)Ljava/lang/Object;".equals(descriptor);
         }
@@ -979,6 +989,12 @@ public final class JdkCallSupport {
         }
         if ("getLast".equals(name)) {
             return "()Ljava/lang/Object;".equals(descriptor);
+        }
+        if ("indexOf".equals(name)) {
+            return "(Ljava/lang/Object;)I".equals(descriptor);
+        }
+        if ("lastIndexOf".equals(name)) {
+            return "(Ljava/lang/Object;)I".equals(descriptor);
         }
         if ("set".equals(name)) {
             return "(ILjava/lang/Object;)Ljava/lang/Object;".equals(descriptor);

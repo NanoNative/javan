@@ -367,6 +367,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void arrayListIndexOfIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/ArrayList",
+            "indexOf",
+            "(Ljava/lang/Object;)I"
+        ))).isTrue();
+    }
+
+    @Test
+    void arrayListLastIndexOfIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/ArrayList",
+            "lastIndexOf",
+            "(Ljava/lang/Object;)I"
+        ))).isTrue();
+    }
+
+    @Test
     void arrayListSetIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/ArrayList",
@@ -1576,6 +1594,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void arrayListIndexOfRequiresCollectionsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/ArrayList",
+            "indexOf",
+            "(Ljava/lang/Object;)I"
+        ))).containsExactly("collections");
+    }
+
+    @Test
+    void arrayListLastIndexOfRequiresCollectionsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/ArrayList",
+            "lastIndexOf",
+            "(Ljava/lang/Object;)I"
+        ))).containsExactly("collections");
+    }
+
+    @Test
     void arrayListSetRequiresCollectionsRuntimeModule() {
         assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
             "java/util/ArrayList",
@@ -1626,6 +1662,42 @@ final class JdkCallSupportTest {
             "java/util/List",
             "remove",
             "(I)Ljava/lang/Object;"
+        ))).containsExactly("collections");
+    }
+
+    @Test
+    void listIndexOfIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/List",
+            "indexOf",
+            "(Ljava/lang/Object;)I"
+        ))).isTrue();
+    }
+
+    @Test
+    void listIndexOfRequiresCollectionsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/List",
+            "indexOf",
+            "(Ljava/lang/Object;)I"
+        ))).containsExactly("collections");
+    }
+
+    @Test
+    void listLastIndexOfIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/List",
+            "lastIndexOf",
+            "(Ljava/lang/Object;)I"
+        ))).isTrue();
+    }
+
+    @Test
+    void listLastIndexOfRequiresCollectionsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/List",
+            "lastIndexOf",
+            "(Ljava/lang/Object;)I"
         ))).containsExactly("collections");
     }
 

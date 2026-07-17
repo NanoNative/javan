@@ -20998,6 +20998,54 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersArrayListIndexOfToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/ArrayList;Ljava/lang/Object;)I",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/util/ArrayList", "indexOf", "(Ljava/lang/Object;)I")),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.INT, "int0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignInt(
+                "int0",
+                IrExpression.intCall("javan_list_index_of", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
+            ),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
+        );
+    }
+
+    @Test
+    void lowersArrayListLastIndexOfToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/ArrayList;Ljava/lang/Object;)I",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/util/ArrayList", "lastIndexOf", "(Ljava/lang/Object;)I")),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.INT, "int0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignInt(
+                "int0",
+                IrExpression.intCall("javan_list_last_index_of", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
+            ),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
+        );
+    }
+
+    @Test
     void lowersArrayListIteratorToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -21100,6 +21148,54 @@ final class BytecodeToIRTest {
             IrInstruction.assignInt(
                 "int0",
                 IrExpression.intCall("javan_arraylist_add_all", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
+            ),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
+        );
+    }
+
+    @Test
+    void lowersListIndexOfToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/List;Ljava/lang/Object;)I",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/util/List", "indexOf", "(Ljava/lang/Object;)I")),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.INT, "int0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignInt(
+                "int0",
+                IrExpression.intCall("javan_list_index_of", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
+            ),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
+        );
+    }
+
+    @Test
+    void lowersListLastIndexOfToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/List;Ljava/lang/Object;)I",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/util/List", "lastIndexOf", "(Ljava/lang/Object;)I")),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.INT, "int0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignInt(
+                "int0",
+                IrExpression.intCall("javan_list_last_index_of", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
             ),
             IrInstruction.returnInt(IrExpression.intLocal("int0"))
         );

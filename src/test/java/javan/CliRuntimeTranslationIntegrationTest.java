@@ -1794,6 +1794,122 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void listIndexOfBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("list-index-of");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<String> values = new ArrayList<>(List.of("left", "middle", "right", "middle"));
+                    System.out.println(values.indexOf("middle"));
+                    System.out.println(values.indexOf("missing"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/list-index-of").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("1\n-1\n");
+    }
+
+    @Test
+    void listLastIndexOfBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("list-last-index-of");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<String> values = new ArrayList<>(List.of("left", "middle", "right", "middle"));
+                    System.out.println(values.lastIndexOf("middle"));
+                    System.out.println(values.lastIndexOf("missing"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/list-last-index-of").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("3\n-1\n");
+    }
+
+    @Test
+    void arrayListDirectOwnerIndexOfBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("arraylist-direct-owner-index-of");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final ArrayList<String> values = new ArrayList<>(List.of("left", "middle", "right", "middle"));
+                    System.out.println(values.indexOf("middle"));
+                    System.out.println(values.indexOf("missing"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/arraylist-direct-owner-index-of").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("1\n-1\n");
+    }
+
+    @Test
+    void arrayListDirectOwnerLastIndexOfBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("arraylist-direct-owner-last-index-of");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final ArrayList<String> values = new ArrayList<>(List.of("left", "middle", "right", "middle"));
+                    System.out.println(values.lastIndexOf("middle"));
+                    System.out.println(values.lastIndexOf("missing"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/arraylist-direct-owner-last-index-of").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("3\n-1\n");
+    }
+
+    @Test
     void hashSetDirectOwnerReadSurfaceBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("hashset-direct-owner-read-surface");
         writeJava(project, "com.acme.Main", """
