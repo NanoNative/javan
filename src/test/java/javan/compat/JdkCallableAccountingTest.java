@@ -319,6 +319,18 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksHashSetCollectionConstructorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/HashSet", "<init>", "(Ljava/util/Collection;)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksLinkedHashSetCollectionConstructorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/LinkedHashSet", "<init>", "(Ljava/util/Collection;)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksCollectionsUnmodifiableSetAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Collections", "unmodifiableSet", "(Ljava/util/Set;)Ljava/util/Set;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

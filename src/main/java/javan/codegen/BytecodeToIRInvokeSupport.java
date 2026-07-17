@@ -3519,9 +3519,14 @@ final class BytecodeToIRInvokeSupport {
             }
         }
         if (("java/util/HashSet".equals(methodRef.owner()) || "java/util/LinkedHashSet".equals(methodRef.owner()))
-            && "<init>".equals(methodRef.name())
-            && "()V".equals(methodRef.descriptor())) {
-            return true;
+            && "<init>".equals(methodRef.name())) {
+            if ("()V".equals(methodRef.descriptor())) {
+                return true;
+            }
+            if ("(Ljava/util/Collection;)V".equals(methodRef.descriptor())) {
+                instructions.add(IrInstruction.callStaticVoid("javan_hashset_add_all", List.of(receiver, arguments.getFirst())));
+                return true;
+            }
         }
         if (isJdkMapClass(methodRef.owner()) && "<init>".equals(methodRef.name()) && "()V".equals(methodRef.descriptor())) {
             return true;

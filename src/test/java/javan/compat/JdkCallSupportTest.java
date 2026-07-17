@@ -220,6 +220,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void hashSetCollectionConstructorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/HashSet",
+            "<init>",
+            "(Ljava/util/Collection;)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void linkedHashSetCollectionConstructorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/LinkedHashSet",
+            "<init>",
+            "(Ljava/util/Collection;)V"
+        ))).isTrue();
+    }
+
+    @Test
     void collectionsUnmodifiableSetIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Collections",

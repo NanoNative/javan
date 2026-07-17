@@ -1857,6 +1857,71 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void hashSetCollectionConstructorBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("hashset-collection-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashSet;
+            import java.util.List;
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Set<String> values = new HashSet<>(List.of("a", "b", "a"));
+                    System.out.println(values.size());
+                    System.out.println(values.contains("a"));
+                    System.out.println(values.contains("b"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/hashset-collection-constructor").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("2\ntrue\ntrue\n");
+    }
+
+    @Test
+    void linkedHashSetCollectionConstructorBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("linkedhashset-collection-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.LinkedHashSet;
+            import java.util.List;
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Set<String> values = new LinkedHashSet<>(List.of("a", "b", "a"));
+                    final Object[] snapshot = values.toArray();
+                    System.out.println(snapshot.length);
+                    System.out.println(snapshot[0]);
+                    System.out.println(snapshot[1]);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/linkedhashset-collection-constructor").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("2\na\nb\n");
+    }
+
+    @Test
     void collectionsUnmodifiableListBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("collections-unmodifiable-list");
         writeJava(project, "com.acme.Main", """

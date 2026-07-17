@@ -7857,6 +7857,21 @@ final class RuntimeSourceMemorySections {
             return javan_list_new_with_capacity(0, 0);
         }
 
+        void javan_hashset_add_all(void* value, void* collection) {
+            javan_object_list* set = javan_list_checked(value);
+            javan_object_list* source = javan_list_checked(collection);
+            void** javan_hashset_add_all_roots[] = {
+                (void**) &set,
+                (void**) &source
+            };
+            javan_root_frame_push(javan_hashset_add_all_roots, 2);
+            int length = javan_list_logical_length(source);
+            for (int index = 0; index < length; index++) {
+                javan_set_add(set, javan_list_get_unchecked(source, index));
+            }
+            javan_root_frame_pop(javan_hashset_add_all_roots);
+        }
+
         void* javan_set_empty(void) {
             return javan_list_new_with_capacity(0, 1);
         }
