@@ -283,6 +283,24 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksCollectionToArrayAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Collection", "toArray", "()[Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksListToArrayAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/List", "toArray", "()[Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksSetToArrayAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Set", "toArray", "()[Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksCollectionsUnmodifiableSetAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Collections", "unmodifiableSet", "(Ljava/util/Set;)Ljava/util/Set;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

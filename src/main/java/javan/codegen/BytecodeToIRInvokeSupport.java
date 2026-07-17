@@ -3992,6 +3992,10 @@ final class BytecodeToIRInvokeSupport {
                 stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_iterator", List.of(receiver))));
                 return true;
             }
+            if ("toArray()[Ljava/lang/Object;".equals(signature)) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_to_array", List.of(receiver))));
+                return true;
+            }
         }
         if (isJdkSetOwner(methodRef.owner())) {
             if ("add(Ljava/lang/Object;)Z".equals(signature)) {
@@ -4012,6 +4016,10 @@ final class BytecodeToIRInvokeSupport {
             }
             if ("iterator()Ljava/util/Iterator;".equals(signature)) {
                 stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_iterator", List.of(receiver))));
+                return true;
+            }
+            if ("toArray()[Ljava/lang/Object;".equals(signature)) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_to_array", List.of(receiver))));
                 return true;
             }
         }

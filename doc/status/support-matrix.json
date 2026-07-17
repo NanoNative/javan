@@ -11,8 +11,8 @@
     "rule": "done = supported variants + rejected variants; unknown leftovers must be 0 for a release-gated JDK"
   },
   "counts": {
-    "rows": 191,
-    "pass": 191,
+    "rows": 194,
+    "pass": 194,
     "scoped": 0,
     "target": 0,
     "rejected": 0
@@ -101,6 +101,9 @@
     {"feature": "collections-unmodifiable-collection", "jdk25": "pass"},
     {"feature": "collections-unmodifiable-set", "jdk25": "pass"},
     {"feature": "collections-unmodifiable-list", "jdk25": "pass"},
+    {"feature": "collection-to-array", "jdk25": "pass"},
+    {"feature": "list-to-array", "jdk25": "pass"},
+    {"feature": "set-to-array", "jdk25": "pass"},
     {"feature": "collections-singleton-set", "jdk25": "pass"},
     {"feature": "collections-singleton-list", "jdk25": "pass"},
     {"feature": "collections-empty-list", "jdk25": "pass"},

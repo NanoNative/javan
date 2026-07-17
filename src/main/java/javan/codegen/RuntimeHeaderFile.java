@@ -252,6 +252,7 @@ final class RuntimeHeaderFile {
         void* javan_list_of(int count, ...);
         void* javan_list_of_array(void* array);
         void* javan_list_copy_of(void* collection);
+        void* javan_list_to_array(void* list);
         void* javan_list_unmodifiable(void* list);
         int javan_list_size(void* list);
         int javan_list_is_empty(void* list);

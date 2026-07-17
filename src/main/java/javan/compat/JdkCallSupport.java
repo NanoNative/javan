@@ -472,14 +472,17 @@ public final class JdkCallSupport {
         runtime("List.size", "java/util/List", "size", "()I"),
         runtime("List.isEmpty", "java/util/List", "isEmpty", "()Z"),
         runtime("List.contains", "java/util/List", "contains", "(Ljava/lang/Object;)Z"),
+        runtime("List.toArray", "java/util/List", "toArray", "()[Ljava/lang/Object;"),
         runtime("Collection.size", "java/util/Collection", "size", "()I"),
         runtime("Collection.isEmpty", "java/util/Collection", "isEmpty", "()Z"),
         runtime("Collection.contains", "java/util/Collection", "contains", "(Ljava/lang/Object;)Z"),
+        runtime("Collection.toArray", "java/util/Collection", "toArray", "()[Ljava/lang/Object;"),
         runtime("Set.add", "java/util/Set", "add", "(Ljava/lang/Object;)Z"),
         runtime("Set.contains", "java/util/Set", "contains", "(Ljava/lang/Object;)Z"),
         runtime("Set.size", "java/util/Set", "size", "()I"),
         runtime("Set.isEmpty", "java/util/Set", "isEmpty", "()Z"),
         runtime("Set.iterator", "java/util/Set", "iterator", "()Ljava/util/Iterator;"),
+        runtime("Set.toArray", "java/util/Set", "toArray", "()[Ljava/lang/Object;"),
         runtime("List.get", "java/util/List", "get", "(I)Ljava/lang/Object;"),
         runtime("List.getFirst", "java/util/List", "getFirst", "()Ljava/lang/Object;"),
         runtime("List.getLast", "java/util/List", "getLast", "()Ljava/lang/Object;"),
@@ -810,6 +813,9 @@ public final class JdkCallSupport {
         if ("addFirst".equals(name)) {
             return "(Ljava/lang/Object;)V".equals(descriptor);
         }
+        if ("toArray".equals(name)) {
+            return "()[Ljava/lang/Object;".equals(descriptor);
+        }
         if ("iterator".equals(name)) {
             return "()Ljava/util/Iterator;".equals(descriptor);
         }
@@ -847,6 +853,9 @@ public final class JdkCallSupport {
         }
         if ("contains".equals(name)) {
             return "(Ljava/lang/Object;)Z".equals(descriptor);
+        }
+        if ("toArray".equals(name)) {
+            return "()[Ljava/lang/Object;".equals(descriptor);
         }
         if ("iterator".equals(name)) {
             return "()Ljava/util/Iterator;".equals(descriptor);

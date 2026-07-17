@@ -166,6 +166,33 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void collectionToArrayIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Collection",
+            "toArray",
+            "()[Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void listToArrayIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/List",
+            "toArray",
+            "()[Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void setToArrayIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Set",
+            "toArray",
+            "()[Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
     void collectionsUnmodifiableSetIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Collections",

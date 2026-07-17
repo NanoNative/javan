@@ -1666,6 +1666,108 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void collectionToArrayReturnsSnapshotAndMatchesJvmOutput() throws Exception {
+        final Path project = project("collection-to-array");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.Collection;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final ArrayList<String> mutable = new ArrayList<>();
+                    mutable.add("x");
+                    final Collection<String> values = mutable;
+                    final Object[] snapshot = values.toArray();
+                    mutable.add("y");
+                    System.out.println(snapshot.length);
+                    System.out.println(snapshot[0]);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/collection-to-array").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("1\nx\n");
+    }
+
+    @Test
+    void listToArrayBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("list-to-array");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<String> values = new ArrayList<>();
+                    values.add("x");
+                    values.add("y");
+                    final Object[] snapshot = values.toArray();
+                    System.out.println(snapshot.length);
+                    System.out.println(snapshot[0]);
+                    System.out.println(snapshot[1]);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/list-to-array").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("2\nx\ny\n");
+    }
+
+    @Test
+    void setToArrayBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("set-to-array");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.LinkedHashSet;
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Set<String> values = new LinkedHashSet<>();
+                    values.add("x");
+                    values.add("y");
+                    final Object[] snapshot = values.toArray();
+                    System.out.println(snapshot.length);
+                    System.out.println(snapshot[0]);
+                    System.out.println(snapshot[1]);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/set-to-array").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("2\nx\ny\n");
+    }
+
+    @Test
     void collectionsUnmodifiableListBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("collections-unmodifiable-list");
         writeJava(project, "com.acme.Main", """
