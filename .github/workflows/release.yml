@@ -26,10 +26,6 @@ on:
         default: false
         type: boolean
 
-concurrency:
-  group: release-${{ github.workflow }}-${{ inputs.tag || github.ref }}
-  cancel-in-progress: false
-
 permissions:
   contents: write
 

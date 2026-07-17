@@ -25,11 +25,11 @@ The Maven build writes `target/jacoco-surefire.exec`, instruments child `java ..
 runs into `target/jacoco-child/*.exec`, merges them into `target/jacoco-merged.exec`, and
 runs report/check from that merged file.
 
-JUnit parallel execution is enabled in opt-in mode through `src/test/resources/junit-platform.properties`.
-Unannotated tests stay same-thread. A test class may use `@Execution(CONCURRENT)` only when
-each test owns its files and does not mutate global JVM state such as `System` properties,
-shared project output, locale, timezone, or process-wide caches. Tests that touch shared
-state stay serial until the shared state is removed or guarded by a narrow resource lock.
+JUnit parallel execution is enabled by default through `src/test/resources/junit-platform.properties`.
+Tests run concurrently unless they opt into `@Execution(SAME_THREAD)`, `@Isolated`, or a
+`@ResourceLock`. Any test that mutates global JVM state such as `System` properties, shared
+project output, locale, timezone, or process-wide caches must stay serial until that shared
+state is removed or guarded by a narrow resource lock.
 The CLI compatibility command tests are split into `CliCompatIntegrationTest`; its three
 JDK-inventory/probe tests run concurrently and now take about `31s` together instead of
 about `88s` when they lived inside the serial CLI monolith. Cheap CLI command/report/toolchain

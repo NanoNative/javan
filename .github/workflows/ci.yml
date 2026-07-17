@@ -12,10 +12,6 @@ on:
       - main
   workflow_dispatch:
 
-concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: false
-
 permissions:
   contents: read
 
@@ -36,6 +32,9 @@ jobs:
             sanitizer-scope: full
           - target: linux-aarch64
             os: ubuntu-24.04-arm
+            sanitizer-scope: platform-smoke
+          - target: macos-aarch64
+            os: macos-15
             sanitizer-scope: platform-smoke
 
     steps:

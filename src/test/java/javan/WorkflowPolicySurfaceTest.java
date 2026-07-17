@@ -14,24 +14,21 @@ final class WorkflowPolicySurfaceTest {
     private static final Path JUNIT_PLATFORM_PROPERTIES = Path.of("src/test/resources/junit-platform.properties");
 
     @Test
-    void ciWorkflowDisablesAutoCancellation() throws Exception {
+    void ciWorkflowAvoidsTopLevelConcurrencyQueueing() throws Exception {
         assertThat(Files.readString(CI_WORKFLOW))
-            .contains("concurrency:")
-            .contains("cancel-in-progress: false");
+            .doesNotContain("concurrency:");
     }
 
     @Test
-    void releaseWorkflowDisablesAutoCancellation() throws Exception {
+    void releaseWorkflowAvoidsTopLevelConcurrencyQueueing() throws Exception {
         assertThat(Files.readString(RELEASE_WORKFLOW))
-            .contains("concurrency:")
-            .contains("cancel-in-progress: false");
+            .doesNotContain("concurrency:");
     }
 
     @Test
-    void containerImagesWorkflowDisablesAutoCancellation() throws Exception {
+    void containerImagesWorkflowAvoidsTopLevelConcurrencyQueueing() throws Exception {
         assertThat(Files.readString(CONTAINER_IMAGES_WORKFLOW))
-            .contains("concurrency:")
-            .contains("cancel-in-progress: false");
+            .doesNotContain("concurrency:");
     }
 
     @Test
@@ -60,10 +57,10 @@ final class WorkflowPolicySurfaceTest {
     }
 
     @Test
-    void junitPlatformKeepsStableClassLevelParallelism() throws Exception {
+    void junitPlatformKeepsParallelExecutionEnabledByDefault() throws Exception {
         assertThat(Files.readString(JUNIT_PLATFORM_PROPERTIES))
             .contains("junit.jupiter.execution.parallel.enabled = true")
-            .contains("junit.jupiter.execution.parallel.mode.default = same_thread")
+            .contains("junit.jupiter.execution.parallel.mode.default = concurrent")
             .contains("junit.jupiter.execution.parallel.mode.classes.default = concurrent");
     }
 }

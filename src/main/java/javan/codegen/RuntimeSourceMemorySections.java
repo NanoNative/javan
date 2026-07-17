@@ -8685,7 +8685,7 @@ final class RuntimeSourceMemorySections {
                 if ((length + 3) <= capacity) {
                     buffer[length] = '.';
                     buffer[length + 1] = '0';
-                    buffer[length + 2] = '\0';
+                    buffer[length + 2] = '\\0';
                 }
             }
         }
