@@ -1150,7 +1150,7 @@ final class CoreBehaviorTest {
 
     @Test
     void jdkCallSupportRejectsUnknownMapCall() {
-        assertThat(JdkCallSupport.isSupported(new MethodRef("java/util/Map", "remove", "(Ljava/lang/Object;)Ljava/lang/Object;"))).isFalse();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/util/Map", "clear", "()V"))).isFalse();
     }
 
     @Test

@@ -1067,6 +1067,7 @@ final class RuntimeSourcePlatformSection {
 
     private static final String SOURCE_TAIL_B = """
         static int javan_socket_getsockopt_int(int fd, int level, int option_name, const char* message);
+        static int javan_socket_getsockopt_buffer_size(int fd, int option_name, const char* message);
         static javan_socket* javan_socket_checked(void* value);
         static javan_server_socket* javan_server_socket_checked(void* value);
 
@@ -1367,7 +1368,7 @@ final class RuntimeSourcePlatformSection {
             if (fd < 0) {
                 javan_panic(message);
             }
-            int value = javan_socket_getsockopt_int(fd, SOL_SOCKET, option_name, message);
+            int value = javan_socket_getsockopt_buffer_size(fd, option_name, message);
             javan_socket_native_close(fd);
             return value <= 0 ? 8192 : value;
         #endif
@@ -1507,6 +1508,21 @@ final class RuntimeSourcePlatformSection {
             return value;
         }
 
+        static int javan_socket_normalize_buffer_size(int option_name, int value) {
+        #if defined(__linux__)
+            if ((option_name == SO_RCVBUF || option_name == SO_SNDBUF) && value > 1) {
+                return value / 2;
+            }
+        #else
+            (void) option_name;
+        #endif
+            return value;
+        }
+
+        static int javan_socket_getsockopt_buffer_size(int fd, int option_name, const char* message) {
+            return javan_socket_normalize_buffer_size(option_name, javan_socket_getsockopt_int(fd, SOL_SOCKET, option_name, message));
+        }
+
         static int javan_socket_buffer_size_checked(int size) {
             if (size <= 0) {
                 javan_panic("non-positive socket buffer size");
@@ -1596,7 +1612,13 @@ final class RuntimeSourcePlatformSection {
         static int javan_socket_getsockopt_traffic_class(int fd, const char* message) {
             int option_name = 0;
             int level = javan_socket_traffic_class_level(fd, &option_name);
-            return javan_socket_getsockopt_int(fd, level, option_name, message);
+            int value = javan_socket_getsockopt_int(fd, level, option_name, message);
+        #if defined(__linux__)
+            if (option_name == IP_TOS) {
+                return value & 0xFC;
+            }
+        #endif
+            return value;
         }
 
         static void javan_socket_setsockopt_traffic_class(int fd, int traffic_class, const char* message) {
@@ -1800,8 +1822,8 @@ final class RuntimeSourcePlatformSection {
             javan_root_frame_push(javan_socket_assign_roots, 3);
             javan_socket_populate_names(fd, &local_address, &local_port, &remote_address, &remote_port);
             javan_socket_populate_options(fd, &tcp_no_delay, &keep_alive, &reuse_address, &oob_inline, &traffic_class);
-            receive_buffer_size = javan_socket_getsockopt_int(fd, SOL_SOCKET, SO_RCVBUF, "socket SO_RCVBUF lookup failed");
-            send_buffer_size = javan_socket_getsockopt_int(fd, SOL_SOCKET, SO_SNDBUF, "socket SO_SNDBUF lookup failed");
+            receive_buffer_size = javan_socket_getsockopt_buffer_size(fd, SO_RCVBUF, "socket SO_RCVBUF lookup failed");
+            send_buffer_size = javan_socket_getsockopt_buffer_size(fd, SO_SNDBUF, "socket SO_SNDBUF lookup failed");
             javan_socket* socket = javan_socket_checked(socket_root);
             socket->fd = fd;
             socket->connected = 1;
@@ -2194,6 +2216,8 @@ final class RuntimeSourcePlatformSection {
             int checked = javan_socket_traffic_class_checked(traffic_class);
             if (socket->fd >= 0) {
                 javan_socket_setsockopt_traffic_class(socket->fd, checked, "socket traffic class update failed");
+                socket->traffic_class = javan_socket_getsockopt_traffic_class(socket->fd, "socket traffic class lookup failed");
+                return;
             }
             socket->traffic_class = checked;
         #endif
@@ -2275,7 +2299,7 @@ final class RuntimeSourcePlatformSection {
             if (socket->fd < 0) {
                 return socket->receive_buffer_size;
             }
-            return javan_socket_getsockopt_int(socket->fd, SOL_SOCKET, SO_RCVBUF, "socket SO_RCVBUF lookup failed");
+            return javan_socket_getsockopt_buffer_size(socket->fd, SO_RCVBUF, "socket SO_RCVBUF lookup failed");
         #endif
         }
 
@@ -2310,7 +2334,7 @@ final class RuntimeSourcePlatformSection {
             if (socket->fd < 0) {
                 return socket->send_buffer_size;
             }
-            return javan_socket_getsockopt_int(socket->fd, SOL_SOCKET, SO_SNDBUF, "socket SO_SNDBUF lookup failed");
+            return javan_socket_getsockopt_buffer_size(socket->fd, SO_SNDBUF, "socket SO_SNDBUF lookup failed");
         #endif
         }
 
@@ -2622,7 +2646,7 @@ final class RuntimeSourcePlatformSection {
             socket->local_port = javan_socket_port_from_sockaddr((const struct sockaddr*) &bound);
             socket->so_timeout = 0;
             socket->reuse_address = javan_socket_getsockopt_flag(fd, SOL_SOCKET, SO_REUSEADDR, "server socket SO_REUSEADDR lookup failed");
-            socket->receive_buffer_size = javan_socket_getsockopt_int(fd, SOL_SOCKET, SO_RCVBUF, "server socket SO_RCVBUF lookup failed");
+            socket->receive_buffer_size = javan_socket_getsockopt_buffer_size(fd, SO_RCVBUF, "server socket SO_RCVBUF lookup failed");
             socket->local_address = (javan_inet_address*) local_address;
             javan_update_runtime_allocation_kind((void*) socket, JAVAN_RUNTIME_KIND_SERVER_SOCKET);
             javan_root_frame_pop(javan_server_socket_owner_roots);
@@ -2733,7 +2757,7 @@ final class RuntimeSourcePlatformSection {
             if (socket->fd < 0) {
                 return socket->receive_buffer_size;
             }
-            return javan_socket_getsockopt_int(socket->fd, SOL_SOCKET, SO_RCVBUF, "server socket SO_RCVBUF lookup failed");
+            return javan_socket_getsockopt_buffer_size(socket->fd, SO_RCVBUF, "server socket SO_RCVBUF lookup failed");
         #endif
         }
 
