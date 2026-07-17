@@ -12,8 +12,15 @@ on:
       - main
   workflow_dispatch:
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
+
+env:
+  JAVAN_COVERAGE_SOFT_TARGET: "0.09"
 
 jobs:
   verify:
@@ -97,11 +104,12 @@ jobs:
         if: always()
         run: |
           python3 - <<'PY'
+          import os
           import pathlib
           import xml.etree.ElementTree as ET
 
           report = pathlib.Path("target/site/jacoco/jacoco.xml")
-          target_ratio = 0.09
+          target_ratio = float(os.environ["JAVAN_COVERAGE_SOFT_TARGET"])
           if not report.exists():
               print("::warning::JaCoCo report missing; coverage summary skipped.")
               raise SystemExit(0)

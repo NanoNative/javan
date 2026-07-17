@@ -29,6 +29,9 @@
         <jacoco-maven-plugin.version>0.8.14</jacoco-maven-plugin.version>
         <surefireArgLine/>
         <javan.coverage.check.skip>true</javan.coverage.check.skip>
+        <javan.coverage.soft-target>0.09</javan.coverage.soft-target>
+        <javan.coverage.line.minimum>0.95</javan.coverage.line.minimum>
+        <javan.coverage.branch.minimum>0.90</javan.coverage.branch.minimum>
         <javan.jacoco.surefire.exec>${project.build.directory}/jacoco-surefire.exec</javan.jacoco.surefire.exec>
         <javan.jacoco.child.dir>${project.build.directory}/jacoco-child</javan.jacoco.child.dir>
         <javan.jacoco.merged.exec>${project.build.directory}/jacoco-merged.exec</javan.jacoco.merged.exec>
@@ -193,12 +196,12 @@
                                         <limit>
                                             <counter>LINE</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.95</minimum>
+                                            <minimum>${javan.coverage.line.minimum}</minimum>
                                         </limit>
                                         <limit>
                                             <counter>BRANCH</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.90</minimum>
+                                            <minimum>${javan.coverage.branch.minimum}</minimum>
                                         </limit>
                                     </limits>
                                 </rule>
