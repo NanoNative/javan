@@ -901,6 +901,8 @@ public final class BytecodeToIR {
                     instructions,
                     stack,
                     localDeclarations,
+                    dispatches,
+                    materializedLambdaMethods,
                     pendingExceptionHandlerStacks,
                     sourceLines
                 );

@@ -97,6 +97,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void objectsRequireNonNullElseGetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Objects",
+            "requireNonNullElseGet",
+            "(Ljava/lang/Object;Ljava/util/function/Supplier;)Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
     void objectsIsNullIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Objects",

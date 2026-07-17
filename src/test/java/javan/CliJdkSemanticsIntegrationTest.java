@@ -72,6 +72,60 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void objectsRequireNonNullElseGetReturnsFallbackBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("objects-require-non-null-else-get-fallback");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Objects;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Objects.requireNonNullElseGet(null, () -> "fallback"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/objects-require-non-null-else-get-fallback").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("fallback\n");
+    }
+
+    @Test
+    void objectsRequireNonNullElseGetReturnsPrimaryValueBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("objects-require-non-null-else-get-primary");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Objects;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Objects.requireNonNullElseGet("value", () -> "fallback"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/objects-require-non-null-else-get-primary").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("value\n");
+    }
+
+    @Test
     void objectsIsNullWithNullBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("objects-is-null-null");
         writeJava(project, "com.acme.Main", """

@@ -103,6 +103,138 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void objectsRequireNonNullElseGetInlineSupplierLambdaReturnsPrimaryValue() throws Exception {
+        final Path project = project("objects-require-non-null-else-get-lambda-primary");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Objects;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Objects.requireNonNullElseGet("value", () -> "fallback"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/objects-require-non-null-else-get-lambda-primary").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("value\n");
+    }
+
+    @Test
+    void objectsRequireNonNullElseGetInlineSupplierLambdaReturnsFallbackValue() throws Exception {
+        final Path project = project("objects-require-non-null-else-get-lambda-fallback");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Objects;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Objects.requireNonNullElseGet(null, () -> "fallback"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/objects-require-non-null-else-get-lambda-fallback").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("fallback\n");
+    }
+
+    @Test
+    void objectsRequireNonNullElseGetConcreteSupplierReturnsPrimaryValue() throws Exception {
+        final Path project = project("objects-require-non-null-else-get-concrete-primary");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Objects;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Objects.requireNonNullElseGet("value", new FallbackSupplier()));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.FallbackSupplier", """
+            package com.acme;
+
+            import java.util.function.Supplier;
+
+            public final class FallbackSupplier implements Supplier<Object> {
+                @Override
+                public Object get() {
+                    return "fallback";
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/objects-require-non-null-else-get-concrete-primary").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("value\n");
+    }
+
+    @Test
+    void objectsRequireNonNullElseGetConcreteSupplierReturnsFallbackValue() throws Exception {
+        final Path project = project("objects-require-non-null-else-get-concrete-fallback");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Objects;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Objects.requireNonNullElseGet(null, new FallbackSupplier()));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.FallbackSupplier", """
+            package com.acme;
+
+            import java.util.function.Supplier;
+
+            public final class FallbackSupplier implements Supplier<Object> {
+                @Override
+                public Object get() {
+                    return "fallback";
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/objects-require-non-null-else-get-concrete-fallback").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("fallback\n");
+    }
+
+    @Test
     void systemArraycopyIntrinsicBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("system-arraycopy-intrinsic");
         writeJava(project, "com.acme.Main", """

@@ -1856,6 +1856,60 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void reachabilityAcceptsObjectsRequireNonNullElseGetDirectSupplierLambda() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of("com/acme/Main", classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                methodInfo(
+                    "supply",
+                    "(Ljava/lang/Object;)Ljava/lang/Object;",
+                    instruction(0, 42, "aload_0"),
+                    invokeDynamicInstruction(1, new DynamicRef(
+                        "get",
+                        "()Ljava/util/function/Supplier;",
+                        "java/lang/invoke/LambdaMetafactory",
+                        "metafactory",
+                        "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                            + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                            + "Ljava/lang/invoke/CallSite;",
+                        List.of(
+                            "()Ljava/lang/Object;",
+                            "invokestatic com/acme/Main.lambda$supplyElse$0:()Ljava/lang/Object;",
+                            "()Ljava/lang/Object;"
+                        ),
+                        List.of(
+                            BootstrapArgument.methodType("()Ljava/lang/Object;"),
+                            BootstrapArgument.methodHandle(
+                                6,
+                                new MethodRef("com/acme/Main", "lambda$supplyElse$0", "()Ljava/lang/Object;")
+                            ),
+                            BootstrapArgument.methodType("()Ljava/lang/Object;")
+                        )
+                    )),
+                    instruction(2, 184, "invokestatic", new MethodRef(
+                        "java/util/Objects",
+                        "requireNonNullElseGet",
+                        "(Ljava/lang/Object;Ljava/util/function/Supplier;)Ljava/lang/Object;"
+                    )),
+                    instruction(3, 176, "areturn")
+                ),
+                methodInfo(
+                    "lambda$supplyElse$0",
+                    "()Ljava/lang/Object;",
+                    instruction(0, 1, "aconst_null"),
+                    instruction(1, 176, "areturn")
+                )
+            )),
+            List.of(new EntryPoint("com/acme/Main", "supply", "(Ljava/lang/Object;)Ljava/lang/Object;"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+    }
+
+    @Test
     void reachabilityResolvesSpecialNonConstructorCall() {
         final CallGraph graph = new ReachabilityAnalyzer().analyze(
             Map.of(

@@ -5152,6 +5152,106 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersObjectsRequireNonNullElseGetSupplierLambdaToBranchAndDirectSupplierCall() {
+        final EntryPoint entryPoint = new EntryPoint("com/acme/Main", "supplyValue", "(Ljava/lang/Object;)Ljava/lang/Object;");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    objectsRequireNonNullElseGetLambdaMethod(),
+                    objectsRequireNonNullElseGetLambdaImplementationMethod()
+                ))
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("supplyValue")).singleElement().satisfies(function -> {
+            assertThat(function.locals()).containsExactly(
+                new IrLocal(IrType.OBJECT, "object0"),
+                new IrLocal(IrType.OBJECT, "object1")
+            );
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.assignObject("object0", IrExpression.objectLocal("arg0")),
+                IrInstruction.branchIf(
+                    "label_objects_require_non_null_else_get_present_2_2",
+                    IrExpression.objectComparison("!=", IrExpression.objectLocal("object0"), IrExpression.objectNull())
+                ),
+                IrInstruction.assignObject(
+                    "object1",
+                    IrExpression.objectCall(
+                        symbol("com/acme/Main", "lambda$requireNonNullElseGet$0", "()Ljava/lang/Object;"),
+                        List.of()
+                    )
+                ),
+                IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(IrExpression.objectLocal("object1"))),
+                IrInstruction.jump("label_objects_require_non_null_else_get_end_2_2"),
+                IrInstruction.label("label_objects_require_non_null_else_get_present_2_2"),
+                IrInstruction.assignObject("object1", IrExpression.objectLocal("object0")),
+                IrInstruction.label("label_objects_require_non_null_else_get_end_2_2"),
+                IrInstruction.returnObject(IrExpression.objectLocal("object1"))
+            );
+        });
+    }
+
+    @Test
+    void lowersObjectsRequireNonNullElseGetConcreteSupplierToBranchAndDirectSupplierCall() {
+        final EntryPoint entryPoint = new EntryPoint(
+            "com/acme/Main",
+            "supplyValueNonLambda",
+            "(Ljava/lang/Object;Ljava/util/function/Supplier;)Ljava/lang/Object;"
+        );
+        final EntryPoint supplierEntry = new EntryPoint("com/acme/FallbackSupplier", "get", "()Ljava/lang/Object;");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    objectsRequireNonNullElseGetConcreteSupplierMethod()
+                )),
+                "com/acme/FallbackSupplier",
+                classFile(
+                    "com/acme/FallbackSupplier",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/util/function/Supplier"),
+                    List.of(),
+                    List.of(supplierGetImplementationMethod())
+                )
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint, supplierEntry), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("supplyValueNonLambda")).singleElement().satisfies(function -> {
+            assertThat(function.locals()).containsExactly(
+                new IrLocal(IrType.OBJECT, "object0"),
+                new IrLocal(IrType.OBJECT, "object1")
+            );
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.assignObject("object0", IrExpression.objectLocal("arg0")),
+                IrInstruction.branchIf(
+                    "label_objects_require_non_null_else_get_present_2_2",
+                    IrExpression.objectComparison("!=", IrExpression.objectLocal("object0"), IrExpression.objectNull())
+                ),
+                IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(IrExpression.objectLocal("arg1"))),
+                IrInstruction.assignObject(
+                    "object1",
+                    IrExpression.objectCall(
+                        symbol("com/acme/FallbackSupplier", "get", "()Ljava/lang/Object;"),
+                        List.of(IrExpression.objectLocal("arg1"))
+                    )
+                ),
+                IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(IrExpression.objectLocal("object1"))),
+                IrInstruction.jump("label_objects_require_non_null_else_get_end_2_2"),
+                IrInstruction.label("label_objects_require_non_null_else_get_present_2_2"),
+                IrInstruction.assignObject("object1", IrExpression.objectLocal("object0")),
+                IrInstruction.label("label_objects_require_non_null_else_get_end_2_2"),
+                IrInstruction.returnObject(IrExpression.objectLocal("object1"))
+            );
+        });
+    }
+
+    @Test
     void lowersObjectsIsNullToObjectComparison() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -26640,6 +26740,63 @@ final class BytecodeToIRTest {
         );
     }
 
+    private static MethodInfo objectsRequireNonNullElseGetLambdaMethod() {
+        return method(
+            0x0008,
+            "supplyValue",
+            "(Ljava/lang/Object;)Ljava/lang/Object;",
+            2,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeDynamic(1, new DynamicRef(
+                "get",
+                "()Ljava/util/function/Supplier;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "()Ljava/lang/Object;",
+                    "invokestatic com/acme/Main.lambda$requireNonNullElseGet$0:()Ljava/lang/Object;",
+                    "()Ljava/lang/Object;"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("()Ljava/lang/Object;"),
+                    BootstrapArgument.methodHandle(
+                        6,
+                        new MethodRef("com/acme/Main", "lambda$requireNonNullElseGet$0", "()Ljava/lang/Object;")
+                    ),
+                    BootstrapArgument.methodType("()Ljava/lang/Object;")
+                )
+            )),
+            invokeStatic(2, new MethodRef(
+                "java/util/Objects",
+                "requireNonNullElseGet",
+                "(Ljava/lang/Object;Ljava/util/function/Supplier;)Ljava/lang/Object;"
+            )),
+            plain(3, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo objectsRequireNonNullElseGetConcreteSupplierMethod() {
+        return method(
+            0x0008,
+            "supplyValueNonLambda",
+            "(Ljava/lang/Object;Ljava/util/function/Supplier;)Ljava/lang/Object;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeStatic(2, new MethodRef(
+                "java/util/Objects",
+                "requireNonNullElseGet",
+                "(Ljava/lang/Object;Ljava/util/function/Supplier;)Ljava/lang/Object;"
+            )),
+            plain(5, 176, "areturn")
+        );
+    }
+
     private static MethodInfo optionalIfPresentLambdaMethod() {
         return method(
             0x0008,
@@ -26893,6 +27050,18 @@ final class BytecodeToIRTest {
         return method(
             0x0008,
             "lambda$orElseGet$0",
+            "()Ljava/lang/Object;",
+            1,
+            0,
+            stringConstant(0, "fallback"),
+            plain(1, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo objectsRequireNonNullElseGetLambdaImplementationMethod() {
+        return method(
+            0x0008,
+            "lambda$requireNonNullElseGet$0",
             "()Ljava/lang/Object;",
             1,
             0,

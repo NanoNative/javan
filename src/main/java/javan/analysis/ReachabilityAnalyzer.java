@@ -409,6 +409,27 @@ public final class ReachabilityAnalyzer {
             ));
             return;
         }
+        if (isObjectsRequireNonNullElseGet(target)) {
+            final MethodRef supplierGet = new MethodRef("java/util/function/Supplier", "get", "()Ljava/lang/Object;");
+            final List<EntryPoint> targetMethods = interfaceTargets(classes, supplierGet, entryPoints);
+            if (!targetMethods.isEmpty()) {
+                enqueueAll(work, workSet, targetMethods);
+                addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
+            }
+            if (hasInlineDirectSupplierLambda(classes, current, instruction) || !targetMethods.isEmpty()) {
+                return;
+            }
+            diagnostics.add(Diagnostic.error(
+                "JAVAN012",
+                "unsupported reachable application method call",
+                current.className(),
+                current.methodName() + current.descriptor(),
+                target.display(),
+                "Objects.requireNonNullElseGet requires a closed-world Supplier implementation class or a supported direct supplier lambda target.",
+                "Provide a reachable Supplier implementation class or keep this exact null-fallback flow on the JVM until broader callback support lands."
+            ));
+            return;
+        }
         if (isMapComputeIfPresent(target) || isMapCompute(target) || isMapMerge(target)) {
             final MethodRef biFunctionApply = new MethodRef("java/util/function/BiFunction", "apply", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;");
             final List<EntryPoint> targetMethods = interfaceTargets(classes, biFunctionApply, entryPoints);
@@ -784,6 +805,12 @@ public final class ReachabilityAnalyzer {
         return "java/util/Optional".equals(target.owner())
             && "orElseGet".equals(target.name())
             && "(Ljava/util/function/Supplier;)Ljava/lang/Object;".equals(target.descriptor());
+    }
+
+    private static boolean isObjectsRequireNonNullElseGet(final MethodRef target) {
+        return "java/util/Objects".equals(target.owner())
+            && "requireNonNullElseGet".equals(target.name())
+            && "(Ljava/lang/Object;Ljava/util/function/Supplier;)Ljava/lang/Object;".equals(target.descriptor());
     }
 
     private static boolean isMapComputeIfPresent(final MethodRef target) {

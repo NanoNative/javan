@@ -1717,6 +1717,8 @@ final class BytecodeToIRInvokeSupport {
         final List<IrInstruction> instructions,
         final List<StackValue> stack,
         final Map<Integer, IrLocal> localDeclarations,
+        final Map<String, IrDispatch> dispatches,
+        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final SourceLineIndex sourceLines
     ) {
@@ -1725,6 +1727,7 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if (lowerJdkStaticIntrinsic(
+            classes,
             classFile,
             method,
             instruction,
@@ -1732,6 +1735,8 @@ final class BytecodeToIRInvokeSupport {
             instructions,
             stack,
             localDeclarations,
+            dispatches,
+            materializedLambdaMethods,
             pendingExceptionHandlerStacks,
             sourceLines
         )) {
@@ -1880,6 +1885,7 @@ final class BytecodeToIRInvokeSupport {
         return enumOrdinal(enumClass, ownerField.substring(separator + 1));
     }
     static boolean lowerJdkStaticIntrinsic(
+        final Map<String, ClassFile> classes,
         final ClassFile classFile,
         final MethodInfo method,
         final Instruction instruction,
@@ -1887,6 +1893,8 @@ final class BytecodeToIRInvokeSupport {
         final List<IrInstruction> instructions,
         final List<StackValue> stack,
         final Map<Integer, IrLocal> localDeclarations,
+        final Map<String, IrDispatch> dispatches,
+        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final SourceLineIndex sourceLines
     ) {
@@ -1897,7 +1905,18 @@ final class BytecodeToIRInvokeSupport {
             return lowerSystemIntrinsic(classFile, method, methodRef, instructions, stack);
         }
         if ("java/util/Objects".equals(methodRef.owner())) {
-            return lowerObjectsIntrinsic(classFile, method, methodRef, instructions, stack, localDeclarations);
+            return lowerObjectsIntrinsic(
+                classes,
+                classFile,
+                method,
+                instruction,
+                methodRef,
+                instructions,
+                stack,
+                localDeclarations,
+                dispatches,
+                materializedLambdaMethods
+            );
         }
         if ("java/util/Arrays".equals(methodRef.owner())) {
             return lowerArraysIntrinsic(classFile, method, methodRef, stack);
@@ -2582,12 +2601,16 @@ final class BytecodeToIRInvokeSupport {
         return Optional.empty();
     }
     static boolean lowerObjectsIntrinsic(
+        final Map<String, ClassFile> classes,
         final ClassFile classFile,
         final MethodInfo method,
+        final Instruction instruction,
         final MethodRef methodRef,
         final List<IrInstruction> instructions,
         final List<StackValue> stack,
-        final Map<Integer, IrLocal> localDeclarations
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<String, IrDispatch> dispatches,
+        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods
     ) {
         if ("requireNonNull".equals(methodRef.name()) && "(Ljava/lang/Object;)Ljava/lang/Object;".equals(methodRef.descriptor())) {
             final IrExpression value = popObject(classFile, method, stack);
@@ -2616,6 +2639,28 @@ final class BytecodeToIRInvokeSupport {
             pushObjectCall(instructions, stack, localDeclarations, "javan_objects_require_non_null_else", List.of(value, fallback));
             return true;
         }
+        if ("requireNonNullElseGet".equals(methodRef.name()) && "(Ljava/lang/Object;Ljava/util/function/Supplier;)Ljava/lang/Object;".equals(methodRef.descriptor())) {
+            if (hasTopStackKind(stack, StackKind.LAMBDA_SUPPLIER)) {
+                lowerObjectsRequireNonNullElseGetLambdaCall(classFile, method, instruction, instructions, stack, localDeclarations);
+                return true;
+            }
+            final IrExpression supplier = popObject(classFile, method, stack);
+            final IrExpression value = popObject(classFile, method, stack);
+            lowerObjectsRequireNonNullElseGetCall(
+                classes,
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                dispatches,
+                materializedLambdaMethods,
+                localDeclarations,
+                value,
+                supplier
+            );
+            return true;
+        }
         if ("isNull".equals(methodRef.name()) && "(Ljava/lang/Object;)Z".equals(methodRef.descriptor())) {
             final IrExpression value = popObject(classFile, method, stack);
             stack.add(StackValue.intExpression(IrExpression.objectComparison("==", value, IrExpression.objectNull())));
@@ -2638,6 +2683,79 @@ final class BytecodeToIRInvokeSupport {
             return true;
         }
         return false;
+    }
+
+    private static void lowerObjectsRequireNonNullElseGetLambdaCall(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations
+    ) {
+        final DynamicLambda lambda = popDynamicLambda(classFile, method, instruction, stack, StackKind.LAMBDA_SUPPLIER, "supplier lambda");
+        final IrExpression value = popObject(classFile, method, instruction, stack);
+        final String valueLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(valueLocal, value));
+        final String resultLocal = newObjectLocal(localDeclarations);
+        final String presentLabel = "label_objects_require_non_null_else_get_present_" + instruction.offset() + "_" + localDeclarations.size();
+        final String endLabel = "label_objects_require_non_null_else_get_end_" + instruction.offset() + "_" + localDeclarations.size();
+        instructions.add(IrInstruction.branchIf(
+            presentLabel,
+            IrExpression.objectComparison("!=", IrExpression.objectLocal(valueLocal), IrExpression.objectNull())
+        ));
+        instructions.add(IrInstruction.assignObject(
+            resultLocal,
+            invokeSupplierLambdaExpression(lambda)
+        ));
+        instructions.add(IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(IrExpression.objectLocal(resultLocal))));
+        instructions.add(IrInstruction.jump(endLabel));
+        instructions.add(IrInstruction.label(presentLabel));
+        instructions.add(IrInstruction.assignObject(resultLocal, IrExpression.objectLocal(valueLocal)));
+        instructions.add(IrInstruction.label(endLabel));
+        stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
+    }
+
+    private static void lowerObjectsRequireNonNullElseGetCall(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<String, IrDispatch> dispatches,
+        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<Integer, IrLocal> localDeclarations,
+        final IrExpression value,
+        final IrExpression supplier
+    ) {
+        final String valueLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(valueLocal, value));
+        final String resultLocal = newObjectLocal(localDeclarations);
+        final String presentLabel = "label_objects_require_non_null_else_get_present_" + instruction.offset() + "_" + localDeclarations.size();
+        final String endLabel = "label_objects_require_non_null_else_get_end_" + instruction.offset() + "_" + localDeclarations.size();
+        instructions.add(IrInstruction.branchIf(
+            presentLabel,
+            IrExpression.objectComparison("!=", IrExpression.objectLocal(valueLocal), IrExpression.objectNull())
+        ));
+        instructions.add(IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(supplier)));
+        lowerSupplierGetCall(
+            classes,
+            classFile,
+            method,
+            instruction,
+            instructions,
+            dispatches,
+            materializedLambdaMethods,
+            supplier,
+            resultLocal
+        );
+        instructions.add(IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(IrExpression.objectLocal(resultLocal))));
+        instructions.add(IrInstruction.jump(endLabel));
+        instructions.add(IrInstruction.label(presentLabel));
+        instructions.add(IrInstruction.assignObject(resultLocal, IrExpression.objectLocal(valueLocal)));
+        instructions.add(IrInstruction.label(endLabel));
+        stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
     }
     static void rejectUnsupportedStringSemantic(
         final ClassFile classFile,

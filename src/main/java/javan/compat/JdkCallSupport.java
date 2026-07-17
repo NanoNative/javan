@@ -73,6 +73,7 @@ public final class JdkCallSupport {
     private static final List<SupportedCall> SUPPORTED_CALLS = List.of(
         intrinsic("Objects.requireNonNull", "java/util/Objects", "requireNonNull", "(Ljava/lang/Object;)Ljava/lang/Object;", "(Ljava/lang/Object;Ljava/lang/String;)Ljava/lang/Object;"),
         intrinsic("Objects.requireNonNullElse", "java/util/Objects", "requireNonNullElse", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+        intrinsic("Objects.requireNonNullElseGet", "java/util/Objects", "requireNonNullElseGet", "(Ljava/lang/Object;Ljava/util/function/Supplier;)Ljava/lang/Object;"),
         intrinsic("Objects.isNull", "java/util/Objects", "isNull", "(Ljava/lang/Object;)Z"),
         intrinsic("Objects.nonNull", "java/util/Objects", "nonNull", "(Ljava/lang/Object;)Z"),
         intrinsic("Objects.toString", "java/util/Objects", "toString", "(Ljava/lang/Object;)Ljava/lang/String;", "(Ljava/lang/Object;Ljava/lang/String;)Ljava/lang/String;"),
