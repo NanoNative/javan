@@ -234,6 +234,27 @@ public final class ReachabilityAnalyzer {
             ));
             return;
         }
+        if (instruction.opcode() == 185 && isIterableForEach(target)) {
+            final MethodRef consumerAccept = new MethodRef("java/util/function/Consumer", "accept", "(Ljava/lang/Object;)V");
+            final List<EntryPoint> targetMethods = interfaceTargets(classes, consumerAccept, entryPoints);
+            if (!targetMethods.isEmpty()) {
+                enqueueAll(work, workSet, targetMethods);
+                addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
+            }
+            if (containsMethodRef(materializedLambdaMethods, consumerAccept) || !targetMethods.isEmpty()) {
+                return;
+            }
+            diagnostics.add(Diagnostic.error(
+                "JAVAN012",
+                "unsupported reachable application method call",
+                current.className(),
+                current.methodName() + current.descriptor(),
+                target.display(),
+                "Iterable.forEach requires either a closed-world Consumer implementation class or a supported materialized Consumer lambda target.",
+                "Provide a reachable Consumer implementation class or keep this exact iterable bulk-consumer flow on the JVM until broader receiver support lands."
+            ));
+            return;
+        }
         if (enumCallKind == EnumCallKind.UNSUPPORTED_SYNTHETIC) {
             diagnostics.add(unsupportedEnumValueOfDiagnostic(current, target.display()));
             return;
@@ -672,6 +693,12 @@ public final class ReachabilityAnalyzer {
     private static boolean isIteratorForEachRemaining(final MethodRef target) {
         return "java/util/Iterator".equals(target.owner())
             && "forEachRemaining".equals(target.name())
+            && "(Ljava/util/function/Consumer;)V".equals(target.descriptor());
+    }
+
+    private static boolean isIterableForEach(final MethodRef target) {
+        return "java/lang/Iterable".equals(target.owner())
+            && "forEach".equals(target.name())
             && "(Ljava/util/function/Consumer;)V".equals(target.descriptor());
     }
 

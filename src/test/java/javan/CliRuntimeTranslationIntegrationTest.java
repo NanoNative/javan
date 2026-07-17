@@ -3728,6 +3728,73 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void iterableForEachLambdaBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("iterable-foreach-lambda");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.Iterable;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Iterable<String> values = new ArrayList<>(List.of("left", "right"));
+                    final String prefix = "item:";
+                    values.forEach(value -> System.out.println(prefix + value));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/iterable-foreach-lambda").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("item:left\nitem:right\n");
+    }
+
+    @Test
+    void iterableForEachConcreteConsumerBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("iterable-foreach-consumer");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.Iterable;
+            import java.util.List;
+            import java.util.function.Consumer;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Iterable<String> values = new ArrayList<>(List.of("left", "right"));
+                    values.forEach(new Printer());
+                }
+
+                private static final class Printer implements Consumer<String> {
+                    @Override
+                    public void accept(final String value) {
+                        System.out.println(value);
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/iterable-foreach-consumer").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("left\nright\n");
+    }
+
+    @Test
     void listOfImmutableAddFailsAtRuntime() throws Exception {
         final Path project = project("list-of-immutable-add");
         writeJava(project, "com.acme.Main", """

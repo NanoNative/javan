@@ -11,8 +11,8 @@
     "rule": "done = supported variants + rejected variants; unknown leftovers must be 0 for a release-gated JDK"
   },
   "counts": {
-    "rows": 288,
-    "pass": 288,
+    "rows": 289,
+    "pass": 289,
     "scoped": 0,
     "target": 0,
     "rejected": 0
@@ -160,6 +160,7 @@
     {"feature": "arraylist-direct-owner-retain-all", "jdk25": "pass"},
     {"feature": "iterator-remove", "jdk25": "pass"},
     {"feature": "iterator-foreach-remaining", "jdk25": "pass"},
+    {"feature": "iterable-foreach", "jdk25": "pass"},
     {"feature": "hashset-direct-owner-read-surface", "jdk25": "pass"},
     {"feature": "hashset-direct-owner-add-all", "jdk25": "pass"},
     {"feature": "hashset-direct-owner-remove-all", "jdk25": "pass"},

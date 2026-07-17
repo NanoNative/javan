@@ -562,6 +562,7 @@ public final class CompatibilityReports {
             pass("arraylist-direct-owner-retain-all"),
             pass("iterator-remove"),
             pass("iterator-foreach-remaining"),
+            pass("iterable-foreach"),
             pass("hashset-direct-owner-read-surface"),
             pass("hashset-direct-owner-add-all"),
             pass("hashset-direct-owner-remove-all"),

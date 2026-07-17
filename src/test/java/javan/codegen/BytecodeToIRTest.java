@@ -913,27 +913,28 @@ final class BytecodeToIRTest {
 
         assertThat(program.functions()).filteredOn(function -> function.name().equals("iterate")).singleElement().satisfies(function ->
             assertThat(function.instructions()).containsExactly(
-                IrInstruction.label("label_iterator_for_each_remaining_loop_2_0"),
+                IrInstruction.assignObject("object0", IrExpression.objectLocal("arg0")),
+                IrInstruction.label("label_iterator_for_each_remaining_loop_2_1"),
                 IrInstruction.assignInt(
-                    "int0",
-                    IrExpression.intCall("javan_iterator_has_next", List.of(IrExpression.objectLocal("arg0")))
+                    "int1",
+                    IrExpression.intCall("javan_iterator_has_next", List.of(IrExpression.objectLocal("object0")))
                 ),
                 IrInstruction.branchIf(
-                    "label_iterator_for_each_remaining_body_2_0",
-                    IrExpression.intComparison("!=", IrExpression.intLocal("int0"), IrExpression.intLiteral(0))
+                    "label_iterator_for_each_remaining_body_2_1",
+                    IrExpression.intComparison("!=", IrExpression.intLocal("int1"), IrExpression.intLiteral(0))
                 ),
-                IrInstruction.jump("label_iterator_for_each_remaining_end_2_0"),
-                IrInstruction.label("label_iterator_for_each_remaining_body_2_0"),
+                IrInstruction.jump("label_iterator_for_each_remaining_end_2_1"),
+                IrInstruction.label("label_iterator_for_each_remaining_body_2_1"),
                 IrInstruction.assignObject(
-                    "object1",
-                    IrExpression.objectCall("javan_iterator_next", List.of(IrExpression.objectLocal("arg0")))
+                    "object2",
+                    IrExpression.objectCall("javan_iterator_next", List.of(IrExpression.objectLocal("object0")))
                 ),
                 IrInstruction.callStaticVoid(
                     "javan_materialized_lambda_apply_void",
-                    List.of(IrExpression.objectLocal("arg1"), IrExpression.objectLocal("object1"))
+                    List.of(IrExpression.objectLocal("arg1"), IrExpression.objectLocal("object2"))
                 ),
-                IrInstruction.jump("label_iterator_for_each_remaining_loop_2_0"),
-                IrInstruction.label("label_iterator_for_each_remaining_end_2_0"),
+                IrInstruction.jump("label_iterator_for_each_remaining_loop_2_1"),
+                IrInstruction.label("label_iterator_for_each_remaining_end_2_1"),
                 IrInstruction.returnVoid()
             )
         );
@@ -963,27 +964,131 @@ final class BytecodeToIRTest {
 
         assertThat(program.functions()).filteredOn(function -> function.name().equals("iterate")).singleElement().satisfies(function ->
             assertThat(function.instructions()).containsExactly(
-                IrInstruction.label("label_iterator_for_each_remaining_loop_2_0"),
+                IrInstruction.assignObject("object0", IrExpression.objectLocal("arg0")),
+                IrInstruction.label("label_iterator_for_each_remaining_loop_2_1"),
                 IrInstruction.assignInt(
-                    "int0",
-                    IrExpression.intCall("javan_iterator_has_next", List.of(IrExpression.objectLocal("arg0")))
+                    "int1",
+                    IrExpression.intCall("javan_iterator_has_next", List.of(IrExpression.objectLocal("object0")))
                 ),
                 IrInstruction.branchIf(
-                    "label_iterator_for_each_remaining_body_2_0",
-                    IrExpression.intComparison("!=", IrExpression.intLocal("int0"), IrExpression.intLiteral(0))
+                    "label_iterator_for_each_remaining_body_2_1",
+                    IrExpression.intComparison("!=", IrExpression.intLocal("int1"), IrExpression.intLiteral(0))
                 ),
-                IrInstruction.jump("label_iterator_for_each_remaining_end_2_0"),
-                IrInstruction.label("label_iterator_for_each_remaining_body_2_0"),
+                IrInstruction.jump("label_iterator_for_each_remaining_end_2_1"),
+                IrInstruction.label("label_iterator_for_each_remaining_body_2_1"),
                 IrInstruction.assignObject(
-                    "object1",
-                    IrExpression.objectCall("javan_iterator_next", List.of(IrExpression.objectLocal("arg0")))
+                    "object2",
+                    IrExpression.objectCall("javan_iterator_next", List.of(IrExpression.objectLocal("object0")))
                 ),
                 IrInstruction.callStaticVoid(
                     "javan_com_acme_Printer_accept__Ljava_lang_Object__V",
-                    List.of(IrExpression.objectLocal("arg1"), IrExpression.objectLocal("object1"))
+                    List.of(IrExpression.objectLocal("arg1"), IrExpression.objectLocal("object2"))
                 ),
-                IrInstruction.jump("label_iterator_for_each_remaining_loop_2_0"),
-                IrInstruction.label("label_iterator_for_each_remaining_end_2_0"),
+                IrInstruction.jump("label_iterator_for_each_remaining_loop_2_1"),
+                IrInstruction.label("label_iterator_for_each_remaining_end_2_1"),
+                IrInstruction.returnVoid()
+            )
+        );
+    }
+
+    @Test
+    void lowersIterableForEachWithMaterializedConsumerLambdaToLoopAndVoidHelperCall() {
+        final EntryPoint buildEntry = new EntryPoint("com/acme/Main", "build", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/function/Consumer;");
+        final EntryPoint iterateEntry = new EntryPoint("com/acme/Main", "iterate", "(Ljava/lang/Iterable;Ljava/util/function/Consumer;)V");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    capturedConsumerBuildMethod(),
+                    iterableForEachMethod(),
+                    capturedConsumerImplementationMethod()
+                ))
+            ),
+            new CallGraph(buildEntry, List.of(buildEntry, iterateEntry), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("iterate")).singleElement().satisfies(function ->
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.assignObject(
+                    "object0",
+                    IrExpression.objectCall("javan_list_iterator", List.of(IrExpression.objectLocal("arg0")))
+                ),
+                IrInstruction.label("label_iterator_for_each_remaining_loop_2_1"),
+                IrInstruction.assignInt(
+                    "int1",
+                    IrExpression.intCall("javan_iterator_has_next", List.of(IrExpression.objectLocal("object0")))
+                ),
+                IrInstruction.branchIf(
+                    "label_iterator_for_each_remaining_body_2_1",
+                    IrExpression.intComparison("!=", IrExpression.intLocal("int1"), IrExpression.intLiteral(0))
+                ),
+                IrInstruction.jump("label_iterator_for_each_remaining_end_2_1"),
+                IrInstruction.label("label_iterator_for_each_remaining_body_2_1"),
+                IrInstruction.assignObject(
+                    "object2",
+                    IrExpression.objectCall("javan_iterator_next", List.of(IrExpression.objectLocal("object0")))
+                ),
+                IrInstruction.callStaticVoid(
+                    "javan_materialized_lambda_apply_void",
+                    List.of(IrExpression.objectLocal("arg1"), IrExpression.objectLocal("object2"))
+                ),
+                IrInstruction.jump("label_iterator_for_each_remaining_loop_2_1"),
+                IrInstruction.label("label_iterator_for_each_remaining_end_2_1"),
+                IrInstruction.returnVoid()
+            )
+        );
+    }
+
+    @Test
+    void lowersIterableForEachWithConcreteConsumerToLoopAndDirectAcceptCall() {
+        final EntryPoint iterateEntry = new EntryPoint("com/acme/Main", "iterate", "(Ljava/lang/Iterable;Ljava/util/function/Consumer;)V");
+        final EntryPoint consumerEntry = new EntryPoint("com/acme/Printer", "accept", "(Ljava/lang/Object;)V");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(iterableForEachMethod())),
+                "com/acme/Printer",
+                classFile(
+                    "com/acme/Printer",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/util/function/Consumer"),
+                    List.of(),
+                    List.of(consumerAcceptImplementationMethod())
+                )
+            ),
+            new CallGraph(iterateEntry, List.of(iterateEntry, consumerEntry), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("iterate")).singleElement().satisfies(function ->
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.assignObject(
+                    "object0",
+                    IrExpression.objectCall("javan_list_iterator", List.of(IrExpression.objectLocal("arg0")))
+                ),
+                IrInstruction.label("label_iterator_for_each_remaining_loop_2_1"),
+                IrInstruction.assignInt(
+                    "int1",
+                    IrExpression.intCall("javan_iterator_has_next", List.of(IrExpression.objectLocal("object0")))
+                ),
+                IrInstruction.branchIf(
+                    "label_iterator_for_each_remaining_body_2_1",
+                    IrExpression.intComparison("!=", IrExpression.intLocal("int1"), IrExpression.intLiteral(0))
+                ),
+                IrInstruction.jump("label_iterator_for_each_remaining_end_2_1"),
+                IrInstruction.label("label_iterator_for_each_remaining_body_2_1"),
+                IrInstruction.assignObject(
+                    "object2",
+                    IrExpression.objectCall("javan_iterator_next", List.of(IrExpression.objectLocal("object0")))
+                ),
+                IrInstruction.callStaticVoid(
+                    "javan_com_acme_Printer_accept__Ljava_lang_Object__V",
+                    List.of(IrExpression.objectLocal("arg1"), IrExpression.objectLocal("object2"))
+                ),
+                IrInstruction.jump("label_iterator_for_each_remaining_loop_2_1"),
+                IrInstruction.label("label_iterator_for_each_remaining_end_2_1"),
                 IrInstruction.returnVoid()
             )
         );
@@ -25924,6 +26029,20 @@ final class BytecodeToIRTest {
             plain(0, 42, "aload_0"),
             plain(1, 43, "aload_1"),
             invokeInterface(2, new MethodRef("java/util/Iterator", "forEachRemaining", "(Ljava/util/function/Consumer;)V")),
+            plain(7, 177, "return")
+        );
+    }
+
+    private static MethodInfo iterableForEachMethod() {
+        return method(
+            0x0008,
+            "iterate",
+            "(Ljava/lang/Iterable;Ljava/util/function/Consumer;)V",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeInterface(2, new MethodRef("java/lang/Iterable", "forEach", "(Ljava/util/function/Consumer;)V")),
             plain(7, 177, "return")
         );
     }

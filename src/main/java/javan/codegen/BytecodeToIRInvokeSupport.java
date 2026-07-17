@@ -4348,6 +4348,23 @@ final class BytecodeToIRInvokeSupport {
                 return true;
             }
         }
+        if ("java/lang/Iterable".equals(methodRef.owner())) {
+            if ("forEach(Ljava/util/function/Consumer;)V".equals(signature)) {
+                lowerIteratorForEachRemainingCall(
+                    classes,
+                    classFile,
+                    method,
+                    instruction,
+                    instructions,
+                    dispatches,
+                    materializedLambdaMethods,
+                    localDeclarations,
+                    IrExpression.objectCall("javan_list_iterator", List.of(receiver)),
+                    arguments.getFirst()
+                );
+                return true;
+            }
+        }
         if ("java/util/Iterator".equals(methodRef.owner())) {
             if ("hasNext()Z".equals(signature)) {
                 stack.add(StackValue.intExpression(IrExpression.intCall("javan_iterator_has_next", List.of(receiver))));
@@ -4502,15 +4519,17 @@ final class BytecodeToIRInvokeSupport {
         final IrExpression iterator,
         final IrExpression consumer
     ) {
+        final String iteratorLocal = newObjectLocal(localDeclarations);
         final String loopLabel = "label_iterator_for_each_remaining_loop_" + instruction.offset() + "_" + localDeclarations.size();
         final String bodyLabel = "label_iterator_for_each_remaining_body_" + instruction.offset() + "_" + localDeclarations.size();
         final String endLabel = "label_iterator_for_each_remaining_end_" + instruction.offset() + "_" + localDeclarations.size();
         final String hasNextLocal = newIntLocal(localDeclarations);
         final String valueLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(iteratorLocal, iterator));
         instructions.add(IrInstruction.label(loopLabel));
         instructions.add(IrInstruction.assignInt(
             hasNextLocal,
-            IrExpression.intCall("javan_iterator_has_next", List.of(iterator))
+            IrExpression.intCall("javan_iterator_has_next", List.of(IrExpression.objectLocal(iteratorLocal)))
         ));
         instructions.add(IrInstruction.branchIf(
             bodyLabel,
@@ -4520,7 +4539,7 @@ final class BytecodeToIRInvokeSupport {
         instructions.add(IrInstruction.label(bodyLabel));
         instructions.add(IrInstruction.assignObject(
             valueLocal,
-            IrExpression.objectCall("javan_iterator_next", List.of(iterator))
+            IrExpression.objectCall("javan_iterator_next", List.of(IrExpression.objectLocal(iteratorLocal)))
         ));
         lowerConsumerAcceptCall(
             classes,

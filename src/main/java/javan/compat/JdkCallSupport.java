@@ -807,6 +807,7 @@ public final class JdkCallSupport {
         runtime("OutputStream.flush", "java/io/OutputStream", "flush", "()V"),
         runtime("OutputStream.close", "java/io/OutputStream", "close", "()V"),
         runtime("Iterable.iterator", "java/lang/Iterable", "iterator", "()Ljava/util/Iterator;"),
+        runtime("Iterable.forEach", "java/lang/Iterable", "forEach", "(Ljava/util/function/Consumer;)V"),
         runtime("DirectoryStream.iterator", "java/nio/file/DirectoryStream", "iterator", "()Ljava/util/Iterator;"),
         runtime("DirectoryStream.close", "java/nio/file/DirectoryStream", "close", "()V"),
         runtime("Optional.empty", "java/util/Optional", "empty", "()Ljava/util/Optional;"),
@@ -904,6 +905,9 @@ public final class JdkCallSupport {
         }
         if ("java/nio/file/DirectoryStream".equals(methodRef.owner())) {
             return isSupportedDirectoryStreamCall(methodRef.name(), methodRef.descriptor());
+        }
+        if ("java/lang/Iterable".equals(methodRef.owner())) {
+            return isSupportedIterableCall(methodRef.name(), methodRef.descriptor());
         }
         return false;
     }
@@ -1337,6 +1341,16 @@ public final class JdkCallSupport {
         }
         if ("close".equals(name)) {
             return "()V".equals(descriptor);
+        }
+        return false;
+    }
+
+    private static boolean isSupportedIterableCall(final String name, final String descriptor) {
+        if ("iterator".equals(name)) {
+            return "()Ljava/util/Iterator;".equals(descriptor);
+        }
+        if ("forEach".equals(name)) {
+            return "(Ljava/util/function/Consumer;)V".equals(descriptor);
         }
         return false;
     }
