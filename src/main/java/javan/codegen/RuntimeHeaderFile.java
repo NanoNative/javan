@@ -267,6 +267,7 @@ final class RuntimeHeaderFile {
         void* javan_set_of_singleton(void* value);
         void* javan_set_of_pair(void* left, void* right);
         void* javan_set_of_triple(void* left, void* middle, void* right);
+        void* javan_set_of_quadruple(void* first, void* second, void* third, void* fourth);
         void* javan_set_singleton(void* value);
         void* javan_set_unmodifiable(void* set);
         int javan_set_add(void* set, void* value);

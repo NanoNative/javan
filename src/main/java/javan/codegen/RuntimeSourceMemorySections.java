@@ -7888,6 +7888,39 @@ final class RuntimeSourceMemorySections {
             return set;
         }
 
+        void* javan_set_of_quadruple(void* first, void* second, void* third, void* fourth) {
+            if (first == NULL || second == NULL || third == NULL || fourth == NULL) {
+                javan_panic("null Set.of element");
+            }
+            if (javan_object_equals(first, second) != 0
+                || javan_object_equals(first, third) != 0
+                || javan_object_equals(first, fourth) != 0
+                || javan_object_equals(second, third) != 0
+                || javan_object_equals(second, fourth) != 0
+                || javan_object_equals(third, fourth) != 0) {
+                javan_panic("duplicate Set.of element");
+            }
+            void* first_root = first;
+            void* second_root = second;
+            void* third_root = third;
+            void* fourth_root = fourth;
+            void** javan_set_of_quadruple_roots[] = {
+                (void**) &first_root,
+                (void**) &second_root,
+                (void**) &third_root,
+                (void**) &fourth_root
+            };
+            javan_root_frame_push(javan_set_of_quadruple_roots, 4);
+            javan_object_list* set = (javan_object_list*) javan_hashset_new();
+            javan_set_add(set, first_root);
+            javan_set_add(set, second_root);
+            javan_set_add(set, third_root);
+            javan_set_add(set, fourth_root);
+            set->immutable = 1;
+            javan_root_frame_pop(javan_set_of_quadruple_roots);
+            return set;
+        }
+
         void* javan_set_singleton(void* value) {
             void* value_root = value;
             void** javan_set_singleton_roots[] = {
