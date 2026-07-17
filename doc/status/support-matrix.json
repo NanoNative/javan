@@ -11,8 +11,8 @@
     "rule": "done = supported variants + rejected variants; unknown leftovers must be 0 for a release-gated JDK"
   },
   "counts": {
-    "rows": 271,
-    "pass": 271,
+    "rows": 273,
+    "pass": 273,
     "scoped": 0,
     "target": 0,
     "rejected": 0
@@ -108,6 +108,7 @@
     {"feature": "collection-contains-all", "jdk25": "pass"},
     {"feature": "collection-remove", "jdk25": "pass"},
     {"feature": "collection-clear", "jdk25": "pass"},
+    {"feature": "list-add-all-at", "jdk25": "pass"},
     {"feature": "list-index-of", "jdk25": "pass"},
     {"feature": "list-last-index-of", "jdk25": "pass"},
     {"feature": "list-remove-object", "jdk25": "pass"},
@@ -132,6 +133,7 @@
     {"feature": "arraylist-direct-owner-read-surface", "jdk25": "pass"},
     {"feature": "arraylist-direct-owner-get-first", "jdk25": "pass"},
     {"feature": "arraylist-direct-owner-get-last", "jdk25": "pass"},
+    {"feature": "arraylist-direct-owner-add-all-at", "jdk25": "pass"},
     {"feature": "arraylist-direct-owner-index-of", "jdk25": "pass"},
     {"feature": "arraylist-direct-owner-last-index-of", "jdk25": "pass"},
     {"feature": "arraylist-direct-owner-remove-object", "jdk25": "pass"},

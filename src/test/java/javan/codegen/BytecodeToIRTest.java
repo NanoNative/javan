@@ -20951,6 +20951,34 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersArrayListAddAllAtToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/ArrayList;ILjava/util/Collection;)Z",
+            3,
+            3,
+            plain(0, 42, "aload_0"),
+            plain(1, 27, "iload_1"),
+            plain(2, 44, "aload_2"),
+            invokeVirtual(3, new MethodRef("java/util/ArrayList", "addAll", "(ILjava/util/Collection;)Z")),
+            plain(4, 172, "ireturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.INT, "int0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignInt(
+                "int0",
+                IrExpression.intCall(
+                    "javan_arraylist_add_all_at",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"), IrExpression.objectLocal("arg2"))
+                )
+            ),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
+        );
+    }
+
+    @Test
     void lowersArrayListAddFirstToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -21170,6 +21198,34 @@ final class BytecodeToIRTest {
                 "javan_list_remove",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
             ))
+        );
+    }
+
+    @Test
+    void lowersListAddAllAtToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/List;ILjava/util/Collection;)Z",
+            3,
+            3,
+            plain(0, 42, "aload_0"),
+            plain(1, 27, "iload_1"),
+            plain(2, 44, "aload_2"),
+            invokeVirtual(3, new MethodRef("java/util/List", "addAll", "(ILjava/util/Collection;)Z")),
+            plain(4, 172, "ireturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.INT, "int0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignInt(
+                "int0",
+                IrExpression.intCall(
+                    "javan_arraylist_add_all_at",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.intLocal("arg1"), IrExpression.objectLocal("arg2"))
+                )
+            ),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
         );
     }
 

@@ -891,7 +891,8 @@ public final class JdkCallSupport {
             return true;
         }
         if ("addAll".equals(name)) {
-            return "(Ljava/util/Collection;)Z".equals(descriptor);
+            return "(Ljava/util/Collection;)Z".equals(descriptor)
+                || "(ILjava/util/Collection;)Z".equals(descriptor);
         }
         if ("removeAll".equals(name)) {
             return "(Ljava/util/Collection;)Z".equals(descriptor);
@@ -965,7 +966,8 @@ public final class JdkCallSupport {
             return true;
         }
         if ("addAll".equals(name)) {
-            return "(Ljava/util/Collection;)Z".equals(descriptor);
+            return "(Ljava/util/Collection;)Z".equals(descriptor)
+                || "(ILjava/util/Collection;)Z".equals(descriptor);
         }
         if ("removeAll".equals(name)) {
             return "(Ljava/util/Collection;)Z".equals(descriptor);

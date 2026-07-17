@@ -7654,6 +7654,39 @@ final class RuntimeSourceMemorySections {
             list->mod_count++;
         }
 
+        int javan_arraylist_add_all_at(void* value, int index, void* collection) {
+            javan_object_list* list = javan_list_checked(value);
+            javan_object_list* source = javan_list_checked(collection);
+            javan_list_mutable_checked(list);
+            if (index < 0 || index > list->length) {
+                javan_panic("list index out of bounds");
+            }
+            int copied = source->length;
+            if (copied == 0) {
+                return 0;
+            }
+            void** javan_list_add_all_at_roots[] = {
+                (void**) &list,
+                (void**) &source
+            };
+            javan_root_frame_push(javan_list_add_all_at_roots, 2);
+            javan_list_ensure_capacity(list, list->length + copied);
+            if (index < list->length) {
+                memmove(
+                    list->values + index + copied,
+                    list->values + index,
+                    (unsigned long) (list->length - index) * sizeof(void*)
+                );
+            }
+            for (int source_index = 0; source_index < copied; source_index++) {
+                list->values[index + source_index] = source->values[source_index];
+            }
+            list->length += copied;
+            javan_root_frame_pop(javan_list_add_all_at_roots);
+            list->mod_count++;
+            return 1;
+        }
+
         int javan_arraylist_add_all(void* value, void* collection) {
             javan_object_list* list = javan_list_checked(value);
             javan_object_list* source = javan_list_checked(collection);

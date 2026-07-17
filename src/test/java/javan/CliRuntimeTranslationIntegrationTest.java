@@ -384,6 +384,37 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void listAddAllAtBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("list-add-all-at");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<String> values = new ArrayList<>(List.of("left", "right"));
+                    System.out.println(values.addAll(1, List.of("middle-a", "middle-b")));
+                    System.out.println(values.size());
+                    System.out.println(values.get(1));
+                    System.out.println(values.get(2));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/list-add-all-at").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n4\nmiddle-a\nmiddle-b\n");
+    }
+
+    @Test
     void collectionAddAllBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("collection-add-all");
         writeJava(project, "com.acme.Main", """
@@ -1853,6 +1884,37 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/arraylist-direct-owner-remove-object").toString())).stdout()).isEqualTo(jvmOutput);
         assertThat(jvmOutput).isEqualTo("true\nfalse\n3\nright\n");
+    }
+
+    @Test
+    void arrayListDirectOwnerAddAllAtBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("arraylist-direct-owner-add-all-at");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final ArrayList<String> values = new ArrayList<>(List.of("left", "right"));
+                    System.out.println(values.addAll(1, List.of("middle-a", "middle-b")));
+                    System.out.println(values.size());
+                    System.out.println(values.get(1));
+                    System.out.println(values.get(2));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/arraylist-direct-owner-add-all-at").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n4\nmiddle-a\nmiddle-b\n");
     }
 
     @Test

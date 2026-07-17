@@ -4070,6 +4070,10 @@ final class BytecodeToIRInvokeSupport {
                 instructions.add(IrInstruction.callStaticVoid("javan_arraylist_add_at", List.of(receiver, arguments.get(0), arguments.get(1))));
                 return true;
             }
+            if ("addAll(ILjava/util/Collection;)Z".equals(signature)) {
+                pushIntCall(instructions, stack, localDeclarations, "javan_arraylist_add_all_at", List.of(receiver, arguments.get(0), arguments.get(1)));
+                return true;
+            }
             if ("addAll(Ljava/util/Collection;)Z".equals(signature)) {
                 pushIntCall(instructions, stack, localDeclarations, "javan_arraylist_add_all", List.of(receiver, arguments.getFirst()));
                 return true;
