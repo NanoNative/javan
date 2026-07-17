@@ -76,12 +76,12 @@ final class CompatibilityReportsTest {
         assertThat(summary).contains(
             "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 5, \"leftCallables\": 3, \"coveragePercent\": \"40.0\"}",
             "\"exactJdkCallableAccounting\": {\"supportedCallables\": 2, \"explicitRejectedCallables\": 3, \"doneCallables\": 5, \"unknownCallables\": 0, \"totalCallables\": 5, \"donePercent\": \"100.0\"}",
-            "\"supportRows\": 199",
-            "\"passRows\": 199",
+            "\"supportRows\": 201",
+            "\"passRows\": 201",
             "\"scopedRows\": 0",
             "\"targetRows\": 0",
             "\"rejectedRows\": 0",
-            "\"accountedRows\": 199",
+            "\"accountedRows\": 201",
             "\"unaccountedRows\": 0"
         );
     }
@@ -131,6 +131,8 @@ final class CompatibilityReportsTest {
             "| `set-contains-all` | pass |",
             "| `hashset-collection-constructor` | pass |",
             "| `linkedhashset-collection-constructor` | pass |",
+            "| `hashmap-map-constructor` | pass |",
+            "| `linkedhashmap-map-constructor` | pass |",
             "| `collection-to-array` | pass |",
             "| `list-to-array` | pass |",
             "| `set-to-array` | pass |",
@@ -264,6 +266,8 @@ final class CompatibilityReportsTest {
             "\"feature\": \"set-contains-all\"",
             "\"feature\": \"hashset-collection-constructor\"",
             "\"feature\": \"linkedhashset-collection-constructor\"",
+            "\"feature\": \"hashmap-map-constructor\"",
+            "\"feature\": \"linkedhashmap-map-constructor\"",
             "\"feature\": \"collection-to-array\"",
             "\"feature\": \"list-to-array\"",
             "\"feature\": \"set-to-array\"",

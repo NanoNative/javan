@@ -3528,6 +3528,16 @@ final class BytecodeToIRInvokeSupport {
                 return true;
             }
         }
+        if (("java/util/HashMap".equals(methodRef.owner()) || "java/util/LinkedHashMap".equals(methodRef.owner()))
+            && "<init>".equals(methodRef.name())) {
+            if ("()V".equals(methodRef.descriptor())) {
+                return true;
+            }
+            if ("(Ljava/util/Map;)V".equals(methodRef.descriptor())) {
+                instructions.add(IrInstruction.callStaticVoid("javan_map_put_all", List.of(receiver, arguments.getFirst())));
+                return true;
+            }
+        }
         if (isJdkMapClass(methodRef.owner()) && "<init>".equals(methodRef.name()) && "()V".equals(methodRef.descriptor())) {
             return true;
         }

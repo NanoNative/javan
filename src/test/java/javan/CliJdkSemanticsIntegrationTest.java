@@ -1922,6 +1922,78 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void hashMapMapConstructorBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("hashmap-map-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashMap;
+            import java.util.LinkedHashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, Integer> source = new LinkedHashMap<>();
+                    source.put("a", 1);
+                    source.put("b", 2);
+                    final Map<String, Integer> copy = new HashMap<>(source);
+                    System.out.println(copy.size());
+                    System.out.println(copy.get("a"));
+                    System.out.println(copy.get("b"));
+                    System.out.println(copy.containsKey("a"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/hashmap-map-constructor").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("2\n1\n2\ntrue\n");
+    }
+
+    @Test
+    void linkedHashMapMapConstructorBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("linkedhashmap-map-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.LinkedHashMap;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final LinkedHashMap<String, String> source = new LinkedHashMap<>();
+                    source.put("third", "c");
+                    source.put("first", "a");
+                    source.put("second", "b");
+                    final LinkedHashMap<String, String> copy = new LinkedHashMap<>(source);
+                    final Object[] keys = copy.keySet().toArray();
+                    System.out.println(copy.size());
+                    System.out.println(keys[0]);
+                    System.out.println(keys[1]);
+                    System.out.println(keys[2]);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/linkedhashmap-map-constructor").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("3\nthird\nfirst\nsecond\n");
+    }
+
+    @Test
     void collectionsUnmodifiableListBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("collections-unmodifiable-list");
         writeJava(project, "com.acme.Main", """

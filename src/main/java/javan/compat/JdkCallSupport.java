@@ -503,7 +503,9 @@ public final class JdkCallSupport {
         runtime("Map.Entry.getKey", "java/util/Map$Entry", "getKey", "()Ljava/lang/Object;"),
         runtime("Map.Entry.getValue", "java/util/Map$Entry", "getValue", "()Ljava/lang/Object;"),
         runtime("HashMap.<init>", "java/util/HashMap", "<init>", "()V"),
+        runtime("HashMap.<init>", "java/util/HashMap", "<init>", "(Ljava/util/Map;)V"),
         runtime("LinkedHashMap.<init>", "java/util/LinkedHashMap", "<init>", "()V"),
+        runtime("LinkedHashMap.<init>", "java/util/LinkedHashMap", "<init>", "(Ljava/util/Map;)V"),
         runtime("TreeMap.<init>", "java/util/TreeMap", "<init>", "()V"),
         runtime("ConcurrentHashMap.<init>", "java/util/concurrent/ConcurrentHashMap", "<init>", "()V"),
         runtime("Map.copyOf", "java/util/Map", "copyOf", "(Ljava/util/Map;)Ljava/util/Map;"),
@@ -915,7 +917,7 @@ public final class JdkCallSupport {
 
     private static boolean isSupportedHashMapCall(final String name, final String descriptor) {
         if ("<init>".equals(name)) {
-            return "()V".equals(descriptor);
+            return "()V".equals(descriptor) || "(Ljava/util/Map;)V".equals(descriptor);
         }
         if ("get".equals(name)) {
             return "(Ljava/lang/Object;)Ljava/lang/Object;".equals(descriptor);

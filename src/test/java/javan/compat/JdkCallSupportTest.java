@@ -238,6 +238,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void hashMapMapConstructorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/HashMap",
+            "<init>",
+            "(Ljava/util/Map;)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void linkedHashMapMapConstructorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/LinkedHashMap",
+            "<init>",
+            "(Ljava/util/Map;)V"
+        ))).isTrue();
+    }
+
+    @Test
     void collectionsUnmodifiableSetIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Collections",

@@ -9318,6 +9318,25 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        void javan_map_put_all(void* value, void* source_value) {
+            javan_object_map* map = javan_map_checked(value);
+            javan_object_map* source = javan_map_checked(source_value);
+            javan_map_mutable_checked(map);
+            void** javan_map_put_all_roots[] = {
+                (void**) &map,
+                (void**) &source
+            };
+            javan_root_frame_push(javan_map_put_all_roots, 2);
+            int length = javan_map_logical_length(source);
+            javan_map_ensure_capacity(map, map->length + length);
+            for (int index = 0; index < length; index++) {
+                void* key = javan_map_key_unchecked(source, index);
+                void* element = javan_map_value_unchecked(source, index);
+                javan_map_put(map, key, element);
+            }
+            javan_root_frame_pop(javan_map_put_all_roots);
+        }
+
         void* javan_map_unmodifiable(void* value) {
             javan_object_map* map = javan_map_checked(value);
             if (map->immutable != 0 && map->backing != NULL && (map->view_flags & JAVAN_MAP_VIEW_UNMODIFIABLE) != 0) {
