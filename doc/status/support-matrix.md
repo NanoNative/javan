@@ -9,8 +9,8 @@ External project names do not belong in this matrix; this ledger stays compiler-
 
 | Measure | Count |
 | --- | ---: |
-| rows | 274 |
-| pass | 274 |
+| rows | 286 |
+| pass | 286 |
 | scoped | 0 |
 | target | 0 |
 | rejected | 0 |
@@ -121,15 +121,22 @@ Status mapping:
 | `abstractlist-direct-owner-indexed-surface` | pass |
 | `abstractlist-direct-owner-index-of` | pass |
 | `abstractlist-direct-owner-iterator` | pass |
+| `abstractlist-direct-owner-list-iterator` | pass |
 | `abstractlist-direct-owner-last-index-of` | pass |
 | `list-add-all-at` | pass |
 | `list-index-of` | pass |
 | `list-last-index-of` | pass |
+| `list-list-iterator-at` | pass |
 | `list-remove-object` | pass |
 | `list-remove-at` | pass |
 | `list-remove-all` | pass |
 | `list-retain-all` | pass |
 | `list-contains-all` | pass |
+| `listiterator-previous` | pass |
+| `listiterator-indexes` | pass |
+| `listiterator-set` | pass |
+| `listiterator-add` | pass |
+| `listiterator-remove` | pass |
 | `set-add-all` | pass |
 | `set-remove-all` | pass |
 | `set-retain-all` | pass |

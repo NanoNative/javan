@@ -442,6 +442,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksListListIteratorAtAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/List", "listIterator", "(I)Ljava/util/ListIterator;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksAbstractListAddAtAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/AbstractList", "add", "(ILjava/lang/Object;)V")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
@@ -484,6 +490,18 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksAbstractListListIteratorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/AbstractList", "listIterator", "()Ljava/util/ListIterator;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksAbstractListListIteratorAtAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/AbstractList", "listIterator", "(I)Ljava/util/ListIterator;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksAbstractListLastIndexOfAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/AbstractList", "lastIndexOf", "(Ljava/lang/Object;)I")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
@@ -514,8 +532,32 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksArrayListListIteratorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "listIterator", "()Ljava/util/ListIterator;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksArrayListListIteratorAtAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "listIterator", "(I)Ljava/util/ListIterator;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksArrayListToArrayAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "toArray", "()[Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksListIteratorPreviousAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ListIterator", "previous", "()Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksListIteratorAddAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ListIterator", "add", "(Ljava/lang/Object;)V")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 

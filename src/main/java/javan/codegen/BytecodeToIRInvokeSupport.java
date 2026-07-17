@@ -4122,6 +4122,14 @@ final class BytecodeToIRInvokeSupport {
                 pushObjectCall(instructions, stack, localDeclarations, "javan_arraylist_remove_first", List.of(receiver));
                 return true;
             }
+            if ("listIterator()Ljava/util/ListIterator;".equals(signature)) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_iterator", List.of(receiver))));
+                return true;
+            }
+            if ("listIterator(I)Ljava/util/ListIterator;".equals(signature)) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_iterator_at", List.of(receiver, arguments.getFirst()))));
+                return true;
+            }
         }
         if ("java/util/AbstractList".equals(methodRef.owner())) {
             if ("add(Ljava/lang/Object;)Z".equals(signature)) {
@@ -4150,6 +4158,14 @@ final class BytecodeToIRInvokeSupport {
             }
             if ("iterator()Ljava/util/Iterator;".equals(signature)) {
                 stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_iterator", List.of(receiver))));
+                return true;
+            }
+            if ("listIterator()Ljava/util/ListIterator;".equals(signature)) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_iterator", List.of(receiver))));
+                return true;
+            }
+            if ("listIterator(I)Ljava/util/ListIterator;".equals(signature)) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_iterator_at", List.of(receiver, arguments.getFirst()))));
                 return true;
             }
             if ("lastIndexOf(Ljava/lang/Object;)I".equals(signature)) {
@@ -4212,6 +4228,14 @@ final class BytecodeToIRInvokeSupport {
             }
             if ("iterator()Ljava/util/Iterator;".equals(signature)) {
                 stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_iterator", List.of(receiver))));
+                return true;
+            }
+            if ("listIterator()Ljava/util/ListIterator;".equals(signature)) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_iterator", List.of(receiver))));
+                return true;
+            }
+            if ("listIterator(I)Ljava/util/ListIterator;".equals(signature)) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_iterator_at", List.of(receiver, arguments.getFirst()))));
                 return true;
             }
             if ("toArray()[Ljava/lang/Object;".equals(signature)) {
@@ -4310,6 +4334,44 @@ final class BytecodeToIRInvokeSupport {
             }
             if ("next()Ljava/lang/Object;".equals(signature)) {
                 pushObjectCall(instructions, stack, localDeclarations, "javan_iterator_next", List.of(receiver));
+                return true;
+            }
+        }
+        if ("java/util/ListIterator".equals(methodRef.owner())) {
+            if ("hasNext()Z".equals(signature)) {
+                stack.add(StackValue.intExpression(IrExpression.intCall("javan_iterator_has_next", List.of(receiver))));
+                return true;
+            }
+            if ("next()Ljava/lang/Object;".equals(signature)) {
+                pushObjectCall(instructions, stack, localDeclarations, "javan_iterator_next", List.of(receiver));
+                return true;
+            }
+            if ("hasPrevious()Z".equals(signature)) {
+                stack.add(StackValue.intExpression(IrExpression.intCall("javan_list_iterator_has_previous", List.of(receiver))));
+                return true;
+            }
+            if ("previous()Ljava/lang/Object;".equals(signature)) {
+                pushObjectCall(instructions, stack, localDeclarations, "javan_list_iterator_previous", List.of(receiver));
+                return true;
+            }
+            if ("nextIndex()I".equals(signature)) {
+                stack.add(StackValue.intExpression(IrExpression.intCall("javan_list_iterator_next_index", List.of(receiver))));
+                return true;
+            }
+            if ("previousIndex()I".equals(signature)) {
+                stack.add(StackValue.intExpression(IrExpression.intCall("javan_list_iterator_previous_index", List.of(receiver))));
+                return true;
+            }
+            if ("remove()V".equals(signature)) {
+                instructions.add(IrInstruction.callStaticVoid("javan_list_iterator_remove", List.of(receiver)));
+                return true;
+            }
+            if ("set(Ljava/lang/Object;)V".equals(signature)) {
+                instructions.add(IrInstruction.callStaticVoid("javan_list_iterator_set", List.of(receiver, arguments.getFirst())));
+                return true;
+            }
+            if ("add(Ljava/lang/Object;)V".equals(signature)) {
+                instructions.add(IrInstruction.callStaticVoid("javan_list_iterator_add", List.of(receiver, arguments.getFirst())));
                 return true;
             }
         }
@@ -4543,6 +4605,9 @@ final class BytecodeToIRInvokeSupport {
             return true;
         }
         if ("java/util/Iterator".equals(owner)) {
+            return true;
+        }
+        if ("java/util/ListIterator".equals(owner)) {
             return true;
         }
         if ("java/util/Map$Entry".equals(owner)) {

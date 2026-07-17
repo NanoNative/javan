@@ -3401,6 +3401,232 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void abstractListDirectOwnerListIteratorBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("abstractlist-direct-owner-list-iterator");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.AbstractList;
+            import java.util.ArrayList;
+            import java.util.List;
+            import java.util.ListIterator;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final AbstractList<String> values = new ArrayList<>(List.of("left", "right"));
+                    final ListIterator<String> iterator = values.listIterator();
+                    System.out.println(iterator.next());
+                    System.out.println(iterator.next());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/abstractlist-direct-owner-list-iterator").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("left\nright\n");
+    }
+
+    @Test
+    void listListIteratorAtBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("list-list-iterator-at");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+            import java.util.ListIterator;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<String> values = new ArrayList<>(List.of("left", "middle", "right"));
+                    final ListIterator<String> iterator = values.listIterator(1);
+                    System.out.println(iterator.next());
+                    System.out.println(iterator.next());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/list-list-iterator-at").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("middle\nright\n");
+    }
+
+    @Test
+    void listIteratorPreviousBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("listiterator-previous");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+            import java.util.ListIterator;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<String> values = new ArrayList<>(List.of("left", "middle", "right"));
+                    final ListIterator<String> iterator = values.listIterator(values.size());
+                    System.out.println(iterator.previous());
+                    System.out.println(iterator.previous());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/listiterator-previous").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("right\nmiddle\n");
+    }
+
+    @Test
+    void listIteratorIndexesBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("listiterator-indexes");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+            import java.util.ListIterator;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<String> values = new ArrayList<>(List.of("left", "right"));
+                    final ListIterator<String> iterator = values.listIterator(1);
+                    System.out.println(iterator.previousIndex());
+                    System.out.println(iterator.nextIndex());
+                    System.out.println(iterator.previous());
+                    System.out.println(iterator.previousIndex());
+                    System.out.println(iterator.nextIndex());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/listiterator-indexes").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("0\n1\nleft\n-1\n0\n");
+    }
+
+    @Test
+    void listIteratorSetBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("listiterator-set");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+            import java.util.ListIterator;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<String> values = new ArrayList<>(List.of("left", "right"));
+                    final ListIterator<String> iterator = values.listIterator();
+                    System.out.println(iterator.next());
+                    iterator.set("LEFT");
+                    System.out.println(values.get(0));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/listiterator-set").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("left\nLEFT\n");
+    }
+
+    @Test
+    void listIteratorAddBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("listiterator-add");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+            import java.util.ListIterator;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<String> values = new ArrayList<>(List.of("left", "right"));
+                    final ListIterator<String> iterator = values.listIterator(1);
+                    iterator.add("middle");
+                    System.out.println(values.size());
+                    System.out.println(values.get(1));
+                    System.out.println(iterator.next());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/listiterator-add").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("3\nmiddle\nright\n");
+    }
+
+    @Test
+    void listIteratorRemoveBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("listiterator-remove");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+            import java.util.ListIterator;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<String> values = new ArrayList<>(List.of("left", "middle", "right"));
+                    final ListIterator<String> iterator = values.listIterator(1);
+                    System.out.println(iterator.next());
+                    iterator.remove();
+                    System.out.println(values.size());
+                    System.out.println(values.get(1));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/listiterator-remove").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("middle\n2\nright\n");
+    }
+
+    @Test
     void listOfImmutableAddFailsAtRuntime() throws Exception {
         final Path project = project("list-of-immutable-add");
         writeJava(project, "com.acme.Main", """

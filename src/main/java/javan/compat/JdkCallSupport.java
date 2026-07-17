@@ -457,6 +457,7 @@ public final class JdkCallSupport {
         runtime("ArrayList.addLast", "java/util/ArrayList", "addLast", "(Ljava/lang/Object;)V"),
         runtime("ArrayList.removeFirst", "java/util/ArrayList", "removeFirst", "()Ljava/lang/Object;"),
         runtime("ArrayList.iterator", "java/util/ArrayList", "iterator", "()Ljava/util/Iterator;"),
+        runtime("ArrayList.listIterator", "java/util/ArrayList", "listIterator", "()Ljava/util/ListIterator;", "(I)Ljava/util/ListIterator;"),
         runtime("ArrayList.toArray", "java/util/ArrayList", "toArray", "()[Ljava/lang/Object;"),
         runtime("AbstractList.add", "java/util/AbstractList", "add", "(Ljava/lang/Object;)Z"),
         runtime("AbstractList.add", "java/util/AbstractList", "add", "(ILjava/lang/Object;)V"),
@@ -465,6 +466,7 @@ public final class JdkCallSupport {
         runtime("AbstractList.get", "java/util/AbstractList", "get", "(I)Ljava/lang/Object;"),
         runtime("AbstractList.indexOf", "java/util/AbstractList", "indexOf", "(Ljava/lang/Object;)I"),
         runtime("AbstractList.iterator", "java/util/AbstractList", "iterator", "()Ljava/util/Iterator;"),
+        runtime("AbstractList.listIterator", "java/util/AbstractList", "listIterator", "()Ljava/util/ListIterator;", "(I)Ljava/util/ListIterator;"),
         runtime("AbstractList.lastIndexOf", "java/util/AbstractList", "lastIndexOf", "(Ljava/lang/Object;)I"),
         runtime("AbstractList.size", "java/util/AbstractList", "size", "()I"),
         runtime("AbstractList.remove", "java/util/AbstractList", "remove", "(I)Ljava/lang/Object;"),
@@ -507,6 +509,7 @@ public final class JdkCallSupport {
         runtime("List.containsAll", "java/util/List", "containsAll", "(Ljava/util/Collection;)Z"),
         runtime("List.toArray", "java/util/List", "toArray", "()[Ljava/lang/Object;"),
         runtime("List.indexOf", "java/util/List", "indexOf", "(Ljava/lang/Object;)I"),
+        runtime("List.listIterator", "java/util/List", "listIterator", "()Ljava/util/ListIterator;", "(I)Ljava/util/ListIterator;"),
         runtime("List.lastIndexOf", "java/util/List", "lastIndexOf", "(Ljava/lang/Object;)I"),
         runtime("Collection.size", "java/util/Collection", "size", "()I"),
         runtime("Collection.isEmpty", "java/util/Collection", "isEmpty", "()Z"),
@@ -570,6 +573,15 @@ public final class JdkCallSupport {
         runtime("LinkedHashSet.toArray", "java/util/LinkedHashSet", "toArray", "()[Ljava/lang/Object;"),
         runtime("Iterator.hasNext", "java/util/Iterator", "hasNext", "()Z"),
         runtime("Iterator.next", "java/util/Iterator", "next", "()Ljava/lang/Object;"),
+        runtime("ListIterator.hasNext", "java/util/ListIterator", "hasNext", "()Z"),
+        runtime("ListIterator.next", "java/util/ListIterator", "next", "()Ljava/lang/Object;"),
+        runtime("ListIterator.hasPrevious", "java/util/ListIterator", "hasPrevious", "()Z"),
+        runtime("ListIterator.previous", "java/util/ListIterator", "previous", "()Ljava/lang/Object;"),
+        runtime("ListIterator.nextIndex", "java/util/ListIterator", "nextIndex", "()I"),
+        runtime("ListIterator.previousIndex", "java/util/ListIterator", "previousIndex", "()I"),
+        runtime("ListIterator.remove", "java/util/ListIterator", "remove", "()V"),
+        runtime("ListIterator.set", "java/util/ListIterator", "set", "(Ljava/lang/Object;)V"),
+        runtime("ListIterator.add", "java/util/ListIterator", "add", "(Ljava/lang/Object;)V"),
         runtime("Map.Entry.getKey", "java/util/Map$Entry", "getKey", "()Ljava/lang/Object;"),
         runtime("Map.Entry.getValue", "java/util/Map$Entry", "getValue", "()Ljava/lang/Object;"),
         runtime("HashMap.<init>", "java/util/HashMap", "<init>", "()V"),
@@ -863,6 +875,9 @@ public final class JdkCallSupport {
         if ("java/util/Iterator".equals(methodRef.owner())) {
             return isSupportedIteratorCall(methodRef.name(), methodRef.descriptor());
         }
+        if ("java/util/ListIterator".equals(methodRef.owner())) {
+            return isSupportedListIteratorCall(methodRef.name(), methodRef.descriptor());
+        }
         if ("java/util/Map".equals(methodRef.owner())) {
             return isSupportedMapCall(methodRef.name(), methodRef.descriptor());
         }
@@ -960,6 +975,10 @@ public final class JdkCallSupport {
         if ("iterator".equals(name)) {
             return "()Ljava/util/Iterator;".equals(descriptor);
         }
+        if ("listIterator".equals(name)) {
+            return "()Ljava/util/ListIterator;".equals(descriptor)
+                || "(I)Ljava/util/ListIterator;".equals(descriptor);
+        }
         return false;
     }
 
@@ -1035,6 +1054,10 @@ public final class JdkCallSupport {
         if ("iterator".equals(name)) {
             return "()Ljava/util/Iterator;".equals(descriptor);
         }
+        if ("listIterator".equals(name)) {
+            return "()Ljava/util/ListIterator;".equals(descriptor)
+                || "(I)Ljava/util/ListIterator;".equals(descriptor);
+        }
         if ("toArray".equals(name)) {
             return "()[Ljava/lang/Object;".equals(descriptor);
         }
@@ -1060,6 +1083,10 @@ public final class JdkCallSupport {
         }
         if ("iterator".equals(name)) {
             return "()Ljava/util/Iterator;".equals(descriptor);
+        }
+        if ("listIterator".equals(name)) {
+            return "()Ljava/util/ListIterator;".equals(descriptor)
+                || "(I)Ljava/util/ListIterator;".equals(descriptor);
         }
         if ("lastIndexOf".equals(name)) {
             return "(Ljava/lang/Object;)I".equals(descriptor);
@@ -1122,6 +1149,25 @@ public final class JdkCallSupport {
         }
         if ("next".equals(name)) {
             return "()Ljava/lang/Object;".equals(descriptor);
+        }
+        return false;
+    }
+
+    private static boolean isSupportedListIteratorCall(final String name, final String descriptor) {
+        if ("hasNext".equals(name) || "hasPrevious".equals(name)) {
+            return "()Z".equals(descriptor);
+        }
+        if ("next".equals(name) || "previous".equals(name)) {
+            return "()Ljava/lang/Object;".equals(descriptor);
+        }
+        if ("nextIndex".equals(name) || "previousIndex".equals(name)) {
+            return "()I".equals(descriptor);
+        }
+        if ("remove".equals(name)) {
+            return "()V".equals(descriptor);
+        }
+        if ("set".equals(name) || "add".equals(name)) {
+            return "(Ljava/lang/Object;)V".equals(descriptor);
         }
         return false;
     }
@@ -1699,7 +1745,8 @@ public final class JdkCallSupport {
         if ("java/lang/Iterable".equals(owner)) {
             return true;
         }
-        return "java/util/Iterator".equals(owner);
+        return "java/util/Iterator".equals(owner)
+            || "java/util/ListIterator".equals(owner);
     }
 
     private static boolean isMapRuntimeOwner(final String owner) {

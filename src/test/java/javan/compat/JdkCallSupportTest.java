@@ -520,6 +520,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void abstractListListIteratorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/AbstractList",
+            "listIterator",
+            "()Ljava/util/ListIterator;"
+        ))).isTrue();
+    }
+
+    @Test
+    void abstractListListIteratorAtIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/AbstractList",
+            "listIterator",
+            "(I)Ljava/util/ListIterator;"
+        ))).isTrue();
+    }
+
+    @Test
     void abstractListLastIndexOfIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/AbstractList",
@@ -561,6 +579,24 @@ final class JdkCallSupportTest {
             "java/util/ArrayList",
             "iterator",
             "()Ljava/util/Iterator;"
+        ))).isTrue();
+    }
+
+    @Test
+    void arrayListListIteratorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/ArrayList",
+            "listIterator",
+            "()Ljava/util/ListIterator;"
+        ))).isTrue();
+    }
+
+    @Test
+    void arrayListListIteratorAtIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/ArrayList",
+            "listIterator",
+            "(I)Ljava/util/ListIterator;"
         ))).isTrue();
     }
 
@@ -1846,6 +1882,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void abstractListListIteratorRequiresCollectionsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/AbstractList",
+            "listIterator",
+            "()Ljava/util/ListIterator;"
+        ))).containsExactly("collections");
+    }
+
+    @Test
     void abstractListLastIndexOfRequiresCollectionsRuntimeModule() {
         assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
             "java/util/AbstractList",
@@ -1879,6 +1924,42 @@ final class JdkCallSupportTest {
             "set",
             "(ILjava/lang/Object;)Ljava/lang/Object;"
         ))).containsExactly("collections");
+    }
+
+    @Test
+    void listIteratorPreviousIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/ListIterator",
+            "previous",
+            "()Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void listIteratorAddIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/ListIterator",
+            "add",
+            "(Ljava/lang/Object;)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void listIteratorRequiresCollectionsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/ListIterator",
+            "previous",
+            "()Ljava/lang/Object;"
+        ))).containsExactly("collections");
+    }
+
+    @Test
+    void listListIteratorAtIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/List",
+            "listIterator",
+            "(I)Ljava/util/ListIterator;"
+        ))).isTrue();
     }
 
     @Test

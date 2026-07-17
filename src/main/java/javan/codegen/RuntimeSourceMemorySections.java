@@ -7551,6 +7551,19 @@ final class RuntimeSourceMemorySections {
             return list->mod_count;
         }
 
+        static void javan_list_iterator_index_checked(javan_object_list* list, int index) {
+            int length = javan_list_logical_length(list);
+            if (index < 0 || index > length) {
+                javan_panic("list iterator index out of bounds");
+            }
+        }
+
+        static void javan_list_iterator_state_checked(javan_object_iterator* iterator) {
+            if (iterator->expected_mod_count != javan_list_observed_mod_count(iterator->list)) {
+                javan_panic("concurrent list modification");
+            }
+        }
+
         static void* javan_list_get_unchecked(javan_object_list* list, int index) {
             if (list->backing != NULL) {
                 return javan_list_get_unchecked(list->backing, index);
@@ -8046,21 +8059,26 @@ final class RuntimeSourceMemorySections {
             return javan_list_get_unchecked(list, length - 1);
         }
 
-        void* javan_list_iterator(void* value) {
+        void* javan_list_iterator_at(void* value, int index) {
             javan_object_list* list = javan_list_checked(value);
+            javan_list_iterator_index_checked(list, index);
             void** javan_list_iterator_roots[] = {
                 (void**) &list
             };
             javan_root_frame_push(javan_list_iterator_roots, 1);
             javan_object_iterator* iterator = (javan_object_iterator*) javan_alloc(sizeof(javan_object_iterator));
             iterator->magic = JAVAN_OBJECT_ITERATOR_MAGIC;
-            iterator->index = 0;
+            iterator->index = index;
             iterator->expected_mod_count = javan_list_observed_mod_count(list);
-            iterator->reserved = 0;
+            iterator->reserved = -1;
             iterator->list = list;
             javan_update_runtime_allocation_kind((void*) iterator, JAVAN_RUNTIME_KIND_OBJECT_ITERATOR);
             javan_root_frame_pop(javan_list_iterator_roots);
             return iterator;
+        }
+
+        void* javan_list_iterator(void* value) {
+            return javan_list_iterator_at(value, 0);
         }
 
         int javan_iterator_has_next(void* value) {
@@ -8070,15 +8088,73 @@ final class RuntimeSourceMemorySections {
 
         void* javan_iterator_next(void* value) {
             javan_object_iterator* iterator = javan_iterator_checked(value);
-            if (iterator->expected_mod_count != javan_list_observed_mod_count(iterator->list)) {
-                javan_panic("concurrent list modification");
-            }
+            javan_list_iterator_state_checked(iterator);
             if (iterator->index >= javan_list_logical_length(iterator->list)) {
                 javan_panic("iterator exhausted");
             }
             void* result = javan_list_get_unchecked(iterator->list, iterator->index);
+            iterator->reserved = iterator->index;
             iterator->index++;
             return result;
+        }
+
+        int javan_list_iterator_has_previous(void* value) {
+            javan_object_iterator* iterator = javan_iterator_checked(value);
+            return iterator->index > 0;
+        }
+
+        void* javan_list_iterator_previous(void* value) {
+            javan_object_iterator* iterator = javan_iterator_checked(value);
+            javan_list_iterator_state_checked(iterator);
+            if (iterator->index <= 0) {
+                javan_panic("iterator exhausted");
+            }
+            iterator->index--;
+            iterator->reserved = iterator->index;
+            return javan_list_get_unchecked(iterator->list, iterator->index);
+        }
+
+        int javan_list_iterator_next_index(void* value) {
+            javan_object_iterator* iterator = javan_iterator_checked(value);
+            return iterator->index;
+        }
+
+        int javan_list_iterator_previous_index(void* value) {
+            javan_object_iterator* iterator = javan_iterator_checked(value);
+            return iterator->index - 1;
+        }
+
+        void javan_list_iterator_remove(void* value) {
+            javan_object_iterator* iterator = javan_iterator_checked(value);
+            javan_list_iterator_state_checked(iterator);
+            if (iterator->reserved < 0) {
+                javan_panic("invalid iterator state");
+            }
+            int removed = iterator->reserved;
+            javan_arraylist_remove_at(iterator->list, removed);
+            if (removed < iterator->index) {
+                iterator->index--;
+            }
+            iterator->reserved = -1;
+            iterator->expected_mod_count = javan_list_observed_mod_count(iterator->list);
+        }
+
+        void javan_list_iterator_set(void* value, void* element) {
+            javan_object_iterator* iterator = javan_iterator_checked(value);
+            javan_list_iterator_state_checked(iterator);
+            if (iterator->reserved < 0) {
+                javan_panic("invalid iterator state");
+            }
+            javan_arraylist_set(iterator->list, iterator->reserved, element);
+        }
+
+        void javan_list_iterator_add(void* value, void* element) {
+            javan_object_iterator* iterator = javan_iterator_checked(value);
+            javan_list_iterator_state_checked(iterator);
+            javan_arraylist_add_at(iterator->list, iterator->index, element);
+            iterator->index++;
+            iterator->reserved = -1;
+            iterator->expected_mod_count = javan_list_observed_mod_count(iterator->list);
         }
 
         void* javan_hashset_new(void) {
