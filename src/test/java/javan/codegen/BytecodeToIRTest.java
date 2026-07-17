@@ -1526,6 +1526,71 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersDirectFunctionApplyMaterializedLambdaToDirectLambdaCall() {
+        final EntryPoint entryPoint = new EntryPoint("com/acme/Main", "applyValue", "(Ljava/lang/Object;)Ljava/lang/Object;");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    directFunctionApplyLambdaMethod(),
+                    functionApplyLambdaImplementationMethod()
+                ))
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("applyValue")).singleElement().satisfies(function -> {
+            assertThat(function.locals()).isEmpty();
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.returnObject(IrExpression.objectCall(
+                    symbol("com/acme/Main", "lambda$apply$0", "(Ljava/lang/Object;)Ljava/lang/Object;"),
+                    List.of(IrExpression.objectLocal("arg0"))
+                ))
+            );
+        });
+    }
+
+    @Test
+    void lowersDirectFunctionApplyConcreteImplementationToDirectCall() {
+        final EntryPoint entryPoint = new EntryPoint(
+            "com/acme/Main",
+            "applyValueNonLambda",
+            "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;"
+        );
+        final EntryPoint applyEntry = new EntryPoint("com/acme/Loader", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    directFunctionApplyConcreteMethod()
+                )),
+                "com/acme/Loader",
+                classFile(
+                    "com/acme/Loader",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/util/function/Function"),
+                    List.of(),
+                    List.of(functionApplyImplementationMethod())
+                )
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint, applyEntry), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("applyValueNonLambda")).singleElement().satisfies(function -> {
+            assertThat(function.locals()).isEmpty();
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.returnObject(IrExpression.objectCall(
+                    "javan_com_acme_Loader_apply__Ljava_lang_Object__Ljava_lang_Object_",
+                    List.of(IrExpression.objectLocal("arg1"), IrExpression.objectLocal("arg0"))
+                ))
+            );
+        });
+    }
+
+    @Test
     void rejectsOptionalMapCapturedLambdaWithWrongImplementationArity() {
         assertThatThrownBy(() -> lowerMain(optionalCapturedMapWrongArityLambdaMethod()))
             .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
@@ -26691,6 +26756,55 @@ final class BytecodeToIRTest {
         );
     }
 
+    private static MethodInfo directFunctionApplyLambdaMethod() {
+        return method(
+            0x0008,
+            "applyValue",
+            "(Ljava/lang/Object;)Ljava/lang/Object;",
+            2,
+            1,
+            invokeDynamic(0, new DynamicRef(
+                "apply",
+                "()Ljava/util/function/Function;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "invokestatic com/acme/Main.lambda$apply$0:(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "(Ljava/lang/Object;)Ljava/lang/Object;"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;"),
+                    BootstrapArgument.methodHandle(
+                        6,
+                        new MethodRef("com/acme/Main", "lambda$apply$0", "(Ljava/lang/Object;)Ljava/lang/Object;")
+                    ),
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;")
+                )
+            )),
+            plain(1, 42, "aload_0"),
+            invokeInterface(2, new MethodRef("java/util/function/Function", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;")),
+            plain(7, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo directFunctionApplyConcreteMethod() {
+        return method(
+            0x0008,
+            "applyValueNonLambda",
+            "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;",
+            2,
+            2,
+            plain(0, 43, "aload_1"),
+            plain(1, 42, "aload_0"),
+            invokeInterface(2, new MethodRef("java/util/function/Function", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;")),
+            plain(7, 176, "areturn")
+        );
+    }
+
     private static MethodInfo optionalOrElseGetLambdaMethod() {
         return method(
             0x0008,
@@ -27038,6 +27152,18 @@ final class BytecodeToIRTest {
         return method(
             0x0008,
             "lambda$map$0",
+            "(Ljava/lang/Object;)Ljava/lang/Object;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            plain(1, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo functionApplyLambdaImplementationMethod() {
+        return method(
+            0x0008,
+            "lambda$apply$0",
             "(Ljava/lang/Object;)Ljava/lang/Object;",
             1,
             1,

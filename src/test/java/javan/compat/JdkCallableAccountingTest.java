@@ -1840,9 +1840,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksFunctionApplyAsExplicitRejected() {
+    void marksFunctionApplyAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/function/Function", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;")))
-            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
     @Test

@@ -1910,6 +1910,101 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void reachabilityAcceptsFunctionApplyDirectConcreteImplementation() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo(
+                        "apply",
+                        "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;",
+                        instruction(0, 43, "aload_1"),
+                        instruction(1, 42, "aload_0"),
+                        instruction(2, 185, "invokeinterface", new MethodRef(
+                            "java/util/function/Function",
+                            "apply",
+                            "(Ljava/lang/Object;)Ljava/lang/Object;"
+                        )),
+                        instruction(7, 176, "areturn")
+                    )
+                ),
+                "com/acme/Loader", classWithMethods(
+                    "com/acme/Loader",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/util/function/Function"),
+                    methodInfo(
+                        "apply",
+                        "(Ljava/lang/Object;)Ljava/lang/Object;",
+                        instruction(0, 42, "aload_0"),
+                        instruction(1, 176, "areturn")
+                    )
+                )
+            ),
+            List.of(new EntryPoint("com/acme/Main", "apply", "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+    }
+
+    @Test
+    void reachabilityAcceptsFunctionApplyDirectLambda() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of("com/acme/Main", classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                methodInfo(
+                    "apply",
+                    "(Ljava/lang/Object;)Ljava/lang/Object;",
+                    invokeDynamicInstruction(0, new DynamicRef(
+                        "apply",
+                        "()Ljava/util/function/Function;",
+                        "java/lang/invoke/LambdaMetafactory",
+                        "metafactory",
+                        "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                            + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                            + "Ljava/lang/invoke/CallSite;",
+                        List.of(
+                            "(Ljava/lang/Object;)Ljava/lang/Object;",
+                            "invokestatic com/acme/Main.lambda$apply$0:(Ljava/lang/Object;)Ljava/lang/Object;",
+                            "(Ljava/lang/Object;)Ljava/lang/Object;"
+                        ),
+                        List.of(
+                            BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;"),
+                            BootstrapArgument.methodHandle(
+                                6,
+                                new MethodRef("com/acme/Main", "lambda$apply$0", "(Ljava/lang/Object;)Ljava/lang/Object;")
+                            ),
+                            BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;")
+                        )
+                    )),
+                    instruction(1, 42, "aload_0"),
+                    instruction(2, 185, "invokeinterface", new MethodRef(
+                        "java/util/function/Function",
+                        "apply",
+                        "(Ljava/lang/Object;)Ljava/lang/Object;"
+                    )),
+                    instruction(7, 176, "areturn")
+                ),
+                methodInfo(
+                    "lambda$apply$0",
+                    "(Ljava/lang/Object;)Ljava/lang/Object;",
+                    instruction(0, 42, "aload_0"),
+                    instruction(1, 176, "areturn")
+                )
+            )),
+            List.of(new EntryPoint("com/acme/Main", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+    }
+
+    @Test
     void reachabilityResolvesSpecialNonConstructorCall() {
         final CallGraph graph = new ReachabilityAnalyzer().analyze(
             Map.of(

@@ -479,6 +479,26 @@ public final class ReachabilityAnalyzer {
             ));
             return;
         }
+        if (instruction.opcode() == 185 && isFunctionApply(target)) {
+            final List<EntryPoint> targetMethods = interfaceTargets(classes, target, entryPoints);
+            if (!targetMethods.isEmpty()) {
+                enqueueAll(work, workSet, targetMethods);
+                addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
+            }
+            if (containsMethodRef(materializedLambdaMethods, target) || !targetMethods.isEmpty()) {
+                return;
+            }
+            diagnostics.add(Diagnostic.error(
+                "JAVAN012",
+                "unsupported reachable application method call",
+                current.className(),
+                current.methodName() + current.descriptor(),
+                target.display(),
+                "Function.apply requires either a closed-world Function implementation class or a supported materialized Function lambda target.",
+                "Provide a reachable Function implementation class or keep this exact function dispatch on the JVM until broader receiver support lands."
+            ));
+            return;
+        }
         if (instruction.opcode() == 185 && isBiFunctionApply(target)) {
             final List<EntryPoint> targetMethods = interfaceTargets(classes, target, entryPoints);
             if (!targetMethods.isEmpty()) {
@@ -770,6 +790,12 @@ public final class ReachabilityAnalyzer {
         return "java/util/function/BiFunction".equals(target.owner())
             && "apply".equals(target.name())
             && "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(target.descriptor());
+    }
+
+    private static boolean isFunctionApply(final MethodRef target) {
+        return "java/util/function/Function".equals(target.owner())
+            && "apply".equals(target.name())
+            && "(Ljava/lang/Object;)Ljava/lang/Object;".equals(target.descriptor());
     }
 
     private static boolean isMapComputeIfAbsent(final MethodRef target) {

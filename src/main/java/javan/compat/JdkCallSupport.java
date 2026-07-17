@@ -855,6 +855,7 @@ public final class JdkCallSupport {
         runtime("Optional.orElseGet", "java/util/Optional", "orElseGet", "(Ljava/util/function/Supplier;)Ljava/lang/Object;"),
         runtime("Optional.orElseThrow", "java/util/Optional", "orElseThrow", "()Ljava/lang/Object;"),
         runtime("Supplier.get", "java/util/function/Supplier", "get", "()Ljava/lang/Object;"),
+        runtime("Function.apply", "java/util/function/Function", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Consumer.accept", "java/util/function/Consumer", "accept", "(Ljava/lang/Object;)V"),
         runtime("BiConsumer.accept", "java/util/function/BiConsumer", "accept", "(Ljava/lang/Object;Ljava/lang/Object;)V"),
         runtime("BiFunction.apply", "java/util/function/BiFunction", "apply", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),

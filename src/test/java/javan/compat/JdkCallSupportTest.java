@@ -205,6 +205,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void functionApplyIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/function/Function",
+            "apply",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
     void collectionsEmptyListIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Collections",

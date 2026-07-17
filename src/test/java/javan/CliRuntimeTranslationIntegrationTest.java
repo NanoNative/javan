@@ -4213,6 +4213,72 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void functionApplyConcreteImplementationBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("function-apply-concrete");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Function<Object, Object> function = new Loader();
+                    System.out.println(function.apply("value"));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Loader", """
+            package com.acme;
+
+            import java.util.function.Function;
+
+            public final class Loader implements Function<Object, Object> {
+                @Override
+                public Object apply(final Object value) {
+                    return value + "-native";
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/function-apply-concrete").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("value-native\n");
+    }
+
+    @Test
+    void functionApplyZeroCaptureLambdaBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("function-apply-lambda");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Function<String, String> function = value -> value + "-lambda";
+                    System.out.println(function.apply("value"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/function-apply-lambda").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("value-lambda\n");
+    }
+
+    @Test
     void mapComputeIfPresentConcreteImplementationBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("map-compute-if-present-concrete");
         writeJava(project, "com.acme.Main", """

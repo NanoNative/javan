@@ -7476,6 +7476,10 @@ final class BytecodeToIRInvokeSupport {
         if (lowerJdkCollectionInstanceCall(classes, classFile, method, instruction, dispatches, materializedLambdaMethods, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
+        if (isFunctionApply(methodRef) && hasFunctionLambdaReceiverOnStack(stack)) {
+            lowerFunctionApplyLambdaCall(classFile, method, instruction, stack);
+            return;
+        }
         final List<EntryPoint> targets = interfaceTargets(classes, methodRef);
         if (targets.size() > 1) {
             lowerDispatchCall(classFile, method, instruction, instructions, stack, dispatches, methodRef, targets);
@@ -7522,6 +7526,17 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         throw unsupported(classFile, method, instruction);
+    }
+
+    private static void lowerFunctionApplyLambdaCall(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<StackValue> stack
+    ) {
+        final IrExpression argument = popObject(classFile, method, stack);
+        final DynamicLambda lambda = popDynamicLambda(classFile, method, instruction, stack, StackKind.LAMBDA_FUNCTION, "function lambda");
+        stack.add(StackValue.objectExpression(invokeFunctionLambdaExpression(lambda, argument)));
     }
 
     private static boolean lowerVirtualThreadBuilderInterfaceCall(
@@ -8556,6 +8571,16 @@ final class BytecodeToIRInvokeSupport {
 
     private static boolean hasTopStackKind(final List<StackValue> stack, final StackKind expected) {
         return !stack.isEmpty() && stack.getLast().kind() == expected;
+    }
+
+    private static boolean hasFunctionLambdaReceiverOnStack(final List<StackValue> stack) {
+        return stack.size() >= 2 && stack.get(stack.size() - 2).kind() == StackKind.LAMBDA_FUNCTION;
+    }
+
+    private static boolean isFunctionApply(final MethodRef methodRef) {
+        return "java/util/function/Function".equals(methodRef.owner())
+            && "apply".equals(methodRef.name())
+            && "(Ljava/lang/Object;)Ljava/lang/Object;".equals(methodRef.descriptor());
     }
 
     private static DynamicLambda popDynamicLambda(
