@@ -462,7 +462,6 @@ jobs:
           CC: ${{ steps.msys2.outputs.msys2-location }}\\mingw64\\bin\\gcc.exe
         run: >-
           mvn -q
-          ${{ env.JAVAN_JUNIT_PARALLEL_ARGS }}
           '-Dtest=${{ matrix.test-selector }}'
           test
 

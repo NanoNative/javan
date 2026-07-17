@@ -511,6 +511,7 @@ public final class ReachabilityAnalyzer {
         final LambdaMetafactoryCall resolved = lambdaCall.orElseThrow();
         if (resolved.isZeroCaptureMaterializedObjectLambda()
             || resolved.isZeroCaptureMaterializedBooleanLambda()
+            || resolved.isMaterializedBiFunctionLambda()
             || resolved.isMaterializedVoidLambda()) {
             final MethodRef interfaceMethod = new MethodRef(
                 resolved.interfaceOwner(),
@@ -524,6 +525,7 @@ public final class ReachabilityAnalyzer {
         if (!resolved.isDirectlyLowerable()
             && !resolved.isZeroCaptureMaterializedObjectLambda()
             && !resolved.isZeroCaptureMaterializedBooleanLambda()
+            && !resolved.isMaterializedBiFunctionLambda()
             && !resolved.isMaterializedVoidLambda()) {
             return;
         }

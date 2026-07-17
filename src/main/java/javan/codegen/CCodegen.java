@@ -24,6 +24,7 @@ import java.util.List;
 public final class CCodegen {
     private static final String RUNNABLE_RUN_DISPATCH_SYMBOL = BytecodeToIR.dispatchSymbol(new MethodRef("java/lang/Runnable", "run", "()V"));
     private static final String MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL = "javan_materialized_lambda_apply_object";
+    private static final String MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL = "javan_materialized_lambda_apply_object2";
     private static final String MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL = "javan_materialized_lambda_apply_boolean";
     private static final String MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL = "javan_materialized_lambda_apply_void";
     private static final String MATERIALIZED_LAMBDA_VOID2_APPLY_SYMBOL = "javan_materialized_lambda_apply_void2";
@@ -92,6 +93,7 @@ public final class CCodegen {
         c.append("void javan_thread_run_target(void* target);").append(System.lineSeparator());
         if (!program.materializedLambdaTargets().isEmpty()) {
             c.append("static void* ").append(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
+            c.append("static void* ").append(MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL).append("(void* self, void* first_arg, void* second_arg);").append(System.lineSeparator());
             c.append("static int ").append(MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
             c.append("static void ").append(MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
             c.append("static void ").append(MATERIALIZED_LAMBDA_VOID2_APPLY_SYMBOL).append("(void* self, void* first_arg, void* second_arg);").append(System.lineSeparator());
@@ -168,6 +170,7 @@ public final class CCodegen {
         c.append("void javan_thread_run_target(void* target);").append(System.lineSeparator());
         if (!program.materializedLambdaTargets().isEmpty()) {
             c.append("static void* ").append(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
+            c.append("static void* ").append(MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL).append("(void* self, void* first_arg, void* second_arg);").append(System.lineSeparator());
             c.append("static int ").append(MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
             c.append("static void ").append(MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
             c.append("static void ").append(MATERIALIZED_LAMBDA_VOID2_APPLY_SYMBOL).append("(void* self, void* first_arg, void* second_arg);").append(System.lineSeparator());
@@ -729,6 +732,25 @@ public final class CCodegen {
             c.append(";").append(System.lineSeparator());
         }
         c.append("        default: javan_panic(\"unsupported materialized object lambda target\");").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        c.append("    return 0;").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+
+        c.append("static void* ").append(MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL).append("(void* self, void* first_arg, void* second_arg) {")
+            .append(System.lineSeparator());
+        c.append("    switch (javan_materialized_lambda_target_id(self)) {").append(System.lineSeparator());
+        for (final IrMaterializedLambdaTarget target : program.materializedLambdaTargets()) {
+            if (target.booleanResult() || target.voidResult()) {
+                continue;
+            }
+            if (materializedLambdaArity(target) != 2) {
+                continue;
+            }
+            c.append("        case ").append(target.targetId()).append(": return ");
+            emitMaterializedLambdaInvocation(c, target, "self", List.of("first_arg", "second_arg"));
+            c.append(";").append(System.lineSeparator());
+        }
+        c.append("        default: javan_panic(\"unsupported materialized two-argument object lambda target\");").append(System.lineSeparator());
         c.append("    }").append(System.lineSeparator());
         c.append("    return 0;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());

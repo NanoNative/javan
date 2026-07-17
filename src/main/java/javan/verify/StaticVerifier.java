@@ -2861,6 +2861,7 @@ public final class StaticVerifier {
             && (lambdaCall.orElseThrow().isDirectlyLowerable()
             || lambdaCall.orElseThrow().isZeroCaptureMaterializedObjectLambda()
             || lambdaCall.orElseThrow().isZeroCaptureMaterializedBooleanLambda()
+            || lambdaCall.orElseThrow().isMaterializedBiFunctionLambda()
             || lambdaCall.orElseThrow().isMaterializedVoidLambda());
     }
 

@@ -7722,6 +7722,7 @@ final class BytecodeToIRInvokeSupport {
                 final LambdaMetafactoryCall resolved = lambdaCall.orElseThrow();
                 if (!resolved.isZeroCaptureMaterializedObjectLambda()
                     && !resolved.isZeroCaptureMaterializedBooleanLambda()
+                    && !resolved.isMaterializedBiFunctionLambda()
                     && !resolved.isMaterializedVoidLambda()) {
                     continue;
                 }
@@ -7821,6 +7822,7 @@ final class BytecodeToIRInvokeSupport {
         final MethodRef implementation = resolved.implementation();
         if (resolved.isZeroCaptureMaterializedObjectLambda()
             || resolved.isZeroCaptureMaterializedBooleanLambda()
+            || resolved.isMaterializedBiFunctionLambda()
             || resolved.isMaterializedVoidLambda()) {
             final Integer targetId = materializedLambdaTargetIds.get(materializedLambdaKey(resolved));
             if (targetId == null) {

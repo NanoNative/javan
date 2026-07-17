@@ -65,6 +65,7 @@ public record LambdaMetafactoryCall(
             return Optional.empty();
         }
         if (!"Ljava/util/function/Function;".equals(returnDescriptor.orElseThrow())
+            && !"Ljava/util/function/BiFunction;".equals(returnDescriptor.orElseThrow())
             && !"Ljava/util/function/Predicate;".equals(returnDescriptor.orElseThrow())
             && !"Ljava/util/function/Consumer;".equals(returnDescriptor.orElseThrow())
             && !"Ljava/util/function/BiConsumer;".equals(returnDescriptor.orElseThrow())
@@ -77,6 +78,7 @@ public record LambdaMetafactoryCall(
         }
         final String interfaceOwner = objectOwner(returnDescriptor.orElseThrow()).orElse("");
         if (!"java/util/function/Function".equals(interfaceOwner)
+            && !"java/util/function/BiFunction".equals(interfaceOwner)
             && !"java/util/function/Predicate".equals(interfaceOwner)
             && !"java/util/function/Consumer".equals(interfaceOwner)
             && !"java/util/function/BiConsumer".equals(interfaceOwner)
@@ -107,6 +109,20 @@ public record LambdaMetafactoryCall(
         return singleObjectInput(instantiatedMethodDescriptor)
             && objectReturn(instantiatedMethodDescriptor)
             && "(Ljava/lang/Object;)Ljava/lang/Object;".equals(samMethodDescriptor);
+    }
+
+    /**
+     * Returns whether this is a supported {@code java.util.function.BiFunction} shape.
+     *
+     * @return true when the lambda is a direct two-argument object-return function
+     */
+    public boolean isBiFunction() {
+        if (!"java/util/function/BiFunction".equals(interfaceOwner) || !"apply".equals(interfaceMethodName)) {
+            return false;
+        }
+        return objectInputs(instantiatedMethodDescriptor, 2)
+            && objectReturn(instantiatedMethodDescriptor)
+            && "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(samMethodDescriptor);
     }
 
     /**
@@ -220,6 +236,26 @@ public record LambdaMetafactoryCall(
     }
 
     /**
+     * Returns whether this is a materializable {@code BiFunction} lambda with object captures only.
+     *
+     * @return true when the current runtime can materialize the bi-function as a lambda object
+     */
+    public boolean isMaterializedBiFunctionLambda() {
+        if (!isBiFunction()) {
+            return false;
+        }
+        if (implementationReferenceKind != 6) {
+            return false;
+        }
+        for (final String capture : capturedParameterDescriptors) {
+            if (!capture.startsWith("L") && !capture.startsWith("[")) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * Returns whether this is a materializable void-return lambda with object captures only.
      *
      * @return true when the current runtime can materialize the callable as a lambda object
@@ -264,7 +300,8 @@ public record LambdaMetafactoryCall(
         if (!capturedParameterDescriptors.isEmpty()) {
             return false;
         }
-        return singleObjectInput(instantiatedMethodDescriptor) && objectReturn(instantiatedMethodDescriptor);
+        return (singleObjectInput(instantiatedMethodDescriptor) || objectInputs(instantiatedMethodDescriptor, 2))
+            && objectReturn(instantiatedMethodDescriptor);
     }
 
     /**

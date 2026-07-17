@@ -231,6 +231,23 @@ final class LambdaMetafactoryCallTest {
     }
 
     @Test
+    void resolveAcceptsZeroCaptureBiFunctionAsMaterializedLambda() {
+        final LambdaMetafactoryCall resolved = LambdaMetafactoryCall.resolve(dynamicRef(
+            "apply",
+            "()Ljava/util/function/BiFunction;",
+            "java/lang/invoke/LambdaMetafactory",
+            "metafactory",
+            List.of(
+                BootstrapArgument.methodType("(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+                BootstrapArgument.methodHandle(6, new MethodRef("com/acme/Main", "lambda$0", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")),
+                BootstrapArgument.methodType("(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")
+            )
+        )).orElseThrow();
+
+        assertThat(resolved.isMaterializedBiFunctionLambda()).isTrue();
+    }
+
+    @Test
     void directlyLowerableAcceptsInterfacePredicateReferenceKindNine() {
         final LambdaMetafactoryCall resolved = LambdaMetafactoryCall.resolve(dynamicRef(
             "test",
