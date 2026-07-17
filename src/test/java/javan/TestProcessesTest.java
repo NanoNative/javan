@@ -62,4 +62,18 @@ final class TestProcessesTest {
         assertThat(result.exitCode()).isZero();
         assertThat(result.stderr()).isEqualTo("bad\n");
     }
+
+    @Test
+    void bareShStillRunsWhenPathIsMissing() {
+        final TestProcesses.Result result = TestProcesses.run(
+            Path.of("").toAbsolutePath(),
+            java.util.List.of("sh", "-c", "printf 'portable\\n'"),
+            Duration.ofSeconds(2),
+            java.util.Map.of("PATH", "")
+        );
+
+        assertThat(result.exitCode()).isZero();
+        assertThat(result.stdout()).isEqualTo("portable\n");
+        assertThat(result.stderr()).isEmpty();
+    }
 }

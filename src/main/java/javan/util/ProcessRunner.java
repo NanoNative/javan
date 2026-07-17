@@ -88,7 +88,7 @@ public class ProcessRunner {
      * @throws InterruptedException when interrupted while waiting
      */
     public boolean commandExists(final String executable) throws IOException, InterruptedException {
-        final Result result = run(Path.of("").toAbsolutePath(), List.of("sh", "-c", "command -v " + executable));
+        final Result result = run(Path.of("").toAbsolutePath(), List.of(posixShell(), "-c", "command -v " + executable));
         if (result.exitCode() == 0) {
             return true;
         }
@@ -113,6 +113,14 @@ public class ProcessRunner {
             }
         }
         return Optional.empty();
+    }
+
+    private static String posixShell() {
+        final Path shell = Path.of("/bin/sh");
+        if (Files.isExecutable(shell)) {
+            return shell.toString();
+        }
+        return "sh";
     }
 
     private static String commandLine(final List<String> command) {
