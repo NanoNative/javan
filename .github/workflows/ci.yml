@@ -2,6 +2,8 @@ name: CI
 
 on:
   pull_request:
+    branches:
+      - main
     types:
       - opened
       - reopened
@@ -21,7 +23,7 @@ env:
 jobs:
   verify-core:
     name: verify-core (${{ matrix.target }})
-    if: "${{ github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore: release ') }}"
+    if: "${{ github.event_name != 'push' || !(startsWith(github.event.head_commit.message, 'chore: release ') || startsWith(github.event.head_commit.message, 'chore: prepare binary release repo')) }}"
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     strategy:
@@ -160,10 +162,21 @@ jobs:
             target/jacoco-merged.exec
 
   verify-cli-integration:
-    name: verify-cli-integration
-    if: "${{ github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore: release ') }}"
+    name: verify-cli-integration (${{ matrix.shard }})
+    if: "${{ github.event_name != 'push' || !(startsWith(github.event.head_commit.message, 'chore: release ') || startsWith(github.event.head_commit.message, 'chore: prepare binary release repo')) }}"
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - shard: cli-core
+            test-selector: >-
+              Cli*IntegrationTest,!CliExternalProbeAcceptanceIntegrationTest,!CliPackagingIntegrationTest
+          - shard: packaging-and-probes
+            test-selector: >-
+              CliExternalProbeAcceptanceIntegrationTest,CliPackagingIntegrationTest
 
     steps:
       - name: Checkout
@@ -215,7 +228,7 @@ jobs:
       - name: Verify CLI integration Maven suite
         run: |
           status=0
-          mvn -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -Dtest='Cli*IntegrationTest,CliExternalProbeAcceptanceIntegrationTest' -Djavan.coverage.check.skip=true verify || status=$?
+          mvn -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -Dtest='${{ matrix.test-selector }}' -Djavan.coverage.check.skip=true verify || status=$?
 
           if [ -f target/jacoco-surefire.exec ] || [ -d target/jacoco-child ]; then
             mvn -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -DskipTests -Djavan.coverage.check.skip=true jacoco:merge@merge-coverage jacoco:report@report || true
@@ -280,7 +293,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v5
         with:
-          name: jacoco-cli-integration
+          name: jacoco-cli-integration-${{ matrix.shard }}
           retention-days: 7
           if-no-files-found: warn
           path: |
@@ -289,7 +302,7 @@ jobs:
 
   native-smoke:
     name: native-smoke (${{ matrix.target }})
-    if: "${{ github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore: release ') }}"
+    if: "${{ github.event_name != 'push' || !(startsWith(github.event.head_commit.message, 'chore: release ') || startsWith(github.event.head_commit.message, 'chore: prepare binary release repo')) }}"
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     strategy:
@@ -381,7 +394,7 @@ jobs:
 
   windows-runtime-smoke:
     name: windows-runtime-smoke (${{ matrix.shard }})
-    if: "${{ github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore: release ') }}"
+    if: "${{ github.event_name != 'push' || !(startsWith(github.event.head_commit.message, 'chore: release ') || startsWith(github.event.head_commit.message, 'chore: prepare binary release repo')) }}"
     runs-on: windows-latest
     timeout-minutes: 30
     strategy:
@@ -442,7 +455,7 @@ jobs:
 
   release:
     name: release
-    if: "${{ github.event_name == 'push' && github.ref_name == 'main' && !startsWith(github.event.head_commit.message, 'chore: release ') }}"
+    if: "${{ github.event_name == 'push' && github.ref_name == 'main' && !(startsWith(github.event.head_commit.message, 'chore: release ') || startsWith(github.event.head_commit.message, 'chore: prepare binary release repo')) }}"
     needs:
       - verify-core
       - verify-cli-integration

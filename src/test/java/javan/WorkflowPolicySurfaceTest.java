@@ -49,13 +49,16 @@ final class WorkflowPolicySurfaceTest {
         assertThat(Files.readString(CI_WORKFLOW))
             .contains("JAVAN_COVERAGE_SOFT_TARGET: \"0.09\"")
             .contains("-Dtest='!Cli*IntegrationTest,!CliExternalProbeAcceptanceIntegrationTest' -Djavan.coverage.check.skip=true verify")
-            .contains("-Dtest='Cli*IntegrationTest,CliExternalProbeAcceptanceIntegrationTest' -Djavan.coverage.check.skip=true verify")
+            .contains("name: verify-cli-integration (${{ matrix.shard }})")
+            .contains("Cli*IntegrationTest,!CliExternalProbeAcceptanceIntegrationTest,!CliPackagingIntegrationTest")
+            .contains("CliExternalProbeAcceptanceIntegrationTest,CliPackagingIntegrationTest")
+            .contains("-Dtest='${{ matrix.test-selector }}' -Djavan.coverage.check.skip=true verify")
             .contains("Summarize coverage (non-blocking)")
             .contains("Soft target: {target_ratio:.0%} (signal only, not a workflow gate)")
             .contains("| Counter | Covered | Total | Ratio | Status |")
             .contains("Upload coverage artifact")
             .contains("name: jacoco-core-${{ matrix.target }}")
-            .contains("name: jacoco-cli-integration")
+            .contains("name: jacoco-cli-integration-${{ matrix.shard }}")
             .contains("::warning::JaCoCo");
     }
 
@@ -71,6 +74,7 @@ final class WorkflowPolicySurfaceTest {
     void ciWorkflowKeepsMacOsX64Disabled() throws Exception {
         assertThat(Files.readString(CI_WORKFLOW))
             .contains("branches:\n      - main")
+            .contains("pull_request:\n    branches:\n      - main")
             .contains("target: linux-x64")
             .contains("target: linux-aarch64")
             .contains("target: macos-aarch64")
@@ -82,11 +86,17 @@ final class WorkflowPolicySurfaceTest {
     @Test
     void ciWorkflowSkipsReleaseMetadataPushesBeforeHeavyJobsStart() throws Exception {
         assertThat(Files.readString(CI_WORKFLOW))
-            .contains("if: \"${{ github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore: release ') }}\"")
+            .contains("if: \"${{ github.event_name != 'push' || !(startsWith(github.event.head_commit.message, 'chore: release ') || startsWith(github.event.head_commit.message, 'chore: prepare binary release repo')) }}\"")
             .contains("name: verify-core (${{ matrix.target }})")
-            .contains("name: verify-cli-integration")
+            .contains("name: verify-cli-integration (${{ matrix.shard }})")
             .contains("name: native-smoke (${{ matrix.target }})")
             .contains("name: windows-runtime-smoke (${{ matrix.shard }})");
+    }
+
+    @Test
+    void releaseWorkflowSkipsReleasePrepPushes() throws Exception {
+        assertThat(Files.readString(CI_WORKFLOW))
+            .contains("if: \"${{ github.event_name == 'push' && github.ref_name == 'main' && !(startsWith(github.event.head_commit.message, 'chore: release ') || startsWith(github.event.head_commit.message, 'chore: prepare binary release repo')) }}\"");
     }
 
     @Test
