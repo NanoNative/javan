@@ -514,6 +514,7 @@ public final class JdkCallSupport {
         runtime("TreeMap.<init>", "java/util/TreeMap", "<init>", "()V"),
         runtime("ConcurrentHashMap.<init>", "java/util/concurrent/ConcurrentHashMap", "<init>", "()V"),
         runtime("ConcurrentHashMap.<init>", "java/util/concurrent/ConcurrentHashMap", "<init>", "(I)V"),
+        runtime("ConcurrentHashMap.<init>", "java/util/concurrent/ConcurrentHashMap", "<init>", "(Ljava/util/Map;)V"),
         runtime("ConcurrentHashMap.<init>", "java/util/concurrent/ConcurrentHashMap", "<init>", "(IF)V"),
         runtime("ConcurrentHashMap.<init>", "java/util/concurrent/ConcurrentHashMap", "<init>", "(IFI)V"),
         runtime("Map.copyOf", "java/util/Map", "copyOf", "(Ljava/util/Map;)Ljava/util/Map;"),
@@ -997,6 +998,7 @@ public final class JdkCallSupport {
         if ("<init>".equals(name)) {
             return "()V".equals(descriptor)
                 || "(I)V".equals(descriptor)
+                || "(Ljava/util/Map;)V".equals(descriptor)
                 || "(IF)V".equals(descriptor)
                 || "(IFI)V".equals(descriptor);
         }

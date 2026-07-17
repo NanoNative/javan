@@ -3562,6 +3562,12 @@ final class BytecodeToIRInvokeSupport {
         }
         if ("java/util/concurrent/ConcurrentHashMap".equals(methodRef.owner())
             && "<init>".equals(methodRef.name())
+            && "(Ljava/util/Map;)V".equals(methodRef.descriptor())) {
+            instructions.add(IrInstruction.callStaticVoid("javan_map_put_all", List.of(receiver, arguments.getFirst())));
+            return true;
+        }
+        if ("java/util/concurrent/ConcurrentHashMap".equals(methodRef.owner())
+            && "<init>".equals(methodRef.name())
             && "(IF)V".equals(methodRef.descriptor())) {
             instructions.add(IrInstruction.callStaticVoid(
                 "javan_map_initialize_capacity_with_load_factor",

@@ -328,6 +328,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksConcurrentHashMapMapConstructorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/ConcurrentHashMap", "<init>", "(Ljava/util/Map;)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksHashMapLoadFactorConstructorAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/HashMap", "<init>", "(IF)V")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

@@ -1994,6 +1994,42 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void concurrentHashMapMapConstructorBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("concurrenthashmap-map-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.LinkedHashMap;
+            import java.util.Map;
+            import java.util.concurrent.ConcurrentHashMap;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, Integer> source = new LinkedHashMap<>();
+                    source.put("a", 1);
+                    source.put("b", 2);
+                    final ConcurrentHashMap<String, Integer> copy = new ConcurrentHashMap<>(source);
+                    System.out.println(copy.size());
+                    System.out.println(copy.get("a"));
+                    System.out.println(copy.get("b"));
+                    System.out.println(copy.containsKey("a"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/concurrenthashmap-map-constructor").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("2\n1\n2\ntrue\n");
+    }
+
+    @Test
     void hashMapLoadFactorConstructorRejectsZeroLoadFactorAtRuntime() throws Exception {
         assertMapConstructorFailureAtRuntime(
             "hashmap-load-factor-constructor-zero-load-factor",

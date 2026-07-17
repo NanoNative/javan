@@ -583,6 +583,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void concurrentHashMapMapConstructorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/ConcurrentHashMap",
+            "<init>",
+            "(Ljava/util/Map;)V"
+        ))).isTrue();
+    }
+
+    @Test
     void concurrentHashMapLoadFactorConstructorIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/concurrent/ConcurrentHashMap",
