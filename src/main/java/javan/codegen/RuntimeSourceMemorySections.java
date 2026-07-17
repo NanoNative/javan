@@ -71,6 +71,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_RUNTIME_KIND_ATOMIC_REFERENCE 32
         #define JAVAN_RUNTIME_KIND_RESOURCE_INPUT_STREAM 33
         #define JAVAN_LIST_VIEW_UNMODIFIABLE 1
+        #define JAVAN_LIST_VIEW_SET 2
         #define JAVAN_MAP_VIEW_UNMODIFIABLE 1
         #define JAVAN_BUILTIN_INSTANCEOF_COLLECTION 1
         #define JAVAN_BUILTIN_INSTANCEOF_MAP 2
@@ -3943,6 +3944,8 @@ final class RuntimeSourceMemorySections {
         static javan_object_list* javan_list_new_view(javan_object_list* backing, int immutable, int view_flags);
         static javan_object_list* javan_list_checked(void* value);
         static void javan_list_append_raw(javan_object_list* list, void* value);
+        int javan_hashset_add_all(void* value, void* collection);
+        int javan_set_add(void* value, void* element);
         void* javan_virtual_thread_executor_from_factory(void* value);
         void javan_atomic_boolean_init(void* value, int initial_value);
         void javan_atomic_reference_init(void* value, void* initial_value);
@@ -7485,6 +7488,16 @@ final class RuntimeSourceMemorySections {
             return list;
         }
 
+        static int javan_list_is_set(javan_object_list* list) {
+            if ((list->view_flags & JAVAN_LIST_VIEW_SET) != 0) {
+                return 1;
+            }
+            if (list->backing != NULL) {
+                return javan_list_is_set(list->backing);
+            }
+            return 0;
+        }
+
         void* javan_list_unmodifiable(void* value) {
             javan_object_list* list = javan_list_checked(value);
             if (list->immutable != 0 && list->backing != NULL && (list->view_flags & JAVAN_LIST_VIEW_UNMODIFIABLE) != 0) {
@@ -7647,6 +7660,14 @@ final class RuntimeSourceMemorySections {
             javan_root_frame_pop(javan_list_add_all_roots);
             list->mod_count++;
             return 1;
+        }
+
+        int javan_collection_add_all(void* value, void* collection) {
+            javan_object_list* list = javan_list_checked(value);
+            if (javan_list_is_set(list) != 0) {
+                return javan_hashset_add_all(value, collection);
+            }
+            return javan_arraylist_add_all(value, collection);
         }
 
         void javan_arraylist_add_first(void* value, void* element) {
@@ -7886,26 +7907,35 @@ final class RuntimeSourceMemorySections {
         }
 
         void* javan_hashset_new(void) {
-            return javan_list_new_with_capacity(0, 0);
+            javan_object_list* set = javan_list_new_with_capacity(0, 0);
+            set->view_flags = JAVAN_LIST_VIEW_SET;
+            return set;
         }
 
-        void javan_hashset_add_all(void* value, void* collection) {
+        int javan_hashset_add_all(void* value, void* collection) {
             javan_object_list* set = javan_list_checked(value);
             javan_object_list* source = javan_list_checked(collection);
+            javan_list_mutable_checked(set);
             void** javan_hashset_add_all_roots[] = {
                 (void**) &set,
                 (void**) &source
             };
             javan_root_frame_push(javan_hashset_add_all_roots, 2);
             int length = javan_list_logical_length(source);
+            int changed = 0;
             for (int index = 0; index < length; index++) {
-                javan_set_add(set, javan_list_get_unchecked(source, index));
+                if (javan_set_add(set, javan_list_get_unchecked(source, index)) != 0) {
+                    changed = 1;
+                }
             }
             javan_root_frame_pop(javan_hashset_add_all_roots);
+            return changed;
         }
 
         void* javan_set_empty(void) {
-            return javan_list_new_with_capacity(0, 1);
+            javan_object_list* set = (javan_object_list*) javan_hashset_new();
+            set->immutable = 1;
+            return set;
         }
 
         void* javan_set_copy_of(void* collection) {
@@ -8426,7 +8456,9 @@ final class RuntimeSourceMemorySections {
                 (void**) &value_root
             };
             javan_root_frame_push(javan_set_singleton_roots, 1);
-            javan_object_list* set = javan_list_new_with_capacity(1, 1);
+            javan_object_list* set = (javan_object_list*) javan_hashset_new();
+            set->immutable = 1;
+            javan_list_ensure_capacity(set, 1);
             set->values[0] = value_root;
             set->length = 1;
             javan_root_frame_pop(javan_set_singleton_roots);
@@ -8438,7 +8470,7 @@ final class RuntimeSourceMemorySections {
             if (set->immutable != 0 && set->backing != NULL && (set->view_flags & JAVAN_LIST_VIEW_UNMODIFIABLE) != 0) {
                 return set;
             }
-            return javan_list_new_view(set, 1, JAVAN_LIST_VIEW_UNMODIFIABLE);
+            return javan_list_new_view(set, 1, JAVAN_LIST_VIEW_UNMODIFIABLE | JAVAN_LIST_VIEW_SET);
         }
 
         int javan_set_add(void* value, void* element) {

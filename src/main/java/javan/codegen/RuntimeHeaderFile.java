@@ -246,6 +246,7 @@ final class RuntimeHeaderFile {
         int javan_arraylist_add(void* list, void* value);
         void javan_arraylist_add_at(void* list, int index, void* value);
         int javan_arraylist_add_all(void* list, void* collection);
+        int javan_collection_add_all(void* list, void* collection);
         void javan_arraylist_add_first(void* list, void* value);
         void* javan_arraylist_set(void* list, int index, void* value);
         void* javan_arraylist_remove_last(void* list);
@@ -269,7 +270,7 @@ final class RuntimeHeaderFile {
         void* javan_hashset_new(void);
         void* javan_hashset_new_with_expected_elements(int num_elements);
         void* javan_linkedhashset_new_with_expected_elements(int num_elements);
-        void javan_hashset_add_all(void* set, void* collection);
+        int javan_hashset_add_all(void* set, void* collection);
         void* javan_set_empty(void);
         void* javan_set_copy_of(void* collection);
         void* javan_set_of_singleton(void* value);

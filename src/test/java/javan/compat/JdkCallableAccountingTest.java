@@ -268,6 +268,30 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksCollectionAddAllAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Collection", "addAll", "(Ljava/util/Collection;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksSetAddAllAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Set", "addAll", "(Ljava/util/Collection;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksHashSetAddAllAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/HashSet", "addAll", "(Ljava/util/Collection;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksLinkedHashSetAddAllAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/LinkedHashSet", "addAll", "(Ljava/util/Collection;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksCollectionRemoveAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Collection", "remove", "(Ljava/lang/Object;)Z")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

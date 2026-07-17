@@ -384,6 +384,36 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void collectionAddAllBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("collection-add-all");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.Collection;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Collection<String> values = new ArrayList<>();
+                    System.out.println(values.addAll(List.of("left", "right")));
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/collection-add-all").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n2\n");
+    }
+
+    @Test
     void listAddFirstBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("list-add-first");
         writeJava(project, "com.acme.Main", """
@@ -1335,6 +1365,97 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/linkedhashset-direct-owner-read-surface").toString())).stdout()).isEqualTo(jvmOutput);
         assertThat(jvmOutput).isEqualTo("3\nfalse\ntrue\ntrue\nalpha\nbeta\ngamma\nalpha\nbeta\ngamma\n");
+    }
+
+    @Test
+    void setAddAllBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("set-add-all");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.LinkedHashSet;
+            import java.util.List;
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Set<String> values = new LinkedHashSet<>(List.of("a", "b"));
+                    System.out.println(values.addAll(List.of("b", "c")));
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/set-add-all").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n3\n");
+    }
+
+    @Test
+    void hashSetDirectOwnerAddAllBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("hashset-direct-owner-add-all");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashSet;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final HashSet<String> values = new HashSet<>(List.of("a", "b"));
+                    System.out.println(values.addAll(List.of("b", "c")));
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/hashset-direct-owner-add-all").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n3\n");
+    }
+
+    @Test
+    void linkedHashSetDirectOwnerAddAllBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("linkedhashset-direct-owner-add-all");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.LinkedHashSet;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final LinkedHashSet<String> values = new LinkedHashSet<>(List.of("b", "a"));
+                    System.out.println(values.addAll(List.of("a", "c")));
+                    final Object[] snapshot = values.toArray();
+                    System.out.println(snapshot[0]);
+                    System.out.println(snapshot[1]);
+                    System.out.println(snapshot[2]);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/linkedhashset-direct-owner-add-all").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\nb\na\nc\n");
     }
 
     @Test

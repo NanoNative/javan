@@ -241,6 +241,42 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void collectionAddAllIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Collection",
+            "addAll",
+            "(Ljava/util/Collection;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void setAddAllIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Set",
+            "addAll",
+            "(Ljava/util/Collection;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void hashSetAddAllIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/HashSet",
+            "addAll",
+            "(Ljava/util/Collection;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void linkedHashSetAddAllIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/LinkedHashSet",
+            "addAll",
+            "(Ljava/util/Collection;)Z"
+        ))).isTrue();
+    }
+
+    @Test
     void hashSetContainsIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/HashSet",
@@ -1239,6 +1275,15 @@ final class JdkCallSupportTest {
             "java/util/Collection",
             "clear",
             "()V"
+        ))).containsExactly("collections");
+    }
+
+    @Test
+    void collectionAddAllRequiresCollectionsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/Collection",
+            "addAll",
+            "(Ljava/util/Collection;)Z"
         ))).containsExactly("collections");
     }
 

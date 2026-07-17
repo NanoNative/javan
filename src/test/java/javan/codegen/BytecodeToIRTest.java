@@ -20034,6 +20034,28 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersHashSetAddAllToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/HashSet;Ljava/util/Collection;)Z",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/util/HashSet", "addAll", "(Ljava/util/Collection;)Z")),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_hashset_add_all",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
     void lowersHashSetIteratorToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -20071,6 +20093,28 @@ final class BytecodeToIRTest {
         assertThat(function.instructions()).containsExactly(
             IrInstruction.returnInt(IrExpression.intCall(
                 "javan_list_contains_all",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersLinkedHashSetAddAllToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/LinkedHashSet;Ljava/util/Collection;)Z",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/util/LinkedHashSet", "addAll", "(Ljava/util/Collection;)Z")),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_hashset_add_all",
                 List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
             ))
         );
@@ -20726,6 +20770,50 @@ final class BytecodeToIRTest {
                 IrExpression.intCall("javan_arraylist_add_all", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
             ),
             IrInstruction.returnInt(IrExpression.intLocal("int0"))
+        );
+    }
+
+    @Test
+    void lowersCollectionAddAllToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/Collection;Ljava/util/Collection;)Z",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeInterface(2, new MethodRef("java/util/Collection", "addAll", "(Ljava/util/Collection;)Z")),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_collection_add_all",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersSetAddAllToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/Set;Ljava/util/Collection;)Z",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeInterface(2, new MethodRef("java/util/Set", "addAll", "(Ljava/util/Collection;)Z")),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_hashset_add_all",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ))
         );
     }
 
