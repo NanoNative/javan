@@ -573,6 +573,7 @@ public final class JdkCallSupport {
         runtime("LinkedHashSet.toArray", "java/util/LinkedHashSet", "toArray", "()[Ljava/lang/Object;"),
         runtime("Iterator.hasNext", "java/util/Iterator", "hasNext", "()Z"),
         runtime("Iterator.next", "java/util/Iterator", "next", "()Ljava/lang/Object;"),
+        runtime("Iterator.remove", "java/util/Iterator", "remove", "()V"),
         runtime("ListIterator.hasNext", "java/util/ListIterator", "hasNext", "()Z"),
         runtime("ListIterator.next", "java/util/ListIterator", "next", "()Ljava/lang/Object;"),
         runtime("ListIterator.hasPrevious", "java/util/ListIterator", "hasPrevious", "()Z"),
@@ -1149,6 +1150,9 @@ public final class JdkCallSupport {
         }
         if ("next".equals(name)) {
             return "()Ljava/lang/Object;".equals(descriptor);
+        }
+        if ("remove".equals(name)) {
+            return "()V".equals(descriptor);
         }
         return false;
     }

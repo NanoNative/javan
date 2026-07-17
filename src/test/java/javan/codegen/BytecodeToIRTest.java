@@ -22240,6 +22240,25 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersIteratorRemoveToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/Iterator;)V",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeInterface(1, new MethodRef("java/util/Iterator", "remove", "()V")),
+            plain(2, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid("javan_list_iterator_remove", List.of(IrExpression.objectLocal("arg0"))),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
     void lowersListIteratorSetToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,

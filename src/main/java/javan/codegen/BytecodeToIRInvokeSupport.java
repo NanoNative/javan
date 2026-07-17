@@ -4336,6 +4336,10 @@ final class BytecodeToIRInvokeSupport {
                 pushObjectCall(instructions, stack, localDeclarations, "javan_iterator_next", List.of(receiver));
                 return true;
             }
+            if ("remove()V".equals(signature)) {
+                instructions.add(IrInstruction.callStaticVoid("javan_list_iterator_remove", List.of(receiver)));
+                return true;
+            }
         }
         if ("java/util/ListIterator".equals(methodRef.owner())) {
             if ("hasNext()Z".equals(signature)) {

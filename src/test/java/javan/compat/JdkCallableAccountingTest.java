@@ -562,6 +562,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksIteratorRemoveAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Iterator", "remove", "()V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksSetAddAllAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Set", "addAll", "(Ljava/util/Collection;)Z")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

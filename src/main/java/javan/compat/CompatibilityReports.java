@@ -560,6 +560,7 @@ public final class CompatibilityReports {
             pass("arraylist-direct-owner-remove-first"),
             pass("arraylist-direct-owner-remove-all"),
             pass("arraylist-direct-owner-retain-all"),
+            pass("iterator-remove"),
             pass("hashset-direct-owner-read-surface"),
             pass("hashset-direct-owner-add-all"),
             pass("hashset-direct-owner-remove-all"),

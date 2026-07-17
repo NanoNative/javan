@@ -3627,6 +3627,39 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void iteratorRemoveBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("iterator-remove");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.Iterator;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<String> values = new ArrayList<>(List.of("left", "middle", "right"));
+                    final Iterator<String> iterator = values.iterator();
+                    System.out.println(iterator.next());
+                    iterator.remove();
+                    System.out.println(values.size());
+                    System.out.println(values.get(0));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/iterator-remove").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("left\n2\nmiddle\n");
+    }
+
+    @Test
     void listOfImmutableAddFailsAtRuntime() throws Exception {
         final Path project = project("list-of-immutable-add");
         writeJava(project, "com.acme.Main", """

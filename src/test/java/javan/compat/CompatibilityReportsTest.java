@@ -83,12 +83,12 @@ final class CompatibilityReportsTest {
         assertThat(summary).contains(
             "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 5, \"leftCallables\": 3, \"coveragePercent\": \"40.0\"}",
             "\"exactJdkCallableAccounting\": {\"supportedCallables\": 2, \"explicitRejectedCallables\": 3, \"doneCallables\": 5, \"unknownCallables\": 0, \"totalCallables\": 5, \"donePercent\": \"100.0\"}",
-            "\"supportRows\": 286",
-            "\"passRows\": 286",
+            "\"supportRows\": 287",
+            "\"passRows\": 287",
             "\"scopedRows\": 0",
             "\"targetRows\": 0",
             "\"rejectedRows\": 0",
-            "\"accountedRows\": 286",
+            "\"accountedRows\": 287",
             "\"unaccountedRows\": 0"
         );
     }
@@ -161,6 +161,7 @@ final class CompatibilityReportsTest {
             "| `listiterator-set` | pass |",
             "| `listiterator-add` | pass |",
             "| `listiterator-remove` | pass |",
+            "| `iterator-remove` | pass |",
             "| `set-add-all` | pass |",
             "| `set-remove-all` | pass |",
             "| `set-retain-all` | pass |",

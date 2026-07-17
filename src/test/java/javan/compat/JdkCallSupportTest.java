@@ -754,6 +754,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void iteratorRemoveIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Iterator",
+            "remove",
+            "()V"
+        ))).isTrue();
+    }
+
+    @Test
     void hashSetToArrayIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/HashSet",
@@ -1950,6 +1959,15 @@ final class JdkCallSupportTest {
             "java/util/ListIterator",
             "previous",
             "()Ljava/lang/Object;"
+        ))).containsExactly("collections");
+    }
+
+    @Test
+    void iteratorRemoveRequiresCollectionsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/Iterator",
+            "remove",
+            "()V"
         ))).containsExactly("collections");
     }
 

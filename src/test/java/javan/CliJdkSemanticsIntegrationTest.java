@@ -1840,6 +1840,36 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void iteratorRemoveRejectsBeforeNextAtRuntime() throws Exception {
+        final Path project = project("iterator-remove-before-next");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.Iterator;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Iterator<String> iterator = new ArrayList<>(List.of("left")).iterator();
+                    iterator.remove();
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/iterator-remove-before-next").toString()));
+
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("invalid iterator state");
+    }
+
+    @Test
     void collectionToArrayReturnsSnapshotAndMatchesJvmOutput() throws Exception {
         final Path project = project("collection-to-array");
         writeJava(project, "com.acme.Main", """
