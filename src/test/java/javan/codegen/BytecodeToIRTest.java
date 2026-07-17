@@ -1761,6 +1761,46 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersDirectBiConsumerAcceptConcreteImplementationToDirectCall() {
+        final EntryPoint entryPoint = new EntryPoint(
+            "com/acme/Main",
+            "consumePairNonLambda",
+            "(Ljava/lang/Object;Ljava/lang/Object;Ljava/util/function/BiConsumer;)V"
+        );
+        final EntryPoint consumerEntry = new EntryPoint("com/acme/Printer", "accept", "(Ljava/lang/Object;Ljava/lang/Object;)V");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    directBiConsumerAcceptConcreteMethod()
+                )),
+                "com/acme/Printer",
+                classFile(
+                    "com/acme/Printer",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/util/function/BiConsumer"),
+                    List.of(),
+                    List.of(biConsumerAcceptImplementationMethod())
+                )
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint, consumerEntry), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("consumePairNonLambda")).singleElement().satisfies(function -> {
+            assertThat(function.locals()).isEmpty();
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.callStaticVoid(
+                    "javan_com_acme_Printer_accept__Ljava_lang_Object_Ljava_lang_Object__V",
+                    List.of(IrExpression.objectLocal("arg2"), IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+                ),
+                IrInstruction.returnVoid()
+            );
+        });
+    }
+
+    @Test
     void rejectsOptionalMapCapturedLambdaWithWrongImplementationArity() {
         assertThatThrownBy(() -> lowerMain(optionalCapturedMapWrongArityLambdaMethod()))
             .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
@@ -27082,6 +27122,21 @@ final class BytecodeToIRTest {
             plain(1, 42, "aload_0"),
             invokeInterface(2, new MethodRef("java/util/function/Consumer", "accept", "(Ljava/lang/Object;)V")),
             plain(7, 177, "return")
+        );
+    }
+
+    private static MethodInfo directBiConsumerAcceptConcreteMethod() {
+        return method(
+            0x0008,
+            "consumePairNonLambda",
+            "(Ljava/lang/Object;Ljava/lang/Object;Ljava/util/function/BiConsumer;)V",
+            3,
+            3,
+            plain(0, 44, "aload_2"),
+            plain(1, 42, "aload_0"),
+            plain(2, 43, "aload_1"),
+            invokeInterface(3, new MethodRef("java/util/function/BiConsumer", "accept", "(Ljava/lang/Object;Ljava/lang/Object;)V")),
+            plain(8, 177, "return")
         );
     }
 

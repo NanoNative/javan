@@ -4477,6 +4477,72 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void biConsumerAcceptDirectConcreteImplementationBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("biconsumer-accept-concrete-direct");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.BiConsumer;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final BiConsumer<String, String> consumer = new Printer();
+                    consumer.accept("left", "right");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Printer", """
+            package com.acme;
+
+            import java.util.function.BiConsumer;
+
+            public final class Printer implements BiConsumer<String, String> {
+                @Override
+                public void accept(final String left, final String right) {
+                    System.out.println(left + ":" + right);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/biconsumer-accept-concrete-direct").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("left:right\n");
+    }
+
+    @Test
+    void biConsumerAcceptDirectZeroCaptureLambdaBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("biconsumer-accept-lambda-direct");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.BiConsumer;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final BiConsumer<String, String> consumer = (left, right) -> System.out.println(left + ":" + right);
+                    consumer.accept("left", "right");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/biconsumer-accept-lambda-direct").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("left:right\n");
+    }
+
+    @Test
     void mapComputeIfPresentConcreteImplementationBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("map-compute-if-present-concrete");
         writeJava(project, "com.acme.Main", """
