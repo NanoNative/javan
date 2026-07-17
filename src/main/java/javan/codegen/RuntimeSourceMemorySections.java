@@ -7704,12 +7704,32 @@ final class RuntimeSourceMemorySections {
             list->mod_count++;
         }
 
+        void javan_arraylist_add_last(void* value, void* element) {
+            javan_arraylist_add(value, element);
+        }
+
         void* javan_arraylist_set(void* value, int index, void* element) {
             javan_object_list* list = javan_list_checked(value);
             javan_list_mutable_checked(list);
             javan_list_bounds_checked(list, index);
             void* previous = list->values[index];
             list->values[index] = element;
+            return previous;
+        }
+
+        void* javan_arraylist_remove_first(void* value) {
+            javan_object_list* list = javan_list_checked(value);
+            javan_list_mutable_checked(list);
+            if (list->length == 0) {
+                javan_panic("list is empty");
+            }
+            void* previous = list->values[0];
+            if (list->length > 1) {
+                memmove(list->values, list->values + 1, (unsigned long) (list->length - 1) * sizeof(void*));
+            }
+            list->length--;
+            list->values[list->length] = NULL;
+            list->mod_count++;
             return previous;
         }
 

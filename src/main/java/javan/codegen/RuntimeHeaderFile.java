@@ -249,7 +249,9 @@ final class RuntimeHeaderFile {
         int javan_arraylist_add_all(void* list, void* collection);
         int javan_collection_add_all(void* list, void* collection);
         void javan_arraylist_add_first(void* list, void* value);
+        void javan_arraylist_add_last(void* list, void* value);
         void* javan_arraylist_set(void* list, int index, void* value);
+        void* javan_arraylist_remove_first(void* list);
         void* javan_arraylist_remove_last(void* list);
         void* javan_list_of(int count, ...);
         void* javan_list_of_array(void* array);

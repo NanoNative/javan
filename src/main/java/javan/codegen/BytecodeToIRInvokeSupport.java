@@ -4098,6 +4098,14 @@ final class BytecodeToIRInvokeSupport {
                 instructions.add(IrInstruction.callStaticVoid("javan_arraylist_add_first", List.of(receiver, arguments.getFirst())));
                 return true;
             }
+            if ("addLast(Ljava/lang/Object;)V".equals(signature)) {
+                instructions.add(IrInstruction.callStaticVoid("javan_arraylist_add_last", List.of(receiver, arguments.getFirst())));
+                return true;
+            }
+            if ("removeFirst()Ljava/lang/Object;".equals(signature)) {
+                pushObjectCall(instructions, stack, localDeclarations, "javan_arraylist_remove_first", List.of(receiver));
+                return true;
+            }
         }
         if (isJdkListOrCollection(methodRef.owner())) {
             if ("add(Ljava/lang/Object;)Z".equals(signature)) {
