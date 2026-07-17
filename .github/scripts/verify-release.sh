@@ -4,7 +4,14 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 cd "$ROOT"
 
-mvn -q -Djavan.coverage.check.skip=true clean verify
+mvn -q \
+  -Djunit.jupiter.execution.parallel.enabled=true \
+  -Djunit.jupiter.execution.parallel.mode.default=concurrent \
+  -Djunit.jupiter.execution.parallel.mode.classes.default=concurrent \
+  -Djunit.jupiter.execution.parallel.config.strategy=dynamic \
+  -Djunit.jupiter.execution.parallel.config.dynamic.factor=1.0 \
+  -Djavan.coverage.check.skip=true \
+  clean verify
 scripts/build.sh
 ARCHIVE=$(.github/scripts/package-release.sh "${JAVAN_VERSION:-}")
 .github/scripts/verify-package.sh "$ARCHIVE"

@@ -48,13 +48,19 @@ final class WorkflowPolicySurfaceTest {
     void ciWorkflowKeepsNinePercentCoverageAsSoftSignal() throws Exception {
         assertThat(Files.readString(CI_WORKFLOW))
             .contains("JAVAN_COVERAGE_SOFT_TARGET: \"0.09\"")
-            .contains("-Dtest='!Cli*IntegrationTest,!CliExternalProbeAcceptanceIntegrationTest' -Djavan.coverage.check.skip=true verify")
+            .contains("JAVAN_JUNIT_PARALLEL_ARGS: >-")
+            .contains("-Djunit.jupiter.execution.parallel.enabled=true")
+            .contains("-Djunit.jupiter.execution.parallel.mode.default=concurrent")
+            .contains("-Djunit.jupiter.execution.parallel.mode.classes.default=concurrent")
+            .contains("-Djunit.jupiter.execution.parallel.config.strategy=dynamic")
+            .contains("-Djunit.jupiter.execution.parallel.config.dynamic.factor=1.0")
+            .contains("$JAVAN_JUNIT_PARALLEL_ARGS -Dtest='!Cli*IntegrationTest,!CliExternalProbeAcceptanceIntegrationTest' -Djavan.coverage.check.skip=true verify")
             .contains("name: verify-cli-integration (${{ matrix.shard }})")
             .contains("Cli*IntegrationTest,!CliExternalProbeAcceptanceIntegrationTest,!CliPackagingIntegrationTest,!CliJdkSemanticsIntegrationTest,!CliThreadRuntimeIntegrationTest,!CliRuntimeTranslationIntegrationTest")
             .contains("CliJdkSemanticsIntegrationTest")
             .contains("CliThreadRuntimeIntegrationTest,CliRuntimeTranslationIntegrationTest")
             .contains("CliExternalProbeAcceptanceIntegrationTest,CliPackagingIntegrationTest")
-            .contains("-Dtest='${{ matrix.test-selector }}' -Djavan.coverage.check.skip=true verify")
+            .contains("$JAVAN_JUNIT_PARALLEL_ARGS -Dtest='${{ matrix.test-selector }}' -Djavan.coverage.check.skip=true verify")
             .contains("Summarize coverage (non-blocking)")
             .contains("Soft target: {target_ratio:.0%} (signal only, not a workflow gate)")
             .contains("| Counter | Covered | Total | Ratio | Status |")
@@ -131,7 +137,9 @@ final class WorkflowPolicySurfaceTest {
         assertThat(Files.readString(JUNIT_PLATFORM_PROPERTIES))
             .contains("junit.jupiter.execution.parallel.enabled = true")
             .contains("junit.jupiter.execution.parallel.mode.default = concurrent")
-            .contains("junit.jupiter.execution.parallel.mode.classes.default = concurrent");
+            .contains("junit.jupiter.execution.parallel.mode.classes.default = concurrent")
+            .contains("junit.jupiter.execution.parallel.config.strategy = dynamic")
+            .contains("junit.jupiter.execution.parallel.config.dynamic.factor = 1.0");
     }
 
     private static List<Path> workflowFiles() throws Exception {
