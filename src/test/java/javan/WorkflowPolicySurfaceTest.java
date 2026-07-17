@@ -50,7 +50,9 @@ final class WorkflowPolicySurfaceTest {
             .contains("JAVAN_COVERAGE_SOFT_TARGET: \"0.09\"")
             .contains("-Dtest='!Cli*IntegrationTest,!CliExternalProbeAcceptanceIntegrationTest' -Djavan.coverage.check.skip=true verify")
             .contains("name: verify-cli-integration (${{ matrix.shard }})")
-            .contains("Cli*IntegrationTest,!CliExternalProbeAcceptanceIntegrationTest,!CliPackagingIntegrationTest")
+            .contains("Cli*IntegrationTest,!CliExternalProbeAcceptanceIntegrationTest,!CliPackagingIntegrationTest,!CliJdkSemanticsIntegrationTest,!CliThreadRuntimeIntegrationTest,!CliRuntimeTranslationIntegrationTest")
+            .contains("CliJdkSemanticsIntegrationTest")
+            .contains("CliThreadRuntimeIntegrationTest,CliRuntimeTranslationIntegrationTest")
             .contains("CliExternalProbeAcceptanceIntegrationTest,CliPackagingIntegrationTest")
             .contains("-Dtest='${{ matrix.test-selector }}' -Djavan.coverage.check.skip=true verify")
             .contains("Summarize coverage (non-blocking)")
@@ -63,11 +65,27 @@ final class WorkflowPolicySurfaceTest {
     }
 
     @Test
+    void ciWorkflowRunsShardableSuitesAtFullParallelWidth() throws Exception {
+        assertThat(Files.readString(CI_WORKFLOW))
+            .contains("name: verify-core (${{ matrix.target }})")
+            .contains("max-parallel: 3")
+            .contains("shard: cli-general")
+            .contains("shard: cli-jdk-semantics")
+            .contains("shard: cli-runtime-heavy")
+            .contains("shard: packaging-and-probes")
+            .contains("max-parallel: 4")
+            .contains("name: native-smoke (${{ matrix.target }})")
+            .contains("name: windows-runtime-smoke (${{ matrix.shard }})");
+    }
+
+    @Test
     void pomKeepsCoverageHardGateOptInByDefault() throws Exception {
         assertThat(Files.readString(POM))
             .contains("<javan.coverage.check.skip>true</javan.coverage.check.skip>")
             .contains("<javan.coverage.line.minimum>0.95</javan.coverage.line.minimum>")
-            .contains("<javan.coverage.branch.minimum>0.90</javan.coverage.branch.minimum>");
+            .contains("<javan.coverage.branch.minimum>0.90</javan.coverage.branch.minimum>")
+            .contains("<testResources>")
+            .contains("<exclude>projects/**/.javan/**</exclude>");
     }
 
     @Test

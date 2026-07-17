@@ -28,7 +28,7 @@ jobs:
     timeout-minutes: 90
     strategy:
       fail-fast: false
-      max-parallel: 4
+      max-parallel: 3
       matrix:
         include:
           - target: linux-x64
@@ -168,12 +168,18 @@ jobs:
     timeout-minutes: 90
     strategy:
       fail-fast: false
-      max-parallel: 2
+      max-parallel: 4
       matrix:
         include:
-          - shard: cli-core
+          - shard: cli-general
             test-selector: >-
-              Cli*IntegrationTest,!CliExternalProbeAcceptanceIntegrationTest,!CliPackagingIntegrationTest
+              Cli*IntegrationTest,!CliExternalProbeAcceptanceIntegrationTest,!CliPackagingIntegrationTest,!CliJdkSemanticsIntegrationTest,!CliThreadRuntimeIntegrationTest,!CliRuntimeTranslationIntegrationTest
+          - shard: cli-jdk-semantics
+            test-selector: >-
+              CliJdkSemanticsIntegrationTest
+          - shard: cli-runtime-heavy
+            test-selector: >-
+              CliThreadRuntimeIntegrationTest,CliRuntimeTranslationIntegrationTest
           - shard: packaging-and-probes
             test-selector: >-
               CliExternalProbeAcceptanceIntegrationTest,CliPackagingIntegrationTest
