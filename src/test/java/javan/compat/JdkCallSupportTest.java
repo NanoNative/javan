@@ -1637,6 +1637,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void mapSizeIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Map",
+            "size",
+            "()I"
+        ))).isTrue();
+    }
+
+    @Test
     void mapValuesIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Map",

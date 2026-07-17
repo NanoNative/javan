@@ -26,6 +26,10 @@ on:
         default: false
         type: boolean
 
+concurrency:
+  group: release-${{ github.ref }}-${{ inputs.tag || github.run_id }}
+  cancel-in-progress: false
+
 permissions:
   contents: write
 

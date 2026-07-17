@@ -286,6 +286,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksMapSizeAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "size", "()I")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksMapValuesAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "values", "()Ljava/util/Collection;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

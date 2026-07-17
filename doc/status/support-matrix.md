@@ -127,6 +127,7 @@ Status mapping:
 | `map-entry` | pass |
 | `map-put-all` | pass |
 | `map-is-empty` | pass |
+| `map-size` | pass |
 | `map-values` | pass |
 | `map-remove` | pass |
 | `map-remove-key-value` | pass |
