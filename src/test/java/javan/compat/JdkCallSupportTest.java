@@ -256,6 +256,51 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void mapRemoveIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Map",
+            "remove",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void hashMapRemoveIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/HashMap",
+            "remove",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void linkedHashMapRemoveIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/LinkedHashMap",
+            "remove",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void treeMapRemoveIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/TreeMap",
+            "remove",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void concurrentHashMapRemoveIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/ConcurrentHashMap",
+            "remove",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
     void collectionsUnmodifiableSetIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Collections",

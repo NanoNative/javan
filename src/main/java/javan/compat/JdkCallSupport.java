@@ -517,6 +517,7 @@ public final class JdkCallSupport {
         runtime("Map.getOrDefault", "java/util/Map", "getOrDefault", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Map.put", "java/util/Map", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Map.putIfAbsent", "java/util/Map", "putIfAbsent", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("Map.remove", "java/util/Map", "remove", "(Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Map.computeIfAbsent", "java/util/Map", "computeIfAbsent", "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;"),
         runtime("Map.entry", "java/util/Map", "entry", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map$Entry;"),
         runtime("HashMap.put", "java/util/HashMap", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
@@ -527,6 +528,10 @@ public final class JdkCallSupport {
         runtime("LinkedHashMap.putIfAbsent", "java/util/LinkedHashMap", "putIfAbsent", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("TreeMap.putIfAbsent", "java/util/TreeMap", "putIfAbsent", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("ConcurrentHashMap.putIfAbsent", "java/util/concurrent/ConcurrentHashMap", "putIfAbsent", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("HashMap.remove", "java/util/HashMap", "remove", "(Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("LinkedHashMap.remove", "java/util/LinkedHashMap", "remove", "(Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("TreeMap.remove", "java/util/TreeMap", "remove", "(Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("ConcurrentHashMap.remove", "java/util/concurrent/ConcurrentHashMap", "remove", "(Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Map.containsKey", "java/util/Map", "containsKey", "(Ljava/lang/Object;)Z"),
         runtime("HashMap.containsKey", "java/util/HashMap", "containsKey", "(Ljava/lang/Object;)Z"),
         runtime("LinkedHashMap.containsKey", "java/util/LinkedHashMap", "containsKey", "(Ljava/lang/Object;)Z"),
@@ -900,6 +905,9 @@ public final class JdkCallSupport {
         if ("putIfAbsent".equals(name)) {
             return "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(descriptor);
         }
+        if ("remove".equals(name)) {
+            return "(Ljava/lang/Object;)Ljava/lang/Object;".equals(descriptor);
+        }
         if ("containsKey".equals(name)) {
             return "(Ljava/lang/Object;)Z".equals(descriptor);
         }
@@ -927,6 +935,9 @@ public final class JdkCallSupport {
         }
         if ("putIfAbsent".equals(name)) {
             return "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(descriptor);
+        }
+        if ("remove".equals(name)) {
+            return "(Ljava/lang/Object;)Ljava/lang/Object;".equals(descriptor);
         }
         return false;
     }

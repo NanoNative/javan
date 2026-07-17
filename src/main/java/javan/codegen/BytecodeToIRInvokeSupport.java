@@ -4107,6 +4107,10 @@ final class BytecodeToIRInvokeSupport {
                 pushObjectCall(instructions, stack, localDeclarations, "javan_map_put_if_absent", List.of(receiver, arguments.get(0), arguments.get(1)));
                 return true;
             }
+            if ("remove(Ljava/lang/Object;)Ljava/lang/Object;".equals(signature)) {
+                pushObjectCall(instructions, stack, localDeclarations, "javan_map_remove", List.of(receiver, arguments.getFirst()));
+                return true;
+            }
             if ("containsKey(Ljava/lang/Object;)Z".equals(signature)) {
                 pushIntCall(instructions, stack, localDeclarations, "javan_map_contains_key", List.of(receiver, arguments.getFirst()));
                 return true;

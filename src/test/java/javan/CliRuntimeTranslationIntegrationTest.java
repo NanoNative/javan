@@ -758,6 +758,70 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void mapRemoveExistingKeyBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-remove-existing");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.LinkedHashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, String> values = new LinkedHashMap<>();
+                    values.put("first", "a");
+                    values.put("second", "b");
+                    System.out.println(values.remove("first"));
+                    System.out.println(values.size());
+                    System.out.println(values.containsKey("first"));
+                    System.out.println(values.keySet().toArray()[0]);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-remove-existing").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("a\n1\nfalse\nsecond\n");
+    }
+
+    @Test
+    void mapRemoveMissingKeyBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-remove-missing");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, String> values = new HashMap<>();
+                    values.put("left", "right");
+                    System.out.println(values.remove("missing"));
+                    System.out.println(values.size());
+                    System.out.println(values.get("left"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-remove-missing").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("null\n1\nright\n");
+    }
+
+    @Test
     void mapCopyOfBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("map-copy-of");
         writeJava(project, "com.acme.Main", """

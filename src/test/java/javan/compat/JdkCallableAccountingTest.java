@@ -343,6 +343,36 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksMapRemoveAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "remove", "(Ljava/lang/Object;)Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksHashMapRemoveAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/HashMap", "remove", "(Ljava/lang/Object;)Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksLinkedHashMapRemoveAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/LinkedHashMap", "remove", "(Ljava/lang/Object;)Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksTreeMapRemoveAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/TreeMap", "remove", "(Ljava/lang/Object;)Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksConcurrentHashMapRemoveAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/ConcurrentHashMap", "remove", "(Ljava/lang/Object;)Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksCollectionsUnmodifiableSetAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Collections", "unmodifiableSet", "(Ljava/util/Set;)Ljava/util/Set;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
