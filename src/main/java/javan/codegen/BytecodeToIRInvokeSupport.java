@@ -281,6 +281,7 @@ final class BytecodeToIRInvokeSupport {
         final Map<Integer, IrLocal> localDeclarations,
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final Map<String, IrDispatch> dispatches,
+        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final SourceLineIndex sourceLines
     ) {
         final MethodRef rawMethodRef = instruction.methodRef().orElseThrow();
@@ -795,7 +796,7 @@ final class BytecodeToIRInvokeSupport {
         if (lowerThreadLocalInstanceCall(classFile, method, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
-        if (lowerJdkCollectionInstanceCall(classFile, method, instruction, methodRef, instructions, stack, localDeclarations)) {
+        if (lowerJdkCollectionInstanceCall(classes, classFile, method, instruction, dispatches, materializedLambdaMethods, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
         if (isPlatformThrowableGetMessage(methodRef)) {
@@ -3460,9 +3461,12 @@ final class BytecodeToIRInvokeSupport {
         return true;
     }
     static boolean lowerJdkCollectionInstanceCall(
+        final Map<String, ClassFile> classes,
         final ClassFile classFile,
         final MethodInfo method,
         final Instruction instruction,
+        final Map<String, IrDispatch> dispatches,
+        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final MethodRef methodRef,
         final List<IrInstruction> instructions,
         final List<StackValue> stack,
@@ -3482,7 +3486,20 @@ final class BytecodeToIRInvokeSupport {
         final MethodDescriptor descriptor = MethodDescriptor.parse(methodRef.descriptor());
         final List<IrExpression> arguments = new ArrayList<>(popArguments(classFile, method, stack, descriptor));
         final IrExpression receiver = popObject(classFile, method, stack);
-        return lowerJdkCollectionInstanceCall(classFile, method, methodRef, instructions, stack, localDeclarations, arguments, receiver);
+        return lowerJdkCollectionInstanceCall(
+            classes,
+            classFile,
+            method,
+            instruction,
+            dispatches,
+            materializedLambdaMethods,
+            methodRef,
+            instructions,
+            stack,
+            localDeclarations,
+            arguments,
+            receiver
+        );
     }
 
     private static void lowerMapComputeIfAbsentLambdaCall(
@@ -4041,8 +4058,12 @@ final class BytecodeToIRInvokeSupport {
     }
 
     static boolean lowerJdkCollectionInstanceCall(
+        final Map<String, ClassFile> classes,
         final ClassFile classFile,
         final MethodInfo method,
+        final Instruction instruction,
+        final Map<String, IrDispatch> dispatches,
+        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final MethodRef methodRef,
         final List<IrInstruction> instructions,
         final List<StackValue> stack,
@@ -4340,6 +4361,21 @@ final class BytecodeToIRInvokeSupport {
                 instructions.add(IrInstruction.callStaticVoid("javan_list_iterator_remove", List.of(receiver)));
                 return true;
             }
+            if ("forEachRemaining(Ljava/util/function/Consumer;)V".equals(signature)) {
+                lowerIteratorForEachRemainingCall(
+                    classes,
+                    classFile,
+                    method,
+                    instruction,
+                    instructions,
+                    dispatches,
+                    materializedLambdaMethods,
+                    localDeclarations,
+                    receiver,
+                    arguments.getFirst()
+                );
+                return true;
+            }
         }
         if ("java/util/ListIterator".equals(methodRef.owner())) {
             if ("hasNext()Z".equals(signature)) {
@@ -4452,6 +4488,88 @@ final class BytecodeToIRInvokeSupport {
             }
         }
         throw collectionLoweringRegistryMismatch(classFile, method, methodRef);
+    }
+
+    private static void lowerIteratorForEachRemainingCall(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final Map<String, IrDispatch> dispatches,
+        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<Integer, IrLocal> localDeclarations,
+        final IrExpression iterator,
+        final IrExpression consumer
+    ) {
+        final String loopLabel = "label_iterator_for_each_remaining_loop_" + instruction.offset() + "_" + localDeclarations.size();
+        final String bodyLabel = "label_iterator_for_each_remaining_body_" + instruction.offset() + "_" + localDeclarations.size();
+        final String endLabel = "label_iterator_for_each_remaining_end_" + instruction.offset() + "_" + localDeclarations.size();
+        final String hasNextLocal = newIntLocal(localDeclarations);
+        final String valueLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.label(loopLabel));
+        instructions.add(IrInstruction.assignInt(
+            hasNextLocal,
+            IrExpression.intCall("javan_iterator_has_next", List.of(iterator))
+        ));
+        instructions.add(IrInstruction.branchIf(
+            bodyLabel,
+            IrExpression.intComparison("!=", IrExpression.intLocal(hasNextLocal), IrExpression.intLiteral(0))
+        ));
+        instructions.add(IrInstruction.jump(endLabel));
+        instructions.add(IrInstruction.label(bodyLabel));
+        instructions.add(IrInstruction.assignObject(
+            valueLocal,
+            IrExpression.objectCall("javan_iterator_next", List.of(iterator))
+        ));
+        lowerConsumerAcceptCall(
+            classes,
+            classFile,
+            method,
+            instruction,
+            instructions,
+            dispatches,
+            materializedLambdaMethods,
+            consumer,
+            IrExpression.objectLocal(valueLocal)
+        );
+        instructions.add(IrInstruction.jump(loopLabel));
+        instructions.add(IrInstruction.label(endLabel));
+    }
+
+    private static void lowerConsumerAcceptCall(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final Map<String, IrDispatch> dispatches,
+        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final IrExpression consumer,
+        final IrExpression argument
+    ) {
+        final MethodRef consumerAccept = new MethodRef("java/util/function/Consumer", "accept", "(Ljava/lang/Object;)V");
+        final List<EntryPoint> targets = interfaceTargets(classes, consumerAccept);
+        if (targets.size() > 1) {
+            final String dispatchSymbol = dispatchSymbol(consumerAccept);
+            dispatches.putIfAbsent(dispatchSymbol, dispatch(dispatchSymbol, MethodDescriptor.parse(consumerAccept.descriptor()), targets));
+            instructions.add(IrInstruction.callStaticVoid(dispatchSymbol, List.of(consumer, argument)));
+            return;
+        }
+        if (!targets.isEmpty()) {
+            instructions.add(IrInstruction.callStaticVoid(symbol(targets.getFirst()), List.of(consumer, argument)));
+            return;
+        }
+        final Optional<EntryPoint> defaultTarget = defaultInterfaceTarget(classes, consumerAccept);
+        if (defaultTarget.isPresent()) {
+            instructions.add(IrInstruction.callStaticVoid(symbol(defaultTarget.orElseThrow()), List.of(consumer, argument)));
+            return;
+        }
+        if (materializedLambdaMethods.get(consumerAccept) == MaterializedLambdaDispatchKind.VOID) {
+            instructions.add(IrInstruction.callStaticVoid(MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL, List.of(consumer, argument)));
+            return;
+        }
+        throw unsupported(classFile, method, instruction);
     }
     static DiagnosticException collectionLoweringRegistryMismatch(
         final ClassFile classFile,
@@ -6074,7 +6192,7 @@ final class BytecodeToIRInvokeSupport {
         if (lowerJdkHttpInterfaceCall(classFile, method, instruction, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
-        if (lowerJdkCollectionInstanceCall(classFile, method, instruction, methodRef, instructions, stack, localDeclarations)) {
+        if (lowerJdkCollectionInstanceCall(classes, classFile, method, instruction, dispatches, materializedLambdaMethods, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
         final List<EntryPoint> targets = interfaceTargets(classes, methodRef);

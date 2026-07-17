@@ -47,10 +47,21 @@ public final class ReachabilityAnalyzer {
         if (entries.isEmpty()) {
             throw new IllegalArgumentException("Reachability requires at least one entry point");
         }
+        final MethodRefFactsCache methodRefFacts = new MethodRefFactsCache(classes);
+        final EntryPointPool entryPoints = new EntryPointPool();
+        final List<EntryPoint> roots = new ArrayList<>(entries.size());
+        for (final EntryPoint entry : entries) {
+            roots.add(entryPoints.entry(entry.className(), entry.methodName(), entry.descriptor()));
+        }
         final List<EntryPoint> reachable = new ArrayList<>();
+        final EntryPointMembership reachableSet = new EntryPointMembership();
         final List<Diagnostic> diagnostics = new ArrayList<>();
-        final List<CallEdge> callEdges = new ArrayList<>();
-        final List<EntryPoint> work = new ArrayList<>(entries);
+        final CallEdgeTracker callEdges = new CallEdgeTracker();
+        final List<EntryPoint> work = new ArrayList<>(roots);
+        final EntryPointMembership workSet = new EntryPointMembership();
+        for (final EntryPoint root : roots) {
+            workSet.add(root);
+        }
         final List<MethodRef> materializedLambdaMethods = new ArrayList<>();
         int workIndex = 0;
 
@@ -58,7 +69,7 @@ public final class ReachabilityAnalyzer {
             while (workIndex < work.size()) {
                 final EntryPoint current = work.get(workIndex);
                 workIndex++;
-                if (containsEntry(reachable, current)) {
+                if (!reachableSet.add(current)) {
                     continue;
                 }
                 reachable.add(current);
@@ -85,39 +96,21 @@ public final class ReachabilityAnalyzer {
                         continue;
                     }
                     for (final Instruction instruction : code.orElseThrow().instructions()) {
-                        enqueueClassInitializer(classes, instruction, work, current, callEdges);
-                        enqueueLambdaApplicationCall(classes, instruction, work, current, callEdges, materializedLambdaMethods);
-                        enqueueApplicationCall(classes, instruction, work, diagnostics, current, callEdges, materializedLambdaMethods);
+                        enqueueClassInitializer(classes, instruction, work, workSet, current, callEdges, entryPoints);
+                        enqueueLambdaApplicationCall(classes, instruction, work, workSet, current, callEdges, materializedLambdaMethods, entryPoints);
+                        enqueueApplicationCall(classes, instruction, work, workSet, diagnostics, current, callEdges, materializedLambdaMethods, entryPoints, methodRefFacts);
                     }
                 }
             }
-            if (!enqueueRunnableThreadTargets(classes, reachable, work, callEdges)) {
+            if (!enqueueRunnableThreadTargets(classes, reachable, reachableSet, work, workSet, callEdges, entryPoints, methodRefFacts)) {
                 break;
             }
         }
-        return new CallGraph(entries.getFirst(), List.copyOf(reachable), List.copyOf(diagnostics), List.copyOf(callEdges));
-    }
-
-    private static boolean containsEntry(final List<EntryPoint> entries, final EntryPoint target) {
-        for (final EntryPoint entry : entries) {
-            if (sameEntry(entry, target)) {
-                return true;
-            }
-        }
-        return false;
+        return new CallGraph(roots.getFirst(), List.copyOf(reachable), List.copyOf(diagnostics), callEdges.snapshot());
     }
 
     private static boolean sameEntry(final EntryPoint left, final EntryPoint right) {
-        if (!left.className().equals(right.className())) {
-            return false;
-        }
-        if (!left.methodName().equals(right.methodName())) {
-            return false;
-        }
-        if (!left.descriptor().equals(right.descriptor())) {
-            return false;
-        }
-        return true;
+        return left.sameAs(right);
     }
 
     private static Optional<MethodInfo> method(final Map<String, ClassFile> classes, final EntryPoint entryPoint) {
@@ -128,42 +121,120 @@ public final class ReachabilityAnalyzer {
         return classFile.method(entryPoint.methodName(), entryPoint.descriptor());
     }
 
+    private static final class MethodRefFactsCache {
+        private final Map<String, ClassFile> classes;
+        private final List<String> owners = new ArrayList<>();
+        private final List<List<MethodRefFacts>> ownerBuckets = new ArrayList<>();
+
+        private MethodRefFactsCache(final Map<String, ClassFile> classes) {
+            this.classes = classes;
+        }
+
+        private MethodRefFacts resolve(final MethodRef original) {
+            final List<MethodRefFacts> bucket = ownerBucket(original.owner());
+            for (final MethodRefFacts facts : bucket) {
+                if (facts.methodName().equals(original.name()) && facts.descriptor().equals(original.descriptor())) {
+                    return facts;
+                }
+            }
+            final MethodRef target = JdkCallSupport.normalizeInheritedSupportedJdkCall(classes, original).orElse(original);
+            final MethodRefFacts facts = new MethodRefFacts(
+                original.name(),
+                original.descriptor(),
+                target,
+                isImmediateThreadDispatchTarget(target),
+                isReachableThreadStartTarget(target),
+                isThreadTargetCarrierTarget(target)
+            );
+            bucket.add(facts);
+            return facts;
+        }
+
+        private List<MethodRefFacts> ownerBucket(final String owner) {
+            final List<MethodRefFacts> existing = existingOwnerBucket(owner);
+            if (existing != null) {
+                return existing;
+            }
+            final List<MethodRefFacts> bucket = new ArrayList<>();
+            owners.add(owner);
+            ownerBuckets.add(bucket);
+            return bucket;
+        }
+
+        private List<MethodRefFacts> existingOwnerBucket(final String owner) {
+            for (int index = 0; index < owners.size(); index++) {
+                if (owners.get(index).equals(owner)) {
+                    return ownerBuckets.get(index);
+                }
+            }
+            return null;
+        }
+    }
+
+    private record MethodRefFacts(
+        String methodName,
+        String descriptor,
+        MethodRef target,
+        boolean immediateThreadDispatchTarget,
+        boolean reachableThreadStartTarget,
+        boolean threadTargetCarrierTarget
+    ) {
+    }
+
     private static void enqueueApplicationCall(
         final Map<String, ClassFile> classes,
         final Instruction instruction,
         final List<EntryPoint> work,
+        final EntryPointMembership workSet,
         final List<Diagnostic> diagnostics,
         final EntryPoint current,
-        final List<CallEdge> callEdges,
-        final List<MethodRef> materializedLambdaMethods
+        final CallEdgeTracker callEdges,
+        final List<MethodRef> materializedLambdaMethods,
+        final EntryPointPool entryPoints,
+        final MethodRefFactsCache methodRefFacts
     ) {
         final Optional<MethodRef> methodRef = instruction.methodRef();
         if (methodRef.isEmpty()) {
             return;
         }
-        final MethodRef target = JdkCallSupport.normalizeInheritedSupportedJdkCall(classes, methodRef.orElseThrow())
-            .orElse(methodRef.orElseThrow());
-        if (isEnumIntrinsic(classes, target) || isSupportedEnumSynthetic(classes, target) || isSupportedArrayClone(target)) {
+        final MethodRefFacts facts = methodRefFacts.resolve(methodRef.orElseThrow());
+        final MethodRef target = facts.target();
+        final ClassFile targetOwner = classes.get(target.owner());
+        final EnumCallKind enumCallKind = enumCallKind(targetOwner, target);
+        if ((enumCallKind == EnumCallKind.INTRINSIC || enumCallKind == EnumCallKind.SUPPORTED_SYNTHETIC)
+            || isSupportedArrayClone(target)) {
             return;
         }
-        if (isVirtualThreadStart(target)
-            || isVirtualThreadBuilderStart(target)
-            || isExecutorExecute(target)
-            || isExecutorSubmit(target)
-            || isScheduledThreadPoolExecutorSchedule(target)
-            || isScheduledThreadPoolExecutorScheduleAtFixedRate(target)
-            || isScheduledThreadPoolExecutorScheduleWithFixedDelay(target)
-            || isScheduledExecutorServiceSchedule(target)
-            || isScheduledExecutorServiceScheduleAtFixedRate(target)
-            || isScheduledExecutorServiceScheduleWithFixedDelay(target)) {
-            final List<EntryPoint> targets = virtualThreadTargets(classes, current);
+        if (facts.immediateThreadDispatchTarget()) {
+            final List<EntryPoint> targets = virtualThreadTargets(classes, current, entryPoints, methodRefFacts);
             if (!targets.isEmpty()) {
-                work.addAll(targets);
+                enqueueAll(work, workSet, targets);
                 addEdges(callEdges, current, targets, CallEdge.Kind.THREAD_START_TASK);
             }
             return;
         }
-        if (isUnsupportedEnumSynthetic(classes, target)) {
+        if (instruction.opcode() == 185 && isIteratorForEachRemaining(target)) {
+            final MethodRef consumerAccept = new MethodRef("java/util/function/Consumer", "accept", "(Ljava/lang/Object;)V");
+            final List<EntryPoint> targetMethods = interfaceTargets(classes, consumerAccept, entryPoints);
+            if (!targetMethods.isEmpty()) {
+                enqueueAll(work, workSet, targetMethods);
+                addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
+            }
+            if (containsMethodRef(materializedLambdaMethods, consumerAccept) || !targetMethods.isEmpty()) {
+                return;
+            }
+            diagnostics.add(Diagnostic.error(
+                "JAVAN012",
+                "unsupported reachable application method call",
+                current.className(),
+                current.methodName() + current.descriptor(),
+                target.display(),
+                "Iterator.forEachRemaining requires either a closed-world Consumer implementation class or a supported materialized Consumer lambda target.",
+                "Provide a reachable Consumer implementation class or keep this exact iterator bulk-consumer flow on the JVM until broader receiver support lands."
+            ));
+            return;
+        }
+        if (enumCallKind == EnumCallKind.UNSUPPORTED_SYNTHETIC) {
             diagnostics.add(unsupportedEnumValueOfDiagnostic(current, target.display()));
             return;
         }
@@ -174,17 +245,17 @@ public final class ReachabilityAnalyzer {
             return;
         }
         if (instruction.opcode() == 185) {
-            final Optional<EntryPoint> defaultTarget = defaultInterfaceTarget(classes, target);
+            final Optional<EntryPoint> defaultTarget = defaultInterfaceTarget(classes, target, entryPoints);
             if (defaultTarget.isPresent()) {
                 final EntryPoint callee = defaultTarget.orElseThrow();
-                work.add(callee);
+                enqueue(work, workSet, callee);
                 addEdge(callEdges, current, callee, CallEdge.Kind.CALL);
                 return;
             }
             if (isCatchNullFunctionalInterfaceCall(classes, target)) {
-                final List<EntryPoint> targetMethods = interfaceTargets(classes, target);
+                final List<EntryPoint> targetMethods = interfaceTargets(classes, target, entryPoints);
                 if (!targetMethods.isEmpty()) {
-                    work.addAll(targetMethods);
+                    enqueueAll(work, workSet, targetMethods);
                     addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
                 }
                 if (containsMethodRef(materializedLambdaMethods, target) || !targetMethods.isEmpty()) {
@@ -204,9 +275,9 @@ public final class ReachabilityAnalyzer {
             if (containsMethodRef(materializedLambdaMethods, target)) {
                 return;
             }
-            final List<EntryPoint> targetMethods = interfaceTargets(classes, target);
+            final List<EntryPoint> targetMethods = interfaceTargets(classes, target, entryPoints);
             if (!targetMethods.isEmpty()) {
-                work.addAll(targetMethods);
+                enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
                 return;
             }
@@ -221,7 +292,7 @@ public final class ReachabilityAnalyzer {
             ));
             return;
         }
-        if (!classes.containsKey(target.owner())) {
+        if (targetOwner == null) {
             if (!target.owner().startsWith("java/")
                 && !target.owner().startsWith("jdk/")
                 && !target.owner().startsWith("sun/")
@@ -239,33 +310,33 @@ public final class ReachabilityAnalyzer {
             return;
         }
         if (instruction.opcode() == 184) {
-            final EntryPoint callee = new EntryPoint(target.owner(), target.name(), target.descriptor());
-            work.add(callee);
+            final EntryPoint callee = entryPoints.entry(target.owner(), target.name(), target.descriptor());
+            enqueue(work, workSet, callee);
             addEdge(callEdges, current, callee, CallEdge.Kind.CALL);
             return;
         }
         if (instruction.opcode() == 183 && "<init>".equals(target.name())) {
-            final EntryPoint callee = new EntryPoint(target.owner(), target.name(), target.descriptor());
-            work.add(callee);
+            final EntryPoint callee = entryPoints.entry(target.owner(), target.name(), target.descriptor());
+            enqueue(work, workSet, callee);
             addEdge(callEdges, current, callee, CallEdge.Kind.CALL);
             return;
         }
         if (instruction.opcode() == 183) {
-            final EntryPoint callee = new EntryPoint(target.owner(), target.name(), target.descriptor());
-            work.add(callee);
+            final EntryPoint callee = entryPoints.entry(target.owner(), target.name(), target.descriptor());
+            enqueue(work, workSet, callee);
             addEdge(callEdges, current, callee, CallEdge.Kind.CALL);
             return;
         }
         if (instruction.opcode() == 182 && isConcreteExactCallTarget(classes, target.owner())) {
-            final EntryPoint callee = new EntryPoint(target.owner(), target.name(), target.descriptor());
-            work.add(callee);
+            final EntryPoint callee = entryPoints.entry(target.owner(), target.name(), target.descriptor());
+            enqueue(work, workSet, callee);
             addEdge(callEdges, current, callee, CallEdge.Kind.CALL);
             return;
         }
         if (instruction.opcode() == 182) {
-            final List<EntryPoint> targets = virtualTargets(classes, target);
+            final List<EntryPoint> targets = virtualTargets(classes, target, entryPoints);
             if (!targets.isEmpty()) {
-                work.addAll(targets);
+                enqueueAll(work, workSet, targets);
                 addEdges(callEdges, current, targets, CallEdge.Kind.CALL);
                 return;
             }
@@ -285,9 +356,11 @@ public final class ReachabilityAnalyzer {
         final Map<String, ClassFile> classes,
         final Instruction instruction,
         final List<EntryPoint> work,
+        final EntryPointMembership workSet,
         final EntryPoint current,
-        final List<CallEdge> callEdges,
-        final List<MethodRef> materializedLambdaMethods
+        final CallEdgeTracker callEdges,
+        final List<MethodRef> materializedLambdaMethods,
+        final EntryPointPool entryPoints
     ) {
         if (instruction.dynamicRef().isEmpty()) {
             return;
@@ -322,15 +395,16 @@ public final class ReachabilityAnalyzer {
         if (!classes.containsKey(implementation.owner())) {
             return;
         }
-        final EntryPoint callee = new EntryPoint(implementation.owner(), implementation.name(), implementation.descriptor());
-        work.add(callee);
+        final EntryPoint callee = entryPoints.entry(implementation.owner(), implementation.name(), implementation.descriptor());
+        enqueue(work, workSet, callee);
         addEdge(callEdges, current, callee, CallEdge.Kind.CALL);
-        enqueueClassInitializer(classes, implementation.owner(), work, current, callEdges);
+        enqueueClassInitializer(classes, implementation.owner(), work, workSet, current, callEdges, entryPoints);
     }
 
     private static Optional<EntryPoint> defaultInterfaceTarget(
         final Map<String, ClassFile> classes,
-        final MethodRef target
+        final MethodRef target,
+        final EntryPointPool entryPoints
     ) {
         final ClassFile owner = classes.get(target.owner());
         if (owner == null || !owner.isInterface()) {
@@ -340,7 +414,7 @@ public final class ReachabilityAnalyzer {
         if (method.isEmpty() || method.orElseThrow().code().isEmpty()) {
             return Optional.empty();
         }
-        return Optional.of(new EntryPoint(target.owner(), target.name(), target.descriptor()));
+        return Optional.of(entryPoints.entry(target.owner(), target.name(), target.descriptor()));
     }
 
     private static boolean isCatchNullFunctionalInterfaceCall(final Map<String, ClassFile> classes, final MethodRef target) {
@@ -374,27 +448,29 @@ public final class ReachabilityAnalyzer {
         final Map<String, ClassFile> classes,
         final Instruction instruction,
         final List<EntryPoint> work,
+        final EntryPointMembership workSet,
         final EntryPoint current,
-        final List<CallEdge> callEdges
+        final CallEdgeTracker callEdges,
+        final EntryPointPool entryPoints
     ) {
         if (instruction.opcode() == 178 || instruction.opcode() == 179) {
             final Optional<FieldRef> fieldRef = instruction.fieldRef();
             if (fieldRef.isPresent()) {
-                enqueueClassInitializer(classes, fieldRef.orElseThrow().owner(), work, current, callEdges);
+                enqueueClassInitializer(classes, fieldRef.orElseThrow().owner(), work, workSet, current, callEdges, entryPoints);
             }
             return;
         }
         if (instruction.opcode() == 184) {
             final Optional<MethodRef> methodRef = instruction.methodRef();
             if (methodRef.isPresent()) {
-                enqueueClassInitializer(classes, methodRef.orElseThrow().owner(), work, current, callEdges);
+                enqueueClassInitializer(classes, methodRef.orElseThrow().owner(), work, workSet, current, callEdges, entryPoints);
             }
             return;
         }
         if (instruction.opcode() == 187) {
             final Optional<String> className = instruction.className();
             if (className.isPresent()) {
-                enqueueClassInitializer(classes, className.orElseThrow(), work, current, callEdges);
+                enqueueClassInitializer(classes, className.orElseThrow(), work, workSet, current, callEdges, entryPoints);
             }
         }
     }
@@ -403,8 +479,10 @@ public final class ReachabilityAnalyzer {
         final Map<String, ClassFile> classes,
         final String owner,
         final List<EntryPoint> work,
+        final EntryPointMembership workSet,
         final EntryPoint current,
-        final List<CallEdge> callEdges
+        final CallEdgeTracker callEdges,
+        final EntryPointPool entryPoints
     ) {
         final ClassFile classFile = classes.get(owner);
         if (classFile == null || classFile.isEnum()) {
@@ -413,8 +491,8 @@ public final class ReachabilityAnalyzer {
         final Optional<MethodInfo> method = classFile.method("<clinit>", "()V");
         if (method.isPresent()) {
             final MethodInfo classInitializer = method.orElseThrow();
-            final EntryPoint callee = new EntryPoint(owner, classInitializer.name(), classInitializer.descriptor());
-            work.add(callee);
+            final EntryPoint callee = entryPoints.entry(owner, classInitializer.name(), classInitializer.descriptor());
+            enqueue(work, workSet, callee);
             addEdge(callEdges, current, callee, CallEdge.Kind.CLASS_INITIALIZER);
         }
     }
@@ -433,31 +511,6 @@ public final class ReachabilityAnalyzer {
             }
         }
         return true;
-    }
-
-    private static boolean isEnumIntrinsic(final Map<String, ClassFile> classes, final MethodRef target) {
-        final ClassFile owner = classes.get(target.owner());
-        if (owner == null || !owner.isEnum()) {
-            return false;
-        }
-        if (!"()Ljava/lang/String;".equals(target.descriptor())) {
-            return false;
-        }
-        if ("name".equals(target.name())) {
-            return true;
-        }
-        return "toString".equals(target.name());
-    }
-
-    private static boolean isUnsupportedEnumSynthetic(final Map<String, ClassFile> classes, final MethodRef target) {
-        final ClassFile owner = classes.get(target.owner());
-        if (owner == null || !owner.isEnum()) {
-            return false;
-        }
-        if (!"valueOf".equals(target.name())) {
-            return false;
-        }
-        return ("(Ljava/lang/String;)L" + target.owner() + ";").equals(target.descriptor());
     }
 
     private static boolean isUnsupportedEnumSyntheticEntry(final Map<String, ClassFile> classes, final EntryPoint entry) {
@@ -483,21 +536,25 @@ public final class ReachabilityAnalyzer {
         );
     }
 
-    private static boolean isSupportedEnumSynthetic(final Map<String, ClassFile> classes, final MethodRef target) {
-        final ClassFile owner = classes.get(target.owner());
+    private static EnumCallKind enumCallKind(final ClassFile owner, final MethodRef target) {
         if (owner == null || !owner.isEnum()) {
-            return false;
+            return EnumCallKind.NONE;
         }
         if ("ordinal".equals(target.name()) && "()I".equals(target.descriptor())) {
-            return true;
+            return EnumCallKind.SUPPORTED_SYNTHETIC;
         }
-        if (!"values".equals(target.name())) {
-            return false;
+        if ("values".equals(target.name()) && target.descriptor().equals("()[L" + target.owner() + ";")) {
+            return EnumCallKind.SUPPORTED_SYNTHETIC;
         }
-        if (!target.descriptor().equals("()[L" + target.owner() + ";")) {
-            return false;
+        if ("()Ljava/lang/String;".equals(target.descriptor())) {
+            if ("name".equals(target.name()) || "toString".equals(target.name())) {
+                return EnumCallKind.INTRINSIC;
+            }
         }
-        return true;
+        if ("valueOf".equals(target.name()) && ("(Ljava/lang/String;)L" + target.owner() + ";").equals(target.descriptor())) {
+            return EnumCallKind.UNSUPPORTED_SYNTHETIC;
+        }
+        return EnumCallKind.NONE;
     }
 
     private static boolean isJdkCall(final MethodRef target) {
@@ -612,7 +669,17 @@ public final class ReachabilityAnalyzer {
             || "(Ljava/lang/Runnable;Ljava/lang/String;)V".equals(target.descriptor()));
     }
 
-    private static List<EntryPoint> interfaceTargets(final Map<String, ClassFile> classes, final MethodRef target) {
+    private static boolean isIteratorForEachRemaining(final MethodRef target) {
+        return "java/util/Iterator".equals(target.owner())
+            && "forEachRemaining".equals(target.name())
+            && "(Ljava/util/function/Consumer;)V".equals(target.descriptor());
+    }
+
+    private static List<EntryPoint> interfaceTargets(
+        final Map<String, ClassFile> classes,
+        final MethodRef target,
+        final EntryPointPool entryPoints
+    ) {
         final List<EntryPoint> targets = new ArrayList<>();
         for (final ClassFile candidate : classes.values()) {
             if (candidate.isInterface()) {
@@ -622,14 +689,19 @@ public final class ReachabilityAnalyzer {
                 continue;
             }
             if (candidate.method(target.name(), target.descriptor()).isPresent()) {
-                targets.add(new EntryPoint(candidate.name(), target.name(), target.descriptor()));
+                targets.add(entryPoints.entry(candidate.name(), target.name(), target.descriptor()));
             }
         }
         return List.copyOf(targets);
     }
 
-    private static List<EntryPoint> virtualTargets(final Map<String, ClassFile> classes, final MethodRef target) {
+    private static List<EntryPoint> virtualTargets(
+        final Map<String, ClassFile> classes,
+        final MethodRef target,
+        final EntryPointPool entryPoints
+    ) {
         final List<EntryPoint> targets = new ArrayList<>();
+        final EntryPointMembership targetSet = new EntryPointMembership();
         for (final ClassFile candidate : classes.values()) {
             if (candidate.isInterface()) {
                 continue;
@@ -637,10 +709,10 @@ public final class ReachabilityAnalyzer {
             if (!isSubtypeOf(classes, candidate.name(), target.owner())) {
                 continue;
             }
-            final Optional<EntryPoint> resolved = lowerableResolvedVirtualTarget(classes, candidate.name(), target);
+            final Optional<EntryPoint> resolved = lowerableResolvedVirtualTarget(classes, candidate.name(), target, entryPoints);
             if (resolved.isPresent()) {
                 final EntryPoint entryPoint = resolved.orElseThrow();
-                if (!containsEntry(targets, entryPoint)) {
+                if (targetSet.add(entryPoint)) {
                     targets.add(entryPoint);
                 }
             }
@@ -651,14 +723,18 @@ public final class ReachabilityAnalyzer {
     private static boolean enqueueRunnableThreadTargets(
         final Map<String, ClassFile> classes,
         final List<EntryPoint> reachable,
+        final EntryPointMembership reachableSet,
         final List<EntryPoint> work,
-        final List<CallEdge> callEdges
+        final EntryPointMembership workSet,
+        final CallEdgeTracker callEdges,
+        final EntryPointPool entryPoints,
+        final MethodRefFactsCache methodRefFacts
     ) {
-        final List<EntryPoint> targets = runnableThreadTargets(classes, reachable);
+        final List<EntryPoint> targets = runnableThreadTargets(classes, reachable, entryPoints, methodRefFacts);
         final List<EntryPoint> starters = threadStartMethods(classes, reachable);
         boolean added = false;
         for (final EntryPoint target : targets) {
-            if (!containsEntry(reachable, target) && !containsEntry(work, target)) {
+            if (!reachableSet.contains(target) && workSet.add(target)) {
                 work.add(target);
                 added = true;
             }
@@ -669,38 +745,32 @@ public final class ReachabilityAnalyzer {
         return added;
     }
 
-    private static List<EntryPoint> virtualThreadTargets(final Map<String, ClassFile> classes, final EntryPoint current) {
+    private static List<EntryPoint> virtualThreadTargets(
+        final Map<String, ClassFile> classes,
+        final EntryPoint current,
+        final EntryPointPool entryPoints,
+        final MethodRefFactsCache methodRefFacts
+    ) {
         final Optional<MethodInfo> method = method(classes, current);
         if (method.isEmpty() || method.orElseThrow().code().isEmpty()) {
             return List.of();
         }
         final List<Instruction> instructions = method.orElseThrow().code().orElseThrow().instructions();
         final List<EntryPoint> result = new ArrayList<>();
+        final EntryPointMembership resultSet = new EntryPointMembership();
         boolean unknownRunnableTarget = false;
         for (int index = 0; index < instructions.size(); index++) {
             final Optional<MethodRef> methodRef = instructions.get(index).methodRef();
             if (methodRef.isEmpty()) {
                 continue;
             }
-            final MethodRef target = JdkCallSupport.normalizeInheritedSupportedJdkCall(classes, methodRef.orElseThrow())
-                .orElse(methodRef.orElseThrow());
-            if (!isVirtualThreadStart(target)
-                && !isVirtualThreadBuilderStart(target)
-                && !isThreadFactoryNewThread(target)
-                && !isExecutorExecute(target)
-                && !isExecutorSubmit(target)
-                && !isScheduledThreadPoolExecutorSchedule(target)
-                && !isScheduledThreadPoolExecutorScheduleAtFixedRate(target)
-                && !isScheduledThreadPoolExecutorScheduleWithFixedDelay(target)
-                && !isScheduledExecutorServiceSchedule(target)
-                && !isScheduledExecutorServiceScheduleAtFixedRate(target)
-                && !isScheduledExecutorServiceScheduleWithFixedDelay(target)) {
+            if (!methodRefFacts.resolve(methodRef.orElseThrow()).threadTargetCarrierTarget()) {
                 continue;
             }
-            final Optional<EntryPoint> inferredTarget = inferVirtualThreadTarget(classes, instructions, index);
+            final Optional<EntryPoint> inferredTarget = inferVirtualThreadTarget(classes, instructions, index, entryPoints);
             if (inferredTarget.isPresent()) {
                 final EntryPoint entryPoint = inferredTarget.orElseThrow();
-                if (!containsEntry(result, entryPoint)) {
+                if (resultSet.add(entryPoint)) {
                     result.add(entryPoint);
                 }
             } else {
@@ -708,8 +778,8 @@ public final class ReachabilityAnalyzer {
             }
         }
         if (unknownRunnableTarget) {
-            for (final EntryPoint target : allRunnableThreadTargets(classes)) {
-                if (!containsEntry(result, target)) {
+            for (final EntryPoint target : allRunnableThreadTargets(classes, entryPoints)) {
+                if (resultSet.add(target)) {
                     result.add(target);
                 }
             }
@@ -720,7 +790,8 @@ public final class ReachabilityAnalyzer {
     private static Optional<EntryPoint> inferVirtualThreadTarget(
         final Map<String, ClassFile> classes,
         final List<Instruction> instructions,
-        final int startIndex
+        final int startIndex,
+        final EntryPointPool entryPoints
     ) {
         if (startIndex < 1) {
             return Optional.empty();
@@ -748,7 +819,7 @@ public final class ReachabilityAnalyzer {
                 return Optional.empty();
             }
         }
-        return lowerableResolvedVirtualTarget(classes, runnableOwner.orElseThrow(), RUNNABLE_RUN);
+        return lowerableResolvedVirtualTarget(classes, runnableOwner.orElseThrow(), RUNNABLE_RUN, entryPoints);
     }
 
     private static Optional<String> supportedRunnableOwner(
@@ -958,6 +1029,7 @@ public final class ReachabilityAnalyzer {
 
     private static List<EntryPoint> threadStartMethods(final Map<String, ClassFile> classes, final List<EntryPoint> reachable) {
         final List<EntryPoint> result = new ArrayList<>();
+        final EntryPointMembership resultSet = new EntryPointMembership();
         for (final EntryPoint reachableMethod : reachable) {
             final Optional<MethodInfo> method = method(classes, reachableMethod);
             if (method.isEmpty() || method.orElseThrow().code().isEmpty()) {
@@ -968,7 +1040,7 @@ public final class ReachabilityAnalyzer {
                 if (methodRef.isPresent() && (isThreadStart(methodRef.orElseThrow())
                     || isVirtualThreadStart(methodRef.orElseThrow())
                     || isVirtualThreadBuilderStart(methodRef.orElseThrow()))) {
-                    if (!containsEntry(result, reachableMethod)) {
+                    if (resultSet.add(reachableMethod)) {
                         result.add(reachableMethod);
                     }
                     break;
@@ -979,7 +1051,7 @@ public final class ReachabilityAnalyzer {
     }
 
     private static void addEdges(
-        final List<CallEdge> callEdges,
+        final CallEdgeTracker callEdges,
         final EntryPoint caller,
         final List<EntryPoint> callees,
         final CallEdge.Kind kind
@@ -990,27 +1062,27 @@ public final class ReachabilityAnalyzer {
     }
 
     private static void addEdge(
-        final List<CallEdge> callEdges,
+        final CallEdgeTracker callEdges,
         final EntryPoint caller,
         final EntryPoint callee,
         final CallEdge.Kind kind
     ) {
-        final CallEdge edge = new CallEdge(caller, callee, kind);
-        if (!callEdges.contains(edge)) {
-            callEdges.add(edge);
-        }
+        callEdges.add(caller, callee, kind);
     }
 
     private static List<EntryPoint> runnableThreadTargets(
         final Map<String, ClassFile> classes,
-        final List<EntryPoint> reachable
+        final List<EntryPoint> reachable,
+        final EntryPointPool entryPoints,
+        final MethodRefFactsCache methodRefFacts
     ) {
-        if (!containsReachableThreadStart(classes, reachable)) {
+        if (!containsReachableThreadStart(classes, reachable, methodRefFacts)) {
             return List.of();
         }
         boolean sawRunnableThreadConstruction = false;
         boolean unknownRunnableTarget = false;
         final List<EntryPoint> exactTargets = new ArrayList<>();
+        final EntryPointMembership exactTargetSet = new EntryPointMembership();
         for (final EntryPoint reachableMethod : reachable) {
             final Optional<MethodInfo> method = method(classes, reachableMethod);
             if (method.isEmpty() || method.orElseThrow().code().isEmpty()) {
@@ -1025,10 +1097,10 @@ public final class ReachabilityAnalyzer {
                     continue;
                 }
                 sawRunnableThreadConstruction = true;
-                final Optional<EntryPoint> inferredTarget = inferRunnableThreadTarget(classes, instructions, index);
+                final Optional<EntryPoint> inferredTarget = inferRunnableThreadTarget(classes, instructions, index, entryPoints);
                 if (inferredTarget.isPresent()) {
                     final EntryPoint entryPoint = inferredTarget.orElseThrow();
-                    if (!containsEntry(exactTargets, entryPoint)) {
+                    if (exactTargetSet.add(entryPoint)) {
                         exactTargets.add(entryPoint);
                     }
                 } else {
@@ -1042,10 +1114,14 @@ public final class ReachabilityAnalyzer {
         if (!unknownRunnableTarget && !exactTargets.isEmpty()) {
             return List.copyOf(exactTargets);
         }
-        return allRunnableThreadTargets(classes);
+        return allRunnableThreadTargets(classes, entryPoints);
     }
 
-    private static boolean containsReachableThreadStart(final Map<String, ClassFile> classes, final List<EntryPoint> reachable) {
+    private static boolean containsReachableThreadStart(
+        final Map<String, ClassFile> classes,
+        final List<EntryPoint> reachable,
+        final MethodRefFactsCache methodRefFacts
+    ) {
         for (final EntryPoint reachableMethod : reachable) {
             final Optional<MethodInfo> method = method(classes, reachableMethod);
             if (method.isEmpty() || method.orElseThrow().code().isEmpty()) {
@@ -1053,37 +1129,46 @@ public final class ReachabilityAnalyzer {
             }
             for (final Instruction instruction : method.orElseThrow().code().orElseThrow().instructions()) {
                 final Optional<MethodRef> methodRef = instruction.methodRef();
-                if (methodRef.isPresent()) {
-                    final MethodRef target = JdkCallSupport.normalizeInheritedSupportedJdkCall(classes, methodRef.orElseThrow())
-                        .orElse(methodRef.orElseThrow());
-                    if (isThreadStart(target)
-                        || isVirtualThreadStart(target)
-                        || isVirtualThreadBuilderStart(target)
-                        || isExecutorExecute(target)
-                        || isExecutorSubmit(target)
-                        || isScheduledThreadPoolExecutorSchedule(target)
-                        || isScheduledThreadPoolExecutorScheduleAtFixedRate(target)
-                        || isScheduledThreadPoolExecutorScheduleWithFixedDelay(target)
-                        || isScheduledExecutorServiceSchedule(target)
-                        || isScheduledExecutorServiceScheduleAtFixedRate(target)
-                        || isScheduledExecutorServiceScheduleWithFixedDelay(target)) {
-                        return true;
-                    }
+                if (methodRef.isPresent() && methodRefFacts.resolve(methodRef.orElseThrow()).reachableThreadStartTarget()) {
+                    return true;
                 }
             }
         }
         return false;
     }
 
+    private static boolean isImmediateThreadDispatchTarget(final MethodRef target) {
+        return isVirtualThreadStart(target)
+            || isVirtualThreadBuilderStart(target)
+            || isExecutorExecute(target)
+            || isExecutorSubmit(target)
+            || isScheduledThreadPoolExecutorSchedule(target)
+            || isScheduledThreadPoolExecutorScheduleAtFixedRate(target)
+            || isScheduledThreadPoolExecutorScheduleWithFixedDelay(target)
+            || isScheduledExecutorServiceSchedule(target)
+            || isScheduledExecutorServiceScheduleAtFixedRate(target)
+            || isScheduledExecutorServiceScheduleWithFixedDelay(target);
+    }
+
+    private static boolean isReachableThreadStartTarget(final MethodRef target) {
+        return isThreadStart(target) || isImmediateThreadDispatchTarget(target);
+    }
+
+    private static boolean isThreadTargetCarrierTarget(final MethodRef target) {
+        return isImmediateThreadDispatchTarget(target)
+            || isThreadFactoryNewThread(target);
+    }
+
     private static Optional<EntryPoint> inferRunnableThreadTarget(
         final Map<String, ClassFile> classes,
         final List<Instruction> instructions,
-        final int threadConstructorIndex
+        final int threadConstructorIndex,
+        final EntryPointPool entryPoints
     ) {
         final Optional<MethodRef> targetRef = instructions.get(threadConstructorIndex).methodRef();
         if (targetRef.isPresent() && (isThreadFactoryNewThread(targetRef.orElseThrow())
             || isVirtualThreadBuilderUnstarted(targetRef.orElseThrow()))) {
-            return inferVirtualThreadTarget(classes, instructions, threadConstructorIndex);
+            return inferVirtualThreadTarget(classes, instructions, threadConstructorIndex, entryPoints);
         }
         final int runnableConstructorOffset = targetRef.isPresent()
             && "(Ljava/lang/Runnable;Ljava/lang/String;)V".equals(targetRef.orElseThrow().descriptor())
@@ -1114,21 +1199,25 @@ public final class ReachabilityAnalyzer {
             || !className.orElseThrow().equals(target.owner())) {
             return Optional.empty();
         }
-        return lowerableResolvedVirtualTarget(classes, target.owner(), RUNNABLE_RUN);
+        return lowerableResolvedVirtualTarget(classes, target.owner(), RUNNABLE_RUN, entryPoints);
     }
 
-    private static List<EntryPoint> allRunnableThreadTargets(final Map<String, ClassFile> classes) {
+    private static List<EntryPoint> allRunnableThreadTargets(
+        final Map<String, ClassFile> classes,
+        final EntryPointPool entryPoints
+    ) {
         final List<EntryPoint> targets = new ArrayList<>();
+        final EntryPointMembership targetSet = new EntryPointMembership();
         for (final ClassFile candidate : classes.values()) {
             if (candidate.isInterface()
                 || !isAssignableTo(classes, candidate.name(), RUNNABLE_RUN.owner())
                 || isAssignableTo(classes, candidate.name(), "java/lang/Thread")) {
                 continue;
             }
-            final Optional<EntryPoint> resolved = lowerableResolvedVirtualTarget(classes, candidate.name(), RUNNABLE_RUN);
+            final Optional<EntryPoint> resolved = lowerableResolvedVirtualTarget(classes, candidate.name(), RUNNABLE_RUN, entryPoints);
             if (resolved.isPresent()) {
                 final EntryPoint entryPoint = resolved.orElseThrow();
-                if (!containsEntry(targets, entryPoint)) {
+                if (targetSet.add(entryPoint)) {
                     targets.add(entryPoint);
                 }
             }
@@ -1136,12 +1225,17 @@ public final class ReachabilityAnalyzer {
         return List.copyOf(targets);
     }
 
-    private static Optional<EntryPoint> resolvedVirtualTarget(final Map<String, ClassFile> classes, final String receiver, final MethodRef target) {
+    private static Optional<EntryPoint> resolvedVirtualTarget(
+        final Map<String, ClassFile> classes,
+        final String receiver,
+        final MethodRef target,
+        final EntryPointPool entryPoints
+    ) {
         String current = receiver;
         while (classes.containsKey(current)) {
             final ClassFile classFile = classes.get(current);
             if (classFile.method(target.name(), target.descriptor()).isPresent()) {
-                return Optional.of(new EntryPoint(current, target.name(), target.descriptor()));
+                return Optional.of(entryPoints.entry(current, target.name(), target.descriptor()));
             }
             current = classFile.superName();
         }
@@ -1151,9 +1245,10 @@ public final class ReachabilityAnalyzer {
     private static Optional<EntryPoint> lowerableResolvedVirtualTarget(
         final Map<String, ClassFile> classes,
         final String receiver,
-        final MethodRef target
+        final MethodRef target,
+        final EntryPointPool entryPoints
     ) {
-        final Optional<EntryPoint> resolved = resolvedVirtualTarget(classes, receiver, target);
+        final Optional<EntryPoint> resolved = resolvedVirtualTarget(classes, receiver, target, entryPoints);
         if (resolved.isEmpty()) {
             return Optional.empty();
         }
@@ -1218,6 +1313,152 @@ public final class ReachabilityAnalyzer {
             }
         }
         return false;
+    }
+
+    private enum EnumCallKind {
+        NONE,
+        INTRINSIC,
+        SUPPORTED_SYNTHETIC,
+        UNSUPPORTED_SYNTHETIC
+    }
+
+    private static final class CallEdgeTracker {
+        private final List<CallEdge> edges = new ArrayList<>();
+        private final List<String> owners = new ArrayList<>();
+        private final List<List<CallerBucket>> ownerBuckets = new ArrayList<>();
+
+        private void add(final EntryPoint caller, final EntryPoint callee, final CallEdge.Kind kind) {
+            final List<CallEdge> bucket = bucket(caller);
+            for (final CallEdge edge : bucket) {
+                if (edge.kind() == kind && sameEntry(edge.callee(), callee)) {
+                    return;
+                }
+            }
+            final CallEdge edge = new CallEdge(caller, callee, kind);
+            bucket.add(edge);
+            edges.add(edge);
+        }
+
+        private List<CallEdge> snapshot() {
+            return List.copyOf(edges);
+        }
+
+        private List<CallEdge> bucket(final EntryPoint caller) {
+            final List<CallerBucket> ownerBucket = ownerBucket(caller.className());
+            for (final CallerBucket bucket : ownerBucket) {
+                if (sameEntry(bucket.caller(), caller)) {
+                    return bucket.edges();
+                }
+            }
+            final CallerBucket bucket = new CallerBucket(caller, new ArrayList<>());
+            ownerBucket.add(bucket);
+            return bucket.edges();
+        }
+
+        private List<CallerBucket> ownerBucket(final String owner) {
+            for (int index = 0; index < owners.size(); index++) {
+                if (owners.get(index).equals(owner)) {
+                    return ownerBuckets.get(index);
+                }
+            }
+            final List<CallerBucket> bucket = new ArrayList<>();
+            owners.add(owner);
+            ownerBuckets.add(bucket);
+            return bucket;
+        }
+    }
+
+    private static void enqueue(final List<EntryPoint> work, final EntryPointMembership workSet, final EntryPoint entryPoint) {
+        if (workSet.add(entryPoint)) {
+            work.add(entryPoint);
+        }
+    }
+
+    private static void enqueueAll(final List<EntryPoint> work, final EntryPointMembership workSet, final List<EntryPoint> entries) {
+        for (final EntryPoint entry : entries) {
+            enqueue(work, workSet, entry);
+        }
+    }
+
+    private static final class EntryPointPool {
+        private final List<String> owners = new ArrayList<>();
+        private final List<List<EntryPoint>> buckets = new ArrayList<>();
+
+        private EntryPoint entry(final String className, final String methodName, final String descriptor) {
+            final List<EntryPoint> ownerBucket = ownerBucket(className);
+            for (final EntryPoint entry : ownerBucket) {
+                if (entry.methodName().equals(methodName) && entry.descriptor().equals(descriptor)) {
+                    return entry;
+                }
+            }
+            final EntryPoint entry = new EntryPoint(className, methodName, descriptor);
+            ownerBucket.add(entry);
+            return entry;
+        }
+
+        private List<EntryPoint> ownerBucket(final String owner) {
+            for (int index = 0; index < owners.size(); index++) {
+                if (owners.get(index).equals(owner)) {
+                    return buckets.get(index);
+                }
+            }
+            final List<EntryPoint> bucket = new ArrayList<>();
+            owners.add(owner);
+            buckets.add(bucket);
+            return bucket;
+        }
+    }
+
+    private static final class EntryPointMembership {
+        private final List<String> owners = new ArrayList<>();
+        private final List<List<EntryPoint>> buckets = new ArrayList<>();
+
+        private boolean add(final EntryPoint entryPoint) {
+            final List<EntryPoint> ownerBucket = ownerBucket(entryPoint.className());
+            for (final EntryPoint existing : ownerBucket) {
+                if (sameEntry(existing, entryPoint)) {
+                    return false;
+                }
+            }
+            ownerBucket.add(entryPoint);
+            return true;
+        }
+
+        private boolean contains(final EntryPoint entryPoint) {
+            final List<EntryPoint> ownerBucket = existingOwnerBucket(entryPoint.className());
+            if (ownerBucket == null) {
+                return false;
+            }
+            for (final EntryPoint existing : ownerBucket) {
+                if (sameEntry(existing, entryPoint)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private List<EntryPoint> ownerBucket(final String owner) {
+            final List<EntryPoint> existing = existingOwnerBucket(owner);
+            if (existing != null) {
+                return existing;
+            }
+            final List<EntryPoint> bucket = new ArrayList<>();
+            owners.add(owner);
+            buckets.add(bucket);
+            return bucket;
+        }
+
+        private List<EntryPoint> existingOwnerBucket(final String owner) {
+            for (int index = 0; index < owners.size(); index++) {
+                if (owners.get(index).equals(owner)) {
+                    return buckets.get(index);
+                }
+            }
+            return null;
+        }
+    }
+
+    private record CallerBucket(EntryPoint caller, List<CallEdge> edges) {
     }
 
 }

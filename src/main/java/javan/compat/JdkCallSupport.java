@@ -574,6 +574,7 @@ public final class JdkCallSupport {
         runtime("Iterator.hasNext", "java/util/Iterator", "hasNext", "()Z"),
         runtime("Iterator.next", "java/util/Iterator", "next", "()Ljava/lang/Object;"),
         runtime("Iterator.remove", "java/util/Iterator", "remove", "()V"),
+        runtime("Iterator.forEachRemaining", "java/util/Iterator", "forEachRemaining", "(Ljava/util/function/Consumer;)V"),
         runtime("ListIterator.hasNext", "java/util/ListIterator", "hasNext", "()Z"),
         runtime("ListIterator.next", "java/util/ListIterator", "next", "()Ljava/lang/Object;"),
         runtime("ListIterator.hasPrevious", "java/util/ListIterator", "hasPrevious", "()Z"),
@@ -1153,6 +1154,9 @@ public final class JdkCallSupport {
         }
         if ("remove".equals(name)) {
             return "()V".equals(descriptor);
+        }
+        if ("forEachRemaining".equals(name)) {
+            return "(Ljava/util/function/Consumer;)V".equals(descriptor);
         }
         return false;
     }

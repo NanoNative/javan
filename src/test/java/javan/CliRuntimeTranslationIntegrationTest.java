@@ -3660,6 +3660,74 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void iteratorForEachRemainingLambdaBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("iterator-foreach-remaining-lambda");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.Iterator;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<String> values = new ArrayList<>(List.of("left", "right"));
+                    final Iterator<String> iterator = values.iterator();
+                    final String prefix = "item:";
+                    iterator.forEachRemaining(value -> System.out.println(prefix + value));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/iterator-foreach-remaining-lambda").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("item:left\nitem:right\n");
+    }
+
+    @Test
+    void iteratorForEachRemainingConcreteConsumerBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("iterator-foreach-remaining-consumer");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.Iterator;
+            import java.util.List;
+            import java.util.function.Consumer;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Iterator<String> iterator = new ArrayList<>(List.of("left", "right")).iterator();
+                    iterator.forEachRemaining(new Printer());
+                }
+
+                private static final class Printer implements Consumer<String> {
+                    @Override
+                    public void accept(final String value) {
+                        System.out.println(value);
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/iterator-foreach-remaining-consumer").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("left\nright\n");
+    }
+
+    @Test
     void listOfImmutableAddFailsAtRuntime() throws Exception {
         final Path project = project("list-of-immutable-add");
         writeJava(project, "com.acme.Main", """

@@ -895,6 +895,101 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersIteratorForEachRemainingWithMaterializedConsumerLambdaToLoopAndVoidHelperCall() {
+        final EntryPoint buildEntry = new EntryPoint("com/acme/Main", "build", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/function/Consumer;");
+        final EntryPoint iterateEntry = new EntryPoint("com/acme/Main", "iterate", "(Ljava/util/Iterator;Ljava/util/function/Consumer;)V");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    capturedConsumerBuildMethod(),
+                    iteratorForEachRemainingMethod(),
+                    capturedConsumerImplementationMethod()
+                ))
+            ),
+            new CallGraph(buildEntry, List.of(buildEntry, iterateEntry), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("iterate")).singleElement().satisfies(function ->
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.label("label_iterator_for_each_remaining_loop_2_0"),
+                IrInstruction.assignInt(
+                    "int0",
+                    IrExpression.intCall("javan_iterator_has_next", List.of(IrExpression.objectLocal("arg0")))
+                ),
+                IrInstruction.branchIf(
+                    "label_iterator_for_each_remaining_body_2_0",
+                    IrExpression.intComparison("!=", IrExpression.intLocal("int0"), IrExpression.intLiteral(0))
+                ),
+                IrInstruction.jump("label_iterator_for_each_remaining_end_2_0"),
+                IrInstruction.label("label_iterator_for_each_remaining_body_2_0"),
+                IrInstruction.assignObject(
+                    "object1",
+                    IrExpression.objectCall("javan_iterator_next", List.of(IrExpression.objectLocal("arg0")))
+                ),
+                IrInstruction.callStaticVoid(
+                    "javan_materialized_lambda_apply_void",
+                    List.of(IrExpression.objectLocal("arg1"), IrExpression.objectLocal("object1"))
+                ),
+                IrInstruction.jump("label_iterator_for_each_remaining_loop_2_0"),
+                IrInstruction.label("label_iterator_for_each_remaining_end_2_0"),
+                IrInstruction.returnVoid()
+            )
+        );
+    }
+
+    @Test
+    void lowersIteratorForEachRemainingWithConcreteConsumerToLoopAndDirectAcceptCall() {
+        final EntryPoint iterateEntry = new EntryPoint("com/acme/Main", "iterate", "(Ljava/util/Iterator;Ljava/util/function/Consumer;)V");
+        final EntryPoint consumerEntry = new EntryPoint("com/acme/Printer", "accept", "(Ljava/lang/Object;)V");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(iteratorForEachRemainingMethod())),
+                "com/acme/Printer",
+                classFile(
+                    "com/acme/Printer",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/util/function/Consumer"),
+                    List.of(),
+                    List.of(consumerAcceptImplementationMethod())
+                )
+            ),
+            new CallGraph(iterateEntry, List.of(iterateEntry, consumerEntry), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("iterate")).singleElement().satisfies(function ->
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.label("label_iterator_for_each_remaining_loop_2_0"),
+                IrInstruction.assignInt(
+                    "int0",
+                    IrExpression.intCall("javan_iterator_has_next", List.of(IrExpression.objectLocal("arg0")))
+                ),
+                IrInstruction.branchIf(
+                    "label_iterator_for_each_remaining_body_2_0",
+                    IrExpression.intComparison("!=", IrExpression.intLocal("int0"), IrExpression.intLiteral(0))
+                ),
+                IrInstruction.jump("label_iterator_for_each_remaining_end_2_0"),
+                IrInstruction.label("label_iterator_for_each_remaining_body_2_0"),
+                IrInstruction.assignObject(
+                    "object1",
+                    IrExpression.objectCall("javan_iterator_next", List.of(IrExpression.objectLocal("arg0")))
+                ),
+                IrInstruction.callStaticVoid(
+                    "javan_com_acme_Printer_accept__Ljava_lang_Object__V",
+                    List.of(IrExpression.objectLocal("arg1"), IrExpression.objectLocal("object1"))
+                ),
+                IrInstruction.jump("label_iterator_for_each_remaining_loop_2_0"),
+                IrInstruction.label("label_iterator_for_each_remaining_end_2_0"),
+                IrInstruction.returnVoid()
+            )
+        );
+    }
+
+    @Test
     void lowersOptionalMapStaticFunctionLambdaToOptionalHelpersAndDirectFunctionCall() {
         final EntryPoint entryPoint = new EntryPoint("com/acme/Main", "mapValue", "(Ljava/util/Optional;)Ljava/util/Optional;");
         final IrProgram program = new BytecodeToIR().lower(
@@ -25816,6 +25911,31 @@ final class BytecodeToIRTest {
             plain(1, 43, "aload_1"),
             invokeInterface(2, new MethodRef("java/util/function/Consumer", "accept", "(Ljava/lang/Object;)V")),
             plain(7, 177, "return")
+        );
+    }
+
+    private static MethodInfo iteratorForEachRemainingMethod() {
+        return method(
+            0x0008,
+            "iterate",
+            "(Ljava/util/Iterator;Ljava/util/function/Consumer;)V",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeInterface(2, new MethodRef("java/util/Iterator", "forEachRemaining", "(Ljava/util/function/Consumer;)V")),
+            plain(7, 177, "return")
+        );
+    }
+
+    private static MethodInfo consumerAcceptImplementationMethod() {
+        return method(
+            0x0001,
+            "accept",
+            "(Ljava/lang/Object;)V",
+            0,
+            2,
+            plain(0, 177, "return")
         );
     }
 

@@ -763,6 +763,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void iteratorForEachRemainingIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Iterator",
+            "forEachRemaining",
+            "(Ljava/util/function/Consumer;)V"
+        ))).isTrue();
+    }
+
+    @Test
     void hashSetToArrayIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/HashSet",
@@ -1968,6 +1977,15 @@ final class JdkCallSupportTest {
             "java/util/Iterator",
             "remove",
             "()V"
+        ))).containsExactly("collections");
+    }
+
+    @Test
+    void iteratorForEachRemainingRequiresCollectionsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/Iterator",
+            "forEachRemaining",
+            "(Ljava/util/function/Consumer;)V"
         ))).containsExactly("collections");
     }
 

@@ -885,6 +885,7 @@ public final class BytecodeToIR {
                     localDeclarations,
                     pendingExceptionHandlerStacks,
                     dispatches,
+                    materializedLambdaMethods,
                     sourceLines
                 );
                 break;
