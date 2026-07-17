@@ -8554,6 +8554,54 @@ final class RuntimeSourceMemorySections {
             return map;
         }
 
+        void* javan_map_quadruple(void* first_key, void* first_value, void* second_key, void* second_value, void* third_key, void* third_value, void* fourth_key, void* fourth_value) {
+            if (first_key == NULL || first_value == NULL
+                || second_key == NULL || second_value == NULL
+                || third_key == NULL || third_value == NULL
+                || fourth_key == NULL || fourth_value == NULL) {
+                javan_panic("null Map.of entry");
+            }
+            if (javan_object_equals(first_key, second_key) != 0
+                || javan_object_equals(first_key, third_key) != 0
+                || javan_object_equals(first_key, fourth_key) != 0
+                || javan_object_equals(second_key, third_key) != 0
+                || javan_object_equals(second_key, fourth_key) != 0
+                || javan_object_equals(third_key, fourth_key) != 0) {
+                javan_panic("duplicate Map.of key");
+            }
+            void* first_key_root = first_key;
+            void* first_value_root = first_value;
+            void* second_key_root = second_key;
+            void* second_value_root = second_value;
+            void* third_key_root = third_key;
+            void* third_value_root = third_value;
+            void* fourth_key_root = fourth_key;
+            void* fourth_value_root = fourth_value;
+            void** javan_map_quadruple_roots[] = {
+                (void**) &first_key_root,
+                (void**) &first_value_root,
+                (void**) &second_key_root,
+                (void**) &second_value_root,
+                (void**) &third_key_root,
+                (void**) &third_value_root,
+                (void**) &fourth_key_root,
+                (void**) &fourth_value_root
+            };
+            javan_root_frame_push(javan_map_quadruple_roots, 8);
+            javan_object_map* map = javan_map_new_with_capacity(4, 1);
+            map->keys[0] = first_key_root;
+            map->values[0] = first_value_root;
+            map->keys[1] = second_key_root;
+            map->values[1] = second_value_root;
+            map->keys[2] = third_key_root;
+            map->values[2] = third_value_root;
+            map->keys[3] = fourth_key_root;
+            map->values[3] = fourth_value_root;
+            map->length = 4;
+            javan_root_frame_pop(javan_map_quadruple_roots);
+            return map;
+        }
+
         void* javan_map_copy_of(void* value) {
             javan_object_map* source = javan_map_checked(value);
             void** javan_map_copy_roots[] = {

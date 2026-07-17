@@ -76,12 +76,12 @@ final class CompatibilityReportsTest {
         assertThat(summary).contains(
             "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 5, \"leftCallables\": 3, \"coveragePercent\": \"40.0\"}",
             "\"exactJdkCallableAccounting\": {\"supportedCallables\": 2, \"explicitRejectedCallables\": 3, \"doneCallables\": 5, \"unknownCallables\": 0, \"totalCallables\": 5, \"donePercent\": \"100.0\"}",
-            "\"supportRows\": 180",
-            "\"passRows\": 180",
+            "\"supportRows\": 181",
+            "\"passRows\": 181",
             "\"scopedRows\": 0",
             "\"targetRows\": 0",
             "\"rejectedRows\": 0",
-            "\"accountedRows\": 180",
+            "\"accountedRows\": 181",
             "\"unaccountedRows\": 0"
         );
     }
@@ -131,6 +131,7 @@ final class CompatibilityReportsTest {
             "| `map-of-singleton` | pass |",
             "| `map-of-pair` | pass |",
             "| `map-of-triple` | pass |",
+            "| `map-of-quadruple` | pass |",
             "| `set-copy-of` | pass |",
             "| `set-of-empty` | pass |",
             "| `set-of-singleton` | pass |",
@@ -245,6 +246,7 @@ final class CompatibilityReportsTest {
             "\"feature\": \"map-of-singleton\"",
             "\"feature\": \"map-of-pair\"",
             "\"feature\": \"map-of-triple\"",
+            "\"feature\": \"map-of-quadruple\"",
             "\"feature\": \"set-copy-of\"",
             "\"feature\": \"set-of-empty\"",
             "\"feature\": \"set-of-singleton\"",

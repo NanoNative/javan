@@ -1882,6 +1882,114 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void mapOfQuadrupleBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-of-quadruple");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, Integer> values = Map.of("a", 1, "b", 2, "c", 3, "d", 4);
+                    System.out.println(values.isEmpty());
+                    System.out.println(values.size());
+                    System.out.println(values.containsKey("a"));
+                    System.out.println(values.containsKey("b"));
+                    System.out.println(values.containsKey("c"));
+                    System.out.println(values.containsKey("d"));
+                    System.out.println(values.containsKey("missing"));
+                    System.out.println(values.get("a"));
+                    System.out.println(values.get("b"));
+                    System.out.println(values.get("c"));
+                    System.out.println(values.get("d"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-of-quadruple").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("false\n4\ntrue\ntrue\ntrue\ntrue\nfalse\n1\n2\n3\n4\n");
+    }
+
+    @Test
+    void mapOfQuadrupleDuplicateFirstSecondFailsAtRuntime() throws Exception {
+        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-duplicate-first-second", "Map.of(\"same\", 1, \"same\", 2, \"c\", 3, \"d\", 4);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfQuadrupleDuplicateFirstThirdFailsAtRuntime() throws Exception {
+        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-duplicate-first-third", "Map.of(\"same\", 1, \"b\", 2, \"same\", 3, \"d\", 4);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfQuadrupleDuplicateFirstFourthFailsAtRuntime() throws Exception {
+        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-duplicate-first-fourth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"same\", 4);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfQuadrupleDuplicateSecondThirdFailsAtRuntime() throws Exception {
+        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-duplicate-second-third", "Map.of(\"a\", 1, \"same\", 2, \"same\", 3, \"d\", 4);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfQuadrupleDuplicateSecondFourthFailsAtRuntime() throws Exception {
+        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-duplicate-second-fourth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"same\", 4);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfQuadrupleDuplicateThirdFourthFailsAtRuntime() throws Exception {
+        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-duplicate-third-fourth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"same\", 4);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfQuadrupleNullFirstKeyFailsAtRuntime() throws Exception {
+        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-null-first-key", "Map.of((String) null, 1, \"b\", 2, \"c\", 3, \"d\", 4);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfQuadrupleNullFirstValueFailsAtRuntime() throws Exception {
+        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-null-first-value", "Map.of(\"a\", (Integer) null, \"b\", 2, \"c\", 3, \"d\", 4);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfQuadrupleNullSecondKeyFailsAtRuntime() throws Exception {
+        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-null-second-key", "Map.of(\"a\", 1, (String) null, 2, \"c\", 3, \"d\", 4);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfQuadrupleNullSecondValueFailsAtRuntime() throws Exception {
+        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-null-second-value", "Map.of(\"a\", 1, \"b\", (Integer) null, \"c\", 3, \"d\", 4);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfQuadrupleNullThirdKeyFailsAtRuntime() throws Exception {
+        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-null-third-key", "Map.of(\"a\", 1, \"b\", 2, (String) null, 3, \"d\", 4);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfQuadrupleNullThirdValueFailsAtRuntime() throws Exception {
+        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-null-third-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", (Integer) null, \"d\", 4);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfQuadrupleNullFourthKeyFailsAtRuntime() throws Exception {
+        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-null-fourth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, (String) null, 4);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfQuadrupleNullFourthValueFailsAtRuntime() throws Exception {
+        assertMapOfQuadrupleFailureAtRuntime("map-of-quadruple-null-fourth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", (Integer) null);", "null Map.of entry");
+    }
+
+    @Test
     void setOfEmptyBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("set-of-empty");
         writeJava(project, "com.acme.Main", """
@@ -3961,6 +4069,36 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     private void assertMapOfTripleFailureAtRuntime(
+        final String projectName,
+        final String statement,
+        final String expectedMessage
+    ) throws Exception {
+        final Path project = project(projectName);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    %s
+                }
+            }
+            """.formatted(statement));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/" + projectName).toString()));
+
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains(expectedMessage);
+    }
+
+    private void assertMapOfQuadrupleFailureAtRuntime(
         final String projectName,
         final String statement,
         final String expectedMessage
