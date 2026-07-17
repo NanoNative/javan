@@ -83,12 +83,12 @@ final class CompatibilityReportsTest {
         assertThat(summary).contains(
             "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 5, \"leftCallables\": 3, \"coveragePercent\": \"40.0\"}",
             "\"exactJdkCallableAccounting\": {\"supportedCallables\": 2, \"explicitRejectedCallables\": 3, \"doneCallables\": 5, \"unknownCallables\": 0, \"totalCallables\": 5, \"donePercent\": \"100.0\"}",
-            "\"supportRows\": 274",
-            "\"passRows\": 274",
+            "\"supportRows\": 279",
+            "\"passRows\": 279",
             "\"scopedRows\": 0",
             "\"targetRows\": 0",
             "\"rejectedRows\": 0",
-            "\"accountedRows\": 274",
+            "\"accountedRows\": 279",
             "\"unaccountedRows\": 0"
         );
     }
@@ -140,7 +140,12 @@ final class CompatibilityReportsTest {
             "| `collection-contains-all` | pass |",
             "| `collection-remove` | pass |",
             "| `collection-clear` | pass |",
+            "| `abstractlist-direct-owner-add` | pass |",
+            "| `abstractlist-direct-owner-clear` | pass |",
             "| `abstractlist-direct-owner-indexed-surface` | pass |",
+            "| `abstractlist-direct-owner-index-of` | pass |",
+            "| `abstractlist-direct-owner-iterator` | pass |",
+            "| `abstractlist-direct-owner-last-index-of` | pass |",
             "| `list-add-all-at` | pass |",
             "| `list-remove-object` | pass |",
             "| `list-index-of` | pass |",

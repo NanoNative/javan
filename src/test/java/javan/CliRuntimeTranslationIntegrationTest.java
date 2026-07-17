@@ -450,6 +450,160 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void abstractListDirectOwnerAddBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("abstractlist-direct-owner-add");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.AbstractList;
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final AbstractList<String> values = new ArrayList<>(List.of("left"));
+                    System.out.println(values.add("right"));
+                    System.out.println(values.size());
+                    System.out.println(values.get(1));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/abstractlist-direct-owner-add").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n2\nright\n");
+    }
+
+    @Test
+    void abstractListDirectOwnerIndexOfBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("abstractlist-direct-owner-index-of");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.AbstractList;
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final AbstractList<String> values = new ArrayList<>(List.of("left", "middle", "right", "middle"));
+                    System.out.println(values.indexOf("middle"));
+                    System.out.println(values.indexOf("missing"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/abstractlist-direct-owner-index-of").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("1\n-1\n");
+    }
+
+    @Test
+    void abstractListDirectOwnerLastIndexOfBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("abstractlist-direct-owner-last-index-of");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.AbstractList;
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final AbstractList<String> values = new ArrayList<>(List.of("left", "middle", "right", "middle"));
+                    System.out.println(values.lastIndexOf("middle"));
+                    System.out.println(values.lastIndexOf("missing"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/abstractlist-direct-owner-last-index-of").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("3\n-1\n");
+    }
+
+    @Test
+    void abstractListDirectOwnerClearBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("abstractlist-direct-owner-clear");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.AbstractList;
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final AbstractList<String> values = new ArrayList<>(List.of("left", "right"));
+                    values.clear();
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/abstractlist-direct-owner-clear").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("0\n");
+    }
+
+    @Test
+    void abstractListDirectOwnerIteratorBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("abstractlist-direct-owner-iterator");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.AbstractList;
+            import java.util.ArrayList;
+            import java.util.Iterator;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final AbstractList<String> values = new ArrayList<>(List.of("left", "right"));
+                    final Iterator<String> iterator = values.iterator();
+                    while (iterator.hasNext()) {
+                        System.out.println(iterator.next());
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/abstractlist-direct-owner-iterator").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("left\nright\n");
+    }
+
+    @Test
     void collectionAddAllBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("collection-add-all");
         writeJava(project, "com.acme.Main", """

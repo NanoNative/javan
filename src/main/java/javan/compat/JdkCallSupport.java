@@ -458,9 +458,14 @@ public final class JdkCallSupport {
         runtime("ArrayList.removeFirst", "java/util/ArrayList", "removeFirst", "()Ljava/lang/Object;"),
         runtime("ArrayList.iterator", "java/util/ArrayList", "iterator", "()Ljava/util/Iterator;"),
         runtime("ArrayList.toArray", "java/util/ArrayList", "toArray", "()[Ljava/lang/Object;"),
+        runtime("AbstractList.add", "java/util/AbstractList", "add", "(Ljava/lang/Object;)Z"),
         runtime("AbstractList.add", "java/util/AbstractList", "add", "(ILjava/lang/Object;)V"),
         runtime("AbstractList.addAll", "java/util/AbstractList", "addAll", "(ILjava/util/Collection;)Z"),
+        runtime("AbstractList.clear", "java/util/AbstractList", "clear", "()V"),
         runtime("AbstractList.get", "java/util/AbstractList", "get", "(I)Ljava/lang/Object;"),
+        runtime("AbstractList.indexOf", "java/util/AbstractList", "indexOf", "(Ljava/lang/Object;)I"),
+        runtime("AbstractList.iterator", "java/util/AbstractList", "iterator", "()Ljava/util/Iterator;"),
+        runtime("AbstractList.lastIndexOf", "java/util/AbstractList", "lastIndexOf", "(Ljava/lang/Object;)I"),
         runtime("AbstractList.size", "java/util/AbstractList", "size", "()I"),
         runtime("AbstractList.remove", "java/util/AbstractList", "remove", "(I)Ljava/lang/Object;"),
         runtime("AbstractList.set", "java/util/AbstractList", "set", "(ILjava/lang/Object;)Ljava/lang/Object;"),
@@ -1038,13 +1043,26 @@ public final class JdkCallSupport {
 
     private static boolean isSupportedAbstractListCall(final String name, final String descriptor) {
         if ("add".equals(name)) {
-            return "(ILjava/lang/Object;)V".equals(descriptor);
+            return "(Ljava/lang/Object;)Z".equals(descriptor)
+                || "(ILjava/lang/Object;)V".equals(descriptor);
         }
         if ("addAll".equals(name)) {
             return "(ILjava/util/Collection;)Z".equals(descriptor);
         }
+        if ("clear".equals(name)) {
+            return "()V".equals(descriptor);
+        }
         if ("get".equals(name)) {
             return "(I)Ljava/lang/Object;".equals(descriptor);
+        }
+        if ("indexOf".equals(name)) {
+            return "(Ljava/lang/Object;)I".equals(descriptor);
+        }
+        if ("iterator".equals(name)) {
+            return "()Ljava/util/Iterator;".equals(descriptor);
+        }
+        if ("lastIndexOf".equals(name)) {
+            return "(Ljava/lang/Object;)I".equals(descriptor);
         }
         if ("size".equals(name)) {
             return "()I".equals(descriptor);

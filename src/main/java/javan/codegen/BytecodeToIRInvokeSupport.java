@@ -4124,6 +4124,10 @@ final class BytecodeToIRInvokeSupport {
             }
         }
         if ("java/util/AbstractList".equals(methodRef.owner())) {
+            if ("add(Ljava/lang/Object;)Z".equals(signature)) {
+                pushIntCall(instructions, stack, localDeclarations, "javan_collection_add", List.of(receiver, arguments.getFirst()));
+                return true;
+            }
             if ("add(ILjava/lang/Object;)V".equals(signature)) {
                 instructions.add(IrInstruction.callStaticVoid("javan_arraylist_add_at", List.of(receiver, arguments.get(0), arguments.get(1))));
                 return true;
@@ -4132,8 +4136,24 @@ final class BytecodeToIRInvokeSupport {
                 pushIntCall(instructions, stack, localDeclarations, "javan_arraylist_add_all_at", List.of(receiver, arguments.get(0), arguments.get(1)));
                 return true;
             }
+            if ("clear()V".equals(signature)) {
+                instructions.add(IrInstruction.callStaticVoid("javan_list_clear", List.of(receiver)));
+                return true;
+            }
             if ("get(I)Ljava/lang/Object;".equals(signature)) {
                 pushObjectCall(instructions, stack, localDeclarations, "javan_list_get", List.of(receiver, arguments.getFirst()));
+                return true;
+            }
+            if ("indexOf(Ljava/lang/Object;)I".equals(signature)) {
+                pushIntCall(instructions, stack, localDeclarations, "javan_list_index_of", List.of(receiver, arguments.getFirst()));
+                return true;
+            }
+            if ("iterator()Ljava/util/Iterator;".equals(signature)) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_iterator", List.of(receiver))));
+                return true;
+            }
+            if ("lastIndexOf(Ljava/lang/Object;)I".equals(signature)) {
+                pushIntCall(instructions, stack, localDeclarations, "javan_list_last_index_of", List.of(receiver, arguments.getFirst()));
                 return true;
             }
             if ("size()I".equals(signature)) {

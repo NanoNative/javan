@@ -116,7 +116,12 @@ Status mapping:
 | `collection-contains-all` | pass |
 | `collection-remove` | pass |
 | `collection-clear` | pass |
+| `abstractlist-direct-owner-add` | pass |
+| `abstractlist-direct-owner-clear` | pass |
 | `abstractlist-direct-owner-indexed-surface` | pass |
+| `abstractlist-direct-owner-index-of` | pass |
+| `abstractlist-direct-owner-iterator` | pass |
+| `abstractlist-direct-owner-last-index-of` | pass |
 | `list-add-all-at` | pass |
 | `list-index-of` | pass |
 | `list-last-index-of` | pass |

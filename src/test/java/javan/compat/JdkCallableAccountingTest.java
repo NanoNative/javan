@@ -448,14 +448,44 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksAbstractListAddAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/AbstractList", "add", "(Ljava/lang/Object;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksAbstractListAddAllAtAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/AbstractList", "addAll", "(ILjava/util/Collection;)Z")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
     @Test
+    void marksAbstractListClearAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/AbstractList", "clear", "()V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksAbstractListGetAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/AbstractList", "get", "(I)Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksAbstractListIndexOfAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/AbstractList", "indexOf", "(Ljava/lang/Object;)I")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksAbstractListIteratorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/AbstractList", "iterator", "()Ljava/util/Iterator;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksAbstractListLastIndexOfAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/AbstractList", "lastIndexOf", "(Ljava/lang/Object;)I")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 

@@ -466,6 +466,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void abstractListAddIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/AbstractList",
+            "add",
+            "(Ljava/lang/Object;)Z"
+        ))).isTrue();
+    }
+
+    @Test
     void abstractListAddAllAtIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/AbstractList",
@@ -475,11 +484,47 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void abstractListClearIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/AbstractList",
+            "clear",
+            "()V"
+        ))).isTrue();
+    }
+
+    @Test
     void abstractListGetIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/AbstractList",
             "get",
             "(I)Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void abstractListIndexOfIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/AbstractList",
+            "indexOf",
+            "(Ljava/lang/Object;)I"
+        ))).isTrue();
+    }
+
+    @Test
+    void abstractListIteratorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/AbstractList",
+            "iterator",
+            "()Ljava/util/Iterator;"
+        ))).isTrue();
+    }
+
+    @Test
+    void abstractListLastIndexOfIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/AbstractList",
+            "lastIndexOf",
+            "(Ljava/lang/Object;)I"
         ))).isTrue();
     }
 
@@ -1747,6 +1792,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void abstractListAddRequiresCollectionsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/AbstractList",
+            "add",
+            "(Ljava/lang/Object;)Z"
+        ))).containsExactly("collections");
+    }
+
+    @Test
     void abstractListAddAllAtRequiresCollectionsRuntimeModule() {
         assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
             "java/util/AbstractList",
@@ -1756,11 +1810,47 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void abstractListClearRequiresCollectionsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/AbstractList",
+            "clear",
+            "()V"
+        ))).containsExactly("collections");
+    }
+
+    @Test
     void abstractListGetRequiresCollectionsRuntimeModule() {
         assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
             "java/util/AbstractList",
             "get",
             "(I)Ljava/lang/Object;"
+        ))).containsExactly("collections");
+    }
+
+    @Test
+    void abstractListIndexOfRequiresCollectionsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/AbstractList",
+            "indexOf",
+            "(Ljava/lang/Object;)I"
+        ))).containsExactly("collections");
+    }
+
+    @Test
+    void abstractListIteratorRequiresCollectionsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/AbstractList",
+            "iterator",
+            "()Ljava/util/Iterator;"
+        ))).containsExactly("collections");
+    }
+
+    @Test
+    void abstractListLastIndexOfRequiresCollectionsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/AbstractList",
+            "lastIndexOf",
+            "(Ljava/lang/Object;)I"
         ))).containsExactly("collections");
     }
 

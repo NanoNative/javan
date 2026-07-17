@@ -11,8 +11,8 @@
     "rule": "done = supported variants + rejected variants; unknown leftovers must be 0 for a release-gated JDK"
   },
   "counts": {
-    "rows": 274,
-    "pass": 274,
+    "rows": 279,
+    "pass": 279,
     "scoped": 0,
     "target": 0,
     "rejected": 0
@@ -108,7 +108,12 @@
     {"feature": "collection-contains-all", "jdk25": "pass"},
     {"feature": "collection-remove", "jdk25": "pass"},
     {"feature": "collection-clear", "jdk25": "pass"},
+    {"feature": "abstractlist-direct-owner-add", "jdk25": "pass"},
+    {"feature": "abstractlist-direct-owner-clear", "jdk25": "pass"},
     {"feature": "abstractlist-direct-owner-indexed-surface", "jdk25": "pass"},
+    {"feature": "abstractlist-direct-owner-index-of", "jdk25": "pass"},
+    {"feature": "abstractlist-direct-owner-iterator", "jdk25": "pass"},
+    {"feature": "abstractlist-direct-owner-last-index-of", "jdk25": "pass"},
     {"feature": "list-add-all-at", "jdk25": "pass"},
     {"feature": "list-index-of", "jdk25": "pass"},
     {"feature": "list-last-index-of", "jdk25": "pass"},
