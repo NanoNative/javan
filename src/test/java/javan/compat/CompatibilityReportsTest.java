@@ -83,12 +83,12 @@ final class CompatibilityReportsTest {
         assertThat(summary).contains(
             "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 5, \"leftCallables\": 3, \"coveragePercent\": \"40.0\"}",
             "\"exactJdkCallableAccounting\": {\"supportedCallables\": 2, \"explicitRejectedCallables\": 3, \"doneCallables\": 5, \"unknownCallables\": 0, \"totalCallables\": 5, \"donePercent\": \"100.0\"}",
-            "\"supportRows\": 242",
-            "\"passRows\": 242",
+            "\"supportRows\": 243",
+            "\"passRows\": 243",
             "\"scopedRows\": 0",
             "\"targetRows\": 0",
             "\"rejectedRows\": 0",
-            "\"accountedRows\": 242",
+            "\"accountedRows\": 243",
             "\"unaccountedRows\": 0"
         );
     }
@@ -133,6 +133,7 @@ final class CompatibilityReportsTest {
             "| `collections-unmodifiable-collection` | pass |",
             "| `collections-unmodifiable-set` | pass |",
             "| `collections-unmodifiable-list` | pass |",
+            "| `collection-add` | pass |",
             "| `collection-add-all` | pass |",
             "| `collection-contains-all` | pass |",
             "| `collection-remove` | pass |",

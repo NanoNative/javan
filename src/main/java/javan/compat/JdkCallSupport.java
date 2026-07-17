@@ -478,6 +478,7 @@ public final class JdkCallSupport {
         runtime("Collection.size", "java/util/Collection", "size", "()I"),
         runtime("Collection.isEmpty", "java/util/Collection", "isEmpty", "()Z"),
         runtime("Collection.contains", "java/util/Collection", "contains", "(Ljava/lang/Object;)Z"),
+        runtime("Collection.add", "java/util/Collection", "add", "(Ljava/lang/Object;)Z"),
         runtime("Collection.addAll", "java/util/Collection", "addAll", "(Ljava/util/Collection;)Z"),
         runtime("Collection.remove", "java/util/Collection", "remove", "(Ljava/lang/Object;)Z"),
         runtime("Collection.containsAll", "java/util/Collection", "containsAll", "(Ljava/util/Collection;)Z"),

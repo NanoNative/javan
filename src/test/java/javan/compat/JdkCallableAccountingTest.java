@@ -268,6 +268,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksCollectionAddAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Collection", "add", "(Ljava/lang/Object;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksCollectionAddAllAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Collection", "addAll", "(Ljava/util/Collection;)Z")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

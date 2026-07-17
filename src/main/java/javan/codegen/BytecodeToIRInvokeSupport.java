@@ -4076,6 +4076,10 @@ final class BytecodeToIRInvokeSupport {
             }
         }
         if (isJdkListOrCollection(methodRef.owner())) {
+            if ("add(Ljava/lang/Object;)Z".equals(signature)) {
+                stack.add(StackValue.intExpression(IrExpression.intCall("javan_collection_add", List.of(receiver, arguments.getFirst()))));
+                return true;
+            }
             if ("addAll(Ljava/util/Collection;)Z".equals(signature)) {
                 stack.add(StackValue.intExpression(IrExpression.intCall("javan_collection_add_all", List.of(receiver, arguments.getFirst()))));
                 return true;

@@ -503,6 +503,7 @@ public final class CompatibilityReports {
             pass("collections-unmodifiable-collection"),
             pass("collections-unmodifiable-set"),
             pass("collections-unmodifiable-list"),
+            pass("collection-add"),
             pass("collection-add-all"),
             pass("collection-contains-all"),
             pass("collection-remove"),

@@ -241,6 +241,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void collectionAddIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Collection",
+            "add",
+            "(Ljava/lang/Object;)Z"
+        ))).isTrue();
+    }
+
+    @Test
     void collectionAddAllIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Collection",
@@ -1284,6 +1293,15 @@ final class JdkCallSupportTest {
             "java/util/Collection",
             "addAll",
             "(Ljava/util/Collection;)Z"
+        ))).containsExactly("collections");
+    }
+
+    @Test
+    void collectionAddRequiresCollectionsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/Collection",
+            "add",
+            "(Ljava/lang/Object;)Z"
         ))).containsExactly("collections");
     }
 

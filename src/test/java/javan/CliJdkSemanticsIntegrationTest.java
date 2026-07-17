@@ -2185,6 +2185,55 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void collectionAddUsesSetSemanticsForSetReceiverAtRuntime() throws Exception {
+        final Path project = project("collection-add-set-receiver");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Collection;
+            import java.util.LinkedHashSet;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Collection<String> values = new LinkedHashSet<>(List.of("b", "a"));
+                    System.out.println(values.add("a"));
+                    System.out.println(values.add("c"));
+                    final Object[] snapshot = values.toArray();
+                    System.out.println(snapshot[0]);
+                    System.out.println(snapshot[1]);
+                    System.out.println(snapshot[2]);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/collection-add-set-receiver").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("false\ntrue\nb\na\nc\n");
+    }
+
+    @Test
+    void collectionsUnmodifiableCollectionRejectsDirectAddAtRuntime() throws Exception {
+        assertCollectionsUnmodifiableCollectionFailureAtRuntime(
+            "collections-unmodifiable-collection-direct-add",
+            """
+            final ArrayList<String> mutable = new ArrayList<>();
+            mutable.add("x");
+            final Collection<String> values = Collections.unmodifiableCollection(mutable);
+            values.add("y");
+            """,
+            "unsupported operation on immutable list"
+        );
+    }
+
+    @Test
     void collectionsUnmodifiableListBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("collections-unmodifiable-list");
         writeJava(project, "com.acme.Main", """

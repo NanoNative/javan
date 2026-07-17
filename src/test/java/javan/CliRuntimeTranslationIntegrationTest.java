@@ -414,6 +414,35 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void collectionAddBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("collection-add");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.Collection;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Collection<String> values = new ArrayList<>();
+                    System.out.println(values.add("left"));
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/collection-add").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n1\n");
+    }
+
+    @Test
     void listAddFirstBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("list-add-first");
         writeJava(project, "com.acme.Main", """

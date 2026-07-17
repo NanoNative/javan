@@ -7617,6 +7617,14 @@ final class RuntimeSourceMemorySections {
             return 1;
         }
 
+        int javan_collection_add(void* value, void* element) {
+            javan_object_list* list = javan_list_checked(value);
+            if (javan_list_is_set(list) != 0) {
+                return javan_set_add(value, element);
+            }
+            return javan_arraylist_add(value, element);
+        }
+
         void javan_arraylist_add_at(void* value, int index, void* element) {
             javan_object_list* list = javan_list_checked(value);
             javan_list_mutable_checked(list);

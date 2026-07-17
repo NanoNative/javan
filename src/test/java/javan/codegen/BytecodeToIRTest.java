@@ -20796,6 +20796,28 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersCollectionAddToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/Collection;Ljava/lang/Object;)Z",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeInterface(2, new MethodRef("java/util/Collection", "add", "(Ljava/lang/Object;)Z")),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_collection_add",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
     void lowersSetAddAllToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
