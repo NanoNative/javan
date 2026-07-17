@@ -1095,6 +1095,73 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersCollectionRemoveIfWithConcretePredicateToLoopAndDirectTestCall() {
+        final EntryPoint iterateEntry = new EntryPoint("com/acme/Main", "iterate", "(Ljava/util/Collection;Ljava/util/function/Predicate;)Z");
+        final EntryPoint predicateEntry = new EntryPoint("com/acme/Matcher", "test", "(Ljava/lang/Object;)Z");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(collectionRemoveIfMethod())),
+                "com/acme/Matcher",
+                classFile(
+                    "com/acme/Matcher",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/util/function/Predicate"),
+                    List.of(),
+                    List.of(predicateTestImplementationMethod())
+                )
+            ),
+            new CallGraph(iterateEntry, List.of(iterateEntry, predicateEntry), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("iterate")).singleElement().satisfies(function ->
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.assignObject(
+                    "object0",
+                    IrExpression.objectCall("javan_list_iterator", List.of(IrExpression.objectLocal("arg0")))
+                ),
+                IrInstruction.assignInt("int1", IrExpression.intLiteral(0)),
+                IrInstruction.label("label_collection_remove_if_loop_2_2"),
+                IrInstruction.assignInt(
+                    "int2",
+                    IrExpression.intCall("javan_iterator_has_next", List.of(IrExpression.objectLocal("object0")))
+                ),
+                IrInstruction.branchIf(
+                    "label_collection_remove_if_body_2_2",
+                    IrExpression.intComparison("!=", IrExpression.intLocal("int2"), IrExpression.intLiteral(0))
+                ),
+                IrInstruction.jump("label_collection_remove_if_end_2_2"),
+                IrInstruction.label("label_collection_remove_if_body_2_2"),
+                IrInstruction.assignObject(
+                    "object3",
+                    IrExpression.objectCall("javan_iterator_next", List.of(IrExpression.objectLocal("object0")))
+                ),
+                IrInstruction.assignInt(
+                    "int4",
+                    IrExpression.intCall(
+                        "javan_com_acme_Matcher_test__Ljava_lang_Object__Z",
+                        List.of(IrExpression.objectLocal("arg1"), IrExpression.objectLocal("object3"))
+                    )
+                ),
+                IrInstruction.branchIf(
+                    "label_collection_remove_if_remove_2_2",
+                    IrExpression.intComparison("!=", IrExpression.intLocal("int4"), IrExpression.intLiteral(0))
+                ),
+                IrInstruction.jump("label_collection_remove_if_continue_2_2"),
+                IrInstruction.label("label_collection_remove_if_remove_2_2"),
+                IrInstruction.callStaticVoid("javan_list_iterator_remove", List.of(IrExpression.objectLocal("object0"))),
+                IrInstruction.assignInt("int1", IrExpression.intLiteral(1)),
+                IrInstruction.label("label_collection_remove_if_continue_2_2"),
+                IrInstruction.jump("label_collection_remove_if_loop_2_2"),
+                IrInstruction.label("label_collection_remove_if_end_2_2"),
+                IrInstruction.returnInt(IrExpression.intLocal("int1"))
+            )
+        );
+    }
+
+    @Test
     void lowersMapForEachWithMaterializedBiConsumerLambdaToLoopAndVoidHelperCall() {
         final EntryPoint buildEntry = new EntryPoint("com/acme/Main", "build", "(Ljava/lang/Object;)Ljava/util/function/BiConsumer;");
         final EntryPoint iterateEntry = new EntryPoint("com/acme/Main", "iterate", "(Ljava/util/Map;Ljava/util/function/BiConsumer;)V");
@@ -1847,6 +1914,252 @@ final class BytecodeToIRTest {
             assertThat(target.interfaceMethodName()).isEqualTo("apply");
             assertThat(target.captureCount()).isZero();
         });
+    }
+
+    @Test
+    void lowersZeroCaptureMaterializedBiFunctionBuildAndInvokeToRuntimeHelpers() {
+        final EntryPoint buildEntry = new EntryPoint("com/acme/Main", "buildBiFunctionLambda", "()Ljava/util/function/BiFunction;");
+        final EntryPoint invokeEntry = new EntryPoint(
+            "com/acme/Main",
+            "invokeBiFunctionLambda",
+            "(Ljava/util/function/BiFunction;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"
+        );
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    buildBiFunctionMaterializedLambdaMethod(),
+                    invokeBiFunctionMaterializedLambdaMethod(),
+                    biFunctionMaterializedLambdaImplementationMethod()
+                ))
+            ),
+            new CallGraph(buildEntry, List.of(buildEntry, invokeEntry), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.materializedLambdaTargets()).singleElement().satisfies(target -> {
+            assertThat(target.interfaceOwner()).isEqualTo("java/util/function/BiFunction");
+            assertThat(target.interfaceMethodName()).isEqualTo("apply");
+            assertThat(target.captureCount()).isZero();
+            assertThat(target.booleanResult()).isFalse();
+            assertThat(target.voidResult()).isFalse();
+        });
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("buildBiFunctionLambda")).singleElement().satisfies(function ->
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.returnObject(IrExpression.objectCall(
+                    "javan_materialized_lambda_new",
+                    List.of(IrExpression.intLiteral(1))
+                ))
+            )
+        );
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("invokeBiFunctionLambda")).singleElement().satisfies(function ->
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.returnObject(IrExpression.objectCall(
+                    "javan_materialized_lambda_apply_object2",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.objectLocal("arg2"))
+                ))
+            )
+        );
+    }
+
+    @Test
+    void lowersBiFunctionApplyWithConcreteImplementationToDirectCall() {
+        final EntryPoint invokeEntry = new EntryPoint(
+            "com/acme/Main",
+            "invokeConcreteBiFunction",
+            "(Ljava/util/function/BiFunction;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"
+        );
+        final EntryPoint applyEntry = new EntryPoint(
+            "com/acme/Joiner",
+            "apply",
+            "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"
+        );
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    invokeConcreteBiFunctionMethod()
+                )),
+                "com/acme/Joiner",
+                classFile(
+                    "com/acme/Joiner",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/util/function/BiFunction"),
+                    List.of(),
+                    List.of(biFunctionApplyImplementationMethod())
+                )
+            ),
+            new CallGraph(invokeEntry, List.of(invokeEntry, applyEntry), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("invokeConcreteBiFunction")).singleElement().satisfies(function ->
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.returnObject(IrExpression.objectCall(
+                    "javan_com_acme_Joiner_apply__Ljava_lang_Object_Ljava_lang_Object__Ljava_lang_Object_",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.objectLocal("arg2"))
+                ))
+            )
+        );
+    }
+
+    @Test
+    void lowersMapComputeIfPresentWithConcreteBiFunctionToMapHelpersAndDirectApplyCall() {
+        final EntryPoint entryPoint = new EntryPoint(
+            "com/acme/Main",
+            "computeIfPresent",
+            "(Ljava/util/Map;Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;"
+        );
+        final EntryPoint applyEntry = new EntryPoint(
+            "com/acme/Joiner",
+            "apply",
+            "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"
+        );
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    mapComputeIfPresentConcreteBiFunctionMethod()
+                )),
+                "com/acme/Joiner",
+                classFile(
+                    "com/acme/Joiner",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/util/function/BiFunction"),
+                    List.of(),
+                    List.of(biFunctionApplyImplementationMethod())
+                )
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint, applyEntry), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("computeIfPresent")).singleElement().satisfies(function -> {
+            assertThat(function.locals()).containsExactly(
+                new IrLocal(IrType.OBJECT, "object0"),
+                new IrLocal(IrType.OBJECT, "object1"),
+                new IrLocal(IrType.OBJECT, "object2"),
+                new IrLocal(IrType.OBJECT, "object3")
+            );
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.assignObject(
+                    "object0",
+                    IrExpression.objectCall("javan_map_get", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
+                ),
+                IrInstruction.branchIf(
+                    "label_map_compute_if_present_present_3_2",
+                    IrExpression.objectComparison("!=", IrExpression.objectLocal("object0"), IrExpression.objectNull())
+                ),
+                IrInstruction.assignObject("object1", IrExpression.objectNull()),
+                IrInstruction.jump("label_map_compute_if_present_end_3_2"),
+                IrInstruction.label("label_map_compute_if_present_present_3_2"),
+                IrInstruction.assignObject(
+                    "object2",
+                    IrExpression.objectCall(
+                        "javan_com_acme_Joiner_apply__Ljava_lang_Object_Ljava_lang_Object__Ljava_lang_Object_",
+                        List.of(IrExpression.objectLocal("arg2"), IrExpression.objectLocal("arg1"), IrExpression.objectLocal("object0"))
+                    )
+                ),
+                IrInstruction.branchIf(
+                    "label_map_compute_if_present_store_3_2",
+                    IrExpression.objectComparison("!=", IrExpression.objectLocal("object2"), IrExpression.objectNull())
+                ),
+                IrInstruction.jump("label_map_compute_if_present_remove_3_2"),
+                IrInstruction.label("label_map_compute_if_present_store_3_2"),
+                IrInstruction.callStaticVoid(
+                    "javan_map_put",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.objectLocal("object2"))
+                ),
+                IrInstruction.assignObject("object1", IrExpression.objectLocal("object2")),
+                IrInstruction.jump("label_map_compute_if_present_end_3_2"),
+                IrInstruction.label("label_map_compute_if_present_remove_3_2"),
+                IrInstruction.assignObject(
+                    "object3",
+                    IrExpression.objectCall("javan_map_remove", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
+                ),
+                IrInstruction.assignObject("object1", IrExpression.objectNull()),
+                IrInstruction.label("label_map_compute_if_present_end_3_2"),
+                IrInstruction.returnObject(IrExpression.objectLocal("object1"))
+            );
+        });
+    }
+
+    @Test
+    void lowersHashMapComputeIfPresentWithConcreteBiFunctionToSameMapHelpers() {
+        final EntryPoint entryPoint = new EntryPoint(
+            "com/acme/Main",
+            "computeHashMapIfPresent",
+            "(Ljava/util/HashMap;Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;"
+        );
+        final EntryPoint applyEntry = new EntryPoint(
+            "com/acme/Joiner",
+            "apply",
+            "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"
+        );
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    hashMapComputeIfPresentConcreteBiFunctionMethod()
+                )),
+                "com/acme/Joiner",
+                classFile(
+                    "com/acme/Joiner",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/util/function/BiFunction"),
+                    List.of(),
+                    List.of(biFunctionApplyImplementationMethod())
+                )
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint, applyEntry), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("computeHashMapIfPresent")).singleElement().satisfies(function ->
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.assignObject(
+                    "object0",
+                    IrExpression.objectCall("javan_map_get", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
+                ),
+                IrInstruction.branchIf(
+                    "label_map_compute_if_present_present_3_2",
+                    IrExpression.objectComparison("!=", IrExpression.objectLocal("object0"), IrExpression.objectNull())
+                ),
+                IrInstruction.assignObject("object1", IrExpression.objectNull()),
+                IrInstruction.jump("label_map_compute_if_present_end_3_2"),
+                IrInstruction.label("label_map_compute_if_present_present_3_2"),
+                IrInstruction.assignObject(
+                    "object2",
+                    IrExpression.objectCall(
+                        "javan_com_acme_Joiner_apply__Ljava_lang_Object_Ljava_lang_Object__Ljava_lang_Object_",
+                        List.of(IrExpression.objectLocal("arg2"), IrExpression.objectLocal("arg1"), IrExpression.objectLocal("object0"))
+                    )
+                ),
+                IrInstruction.branchIf(
+                    "label_map_compute_if_present_store_3_2",
+                    IrExpression.objectComparison("!=", IrExpression.objectLocal("object2"), IrExpression.objectNull())
+                ),
+                IrInstruction.jump("label_map_compute_if_present_remove_3_2"),
+                IrInstruction.label("label_map_compute_if_present_store_3_2"),
+                IrInstruction.callStaticVoid(
+                    "javan_map_put",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.objectLocal("object2"))
+                ),
+                IrInstruction.assignObject("object1", IrExpression.objectLocal("object2")),
+                IrInstruction.jump("label_map_compute_if_present_end_3_2"),
+                IrInstruction.label("label_map_compute_if_present_remove_3_2"),
+                IrInstruction.assignObject(
+                    "object3",
+                    IrExpression.objectCall("javan_map_remove", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
+                ),
+                IrInstruction.assignObject("object1", IrExpression.objectNull()),
+                IrInstruction.label("label_map_compute_if_present_end_3_2"),
+                IrInstruction.returnObject(IrExpression.objectLocal("object1"))
+            )
+        );
     }
 
     @Test
@@ -26035,6 +26348,36 @@ final class BytecodeToIRTest {
         );
     }
 
+    private static MethodInfo mapComputeIfPresentConcreteBiFunctionMethod() {
+        return method(
+            0x0008,
+            "computeIfPresent",
+            "(Ljava/util/Map;Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;",
+            3,
+            3,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            plain(2, 44, "aload_2"),
+            invokeInterface(3, new MethodRef("java/util/Map", "computeIfPresent", "(Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;")),
+            plain(8, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo hashMapComputeIfPresentConcreteBiFunctionMethod() {
+        return method(
+            0x0008,
+            "computeHashMapIfPresent",
+            "(Ljava/util/HashMap;Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;",
+            3,
+            3,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            plain(2, 44, "aload_2"),
+            invokeVirtual(3, new MethodRef("java/util/HashMap", "computeIfPresent", "(Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;")),
+            plain(8, 176, "areturn")
+        );
+    }
+
     private static MethodInfo buildObjectMaterializedLambdaMethod() {
         return buildObjectMaterializedLambdaMethod(
             "buildObjectLambda",
@@ -26117,6 +26460,93 @@ final class BytecodeToIRTest {
             plain(1, 43, "aload_1"),
             invokeInterface(2, new MethodRef("com/acme/ObjectFn", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;")),
             plain(3, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo buildBiFunctionMaterializedLambdaMethod() {
+        return method(
+            0x0008,
+            "buildBiFunctionLambda",
+            "()Ljava/util/function/BiFunction;",
+            1,
+            0,
+            invokeDynamic(0, new DynamicRef(
+                "apply",
+                "()Ljava/util/function/BiFunction;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+                    "invokestatic com/acme/Main.lambda$bifunction$0:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+                    "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+                    BootstrapArgument.methodHandle(
+                        6,
+                        new MethodRef("com/acme/Main", "lambda$bifunction$0", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")
+                    ),
+                    BootstrapArgument.methodType("(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")
+                )
+            )),
+            plain(1, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo invokeBiFunctionMaterializedLambdaMethod() {
+        return method(
+            0x0008,
+            "invokeBiFunctionLambda",
+            "(Ljava/util/function/BiFunction;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+            3,
+            3,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            plain(2, 44, "aload_2"),
+            invokeInterface(3, new MethodRef("java/util/function/BiFunction", "apply", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")),
+            plain(4, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo biFunctionMaterializedLambdaImplementationMethod() {
+        return method(
+            0x0008,
+            "lambda$bifunction$0",
+            "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+            1,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo invokeConcreteBiFunctionMethod() {
+        return method(
+            0x0008,
+            "invokeConcreteBiFunction",
+            "(Ljava/util/function/BiFunction;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+            3,
+            3,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            plain(2, 44, "aload_2"),
+            invokeInterface(3, new MethodRef("java/util/function/BiFunction", "apply", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")),
+            plain(4, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo biFunctionApplyImplementationMethod() {
+        return method(
+            0x0008,
+            "apply",
+            "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+            1,
+            3,
+            plain(0, 42, "aload_0"),
+            plain(1, 176, "areturn")
         );
     }
 
@@ -26318,6 +26748,20 @@ final class BytecodeToIRTest {
         );
     }
 
+    private static MethodInfo collectionRemoveIfMethod() {
+        return method(
+            0x0008,
+            "iterate",
+            "(Ljava/util/Collection;Ljava/util/function/Predicate;)Z",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeInterface(2, new MethodRef("java/util/Collection", "removeIf", "(Ljava/util/function/Predicate;)Z")),
+            plain(7, 172, "ireturn")
+        );
+    }
+
     private static MethodInfo mapForEachMethod() {
         return method(
             0x0008,
@@ -26366,6 +26810,18 @@ final class BytecodeToIRTest {
             0,
             3,
             plain(0, 177, "return")
+        );
+    }
+
+    private static MethodInfo predicateTestImplementationMethod() {
+        return method(
+            0x0001,
+            "test",
+            "(Ljava/lang/Object;)Z",
+            0,
+            2,
+            plain(0, 4, "iconst_1"),
+            plain(1, 172, "ireturn")
         );
     }
 

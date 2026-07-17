@@ -781,6 +781,33 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void collectionRemoveIfIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Collection",
+            "removeIf",
+            "(Ljava/util/function/Predicate;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void arrayListRemoveIfIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/ArrayList",
+            "removeIf",
+            "(Ljava/util/function/Predicate;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void predicateTestIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/function/Predicate",
+            "test",
+            "(Ljava/lang/Object;)Z"
+        ))).isTrue();
+    }
+
+    @Test
     void mapForEachIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Map",
@@ -795,6 +822,33 @@ final class JdkCallSupportTest {
             "java/util/function/BiConsumer",
             "accept",
             "(Ljava/lang/Object;Ljava/lang/Object;)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void biFunctionApplyIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/function/BiFunction",
+            "apply",
+            "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void mapComputeIfPresentIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Map",
+            "computeIfPresent",
+            "(Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void hashMapComputeIfPresentIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/HashMap",
+            "computeIfPresent",
+            "(Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;"
         ))).isTrue();
     }
 
@@ -2022,6 +2076,24 @@ final class JdkCallSupportTest {
             "java/lang/Iterable",
             "forEach",
             "(Ljava/util/function/Consumer;)V"
+        ))).containsExactly("collections");
+    }
+
+    @Test
+    void collectionRemoveIfRequiresCollectionsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/Collection",
+            "removeIf",
+            "(Ljava/util/function/Predicate;)Z"
+        ))).containsExactly("collections");
+    }
+
+    @Test
+    void predicateTestRequiresCollectionsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/function/Predicate",
+            "test",
+            "(Ljava/lang/Object;)Z"
         ))).containsExactly("collections");
     }
 

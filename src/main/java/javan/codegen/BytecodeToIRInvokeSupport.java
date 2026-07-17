@@ -35,6 +35,7 @@ import static javan.codegen.BytecodeToIRMetadataSupport.*;
 final class BytecodeToIRInvokeSupport {
     private static final MethodRef RUNNABLE_RUN = new MethodRef("java/lang/Runnable", "run", "()V");
     private static final String MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL = "javan_materialized_lambda_apply_object";
+    private static final String MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL = "javan_materialized_lambda_apply_object2";
     private static final String MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL = "javan_materialized_lambda_apply_boolean";
     private static final String MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL = "javan_materialized_lambda_apply_void";
     private static final String MATERIALIZED_LAMBDA_VOID2_APPLY_SYMBOL = "javan_materialized_lambda_apply_void2";
@@ -3012,6 +3013,64 @@ final class BytecodeToIRInvokeSupport {
         stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
     }
 
+    private static void lowerCollectionRemoveIfLambdaCall(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations
+    ) {
+        final DynamicLambda lambda = popDynamicLambda(classFile, method, instruction, stack, StackKind.LAMBDA_PREDICATE, "predicate lambda");
+        final IrExpression receiver = popObject(classFile, method, instruction, stack);
+        final String changedLocal = newIntLocal(localDeclarations);
+        final String iteratorLocal = newObjectLocal(localDeclarations);
+        final String loopLabel = "label_collection_remove_if_lambda_loop_" + instruction.offset() + "_" + localDeclarations.size();
+        final String bodyLabel = "label_collection_remove_if_lambda_body_" + instruction.offset() + "_" + localDeclarations.size();
+        final String removeLabel = "label_collection_remove_if_lambda_remove_" + instruction.offset() + "_" + localDeclarations.size();
+        final String continueLabel = "label_collection_remove_if_lambda_continue_" + instruction.offset() + "_" + localDeclarations.size();
+        final String endLabel = "label_collection_remove_if_lambda_end_" + instruction.offset() + "_" + localDeclarations.size();
+        final String hasNextLocal = newIntLocal(localDeclarations);
+        final String valueLocal = newObjectLocal(localDeclarations);
+        final String predicateLocal = newIntLocal(localDeclarations);
+        instructions.add(IrInstruction.assignInt(changedLocal, IrExpression.intLiteral(0)));
+        instructions.add(IrInstruction.assignObject(
+            iteratorLocal,
+            IrExpression.objectCall("javan_list_iterator", List.of(receiver))
+        ));
+        instructions.add(IrInstruction.label(loopLabel));
+        instructions.add(IrInstruction.assignInt(
+            hasNextLocal,
+            IrExpression.intCall("javan_iterator_has_next", List.of(IrExpression.objectLocal(iteratorLocal)))
+        ));
+        instructions.add(IrInstruction.branchIf(
+            bodyLabel,
+            IrExpression.intComparison("!=", IrExpression.intLocal(hasNextLocal), IrExpression.intLiteral(0))
+        ));
+        instructions.add(IrInstruction.jump(endLabel));
+        instructions.add(IrInstruction.label(bodyLabel));
+        instructions.add(IrInstruction.assignObject(
+            valueLocal,
+            IrExpression.objectCall("javan_iterator_next", List.of(IrExpression.objectLocal(iteratorLocal)))
+        ));
+        instructions.add(IrInstruction.assignInt(
+            predicateLocal,
+            invokePredicateLambdaExpression(lambda, IrExpression.objectLocal(valueLocal))
+        ));
+        instructions.add(IrInstruction.branchIf(
+            removeLabel,
+            IrExpression.intComparison("!=", IrExpression.intLocal(predicateLocal), IrExpression.intLiteral(0))
+        ));
+        instructions.add(IrInstruction.jump(continueLabel));
+        instructions.add(IrInstruction.label(removeLabel));
+        instructions.add(IrInstruction.callStaticVoid("javan_list_iterator_remove", List.of(IrExpression.objectLocal(iteratorLocal))));
+        instructions.add(IrInstruction.assignInt(changedLocal, IrExpression.intLiteral(1)));
+        instructions.add(IrInstruction.label(continueLabel));
+        instructions.add(IrInstruction.jump(loopLabel));
+        instructions.add(IrInstruction.label(endLabel));
+        stack.add(StackValue.intExpression(IrExpression.intLocal(changedLocal)));
+    }
+
     static boolean lowerStringBuilderCall(
         final ClassFile classFile,
         final MethodInfo method,
@@ -3482,6 +3541,10 @@ final class BytecodeToIRInvokeSupport {
             && "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;".equals(methodRef.descriptor())
             && hasTopStackKind(stack, StackKind.LAMBDA_FUNCTION)) {
             lowerMapComputeIfAbsentLambdaCall(classFile, method, instruction, instructions, stack, localDeclarations);
+            return true;
+        }
+        if (isInlineCollectionRemoveIfLambdaCall(methodRef, stack)) {
+            lowerCollectionRemoveIfLambdaCall(classFile, method, instruction, instructions, stack, localDeclarations);
             return true;
         }
         final MethodDescriptor descriptor = MethodDescriptor.parse(methodRef.descriptor());
@@ -4240,6 +4303,22 @@ final class BytecodeToIRInvokeSupport {
                 stack.add(StackValue.intExpression(IrExpression.intCall("javan_list_remove", List.of(receiver, arguments.getFirst()))));
                 return true;
             }
+            if ("removeIf(Ljava/util/function/Predicate;)Z".equals(signature)) {
+                final String changedLocal = lowerCollectionRemoveIfCall(
+                    classes,
+                    classFile,
+                    method,
+                    instruction,
+                    instructions,
+                    dispatches,
+                    materializedLambdaMethods,
+                    localDeclarations,
+                    receiver,
+                    arguments.getFirst()
+                );
+                stack.add(StackValue.intExpression(IrExpression.intLocal(changedLocal)));
+                return true;
+            }
             if ("containsAll(Ljava/util/Collection;)Z".equals(signature)) {
                 stack.add(StackValue.intExpression(IrExpression.intCall("javan_list_contains_all", List.of(receiver, arguments.getFirst()))));
                 return true;
@@ -4288,6 +4367,22 @@ final class BytecodeToIRInvokeSupport {
             }
             if ("remove(Ljava/lang/Object;)Z".equals(signature)) {
                 stack.add(StackValue.intExpression(IrExpression.intCall("javan_list_remove", List.of(receiver, arguments.getFirst()))));
+                return true;
+            }
+            if ("removeIf(Ljava/util/function/Predicate;)Z".equals(signature)) {
+                final String changedLocal = lowerCollectionRemoveIfCall(
+                    classes,
+                    classFile,
+                    method,
+                    instruction,
+                    instructions,
+                    dispatches,
+                    materializedLambdaMethods,
+                    localDeclarations,
+                    receiver,
+                    arguments.getFirst()
+                );
+                stack.add(StackValue.intExpression(IrExpression.intLocal(changedLocal)));
                 return true;
             }
             if ("containsAll(Ljava/util/Collection;)Z".equals(signature)) {
@@ -4487,6 +4582,23 @@ final class BytecodeToIRInvokeSupport {
                 );
                 return true;
             }
+            if ("computeIfPresent(Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;".equals(signature)) {
+                final String resultLocal = lowerMapComputeIfPresentCall(
+                    classes,
+                    classFile,
+                    method,
+                    instruction,
+                    instructions,
+                    dispatches,
+                    materializedLambdaMethods,
+                    localDeclarations,
+                    receiver,
+                    arguments.get(0),
+                    arguments.get(1)
+                );
+                stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
+                return true;
+            }
             if ("remove(Ljava/lang/Object;)Ljava/lang/Object;".equals(signature)) {
                 pushObjectCall(instructions, stack, localDeclarations, "javan_map_remove", List.of(receiver, arguments.getFirst()));
                 return true;
@@ -4586,6 +4698,74 @@ final class BytecodeToIRInvokeSupport {
         instructions.add(IrInstruction.label(endLabel));
     }
 
+    private static String lowerCollectionRemoveIfCall(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final Map<String, IrDispatch> dispatches,
+        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<Integer, IrLocal> localDeclarations,
+        final IrExpression collection,
+        final IrExpression predicate
+    ) {
+        final String iteratorLocal = newObjectLocal(localDeclarations);
+        final String changedLocal = newIntLocal(localDeclarations);
+        final String loopLabel = "label_collection_remove_if_loop_" + instruction.offset() + "_" + localDeclarations.size();
+        final String bodyLabel = "label_collection_remove_if_body_" + instruction.offset() + "_" + localDeclarations.size();
+        final String removeLabel = "label_collection_remove_if_remove_" + instruction.offset() + "_" + localDeclarations.size();
+        final String continueLabel = "label_collection_remove_if_continue_" + instruction.offset() + "_" + localDeclarations.size();
+        final String endLabel = "label_collection_remove_if_end_" + instruction.offset() + "_" + localDeclarations.size();
+        final String hasNextLocal = newIntLocal(localDeclarations);
+        final String valueLocal = newObjectLocal(localDeclarations);
+        final String predicateLocal = newIntLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(
+            iteratorLocal,
+            IrExpression.objectCall("javan_list_iterator", List.of(collection))
+        ));
+        instructions.add(IrInstruction.assignInt(changedLocal, IrExpression.intLiteral(0)));
+        instructions.add(IrInstruction.label(loopLabel));
+        instructions.add(IrInstruction.assignInt(
+            hasNextLocal,
+            IrExpression.intCall("javan_iterator_has_next", List.of(IrExpression.objectLocal(iteratorLocal)))
+        ));
+        instructions.add(IrInstruction.branchIf(
+            bodyLabel,
+            IrExpression.intComparison("!=", IrExpression.intLocal(hasNextLocal), IrExpression.intLiteral(0))
+        ));
+        instructions.add(IrInstruction.jump(endLabel));
+        instructions.add(IrInstruction.label(bodyLabel));
+        instructions.add(IrInstruction.assignObject(
+            valueLocal,
+            IrExpression.objectCall("javan_iterator_next", List.of(IrExpression.objectLocal(iteratorLocal)))
+        ));
+        lowerPredicateTestCall(
+            classes,
+            classFile,
+            method,
+            instruction,
+            instructions,
+            dispatches,
+            materializedLambdaMethods,
+            predicate,
+            IrExpression.objectLocal(valueLocal),
+            predicateLocal
+        );
+        instructions.add(IrInstruction.branchIf(
+            removeLabel,
+            IrExpression.intComparison("!=", IrExpression.intLocal(predicateLocal), IrExpression.intLiteral(0))
+        ));
+        instructions.add(IrInstruction.jump(continueLabel));
+        instructions.add(IrInstruction.label(removeLabel));
+        instructions.add(IrInstruction.callStaticVoid("javan_list_iterator_remove", List.of(IrExpression.objectLocal(iteratorLocal))));
+        instructions.add(IrInstruction.assignInt(changedLocal, IrExpression.intLiteral(1)));
+        instructions.add(IrInstruction.label(continueLabel));
+        instructions.add(IrInstruction.jump(loopLabel));
+        instructions.add(IrInstruction.label(endLabel));
+        return changedLocal;
+    }
+
     private static void lowerMapForEachCall(
         final Map<String, ClassFile> classes,
         final ClassFile classFile,
@@ -4649,6 +4829,73 @@ final class BytecodeToIRInvokeSupport {
         instructions.add(IrInstruction.label(endLabel));
     }
 
+    private static String lowerMapComputeIfPresentCall(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final Map<String, IrDispatch> dispatches,
+        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<Integer, IrLocal> localDeclarations,
+        final IrExpression map,
+        final IrExpression key,
+        final IrExpression biFunction
+    ) {
+        final String existingLocal = newObjectLocal(localDeclarations);
+        final String resultLocal = newObjectLocal(localDeclarations);
+        final String presentLabel = "label_map_compute_if_present_present_" + instruction.offset() + "_" + localDeclarations.size();
+        final String storeLabel = "label_map_compute_if_present_store_" + instruction.offset() + "_" + localDeclarations.size();
+        final String removeLabel = "label_map_compute_if_present_remove_" + instruction.offset() + "_" + localDeclarations.size();
+        final String endLabel = "label_map_compute_if_present_end_" + instruction.offset() + "_" + localDeclarations.size();
+        instructions.add(IrInstruction.assignObject(
+            existingLocal,
+            IrExpression.objectCall("javan_map_get", List.of(map, key))
+        ));
+        instructions.add(IrInstruction.branchIf(
+            presentLabel,
+            IrExpression.objectComparison("!=", IrExpression.objectLocal(existingLocal), IrExpression.objectNull())
+        ));
+        instructions.add(IrInstruction.assignObject(resultLocal, IrExpression.objectNull()));
+        instructions.add(IrInstruction.jump(endLabel));
+        instructions.add(IrInstruction.label(presentLabel));
+        final String computedLocal = newObjectLocal(localDeclarations);
+        final String removedLocal = newObjectLocal(localDeclarations);
+        lowerBiFunctionApplyCall(
+            classes,
+            classFile,
+            method,
+            instruction,
+            instructions,
+            dispatches,
+            materializedLambdaMethods,
+            biFunction,
+            key,
+            IrExpression.objectLocal(existingLocal),
+            computedLocal
+        );
+        instructions.add(IrInstruction.branchIf(
+            storeLabel,
+            IrExpression.objectComparison("!=", IrExpression.objectLocal(computedLocal), IrExpression.objectNull())
+        ));
+        instructions.add(IrInstruction.jump(removeLabel));
+        instructions.add(IrInstruction.label(storeLabel));
+        instructions.add(IrInstruction.callStaticVoid(
+            "javan_map_put",
+            List.of(map, key, IrExpression.objectLocal(computedLocal))
+        ));
+        instructions.add(IrInstruction.assignObject(resultLocal, IrExpression.objectLocal(computedLocal)));
+        instructions.add(IrInstruction.jump(endLabel));
+        instructions.add(IrInstruction.label(removeLabel));
+        instructions.add(IrInstruction.assignObject(
+            removedLocal,
+            IrExpression.objectCall("javan_map_remove", List.of(map, key))
+        ));
+        instructions.add(IrInstruction.assignObject(resultLocal, IrExpression.objectNull()));
+        instructions.add(IrInstruction.label(endLabel));
+        return resultLocal;
+    }
+
     private static void lowerConsumerAcceptCall(
         final Map<String, ClassFile> classes,
         final ClassFile classFile,
@@ -4677,10 +4924,10 @@ final class BytecodeToIRInvokeSupport {
             instructions.add(IrInstruction.callStaticVoid(symbol(defaultTarget.orElseThrow()), List.of(consumer, argument)));
             return;
         }
-        if (materializedLambdaMethods.get(consumerAccept) == MaterializedLambdaDispatchKind.VOID) {
-            instructions.add(IrInstruction.callStaticVoid(MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL, List.of(consumer, argument)));
-            return;
-        }
+            if (materializedLambdaMethods.get(consumerAccept) == MaterializedLambdaDispatchKind.VOID) {
+                instructions.add(IrInstruction.callStaticVoid(MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL, List.of(consumer, argument)));
+                return;
+            }
         throw unsupported(classFile, method, instruction);
     }
 
@@ -4718,6 +4965,107 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         throw unsupported(classFile, method, instruction);
+    }
+
+    private static void lowerBiFunctionApplyCall(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final Map<String, IrDispatch> dispatches,
+        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final IrExpression biFunction,
+        final IrExpression firstArgument,
+        final IrExpression secondArgument,
+        final String resultLocal
+    ) {
+        final MethodRef biFunctionApply = new MethodRef("java/util/function/BiFunction", "apply", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;");
+        final List<EntryPoint> targets = interfaceTargets(classes, biFunctionApply);
+        if (targets.size() > 1) {
+            final String dispatchSymbol = dispatchSymbol(biFunctionApply);
+            dispatches.putIfAbsent(dispatchSymbol, dispatch(dispatchSymbol, MethodDescriptor.parse(biFunctionApply.descriptor()), targets));
+            instructions.add(IrInstruction.assignObject(
+                resultLocal,
+                IrExpression.objectCall(dispatchSymbol, List.of(biFunction, firstArgument, secondArgument))
+            ));
+            return;
+        }
+        if (!targets.isEmpty()) {
+            instructions.add(IrInstruction.assignObject(
+                resultLocal,
+                IrExpression.objectCall(symbol(targets.getFirst()), List.of(biFunction, firstArgument, secondArgument))
+            ));
+            return;
+        }
+        final Optional<EntryPoint> defaultTarget = defaultInterfaceTarget(classes, biFunctionApply);
+        if (defaultTarget.isPresent()) {
+            instructions.add(IrInstruction.assignObject(
+                resultLocal,
+                IrExpression.objectCall(symbol(defaultTarget.orElseThrow()), List.of(biFunction, firstArgument, secondArgument))
+            ));
+            return;
+        }
+        if (materializedLambdaMethods.get(biFunctionApply) == MaterializedLambdaDispatchKind.OBJECT) {
+            instructions.add(IrInstruction.assignObject(
+                resultLocal,
+                IrExpression.objectCall(MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL, List.of(biFunction, firstArgument, secondArgument))
+            ));
+            return;
+        }
+        throw unsupported(classFile, method, instruction);
+    }
+
+    private static void lowerPredicateTestCall(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final Map<String, IrDispatch> dispatches,
+        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final IrExpression predicate,
+        final IrExpression argument,
+        final String resultLocal
+    ) {
+        final MethodRef predicateTest = new MethodRef("java/util/function/Predicate", "test", "(Ljava/lang/Object;)Z");
+        final List<EntryPoint> targets = interfaceTargets(classes, predicateTest);
+        if (targets.size() > 1) {
+            final String dispatchSymbol = dispatchSymbol(predicateTest);
+            dispatches.putIfAbsent(dispatchSymbol, dispatch(dispatchSymbol, MethodDescriptor.parse(predicateTest.descriptor()), targets));
+            instructions.add(IrInstruction.assignInt(resultLocal, IrExpression.intCall(dispatchSymbol, List.of(predicate, argument))));
+            return;
+        }
+        if (!targets.isEmpty()) {
+            instructions.add(IrInstruction.assignInt(resultLocal, IrExpression.intCall(symbol(targets.getFirst()), List.of(predicate, argument))));
+            return;
+        }
+        final Optional<EntryPoint> defaultTarget = defaultInterfaceTarget(classes, predicateTest);
+        if (defaultTarget.isPresent()) {
+            instructions.add(IrInstruction.assignInt(resultLocal, IrExpression.intCall(symbol(defaultTarget.orElseThrow()), List.of(predicate, argument))));
+            return;
+        }
+        if (materializedLambdaMethods.get(predicateTest) == MaterializedLambdaDispatchKind.BOOLEAN) {
+            instructions.add(IrInstruction.assignInt(resultLocal, IrExpression.intCall(MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL, List.of(predicate, argument))));
+            return;
+        }
+        throw unsupported(classFile, method, instruction);
+    }
+
+    private static boolean isInlineCollectionRemoveIfLambdaCall(final MethodRef methodRef, final List<StackValue> stack) {
+        if (!hasTopStackKind(stack, StackKind.LAMBDA_PREDICATE)) {
+            return false;
+        }
+        if (!"removeIf".equals(methodRef.name()) || !"(Ljava/util/function/Predicate;)Z".equals(methodRef.descriptor())) {
+            return false;
+        }
+        final String owner = methodRef.owner();
+        return "java/util/Collection".equals(owner)
+            || "java/util/List".equals(owner)
+            || "java/util/ArrayList".equals(owner)
+            || "java/util/Set".equals(owner)
+            || "java/util/HashSet".equals(owner)
+            || "java/util/LinkedHashSet".equals(owner);
     }
     static DiagnosticException collectionLoweringRegistryMismatch(
         final ClassFile classFile,
@@ -6379,6 +6727,13 @@ final class BytecodeToIRInvokeSupport {
                     return;
                 }
                 instructions.add(IrInstruction.callStaticVoid(MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL, List.of(receiver, arguments.getFirst())));
+                return;
+            }
+            if (arguments.size() == 2) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                    MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL,
+                    List.of(receiver, arguments.get(0), arguments.get(1))
+                )));
                 return;
             }
             stack.add(StackValue.objectExpression(IrExpression.objectCall(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL, List.of(receiver, arguments.getFirst()))));

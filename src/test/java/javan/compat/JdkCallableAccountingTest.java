@@ -1828,15 +1828,45 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksCollectionRemoveIfAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Collection", "removeIf", "(Ljava/util/function/Predicate;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksArrayListRemoveIfAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "removeIf", "(Ljava/util/function/Predicate;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksSupplierGetAsExplicitRejected() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/function/Supplier", "get", "()Ljava/lang/Object;")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
     }
 
     @Test
-    void marksPredicateTestAsExplicitRejected() {
+    void marksPredicateTestAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/function/Predicate", "test", "(Ljava/lang/Object;)Z")))
-            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksBiFunctionApplyAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/function/BiFunction", "apply", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksMapComputeIfPresentAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "computeIfPresent", "(Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksHashMapComputeIfPresentAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/HashMap", "computeIfPresent", "(Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
     @Test

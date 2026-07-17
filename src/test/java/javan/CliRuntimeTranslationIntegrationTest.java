@@ -3908,6 +3908,312 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void collectionRemoveIfLambdaBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("collection-remove-if-lambda");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.Collection;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Collection<String> values = new ArrayList<>(List.of("keep", "drop", "stay"));
+                    final boolean changed = values.removeIf(value -> value.equals("drop"));
+                    System.out.println(changed);
+                    System.out.println(values.contains("drop"));
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/collection-remove-if-lambda").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\nfalse\n2\n");
+    }
+
+    @Test
+    void collectionRemoveIfConcretePredicateBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("collection-remove-if-predicate");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.Collection;
+            import java.util.List;
+            import java.util.function.Predicate;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Collection<String> values = new ArrayList<>(List.of("keep", "drop", "stay"));
+                    final boolean changed = values.removeIf(new DropPredicate());
+                    System.out.println(changed);
+                    System.out.println(values.contains("drop"));
+                    System.out.println(values.size());
+                }
+
+                private static final class DropPredicate implements Predicate<String> {
+                    @Override
+                    public boolean test(final String value) {
+                        return value.equals("drop");
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/collection-remove-if-predicate").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\nfalse\n2\n");
+    }
+
+    @Test
+    void predicateTestConcreteImplementationBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("predicate-test-concrete");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Predicate;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Predicate<String> predicate = new KeepPredicate();
+                    System.out.println(predicate.test("keep"));
+                    System.out.println(predicate.test("drop"));
+                }
+
+                private static final class KeepPredicate implements Predicate<String> {
+                    @Override
+                    public boolean test(final String value) {
+                        return value.equals("keep");
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/predicate-test-concrete").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\nfalse\n");
+    }
+
+    @Test
+    void biFunctionApplyConcreteImplementationBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("bifunction-apply-concrete");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.BiFunction;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final BiFunction<Object, Object, Object> function = new Joiner();
+                    System.out.println(function.apply("left", "right"));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Joiner", """
+            package com.acme;
+
+            import java.util.function.BiFunction;
+
+            public final class Joiner implements BiFunction<Object, Object, Object> {
+                @Override
+                public Object apply(final Object left, final Object right) {
+                    return ((String) left) + ":" + ((String) right);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/bifunction-apply-concrete").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("left:right\n");
+    }
+
+    @Test
+    void biFunctionApplyZeroCaptureLambdaBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("bifunction-apply-lambda");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.BiFunction;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final BiFunction<String, String, String> function = (left, right) -> left + "-" + right;
+                    System.out.println(function.apply("left", "right"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/bifunction-apply-lambda").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("left-right\n");
+    }
+
+    @Test
+    void mapComputeIfPresentConcreteImplementationBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-compute-if-present-concrete");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashMap;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final HashMap<Object, Object> values = new HashMap<>();
+                    values.put("demo", "value");
+                    System.out.println(values.computeIfPresent("demo", new Joiner()));
+                    System.out.println(values.get("demo"));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Joiner", """
+            package com.acme;
+
+            import java.util.function.BiFunction;
+
+            public final class Joiner implements BiFunction<Object, Object, Object> {
+                @Override
+                public Object apply(final Object key, final Object value) {
+                    return key + ":" + value;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-compute-if-present-concrete").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("demo:value\ndemo:value\n");
+    }
+
+    @Test
+    void mapComputeIfPresentLambdaBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-compute-if-present-lambda");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, String> values = new HashMap<>();
+                    values.put("demo", "value");
+                    System.out.println(values.computeIfPresent("demo", (key, value) -> key + "-" + value));
+                    System.out.println(values.get("demo"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-compute-if-present-lambda").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("demo-value\ndemo-value\n");
+    }
+
+    @Test
+    void mapComputeIfPresentMissingKeyBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-compute-if-present-missing");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, String> values = new HashMap<>();
+                    values.put("present", "value");
+                    System.out.println(values.computeIfPresent("missing", (key, value) -> key + "-" + value));
+                    System.out.println(values.size());
+                    System.out.println(values.containsKey("present"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-compute-if-present-missing").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("null\n1\ntrue\n");
+    }
+
+    @Test
+    void mapComputeIfPresentNullRemapRemovesEntryBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-compute-if-present-null-remap");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, String> values = new HashMap<>();
+                    values.put("demo", "value");
+                    System.out.println(values.computeIfPresent("demo", (key, value) -> null));
+                    System.out.println(values.containsKey("demo"));
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-compute-if-present-null-remap").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("null\nfalse\n0\n");
+    }
+
+    @Test
     void mapForEachLambdaBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("map-foreach-lambda");
         writeJava(project, "com.acme.Main", """

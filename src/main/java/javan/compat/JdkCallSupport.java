@@ -456,6 +456,7 @@ public final class JdkCallSupport {
         runtime("ArrayList.addFirst", "java/util/ArrayList", "addFirst", "(Ljava/lang/Object;)V"),
         runtime("ArrayList.addLast", "java/util/ArrayList", "addLast", "(Ljava/lang/Object;)V"),
         runtime("ArrayList.removeFirst", "java/util/ArrayList", "removeFirst", "()Ljava/lang/Object;"),
+        runtime("ArrayList.removeIf", "java/util/ArrayList", "removeIf", "(Ljava/util/function/Predicate;)Z"),
         runtime("ArrayList.iterator", "java/util/ArrayList", "iterator", "()Ljava/util/Iterator;"),
         runtime("ArrayList.listIterator", "java/util/ArrayList", "listIterator", "()Ljava/util/ListIterator;", "(I)Ljava/util/ListIterator;"),
         runtime("ArrayList.toArray", "java/util/ArrayList", "toArray", "()[Ljava/lang/Object;"),
@@ -503,6 +504,7 @@ public final class JdkCallSupport {
         runtime("List.addAll", "java/util/List", "addAll", "(Ljava/util/Collection;)Z"),
         runtime("List.removeAll", "java/util/List", "removeAll", "(Ljava/util/Collection;)Z"),
         runtime("List.retainAll", "java/util/List", "retainAll", "(Ljava/util/Collection;)Z"),
+        runtime("List.removeIf", "java/util/List", "removeIf", "(Ljava/util/function/Predicate;)Z"),
         runtime("List.size", "java/util/List", "size", "()I"),
         runtime("List.isEmpty", "java/util/List", "isEmpty", "()Z"),
         runtime("List.contains", "java/util/List", "contains", "(Ljava/lang/Object;)Z"),
@@ -519,6 +521,7 @@ public final class JdkCallSupport {
         runtime("Collection.removeAll", "java/util/Collection", "removeAll", "(Ljava/util/Collection;)Z"),
         runtime("Collection.retainAll", "java/util/Collection", "retainAll", "(Ljava/util/Collection;)Z"),
         runtime("Collection.remove", "java/util/Collection", "remove", "(Ljava/lang/Object;)Z"),
+        runtime("Collection.removeIf", "java/util/Collection", "removeIf", "(Ljava/util/function/Predicate;)Z"),
         runtime("Collection.containsAll", "java/util/Collection", "containsAll", "(Ljava/util/Collection;)Z"),
         runtime("Collection.clear", "java/util/Collection", "clear", "()V"),
         runtime("Collection.toArray", "java/util/Collection", "toArray", "()[Ljava/lang/Object;"),
@@ -528,6 +531,7 @@ public final class JdkCallSupport {
         runtime("Set.retainAll", "java/util/Set", "retainAll", "(Ljava/util/Collection;)Z"),
         runtime("Set.contains", "java/util/Set", "contains", "(Ljava/lang/Object;)Z"),
         runtime("Set.remove", "java/util/Set", "remove", "(Ljava/lang/Object;)Z"),
+        runtime("Set.removeIf", "java/util/Set", "removeIf", "(Ljava/util/function/Predicate;)Z"),
         runtime("Set.containsAll", "java/util/Set", "containsAll", "(Ljava/util/Collection;)Z"),
         runtime("Set.clear", "java/util/Set", "clear", "()V"),
         runtime("Set.size", "java/util/Set", "size", "()I"),
@@ -553,6 +557,7 @@ public final class JdkCallSupport {
         runtime("HashSet.retainAll", "java/util/HashSet", "retainAll", "(Ljava/util/Collection;)Z"),
         runtime("HashSet.contains", "java/util/HashSet", "contains", "(Ljava/lang/Object;)Z"),
         runtime("HashSet.remove", "java/util/HashSet", "remove", "(Ljava/lang/Object;)Z"),
+        runtime("HashSet.removeIf", "java/util/HashSet", "removeIf", "(Ljava/util/function/Predicate;)Z"),
         runtime("HashSet.containsAll", "java/util/HashSet", "containsAll", "(Ljava/util/Collection;)Z"),
         runtime("HashSet.clear", "java/util/HashSet", "clear", "()V"),
         runtime("HashSet.size", "java/util/HashSet", "size", "()I"),
@@ -565,6 +570,7 @@ public final class JdkCallSupport {
         runtime("LinkedHashSet.retainAll", "java/util/LinkedHashSet", "retainAll", "(Ljava/util/Collection;)Z"),
         runtime("LinkedHashSet.contains", "java/util/LinkedHashSet", "contains", "(Ljava/lang/Object;)Z"),
         runtime("LinkedHashSet.remove", "java/util/LinkedHashSet", "remove", "(Ljava/lang/Object;)Z"),
+        runtime("LinkedHashSet.removeIf", "java/util/LinkedHashSet", "removeIf", "(Ljava/util/function/Predicate;)Z"),
         runtime("LinkedHashSet.containsAll", "java/util/LinkedHashSet", "containsAll", "(Ljava/util/Collection;)Z"),
         runtime("LinkedHashSet.clear", "java/util/LinkedHashSet", "clear", "()V"),
         runtime("LinkedHashSet.size", "java/util/LinkedHashSet", "size", "()I"),
@@ -619,6 +625,7 @@ public final class JdkCallSupport {
         runtime("Map.remove", "java/util/Map", "remove", "(Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Map.remove", "java/util/Map", "remove", "(Ljava/lang/Object;Ljava/lang/Object;)Z"),
         runtime("Map.computeIfAbsent", "java/util/Map", "computeIfAbsent", "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;"),
+        runtime("Map.computeIfPresent", "java/util/Map", "computeIfPresent", "(Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;"),
         runtime("Map.entry", "java/util/Map", "entry", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map$Entry;"),
         runtime("Map.containsValue", "java/util/Map", "containsValue", "(Ljava/lang/Object;)Z"),
         runtime("HashMap.put", "java/util/HashMap", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
@@ -626,9 +633,13 @@ public final class JdkCallSupport {
         runtime("TreeMap.put", "java/util/TreeMap", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("ConcurrentHashMap.put", "java/util/concurrent/ConcurrentHashMap", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("HashMap.putIfAbsent", "java/util/HashMap", "putIfAbsent", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("HashMap.computeIfPresent", "java/util/HashMap", "computeIfPresent", "(Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;"),
         runtime("LinkedHashMap.putIfAbsent", "java/util/LinkedHashMap", "putIfAbsent", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("LinkedHashMap.computeIfPresent", "java/util/LinkedHashMap", "computeIfPresent", "(Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;"),
         runtime("TreeMap.putIfAbsent", "java/util/TreeMap", "putIfAbsent", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("TreeMap.computeIfPresent", "java/util/TreeMap", "computeIfPresent", "(Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;"),
         runtime("ConcurrentHashMap.putIfAbsent", "java/util/concurrent/ConcurrentHashMap", "putIfAbsent", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("ConcurrentHashMap.computeIfPresent", "java/util/concurrent/ConcurrentHashMap", "computeIfPresent", "(Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;"),
         runtime("HashMap.replace", "java/util/HashMap", "replace", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("HashMap.replace", "java/util/HashMap", "replace", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Z"),
         runtime("LinkedHashMap.replace", "java/util/LinkedHashMap", "replace", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
@@ -831,6 +842,8 @@ public final class JdkCallSupport {
         runtime("Optional.orElseThrow", "java/util/Optional", "orElseThrow", "()Ljava/lang/Object;"),
         runtime("Consumer.accept", "java/util/function/Consumer", "accept", "(Ljava/lang/Object;)V"),
         runtime("BiConsumer.accept", "java/util/function/BiConsumer", "accept", "(Ljava/lang/Object;Ljava/lang/Object;)V"),
+        runtime("BiFunction.apply", "java/util/function/BiFunction", "apply", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("Predicate.test", "java/util/function/Predicate", "test", "(Ljava/lang/Object;)Z"),
         runtime("Optional.filter", "java/util/Optional", "filter", "(Ljava/util/function/Predicate;)Ljava/util/Optional;"),
         runtime("Optional.map", "java/util/Optional", "map", "(Ljava/util/function/Function;)Ljava/util/Optional;")
     );
@@ -1777,6 +1790,9 @@ public final class JdkCallSupport {
             return true;
         }
         if ("java/lang/Iterable".equals(owner)) {
+            return true;
+        }
+        if ("java/util/function/Predicate".equals(owner)) {
             return true;
         }
         return "java/util/Iterator".equals(owner)

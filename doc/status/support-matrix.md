@@ -9,8 +9,8 @@ External project names do not belong in this matrix; this ledger stays compiler-
 
 | Measure | Count |
 | --- | ---: |
-| rows | 292 |
-| pass | 292 |
+| rows | 296 |
+| pass | 296 |
 | scoped | 0 |
 | target | 0 |
 | rejected | 0 |
@@ -113,6 +113,7 @@ Status mapping:
 | `collection-add-all` | pass |
 | `collection-remove-all` | pass |
 | `collection-retain-all` | pass |
+| `collection-remove-if` | pass |
 | `collection-contains-all` | pass |
 | `collection-remove` | pass |
 | `collection-clear` | pass |
@@ -169,6 +170,9 @@ Status mapping:
 | `iterator-remove` | pass |
 | `iterator-foreach-remaining` | pass |
 | `iterable-foreach` | pass |
+| `bifunction-apply` | pass |
+| `map-compute-if-present` | pass |
+| `predicate-test` | pass |
 | `hashset-direct-owner-read-surface` | pass |
 | `hashset-direct-owner-add-all` | pass |
 | `hashset-direct-owner-remove-all` | pass |

@@ -260,6 +260,29 @@ public final class ReachabilityAnalyzer {
             ));
             return;
         }
+        if (isCollectionRemoveIf(target)) {
+            final MethodRef predicateTest = new MethodRef("java/util/function/Predicate", "test", "(Ljava/lang/Object;)Z");
+            final List<EntryPoint> targetMethods = interfaceTargets(classes, predicateTest, entryPoints);
+            if (!targetMethods.isEmpty()) {
+                enqueueAll(work, workSet, targetMethods);
+                addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
+            }
+            if (hasInlineDirectPredicateLambda(classes, current, instruction)
+                || containsMethodRef(materializedLambdaMethods, predicateTest)
+                || !targetMethods.isEmpty()) {
+                return;
+            }
+            diagnostics.add(Diagnostic.error(
+                "JAVAN012",
+                "unsupported reachable application method call",
+                current.className(),
+                current.methodName() + current.descriptor(),
+                target.display(),
+                "Collection.removeIf requires either a closed-world Predicate implementation class or a supported inline Predicate lambda at the call site.",
+                "Provide a reachable Predicate implementation class, keep the Predicate lambda inline at the removeIf call, or keep this exact collection predicate-removal flow on the JVM until broader receiver support lands."
+            ));
+            return;
+        }
         if (instruction.opcode() == 185 && isMapForEach(target)) {
             final MethodRef biConsumerAccept = new MethodRef("java/util/function/BiConsumer", "accept", "(Ljava/lang/Object;Ljava/lang/Object;)V");
             final List<EntryPoint> targetMethods = interfaceTargets(classes, biConsumerAccept, entryPoints);
@@ -278,6 +301,67 @@ public final class ReachabilityAnalyzer {
                 target.display(),
                 "Map.forEach requires either a closed-world BiConsumer implementation class or a supported materialized BiConsumer lambda target.",
                 "Provide a reachable BiConsumer implementation class or keep this exact map bulk-callback flow on the JVM until broader receiver support lands."
+            ));
+            return;
+        }
+        if (isMapComputeIfPresent(target)) {
+            final MethodRef biFunctionApply = new MethodRef("java/util/function/BiFunction", "apply", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;");
+            final List<EntryPoint> targetMethods = interfaceTargets(classes, biFunctionApply, entryPoints);
+            if (!targetMethods.isEmpty()) {
+                enqueueAll(work, workSet, targetMethods);
+                addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
+            }
+            if (containsMethodRef(materializedLambdaMethods, biFunctionApply) || !targetMethods.isEmpty()) {
+                return;
+            }
+            diagnostics.add(Diagnostic.error(
+                "JAVAN012",
+                "unsupported reachable application method call",
+                current.className(),
+                current.methodName() + current.descriptor(),
+                target.display(),
+                "Map.computeIfPresent requires either a closed-world BiFunction implementation class or a supported materialized BiFunction lambda target.",
+                "Provide a reachable BiFunction implementation class or keep this exact map compute-if-present flow on the JVM until broader receiver support lands."
+            ));
+            return;
+        }
+        if (instruction.opcode() == 185 && isPredicateTest(target)) {
+            final List<EntryPoint> targetMethods = interfaceTargets(classes, target, entryPoints);
+            if (!targetMethods.isEmpty()) {
+                enqueueAll(work, workSet, targetMethods);
+                addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
+            }
+            if (containsMethodRef(materializedLambdaMethods, target) || !targetMethods.isEmpty()) {
+                return;
+            }
+            diagnostics.add(Diagnostic.error(
+                "JAVAN012",
+                "unsupported reachable application method call",
+                current.className(),
+                current.methodName() + current.descriptor(),
+                target.display(),
+                "Predicate.test requires either a closed-world Predicate implementation class or a supported materialized Predicate lambda target.",
+                "Provide a reachable Predicate implementation class or keep this exact predicate dispatch on the JVM until broader receiver support lands."
+            ));
+            return;
+        }
+        if (instruction.opcode() == 185 && isBiFunctionApply(target)) {
+            final List<EntryPoint> targetMethods = interfaceTargets(classes, target, entryPoints);
+            if (!targetMethods.isEmpty()) {
+                enqueueAll(work, workSet, targetMethods);
+                addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
+            }
+            if (containsMethodRef(materializedLambdaMethods, target) || !targetMethods.isEmpty()) {
+                return;
+            }
+            diagnostics.add(Diagnostic.error(
+                "JAVAN012",
+                "unsupported reachable application method call",
+                current.className(),
+                current.methodName() + current.descriptor(),
+                target.display(),
+                "BiFunction.apply requires either a closed-world BiFunction implementation class or a supported materialized BiFunction lambda target.",
+                "Provide a reachable BiFunction implementation class or keep this exact bi-function dispatch on the JVM until broader receiver support lands."
             ));
             return;
         }
@@ -489,6 +573,50 @@ public final class ReachabilityAnalyzer {
             }
         }
         return false;
+    }
+
+    private static boolean hasInlineDirectPredicateLambda(
+        final Map<String, ClassFile> classes,
+        final EntryPoint current,
+        final Instruction instruction
+    ) {
+        final Optional<MethodInfo> method = method(classes, current);
+        if (method.isEmpty() || method.orElseThrow().code().isEmpty()) {
+            return false;
+        }
+        final List<Instruction> instructions = method.orElseThrow().code().orElseThrow().instructions();
+        for (int index = 1; index < instructions.size(); index++) {
+            if (instructions.get(index).offset() != instruction.offset()) {
+                continue;
+            }
+            final Instruction producer = instructions.get(index - 1);
+            if (producer.opcode() != 186 || producer.dynamicRef().isEmpty()) {
+                return false;
+            }
+            final Optional<LambdaMetafactoryCall> lambdaCall = LambdaMetafactoryCall.resolve(producer.dynamicRef().orElseThrow());
+            return lambdaCall.isPresent()
+                && lambdaCall.orElseThrow().isPredicate()
+                && lambdaCall.orElseThrow().isDirectlyLowerable();
+        }
+        return false;
+    }
+
+    private static boolean isBiFunctionApply(final MethodRef target) {
+        return "java/util/function/BiFunction".equals(target.owner())
+            && "apply".equals(target.name())
+            && "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(target.descriptor());
+    }
+
+    private static boolean isMapComputeIfPresent(final MethodRef target) {
+        if (!"computeIfPresent".equals(target.name())
+            || !"(Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;".equals(target.descriptor())) {
+            return false;
+        }
+        return "java/util/Map".equals(target.owner())
+            || "java/util/HashMap".equals(target.owner())
+            || "java/util/LinkedHashMap".equals(target.owner())
+            || "java/util/TreeMap".equals(target.owner())
+            || "java/util/concurrent/ConcurrentHashMap".equals(target.owner());
     }
 
     private static void enqueueClassInitializer(
@@ -728,10 +856,27 @@ public final class ReachabilityAnalyzer {
             && "(Ljava/util/function/Consumer;)V".equals(target.descriptor());
     }
 
+    private static boolean isCollectionRemoveIf(final MethodRef target) {
+        return ("java/util/Collection".equals(target.owner())
+            || "java/util/List".equals(target.owner())
+            || "java/util/ArrayList".equals(target.owner())
+            || "java/util/Set".equals(target.owner())
+            || "java/util/HashSet".equals(target.owner())
+            || "java/util/LinkedHashSet".equals(target.owner()))
+            && "removeIf".equals(target.name())
+            && "(Ljava/util/function/Predicate;)Z".equals(target.descriptor());
+    }
+
     private static boolean isMapForEach(final MethodRef target) {
         return "java/util/Map".equals(target.owner())
             && "forEach".equals(target.name())
             && "(Ljava/util/function/BiConsumer;)V".equals(target.descriptor());
+    }
+
+    private static boolean isPredicateTest(final MethodRef target) {
+        return "java/util/function/Predicate".equals(target.owner())
+            && "test".equals(target.name())
+            && "(Ljava/lang/Object;)Z".equals(target.descriptor());
     }
 
     private static List<EntryPoint> interfaceTargets(
