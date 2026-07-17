@@ -11,8 +11,8 @@
     "rule": "done = supported variants + rejected variants; unknown leftovers must be 0 for a release-gated JDK"
   },
   "counts": {
-    "rows": 236,
-    "pass": 236,
+    "rows": 238,
+    "pass": 238,
     "scoped": 0,
     "target": 0,
     "rejected": 0
@@ -110,6 +110,8 @@
     {"feature": "set-clear", "jdk25": "pass"},
     {"feature": "hashset-capacity-constructor", "jdk25": "pass"},
     {"feature": "linkedhashset-capacity-constructor", "jdk25": "pass"},
+    {"feature": "hashset-load-factor-constructor", "jdk25": "pass"},
+    {"feature": "linkedhashset-load-factor-constructor", "jdk25": "pass"},
     {"feature": "hashset-collection-constructor", "jdk25": "pass"},
     {"feature": "linkedhashset-collection-constructor", "jdk25": "pass"},
     {"feature": "hashset-static-factory", "jdk25": "pass"},

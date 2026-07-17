@@ -8663,6 +8663,48 @@ final class RuntimeSourceMemorySections {
             javan_list_ensure_capacity(list, capacity);
         }
 
+        static void javan_format_java_float(float value, char* buffer, unsigned long capacity) {
+            if (capacity == 0) {
+                return;
+            }
+            if (isnan(value)) {
+                snprintf(buffer, capacity, "NaN");
+                return;
+            }
+            if (value == 0.0f) {
+                if (signbit(value)) {
+                    snprintf(buffer, capacity, "-0.0");
+                } else {
+                    snprintf(buffer, capacity, "0.0");
+                }
+                return;
+            }
+            snprintf(buffer, capacity, "%.9g", value);
+            if (strchr(buffer, '.') == NULL && strchr(buffer, 'e') == NULL && strchr(buffer, 'E') == NULL) {
+                unsigned long length = (unsigned long) strlen(buffer);
+                if ((length + 3) <= capacity) {
+                    buffer[length] = '.';
+                    buffer[length + 1] = '0';
+                    buffer[length + 2] = '\0';
+                }
+            }
+        }
+
+        static void javan_panic_illegal_load_factor(float load_factor) {
+            char load_factor_text[32];
+            char buffer[64];
+            javan_format_java_float(load_factor, load_factor_text, sizeof(load_factor_text));
+            snprintf(buffer, sizeof(buffer), "Illegal load factor: %s", load_factor_text);
+            javan_panic(buffer);
+        }
+
+        void javan_set_initialize_capacity_with_load_factor(void* value, int capacity, float load_factor) {
+            if (!(load_factor > 0.0f)) {
+                javan_panic_illegal_load_factor(load_factor);
+            }
+            javan_set_initialize_capacity(value, capacity);
+        }
+
         void* javan_hashmap_new_with_expected_mappings(int num_mappings) {
             return javan_map_new_with_capacity(javan_hashmap_capacity_for_expected_mappings(num_mappings), 0);
         }

@@ -1175,6 +1175,69 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void hashSetLoadFactorConstructorBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("hashset-load-factor-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashSet;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final HashSet<String> values = new HashSet<>(16, 0.75f);
+                    values.add("alpha");
+                    values.add("beta");
+                    System.out.println(values.contains("alpha"));
+                    System.out.println(values.contains("beta"));
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/hashset-load-factor-constructor").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\ntrue\n2\n");
+    }
+
+    @Test
+    void linkedHashSetLoadFactorConstructorBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("linkedhashset-load-factor-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.LinkedHashSet;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final LinkedHashSet<String> values = new LinkedHashSet<>(8, 0.75f);
+                    values.add("alpha");
+                    values.add("beta");
+                    final Object[] elements = values.toArray();
+                    System.out.println(elements[0]);
+                    System.out.println(elements[1]);
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/linkedhashset-load-factor-constructor").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("alpha\nbeta\n2\n");
+    }
+
+    @Test
     void hashSetDirectOwnerReadSurfaceBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("hashset-direct-owner-read-surface");
         writeJava(project, "com.acme.Main", """

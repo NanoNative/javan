@@ -3560,6 +3560,13 @@ final class BytecodeToIRInvokeSupport {
                 instructions.add(IrInstruction.callStaticVoid("javan_set_initialize_capacity", List.of(receiver, arguments.getFirst())));
                 return true;
             }
+            if ("(IF)V".equals(methodRef.descriptor())) {
+                instructions.add(IrInstruction.callStaticVoid(
+                    "javan_set_initialize_capacity_with_load_factor",
+                    List.of(receiver, arguments.get(0), arguments.get(1))
+                ));
+                return true;
+            }
             if ("(Ljava/util/Collection;)V".equals(methodRef.descriptor())) {
                 instructions.add(IrInstruction.callStaticVoid("javan_hashset_add_all", List.of(receiver, arguments.getFirst())));
                 return true;

@@ -2130,6 +2130,26 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void hashSetLoadFactorConstructorRejectsZeroLoadFactorAtRuntime() throws Exception {
+        assertSetConstructorFailureAtRuntime(
+            "hashset-load-factor-constructor-zero-load-factor",
+            "import java.util.HashSet;",
+            "new HashSet<String>(16, 0.0f);",
+            "Illegal load factor: 0.0"
+        );
+    }
+
+    @Test
+    void linkedHashSetLoadFactorConstructorRejectsZeroLoadFactorAtRuntime() throws Exception {
+        assertSetConstructorFailureAtRuntime(
+            "linkedhashset-load-factor-constructor-zero-load-factor",
+            "import java.util.LinkedHashSet;",
+            "new LinkedHashSet<String>(8, 0.0f);",
+            "Illegal load factor: 0.0"
+        );
+    }
+
+    @Test
     void collectionsUnmodifiableListBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("collections-unmodifiable-list");
         writeJava(project, "com.acme.Main", """

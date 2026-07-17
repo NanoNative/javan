@@ -205,6 +205,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void hashSetLoadFactorConstructorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/HashSet",
+            "<init>",
+            "(IF)V"
+        ))).isTrue();
+    }
+
+    @Test
     void linkedHashSetNewLinkedHashSetIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/LinkedHashSet",
@@ -219,6 +228,15 @@ final class JdkCallSupportTest {
             "java/util/LinkedHashSet",
             "<init>",
             "(I)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void linkedHashSetLoadFactorConstructorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/LinkedHashSet",
+            "<init>",
+            "(IF)V"
         ))).isTrue();
     }
 

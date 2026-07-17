@@ -19590,6 +19590,60 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersHashSetLoadFactorConstructorToRuntimeInitialization() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(IF)Ljava/util/HashSet;",
+            4,
+            2,
+            classInstruction(0, 187, "new", "java/util/HashSet"),
+            plain(1, 89, "dup"),
+            plain(2, 26, "iload_0"),
+            plain(3, 35, "fload_1"),
+            invokeSpecial(4, new MethodRef("java/util/HashSet", "<init>", "(IF)V")),
+            plain(5, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_hashset_new", List.of())),
+            IrInstruction.callStaticVoid(
+                "javan_set_initialize_capacity_with_load_factor",
+                List.of(IrExpression.objectLocal("object0"), IrExpression.intLocal("arg0"), IrExpression.floatLocal("arg1"))
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersLinkedHashSetLoadFactorConstructorToRuntimeInitialization() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(IF)Ljava/util/LinkedHashSet;",
+            4,
+            2,
+            classInstruction(0, 187, "new", "java/util/LinkedHashSet"),
+            plain(1, 89, "dup"),
+            plain(2, 26, "iload_0"),
+            plain(3, 35, "fload_1"),
+            invokeSpecial(4, new MethodRef("java/util/LinkedHashSet", "<init>", "(IF)V")),
+            plain(5, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_hashset_new", List.of())),
+            IrInstruction.callStaticVoid(
+                "javan_set_initialize_capacity_with_load_factor",
+                List.of(IrExpression.objectLocal("object0"), IrExpression.intLocal("arg0"), IrExpression.floatLocal("arg1"))
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
     void lowersHashMapMapConstructorToRuntimePopulation() {
         final IrFunction function = lowerMain(method(
             0x0008,

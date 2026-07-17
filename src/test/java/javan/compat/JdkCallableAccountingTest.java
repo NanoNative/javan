@@ -244,6 +244,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksHashSetLoadFactorConstructorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/HashSet", "<init>", "(IF)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksLinkedHashSetNewLinkedHashSetAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/LinkedHashSet", "newLinkedHashSet", "(I)Ljava/util/LinkedHashSet;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
@@ -252,6 +258,12 @@ final class JdkCallableAccountingTest {
     @Test
     void marksLinkedHashSetCapacityConstructorAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/LinkedHashSet", "<init>", "(I)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksLinkedHashSetLoadFactorConstructorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/LinkedHashSet", "<init>", "(IF)V")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
