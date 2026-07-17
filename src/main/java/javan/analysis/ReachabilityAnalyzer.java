@@ -479,6 +479,26 @@ public final class ReachabilityAnalyzer {
             ));
             return;
         }
+        if (instruction.opcode() == 185 && isConsumerAccept(target)) {
+            final List<EntryPoint> targetMethods = interfaceTargets(classes, target, entryPoints);
+            if (!targetMethods.isEmpty()) {
+                enqueueAll(work, workSet, targetMethods);
+                addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
+            }
+            if (containsMethodRef(materializedLambdaMethods, target) || !targetMethods.isEmpty()) {
+                return;
+            }
+            diagnostics.add(Diagnostic.error(
+                "JAVAN012",
+                "unsupported reachable application method call",
+                current.className(),
+                current.methodName() + current.descriptor(),
+                target.display(),
+                "Consumer.accept requires either a closed-world Consumer implementation class or a supported materialized Consumer lambda target.",
+                "Provide a reachable Consumer implementation class or keep this exact consumer dispatch on the JVM until broader receiver support lands."
+            ));
+            return;
+        }
         if (instruction.opcode() == 185 && isSupplierGet(target)) {
             final List<EntryPoint> targetMethods = interfaceTargets(classes, target, entryPoints);
             if (!targetMethods.isEmpty()) {
@@ -822,6 +842,12 @@ public final class ReachabilityAnalyzer {
         return "java/util/function/Supplier".equals(target.owner())
             && "get".equals(target.name())
             && "()Ljava/lang/Object;".equals(target.descriptor());
+    }
+
+    private static boolean isConsumerAccept(final MethodRef target) {
+        return "java/util/function/Consumer".equals(target.owner())
+            && "accept".equals(target.name())
+            && "(Ljava/lang/Object;)V".equals(target.descriptor());
     }
 
     private static boolean isMapComputeIfAbsent(final MethodRef target) {

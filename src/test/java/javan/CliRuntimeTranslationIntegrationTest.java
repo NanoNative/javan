@@ -4411,6 +4411,72 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void consumerAcceptDirectConcreteImplementationBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("consumer-accept-concrete-direct");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Consumer;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Consumer<String> consumer = new Printer();
+                    consumer.accept("value");
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Printer", """
+            package com.acme;
+
+            import java.util.function.Consumer;
+
+            public final class Printer implements Consumer<String> {
+                @Override
+                public void accept(final String value) {
+                    System.out.println("seen:" + value);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/consumer-accept-concrete-direct").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("seen:value\n");
+    }
+
+    @Test
+    void consumerAcceptDirectZeroCaptureLambdaBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("consumer-accept-lambda-direct");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Consumer;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Consumer<String> consumer = value -> System.out.println("seen:" + value);
+                    consumer.accept("value");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/consumer-accept-lambda-direct").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("seen:value\n");
+    }
+
+    @Test
     void mapComputeIfPresentConcreteImplementationBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("map-compute-if-present-concrete");
         writeJava(project, "com.acme.Main", """

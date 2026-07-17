@@ -1721,6 +1721,46 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersDirectConsumerAcceptConcreteImplementationToDirectCall() {
+        final EntryPoint entryPoint = new EntryPoint(
+            "com/acme/Main",
+            "consumeValueNonLambda",
+            "(Ljava/lang/Object;Ljava/util/function/Consumer;)V"
+        );
+        final EntryPoint consumerEntry = new EntryPoint("com/acme/Printer", "accept", "(Ljava/lang/Object;)V");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    directConsumerAcceptConcreteMethod()
+                )),
+                "com/acme/Printer",
+                classFile(
+                    "com/acme/Printer",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/util/function/Consumer"),
+                    List.of(),
+                    List.of(consumerAcceptImplementationMethod())
+                )
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint, consumerEntry), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("consumeValueNonLambda")).singleElement().satisfies(function -> {
+            assertThat(function.locals()).isEmpty();
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.callStaticVoid(
+                    "javan_com_acme_Printer_accept__Ljava_lang_Object__V",
+                    List.of(IrExpression.objectLocal("arg1"), IrExpression.objectLocal("arg0"))
+                ),
+                IrInstruction.returnVoid()
+            );
+        });
+    }
+
+    @Test
     void rejectsOptionalMapCapturedLambdaWithWrongImplementationArity() {
         assertThatThrownBy(() -> lowerMain(optionalCapturedMapWrongArityLambdaMethod()))
             .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
@@ -27028,6 +27068,20 @@ final class BytecodeToIRTest {
             plain(1, 42, "aload_0"),
             invokeInterface(2, new MethodRef("java/util/function/Predicate", "test", "(Ljava/lang/Object;)Z")),
             plain(7, 172, "ireturn")
+        );
+    }
+
+    private static MethodInfo directConsumerAcceptConcreteMethod() {
+        return method(
+            0x0008,
+            "consumeValueNonLambda",
+            "(Ljava/lang/Object;Ljava/util/function/Consumer;)V",
+            2,
+            2,
+            plain(0, 43, "aload_1"),
+            plain(1, 42, "aload_0"),
+            invokeInterface(2, new MethodRef("java/util/function/Consumer", "accept", "(Ljava/lang/Object;)V")),
+            plain(7, 177, "return")
         );
     }
 
