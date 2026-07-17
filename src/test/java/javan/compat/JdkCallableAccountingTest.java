@@ -277,6 +277,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksCollectionsUnmodifiableCollectionAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Collections", "unmodifiableCollection", "(Ljava/util/Collection;)Ljava/util/Collection;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksCollectionsUnmodifiableSetAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Collections", "unmodifiableSet", "(Ljava/util/Set;)Ljava/util/Set;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

@@ -3282,6 +3282,11 @@ final class BytecodeToIRInvokeSupport {
             return true;
         }
         if ("java/util/Collections".equals(owner)) {
+            if ("unmodifiableCollection".equals(name) && "(Ljava/util/Collection;)Ljava/util/Collection;".equals(descriptor)) {
+                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_unmodifiable", arguments)));
+                return true;
+            }
             if ("emptySet".equals(name) && "()Ljava/util/Set;".equals(descriptor)) {
                 stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_set_empty", List.of())));
                 return true;

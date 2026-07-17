@@ -157,6 +157,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void collectionsUnmodifiableCollectionIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Collections",
+            "unmodifiableCollection",
+            "(Ljava/util/Collection;)Ljava/util/Collection;"
+        ))).isTrue();
+    }
+
+    @Test
     void collectionsUnmodifiableSetIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Collections",

@@ -212,6 +212,7 @@ public final class JdkCallSupport {
         runtime("CharSequence.length", "java/lang/CharSequence", "length", "()I"),
         runtime("CharSequence.charAt", "java/lang/CharSequence", "charAt", "(I)C"),
         intrinsic("Character.isWhitespace", "java/lang/Character", "isWhitespace", "(C)Z"),
+        runtime("Collections.unmodifiableCollection", "java/util/Collections", "unmodifiableCollection", "(Ljava/util/Collection;)Ljava/util/Collection;"),
         runtime("Collections.unmodifiableSet", "java/util/Collections", "unmodifiableSet", "(Ljava/util/Set;)Ljava/util/Set;"),
         runtime("Collections.unmodifiableList", "java/util/Collections", "unmodifiableList", "(Ljava/util/List;)Ljava/util/List;"),
         runtime("Collections.emptySet", "java/util/Collections", "emptySet", "()Ljava/util/Set;"),

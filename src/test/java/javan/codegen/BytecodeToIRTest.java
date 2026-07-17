@@ -19512,6 +19512,27 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersCollectionsUnmodifiableCollectionToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/Collection;)Ljava/util/Collection;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeStatic(1, new MethodRef("java/util/Collections", "unmodifiableCollection", "(Ljava/util/Collection;)Ljava/util/Collection;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_list_unmodifiable",
+                List.of(IrExpression.objectLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
     void lowersCollectionsUnmodifiableListToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,

@@ -1615,6 +1615,57 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void collectionsUnmodifiableCollectionBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("collections-unmodifiable-collection");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.Collection;
+            import java.util.Collections;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final ArrayList<String> mutable = new ArrayList<>();
+                    mutable.add("x");
+                    final Collection<String> values = Collections.unmodifiableCollection(mutable);
+                    System.out.println(values.isEmpty());
+                    System.out.println(values.size());
+                    System.out.println(values.contains("x"));
+                    mutable.add("y");
+                    System.out.println(values.contains("y"));
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/collections-unmodifiable-collection").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("false\n1\ntrue\ntrue\n2\n");
+    }
+
+    @Test
+    void collectionsUnmodifiableCollectionRejectsMutationAtRuntime() throws Exception {
+        assertCollectionsUnmodifiableCollectionFailureAtRuntime(
+            "collections-unmodifiable-collection-add",
+            """
+            final ArrayList<String> mutable = new ArrayList<>();
+            mutable.add("x");
+            final Collection<String> values = Collections.unmodifiableCollection(mutable);
+            ((java.util.List<String>) values).add("y");
+            """,
+            "unsupported operation on immutable list"
+        );
+    }
+
+    @Test
     void collectionsUnmodifiableListBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("collections-unmodifiable-list");
         writeJava(project, "com.acme.Main", """
@@ -5781,6 +5832,38 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
             import java.util.ArrayList;
             import java.util.Collections;
             import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    %s
+                }
+            }
+            """.formatted(statement));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/" + projectName).toString()));
+
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains(expectedMessage);
+    }
+
+    private void assertCollectionsUnmodifiableCollectionFailureAtRuntime(
+        final String projectName,
+        final String statement,
+        final String expectedMessage
+    ) throws Exception {
+        final Path project = project(projectName);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.Collection;
+            import java.util.Collections;
 
             public final class Main {
                 private Main() {
