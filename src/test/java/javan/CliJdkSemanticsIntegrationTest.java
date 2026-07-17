@@ -1694,6 +1694,64 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void arrayListDirectOwnerRemoveAtRejectsOutOfBoundsAtRuntime() throws Exception {
+        final Path project = project("arraylist-direct-owner-remove-at-oob");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final ArrayList<String> values = new ArrayList<>(List.of("left"));
+                    values.remove(1);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/arraylist-direct-owner-remove-at-oob").toString()));
+
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("index out of bounds");
+    }
+
+    @Test
+    void listRemoveAtRejectsOutOfBoundsAtRuntime() throws Exception {
+        final Path project = project("list-remove-at-oob");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<String> values = new ArrayList<>(List.of("left"));
+                    values.remove(1);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/list-remove-at-oob").toString()));
+
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("index out of bounds");
+    }
+
+    @Test
     void collectionToArrayReturnsSnapshotAndMatchesJvmOutput() throws Exception {
         final Path project = project("collection-to-array");
         writeJava(project, "com.acme.Main", """

@@ -376,8 +376,20 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksArrayListRemoveAtAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "remove", "(I)Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksArrayListRemoveFirstAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "removeFirst", "()Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksListRemoveAtAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/List", "remove", "(I)Ljava/lang/Object;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 

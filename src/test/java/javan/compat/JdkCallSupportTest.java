@@ -376,6 +376,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void arrayListRemoveAtIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/ArrayList",
+            "remove",
+            "(I)Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
     void arrayListRemoveLastIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/ArrayList",
@@ -1576,6 +1585,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void arrayListRemoveAtRequiresCollectionsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/ArrayList",
+            "remove",
+            "(I)Ljava/lang/Object;"
+        ))).containsExactly("collections");
+    }
+
+    @Test
     void arrayListAddLastRequiresCollectionsRuntimeModule() {
         assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
             "java/util/ArrayList",
@@ -1590,6 +1608,24 @@ final class JdkCallSupportTest {
             "java/util/ArrayList",
             "removeFirst",
             "()Ljava/lang/Object;"
+        ))).containsExactly("collections");
+    }
+
+    @Test
+    void listRemoveAtIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/List",
+            "remove",
+            "(I)Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void listRemoveAtRequiresCollectionsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/List",
+            "remove",
+            "(I)Ljava/lang/Object;"
         ))).containsExactly("collections");
     }
 

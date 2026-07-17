@@ -83,12 +83,12 @@ final class CompatibilityReportsTest {
         assertThat(summary).contains(
             "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 5, \"leftCallables\": 3, \"coveragePercent\": \"40.0\"}",
             "\"exactJdkCallableAccounting\": {\"supportedCallables\": 2, \"explicitRejectedCallables\": 3, \"doneCallables\": 5, \"unknownCallables\": 0, \"totalCallables\": 5, \"donePercent\": \"100.0\"}",
-            "\"supportRows\": 263",
-            "\"passRows\": 263",
+            "\"supportRows\": 265",
+            "\"passRows\": 265",
             "\"scopedRows\": 0",
             "\"targetRows\": 0",
             "\"rejectedRows\": 0",
-            "\"accountedRows\": 263",
+            "\"accountedRows\": 265",
             "\"unaccountedRows\": 0"
         );
     }
@@ -140,6 +140,7 @@ final class CompatibilityReportsTest {
             "| `collection-contains-all` | pass |",
             "| `collection-remove` | pass |",
             "| `collection-clear` | pass |",
+            "| `list-remove-at` | pass |",
             "| `list-remove-all` | pass |",
             "| `list-retain-all` | pass |",
             "| `list-contains-all` | pass |",
@@ -161,6 +162,7 @@ final class CompatibilityReportsTest {
             "| `arraylist-direct-owner-get-first` | pass |",
             "| `arraylist-direct-owner-get-last` | pass |",
             "| `arraylist-direct-owner-set` | pass |",
+            "| `arraylist-direct-owner-remove-at` | pass |",
             "| `arraylist-direct-owner-remove-last` | pass |",
             "| `arraylist-direct-owner-add-first` | pass |",
             "| `arraylist-direct-owner-add-last` | pass |",
@@ -335,6 +337,7 @@ final class CompatibilityReportsTest {
             "\"feature\": \"collection-contains-all\"",
             "\"feature\": \"collection-remove\"",
             "\"feature\": \"collection-clear\"",
+            "\"feature\": \"list-remove-at\"",
             "\"feature\": \"list-remove-all\"",
             "\"feature\": \"list-retain-all\"",
             "\"feature\": \"list-contains-all\"",
@@ -355,6 +358,7 @@ final class CompatibilityReportsTest {
             "\"feature\": \"arraylist-direct-owner-get-first\"",
             "\"feature\": \"arraylist-direct-owner-get-last\"",
             "\"feature\": \"arraylist-direct-owner-set\"",
+            "\"feature\": \"arraylist-direct-owner-remove-at\"",
             "\"feature\": \"arraylist-direct-owner-remove-last\"",
             "\"feature\": \"arraylist-direct-owner-add-first\"",
             "\"feature\": \"arraylist-direct-owner-add-last\"",
