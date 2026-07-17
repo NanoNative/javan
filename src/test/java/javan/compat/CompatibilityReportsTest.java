@@ -83,12 +83,12 @@ final class CompatibilityReportsTest {
         assertThat(summary).contains(
             "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 5, \"leftCallables\": 3, \"coveragePercent\": \"40.0\"}",
             "\"exactJdkCallableAccounting\": {\"supportedCallables\": 2, \"explicitRejectedCallables\": 3, \"doneCallables\": 5, \"unknownCallables\": 0, \"totalCallables\": 5, \"donePercent\": \"100.0\"}",
-            "\"supportRows\": 289",
-            "\"passRows\": 289",
+            "\"supportRows\": 290",
+            "\"passRows\": 290",
             "\"scopedRows\": 0",
             "\"targetRows\": 0",
             "\"rejectedRows\": 0",
-            "\"accountedRows\": 289",
+            "\"accountedRows\": 290",
             "\"unaccountedRows\": 0"
         );
     }
@@ -226,6 +226,7 @@ final class CompatibilityReportsTest {
             "| `collections-singleton-map` | pass |",
             "| `collections-unmodifiable-map` | pass |",
             "| `map-entry` | pass |",
+            "| `map-foreach` | pass |",
             "| `map-clear` | pass |",
             "| `map-put-all` | pass |",
             "| `map-is-empty` | pass |",

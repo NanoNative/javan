@@ -2861,7 +2861,7 @@ public final class StaticVerifier {
             && (lambdaCall.orElseThrow().isDirectlyLowerable()
             || lambdaCall.orElseThrow().isZeroCaptureMaterializedObjectLambda()
             || lambdaCall.orElseThrow().isZeroCaptureMaterializedBooleanLambda()
-            || lambdaCall.orElseThrow().isMaterializedConsumerLambda());
+            || lambdaCall.orElseThrow().isMaterializedVoidLambda());
     }
 
     private static boolean supportedStringConcatParameters(final String descriptor) {
@@ -3062,7 +3062,7 @@ public final class StaticVerifier {
         final int reachable
     ) {
         final String reason =
-            "Only StringConcatFactory string concatenation, record ObjectMethods equals, exact LambdaMetafactory Function/Predicate shapes, the current Consumer.accept object-capture materialization slice, and the current custom-SAM materialization subset are implemented.";
+            "Only StringConcatFactory string concatenation, record ObjectMethods equals, exact LambdaMetafactory Function/Predicate shapes, the current Consumer/BiConsumer object-capture materialization slice, and the current custom-SAM materialization subset are implemented.";
         final String fix =
             "Keep invokedynamic limited to supported javac string concatenation, supported record equals, or the admitted LambdaMetafactory subset.";
         if (reachable == 1) {

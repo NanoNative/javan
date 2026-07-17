@@ -26,6 +26,7 @@ public final class CCodegen {
     private static final String MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL = "javan_materialized_lambda_apply_object";
     private static final String MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL = "javan_materialized_lambda_apply_boolean";
     private static final String MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL = "javan_materialized_lambda_apply_void";
+    private static final String MATERIALIZED_LAMBDA_VOID2_APPLY_SYMBOL = "javan_materialized_lambda_apply_void2";
     private static final String EXACT_ENUM_LOOKUP_SYMBOL = "javan_exact_enum_lookup";
     private static final String EXACT_CATCH_NULL_APPLY_SYMBOL = "javan_exact_catch_null_apply";
     private static final String EXACT_TEMPORAL_OF_UNSUPPORTED_SYMBOL = "javan_exact_temporal_of_unsupported";
@@ -93,6 +94,7 @@ public final class CCodegen {
             c.append("static void* ").append(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
             c.append("static int ").append(MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
             c.append("static void ").append(MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
+            c.append("static void ").append(MATERIALIZED_LAMBDA_VOID2_APPLY_SYMBOL).append("(void* self, void* first_arg, void* second_arg);").append(System.lineSeparator());
         }
         c.append(System.lineSeparator());
         emitAllocators(program, c);
@@ -167,6 +169,8 @@ public final class CCodegen {
         if (!program.materializedLambdaTargets().isEmpty()) {
             c.append("static void* ").append(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
             c.append("static int ").append(MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
+            c.append("static void ").append(MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
+            c.append("static void ").append(MATERIALIZED_LAMBDA_VOID2_APPLY_SYMBOL).append("(void* self, void* first_arg, void* second_arg);").append(System.lineSeparator());
         }
         c.append(System.lineSeparator());
         emitAllocators(program, c);
@@ -717,8 +721,11 @@ public final class CCodegen {
             if (target.booleanResult() || target.voidResult()) {
                 continue;
             }
+            if (materializedLambdaArity(target) != 1) {
+                continue;
+            }
             c.append("        case ").append(target.targetId()).append(": return ");
-            emitMaterializedLambdaInvocation(c, target, "self", "arg");
+            emitMaterializedLambdaInvocation(c, target, "self", List.of("arg"));
             c.append(";").append(System.lineSeparator());
         }
         c.append("        default: javan_panic(\"unsupported materialized object lambda target\");").append(System.lineSeparator());
@@ -733,8 +740,11 @@ public final class CCodegen {
             if (!target.booleanResult() || target.voidResult()) {
                 continue;
             }
+            if (materializedLambdaArity(target) != 1) {
+                continue;
+            }
             c.append("        case ").append(target.targetId()).append(": return ");
-            emitMaterializedLambdaInvocation(c, target, "self", "arg");
+            emitMaterializedLambdaInvocation(c, target, "self", List.of("arg"));
             c.append(";").append(System.lineSeparator());
         }
         c.append("        default: javan_panic(\"unsupported materialized boolean lambda target\");").append(System.lineSeparator());
@@ -749,11 +759,32 @@ public final class CCodegen {
             if (!target.voidResult()) {
                 continue;
             }
+            if (materializedLambdaArity(target) != 1) {
+                continue;
+            }
             c.append("        case ").append(target.targetId()).append(": ");
-            emitMaterializedLambdaInvocation(c, target, "self", "arg");
+            emitMaterializedLambdaInvocation(c, target, "self", List.of("arg"));
             c.append("; return;").append(System.lineSeparator());
         }
         c.append("        default: javan_panic(\"unsupported materialized void lambda target\");").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+
+        c.append("static void ").append(MATERIALIZED_LAMBDA_VOID2_APPLY_SYMBOL).append("(void* self, void* first_arg, void* second_arg) {")
+            .append(System.lineSeparator());
+        c.append("    switch (javan_materialized_lambda_target_id(self)) {").append(System.lineSeparator());
+        for (final IrMaterializedLambdaTarget target : program.materializedLambdaTargets()) {
+            if (!target.voidResult()) {
+                continue;
+            }
+            if (materializedLambdaArity(target) != 2) {
+                continue;
+            }
+            c.append("        case ").append(target.targetId()).append(": ");
+            emitMaterializedLambdaInvocation(c, target, "self", List.of("first_arg", "second_arg"));
+            c.append("; return;").append(System.lineSeparator());
+        }
+        c.append("        default: javan_panic(\"unsupported materialized two-argument void lambda target\");").append(System.lineSeparator());
         c.append("    }").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
     }
@@ -762,7 +793,7 @@ public final class CCodegen {
         final StringBuilder c,
         final IrMaterializedLambdaTarget target,
         final String selfExpression,
-        final String argumentExpression
+        final List<String> argumentExpressions
     ) {
         c.append(target.functionSymbol()).append("(");
         boolean first = true;
@@ -776,7 +807,17 @@ public final class CCodegen {
         if (!first) {
             c.append(", ");
         }
-        c.append(argumentExpression).append(")");
+        for (int index = 0; index < argumentExpressions.size(); index++) {
+            if (index > 0) {
+                c.append(", ");
+            }
+            c.append(argumentExpressions.get(index));
+        }
+        c.append(")");
+    }
+
+    private static int materializedLambdaArity(final IrMaterializedLambdaTarget target) {
+        return MethodDescriptor.parse(target.interfaceMethodDescriptor()).parameterTypes().size();
     }
 
     private static void emitFunction(

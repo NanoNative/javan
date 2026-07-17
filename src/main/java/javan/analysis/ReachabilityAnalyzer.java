@@ -260,6 +260,27 @@ public final class ReachabilityAnalyzer {
             ));
             return;
         }
+        if (instruction.opcode() == 185 && isMapForEach(target)) {
+            final MethodRef biConsumerAccept = new MethodRef("java/util/function/BiConsumer", "accept", "(Ljava/lang/Object;Ljava/lang/Object;)V");
+            final List<EntryPoint> targetMethods = interfaceTargets(classes, biConsumerAccept, entryPoints);
+            if (!targetMethods.isEmpty()) {
+                enqueueAll(work, workSet, targetMethods);
+                addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
+            }
+            if (containsMethodRef(materializedLambdaMethods, biConsumerAccept) || !targetMethods.isEmpty()) {
+                return;
+            }
+            diagnostics.add(Diagnostic.error(
+                "JAVAN012",
+                "unsupported reachable application method call",
+                current.className(),
+                current.methodName() + current.descriptor(),
+                target.display(),
+                "Map.forEach requires either a closed-world BiConsumer implementation class or a supported materialized BiConsumer lambda target.",
+                "Provide a reachable BiConsumer implementation class or keep this exact map bulk-callback flow on the JVM until broader receiver support lands."
+            ));
+            return;
+        }
         if (enumCallKind == EnumCallKind.UNSUPPORTED_SYNTHETIC) {
             diagnostics.add(unsupportedEnumValueOfDiagnostic(current, target.display()));
             return;
@@ -398,7 +419,7 @@ public final class ReachabilityAnalyzer {
         final LambdaMetafactoryCall resolved = lambdaCall.orElseThrow();
         if (resolved.isZeroCaptureMaterializedObjectLambda()
             || resolved.isZeroCaptureMaterializedBooleanLambda()
-            || resolved.isMaterializedConsumerLambda()) {
+            || resolved.isMaterializedVoidLambda()) {
             final MethodRef interfaceMethod = new MethodRef(
                 resolved.interfaceOwner(),
                 resolved.interfaceMethodName(),
@@ -411,7 +432,7 @@ public final class ReachabilityAnalyzer {
         if (!resolved.isDirectlyLowerable()
             && !resolved.isZeroCaptureMaterializedObjectLambda()
             && !resolved.isZeroCaptureMaterializedBooleanLambda()
-            && !resolved.isMaterializedConsumerLambda()) {
+            && !resolved.isMaterializedVoidLambda()) {
             return;
         }
         final MethodRef implementation = resolved.implementation();
@@ -705,6 +726,12 @@ public final class ReachabilityAnalyzer {
         return "java/lang/Iterable".equals(target.owner())
             && "forEach".equals(target.name())
             && "(Ljava/util/function/Consumer;)V".equals(target.descriptor());
+    }
+
+    private static boolean isMapForEach(final MethodRef target) {
+        return "java/util/Map".equals(target.owner())
+            && "forEach".equals(target.name())
+            && "(Ljava/util/function/BiConsumer;)V".equals(target.descriptor());
     }
 
     private static List<EntryPoint> interfaceTargets(

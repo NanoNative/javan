@@ -613,6 +613,7 @@ public final class JdkCallSupport {
         runtime("Map.putIfAbsent", "java/util/Map", "putIfAbsent", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Map.clear", "java/util/Map", "clear", "()V"),
         runtime("Map.putAll", "java/util/Map", "putAll", "(Ljava/util/Map;)V"),
+        runtime("Map.forEach", "java/util/Map", "forEach", "(Ljava/util/function/BiConsumer;)V"),
         runtime("Map.remove", "java/util/Map", "remove", "(Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Map.remove", "java/util/Map", "remove", "(Ljava/lang/Object;Ljava/lang/Object;)Z"),
         runtime("Map.computeIfAbsent", "java/util/Map", "computeIfAbsent", "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;"),
@@ -819,6 +820,7 @@ public final class JdkCallSupport {
         runtime("Optional.orElse", "java/util/Optional", "orElse", "(Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Optional.orElseThrow", "java/util/Optional", "orElseThrow", "()Ljava/lang/Object;"),
         runtime("Consumer.accept", "java/util/function/Consumer", "accept", "(Ljava/lang/Object;)V"),
+        runtime("BiConsumer.accept", "java/util/function/BiConsumer", "accept", "(Ljava/lang/Object;Ljava/lang/Object;)V"),
         runtime("Optional.filter", "java/util/Optional", "filter", "(Ljava/util/function/Predicate;)Ljava/util/Optional;"),
         runtime("Optional.map", "java/util/Optional", "map", "(Ljava/util/function/Function;)Ljava/util/Optional;")
     );

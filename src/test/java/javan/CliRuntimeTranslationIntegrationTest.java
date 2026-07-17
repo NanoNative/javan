@@ -3734,7 +3734,6 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
             package com.acme;
 
             import java.util.ArrayList;
-            import java.util.Iterable;
             import java.util.List;
 
             public final class Main {
@@ -3764,7 +3763,6 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
             package com.acme;
 
             import java.util.ArrayList;
-            import java.util.Iterable;
             import java.util.List;
             import java.util.function.Consumer;
 
@@ -3792,6 +3790,37 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/iterable-foreach-consumer").toString())).stdout()).isEqualTo(jvmOutput);
         assertThat(jvmOutput).isEqualTo("left\nright\n");
+    }
+
+    @Test
+    void mapForEachLambdaBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-foreach-lambda");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.LinkedHashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, String> values = new LinkedHashMap<>();
+                    values.put("left", "one");
+                    values.put("right", "two");
+                    final String prefix = "item:";
+                    values.forEach((key, value) -> System.out.println(prefix + key + "=" + value));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-foreach-lambda").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("item:left=one\nitem:right=two\n");
     }
 
     @Test

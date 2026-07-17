@@ -1095,6 +1095,153 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersMapForEachWithMaterializedBiConsumerLambdaToLoopAndVoidHelperCall() {
+        final EntryPoint buildEntry = new EntryPoint("com/acme/Main", "build", "(Ljava/lang/Object;)Ljava/util/function/BiConsumer;");
+        final EntryPoint iterateEntry = new EntryPoint("com/acme/Main", "iterate", "(Ljava/util/Map;Ljava/util/function/BiConsumer;)V");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    capturedBiConsumerBuildMethod(),
+                    mapForEachMethod(),
+                    capturedBiConsumerImplementationMethod()
+                ))
+            ),
+            new CallGraph(buildEntry, List.of(buildEntry, iterateEntry), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("iterate")).singleElement().satisfies(function ->
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.assignObject(
+                    "object0",
+                    IrExpression.objectCall("javan_list_iterator", List.of(IrExpression.objectCall("javan_map_entry_set", List.of(IrExpression.objectLocal("arg0")))))
+                ),
+                IrInstruction.label("label_map_for_each_loop_2_1"),
+                IrInstruction.assignInt(
+                    "int1",
+                    IrExpression.intCall("javan_iterator_has_next", List.of(IrExpression.objectLocal("object0")))
+                ),
+                IrInstruction.branchIf(
+                    "label_map_for_each_body_2_1",
+                    IrExpression.intComparison("!=", IrExpression.intLocal("int1"), IrExpression.intLiteral(0))
+                ),
+                IrInstruction.jump("label_map_for_each_end_2_1"),
+                IrInstruction.label("label_map_for_each_body_2_1"),
+                IrInstruction.assignObject(
+                    "object2",
+                    IrExpression.objectCall("javan_iterator_next", List.of(IrExpression.objectLocal("object0")))
+                ),
+                IrInstruction.assignObject(
+                    "object3",
+                    IrExpression.objectCall("javan_map_entry_get_key", List.of(IrExpression.objectLocal("object2")))
+                ),
+                IrInstruction.assignObject(
+                    "object4",
+                    IrExpression.objectCall("javan_map_entry_get_value", List.of(IrExpression.objectLocal("object2")))
+                ),
+                IrInstruction.callStaticVoid(
+                    "javan_materialized_lambda_apply_void2",
+                    List.of(IrExpression.objectLocal("arg1"), IrExpression.objectLocal("object3"), IrExpression.objectLocal("object4"))
+                ),
+                IrInstruction.jump("label_map_for_each_loop_2_1"),
+                IrInstruction.label("label_map_for_each_end_2_1"),
+                IrInstruction.returnVoid()
+            )
+        );
+    }
+
+    @Test
+    void lowersMaterializedBiConsumerAcceptToVoid2HelperCall() {
+        final EntryPoint buildEntry = new EntryPoint("com/acme/Main", "build", "(Ljava/lang/Object;)Ljava/util/function/BiConsumer;");
+        final EntryPoint invokeEntry = new EntryPoint("com/acme/Main", "invoke", "(Ljava/util/function/BiConsumer;Ljava/lang/Object;Ljava/lang/Object;)V");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    capturedBiConsumerBuildMethod(),
+                    biConsumerInvokeMethod(),
+                    capturedBiConsumerImplementationMethod()
+                ))
+            ),
+            new CallGraph(buildEntry, List.of(buildEntry, invokeEntry), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("invoke")).singleElement().satisfies(function ->
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.callStaticVoid(
+                    "javan_materialized_lambda_apply_void2",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.objectLocal("arg2"))
+                ),
+                IrInstruction.returnVoid()
+            )
+        );
+    }
+
+    @Test
+    void lowersMapForEachWithConcreteBiConsumerToLoopAndDirectAcceptCall() {
+        final EntryPoint iterateEntry = new EntryPoint("com/acme/Main", "iterate", "(Ljava/util/Map;Ljava/util/function/BiConsumer;)V");
+        final EntryPoint consumerEntry = new EntryPoint("com/acme/Printer", "accept", "(Ljava/lang/Object;Ljava/lang/Object;)V");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(mapForEachMethod())),
+                "com/acme/Printer",
+                classFile(
+                    "com/acme/Printer",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/util/function/BiConsumer"),
+                    List.of(),
+                    List.of(biConsumerAcceptImplementationMethod())
+                )
+            ),
+            new CallGraph(iterateEntry, List.of(iterateEntry, consumerEntry), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("iterate")).singleElement().satisfies(function ->
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.assignObject(
+                    "object0",
+                    IrExpression.objectCall("javan_list_iterator", List.of(IrExpression.objectCall("javan_map_entry_set", List.of(IrExpression.objectLocal("arg0")))))
+                ),
+                IrInstruction.label("label_map_for_each_loop_2_1"),
+                IrInstruction.assignInt(
+                    "int1",
+                    IrExpression.intCall("javan_iterator_has_next", List.of(IrExpression.objectLocal("object0")))
+                ),
+                IrInstruction.branchIf(
+                    "label_map_for_each_body_2_1",
+                    IrExpression.intComparison("!=", IrExpression.intLocal("int1"), IrExpression.intLiteral(0))
+                ),
+                IrInstruction.jump("label_map_for_each_end_2_1"),
+                IrInstruction.label("label_map_for_each_body_2_1"),
+                IrInstruction.assignObject(
+                    "object2",
+                    IrExpression.objectCall("javan_iterator_next", List.of(IrExpression.objectLocal("object0")))
+                ),
+                IrInstruction.assignObject(
+                    "object3",
+                    IrExpression.objectCall("javan_map_entry_get_key", List.of(IrExpression.objectLocal("object2")))
+                ),
+                IrInstruction.assignObject(
+                    "object4",
+                    IrExpression.objectCall("javan_map_entry_get_value", List.of(IrExpression.objectLocal("object2")))
+                ),
+                IrInstruction.callStaticVoid(
+                    "javan_com_acme_Printer_accept__Ljava_lang_Object_Ljava_lang_Object__V",
+                    List.of(IrExpression.objectLocal("arg1"), IrExpression.objectLocal("object3"), IrExpression.objectLocal("object4"))
+                ),
+                IrInstruction.jump("label_map_for_each_loop_2_1"),
+                IrInstruction.label("label_map_for_each_end_2_1"),
+                IrInstruction.returnVoid()
+            )
+        );
+    }
+
+    @Test
     void lowersOptionalMapStaticFunctionLambdaToOptionalHelpersAndDirectFunctionCall() {
         final EntryPoint entryPoint = new EntryPoint("com/acme/Main", "mapValue", "(Ljava/util/Optional;)Ljava/util/Optional;");
         final IrProgram program = new BytecodeToIR().lower(
@@ -26047,6 +26194,35 @@ final class BytecodeToIRTest {
         );
     }
 
+    private static MethodInfo mapForEachMethod() {
+        return method(
+            0x0008,
+            "iterate",
+            "(Ljava/util/Map;Ljava/util/function/BiConsumer;)V",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeInterface(2, new MethodRef("java/util/Map", "forEach", "(Ljava/util/function/BiConsumer;)V")),
+            plain(7, 177, "return")
+        );
+    }
+
+    private static MethodInfo biConsumerInvokeMethod() {
+        return method(
+            0x0008,
+            "invoke",
+            "(Ljava/util/function/BiConsumer;Ljava/lang/Object;Ljava/lang/Object;)V",
+            3,
+            3,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            plain(2, 44, "aload_2"),
+            invokeInterface(3, new MethodRef("java/util/function/BiConsumer", "accept", "(Ljava/lang/Object;Ljava/lang/Object;)V")),
+            plain(8, 177, "return")
+        );
+    }
+
     private static MethodInfo consumerAcceptImplementationMethod() {
         return method(
             0x0001,
@@ -26054,6 +26230,17 @@ final class BytecodeToIRTest {
             "(Ljava/lang/Object;)V",
             0,
             2,
+            plain(0, 177, "return")
+        );
+    }
+
+    private static MethodInfo biConsumerAcceptImplementationMethod() {
+        return method(
+            0x0001,
+            "accept",
+            "(Ljava/lang/Object;Ljava/lang/Object;)V",
+            0,
+            3,
             plain(0, 177, "return")
         );
     }
@@ -26095,6 +26282,55 @@ final class BytecodeToIRTest {
         return method(
             0x0008,
             "lambda$consumer$0",
+            "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)V",
+            1,
+            3,
+            plain(0, 177, "return")
+        );
+    }
+
+    private static MethodInfo capturedBiConsumerBuildMethod() {
+        return method(
+            0x0008,
+            "build",
+            "(Ljava/lang/Object;)Ljava/util/function/BiConsumer;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeDynamic(1, new DynamicRef(
+                "accept",
+                "(Ljava/lang/Object;)Ljava/util/function/BiConsumer;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;Ljava/lang/Object;)V",
+                    "invokestatic com/acme/Main.lambda$biConsumer$0:(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)V",
+                    "(Ljava/lang/Object;Ljava/lang/Object;)V"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;Ljava/lang/Object;)V"),
+                    BootstrapArgument.methodHandle(
+                        6,
+                        new MethodRef(
+                            "com/acme/Main",
+                            "lambda$biConsumer$0",
+                            "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)V"
+                        )
+                    ),
+                    BootstrapArgument.methodType("(Ljava/lang/Object;Ljava/lang/Object;)V")
+                )
+            )),
+            plain(6, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo capturedBiConsumerImplementationMethod() {
+        return method(
+            0x0008,
+            "lambda$biConsumer$0",
             "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)V",
             1,
             3,

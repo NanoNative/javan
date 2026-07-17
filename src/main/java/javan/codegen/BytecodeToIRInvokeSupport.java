@@ -37,6 +37,7 @@ final class BytecodeToIRInvokeSupport {
     private static final String MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL = "javan_materialized_lambda_apply_object";
     private static final String MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL = "javan_materialized_lambda_apply_boolean";
     private static final String MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL = "javan_materialized_lambda_apply_void";
+    private static final String MATERIALIZED_LAMBDA_VOID2_APPLY_SYMBOL = "javan_materialized_lambda_apply_void2";
     private static final String MATERIALIZED_LAMBDA_NEW_SYMBOL = "javan_materialized_lambda_new";
     private static final String MATERIALIZED_LAMBDA_NEW_WITH_CAPTURES_SYMBOL = "javan_materialized_lambda_new_with_captures";
     private static final String MATERIALIZED_LAMBDA_CAPTURE_SYMBOL = "javan_materialized_lambda_capture";
@@ -4457,6 +4458,21 @@ final class BytecodeToIRInvokeSupport {
                 instructions.add(IrInstruction.callStaticVoid("javan_map_put_all", List.of(receiver, arguments.getFirst())));
                 return true;
             }
+            if ("forEach(Ljava/util/function/BiConsumer;)V".equals(signature)) {
+                lowerMapForEachCall(
+                    classes,
+                    classFile,
+                    method,
+                    instruction,
+                    instructions,
+                    dispatches,
+                    materializedLambdaMethods,
+                    localDeclarations,
+                    receiver,
+                    arguments.getFirst()
+                );
+                return true;
+            }
             if ("remove(Ljava/lang/Object;)Ljava/lang/Object;".equals(signature)) {
                 pushObjectCall(instructions, stack, localDeclarations, "javan_map_remove", List.of(receiver, arguments.getFirst()));
                 return true;
@@ -4556,6 +4572,69 @@ final class BytecodeToIRInvokeSupport {
         instructions.add(IrInstruction.label(endLabel));
     }
 
+    private static void lowerMapForEachCall(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final Map<String, IrDispatch> dispatches,
+        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<Integer, IrLocal> localDeclarations,
+        final IrExpression map,
+        final IrExpression biConsumer
+    ) {
+        final String iteratorLocal = newObjectLocal(localDeclarations);
+        final String loopLabel = "label_map_for_each_loop_" + instruction.offset() + "_" + localDeclarations.size();
+        final String bodyLabel = "label_map_for_each_body_" + instruction.offset() + "_" + localDeclarations.size();
+        final String endLabel = "label_map_for_each_end_" + instruction.offset() + "_" + localDeclarations.size();
+        final String hasNextLocal = newIntLocal(localDeclarations);
+        final String entryLocal = newObjectLocal(localDeclarations);
+        final String keyLocal = newObjectLocal(localDeclarations);
+        final String valueLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(
+            iteratorLocal,
+            IrExpression.objectCall("javan_list_iterator", List.of(IrExpression.objectCall("javan_map_entry_set", List.of(map))))
+        ));
+        instructions.add(IrInstruction.label(loopLabel));
+        instructions.add(IrInstruction.assignInt(
+            hasNextLocal,
+            IrExpression.intCall("javan_iterator_has_next", List.of(IrExpression.objectLocal(iteratorLocal)))
+        ));
+        instructions.add(IrInstruction.branchIf(
+            bodyLabel,
+            IrExpression.intComparison("!=", IrExpression.intLocal(hasNextLocal), IrExpression.intLiteral(0))
+        ));
+        instructions.add(IrInstruction.jump(endLabel));
+        instructions.add(IrInstruction.label(bodyLabel));
+        instructions.add(IrInstruction.assignObject(
+            entryLocal,
+            IrExpression.objectCall("javan_iterator_next", List.of(IrExpression.objectLocal(iteratorLocal)))
+        ));
+        instructions.add(IrInstruction.assignObject(
+            keyLocal,
+            IrExpression.objectCall("javan_map_entry_get_key", List.of(IrExpression.objectLocal(entryLocal)))
+        ));
+        instructions.add(IrInstruction.assignObject(
+            valueLocal,
+            IrExpression.objectCall("javan_map_entry_get_value", List.of(IrExpression.objectLocal(entryLocal)))
+        ));
+        lowerBiConsumerAcceptCall(
+            classes,
+            classFile,
+            method,
+            instruction,
+            instructions,
+            dispatches,
+            materializedLambdaMethods,
+            biConsumer,
+            IrExpression.objectLocal(keyLocal),
+            IrExpression.objectLocal(valueLocal)
+        );
+        instructions.add(IrInstruction.jump(loopLabel));
+        instructions.add(IrInstruction.label(endLabel));
+    }
+
     private static void lowerConsumerAcceptCall(
         final Map<String, ClassFile> classes,
         final ClassFile classFile,
@@ -4586,6 +4665,42 @@ final class BytecodeToIRInvokeSupport {
         }
         if (materializedLambdaMethods.get(consumerAccept) == MaterializedLambdaDispatchKind.VOID) {
             instructions.add(IrInstruction.callStaticVoid(MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL, List.of(consumer, argument)));
+            return;
+        }
+        throw unsupported(classFile, method, instruction);
+    }
+
+    private static void lowerBiConsumerAcceptCall(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final Map<String, IrDispatch> dispatches,
+        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final IrExpression biConsumer,
+        final IrExpression firstArgument,
+        final IrExpression secondArgument
+    ) {
+        final MethodRef biConsumerAccept = new MethodRef("java/util/function/BiConsumer", "accept", "(Ljava/lang/Object;Ljava/lang/Object;)V");
+        final List<EntryPoint> targets = interfaceTargets(classes, biConsumerAccept);
+        if (targets.size() > 1) {
+            final String dispatchSymbol = dispatchSymbol(biConsumerAccept);
+            dispatches.putIfAbsent(dispatchSymbol, dispatch(dispatchSymbol, MethodDescriptor.parse(biConsumerAccept.descriptor()), targets));
+            instructions.add(IrInstruction.callStaticVoid(dispatchSymbol, List.of(biConsumer, firstArgument, secondArgument)));
+            return;
+        }
+        if (!targets.isEmpty()) {
+            instructions.add(IrInstruction.callStaticVoid(symbol(targets.getFirst()), List.of(biConsumer, firstArgument, secondArgument)));
+            return;
+        }
+        final Optional<EntryPoint> defaultTarget = defaultInterfaceTarget(classes, biConsumerAccept);
+        if (defaultTarget.isPresent()) {
+            instructions.add(IrInstruction.callStaticVoid(symbol(defaultTarget.orElseThrow()), List.of(biConsumer, firstArgument, secondArgument)));
+            return;
+        }
+        if (materializedLambdaMethods.get(biConsumerAccept) == MaterializedLambdaDispatchKind.VOID) {
+            instructions.add(IrInstruction.callStaticVoid(MATERIALIZED_LAMBDA_VOID2_APPLY_SYMBOL, List.of(biConsumer, firstArgument, secondArgument)));
             return;
         }
         throw unsupported(classFile, method, instruction);
@@ -6245,6 +6360,10 @@ final class BytecodeToIRInvokeSupport {
                 return;
             }
             if (dispatchKind == MaterializedLambdaDispatchKind.VOID) {
+                if (arguments.size() == 2) {
+                    instructions.add(IrInstruction.callStaticVoid(MATERIALIZED_LAMBDA_VOID2_APPLY_SYMBOL, List.of(receiver, arguments.get(0), arguments.get(1))));
+                    return;
+                }
                 instructions.add(IrInstruction.callStaticVoid(MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL, List.of(receiver, arguments.getFirst())));
                 return;
             }
@@ -7043,7 +7162,7 @@ final class BytecodeToIRInvokeSupport {
                 final LambdaMetafactoryCall resolved = lambdaCall.orElseThrow();
                 if (!resolved.isZeroCaptureMaterializedObjectLambda()
                     && !resolved.isZeroCaptureMaterializedBooleanLambda()
-                    && !resolved.isMaterializedConsumerLambda()) {
+                    && !resolved.isMaterializedVoidLambda()) {
                     continue;
                 }
                 if (!classes.containsKey(resolved.implementation().owner())) {
@@ -7056,7 +7175,7 @@ final class BytecodeToIRInvokeSupport {
                     resolved.implementation(),
                     resolved.capturedParameterDescriptors().size(),
                     resolved.isZeroCaptureMaterializedBooleanLambda(),
-                    resolved.isMaterializedConsumerLambda()
+                    resolved.isMaterializedVoidLambda()
                 );
                 if (!result.containsKey(key)) {
                     result.put(key, Integer.valueOf(nextId));
@@ -7084,7 +7203,7 @@ final class BytecodeToIRInvokeSupport {
             + "#" + lambdaCall.implementation().display()
             + "#" + lambdaCall.capturedParameterDescriptors().size()
             + "#" + (lambdaCall.isZeroCaptureMaterializedBooleanLambda() ? "1" : "0")
-            + "#" + (lambdaCall.isMaterializedConsumerLambda() ? "1" : "0");
+            + "#" + (lambdaCall.isMaterializedVoidLambda() ? "1" : "0");
     }
 
     static void lowerDynamicCall(
@@ -7142,7 +7261,7 @@ final class BytecodeToIRInvokeSupport {
         final MethodRef implementation = resolved.implementation();
         if (resolved.isZeroCaptureMaterializedObjectLambda()
             || resolved.isZeroCaptureMaterializedBooleanLambda()
-            || resolved.isMaterializedConsumerLambda()) {
+            || resolved.isMaterializedVoidLambda()) {
             final Integer targetId = materializedLambdaTargetIds.get(materializedLambdaKey(resolved));
             if (targetId == null) {
                 return false;

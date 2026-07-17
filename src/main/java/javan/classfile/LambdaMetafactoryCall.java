@@ -67,6 +67,7 @@ public record LambdaMetafactoryCall(
         if (!"Ljava/util/function/Function;".equals(returnDescriptor.orElseThrow())
             && !"Ljava/util/function/Predicate;".equals(returnDescriptor.orElseThrow())
             && !"Ljava/util/function/Consumer;".equals(returnDescriptor.orElseThrow())
+            && !"Ljava/util/function/BiConsumer;".equals(returnDescriptor.orElseThrow())
             && !returnDescriptor.orElseThrow().startsWith("L")) {
             return Optional.empty();
         }
@@ -78,6 +79,7 @@ public record LambdaMetafactoryCall(
         if (!"java/util/function/Function".equals(interfaceOwner)
             && !"java/util/function/Predicate".equals(interfaceOwner)
             && !"java/util/function/Consumer".equals(interfaceOwner)
+            && !"java/util/function/BiConsumer".equals(interfaceOwner)
             && interfaceOwner.isEmpty()) {
             return Optional.empty();
         }
@@ -136,6 +138,20 @@ public record LambdaMetafactoryCall(
     }
 
     /**
+     * Returns whether this is a supported {@code java.util.function.BiConsumer} shape.
+     *
+     * @return true when the lambda is a direct two-argument consumer
+     */
+    public boolean isBiConsumer() {
+        if (!"java/util/function/BiConsumer".equals(interfaceOwner) || !"accept".equals(interfaceMethodName)) {
+            return false;
+        }
+        return objectInputs(instantiatedMethodDescriptor, 2)
+            && voidReturn(instantiatedMethodDescriptor)
+            && "(Ljava/lang/Object;Ljava/lang/Object;)V".equals(samMethodDescriptor);
+    }
+
+    /**
      * Returns the single instantiated input descriptor.
      *
      * @return input descriptor when this is a one-argument shape
@@ -181,6 +197,35 @@ public record LambdaMetafactoryCall(
             }
         }
         return true;
+    }
+
+    /**
+     * Returns whether this is a materializable {@code BiConsumer} lambda with object captures only.
+     *
+     * @return true when the current runtime can materialize the bi-consumer as a lambda object
+     */
+    public boolean isMaterializedBiConsumerLambda() {
+        if (!isBiConsumer()) {
+            return false;
+        }
+        if (implementationReferenceKind != 6) {
+            return false;
+        }
+        for (final String capture : capturedParameterDescriptors) {
+            if (!capture.startsWith("L") && !capture.startsWith("[")) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Returns whether this is a materializable void-return lambda with object captures only.
+     *
+     * @return true when the current runtime can materialize the callable as a lambda object
+     */
+    public boolean isMaterializedVoidLambda() {
+        return isMaterializedConsumerLambda() || isMaterializedBiConsumerLambda();
     }
 
     /**
@@ -244,6 +289,19 @@ public record LambdaMetafactoryCall(
         final Optional<String> input = new LambdaMetafactoryCall("", "", "", "", new MethodRef("", "", ""), -1, descriptor, List.of())
             .inputDescriptor();
         return input.isPresent() && input.orElseThrow().startsWith("L");
+    }
+
+    private static boolean objectInputs(final String descriptor, final int count) {
+        final List<String> parameters = parameterDescriptors(descriptor);
+        if (parameters.size() != count) {
+            return false;
+        }
+        for (final String parameter : parameters) {
+            if (!parameter.startsWith("L") && !parameter.startsWith("[")) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static boolean booleanReturn(final String descriptor) {

@@ -781,6 +781,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void mapForEachIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Map",
+            "forEach",
+            "(Ljava/util/function/BiConsumer;)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void biConsumerAcceptIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/function/BiConsumer",
+            "accept",
+            "(Ljava/lang/Object;Ljava/lang/Object;)V"
+        ))).isTrue();
+    }
+
+    @Test
     void hashSetToArrayIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/HashSet",
