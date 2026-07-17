@@ -17,8 +17,21 @@ final class CiParallelWorkflowSurfaceTest {
             .contains("native-smoke:")
             .contains("name: verify (${{ matrix.target }})")
             .contains("name: native-smoke (${{ matrix.target }})")
+            .contains("max-parallel: 3")
             .contains("Compile test fixtures")
             .contains("Verify acceptance suite");
+    }
+
+    @Test
+    void ciWorkflowLeavesParallelLanesIndependentUntilRelease() throws Exception {
+        assertThat(Files.readString(CI_WORKFLOW))
+            .contains("verify:")
+            .contains("native-smoke:")
+            .contains("windows-runtime-smoke:")
+            .contains("needs:\n      - verify\n      - native-smoke\n      - windows-runtime-smoke")
+            .doesNotContain("verify:\n    needs:")
+            .doesNotContain("native-smoke:\n    needs:")
+            .doesNotContain("windows-runtime-smoke:\n    needs:");
     }
 
     @Test
