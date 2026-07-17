@@ -516,6 +516,7 @@ public final class CompatibilityReports {
             pass("set-of-sextuple"),
             pass("set-of-septuple"),
             pass("set-of-octuple"),
+            pass("set-of-nonuple"),
             pass("list-of-varargs-gc"),
             pass("owned-buffer-realloc-validation"),
             pass("stringbuilder-setlength-overflow-panic"),

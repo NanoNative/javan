@@ -3097,6 +3097,269 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertSetOfOctupleFailureAtRuntime("set-of-octuple-null-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", (String) null);", "null Set.of element");
     }
 
+    @Test
+    void setOfNonupleBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("set-of-nonuple");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Set<String> values = Set.of("a", "b", "c", "d", "e", "f", "g", "h", "i");
+                    System.out.println(values.size());
+                    System.out.println(values.contains("a"));
+                    System.out.println(values.contains("b"));
+                    System.out.println(values.contains("c"));
+                    System.out.println(values.contains("d"));
+                    System.out.println(values.contains("e"));
+                    System.out.println(values.contains("f"));
+                    System.out.println(values.contains("g"));
+                    System.out.println(values.contains("h"));
+                    System.out.println(values.contains("i"));
+                    System.out.println(values.contains("later"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/set-of-nonuple").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("9\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\nfalse\n");
+    }
+
+    @Test
+    void setOfNonupleDuplicateFirstSecondFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-first-second", "Set.of(\"same\", \"same\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleDuplicateFirstThirdFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-first-third", "Set.of(\"same\", \"b\", \"same\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleDuplicateFirstFourthFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-first-fourth", "Set.of(\"same\", \"b\", \"c\", \"same\", \"e\", \"f\", \"g\", \"h\", \"i\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleDuplicateFirstFifthFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-first-fifth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"same\", \"f\", \"g\", \"h\", \"i\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleDuplicateFirstSixthFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-first-sixth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"same\", \"g\", \"h\", \"i\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleDuplicateFirstSeventhFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-first-seventh", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"f\", \"same\", \"h\", \"i\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleDuplicateFirstEighthFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-first-eighth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"same\", \"i\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleDuplicateFirstNinthFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-first-ninth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"same\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleDuplicateSecondThirdFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-second-third", "Set.of(\"a\", \"same\", \"same\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleDuplicateSecondFourthFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-second-fourth", "Set.of(\"a\", \"same\", \"c\", \"same\", \"e\", \"f\", \"g\", \"h\", \"i\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleDuplicateSecondFifthFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-second-fifth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"same\", \"f\", \"g\", \"h\", \"i\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleDuplicateSecondSixthFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-second-sixth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"same\", \"g\", \"h\", \"i\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleDuplicateSecondSeventhFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-second-seventh", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"f\", \"same\", \"h\", \"i\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleDuplicateSecondEighthFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-second-eighth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"f\", \"g\", \"same\", \"i\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleDuplicateSecondNinthFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-second-ninth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"same\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleDuplicateThirdFourthFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-third-fourth", "Set.of(\"a\", \"b\", \"same\", \"same\", \"e\", \"f\", \"g\", \"h\", \"i\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleDuplicateThirdFifthFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-third-fifth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"same\", \"f\", \"g\", \"h\", \"i\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleDuplicateThirdSixthFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-third-sixth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"same\", \"g\", \"h\", \"i\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleDuplicateThirdSeventhFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-third-seventh", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"f\", \"same\", \"h\", \"i\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleDuplicateThirdEighthFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-third-eighth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"f\", \"g\", \"same\", \"i\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleDuplicateThirdNinthFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-third-ninth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"f\", \"g\", \"h\", \"same\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleDuplicateFourthFifthFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-fourth-fifth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"same\", \"f\", \"g\", \"h\", \"i\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleDuplicateFourthSixthFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-fourth-sixth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"same\", \"g\", \"h\", \"i\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleDuplicateFourthSeventhFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-fourth-seventh", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"f\", \"same\", \"h\", \"i\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleDuplicateFourthEighthFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-fourth-eighth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"f\", \"g\", \"same\", \"i\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleDuplicateFourthNinthFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-fourth-ninth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"f\", \"g\", \"h\", \"same\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleDuplicateFifthSixthFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-fifth-sixth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"same\", \"g\", \"h\", \"i\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleDuplicateFifthSeventhFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-fifth-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"f\", \"same\", \"h\", \"i\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleDuplicateFifthEighthFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-fifth-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"f\", \"g\", \"same\", \"i\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleDuplicateFifthNinthFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-fifth-ninth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"f\", \"g\", \"h\", \"same\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleDuplicateSixthSeventhFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-sixth-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"same\", \"same\", \"h\", \"i\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleDuplicateSixthEighthFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-sixth-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"same\", \"g\", \"same\", \"i\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleDuplicateSixthNinthFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-sixth-ninth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"same\", \"g\", \"h\", \"same\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleDuplicateSeventhEighthFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-seventh-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"same\", \"same\", \"i\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleDuplicateSeventhNinthFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-seventh-ninth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"same\", \"h\", \"same\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleDuplicateEighthNinthFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-duplicate-eighth-ninth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"same\", \"same\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfNonupleNullFirstFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-null-first", "Set.of((String) null, \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\");", "null Set.of element");
+    }
+
+    @Test
+    void setOfNonupleNullSecondFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-null-second", "Set.of(\"a\", (String) null, \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\");", "null Set.of element");
+    }
+
+    @Test
+    void setOfNonupleNullThirdFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-null-third", "Set.of(\"a\", \"b\", (String) null, \"d\", \"e\", \"f\", \"g\", \"h\", \"i\");", "null Set.of element");
+    }
+
+    @Test
+    void setOfNonupleNullFourthFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-null-fourth", "Set.of(\"a\", \"b\", \"c\", (String) null, \"e\", \"f\", \"g\", \"h\", \"i\");", "null Set.of element");
+    }
+
+    @Test
+    void setOfNonupleNullFifthFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-null-fifth", "Set.of(\"a\", \"b\", \"c\", \"d\", (String) null, \"f\", \"g\", \"h\", \"i\");", "null Set.of element");
+    }
+
+    @Test
+    void setOfNonupleNullSixthFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-null-sixth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", (String) null, \"g\", \"h\", \"i\");", "null Set.of element");
+    }
+
+    @Test
+    void setOfNonupleNullSeventhFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-null-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", (String) null, \"h\", \"i\");", "null Set.of element");
+    }
+
+    @Test
+    void setOfNonupleNullEighthFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-null-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", (String) null, \"i\");", "null Set.of element");
+    }
+
+    @Test
+    void setOfNonupleNullNinthFailsAtRuntime() throws Exception {
+        assertSetOfNonupleFailureAtRuntime("set-of-nonuple-null-ninth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", (String) null);", "null Set.of element");
+    }
+
     private void assertSetOfQuintupleFailureAtRuntime(
         final String projectName,
         final String statement,
@@ -3188,6 +3451,36 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     private void assertSetOfOctupleFailureAtRuntime(
+        final String projectName,
+        final String statement,
+        final String expectedMessage
+    ) throws Exception {
+        final Path project = project(projectName);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    %s
+                }
+            }
+            """.formatted(statement));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/" + projectName).toString()));
+
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains(expectedMessage);
+    }
+
+    private void assertSetOfNonupleFailureAtRuntime(
         final String projectName,
         final String statement,
         final String expectedMessage
