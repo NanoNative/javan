@@ -1742,6 +1742,46 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void mapEntryBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-entry");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map.Entry<String, Integer> entry = Map.entry("alpha", 7);
+                    System.out.println(entry instanceof Map.Entry);
+                    System.out.println(entry.getKey());
+                    System.out.println(entry.getValue());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-entry").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\nalpha\n7\n");
+    }
+
+    @Test
+    void mapEntryNullKeyFailsAtRuntime() throws Exception {
+        assertMapEntryFailureAtRuntime("map-entry-null-key", "Map.entry((String) null, 7);", "null Map.entry component");
+    }
+
+    @Test
+    void mapEntryNullValueFailsAtRuntime() throws Exception {
+        assertMapEntryFailureAtRuntime("map-entry-null-value", "Map.entry(\"alpha\", (Integer) null);", "null Map.entry component");
+    }
+
+    @Test
     void mapOfPairBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("map-of-pair");
         writeJava(project, "com.acme.Main", """
@@ -5534,6 +5574,36 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     private void assertMapOfPairFailureAtRuntime(
+        final String projectName,
+        final String statement,
+        final String expectedMessage
+    ) throws Exception {
+        final Path project = project(projectName);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    %s
+                }
+            }
+            """.formatted(statement));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/" + projectName).toString()));
+
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains(expectedMessage);
+    }
+
+    private void assertMapEntryFailureAtRuntime(
         final String projectName,
         final String statement,
         final String expectedMessage

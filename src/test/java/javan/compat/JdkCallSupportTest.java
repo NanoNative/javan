@@ -202,6 +202,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void mapEntryIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Map",
+            "entry",
+            "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map$Entry;"
+        ))).isTrue();
+    }
+
+    @Test
     void setOfEmptyIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Set",

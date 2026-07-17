@@ -8472,6 +8472,37 @@ final class RuntimeSourceMemorySections {
             return javan_map_new_with_capacity(0, 0);
         }
 
+        static void* javan_map_entry_alloc(void* key, void* value) {
+            void* entry_value = javan_alloc(sizeof(javan_map_entry_state));
+            javan_map_entry_state* entry = (javan_map_entry_state*) entry_value;
+            entry->magic = JAVAN_MAP_ENTRY_MAGIC;
+            entry->reserved0 = 0;
+            entry->reserved1 = 0;
+            entry->reserved2 = 0;
+            entry->key = key;
+            entry->value = value;
+            javan_update_runtime_allocation_kind(entry_value, JAVAN_RUNTIME_KIND_MAP_ENTRY);
+            return entry_value;
+        }
+
+        void* javan_map_entry_new(void* key, void* value) {
+            if (key == NULL || value == NULL) {
+                javan_panic("null Map.entry component");
+            }
+            void* key_root = key;
+            void* value_root = value;
+            void* entry_value = NULL;
+            void** roots[] = {
+                (void**) &key_root,
+                (void**) &value_root,
+                (void**) &entry_value
+            };
+            javan_root_frame_push(roots, 3);
+            entry_value = javan_map_entry_alloc(key_root, value_root);
+            javan_root_frame_pop(roots);
+            return entry_value;
+        }
+
         void* javan_map_empty(void) {
             return javan_map_new_with_capacity(0, 1);
         }
@@ -9297,15 +9328,7 @@ final class RuntimeSourceMemorySections {
             javan_root_frame_push(roots, 3);
             list_value = javan_list_new_with_capacity(map->length, 1);
             for (int index = 0; index < map->length; index++) {
-                entry_value = javan_alloc(sizeof(javan_map_entry_state));
-                javan_map_entry_state* entry = (javan_map_entry_state*) entry_value;
-                entry->magic = JAVAN_MAP_ENTRY_MAGIC;
-                entry->reserved0 = 0;
-                entry->reserved1 = 0;
-                entry->reserved2 = 0;
-                entry->key = map->keys[index];
-                entry->value = map->values[index];
-                javan_update_runtime_allocation_kind(entry_value, JAVAN_RUNTIME_KIND_MAP_ENTRY);
+                entry_value = javan_map_entry_alloc(map->keys[index], map->values[index]);
                 javan_list_append_raw((javan_object_list*) list_value, entry_value);
                 entry_value = NULL;
             }

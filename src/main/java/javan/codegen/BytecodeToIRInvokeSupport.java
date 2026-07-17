@@ -3215,6 +3215,11 @@ final class BytecodeToIRInvokeSupport {
         final String name = methodRef.name();
         final String descriptor = methodRef.descriptor();
         if ("java/util/Map".equals(owner)) {
+            if ("entry".equals(name) && "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map$Entry;".equals(descriptor)) {
+                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_entry_new", arguments)));
+                return true;
+            }
             if ("of".equals(name) && "()Ljava/util/Map;".equals(descriptor)) {
                 stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_empty", List.of())));
                 return true;

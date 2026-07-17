@@ -259,6 +259,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksMapEntryAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "entry", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map$Entry;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksCollectionsEmptyListAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Collections", "emptyList", "()Ljava/util/List;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

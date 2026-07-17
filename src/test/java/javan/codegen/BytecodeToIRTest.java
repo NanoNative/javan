@@ -8750,6 +8750,27 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersMapEntryToRuntimeHelper() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map$Entry;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeStatic(2, new MethodRef("java/util/Map", "entry", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map$Entry;")),
+            plain(3, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(
+                IrExpression.objectCall("javan_map_entry_new", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
+            )
+        );
+    }
+
+    @Test
     void lowersMapOfPairToRuntimeHelper() {
         final IrFunction function = lowerMain(method(
             0x0008,
