@@ -3,6 +3,7 @@ package javan.compat;
 import javan.classfile.ClassFile;
 import javan.classfile.MethodInfo;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Execution;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -10,7 +11,9 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 
+@Execution(CONCURRENT)
 final class JdkCallSupportTest {
     @Test
     void classDescriptorStringIsSupported() {

@@ -1,11 +1,14 @@
 package javan.classfile;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Execution;
 
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 
+@Execution(CONCURRENT)
 final class ConstantPoolTest {
     @Test
     void stringSupportsUtf8AndStringEntries() {

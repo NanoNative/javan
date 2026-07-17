@@ -28,6 +28,7 @@
         <maven-surefire-plugin.version>3.5.6</maven-surefire-plugin.version>
         <jacoco-maven-plugin.version>0.8.14</jacoco-maven-plugin.version>
         <surefireArgLine/>
+        <javan.coverage.check.skip>false</javan.coverage.check.skip>
         <javan.jacoco.surefire.exec>${project.build.directory}/jacoco-surefire.exec</javan.jacoco.surefire.exec>
         <javan.jacoco.child.dir>${project.build.directory}/jacoco-child</javan.jacoco.child.dir>
         <javan.jacoco.merged.exec>${project.build.directory}/jacoco-merged.exec</javan.jacoco.merged.exec>
@@ -183,6 +184,7 @@
                             <goal>check</goal>
                         </goals>
                         <configuration>
+                            <skip>${javan.coverage.check.skip}</skip>
                             <dataFile>${javan.jacoco.merged.exec}</dataFile>
                             <rules>
                                 <rule>

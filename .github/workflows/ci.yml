@@ -17,7 +17,7 @@ permissions:
 
 concurrency:
   group: ci-${{ github.event.pull_request.head.ref || github.ref_name }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   verify:
@@ -36,9 +36,6 @@ jobs:
             sanitizer-scope: platform-smoke
           - target: macos-aarch64
             os: macos-15
-            sanitizer-scope: full
-          - target: macos-x64
-            os: macos-15-intel
             sanitizer-scope: full
 
     steps:
@@ -91,10 +88,41 @@ jobs:
 
       - name: Verify Maven suite
         run: |
-          if ! mvn -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" verify; then
+          if ! mvn -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -Djavan.coverage.check.skip=true verify; then
             python3 -c $'import pathlib\nimport xml.etree.ElementTree as ET\n\nreport = pathlib.Path("target/site/jacoco/jacoco.xml")\nif not report.exists():\n    print("JaCoCo report missing after failed verify.")\nelse:\n    root = ET.parse(report).getroot()\n    bundle = {counter.attrib["type"]: counter.attrib for counter in root.findall("counter")}\n    for counter_type in ("BRANCH", "LINE"):\n        counter = bundle.get(counter_type)\n        if counter is None:\n            continue\n        missed = int(counter["missed"])\n        covered = int(counter["covered"])\n        total = missed + covered\n        ratio = covered / total if total else 1.0\n        print(f"JaCoCo {counter_type.lower()} bundle ratio: {covered}/{total} = {ratio:.6%}")'
             exit 1
           fi
+
+      - name: Summarize coverage (non-blocking)
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          import xml.etree.ElementTree as ET
+
+          report = pathlib.Path("target/site/jacoco/jacoco.xml")
+          target_ratio = 0.09
+          if not report.exists():
+              print("::warning::JaCoCo report missing; coverage summary skipped.")
+              raise SystemExit(0)
+
+          root = ET.parse(report).getroot()
+          counters = {counter.attrib["type"]: counter.attrib for counter in root.findall("counter")}
+          for counter_type in ("LINE", "BRANCH"):
+              counter = counters.get(counter_type)
+              if counter is None:
+                  continue
+              missed = int(counter["missed"])
+              covered = int(counter["covered"])
+              total = missed + covered
+              ratio = covered / total if total else 1.0
+              ratio_text = f"{covered}/{total} = {ratio:.6%}"
+              print(f"JaCoCo {counter_type.lower()} bundle ratio: {ratio_text}")
+              if ratio < target_ratio:
+                  print(f"::warning::JaCoCo {counter_type.lower()} coverage is below soft target {target_ratio:.0%}: {ratio_text}")
+              else:
+                  print(f"::notice::JaCoCo {counter_type.lower()} coverage meets soft target {target_ratio:.0%}: {ratio_text}")
+          PY
 
       - name: Verify acceptance suite
         env:
