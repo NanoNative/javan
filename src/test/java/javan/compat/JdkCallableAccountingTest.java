@@ -1858,9 +1858,15 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksSupplierGetAsExplicitRejected() {
+    void marksSupplierGetAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/function/Supplier", "get", "()Ljava/lang/Object;")))
-            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksOptionalOrElseGetAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Optional", "orElseGet", "(Ljava/util/function/Supplier;)Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
     @Test

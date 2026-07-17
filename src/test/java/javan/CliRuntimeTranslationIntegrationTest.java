@@ -4509,6 +4509,74 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void optionalOrElseGetInlineSupplierLambdaBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-or-else-get-lambda");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Optional.of("value").orElseGet(() -> "fallback"));
+                    System.out.println(Optional.<String>empty().orElseGet(() -> "fallback"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-or-else-get-lambda").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("value\nfallback\n");
+    }
+
+    @Test
+    void optionalOrElseGetConcreteSupplierBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-or-else-get-concrete");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Optional.of("value").orElseGet(new FallbackSupplier()));
+                    System.out.println(Optional.<String>empty().orElseGet(new FallbackSupplier()));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.FallbackSupplier", """
+            package com.acme;
+
+            import java.util.function.Supplier;
+
+            public final class FallbackSupplier implements Supplier<Object> {
+                @Override
+                public Object get() {
+                    return "fallback";
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-or-else-get-concrete").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("value\nfallback\n");
+    }
+
+    @Test
     void hashMapComputeIfAbsentConcreteImplementationBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("hashmap-compute-if-absent-concrete");
         writeJava(project, "com.acme.Main", """

@@ -2793,6 +2793,7 @@ public final class BytecodeToIR {
         SCHEDULED_THREAD_POOL_EXECUTOR,
         LAMBDA_FUNCTION,
         LAMBDA_PREDICATE,
+        LAMBDA_SUPPLIER,
         PRINT_STREAM,
         ERROR_PRINT_STREAM,
         SOCKET_INPUT_STREAM,
@@ -2859,6 +2860,10 @@ public final class BytecodeToIR {
 
         static StackValue lambdaPredicate(final DynamicLambda dynamicLambda) {
             return new StackValue(StackKind.LAMBDA_PREDICATE, Optional.empty(), Optional.empty(), Optional.of(dynamicLambda));
+        }
+
+        static StackValue lambdaSupplier(final DynamicLambda dynamicLambda) {
+            return new StackValue(StackKind.LAMBDA_SUPPLIER, Optional.empty(), Optional.empty(), Optional.of(dynamicLambda));
         }
 
         static StackValue printStream() {

@@ -331,6 +331,8 @@ public final class ReachabilityAnalyzer {
             if (!targetMethods.isEmpty()) {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
+            }
+            if (!targetMethods.isEmpty()) {
                 return;
             }
             diagnostics.add(Diagnostic.error(
@@ -350,6 +352,8 @@ public final class ReachabilityAnalyzer {
             if (!targetMethods.isEmpty()) {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
+            }
+            if (!targetMethods.isEmpty()) {
                 return;
             }
             diagnostics.add(Diagnostic.error(
@@ -360,6 +364,27 @@ public final class ReachabilityAnalyzer {
                 target.display(),
                 "Optional.map requires a closed-world Function implementation class or a supported direct function lambda target.",
                 "Provide a reachable Function implementation class or keep this exact optional mapping flow on the JVM until broader callback support lands."
+            ));
+            return;
+        }
+        if (isOptionalOrElseGet(target)) {
+            final MethodRef supplierGet = new MethodRef("java/util/function/Supplier", "get", "()Ljava/lang/Object;");
+            final List<EntryPoint> targetMethods = interfaceTargets(classes, supplierGet, entryPoints);
+            if (!targetMethods.isEmpty()) {
+                enqueueAll(work, workSet, targetMethods);
+                addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
+            }
+            if (hasInlineDirectSupplierLambda(classes, current, instruction) || !targetMethods.isEmpty()) {
+                return;
+            }
+            diagnostics.add(Diagnostic.error(
+                "JAVAN012",
+                "unsupported reachable application method call",
+                current.className(),
+                current.methodName() + current.descriptor(),
+                target.display(),
+                "Optional.orElseGet requires a closed-world Supplier implementation class or a supported direct supplier lambda target.",
+                "Provide a reachable Supplier implementation class or keep this exact optional fallback flow on the JVM until broader callback support lands."
             ));
             return;
         }
@@ -649,6 +674,23 @@ public final class ReachabilityAnalyzer {
         final EntryPoint current,
         final Instruction instruction
     ) {
+        return hasInlineDirectLambda(classes, current, instruction, InlineLambdaKind.PREDICATE);
+    }
+
+    private static boolean hasInlineDirectSupplierLambda(
+        final Map<String, ClassFile> classes,
+        final EntryPoint current,
+        final Instruction instruction
+    ) {
+        return hasInlineDirectLambda(classes, current, instruction, InlineLambdaKind.SUPPLIER);
+    }
+
+    private static boolean hasInlineDirectLambda(
+        final Map<String, ClassFile> classes,
+        final EntryPoint current,
+        final Instruction instruction,
+        final InlineLambdaKind lambdaKind
+    ) {
         final Optional<MethodInfo> method = method(classes, current);
         if (method.isEmpty() || method.orElseThrow().code().isEmpty()) {
             return false;
@@ -664,10 +706,22 @@ public final class ReachabilityAnalyzer {
             }
             final Optional<LambdaMetafactoryCall> lambdaCall = LambdaMetafactoryCall.resolve(producer.dynamicRef().orElseThrow());
             return lambdaCall.isPresent()
-                && lambdaCall.orElseThrow().isPredicate()
+                && matchesInlineLambdaKind(lambdaCall.orElseThrow(), lambdaKind)
                 && lambdaCall.orElseThrow().isDirectlyLowerable();
         }
         return false;
+    }
+
+    private static boolean matchesInlineLambdaKind(final LambdaMetafactoryCall lambdaCall, final InlineLambdaKind lambdaKind) {
+        if (lambdaKind == InlineLambdaKind.PREDICATE) {
+            return lambdaCall.isPredicate();
+        }
+        return lambdaCall.isSupplier();
+    }
+
+    private enum InlineLambdaKind {
+        PREDICATE,
+        SUPPLIER
     }
 
     private static boolean isBiFunctionApply(final MethodRef target) {
@@ -697,6 +751,12 @@ public final class ReachabilityAnalyzer {
         return "java/util/Optional".equals(target.owner())
             && "map".equals(target.name())
             && "(Ljava/util/function/Function;)Ljava/util/Optional;".equals(target.descriptor());
+    }
+
+    private static boolean isOptionalOrElseGet(final MethodRef target) {
+        return "java/util/Optional".equals(target.owner())
+            && "orElseGet".equals(target.name())
+            && "(Ljava/util/function/Supplier;)Ljava/lang/Object;".equals(target.descriptor());
     }
 
     private static boolean isMapComputeIfPresent(final MethodRef target) {

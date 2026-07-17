@@ -67,6 +67,7 @@ public record LambdaMetafactoryCall(
         if (!"Ljava/util/function/Function;".equals(returnDescriptor.orElseThrow())
             && !"Ljava/util/function/BiFunction;".equals(returnDescriptor.orElseThrow())
             && !"Ljava/util/function/Predicate;".equals(returnDescriptor.orElseThrow())
+            && !"Ljava/util/function/Supplier;".equals(returnDescriptor.orElseThrow())
             && !"Ljava/util/function/Consumer;".equals(returnDescriptor.orElseThrow())
             && !"Ljava/util/function/BiConsumer;".equals(returnDescriptor.orElseThrow())
             && !returnDescriptor.orElseThrow().startsWith("L")) {
@@ -80,6 +81,7 @@ public record LambdaMetafactoryCall(
         if (!"java/util/function/Function".equals(interfaceOwner)
             && !"java/util/function/BiFunction".equals(interfaceOwner)
             && !"java/util/function/Predicate".equals(interfaceOwner)
+            && !"java/util/function/Supplier".equals(interfaceOwner)
             && !"java/util/function/Consumer".equals(interfaceOwner)
             && !"java/util/function/BiConsumer".equals(interfaceOwner)
             && interfaceOwner.isEmpty()) {
@@ -140,6 +142,20 @@ public record LambdaMetafactoryCall(
     }
 
     /**
+     * Returns whether this is a supported {@code java.util.function.Supplier} shape.
+     *
+     * @return true when the lambda is a direct zero-argument object supplier
+     */
+    public boolean isSupplier() {
+        if (!"java/util/function/Supplier".equals(interfaceOwner) || !"get".equals(interfaceMethodName)) {
+            return false;
+        }
+        return noInputs(instantiatedMethodDescriptor)
+            && objectReturn(instantiatedMethodDescriptor)
+            && "()Ljava/lang/Object;".equals(samMethodDescriptor);
+    }
+
+    /**
      * Returns whether this is a supported {@code java.util.function.Consumer} shape.
      *
      * @return true when the lambda is a direct one-argument consumer
@@ -186,11 +202,14 @@ public record LambdaMetafactoryCall(
      * @return true for the supported function/predicate subset
      */
     public boolean isDirectlyLowerable() {
-        if (!(isFunction() || isPredicate())) {
+        if (!(isFunction() || isPredicate() || isSupplier())) {
             return false;
         }
         if (implementationReferenceKind != 6 && implementationReferenceKind != 9) {
             return false;
+        }
+        if (isSupplier()) {
+            return noInputs(instantiatedMethodDescriptor);
         }
         return inputDescriptor().isPresent();
     }
@@ -326,6 +345,10 @@ public record LambdaMetafactoryCall(
         final Optional<String> input = new LambdaMetafactoryCall("", "", "", "", new MethodRef("", "", ""), -1, descriptor, List.of())
             .inputDescriptor();
         return input.isPresent() && input.orElseThrow().startsWith("L");
+    }
+
+    private static boolean noInputs(final String descriptor) {
+        return parameterDescriptors(descriptor).isEmpty();
     }
 
     private static boolean objectInputs(final String descriptor, final int count) {

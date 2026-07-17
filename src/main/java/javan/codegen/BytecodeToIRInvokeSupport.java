@@ -2916,6 +2916,12 @@ final class BytecodeToIRInvokeSupport {
             lowerOptionalMapLambdaCall(classFile, method, instruction, instructions, stack, localDeclarations);
             return true;
         }
+        if ("orElseGet".equals(name)
+            && "(Ljava/util/function/Supplier;)Ljava/lang/Object;".equals(descriptor)
+            && hasTopStackKind(stack, StackKind.LAMBDA_SUPPLIER)) {
+            lowerOptionalOrElseGetLambdaCall(classFile, method, instruction, instructions, stack, localDeclarations);
+            return true;
+        }
         final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
         final IrExpression receiver = popObject(classFile, method, stack);
         if ("filter".equals(name) && "(Ljava/util/function/Predicate;)Ljava/util/Optional;".equals(descriptor)) {
@@ -2936,6 +2942,22 @@ final class BytecodeToIRInvokeSupport {
         }
         if ("map".equals(name) && "(Ljava/util/function/Function;)Ljava/util/Optional;".equals(descriptor)) {
             lowerOptionalMapCall(
+                classes,
+                classFile,
+                method,
+                instruction,
+                instructions,
+                dispatches,
+                materializedLambdaMethods,
+                stack,
+                localDeclarations,
+                receiver,
+                arguments.getFirst()
+            );
+            return true;
+        }
+        if ("orElseGet".equals(name) && "(Ljava/util/function/Supplier;)Ljava/lang/Object;".equals(descriptor)) {
+            lowerOptionalOrElseGetCall(
                 classes,
                 classFile,
                 method,
@@ -3059,6 +3081,39 @@ final class BytecodeToIRInvokeSupport {
         stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
     }
 
+    private static void lowerOptionalOrElseGetLambdaCall(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations
+    ) {
+        final DynamicLambda lambda = popDynamicLambda(classFile, method, instruction, stack, StackKind.LAMBDA_SUPPLIER, "supplier lambda");
+        final IrExpression receiver = popObject(classFile, method, instruction, stack);
+        final String valueLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(
+            valueLocal,
+            IrExpression.objectCall("javan_optional_or_else", List.of(receiver, IrExpression.objectNull()))
+        ));
+        final String resultLocal = newObjectLocal(localDeclarations);
+        final String valuePresentLabel = "label_optional_or_else_get_value_present_" + instruction.offset() + "_" + localDeclarations.size();
+        final String endLabel = "label_optional_or_else_get_end_" + instruction.offset() + "_" + localDeclarations.size();
+        instructions.add(IrInstruction.branchIf(
+            valuePresentLabel,
+            IrExpression.objectComparison("!=", IrExpression.objectLocal(valueLocal), IrExpression.objectNull())
+        ));
+        instructions.add(IrInstruction.assignObject(
+            resultLocal,
+            invokeSupplierLambdaExpression(lambda)
+        ));
+        instructions.add(IrInstruction.jump(endLabel));
+        instructions.add(IrInstruction.label(valuePresentLabel));
+        instructions.add(IrInstruction.assignObject(resultLocal, IrExpression.objectLocal(valueLocal)));
+        instructions.add(IrInstruction.label(endLabel));
+        stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
+    }
+
     private static void lowerOptionalFilterCall(
         final Map<String, ClassFile> classes,
         final ClassFile classFile,
@@ -3115,6 +3170,49 @@ final class BytecodeToIRInvokeSupport {
         instructions.add(IrInstruction.jump(endLabel));
         instructions.add(IrInstruction.label(keepLabel));
         instructions.add(IrInstruction.assignObject(resultLocal, receiver));
+        instructions.add(IrInstruction.label(endLabel));
+        stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
+    }
+
+    private static void lowerOptionalOrElseGetCall(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final Map<String, IrDispatch> dispatches,
+        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final IrExpression receiver,
+        final IrExpression supplier
+    ) {
+        final String valueLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(
+            valueLocal,
+            IrExpression.objectCall("javan_optional_or_else", List.of(receiver, IrExpression.objectNull()))
+        ));
+        final String resultLocal = newObjectLocal(localDeclarations);
+        final String valuePresentLabel = "label_optional_or_else_get_value_present_" + instruction.offset() + "_" + localDeclarations.size();
+        final String endLabel = "label_optional_or_else_get_end_" + instruction.offset() + "_" + localDeclarations.size();
+        instructions.add(IrInstruction.branchIf(
+            valuePresentLabel,
+            IrExpression.objectComparison("!=", IrExpression.objectLocal(valueLocal), IrExpression.objectNull())
+        ));
+        lowerSupplierGetCall(
+            classes,
+            classFile,
+            method,
+            instruction,
+            instructions,
+            dispatches,
+            materializedLambdaMethods,
+            supplier,
+            resultLocal
+        );
+        instructions.add(IrInstruction.jump(endLabel));
+        instructions.add(IrInstruction.label(valuePresentLabel));
+        instructions.add(IrInstruction.assignObject(resultLocal, IrExpression.objectLocal(valueLocal)));
         instructions.add(IrInstruction.label(endLabel));
         stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
     }
@@ -5482,6 +5580,46 @@ final class BytecodeToIRInvokeSupport {
             instructions.add(IrInstruction.assignObject(
                 resultLocal,
                 IrExpression.objectCall(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL, List.of(function, argument))
+            ));
+            return;
+        }
+        throw unsupported(classFile, method, instruction);
+    }
+
+    private static void lowerSupplierGetCall(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final Map<String, IrDispatch> dispatches,
+        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final IrExpression supplier,
+        final String resultLocal
+    ) {
+        final MethodRef supplierGet = new MethodRef("java/util/function/Supplier", "get", "()Ljava/lang/Object;");
+        final List<EntryPoint> targets = interfaceTargets(classes, supplierGet);
+        if (targets.size() > 1) {
+            final String dispatchSymbol = dispatchSymbol(supplierGet);
+            dispatches.putIfAbsent(dispatchSymbol, dispatch(dispatchSymbol, MethodDescriptor.parse(supplierGet.descriptor()), targets));
+            instructions.add(IrInstruction.assignObject(
+                resultLocal,
+                IrExpression.objectCall(dispatchSymbol, List.of(supplier))
+            ));
+            return;
+        }
+        if (!targets.isEmpty()) {
+            instructions.add(IrInstruction.assignObject(
+                resultLocal,
+                IrExpression.objectCall(symbol(targets.getFirst()), List.of(supplier))
+            ));
+            return;
+        }
+        final Optional<EntryPoint> defaultTarget = defaultInterfaceTarget(classes, supplierGet);
+        if (defaultTarget.isPresent()) {
+            instructions.add(IrInstruction.assignObject(
+                resultLocal,
+                IrExpression.objectCall(symbol(defaultTarget.orElseThrow()), List.of(supplier))
             ));
             return;
         }
@@ -8179,6 +8317,10 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.lambdaPredicate(lambda));
             return true;
         }
+        if (resolved.isSupplier()) {
+            stack.add(StackValue.lambdaSupplier(lambda));
+            return true;
+        }
         if (resolved.isFunction()) {
             stack.add(StackValue.lambdaFunction(lambda));
             return true;
@@ -8197,6 +8339,17 @@ final class BytecodeToIRInvokeSupport {
         }
         final List<String> parameters = implementationParameters.orElseThrow();
         if (lambdaCall.implementationReferenceKind() == 6) {
+            if (lambdaCall.isSupplier()) {
+                if (parameters.size() != captureDescriptors.size()) {
+                    return false;
+                }
+                for (int index = 0; index < captureDescriptors.size(); index++) {
+                    if (!sameOrObjectCompatible(captureDescriptors.get(index), parameters.get(index))) {
+                        return false;
+                    }
+                }
+                return true;
+            }
             if (parameters.size() != captureDescriptors.size() + 1) {
                 return false;
             }
@@ -8262,6 +8415,17 @@ final class BytecodeToIRInvokeSupport {
             )), arguments);
         }
         throw new IllegalArgumentException("Unsupported predicate lambda shape: " + lambda.implementationMethodRef().display());
+    }
+
+    private static IrExpression invokeSupplierLambdaExpression(final DynamicLambda lambda) {
+        if (lambda.implementationReferenceKind() == 6) {
+            return IrExpression.objectCall(symbol(new EntryPoint(
+                lambda.implementationOwner(),
+                lambda.implementationName(),
+                lambda.implementationDescriptor()
+            )), lambda.captures());
+        }
+        throw new IllegalArgumentException("Unsupported supplier lambda shape: " + lambda.implementationMethodRef().display());
     }
 
     private static IrExpression invokeFunctionLambdaExpression(final DynamicLambda lambda, final IrExpression argument) {
@@ -8566,13 +8730,13 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if (isLiteralOpcode(instruction.opcode())) {
-            if (instruction.constantPoolTag().filter(tag -> tag == 15).isPresent()) {
+            if (instruction.constantPoolTag().isPresent() && instruction.constantPoolTag().orElseThrow() == 15) {
                 throw unsupportedMethodHandleLiteral(classFile, method, instruction);
             }
-            if (instruction.constantPoolTag().filter(tag -> tag == 16).isPresent()) {
+            if (instruction.constantPoolTag().isPresent() && instruction.constantPoolTag().orElseThrow() == 16) {
                 throw unsupportedMethodTypeLiteral(classFile, method, instruction);
             }
-            if (instruction.constantPoolTag().filter(tag -> tag == 17).isPresent()) {
+            if (instruction.constantPoolTag().isPresent() && instruction.constantPoolTag().orElseThrow() == 17) {
                 throw unsupportedDynamicConstant(classFile, method, instruction);
             }
             throw unsupportedLiteralConstant(classFile, method, instruction);

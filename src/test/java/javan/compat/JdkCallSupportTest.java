@@ -169,6 +169,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void optionalOrElseGetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Optional",
+            "orElseGet",
+            "(Ljava/util/function/Supplier;)Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void supplierGetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/function/Supplier",
+            "get",
+            "()Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
     void collectionsEmptyListIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Collections",
