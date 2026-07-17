@@ -1459,22 +1459,70 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void rejectsOptionalMapWhenFunctionArgumentIsNotDynamicLambda() {
-        assertThatThrownBy(() -> lowerMain(method(
-            0x0008,
+    void lowersOptionalMapWithConcreteFunctionImplementationToOptionalHelpersAndDirectFunctionCall() {
+        final EntryPoint entryPoint = new EntryPoint(
+            "com/acme/Main",
             "mapValueNonLambda",
-            "(Ljava/util/Optional;Ljava/util/function/Function;)Ljava/util/Optional;",
-            2,
-            2,
-            plain(0, 42, "aload_0"),
-            plain(1, 43, "aload_1"),
-            invokeVirtual(2, new MethodRef("java/util/Optional", "map", "(Ljava/util/function/Function;)Ljava/util/Optional;")),
-            plain(5, 176, "areturn")
-        )))
-            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
-                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
-                assertThat(exception.diagnostic().subject()).isEqualTo("invokevirtual java/util/Optional.map(Ljava/util/function/Function;)Ljava/util/Optional;");
-            });
+            "(Ljava/util/Optional;Ljava/util/function/Function;)Ljava/util/Optional;"
+        );
+        final EntryPoint applyEntry = new EntryPoint(
+            "com/acme/Loader",
+            "apply",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
+        );
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    optionalMapConcreteFunctionMethod()
+                )),
+                "com/acme/Loader",
+                classFile(
+                    "com/acme/Loader",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/util/function/Function"),
+                    List.of(),
+                    List.of(functionApplyImplementationMethod())
+                )
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint, applyEntry), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("mapValueNonLambda")).singleElement().satisfies(function -> {
+            assertThat(function.locals()).containsExactly(
+                new IrLocal(IrType.OBJECT, "object0"),
+                new IrLocal(IrType.OBJECT, "object1"),
+                new IrLocal(IrType.OBJECT, "object2")
+            );
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.assignObject(
+                    "object0",
+                    IrExpression.objectCall("javan_optional_or_else", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectNull()))
+                ),
+                IrInstruction.branchIf(
+                    "label_optional_map_value_present_2_2",
+                    IrExpression.objectComparison("!=", IrExpression.objectLocal("object0"), IrExpression.objectNull())
+                ),
+                IrInstruction.assignObject("object1", IrExpression.objectCall("javan_optional_empty", List.of())),
+                IrInstruction.jump("label_optional_map_end_2_2"),
+                IrInstruction.label("label_optional_map_value_present_2_2"),
+                IrInstruction.assignObject(
+                    "object2",
+                    IrExpression.objectCall(
+                        "javan_com_acme_Loader_apply__Ljava_lang_Object__Ljava_lang_Object_",
+                        List.of(IrExpression.objectLocal("arg1"), IrExpression.objectLocal("object0"))
+                    )
+                ),
+                IrInstruction.assignObject(
+                    "object1",
+                    IrExpression.objectCall("javan_optional_of_nullable", List.of(IrExpression.objectLocal("object2")))
+                ),
+                IrInstruction.label("label_optional_map_end_2_2"),
+                IrInstruction.returnObject(IrExpression.objectLocal("object1"))
+            );
+        });
     }
 
     @Test
@@ -26288,6 +26336,20 @@ final class BytecodeToIRTest {
             )),
             invokeVirtual(2, new MethodRef("java/util/Optional", "map", "(Ljava/util/function/Function;)Ljava/util/Optional;")),
             plain(3, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo optionalMapConcreteFunctionMethod() {
+        return method(
+            0x0008,
+            "mapValueNonLambda",
+            "(Ljava/util/Optional;Ljava/util/function/Function;)Ljava/util/Optional;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/util/Optional", "map", "(Ljava/util/function/Function;)Ljava/util/Optional;")),
+            plain(5, 176, "areturn")
         );
     }
 

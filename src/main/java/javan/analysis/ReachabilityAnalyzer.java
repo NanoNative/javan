@@ -325,6 +325,25 @@ public final class ReachabilityAnalyzer {
             ));
             return;
         }
+        if (isOptionalMap(target)) {
+            final MethodRef functionApply = new MethodRef("java/util/function/Function", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;");
+            final List<EntryPoint> targetMethods = interfaceTargets(classes, functionApply, entryPoints);
+            if (!targetMethods.isEmpty()) {
+                enqueueAll(work, workSet, targetMethods);
+                addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
+                return;
+            }
+            diagnostics.add(Diagnostic.error(
+                "JAVAN012",
+                "unsupported reachable application method call",
+                current.className(),
+                current.methodName() + current.descriptor(),
+                target.display(),
+                "Optional.map requires a closed-world Function implementation class or a supported direct function lambda target.",
+                "Provide a reachable Function implementation class or keep this exact optional mapping flow on the JVM until broader callback support lands."
+            ));
+            return;
+        }
         if (isMapComputeIfPresent(target) || isMapCompute(target) || isMapMerge(target)) {
             final MethodRef biFunctionApply = new MethodRef("java/util/function/BiFunction", "apply", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;");
             final List<EntryPoint> targetMethods = interfaceTargets(classes, biFunctionApply, entryPoints);
@@ -647,6 +666,12 @@ public final class ReachabilityAnalyzer {
             || "java/util/HashMap".equals(target.owner())
             || "java/util/LinkedHashMap".equals(target.owner())
             || "java/util/TreeMap".equals(target.owner());
+    }
+
+    private static boolean isOptionalMap(final MethodRef target) {
+        return "java/util/Optional".equals(target.owner())
+            && "map".equals(target.name())
+            && "(Ljava/util/function/Function;)Ljava/util/Optional;".equals(target.descriptor());
     }
 
     private static boolean isMapComputeIfPresent(final MethodRef target) {
