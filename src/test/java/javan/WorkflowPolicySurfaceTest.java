@@ -48,12 +48,14 @@ final class WorkflowPolicySurfaceTest {
     void ciWorkflowKeepsNinePercentCoverageAsSoftSignal() throws Exception {
         assertThat(Files.readString(CI_WORKFLOW))
             .contains("JAVAN_COVERAGE_SOFT_TARGET: \"0.09\"")
-            .contains("-Djavan.coverage.check.skip=true verify")
+            .contains("-Dtest='!Cli*IntegrationTest,!CliExternalProbeAcceptanceIntegrationTest' -Djavan.coverage.check.skip=true verify")
+            .contains("-Dtest='Cli*IntegrationTest,CliExternalProbeAcceptanceIntegrationTest' -Djavan.coverage.check.skip=true verify")
             .contains("Summarize coverage (non-blocking)")
             .contains("Soft target: {target_ratio:.0%} (signal only, not a workflow gate)")
             .contains("| Counter | Covered | Total | Ratio | Status |")
             .contains("Upload coverage artifact")
-            .contains("name: jacoco-${{ matrix.target }}")
+            .contains("name: jacoco-core-${{ matrix.target }}")
+            .contains("name: jacoco-cli-integration")
             .contains("::warning::JaCoCo");
     }
 
@@ -81,7 +83,8 @@ final class WorkflowPolicySurfaceTest {
     void ciWorkflowSkipsReleaseMetadataPushesBeforeHeavyJobsStart() throws Exception {
         assertThat(Files.readString(CI_WORKFLOW))
             .contains("if: \"${{ github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore: release ') }}\"")
-            .contains("name: verify (${{ matrix.target }})")
+            .contains("name: verify-core (${{ matrix.target }})")
+            .contains("name: verify-cli-integration")
             .contains("name: native-smoke (${{ matrix.target }})")
             .contains("name: windows-runtime-smoke (${{ matrix.shard }})");
     }

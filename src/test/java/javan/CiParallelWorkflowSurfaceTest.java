@@ -11,13 +11,17 @@ final class CiParallelWorkflowSurfaceTest {
     private static final Path CI_WORKFLOW = Path.of(".github/workflows/ci.yml");
 
     @Test
-    void ciWorkflowSplitsVerifyAndNativeSmokeIntoParallelJobs() throws Exception {
+    void ciWorkflowSplitsCoreVerifyCliVerifyAndNativeSmokeIntoParallelJobs() throws Exception {
         assertThat(Files.readString(CI_WORKFLOW))
-            .contains("verify:")
+            .contains("verify-core:")
+            .contains("verify-cli-integration:")
             .contains("native-smoke:")
-            .contains("name: verify (${{ matrix.target }})")
+            .contains("name: verify-core (${{ matrix.target }})")
+            .contains("name: verify-cli-integration")
             .contains("name: native-smoke (${{ matrix.target }})")
-            .contains("max-parallel: 3")
+            .contains("max-parallel: 4")
+            .contains("Verify core Maven suite")
+            .contains("Verify CLI integration Maven suite")
             .contains("Compile test fixtures")
             .contains("Verify acceptance suite");
     }
@@ -25,14 +29,16 @@ final class CiParallelWorkflowSurfaceTest {
     @Test
     void ciWorkflowLeavesParallelLanesIndependentUntilRelease() throws Exception {
         assertThat(Files.readString(CI_WORKFLOW))
-            .contains("verify:")
+            .contains("verify-core:")
+            .contains("verify-cli-integration:")
             .contains("native-smoke:")
             .contains("windows-runtime-smoke:")
             .contains("max-parallel: 2")
             .contains("shard: current-thread")
             .contains("shard: worker-thread")
-            .contains("needs:\n      - verify\n      - native-smoke\n      - windows-runtime-smoke")
-            .doesNotContain("verify:\n    needs:")
+            .contains("needs:\n      - verify-core\n      - verify-cli-integration\n      - native-smoke\n      - windows-runtime-smoke")
+            .doesNotContain("verify-core:\n    needs:")
+            .doesNotContain("verify-cli-integration:\n    needs:")
             .doesNotContain("native-smoke:\n    needs:")
             .doesNotContain("windows-runtime-smoke:\n    needs:");
     }
@@ -41,7 +47,8 @@ final class CiParallelWorkflowSurfaceTest {
     void releaseWaitsForNativeSmokeBeforePackaging() throws Exception {
         assertThat(Files.readString(CI_WORKFLOW))
             .contains("needs:")
-            .contains("- verify")
+            .contains("- verify-core")
+            .contains("- verify-cli-integration")
             .contains("- native-smoke")
             .contains("- windows-runtime-smoke");
     }
