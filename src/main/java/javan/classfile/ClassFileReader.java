@@ -367,18 +367,40 @@ public final class ClassFileReader {
     }
 
     private static Optional<Integer> smallIntegerLiteral(final int opcode, final byte[] operands) {
-        return switch (opcode) {
-            case 2 -> Optional.of(-1);
-            case 3 -> Optional.of(0);
-            case 4 -> Optional.of(1);
-            case 5 -> Optional.of(2);
-            case 6 -> Optional.of(3);
-            case 7 -> Optional.of(4);
-            case 8 -> Optional.of(5);
-            case 16 -> operands.length == 1 ? Optional.of((int) operands[0]) : Optional.empty();
-            case 17 -> operands.length == 2 ? Optional.of(signedShort(operands[0], operands[1])) : Optional.empty();
-            default -> Optional.empty();
-        };
+        if (opcode == 2) {
+            return Optional.of(-1);
+        }
+        if (opcode == 3) {
+            return Optional.of(0);
+        }
+        if (opcode == 4) {
+            return Optional.of(1);
+        }
+        if (opcode == 5) {
+            return Optional.of(2);
+        }
+        if (opcode == 6) {
+            return Optional.of(3);
+        }
+        if (opcode == 7) {
+            return Optional.of(4);
+        }
+        if (opcode == 8) {
+            return Optional.of(5);
+        }
+        if (opcode == 16) {
+            if (operands.length != 1) {
+                return Optional.empty();
+            }
+            return Optional.of((int) operands[0]);
+        }
+        if (opcode == 17) {
+            if (operands.length != 2) {
+                return Optional.empty();
+            }
+            return Optional.of(signedShort(operands[0], operands[1]));
+        }
+        return Optional.empty();
     }
 
     private static int signedShort(final byte high, final byte low) {
@@ -433,28 +455,36 @@ public final class ClassFileReader {
     }
 
     private static Optional<Long> smallLongLiteral(final int opcode) {
-        return switch (opcode) {
-            case 9 -> Optional.of(0L);
-            case 10 -> Optional.of(1L);
-            default -> Optional.empty();
-        };
+        if (opcode == 9) {
+            return Optional.of(0L);
+        }
+        if (opcode == 10) {
+            return Optional.of(1L);
+        }
+        return Optional.empty();
     }
 
     private static Optional<Float> smallFloatLiteral(final int opcode) {
-        return switch (opcode) {
-            case 11 -> Optional.of(0.0f);
-            case 12 -> Optional.of(1.0f);
-            case 13 -> Optional.of(2.0f);
-            default -> Optional.empty();
-        };
+        if (opcode == 11) {
+            return Optional.of(0.0f);
+        }
+        if (opcode == 12) {
+            return Optional.of(1.0f);
+        }
+        if (opcode == 13) {
+            return Optional.of(2.0f);
+        }
+        return Optional.empty();
     }
 
     private static Optional<Double> smallDoubleLiteral(final int opcode) {
-        return switch (opcode) {
-            case 14 -> Optional.of(0.0d);
-            case 15 -> Optional.of(1.0d);
-            default -> Optional.empty();
-        };
+        if (opcode == 14) {
+            return Optional.of(0.0d);
+        }
+        if (opcode == 15) {
+            return Optional.of(1.0d);
+        }
+        return Optional.empty();
     }
 
     private static int instructionLength(final byte[] bytecode, final int offset) throws IOException {

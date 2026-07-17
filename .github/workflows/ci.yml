@@ -21,6 +21,7 @@ env:
 jobs:
   verify:
     name: verify (${{ matrix.target }})
+    if: "${{ github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore: release ') }}"
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     strategy:
@@ -134,6 +135,7 @@ jobs:
 
   native-smoke:
     name: native-smoke (${{ matrix.target }})
+    if: "${{ github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore: release ') }}"
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     strategy:
@@ -225,6 +227,7 @@ jobs:
 
   windows-runtime-smoke:
     name: windows-runtime-smoke
+    if: "${{ github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore: release ') }}"
     runs-on: windows-latest
     timeout-minutes: 30
 

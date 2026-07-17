@@ -2649,22 +2649,22 @@ public final class CCodegen {
     private static String escapeCString(final String value) {
         final StringBuilder result = new StringBuilder();
         for (int index = 0; index < value.length(); index++) {
-            result.append(escapeCChar(value.charAt(index)));
+            appendEscapedCChar(result, value.charAt(index));
         }
         return result.toString();
     }
 
     private static String emitCStringLiteral(final String value) {
         final int maxChunkLength = 120;
-        final StringBuilder result = new StringBuilder();
-        StringBuilder chunk = new StringBuilder();
+        final StringBuilder result = new StringBuilder(value.length() + 16);
+        StringBuilder chunk = new StringBuilder(Math.min(value.length(), maxChunkLength));
         for (int index = 0; index < value.length(); index++) {
-            final String escaped = escapeCChar(value.charAt(index));
-            if (!chunk.isEmpty() && chunk.length() + escaped.length() > maxChunkLength) {
+            final int escapedLength = escapedCCharLength(value.charAt(index));
+            if (!chunk.isEmpty() && chunk.length() + escapedLength > maxChunkLength) {
                 appendCStringChunk(result, chunk);
-                chunk = new StringBuilder();
+                chunk = new StringBuilder(Math.min(value.length() - index, maxChunkLength));
             }
-            chunk.append(escaped);
+            appendEscapedCChar(chunk, value.charAt(index));
         }
         appendCStringChunk(result, chunk);
         return result.toString();
@@ -2677,31 +2677,50 @@ public final class CCodegen {
         result.append('"').append(chunk.toString()).append('"');
     }
 
-    private static String escapeCChar(final char ch) {
-        final StringBuilder result = new StringBuilder();
+    private static int escapedCCharLength(final char ch) {
         switch (ch) {
             case '\\':
-                return "\\\\";
             case '"':
-                return "\\\"";
             case '\n':
-                return "\\n";
             case '\r':
-                return "\\r";
             case '\t':
-                return "\\t";
+                return 2;
             default:
                 if (ch < 32 || ch > 126) {
-                    result.append('\\');
-                    appendOctal(result, ch);
-                    return result.toString();
+                    return 4;
                 }
-                result.append(ch);
-                return result.toString();
+                return 1;
         }
     }
 
-    private static void appendOctal(final StringBuilder result, final int value) {
+    private static void appendEscapedCChar(final StringBuilder result, final char ch) {
+        switch (ch) {
+            case '\\':
+                result.append('\\').append('\\');
+                return;
+            case '"':
+                result.append('\\').append('"');
+                return;
+            case '\n':
+                result.append('\\').append('n');
+                return;
+            case '\r':
+                result.append('\\').append('r');
+                return;
+            case '\t':
+                result.append('\\').append('t');
+                return;
+            default:
+                if (ch < 32 || ch > 126) {
+                    result.append('\\');
+                    appendEscapedOctal(result, ch);
+                    return;
+                }
+                result.append(ch);
+        }
+    }
+
+    private static void appendEscapedOctal(final StringBuilder result, final int value) {
         result.append((char) ('0' + ((value >> 6) & 7)));
         result.append((char) ('0' + ((value >> 3) & 7)));
         result.append((char) ('0' + (value & 7)));

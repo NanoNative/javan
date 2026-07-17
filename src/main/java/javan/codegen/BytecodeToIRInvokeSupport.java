@@ -7390,15 +7390,25 @@ final class BytecodeToIRInvokeSupport {
     }
 
     private static boolean isLiteralOpcode(final int opcode) {
-        return switch (opcode) {
-            case 2, 3, 4, 5, 6, 7, 8,
-                 9, 10,
-                 11, 12, 13,
-                 14, 15,
-                 16, 17,
-                 18, 19, 20 -> true;
-            default -> false;
-        };
+        return opcode == 2
+            || opcode == 3
+            || opcode == 4
+            || opcode == 5
+            || opcode == 6
+            || opcode == 7
+            || opcode == 8
+            || opcode == 9
+            || opcode == 10
+            || opcode == 11
+            || opcode == 12
+            || opcode == 13
+            || opcode == 14
+            || opcode == 15
+            || opcode == 16
+            || opcode == 17
+            || opcode == 18
+            || opcode == 19
+            || opcode == 20;
     }
 
     private static IrExpression classLiteralExpression(

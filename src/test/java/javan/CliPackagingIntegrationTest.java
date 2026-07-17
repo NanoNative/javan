@@ -257,6 +257,163 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void nativeBuiltJavanBuildsPlainBooleanLiteralProgram() throws Exception {
+        final Path root = Path.of("").toAbsolutePath().normalize();
+        final Path classes = root.resolve("target/classes");
+        assertThat(classes.resolve("javan/Main.class")).exists();
+
+        final CliRun bootstrapBuild = runWithTimeout(
+            tempDir,
+            Duration.ofSeconds(120),
+            "build",
+            classes.toString(),
+            "--main",
+            "javan.Main",
+            "--output",
+            "javan-bootstrap-literal"
+        );
+        assertThat(bootstrapBuild.exitCode()).as(bootstrapBuild.stderr()).isZero();
+
+        final Path bootstrapBinary = root.resolve("target/.javan/bin/javan-bootstrap-literal");
+        assertThat(bootstrapBinary).isExecutable();
+
+        final Path probeProject = tempDir.resolve("selfhost-plain-boolean");
+        final Path probeClasses = probeProject.resolve("classes");
+        Files.createDirectories(probeClasses);
+        writeJava(probeProject, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                private static boolean flag(final boolean value) {
+                    if (value) {
+                        return false;
+                    }
+                    return true;
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(flag(false));
+                    System.out.println(flag(true));
+                }
+            }
+            """);
+
+        final ProcessResult javac = process(
+            tempDir,
+            List.of(
+                CliTestHarness.currentJavacCommand(),
+                "--release",
+                "25",
+                "-d",
+                probeClasses.toString(),
+                probeProject.resolve("src/main/java/com/acme/Main.java").toString()
+            ),
+            Duration.ofSeconds(30)
+        );
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+
+        final ProcessResult nativeBuild = process(
+            tempDir,
+            List.of(
+                bootstrapBinary.toString(),
+                "build",
+                probeClasses.toString(),
+                "--main",
+                "com.acme.Main",
+                "--output",
+                "selfhost-plain-boolean"
+            ),
+            Duration.ofSeconds(120)
+        );
+        assertThat(nativeBuild.exitCode()).as(nativeBuild.stderr()).isZero();
+        assertThat(nativeBuild.stderr()).doesNotContain("debug[JAVAN040]");
+
+        final Path probeBinary = probeProject.resolve(".javan/bin/selfhost-plain-boolean");
+        assertThat(probeBinary).isExecutable();
+        assertThat(process(tempDir, List.of(probeBinary.toString())).stdout()).isEqualTo("true\nfalse\n");
+    }
+
+    @Test
+    void nativeBuiltJavanBuildsPlainLongLiteralProgram() throws Exception {
+        final Path root = Path.of("").toAbsolutePath().normalize();
+        final Path classes = root.resolve("target/classes");
+        assertThat(classes.resolve("javan/Main.class")).exists();
+
+        final CliRun bootstrapBuild = runWithTimeout(
+            tempDir,
+            Duration.ofSeconds(120),
+            "build",
+            classes.toString(),
+            "--main",
+            "javan.Main",
+            "--output",
+            "javan-bootstrap-long-literal"
+        );
+        assertThat(bootstrapBuild.exitCode()).as(bootstrapBuild.stderr()).isZero();
+
+        final Path bootstrapBinary = root.resolve("target/.javan/bin/javan-bootstrap-long-literal");
+        assertThat(bootstrapBinary).isExecutable();
+
+        final Path probeProject = tempDir.resolve("selfhost-plain-long");
+        final Path probeClasses = probeProject.resolve("classes");
+        Files.createDirectories(probeClasses);
+        writeJava(probeProject, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                private static long zero() {
+                    return 0L;
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(zero());
+                    System.out.println(1L);
+                }
+            }
+            """);
+
+        final ProcessResult javac = process(
+            tempDir,
+            List.of(
+                CliTestHarness.currentJavacCommand(),
+                "--release",
+                "25",
+                "-d",
+                probeClasses.toString(),
+                probeProject.resolve("src/main/java/com/acme/Main.java").toString()
+            ),
+            Duration.ofSeconds(30)
+        );
+        assertThat(javac.exitCode()).as(javac.stderr()).isZero();
+
+        final ProcessResult nativeBuild = process(
+            tempDir,
+            List.of(
+                bootstrapBinary.toString(),
+                "build",
+                probeClasses.toString(),
+                "--main",
+                "com.acme.Main",
+                "--output",
+                "selfhost-plain-long"
+            ),
+            Duration.ofSeconds(120)
+        );
+        assertThat(nativeBuild.exitCode()).as(nativeBuild.stderr()).isZero();
+        assertThat(nativeBuild.stderr()).doesNotContain("debug[JAVAN040]");
+
+        final Path probeBinary = probeProject.resolve(".javan/bin/selfhost-plain-long");
+        assertThat(probeBinary).isExecutable();
+        assertThat(process(tempDir, List.of(probeBinary.toString())).stdout()).isEqualTo("0\n1\n");
+    }
+
+    @Test
     void buildRejectsCrossTargetBeforeNativeLinking() throws Exception {
         final Path project = project("target-reject");
         writeJava(project, "com.acme.Main", """

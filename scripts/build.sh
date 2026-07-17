@@ -18,7 +18,11 @@ fi
 mkdir -p "$(dirname -- "$OUTPUT")"
 VERSION=$(sed -n 's/.*<version>\(.*\)<\/version>.*/\1/p' pom.xml | head -n 1)
 JAR="target/javan-$VERSION.jar"
-if [ -z "$VERSION" ] || [ ! -f "$JAR" ]; then
+if [ -z "$VERSION" ]; then
+  printf '%s\n' "Could not resolve project version from pom.xml." >&2
+  exit 1
+fi
+if [ "$REUSE_TARGET" != "true" ] && [ ! -f "$JAR" ]; then
   printf '%s\n' "No packaged javan jar found in target/." >&2
   exit 1
 fi

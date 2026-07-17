@@ -7394,6 +7394,11 @@ final class RuntimeSourceMemorySections {
             if (left_type == right_type && left_type == JAVAN_TYPE_JAVA_LANG_CHARACTER) {
                 return ((javan_boxed_character*) left)->value == ((javan_boxed_character*) right)->value;
             }
+            if (left_type == 0 && right_type == 0
+                && javan_probably_string_key(left) != 0
+                && javan_probably_string_key(right) != 0) {
+                return strcmp((const char*) left, (const char*) right) == 0;
+            }
             javan_allocation_node* left_node = javan_find_allocation(left, NULL);
             javan_allocation_node* right_node = javan_find_allocation(right, NULL);
             if (left_node != NULL
@@ -7404,9 +7409,6 @@ final class RuntimeSourceMemorySections {
             }
             if (left_type != 0 || right_type != 0) {
                 return 0;
-            }
-            if (javan_probably_string_key(left) != 0 && javan_probably_string_key(right) != 0) {
-                return strcmp((const char*) left, (const char*) right) == 0;
             }
             return 0;
         }
