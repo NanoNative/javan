@@ -1628,6 +1628,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void mapIsEmptyIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Map",
+            "isEmpty",
+            "()Z"
+        ))).isTrue();
+    }
+
+    @Test
     void mapValuesIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Map",

@@ -280,6 +280,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksMapIsEmptyAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "isEmpty", "()Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksMapValuesAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "values", "()Ljava/util/Collection;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
