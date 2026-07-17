@@ -4471,6 +4471,88 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void linkedHashMapComputeIfAbsentConcreteImplementationBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("linkedhashmap-compute-if-absent-concrete");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.LinkedHashMap;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final LinkedHashMap<String, String> values = new LinkedHashMap<>();
+                    System.out.println(values.computeIfAbsent("demo", new Loader()));
+                    System.out.println(values.get("demo"));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Loader", """
+            package com.acme;
+
+            import java.util.function.Function;
+
+            public final class Loader implements Function<String, String> {
+                @Override
+                public String apply(final String key) {
+                    return key + ":value";
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/linkedhashmap-compute-if-absent-concrete").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("demo:value\ndemo:value\n");
+    }
+
+    @Test
+    void treeMapComputeIfAbsentConcreteImplementationBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("treemap-compute-if-absent-concrete");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.TreeMap;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final TreeMap<String, String> values = new TreeMap<>();
+                    System.out.println(values.computeIfAbsent("demo", new Loader()));
+                    System.out.println(values.get("demo"));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Loader", """
+            package com.acme;
+
+            import java.util.function.Function;
+
+            public final class Loader implements Function<String, String> {
+                @Override
+                public String apply(final String key) {
+                    return key + ":value";
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/treemap-compute-if-absent-concrete").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("demo:value\ndemo:value\n");
+    }
+
+    @Test
     void linkedHashMapComputeIfAbsentCapturedLambdaBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("linkedhashmap-compute-if-absent-captured-lambda");
         writeJava(project, "com.acme.Main", """
