@@ -229,6 +229,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void setOfPairIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Set",
+            "of",
+            "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;"
+        ))).isTrue();
+    }
+
+    @Test
     void stringHashCodeIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/String",

@@ -3282,12 +3282,17 @@ final class BytecodeToIRInvokeSupport {
                 stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_set_empty", List.of())));
                 return true;
             }
-            if (!"of".equals(name) || !"(Ljava/lang/Object;)Ljava/util/Set;".equals(descriptor)) {
-                return false;
+            if ("of".equals(name) && "(Ljava/lang/Object;)Ljava/util/Set;".equals(descriptor)) {
+                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_set_of_singleton", arguments)));
+                return true;
             }
-            final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
-            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_set_singleton", arguments)));
-            return true;
+            if ("of".equals(name) && "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;".equals(descriptor)) {
+                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_set_of_pair", arguments)));
+                return true;
+            }
+            return false;
         }
         if ("copyOf".equals(name)) {
             if (!"(Ljava/util/Collection;)Ljava/util/List;".equals(descriptor)) {

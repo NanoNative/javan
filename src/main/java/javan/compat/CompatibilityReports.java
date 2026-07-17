@@ -509,6 +509,7 @@ public final class CompatibilityReports {
             pass("set-copy-of"),
             pass("set-of-empty"),
             pass("set-of-singleton"),
+            pass("set-of-pair"),
             pass("list-of-varargs-gc"),
             pass("owned-buffer-realloc-validation"),
             pass("stringbuilder-setlength-overflow-panic"),
