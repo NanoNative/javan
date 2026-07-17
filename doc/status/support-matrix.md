@@ -9,8 +9,8 @@ External project names do not belong in this matrix; this ledger stays compiler-
 
 | Measure | Count |
 | --- | ---: |
-| rows | 273 |
-| pass | 273 |
+| rows | 274 |
+| pass | 274 |
 | scoped | 0 |
 | target | 0 |
 | rejected | 0 |
@@ -116,6 +116,7 @@ Status mapping:
 | `collection-contains-all` | pass |
 | `collection-remove` | pass |
 | `collection-clear` | pass |
+| `abstractlist-direct-owner-indexed-surface` | pass |
 | `list-add-all-at` | pass |
 | `list-index-of` | pass |
 | `list-last-index-of` | pass |

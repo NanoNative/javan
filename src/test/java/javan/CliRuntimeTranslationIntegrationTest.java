@@ -415,6 +415,41 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void abstractListDirectOwnerIndexedSurfaceBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("abstractlist-direct-owner-indexed-surface");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.AbstractList;
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final AbstractList<String> values = new ArrayList<>(List.of("left", "right"));
+                    values.add(1, "middle-0");
+                    System.out.println(values.addAll(2, List.of("middle-1", "middle-2")));
+                    System.out.println(values.get(2));
+                    System.out.println(values.set(2, "updated"));
+                    System.out.println(values.remove(1));
+                    System.out.println(values.size());
+                    System.out.println(values.get(1));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/abstractlist-direct-owner-indexed-surface").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\nmiddle-1\nmiddle-1\nmiddle-0\n4\nupdated\n");
+    }
+
+    @Test
     void collectionAddAllBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("collection-add-all");
         writeJava(project, "com.acme.Main", """

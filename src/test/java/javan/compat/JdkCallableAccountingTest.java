@@ -442,6 +442,42 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksAbstractListAddAtAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/AbstractList", "add", "(ILjava/lang/Object;)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksAbstractListAddAllAtAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/AbstractList", "addAll", "(ILjava/util/Collection;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksAbstractListGetAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/AbstractList", "get", "(I)Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksAbstractListSizeAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/AbstractList", "size", "()I")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksAbstractListRemoveAtAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/AbstractList", "remove", "(I)Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksAbstractListSetAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/AbstractList", "set", "(ILjava/lang/Object;)Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksArrayListIteratorAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "iterator", "()Ljava/util/Iterator;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

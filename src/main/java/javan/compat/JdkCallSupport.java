@@ -458,6 +458,12 @@ public final class JdkCallSupport {
         runtime("ArrayList.removeFirst", "java/util/ArrayList", "removeFirst", "()Ljava/lang/Object;"),
         runtime("ArrayList.iterator", "java/util/ArrayList", "iterator", "()Ljava/util/Iterator;"),
         runtime("ArrayList.toArray", "java/util/ArrayList", "toArray", "()[Ljava/lang/Object;"),
+        runtime("AbstractList.add", "java/util/AbstractList", "add", "(ILjava/lang/Object;)V"),
+        runtime("AbstractList.addAll", "java/util/AbstractList", "addAll", "(ILjava/util/Collection;)Z"),
+        runtime("AbstractList.get", "java/util/AbstractList", "get", "(I)Ljava/lang/Object;"),
+        runtime("AbstractList.size", "java/util/AbstractList", "size", "()I"),
+        runtime("AbstractList.remove", "java/util/AbstractList", "remove", "(I)Ljava/lang/Object;"),
+        runtime("AbstractList.set", "java/util/AbstractList", "set", "(ILjava/lang/Object;)Ljava/lang/Object;"),
         runtime("List.of", "java/util/List", "of", "()Ljava/util/List;"),
         runtime("List.of", "java/util/List", "of", "(Ljava/lang/Object;)Ljava/util/List;"),
         runtime("List.of", "java/util/List", "of", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;"),
@@ -843,6 +849,9 @@ public final class JdkCallSupport {
         if ("java/util/ArrayList".equals(methodRef.owner())) {
             return isSupportedArrayListCall(methodRef.name(), methodRef.descriptor());
         }
+        if ("java/util/AbstractList".equals(methodRef.owner())) {
+            return isSupportedAbstractListCall(methodRef.name(), methodRef.descriptor());
+        }
         if ("java/util/Collection".equals(methodRef.owner())) {
             return isSupportedCollectionCall(methodRef.name(), methodRef.descriptor());
         }
@@ -1023,6 +1032,28 @@ public final class JdkCallSupport {
         }
         if ("toArray".equals(name)) {
             return "()[Ljava/lang/Object;".equals(descriptor);
+        }
+        return false;
+    }
+
+    private static boolean isSupportedAbstractListCall(final String name, final String descriptor) {
+        if ("add".equals(name)) {
+            return "(ILjava/lang/Object;)V".equals(descriptor);
+        }
+        if ("addAll".equals(name)) {
+            return "(ILjava/util/Collection;)Z".equals(descriptor);
+        }
+        if ("get".equals(name)) {
+            return "(I)Ljava/lang/Object;".equals(descriptor);
+        }
+        if ("size".equals(name)) {
+            return "()I".equals(descriptor);
+        }
+        if ("remove".equals(name)) {
+            return "(I)Ljava/lang/Object;".equals(descriptor);
+        }
+        if ("set".equals(name)) {
+            return "(ILjava/lang/Object;)Ljava/lang/Object;".equals(descriptor);
         }
         return false;
     }
@@ -1630,6 +1661,9 @@ public final class JdkCallSupport {
             return true;
         }
         if ("java/util/ArrayList".equals(owner)) {
+            return true;
+        }
+        if ("java/util/AbstractList".equals(owner)) {
             return true;
         }
         if ("java/util/Collection".equals(owner)) {

@@ -4123,6 +4123,32 @@ final class BytecodeToIRInvokeSupport {
                 return true;
             }
         }
+        if ("java/util/AbstractList".equals(methodRef.owner())) {
+            if ("add(ILjava/lang/Object;)V".equals(signature)) {
+                instructions.add(IrInstruction.callStaticVoid("javan_arraylist_add_at", List.of(receiver, arguments.get(0), arguments.get(1))));
+                return true;
+            }
+            if ("addAll(ILjava/util/Collection;)Z".equals(signature)) {
+                pushIntCall(instructions, stack, localDeclarations, "javan_arraylist_add_all_at", List.of(receiver, arguments.get(0), arguments.get(1)));
+                return true;
+            }
+            if ("get(I)Ljava/lang/Object;".equals(signature)) {
+                pushObjectCall(instructions, stack, localDeclarations, "javan_list_get", List.of(receiver, arguments.getFirst()));
+                return true;
+            }
+            if ("size()I".equals(signature)) {
+                pushIntCall(instructions, stack, localDeclarations, "javan_list_size", List.of(receiver));
+                return true;
+            }
+            if ("remove(I)Ljava/lang/Object;".equals(signature)) {
+                pushObjectCall(instructions, stack, localDeclarations, "javan_arraylist_remove_at", List.of(receiver, arguments.getFirst()));
+                return true;
+            }
+            if ("set(ILjava/lang/Object;)Ljava/lang/Object;".equals(signature)) {
+                pushObjectCall(instructions, stack, localDeclarations, "javan_arraylist_set", List.of(receiver, arguments.get(0), arguments.get(1)));
+                return true;
+            }
+        }
         if (isJdkListOrCollection(methodRef.owner())) {
             if ("add(Ljava/lang/Object;)Z".equals(signature)) {
                 stack.add(StackValue.intExpression(IrExpression.intCall("javan_collection_add", List.of(receiver, arguments.getFirst()))));
@@ -4488,6 +4514,9 @@ final class BytecodeToIRInvokeSupport {
     }
     static boolean isJdkCollectionOwner(final String owner) {
         if (isJdkListOrCollection(owner)) {
+            return true;
+        }
+        if ("java/util/AbstractList".equals(owner)) {
             return true;
         }
         if (isJdkSetOwner(owner)) {

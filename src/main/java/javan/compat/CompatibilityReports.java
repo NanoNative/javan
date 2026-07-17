@@ -510,6 +510,7 @@ public final class CompatibilityReports {
             pass("collection-contains-all"),
             pass("collection-remove"),
             pass("collection-clear"),
+            pass("abstractlist-direct-owner-indexed-surface"),
             pass("list-add-all-at"),
             pass("list-index-of"),
             pass("list-last-index-of"),
