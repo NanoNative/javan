@@ -304,7 +304,7 @@ public final class ReachabilityAnalyzer {
             ));
             return;
         }
-        if (isMapComputeIfPresent(target) || isMapMerge(target)) {
+        if (isMapComputeIfPresent(target) || isMapCompute(target) || isMapMerge(target)) {
             final MethodRef biFunctionApply = new MethodRef("java/util/function/BiFunction", "apply", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;");
             final List<EntryPoint> targetMethods = interfaceTargets(classes, biFunctionApply, entryPoints);
             if (!targetMethods.isEmpty()) {
@@ -320,10 +320,14 @@ public final class ReachabilityAnalyzer {
                 current.className(),
                 current.methodName() + current.descriptor(),
                 target.display(),
-                isMapMerge(target)
+                isMapCompute(target)
+                    ? "Map.compute requires either a closed-world BiFunction implementation class or a supported materialized BiFunction lambda target."
+                    : isMapMerge(target)
                     ? "Map.merge requires either a closed-world BiFunction implementation class or a supported materialized BiFunction lambda target."
                     : "Map.computeIfPresent requires either a closed-world BiFunction implementation class or a supported materialized BiFunction lambda target.",
-                isMapMerge(target)
+                isMapCompute(target)
+                    ? "Provide a reachable BiFunction implementation class or keep this exact map compute flow on the JVM until broader receiver support lands."
+                    : isMapMerge(target)
                     ? "Provide a reachable BiFunction implementation class or keep this exact map merge flow on the JVM until broader receiver support lands."
                     : "Provide a reachable BiFunction implementation class or keep this exact map compute-if-present flow on the JVM until broader receiver support lands."
             ));
@@ -630,8 +634,18 @@ public final class ReachabilityAnalyzer {
         return "java/util/Map".equals(target.owner())
             || "java/util/HashMap".equals(target.owner())
             || "java/util/LinkedHashMap".equals(target.owner())
-            || "java/util/TreeMap".equals(target.owner())
-            || "java/util/concurrent/ConcurrentHashMap".equals(target.owner());
+            || "java/util/TreeMap".equals(target.owner());
+    }
+
+    private static boolean isMapCompute(final MethodRef target) {
+        if (!"compute".equals(target.name())
+            || !"(Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;".equals(target.descriptor())) {
+            return false;
+        }
+        return "java/util/Map".equals(target.owner())
+            || "java/util/HashMap".equals(target.owner())
+            || "java/util/LinkedHashMap".equals(target.owner())
+            || "java/util/TreeMap".equals(target.owner());
     }
 
     private static void enqueueClassInitializer(

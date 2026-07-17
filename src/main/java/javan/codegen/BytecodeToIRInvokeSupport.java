@@ -4599,6 +4599,23 @@ final class BytecodeToIRInvokeSupport {
                 stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
                 return true;
             }
+            if ("compute(Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;".equals(signature)) {
+                final String resultLocal = lowerMapComputeCall(
+                    classes,
+                    classFile,
+                    method,
+                    instruction,
+                    instructions,
+                    dispatches,
+                    materializedLambdaMethods,
+                    localDeclarations,
+                    receiver,
+                    arguments.get(0),
+                    arguments.get(1)
+                );
+                stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
+                return true;
+            }
             if ("merge(Ljava/lang/Object;Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;".equals(signature)) {
                 final String resultLocal = lowerMapMergeCall(
                     classes,
@@ -4910,6 +4927,78 @@ final class BytecodeToIRInvokeSupport {
             IrExpression.objectCall("javan_map_remove", List.of(map, key))
         ));
         instructions.add(IrInstruction.assignObject(resultLocal, IrExpression.objectNull()));
+        instructions.add(IrInstruction.label(endLabel));
+        return resultLocal;
+    }
+
+    private static String lowerMapComputeCall(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final Map<String, IrDispatch> dispatches,
+        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<Integer, IrLocal> localDeclarations,
+        final IrExpression map,
+        final IrExpression key,
+        final IrExpression biFunction
+    ) {
+        final String existingLocal = newObjectLocal(localDeclarations);
+        final String hasKeyLocal = newIntLocal(localDeclarations);
+        final String resultLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(
+            existingLocal,
+            IrExpression.objectCall("javan_map_get", List.of(map, key))
+        ));
+        instructions.add(IrInstruction.assignInt(
+            hasKeyLocal,
+            IrExpression.intCall("javan_map_contains_key", List.of(map, key))
+        ));
+        final String computedLocal = newObjectLocal(localDeclarations);
+        lowerBiFunctionApplyCall(
+            classes,
+            classFile,
+            method,
+            instruction,
+            instructions,
+            dispatches,
+            materializedLambdaMethods,
+            biFunction,
+            key,
+            IrExpression.objectLocal(existingLocal),
+            computedLocal
+        );
+        final String storeLabel = "label_map_compute_store_" + instruction.offset() + "_" + localDeclarations.size();
+        final String removeLabel = "label_map_compute_remove_" + instruction.offset() + "_" + localDeclarations.size();
+        final String endLabel = "label_map_compute_end_" + instruction.offset() + "_" + localDeclarations.size();
+        instructions.add(IrInstruction.branchIf(
+            storeLabel,
+            IrExpression.objectComparison("!=", IrExpression.objectLocal(computedLocal), IrExpression.objectNull())
+        ));
+        instructions.add(IrInstruction.assignObject(resultLocal, IrExpression.objectNull()));
+        instructions.add(IrInstruction.branchIf(
+            removeLabel,
+            IrExpression.objectComparison("!=", IrExpression.objectLocal(existingLocal), IrExpression.objectNull())
+        ));
+        instructions.add(IrInstruction.branchIf(
+            removeLabel,
+            IrExpression.intComparison("!=", IrExpression.intLocal(hasKeyLocal), IrExpression.intLiteral(0))
+        ));
+        instructions.add(IrInstruction.jump(endLabel));
+        instructions.add(IrInstruction.label(storeLabel));
+        instructions.add(IrInstruction.callStaticVoid(
+            "javan_map_put",
+            List.of(map, key, IrExpression.objectLocal(computedLocal))
+        ));
+        instructions.add(IrInstruction.assignObject(resultLocal, IrExpression.objectLocal(computedLocal)));
+        instructions.add(IrInstruction.jump(endLabel));
+        instructions.add(IrInstruction.label(removeLabel));
+        final String removedLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(
+            removedLocal,
+            IrExpression.objectCall("javan_map_remove", List.of(map, key))
+        ));
         instructions.add(IrInstruction.label(endLabel));
         return resultLocal;
     }

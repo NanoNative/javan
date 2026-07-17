@@ -4316,6 +4316,168 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void mapComputeConcreteImplementationBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-compute-concrete");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashMap;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final HashMap<Object, Object> values = new HashMap<>();
+                    values.put("demo", "value");
+                    System.out.println(values.compute("demo", new Joiner()));
+                    System.out.println(values.get("demo"));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Joiner", """
+            package com.acme;
+
+            import java.util.function.BiFunction;
+
+            public final class Joiner implements BiFunction<Object, Object, Object> {
+                @Override
+                public Object apply(final Object key, final Object value) {
+                    return key + ":" + value;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-compute-concrete").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("demo:value\ndemo:value\n");
+    }
+
+    @Test
+    void mapComputeMissingKeyBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-compute-missing");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, String> values = new HashMap<>();
+                    System.out.println(values.compute("demo", (key, value) -> key + ":" + value));
+                    System.out.println(values.get("demo"));
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-compute-missing").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("demo:null\ndemo:null\n1\n");
+    }
+
+    @Test
+    void mapComputeNullExistingValueBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-compute-null-existing");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, String> values = new HashMap<>();
+                    values.put("demo", null);
+                    System.out.println(values.compute("demo", (key, value) -> key + ":" + value));
+                    System.out.println(values.get("demo"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-compute-null-existing").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("demo:null\ndemo:null\n");
+    }
+
+    @Test
+    void mapComputeNullRemapRemovesExistingEntryBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-compute-null-remap-existing");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, String> values = new HashMap<>();
+                    values.put("demo", "value");
+                    System.out.println(values.compute("demo", (key, value) -> null));
+                    System.out.println(values.containsKey("demo"));
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-compute-null-remap-existing").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("null\nfalse\n0\n");
+    }
+
+    @Test
+    void mapComputeNullRemapLeavesMissingKeyAbsentBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-compute-null-remap-missing");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, String> values = new HashMap<>();
+                    System.out.println(values.compute("demo", (key, value) -> null));
+                    System.out.println(values.containsKey("demo"));
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-compute-null-remap-missing").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("null\nfalse\n0\n");
+    }
+
+    @Test
     void mapForEachLambdaBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("map-foreach-lambda");
         writeJava(project, "com.acme.Main", """

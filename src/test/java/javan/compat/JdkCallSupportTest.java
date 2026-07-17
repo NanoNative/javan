@@ -853,6 +853,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void mapComputeIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Map",
+            "compute",
+            "(Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void hashMapComputeIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/HashMap",
+            "compute",
+            "(Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
     void mapMergeIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Map",

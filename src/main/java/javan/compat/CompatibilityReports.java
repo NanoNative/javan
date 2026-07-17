@@ -603,6 +603,7 @@ public final class CompatibilityReports {
             pass("map-foreach"),
             pass("map-clear"),
             pass("map-put-all"),
+            pass("map-compute"),
             pass("map-merge"),
             pass("map-replace"),
             pass("map-replace-key-value"),

@@ -1870,6 +1870,18 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksMapComputeAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "compute", "(Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksHashMapComputeAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/HashMap", "compute", "(Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksMapMergeAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "merge", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
