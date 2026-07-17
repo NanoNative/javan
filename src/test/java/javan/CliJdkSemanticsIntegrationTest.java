@@ -3110,6 +3110,381 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void mapOfDecupleBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-of-decuple");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, Integer> values = Map.of("a", 1, "b", 2, "c", 3, "d", 4, "e", 5, "f", 6, "g", 7, "h", 8, "i", 9, "j", 10);
+                    System.out.println(values.isEmpty());
+                    System.out.println(values.size());
+                    System.out.println(values.containsKey("a"));
+                    System.out.println(values.containsKey("b"));
+                    System.out.println(values.containsKey("c"));
+                    System.out.println(values.containsKey("d"));
+                    System.out.println(values.containsKey("e"));
+                    System.out.println(values.containsKey("f"));
+                    System.out.println(values.containsKey("g"));
+                    System.out.println(values.containsKey("h"));
+                    System.out.println(values.containsKey("i"));
+                    System.out.println(values.containsKey("j"));
+                    System.out.println(values.containsKey("missing"));
+                    System.out.println(values.get("a"));
+                    System.out.println(values.get("b"));
+                    System.out.println(values.get("c"));
+                    System.out.println(values.get("d"));
+                    System.out.println(values.get("e"));
+                    System.out.println(values.get("f"));
+                    System.out.println(values.get("g"));
+                    System.out.println(values.get("h"));
+                    System.out.println(values.get("i"));
+                    System.out.println(values.get("j"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-of-decuple").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("false\n10\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\nfalse\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateFirstSecondFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-first-second", "Map.of(\"same\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateFirstThirdFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-first-third", "Map.of(\"same\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateFirstFourthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-first-fourth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateFirstFifthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-first-fifth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateFirstSixthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-first-sixth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateFirstSeventhFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-first-seventh", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateFirstEighthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-first-eighth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateFirstNinthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-first-ninth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"same\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateFirstTenthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-first-tenth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"same\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateSecondThirdFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-second-third", "Map.of(\"a\", 1, \"same\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateSecondFourthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-second-fourth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateSecondFifthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-second-fifth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateSecondSixthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-second-sixth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateSecondSeventhFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-second-seventh", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateSecondEighthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-second-eighth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateSecondNinthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-second-ninth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"same\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateSecondTenthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-second-tenth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"same\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateThirdFourthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-third-fourth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateThirdFifthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-third-fifth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateThirdSixthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-third-sixth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateThirdSeventhFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-third-seventh", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateThirdEighthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-third-eighth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateThirdNinthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-third-ninth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"same\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateThirdTenthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-third-tenth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"same\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateFourthFifthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-fourth-fifth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateFourthSixthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-fourth-sixth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateFourthSeventhFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-fourth-seventh", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateFourthEighthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-fourth-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateFourthNinthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-fourth-ninth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"same\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateFourthTenthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-fourth-tenth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"same\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateFifthSixthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-fifth-sixth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateFifthSeventhFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-fifth-seventh", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateFifthEighthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-fifth-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateFifthNinthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-fifth-ninth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"same\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateFifthTenthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-fifth-tenth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"same\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateSixthSeventhFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-sixth-seventh", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"same\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateSixthEighthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-sixth-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"same\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateSixthNinthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-sixth-ninth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"same\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateSixthTenthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-sixth-tenth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"same\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateSeventhEighthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-seventh-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"same\", 8, \"i\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateSeventhNinthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-seventh-ninth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"same\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateSeventhTenthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-seventh-tenth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"i\", 9, \"same\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateEighthNinthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-eighth-ninth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"same\", 9, \"j\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateEighthTenthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-eighth-tenth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"i\", 9, \"same\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleDuplicateNinthTenthFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-duplicate-ninth-tenth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"same\", 9, \"same\", 10);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfDecupleNullFirstKeyFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-first-key", "Map.of((String) null, 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfDecupleNullFirstValueFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-first-value", "Map.of(\"a\", (Integer) null, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfDecupleNullSecondKeyFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-second-key", "Map.of(\"a\", 1, (String) null, 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfDecupleNullSecondValueFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-second-value", "Map.of(\"a\", 1, \"b\", (Integer) null, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfDecupleNullThirdKeyFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-third-key", "Map.of(\"a\", 1, \"b\", 2, (String) null, 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfDecupleNullThirdValueFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-third-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", (Integer) null, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfDecupleNullFourthKeyFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-fourth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, (String) null, 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfDecupleNullFourthValueFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-fourth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", (Integer) null, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfDecupleNullFifthKeyFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-fifth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, (String) null, 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfDecupleNullFifthValueFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-fifth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", (Integer) null, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfDecupleNullSixthKeyFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-sixth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, (String) null, 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfDecupleNullSixthValueFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-sixth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", (Integer) null, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", 10);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfDecupleNullSeventhKeyFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-seventh-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, (String) null, 7, \"h\", 8, \"i\", 9, \"j\", 10);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfDecupleNullSeventhValueFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-seventh-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", (Integer) null, \"h\", 8, \"i\", 9, \"j\", 10);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfDecupleNullEighthKeyFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-eighth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, (String) null, 8, \"i\", 9, \"j\", 10);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfDecupleNullEighthValueFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-eighth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", (Integer) null, \"i\", 9, \"j\", 10);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfDecupleNullNinthKeyFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-ninth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, (String) null, 9, \"j\", 10);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfDecupleNullNinthValueFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-ninth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", (Integer) null, \"j\", 10);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfDecupleNullTenthKeyFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-tenth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, (String) null, 10);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfDecupleNullTenthValueFailsAtRuntime() throws Exception {
+        assertMapOfDecupleFailureAtRuntime("map-of-decuple-null-tenth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9, \"j\", (Integer) null);", "null Map.of entry");
+    }
+
+    @Test
     void setOfEmptyBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("set-of-empty");
         writeJava(project, "com.acme.Main", """
@@ -5489,6 +5864,36 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     private void assertMapOfNonupleFailureAtRuntime(
+        final String projectName,
+        final String statement,
+        final String expectedMessage
+    ) throws Exception {
+        final Path project = project(projectName);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    %s
+                }
+            }
+            """.formatted(statement));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/" + projectName).toString()));
+
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains(expectedMessage);
+    }
+
+    private void assertMapOfDecupleFailureAtRuntime(
         final String projectName,
         final String statement,
         final String expectedMessage

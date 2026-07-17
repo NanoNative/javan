@@ -298,6 +298,7 @@ final class RuntimeHeaderFile {
         void* javan_map_septuple(void* first_key, void* first_value, void* second_key, void* second_value, void* third_key, void* third_value, void* fourth_key, void* fourth_value, void* fifth_key, void* fifth_value, void* sixth_key, void* sixth_value, void* seventh_key, void* seventh_value);
         void* javan_map_octuple(void* first_key, void* first_value, void* second_key, void* second_value, void* third_key, void* third_value, void* fourth_key, void* fourth_value, void* fifth_key, void* fifth_value, void* sixth_key, void* sixth_value, void* seventh_key, void* seventh_value, void* eighth_key, void* eighth_value);
         void* javan_map_nonuple(void* first_key, void* first_value, void* second_key, void* second_value, void* third_key, void* third_value, void* fourth_key, void* fourth_value, void* fifth_key, void* fifth_value, void* sixth_key, void* sixth_value, void* seventh_key, void* seventh_value, void* eighth_key, void* eighth_value, void* ninth_key, void* ninth_value);
+        void* javan_map_decuple(void* first_key, void* first_value, void* second_key, void* second_value, void* third_key, void* third_value, void* fourth_key, void* fourth_value, void* fifth_key, void* fifth_value, void* sixth_key, void* sixth_value, void* seventh_key, void* seventh_value, void* eighth_key, void* eighth_value, void* ninth_key, void* ninth_value, void* tenth_key, void* tenth_value);
         void* javan_map_key_set(void* map);
         void* javan_map_entry_set(void* map);
         void* javan_map_entry_get_key(void* value);
