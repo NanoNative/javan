@@ -367,6 +367,33 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void arrayListSetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/ArrayList",
+            "set",
+            "(ILjava/lang/Object;)Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void arrayListRemoveLastIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/ArrayList",
+            "removeLast",
+            "()Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void arrayListAddFirstIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/ArrayList",
+            "addFirst",
+            "(Ljava/lang/Object;)V"
+        ))).isTrue();
+    }
+
+    @Test
     void arrayListIteratorIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/ArrayList",
@@ -1518,6 +1545,15 @@ final class JdkCallSupportTest {
             "java/util/ArrayList",
             "getFirst",
             "()Ljava/lang/Object;"
+        ))).containsExactly("collections");
+    }
+
+    @Test
+    void arrayListSetRequiresCollectionsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/ArrayList",
+            "set",
+            "(ILjava/lang/Object;)Ljava/lang/Object;"
         ))).containsExactly("collections");
     }
 

@@ -1589,6 +1589,94 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void arrayListDirectOwnerSetBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("arraylist-direct-owner-set");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final ArrayList<String> values = new ArrayList<>(List.of("old", "right"));
+                    System.out.println(values.set(0, "left"));
+                    System.out.println(values.getFirst());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/arraylist-direct-owner-set").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("old\nleft\n");
+    }
+
+    @Test
+    void arrayListDirectOwnerRemoveLastBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("arraylist-direct-owner-remove-last");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final ArrayList<String> values = new ArrayList<>(List.of("left", "right"));
+                    System.out.println(values.removeLast());
+                    System.out.println(values.getLast());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/arraylist-direct-owner-remove-last").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("right\nleft\n");
+    }
+
+    @Test
+    void arrayListDirectOwnerAddFirstBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("arraylist-direct-owner-add-first");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final ArrayList<String> values = new ArrayList<>(List.of("right"));
+                    values.addFirst("left");
+                    System.out.println(values.getFirst());
+                    System.out.println(values.getLast());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/arraylist-direct-owner-add-first").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("left\nright\n");
+    }
+
+    @Test
     void hashSetDirectOwnerReadSurfaceBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("hashset-direct-owner-read-surface");
         writeJava(project, "com.acme.Main", """
