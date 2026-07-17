@@ -114,8 +114,11 @@ Status mapping:
 | `set-contains-all` | pass |
 | `hashset-collection-constructor` | pass |
 | `linkedhashset-collection-constructor` | pass |
+| `hashmap-capacity-constructor` | pass |
+| `linkedhashmap-capacity-constructor` | pass |
 | `hashmap-map-constructor` | pass |
 | `linkedhashmap-map-constructor` | pass |
+| `concurrenthashmap-capacity-constructor` | pass |
 | `collection-to-array` | pass |
 | `list-to-array` | pass |
 | `set-to-array` | pass |

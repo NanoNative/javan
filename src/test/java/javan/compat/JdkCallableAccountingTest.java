@@ -310,6 +310,24 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksHashMapCapacityConstructorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/HashMap", "<init>", "(I)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksLinkedHashMapCapacityConstructorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/LinkedHashMap", "<init>", "(I)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksConcurrentHashMapCapacityConstructorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/ConcurrentHashMap", "<init>", "(I)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksCollectionsEmptyListAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Collections", "emptyList", "()Ljava/util/List;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

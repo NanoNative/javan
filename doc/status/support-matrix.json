@@ -11,8 +11,8 @@
     "rule": "done = supported variants + rejected variants; unknown leftovers must be 0 for a release-gated JDK"
   },
   "counts": {
-    "rows": 212,
-    "pass": 212,
+    "rows": 215,
+    "pass": 215,
     "scoped": 0,
     "target": 0,
     "rejected": 0
@@ -106,8 +106,11 @@
     {"feature": "set-contains-all", "jdk25": "pass"},
     {"feature": "hashset-collection-constructor", "jdk25": "pass"},
     {"feature": "linkedhashset-collection-constructor", "jdk25": "pass"},
+    {"feature": "hashmap-capacity-constructor", "jdk25": "pass"},
+    {"feature": "linkedhashmap-capacity-constructor", "jdk25": "pass"},
     {"feature": "hashmap-map-constructor", "jdk25": "pass"},
     {"feature": "linkedhashmap-map-constructor", "jdk25": "pass"},
+    {"feature": "concurrenthashmap-capacity-constructor", "jdk25": "pass"},
     {"feature": "collection-to-array", "jdk25": "pass"},
     {"feature": "list-to-array", "jdk25": "pass"},
     {"feature": "set-to-array", "jdk25": "pass"},
