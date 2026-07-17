@@ -550,9 +550,17 @@ public final class JdkCallSupport {
         runtime("Map.isEmpty", "java/util/Map", "isEmpty", "()Z"),
         runtime("Map.keySet", "java/util/Map", "keySet", "()Ljava/util/Set;"),
         runtime("Map.entrySet", "java/util/Map", "entrySet", "()Ljava/util/Set;"),
+        runtime("HashMap.keySet", "java/util/HashMap", "keySet", "()Ljava/util/Set;"),
+        runtime("HashMap.entrySet", "java/util/HashMap", "entrySet", "()Ljava/util/Set;"),
         runtime("HashMap.isEmpty", "java/util/HashMap", "isEmpty", "()Z"),
+        runtime("LinkedHashMap.keySet", "java/util/LinkedHashMap", "keySet", "()Ljava/util/Set;"),
+        runtime("LinkedHashMap.entrySet", "java/util/LinkedHashMap", "entrySet", "()Ljava/util/Set;"),
         runtime("LinkedHashMap.isEmpty", "java/util/LinkedHashMap", "isEmpty", "()Z"),
+        runtime("TreeMap.keySet", "java/util/TreeMap", "keySet", "()Ljava/util/Set;"),
+        runtime("TreeMap.entrySet", "java/util/TreeMap", "entrySet", "()Ljava/util/Set;"),
         runtime("TreeMap.isEmpty", "java/util/TreeMap", "isEmpty", "()Z"),
+        runtime("ConcurrentHashMap.keySet", "java/util/concurrent/ConcurrentHashMap", "keySet", "()Ljava/util/Set;"),
+        runtime("ConcurrentHashMap.entrySet", "java/util/concurrent/ConcurrentHashMap", "entrySet", "()Ljava/util/Set;"),
         runtime("ConcurrentHashMap.isEmpty", "java/util/concurrent/ConcurrentHashMap", "isEmpty", "()Z"),
         runtime("Map.values", "java/util/Map", "values", "()Ljava/util/Collection;"),
         runtime("HashMap.values", "java/util/HashMap", "values", "()Ljava/util/Collection;"),
@@ -916,6 +924,9 @@ public final class JdkCallSupport {
         }
         if ("containsKey".equals(name)) {
             return "(Ljava/lang/Object;)Z".equals(descriptor);
+        }
+        if ("keySet".equals(name) || "entrySet".equals(name)) {
+            return "()Ljava/util/Set;".equals(descriptor);
         }
         if ("size".equals(name)) {
             return "()I".equals(descriptor);

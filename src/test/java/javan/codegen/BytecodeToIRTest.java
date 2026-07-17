@@ -9829,6 +9829,42 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersHashMapKeySetToRuntimeHelper() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/HashMap;)Ljava/util/Set;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/util/HashMap", "keySet", "()Ljava/util/Set;")),
+            plain(4, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall("javan_map_key_set", List.of(IrExpression.objectLocal("arg0"))))
+        );
+    }
+
+    @Test
+    void lowersHashMapEntrySetToRuntimeHelper() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/HashMap;)Ljava/util/Set;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/util/HashMap", "entrySet", "()Ljava/util/Set;")),
+            plain(4, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall("javan_map_entry_set", List.of(IrExpression.objectLocal("arg0"))))
+        );
+    }
+
+    @Test
     void lowerAtomicBooleanInstanceCallRejectsUnsupportedMethodShape() {
         assertThat(BytecodeToIRInvokeSupport.lowerAtomicBooleanInstanceCall(
             classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of()),

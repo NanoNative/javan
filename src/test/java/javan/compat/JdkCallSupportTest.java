@@ -1805,6 +1805,78 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void hashMapKeySetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/HashMap",
+            "keySet",
+            "()Ljava/util/Set;"
+        ))).isTrue();
+    }
+
+    @Test
+    void linkedHashMapKeySetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/LinkedHashMap",
+            "keySet",
+            "()Ljava/util/Set;"
+        ))).isTrue();
+    }
+
+    @Test
+    void treeMapKeySetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/TreeMap",
+            "keySet",
+            "()Ljava/util/Set;"
+        ))).isTrue();
+    }
+
+    @Test
+    void concurrentHashMapKeySetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/ConcurrentHashMap",
+            "keySet",
+            "()Ljava/util/Set;"
+        ))).isTrue();
+    }
+
+    @Test
+    void hashMapEntrySetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/HashMap",
+            "entrySet",
+            "()Ljava/util/Set;"
+        ))).isTrue();
+    }
+
+    @Test
+    void linkedHashMapEntrySetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/LinkedHashMap",
+            "entrySet",
+            "()Ljava/util/Set;"
+        ))).isTrue();
+    }
+
+    @Test
+    void treeMapEntrySetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/TreeMap",
+            "entrySet",
+            "()Ljava/util/Set;"
+        ))).isTrue();
+    }
+
+    @Test
+    void concurrentHashMapEntrySetIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/ConcurrentHashMap",
+            "entrySet",
+            "()Ljava/util/Set;"
+        ))).isTrue();
+    }
+
+    @Test
     void typedThreadBuilderNameCounterRequiresThreadsRuntimeModule() {
         assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
             "java/lang/Thread$Builder$OfVirtual",

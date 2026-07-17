@@ -559,6 +559,54 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksHashMapKeySetAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/HashMap", "keySet", "()Ljava/util/Set;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksLinkedHashMapKeySetAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/LinkedHashMap", "keySet", "()Ljava/util/Set;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksTreeMapKeySetAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/TreeMap", "keySet", "()Ljava/util/Set;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksConcurrentHashMapKeySetAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/ConcurrentHashMap", "keySet", "()Ljava/util/Set;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksHashMapEntrySetAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/HashMap", "entrySet", "()Ljava/util/Set;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksLinkedHashMapEntrySetAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/LinkedHashMap", "entrySet", "()Ljava/util/Set;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksTreeMapEntrySetAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/TreeMap", "entrySet", "()Ljava/util/Set;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksConcurrentHashMapEntrySetAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/ConcurrentHashMap", "entrySet", "()Ljava/util/Set;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksClassIsInstanceAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Class", "isInstance", "(Ljava/lang/Object;)Z")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

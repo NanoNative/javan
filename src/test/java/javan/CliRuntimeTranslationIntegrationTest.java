@@ -946,6 +946,72 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void linkedHashMapDirectKeySetBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("linkedhashmap-direct-key-set");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.LinkedHashMap;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final LinkedHashMap<String, String> values = new LinkedHashMap<>();
+                    values.put("left", "1");
+                    values.put("right", "2");
+                    System.out.println(values.keySet().contains("left"));
+                    for (final String key : values.keySet()) {
+                        System.out.println(key);
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/linkedhashmap-direct-key-set").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\nleft\nright\n");
+    }
+
+    @Test
+    void linkedHashMapDirectEntrySetBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("linkedhashmap-direct-entry-set");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.LinkedHashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final LinkedHashMap<String, String> values = new LinkedHashMap<>();
+                    values.put("left", "1");
+                    values.put("right", "2");
+                    for (final Map.Entry<String, String> entry : values.entrySet()) {
+                        System.out.println(entry.getKey() + "=" + entry.getValue());
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/linkedhashmap-direct-entry-set").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("left=1\nright=2\n");
+    }
+
+    @Test
     void mapCopyOfBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("map-copy-of");
         writeJava(project, "com.acme.Main", """

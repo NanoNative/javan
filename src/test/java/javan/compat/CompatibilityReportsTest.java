@@ -76,12 +76,12 @@ final class CompatibilityReportsTest {
         assertThat(summary).contains(
             "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 5, \"leftCallables\": 3, \"coveragePercent\": \"40.0\"}",
             "\"exactJdkCallableAccounting\": {\"supportedCallables\": 2, \"explicitRejectedCallables\": 3, \"doneCallables\": 5, \"unknownCallables\": 0, \"totalCallables\": 5, \"donePercent\": \"100.0\"}",
-            "\"supportRows\": 203",
-            "\"passRows\": 203",
+            "\"supportRows\": 205",
+            "\"passRows\": 205",
             "\"scopedRows\": 0",
             "\"targetRows\": 0",
             "\"rejectedRows\": 0",
-            "\"accountedRows\": 203",
+            "\"accountedRows\": 205",
             "\"unaccountedRows\": 0"
         );
     }
@@ -144,6 +144,8 @@ final class CompatibilityReportsTest {
             "| `map-entry` | pass |",
             "| `map-remove` | pass |",
             "| `map-remove-key-value` | pass |",
+            "| `map-concrete-key-set` | pass |",
+            "| `map-concrete-entry-set` | pass |",
             "| `map-of-singleton` | pass |",
             "| `map-of-pair` | pass |",
             "| `map-of-triple` | pass |",
@@ -281,6 +283,8 @@ final class CompatibilityReportsTest {
             "\"feature\": \"map-entry\"",
             "\"feature\": \"map-remove\"",
             "\"feature\": \"map-remove-key-value\"",
+            "\"feature\": \"map-concrete-key-set\"",
+            "\"feature\": \"map-concrete-entry-set\"",
             "\"feature\": \"map-of-singleton\"",
             "\"feature\": \"map-of-pair\"",
             "\"feature\": \"map-of-triple\"",
