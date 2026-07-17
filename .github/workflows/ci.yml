@@ -131,6 +131,75 @@ jobs:
                   print(f"::notice::JaCoCo {counter_type.lower()} coverage meets soft target {target_ratio:.0%}: {ratio_text}")
           PY
 
+  native-smoke:
+    name: native-smoke (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x64
+            os: ubuntu-24.04
+            sanitizer-scope: full
+          - target: linux-aarch64
+            os: ubuntu-24.04-arm
+            sanitizer-scope: platform-smoke
+          - target: macos-aarch64
+            os: macos-15
+            sanitizer-scope: platform-smoke
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: temurin
+          cache: maven
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.4'
+          cache: false
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@1.96.0
+
+      - name: Verify binding toolchains
+        run: |
+          go version
+          rustc --version
+
+      - name: Install Linux native toolchain
+        if: runner.os == 'Linux'
+        run: |
+          for attempt in 1 2 3; do
+            if sudo apt-get -o Acquire::ForceIPv4=true update \
+              && sudo apt-get -o Acquire::ForceIPv4=true install -y --fix-missing build-essential mingw-w64; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            sleep 15
+          done
+
+      - name: Resolve Maven local repository
+        run: |
+          repo=$(mvn -q help:evaluate -Dexpression=settings.localRepository -DforceStdout | tail -n 1)
+          echo "MAVEN_REPO_LOCAL=$repo" >> "$GITHUB_ENV"
+
+      - name: Install bundled external smoke artifacts
+        run: |
+          sh .github/scripts/install-external-probe-artifacts.sh "$MAVEN_REPO_LOCAL"
+
+      - name: Compile test fixtures
+        run: mvn -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -DskipTests compile test-compile
+
       - name: Verify acceptance suite
         env:
           JAVAN_MAVEN_REPO: ${{ env.MAVEN_REPO_LOCAL }}
@@ -206,6 +275,7 @@ jobs:
     if: "${{ github.event_name == 'push' && github.ref_name == 'main' && !startsWith(github.event.head_commit.message, 'chore: release ') }}"
     needs:
       - verify
+      - native-smoke
       - windows-runtime-smoke
     permissions:
       contents: write
