@@ -501,6 +501,7 @@ public final class CompatibilityReports {
             pass("hashmap-realloc-gc"),
             pass("collections-empty-set"),
             pass("collections-unmodifiable-set"),
+            pass("collections-unmodifiable-list"),
             pass("collections-singleton-set"),
             pass("collections-singleton-list"),
             pass("collections-empty-list"),

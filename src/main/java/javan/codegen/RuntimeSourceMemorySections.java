@@ -3940,6 +3940,7 @@ final class RuntimeSourceMemorySections {
     private static final String SOURCE_HEAP_ALLOC_EXECUTOR = """
         static javan_object_list* javan_list_new_with_capacity(int capacity, int immutable);
         static javan_object_list* javan_list_new_view(javan_object_list* backing, int immutable, int view_flags);
+        static javan_object_list* javan_list_checked(void* value);
         static void javan_list_append_raw(javan_object_list* list, void* value);
         void* javan_virtual_thread_executor_from_factory(void* value);
         void javan_atomic_boolean_init(void* value, int initial_value);
@@ -7481,6 +7482,14 @@ final class RuntimeSourceMemorySections {
             javan_update_runtime_allocation_kind((void*) list, JAVAN_RUNTIME_KIND_OBJECT_LIST);
             javan_root_frame_pop(roots);
             return list;
+        }
+
+        void* javan_list_unmodifiable(void* value) {
+            javan_object_list* list = javan_list_checked(value);
+            if (list->immutable != 0 && list->backing != NULL && (list->view_flags & JAVAN_LIST_VIEW_UNMODIFIABLE) != 0) {
+                return list;
+            }
+            return javan_list_new_view(list, 1, JAVAN_LIST_VIEW_UNMODIFIABLE);
         }
 
         static javan_object_list* javan_list_checked(void* value) {

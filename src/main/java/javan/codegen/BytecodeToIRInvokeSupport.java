@@ -3303,6 +3303,11 @@ final class BytecodeToIRInvokeSupport {
                 stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_of", List.of(IrExpression.intLiteral(0)))));
                 return true;
             }
+            if ("unmodifiableList".equals(name) && "(Ljava/util/List;)Ljava/util/List;".equals(descriptor)) {
+                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_unmodifiable", arguments)));
+                return true;
+            }
             if ("singletonMap".equals(name) && "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;".equals(descriptor)) {
                 final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
                 stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_singleton", arguments)));
