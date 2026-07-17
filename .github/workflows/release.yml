@@ -29,10 +29,6 @@ on:
 permissions:
   contents: write
 
-concurrency:
-  group: release-${{ github.ref_name || github.run_id }}
-  cancel-in-progress: false
-
 jobs:
   plan:
     name: plan release
