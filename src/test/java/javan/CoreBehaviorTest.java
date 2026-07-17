@@ -2005,6 +2005,99 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void reachabilityAcceptsSupplierGetDirectConcreteImplementation() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo(
+                        "supply",
+                        "(Ljava/util/function/Supplier;)Ljava/lang/Object;",
+                        instruction(0, 42, "aload_0"),
+                        instruction(1, 185, "invokeinterface", new MethodRef(
+                            "java/util/function/Supplier",
+                            "get",
+                            "()Ljava/lang/Object;"
+                        )),
+                        instruction(6, 176, "areturn")
+                    )
+                ),
+                "com/acme/FallbackSupplier", classWithMethods(
+                    "com/acme/FallbackSupplier",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/util/function/Supplier"),
+                    methodInfo(
+                        "get",
+                        "()Ljava/lang/Object;",
+                        instruction(0, 1, "aconst_null"),
+                        instruction(1, 176, "areturn")
+                    )
+                )
+            ),
+            List.of(new EntryPoint("com/acme/Main", "supply", "(Ljava/util/function/Supplier;)Ljava/lang/Object;"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+    }
+
+    @Test
+    void reachabilityAcceptsSupplierGetDirectLambda() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of("com/acme/Main", classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                methodInfo(
+                    "supply",
+                    "()Ljava/lang/Object;",
+                    invokeDynamicInstruction(0, new DynamicRef(
+                        "get",
+                        "()Ljava/util/function/Supplier;",
+                        "java/lang/invoke/LambdaMetafactory",
+                        "metafactory",
+                        "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                            + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                            + "Ljava/lang/invoke/CallSite;",
+                        List.of(
+                            "()Ljava/lang/Object;",
+                            "invokestatic com/acme/Main.lambda$get$0:()Ljava/lang/Object;",
+                            "()Ljava/lang/Object;"
+                        ),
+                        List.of(
+                            BootstrapArgument.methodType("()Ljava/lang/Object;"),
+                            BootstrapArgument.methodHandle(
+                                6,
+                                new MethodRef("com/acme/Main", "lambda$get$0", "()Ljava/lang/Object;")
+                            ),
+                            BootstrapArgument.methodType("()Ljava/lang/Object;")
+                        )
+                    )),
+                    instruction(1, 185, "invokeinterface", new MethodRef(
+                        "java/util/function/Supplier",
+                        "get",
+                        "()Ljava/lang/Object;"
+                    )),
+                    instruction(6, 176, "areturn")
+                ),
+                methodInfo(
+                    "lambda$get$0",
+                    "()Ljava/lang/Object;",
+                    instruction(0, 1, "aconst_null"),
+                    instruction(1, 176, "areturn")
+                )
+            )),
+            List.of(new EntryPoint("com/acme/Main", "supply", "()Ljava/lang/Object;"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+    }
+
+    @Test
     void reachabilityResolvesSpecialNonConstructorCall() {
         final CallGraph graph = new ReachabilityAnalyzer().analyze(
             Map.of(

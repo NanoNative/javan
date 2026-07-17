@@ -1591,6 +1591,71 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersDirectSupplierGetMaterializedLambdaToDirectLambdaCall() {
+        final EntryPoint entryPoint = new EntryPoint("com/acme/Main", "supplyValue", "()Ljava/lang/Object;");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    directSupplierGetLambdaMethod(),
+                    directSupplierGetLambdaImplementationMethod()
+                ))
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("supplyValue")).singleElement().satisfies(function -> {
+            assertThat(function.locals()).isEmpty();
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.returnObject(IrExpression.objectCall(
+                    symbol("com/acme/Main", "lambda$get$0", "()Ljava/lang/Object;"),
+                    List.of()
+                ))
+            );
+        });
+    }
+
+    @Test
+    void lowersDirectSupplierGetConcreteImplementationToDirectCall() {
+        final EntryPoint entryPoint = new EntryPoint(
+            "com/acme/Main",
+            "supplyValueNonLambda",
+            "(Ljava/util/function/Supplier;)Ljava/lang/Object;"
+        );
+        final EntryPoint supplierEntry = new EntryPoint("com/acme/FallbackSupplier", "get", "()Ljava/lang/Object;");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    directSupplierGetConcreteMethod()
+                )),
+                "com/acme/FallbackSupplier",
+                classFile(
+                    "com/acme/FallbackSupplier",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/util/function/Supplier"),
+                    List.of(),
+                    List.of(supplierGetImplementationMethod())
+                )
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint, supplierEntry), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("supplyValueNonLambda")).singleElement().satisfies(function -> {
+            assertThat(function.locals()).isEmpty();
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.returnObject(IrExpression.objectCall(
+                    symbol("com/acme/FallbackSupplier", "get", "()Ljava/lang/Object;"),
+                    List.of(IrExpression.objectLocal("arg0"))
+                ))
+            );
+        });
+    }
+
+    @Test
     void rejectsOptionalMapCapturedLambdaWithWrongImplementationArity() {
         assertThatThrownBy(() -> lowerMain(optionalCapturedMapWrongArityLambdaMethod()))
             .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
@@ -26805,6 +26870,53 @@ final class BytecodeToIRTest {
         );
     }
 
+    private static MethodInfo directSupplierGetLambdaMethod() {
+        return method(
+            0x0008,
+            "supplyValue",
+            "()Ljava/lang/Object;",
+            1,
+            0,
+            invokeDynamic(0, new DynamicRef(
+                "get",
+                "()Ljava/util/function/Supplier;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "()Ljava/lang/Object;",
+                    "invokestatic com/acme/Main.lambda$get$0:()Ljava/lang/Object;",
+                    "()Ljava/lang/Object;"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("()Ljava/lang/Object;"),
+                    BootstrapArgument.methodHandle(
+                        6,
+                        new MethodRef("com/acme/Main", "lambda$get$0", "()Ljava/lang/Object;")
+                    ),
+                    BootstrapArgument.methodType("()Ljava/lang/Object;")
+                )
+            )),
+            invokeInterface(1, new MethodRef("java/util/function/Supplier", "get", "()Ljava/lang/Object;")),
+            plain(6, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo directSupplierGetConcreteMethod() {
+        return method(
+            0x0008,
+            "supplyValueNonLambda",
+            "(Ljava/util/function/Supplier;)Ljava/lang/Object;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeInterface(1, new MethodRef("java/util/function/Supplier", "get", "()Ljava/lang/Object;")),
+            plain(6, 176, "areturn")
+        );
+    }
+
     private static MethodInfo optionalOrElseGetLambdaMethod() {
         return method(
             0x0008,
@@ -27168,6 +27280,18 @@ final class BytecodeToIRTest {
             1,
             1,
             plain(0, 42, "aload_0"),
+            plain(1, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo directSupplierGetLambdaImplementationMethod() {
+        return method(
+            0x0008,
+            "lambda$get$0",
+            "()Ljava/lang/Object;",
+            1,
+            0,
+            stringConstant(0, "fallback"),
             plain(1, 176, "areturn")
         );
     }

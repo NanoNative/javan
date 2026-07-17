@@ -4279,6 +4279,72 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void supplierGetConcreteImplementationBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("supplier-get-concrete");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Supplier;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Supplier<Object> supplier = new FallbackSupplier();
+                    System.out.println(supplier.get());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.FallbackSupplier", """
+            package com.acme;
+
+            import java.util.function.Supplier;
+
+            public final class FallbackSupplier implements Supplier<Object> {
+                @Override
+                public Object get() {
+                    return "fallback";
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/supplier-get-concrete").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("fallback\n");
+    }
+
+    @Test
+    void supplierGetZeroCaptureLambdaBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("supplier-get-lambda");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Supplier;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Supplier<String> supplier = () -> "fallback";
+                    System.out.println(supplier.get());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/supplier-get-lambda").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("fallback\n");
+    }
+
+    @Test
     void mapComputeIfPresentConcreteImplementationBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("map-compute-if-present-concrete");
         writeJava(project, "com.acme.Main", """
