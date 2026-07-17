@@ -4577,6 +4577,74 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void optionalIfPresentMaterializedConsumerLambdaBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-if-present-lambda");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    Optional.of("value").ifPresent(value -> System.out.println("seen:" + value));
+                    Optional.<String>empty().ifPresent(value -> System.out.println("seen:" + value));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-if-present-lambda").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("seen:value\n");
+    }
+
+    @Test
+    void optionalIfPresentConcreteConsumerBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-if-present-concrete");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    Optional.of("value").ifPresent(new Printer());
+                    Optional.<String>empty().ifPresent(new Printer());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Printer", """
+            package com.acme;
+
+            import java.util.function.Consumer;
+
+            public final class Printer implements Consumer<Object> {
+                @Override
+                public void accept(final Object value) {
+                    System.out.println("seen:" + value);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-if-present-concrete").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("seen:value\n");
+    }
+
+    @Test
     void hashMapComputeIfAbsentConcreteImplementationBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("hashmap-compute-if-absent-concrete");
         writeJava(project, "com.acme.Main", """

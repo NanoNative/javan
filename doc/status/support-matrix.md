@@ -9,8 +9,8 @@ External project names do not belong in this matrix; this ledger stays compiler-
 
 | Measure | Count |
 | --- | ---: |
-| rows | 299 |
-| pass | 299 |
+| rows | 300 |
+| pass | 300 |
 | scoped | 0 |
 | target | 0 |
 | rejected | 0 |
@@ -174,6 +174,7 @@ Status mapping:
 | `map-compute-if-absent` | pass |
 | `map-compute-if-present` | pass |
 | `predicate-test` | pass |
+| `optional-if-present` | pass |
 | `hashset-direct-owner-read-surface` | pass |
 | `hashset-direct-owner-add-all` | pass |
 | `hashset-direct-owner-remove-all` | pass |

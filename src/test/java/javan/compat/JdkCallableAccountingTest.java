@@ -1870,6 +1870,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksOptionalIfPresentAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Optional", "ifPresent", "(Ljava/util/function/Consumer;)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksPredicateTestAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/function/Predicate", "test", "(Ljava/lang/Object;)Z")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

@@ -20739,6 +20739,103 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersOptionalIfPresentMaterializedConsumerLambdaToOptionalHelpersAndVoidHelperCall() {
+        final EntryPoint entryPoint = new EntryPoint("com/acme/Main", "consumeValue", "(Ljava/util/Optional;)V");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    optionalIfPresentLambdaMethod(),
+                    optionalIfPresentLambdaImplementationMethod()
+                ))
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("consumeValue")).singleElement().satisfies(function -> {
+            assertThat(function.locals()).containsExactly(
+                new IrLocal(IrType.OBJECT, "object0")
+            );
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.assignObject(
+                    "object0",
+                    IrExpression.objectCall("javan_optional_or_else", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectNull()))
+                ),
+                IrInstruction.branchIf(
+                    "label_optional_if_present_value_present_2_1",
+                    IrExpression.objectComparison("!=", IrExpression.objectLocal("object0"), IrExpression.objectNull())
+                ),
+                IrInstruction.jump("label_optional_if_present_end_2_1"),
+                IrInstruction.label("label_optional_if_present_value_present_2_1"),
+                IrInstruction.callStaticVoid(
+                    "javan_materialized_lambda_apply_void",
+                    List.of(IrExpression.objectLocal("lambda0"), IrExpression.objectLocal("object0"))
+                ),
+                IrInstruction.label("label_optional_if_present_end_2_1"),
+                IrInstruction.returnVoid()
+            );
+        });
+    }
+
+    @Test
+    void lowersOptionalIfPresentConcreteConsumerImplementationToOptionalHelpersAndDirectAcceptCall() {
+        final EntryPoint entryPoint = new EntryPoint(
+            "com/acme/Main",
+            "consumeValueNonLambda",
+            "(Ljava/util/Optional;Ljava/util/function/Consumer;)V"
+        );
+        final EntryPoint consumerEntry = new EntryPoint(
+            "com/acme/ConsumerImpl",
+            "accept",
+            "(Ljava/lang/Object;)V"
+        );
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    optionalIfPresentConcreteConsumerMethod()
+                )),
+                "com/acme/ConsumerImpl",
+                classFile(
+                    "com/acme/ConsumerImpl",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/util/function/Consumer"),
+                    List.of(),
+                    List.of(consumerAcceptImplementationMethod())
+                )
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint, consumerEntry), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("consumeValueNonLambda")).singleElement().satisfies(function -> {
+            assertThat(function.locals()).containsExactly(
+                new IrLocal(IrType.OBJECT, "object0")
+            );
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.assignObject(
+                    "object0",
+                    IrExpression.objectCall("javan_optional_or_else", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectNull()))
+                ),
+                IrInstruction.branchIf(
+                    "label_optional_if_present_value_present_2_1",
+                    IrExpression.objectComparison("!=", IrExpression.objectLocal("object0"), IrExpression.objectNull())
+                ),
+                IrInstruction.jump("label_optional_if_present_end_2_1"),
+                IrInstruction.label("label_optional_if_present_value_present_2_1"),
+                IrInstruction.callStaticVoid(
+                    symbol("com/acme/ConsumerImpl", "accept", "(Ljava/lang/Object;)V"),
+                    List.of(IrExpression.objectLocal("arg1"), IrExpression.objectLocal("object0"))
+                ),
+                IrInstruction.label("label_optional_if_present_end_2_1"),
+                IrInstruction.returnVoid()
+            );
+        });
+    }
+
+    @Test
     void keepsHashMapReceiverAliveAcrossConstructorPutAndGetSequence() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -26534,6 +26631,66 @@ final class BytecodeToIRTest {
             plain(1, 43, "aload_1"),
             invokeVirtual(2, new MethodRef("java/util/Optional", "orElseGet", "(Ljava/util/function/Supplier;)Ljava/lang/Object;")),
             plain(5, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo optionalIfPresentLambdaMethod() {
+        return method(
+            0x0008,
+            "consumeValue",
+            "(Ljava/util/Optional;)V",
+            2,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeDynamic(1, new DynamicRef(
+                "accept",
+                "()Ljava/util/function/Consumer;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;)V",
+                    "invokestatic com/acme/Main.lambda$ifPresent$0:(Ljava/lang/Object;)V",
+                    "(Ljava/lang/Object;)V"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)V"),
+                    BootstrapArgument.methodHandle(
+                        6,
+                        new MethodRef("com/acme/Main", "lambda$ifPresent$0", "(Ljava/lang/Object;)V")
+                    ),
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)V")
+                )
+            )),
+            invokeVirtual(2, new MethodRef("java/util/Optional", "ifPresent", "(Ljava/util/function/Consumer;)V")),
+            plain(3, 177, "return")
+        );
+    }
+
+    private static MethodInfo optionalIfPresentLambdaImplementationMethod() {
+        return method(
+            0x0008,
+            "lambda$ifPresent$0",
+            "(Ljava/lang/Object;)V",
+            0,
+            1,
+            plain(0, 177, "return")
+        );
+    }
+
+    private static MethodInfo optionalIfPresentConcreteConsumerMethod() {
+        return method(
+            0x0008,
+            "consumeValueNonLambda",
+            "(Ljava/util/Optional;Ljava/util/function/Consumer;)V",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/util/Optional", "ifPresent", "(Ljava/util/function/Consumer;)V")),
+            plain(5, 177, "return")
         );
     }
 

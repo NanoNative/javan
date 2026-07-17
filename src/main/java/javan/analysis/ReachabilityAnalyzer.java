@@ -367,6 +367,27 @@ public final class ReachabilityAnalyzer {
             ));
             return;
         }
+        if (isOptionalIfPresent(target)) {
+            final MethodRef consumerAccept = new MethodRef("java/util/function/Consumer", "accept", "(Ljava/lang/Object;)V");
+            final List<EntryPoint> targetMethods = interfaceTargets(classes, consumerAccept, entryPoints);
+            if (!targetMethods.isEmpty()) {
+                enqueueAll(work, workSet, targetMethods);
+                addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
+            }
+            if (containsMethodRef(materializedLambdaMethods, consumerAccept) || !targetMethods.isEmpty()) {
+                return;
+            }
+            diagnostics.add(Diagnostic.error(
+                "JAVAN012",
+                "unsupported reachable application method call",
+                current.className(),
+                current.methodName() + current.descriptor(),
+                target.display(),
+                "Optional.ifPresent requires either a closed-world Consumer implementation class or a supported materialized Consumer lambda target.",
+                "Provide a reachable Consumer implementation class or keep this exact optional callback flow on the JVM until broader callback support lands."
+            ));
+            return;
+        }
         if (isOptionalOrElseGet(target)) {
             final MethodRef supplierGet = new MethodRef("java/util/function/Supplier", "get", "()Ljava/lang/Object;");
             final List<EntryPoint> targetMethods = interfaceTargets(classes, supplierGet, entryPoints);
@@ -751,6 +772,12 @@ public final class ReachabilityAnalyzer {
         return "java/util/Optional".equals(target.owner())
             && "map".equals(target.name())
             && "(Ljava/util/function/Function;)Ljava/util/Optional;".equals(target.descriptor());
+    }
+
+    private static boolean isOptionalIfPresent(final MethodRef target) {
+        return "java/util/Optional".equals(target.owner())
+            && "ifPresent".equals(target.name())
+            && "(Ljava/util/function/Consumer;)V".equals(target.descriptor());
     }
 
     private static boolean isOptionalOrElseGet(final MethodRef target) {

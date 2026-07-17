@@ -2956,6 +2956,21 @@ final class BytecodeToIRInvokeSupport {
             );
             return true;
         }
+        if ("ifPresent".equals(name) && "(Ljava/util/function/Consumer;)V".equals(descriptor)) {
+            lowerOptionalIfPresentCall(
+                classes,
+                classFile,
+                method,
+                instruction,
+                instructions,
+                dispatches,
+                materializedLambdaMethods,
+                localDeclarations,
+                receiver,
+                arguments.getFirst()
+            );
+            return true;
+        }
         if ("orElseGet".equals(name) && "(Ljava/util/function/Supplier;)Ljava/lang/Object;".equals(descriptor)) {
             lowerOptionalOrElseGetCall(
                 classes,
@@ -3215,6 +3230,45 @@ final class BytecodeToIRInvokeSupport {
         instructions.add(IrInstruction.assignObject(resultLocal, IrExpression.objectLocal(valueLocal)));
         instructions.add(IrInstruction.label(endLabel));
         stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
+    }
+
+    private static void lowerOptionalIfPresentCall(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final Map<String, IrDispatch> dispatches,
+        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<Integer, IrLocal> localDeclarations,
+        final IrExpression receiver,
+        final IrExpression consumer
+    ) {
+        final String valueLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(
+            valueLocal,
+            IrExpression.objectCall("javan_optional_or_else", List.of(receiver, IrExpression.objectNull()))
+        ));
+        final String valuePresentLabel = "label_optional_if_present_value_present_" + instruction.offset() + "_" + localDeclarations.size();
+        final String endLabel = "label_optional_if_present_end_" + instruction.offset() + "_" + localDeclarations.size();
+        instructions.add(IrInstruction.branchIf(
+            valuePresentLabel,
+            IrExpression.objectComparison("!=", IrExpression.objectLocal(valueLocal), IrExpression.objectNull())
+        ));
+        instructions.add(IrInstruction.jump(endLabel));
+        instructions.add(IrInstruction.label(valuePresentLabel));
+        lowerConsumerAcceptCall(
+            classes,
+            classFile,
+            method,
+            instruction,
+            instructions,
+            dispatches,
+            materializedLambdaMethods,
+            consumer,
+            IrExpression.objectLocal(valueLocal)
+        );
+        instructions.add(IrInstruction.label(endLabel));
     }
 
     private static void lowerOptionalMapCall(

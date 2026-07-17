@@ -178,6 +178,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void optionalIfPresentIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Optional",
+            "ifPresent",
+            "(Ljava/util/function/Consumer;)V"
+        ))).isTrue();
+    }
+
+    @Test
     void supplierGetIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/function/Supplier",

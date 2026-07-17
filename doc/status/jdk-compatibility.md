@@ -17,17 +17,17 @@ bytecode pattern or rejects it before native code generation.
 - scanned java: `25.0.1`
 - scanned JDK: `JDK25`
 - project classfile majors: `[69]`
-- JDK classfile majors: `[52, 69]`
-- JDK modules: `69`
+- JDK classfile majors: `[53, 55, 61, 65, 69]`
+- JDK modules: `84`
 
 ## Inventory Totals
 
 | item | count |
 | --- | ---: |
-| classes | 27337 |
-| fields | 106290 |
-| constructors | 30152 |
-| methods | 203025 |
+| classes | 32482 |
+| fields | 118632 |
+| constructors | 35209 |
+| methods | 232677 |
 
 ## Inventory Is Not Support
 
@@ -50,21 +50,21 @@ Current support ledger for the active JDK 25 evidence set:
 
 | Measure | Count |
 | --- | ---: |
-| support rows | 299 |
-| pass rows | 299 |
+| support rows | 300 |
+| pass rows | 300 |
 | scoped rows | 0 |
 | target rows | 0 |
 | rejected rows | 0 |
-| accounted rows | 299 |
+| accounted rows | 300 |
 | unaccounted rows | 0 |
-| exact supported JDK callable classes | 485 |
+| exact supported JDK callable classes | 486 |
 | exact supported JDK constructors | 723 |
-| exact supported JDK methods | 707 |
-| exact supported JDK callables | 1430 / 233177 (0.6%) |
-| exact explicit rejected JDK callables | 141211 |
-| exact done JDK callables | 142641 / 233177 (61.1%) |
-| exact unknown JDK callables | 90536 |
-| exact supported JDK callables left | 231747 |
+| exact supported JDK methods | 710 |
+| exact supported JDK callables | 1433 / 267886 (0.5%) |
+| exact explicit rejected JDK callables | 174597 |
+| exact done JDK callables | 176030 / 267886 (65.7%) |
+| exact unknown JDK callables | 91856 |
+| exact supported JDK callables left | 266453 |
 | flow-qualified reachable current-thread lifecycle rejects | 0 |
 | flow-qualified unreachable current-thread lifecycle rejects | 0 |
 | flow-qualified reachable thread-builder receiver-shape rejects | 0 |

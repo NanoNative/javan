@@ -1803,6 +1803,59 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void reachabilityAcceptsOptionalIfPresentMaterializedConsumerLambda() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of("com/acme/Main", classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                methodInfo(
+                    "consume",
+                    "(Ljava/util/Optional;)V",
+                    instruction(0, 42, "aload_0"),
+                    invokeDynamicInstruction(1, new DynamicRef(
+                        "accept",
+                        "()Ljava/util/function/Consumer;",
+                        "java/lang/invoke/LambdaMetafactory",
+                        "metafactory",
+                        "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                            + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                            + "Ljava/lang/invoke/CallSite;",
+                        List.of(
+                            "(Ljava/lang/Object;)V",
+                            "invokestatic com/acme/Main.lambda$consume$0:(Ljava/lang/Object;)V",
+                            "(Ljava/lang/Object;)V"
+                        ),
+                        List.of(
+                            BootstrapArgument.methodType("(Ljava/lang/Object;)V"),
+                            BootstrapArgument.methodHandle(
+                                6,
+                                new MethodRef("com/acme/Main", "lambda$consume$0", "(Ljava/lang/Object;)V")
+                            ),
+                            BootstrapArgument.methodType("(Ljava/lang/Object;)V")
+                        )
+                    )),
+                    instruction(2, 182, "invokevirtual", new MethodRef(
+                        "java/util/Optional",
+                        "ifPresent",
+                        "(Ljava/util/function/Consumer;)V"
+                    )),
+                    instruction(3, 177, "return")
+                ),
+                methodInfo(
+                    "lambda$consume$0",
+                    "(Ljava/lang/Object;)V",
+                    instruction(0, 177, "return")
+                )
+            )),
+            List.of(new EntryPoint("com/acme/Main", "consume", "(Ljava/util/Optional;)V"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+    }
+
+    @Test
     void reachabilityResolvesSpecialNonConstructorCall() {
         final CallGraph graph = new ReachabilityAnalyzer().analyze(
             Map.of(

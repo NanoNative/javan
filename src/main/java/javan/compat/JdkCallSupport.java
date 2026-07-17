@@ -849,6 +849,7 @@ public final class JdkCallSupport {
         runtime("Optional.isPresent", "java/util/Optional", "isPresent", "()Z"),
         runtime("Optional.isEmpty", "java/util/Optional", "isEmpty", "()Z"),
         runtime("Optional.get", "java/util/Optional", "get", "()Ljava/lang/Object;"),
+        runtime("Optional.ifPresent", "java/util/Optional", "ifPresent", "(Ljava/util/function/Consumer;)V"),
         runtime("Optional.orElse", "java/util/Optional", "orElse", "(Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Optional.orElseGet", "java/util/Optional", "orElseGet", "(Ljava/util/function/Supplier;)Ljava/lang/Object;"),
         runtime("Optional.orElseThrow", "java/util/Optional", "orElseThrow", "()Ljava/lang/Object;"),

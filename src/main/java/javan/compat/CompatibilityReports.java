@@ -568,6 +568,7 @@ public final class CompatibilityReports {
             pass("map-compute-if-absent"),
             pass("map-compute-if-present"),
             pass("predicate-test"),
+            pass("optional-if-present"),
             pass("hashset-direct-owner-read-surface"),
             pass("hashset-direct-owner-add-all"),
             pass("hashset-direct-owner-remove-all"),

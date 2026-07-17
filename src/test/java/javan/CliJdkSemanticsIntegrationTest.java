@@ -8616,6 +8616,38 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void optionalIfPresentWithStaticConsumerMethodBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-if-present-static-consumer");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    Optional.of("value").ifPresent(Main::printSeen);
+                    Optional.<String>empty().ifPresent(Main::printSeen);
+                }
+
+                private static void printSeen(final String value) {
+                    System.out.println("seen:" + value);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-if-present-static-consumer").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("seen:value\n");
+    }
+
+    @Test
     void mapComputeIfAbsentWithCapturedLambdaBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("map-compute-if-absent-captured-lambda");
         writeJava(project, "com.acme.Main", """
