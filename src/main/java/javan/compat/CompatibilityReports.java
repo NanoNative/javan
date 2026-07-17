@@ -528,6 +528,8 @@ public final class CompatibilityReports {
             pass("hashset-static-factory"),
             pass("linkedhashset-static-factory"),
             pass("arraylist-direct-owner-read-surface"),
+            pass("arraylist-direct-owner-get-first"),
+            pass("arraylist-direct-owner-get-last"),
             pass("arraylist-direct-owner-remove-all"),
             pass("arraylist-direct-owner-retain-all"),
             pass("hashset-direct-owner-read-surface"),

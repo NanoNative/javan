@@ -446,6 +446,8 @@ public final class JdkCallSupport {
         runtime("ArrayList.isEmpty", "java/util/ArrayList", "isEmpty", "()Z"),
         runtime("ArrayList.contains", "java/util/ArrayList", "contains", "(Ljava/lang/Object;)Z"),
         runtime("ArrayList.get", "java/util/ArrayList", "get", "(I)Ljava/lang/Object;"),
+        runtime("ArrayList.getFirst", "java/util/ArrayList", "getFirst", "()Ljava/lang/Object;"),
+        runtime("ArrayList.getLast", "java/util/ArrayList", "getLast", "()Ljava/lang/Object;"),
         runtime("ArrayList.iterator", "java/util/ArrayList", "iterator", "()Ljava/util/Iterator;"),
         runtime("ArrayList.toArray", "java/util/ArrayList", "toArray", "()[Ljava/lang/Object;"),
         runtime("List.of", "java/util/List", "of", "()Ljava/util/List;"),
@@ -961,6 +963,12 @@ public final class JdkCallSupport {
         }
         if ("get".equals(name)) {
             return "(I)Ljava/lang/Object;".equals(descriptor);
+        }
+        if ("getFirst".equals(name)) {
+            return "()Ljava/lang/Object;".equals(descriptor);
+        }
+        if ("getLast".equals(name)) {
+            return "()Ljava/lang/Object;".equals(descriptor);
         }
         if ("iterator".equals(name)) {
             return "()Ljava/util/Iterator;".equals(descriptor);

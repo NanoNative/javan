@@ -1533,6 +1533,62 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void arrayListDirectOwnerGetFirstBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("arraylist-direct-owner-get-first");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final ArrayList<String> values = new ArrayList<>(List.of("alpha", "beta", "gamma"));
+                    System.out.println(values.getFirst());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/arraylist-direct-owner-get-first").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("alpha\n");
+    }
+
+    @Test
+    void arrayListDirectOwnerGetLastBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("arraylist-direct-owner-get-last");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final ArrayList<String> values = new ArrayList<>(List.of("alpha", "beta", "gamma"));
+                    System.out.println(values.getLast());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/arraylist-direct-owner-get-last").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("gamma\n");
+    }
+
+    @Test
     void hashSetDirectOwnerReadSurfaceBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("hashset-direct-owner-read-surface");
         writeJava(project, "com.acme.Main", """

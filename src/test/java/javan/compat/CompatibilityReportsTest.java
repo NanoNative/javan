@@ -83,12 +83,12 @@ final class CompatibilityReportsTest {
         assertThat(summary).contains(
             "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 5, \"leftCallables\": 3, \"coveragePercent\": \"40.0\"}",
             "\"exactJdkCallableAccounting\": {\"supportedCallables\": 2, \"explicitRejectedCallables\": 3, \"doneCallables\": 5, \"unknownCallables\": 0, \"totalCallables\": 5, \"donePercent\": \"100.0\"}",
-            "\"supportRows\": 256",
-            "\"passRows\": 256",
+            "\"supportRows\": 258",
+            "\"passRows\": 258",
             "\"scopedRows\": 0",
             "\"targetRows\": 0",
             "\"rejectedRows\": 0",
-            "\"accountedRows\": 256",
+            "\"accountedRows\": 258",
             "\"unaccountedRows\": 0"
         );
     }
@@ -158,6 +158,8 @@ final class CompatibilityReportsTest {
             "| `hashset-static-factory` | pass |",
             "| `linkedhashset-static-factory` | pass |",
             "| `arraylist-direct-owner-read-surface` | pass |",
+            "| `arraylist-direct-owner-get-first` | pass |",
+            "| `arraylist-direct-owner-get-last` | pass |",
             "| `arraylist-direct-owner-remove-all` | pass |",
             "| `arraylist-direct-owner-retain-all` | pass |",
             "| `hashset-direct-owner-read-surface` | pass |",
@@ -345,6 +347,8 @@ final class CompatibilityReportsTest {
             "\"feature\": \"hashset-static-factory\"",
             "\"feature\": \"linkedhashset-static-factory\"",
             "\"feature\": \"arraylist-direct-owner-read-surface\"",
+            "\"feature\": \"arraylist-direct-owner-get-first\"",
+            "\"feature\": \"arraylist-direct-owner-get-last\"",
             "\"feature\": \"arraylist-direct-owner-remove-all\"",
             "\"feature\": \"arraylist-direct-owner-retain-all\"",
             "\"feature\": \"hashset-direct-owner-read-surface\"",

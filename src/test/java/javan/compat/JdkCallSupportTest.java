@@ -349,6 +349,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void arrayListGetFirstIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/ArrayList",
+            "getFirst",
+            "()Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void arrayListGetLastIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/ArrayList",
+            "getLast",
+            "()Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
     void arrayListIteratorIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/ArrayList",
@@ -1491,6 +1509,15 @@ final class JdkCallSupportTest {
             "java/util/ArrayList",
             "size",
             "()I"
+        ))).containsExactly("collections");
+    }
+
+    @Test
+    void arrayListGetFirstRequiresCollectionsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/ArrayList",
+            "getFirst",
+            "()Ljava/lang/Object;"
         ))).containsExactly("collections");
     }
 

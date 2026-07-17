@@ -20808,6 +20808,52 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersArrayListGetFirstToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/ArrayList;)Ljava/lang/Object;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/util/ArrayList", "getFirst", "()Ljava/lang/Object;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall("javan_list_get_first", List.of(IrExpression.objectLocal("arg0")))
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersArrayListGetLastToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/ArrayList;)Ljava/lang/Object;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/util/ArrayList", "getLast", "()Ljava/lang/Object;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall("javan_list_get_last", List.of(IrExpression.objectLocal("arg0")))
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
     void lowersArrayListIteratorToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -21176,8 +21222,13 @@ final class BytecodeToIRTest {
             plain(2, 176, "areturn")
         ));
 
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.objectCall("javan_list_get_first", List.of(IrExpression.objectLocal("arg0"))))
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall("javan_list_get_first", List.of(IrExpression.objectLocal("arg0")))
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
 
@@ -21298,8 +21349,13 @@ final class BytecodeToIRTest {
             plain(2, 176, "areturn")
         ));
 
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.returnObject(IrExpression.objectCall("javan_list_get_last", List.of(IrExpression.objectLocal("arg0"))))
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall("javan_list_get_last", List.of(IrExpression.objectLocal("arg0")))
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
         );
     }
 

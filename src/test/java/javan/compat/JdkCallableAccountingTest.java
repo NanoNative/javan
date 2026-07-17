@@ -340,6 +340,18 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksArrayListGetFirstAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "getFirst", "()Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksArrayListGetLastAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "getLast", "()Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksArrayListIteratorAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "iterator", "()Ljava/util/Iterator;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

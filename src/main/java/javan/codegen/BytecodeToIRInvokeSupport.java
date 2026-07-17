@@ -4078,6 +4078,14 @@ final class BytecodeToIRInvokeSupport {
                 pushObjectCall(instructions, stack, localDeclarations, "javan_list_get", List.of(receiver, arguments.getFirst()));
                 return true;
             }
+            if ("getFirst()Ljava/lang/Object;".equals(signature)) {
+                pushObjectCall(instructions, stack, localDeclarations, "javan_list_get_first", List.of(receiver));
+                return true;
+            }
+            if ("getLast()Ljava/lang/Object;".equals(signature)) {
+                pushObjectCall(instructions, stack, localDeclarations, "javan_list_get_last", List.of(receiver));
+                return true;
+            }
         }
         if (isJdkListOrCollection(methodRef.owner())) {
             if ("add(Ljava/lang/Object;)Z".equals(signature)) {
