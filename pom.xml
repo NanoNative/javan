@@ -134,6 +134,13 @@
                 <version>${maven-surefire-plugin.version}</version>
                 <configuration>
                     <argLine>@{surefireArgLine} -Djavan.childJacocoArgLine=@{surefireArgLine} -Djavan.childJacocoDir=${javan.jacoco.child.dir}</argLine>
+                    <systemPropertyVariables>
+                        <junit.jupiter.execution.parallel.enabled>true</junit.jupiter.execution.parallel.enabled>
+                        <junit.jupiter.execution.parallel.mode.default>concurrent</junit.jupiter.execution.parallel.mode.default>
+                        <junit.jupiter.execution.parallel.mode.classes.default>concurrent</junit.jupiter.execution.parallel.mode.classes.default>
+                        <junit.jupiter.execution.parallel.config.strategy>dynamic</junit.jupiter.execution.parallel.config.strategy>
+                        <junit.jupiter.execution.parallel.config.dynamic.factor>1.0</junit.jupiter.execution.parallel.config.dynamic.factor>
+                    </systemPropertyVariables>
                     <includes>
                         <include>**/*Test.java</include>
                     </includes>

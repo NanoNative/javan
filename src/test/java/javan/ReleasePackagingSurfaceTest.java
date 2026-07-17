@@ -139,17 +139,20 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     }
 
     @Test
-    void workflowsAvoidTopLevelConcurrencyQueueing() throws Exception {
+    void workflowsQueueByRefWithoutCancelingRuns() throws Exception {
         final String ciWorkflow = Files.readString(CI_WORKFLOW);
         final String releaseWorkflow = Files.readString(RELEASE_WORKFLOW);
         final String containerWorkflow = Files.readString(CONTAINER_WORKFLOW);
 
         assertThat(ciWorkflow)
-            .doesNotContain("concurrency:");
+            .contains("concurrency:")
+            .contains("cancel-in-progress: false");
         assertThat(releaseWorkflow)
-            .doesNotContain("concurrency:");
+            .contains("concurrency:")
+            .contains("cancel-in-progress: false");
         assertThat(containerWorkflow)
-            .doesNotContain("concurrency:");
+            .contains("concurrency:")
+            .contains("cancel-in-progress: false");
     }
 
     @Test
@@ -227,11 +230,6 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
 
         assertThat(script)
             .contains("mvn -q \\")
-            .contains("-Djunit.jupiter.execution.parallel.enabled=true \\")
-            .contains("-Djunit.jupiter.execution.parallel.mode.default=concurrent \\")
-            .contains("-Djunit.jupiter.execution.parallel.mode.classes.default=concurrent \\")
-            .contains("-Djunit.jupiter.execution.parallel.config.strategy=dynamic \\")
-            .contains("-Djunit.jupiter.execution.parallel.config.dynamic.factor=1.0 \\")
             .contains("-Djavan.coverage.check.skip=true \\")
             .contains("clean verify")
             .contains("scripts/build.sh")

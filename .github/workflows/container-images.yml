@@ -11,6 +11,10 @@ on:
         required: true
         type: string
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && format('manual-{0}', github.run_id) || github.event.release.tag_name || github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
   packages: write

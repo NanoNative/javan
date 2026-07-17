@@ -18,21 +18,25 @@ final class WorkflowPolicySurfaceTest {
     private static final Path WORKFLOW_ROOT = Path.of(".github/workflows");
 
     @Test
-    void ciWorkflowAvoidsTopLevelConcurrencyQueueing() throws Exception {
+    void ciWorkflowQueuesByRefWithoutCancelingRuns() throws Exception {
         assertThat(Files.readString(CI_WORKFLOW))
-            .doesNotContain("concurrency:");
+            .contains("concurrency:")
+            .contains("group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}")
+            .contains("cancel-in-progress: false");
     }
 
     @Test
-    void releaseWorkflowAvoidsTopLevelConcurrencyQueueing() throws Exception {
+    void releaseWorkflowQueuesByRefWithoutCancelingRuns() throws Exception {
         assertThat(Files.readString(RELEASE_WORKFLOW))
-            .doesNotContain("concurrency:");
+            .contains("concurrency:")
+            .contains("cancel-in-progress: false");
     }
 
     @Test
-    void containerImagesWorkflowAvoidsTopLevelConcurrencyQueueing() throws Exception {
+    void containerImagesWorkflowQueuesByRefWithoutCancelingRuns() throws Exception {
         assertThat(Files.readString(CONTAINER_IMAGES_WORKFLOW))
-            .doesNotContain("concurrency:");
+            .contains("concurrency:")
+            .contains("cancel-in-progress: false");
     }
 
     @Test
@@ -40,7 +44,8 @@ final class WorkflowPolicySurfaceTest {
         for (final Path workflow : workflowFiles()) {
             assertThat(Files.readString(workflow))
                 .as(workflow + " must not auto-cancel in-flight runs")
-                .doesNotContain("cancel-in-progress:");
+                .contains("cancel-in-progress: false")
+                .doesNotContain("cancel-in-progress: true");
         }
     }
 
@@ -48,19 +53,13 @@ final class WorkflowPolicySurfaceTest {
     void ciWorkflowKeepsNinePercentCoverageAsSoftSignal() throws Exception {
         assertThat(Files.readString(CI_WORKFLOW))
             .contains("JAVAN_COVERAGE_SOFT_TARGET: \"0.09\"")
-            .contains("JAVAN_JUNIT_PARALLEL_ARGS: >-")
-            .contains("-Djunit.jupiter.execution.parallel.enabled=true")
-            .contains("-Djunit.jupiter.execution.parallel.mode.default=concurrent")
-            .contains("-Djunit.jupiter.execution.parallel.mode.classes.default=concurrent")
-            .contains("-Djunit.jupiter.execution.parallel.config.strategy=dynamic")
-            .contains("-Djunit.jupiter.execution.parallel.config.dynamic.factor=1.0")
-            .contains("$JAVAN_JUNIT_PARALLEL_ARGS -Dtest='!Cli*IntegrationTest,!CliExternalProbeAcceptanceIntegrationTest' -Djavan.coverage.check.skip=true verify")
+            .contains("mvn -q -Dmaven.repo.local=\"$MAVEN_REPO_LOCAL\" -Dtest='!Cli*IntegrationTest,!CliExternalProbeAcceptanceIntegrationTest' -Djavan.coverage.check.skip=true verify")
             .contains("name: verify-cli-integration (${{ matrix.shard }})")
             .contains("Cli*IntegrationTest,!CliExternalProbeAcceptanceIntegrationTest,!CliPackagingIntegrationTest,!CliJdkSemanticsIntegrationTest,!CliThreadRuntimeIntegrationTest,!CliRuntimeTranslationIntegrationTest")
             .contains("CliJdkSemanticsIntegrationTest")
             .contains("CliThreadRuntimeIntegrationTest,CliRuntimeTranslationIntegrationTest")
             .contains("CliExternalProbeAcceptanceIntegrationTest,CliPackagingIntegrationTest")
-            .contains("$JAVAN_JUNIT_PARALLEL_ARGS -Dtest='${{ matrix.test-selector }}' -Djavan.coverage.check.skip=true verify")
+            .contains("mvn -q -Dmaven.repo.local=\"$MAVEN_REPO_LOCAL\" -Dtest='${{ matrix.test-selector }}' -Djavan.coverage.check.skip=true verify")
             .contains("Summarize coverage (non-blocking)")
             .contains("Soft target: {target_ratio:.0%} (signal only, not a workflow gate)")
             .contains("| Counter | Covered | Total | Ratio | Status |")
@@ -90,6 +89,12 @@ final class WorkflowPolicySurfaceTest {
             .contains("<javan.coverage.check.skip>true</javan.coverage.check.skip>")
             .contains("<javan.coverage.line.minimum>0.95</javan.coverage.line.minimum>")
             .contains("<javan.coverage.branch.minimum>0.90</javan.coverage.branch.minimum>")
+            .contains("<systemPropertyVariables>")
+            .contains("<junit.jupiter.execution.parallel.enabled>true</junit.jupiter.execution.parallel.enabled>")
+            .contains("<junit.jupiter.execution.parallel.mode.default>concurrent</junit.jupiter.execution.parallel.mode.default>")
+            .contains("<junit.jupiter.execution.parallel.mode.classes.default>concurrent</junit.jupiter.execution.parallel.mode.classes.default>")
+            .contains("<junit.jupiter.execution.parallel.config.strategy>dynamic</junit.jupiter.execution.parallel.config.strategy>")
+            .contains("<junit.jupiter.execution.parallel.config.dynamic.factor>1.0</junit.jupiter.execution.parallel.config.dynamic.factor>")
             .contains("<testResources>")
             .contains("<exclude>projects/**/.javan/**</exclude>");
     }

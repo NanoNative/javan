@@ -14,17 +14,15 @@ on:
       - main
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
 env:
   JAVAN_COVERAGE_SOFT_TARGET: "0.09"
-  JAVAN_JUNIT_PARALLEL_ARGS: >-
-    -Djunit.jupiter.execution.parallel.enabled=true
-    -Djunit.jupiter.execution.parallel.mode.default=concurrent
-    -Djunit.jupiter.execution.parallel.mode.classes.default=concurrent
-    -Djunit.jupiter.execution.parallel.config.strategy=dynamic
-    -Djunit.jupiter.execution.parallel.config.dynamic.factor=1.0
 
 jobs:
   verify-core:
@@ -95,7 +93,7 @@ jobs:
       - name: Verify core Maven suite
         run: |
           status=0
-          mvn -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" $JAVAN_JUNIT_PARALLEL_ARGS -Dtest='!Cli*IntegrationTest,!CliExternalProbeAcceptanceIntegrationTest' -Djavan.coverage.check.skip=true verify || status=$?
+          mvn -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -Dtest='!Cli*IntegrationTest,!CliExternalProbeAcceptanceIntegrationTest' -Djavan.coverage.check.skip=true verify || status=$?
 
           if [ -f target/jacoco-surefire.exec ] || [ -d target/jacoco-child ]; then
             mvn -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -DskipTests -Djavan.coverage.check.skip=true jacoco:merge@merge-coverage jacoco:report@report || true
@@ -240,7 +238,7 @@ jobs:
       - name: Verify CLI integration Maven suite
         run: |
           status=0
-          mvn -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" $JAVAN_JUNIT_PARALLEL_ARGS -Dtest='${{ matrix.test-selector }}' -Djavan.coverage.check.skip=true verify || status=$?
+          mvn -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -Dtest='${{ matrix.test-selector }}' -Djavan.coverage.check.skip=true verify || status=$?
 
           if [ -f target/jacoco-surefire.exec ] || [ -d target/jacoco-child ]; then
             mvn -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -DskipTests -Djavan.coverage.check.skip=true jacoco:merge@merge-coverage jacoco:report@report || true
@@ -381,7 +379,7 @@ jobs:
           sh .github/scripts/install-external-probe-artifacts.sh "$MAVEN_REPO_LOCAL"
 
       - name: Compile test fixtures
-        run: mvn -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" $JAVAN_JUNIT_PARALLEL_ARGS -DskipTests compile test-compile
+        run: mvn -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -DskipTests compile test-compile
 
       - name: Verify acceptance suite
         env:
