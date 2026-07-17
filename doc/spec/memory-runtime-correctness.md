@@ -247,7 +247,7 @@ Current gates:
   backing-array growth publishes moved buffers before later allocator-triggered GC can
   traverse the rooted map.
 - `runtime-realloc-growth-fit` native-profile project runs with
-  `JAVAN_HEAP_LIMIT_BYTES=300` and `JAVAN_GC_STRESS=1` and verifies `realloc`
+  `JAVAN_HEAP_LIMIT_BYTES=512` and `JAVAN_GC_STRESS=1` and verifies `realloc`
   charges only positive replacement-buffer growth against the configured heap ceiling.
 - `operand-call-receiver-temporary-root`, `operand-array-load-temporary-root`,
   `operand-object-compare-temporary-root`, `operand-field-load-temporary-root`,

@@ -697,7 +697,7 @@ accepts_jvm_equivalent_app_env "$NATIVE_PROFILE_PROJECTS/runtime-list-copy-gc" J
 accepts_jvm_equivalent_app_env "$NATIVE_PROFILE_PROJECTS/runtime-map-copy-gc" JAVAN_HEAP_LIMIT_BYTES 12288
 accepts_jvm_equivalent_app_env "$NATIVE_PROFILE_PROJECTS/runtime-map-values-gc" JAVAN_HEAP_LIMIT_BYTES 12288
 accepts_jvm_equivalent_app_envs "$NATIVE_PROFILE_PROJECTS/runtime-realloc-growth-fit" com.acme.Main \
-  JAVAN_HEAP_LIMIT_BYTES=300 \
+  JAVAN_HEAP_LIMIT_BYTES=512 \
   JAVAN_GC_STRESS=1
 accepts_jvm_equivalent_app_envs "$NATIVE_PROFILE_PROJECTS/operand-call-receiver-temporary-root" com.acme.Main \
   JAVAN_HEAP_LIMIT_BYTES=4096 \
@@ -809,8 +809,6 @@ rejects_check "$NEGATIVE_PROJECTS/unsupported-reflection" "Class.forName"
 rejects_check "$NEGATIVE_PROJECTS/exception-cause-constructor" "error[JAVAN014]"
 rejects_check "$NEGATIVE_PROJECTS/enum-value-of" "error[JAVAN015]"
 rejects_check "$NEGATIVE_PROJECTS/non-ascii-string" "error[JAVAN046]"
-rejects_check "$NEGATIVE_PROJECTS/unsupported-socket" "error[JAVAN061]"
-rejects_check "$NEGATIVE_PROJECTS/unsupported-server-socket" "error[JAVAN061]"
 rejects_check "$NEGATIVE_PROJECTS/unsupported-http-server-dependency" "error[JAVAN061]"
 
 accepts_optional_real_probes

@@ -1666,6 +1666,34 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void arrayListDirectOwnerRemoveFirstRejectsEmptyListAtRuntime() throws Exception {
+        final Path project = project("arraylist-direct-owner-remove-first-empty");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final ArrayList<String> values = new ArrayList<>();
+                    values.removeFirst();
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/arraylist-direct-owner-remove-first-empty").toString()));
+
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("list is empty");
+    }
+
+    @Test
     void collectionToArrayReturnsSnapshotAndMatchesJvmOutput() throws Exception {
         final Path project = project("collection-to-array");
         writeJava(project, "com.acme.Main", """

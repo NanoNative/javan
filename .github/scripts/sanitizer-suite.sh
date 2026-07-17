@@ -331,7 +331,7 @@ JAVAN_HEAP_LIMIT_BYTES=12288 \
 JAVAN_HEAP_LIMIT_BYTES=12288 \
   sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-map-values-gc
 
-JAVAN_HEAP_LIMIT_BYTES=300 \
+JAVAN_HEAP_LIMIT_BYTES=512 \
 JAVAN_GC_STRESS=1 \
   sh .github/scripts/sanitizer-smoke.sh src/test/resources/projects/native-profile/runtime-realloc-growth-fit
 

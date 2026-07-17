@@ -1585,6 +1585,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void arrayListRemoveFirstRequiresCollectionsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/ArrayList",
+            "removeFirst",
+            "()Ljava/lang/Object;"
+        ))).containsExactly("collections");
+    }
+
+    @Test
     void linkedHashSetToArrayRequiresCollectionsRuntimeModule() {
         assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
             "java/util/LinkedHashSet",
