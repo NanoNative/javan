@@ -76,12 +76,12 @@ final class CompatibilityReportsTest {
         assertThat(summary).contains(
             "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 5, \"leftCallables\": 3, \"coveragePercent\": \"40.0\"}",
             "\"exactJdkCallableAccounting\": {\"supportedCallables\": 2, \"explicitRejectedCallables\": 3, \"doneCallables\": 5, \"unknownCallables\": 0, \"totalCallables\": 5, \"donePercent\": \"100.0\"}",
-            "\"supportRows\": 173",
-            "\"passRows\": 173",
+            "\"supportRows\": 174",
+            "\"passRows\": 174",
             "\"scopedRows\": 0",
             "\"targetRows\": 0",
             "\"rejectedRows\": 0",
-            "\"accountedRows\": 173",
+            "\"accountedRows\": 174",
             "\"unaccountedRows\": 0"
         );
     }
@@ -137,6 +137,7 @@ final class CompatibilityReportsTest {
             "| `set-of-quadruple` | pass |",
             "| `set-of-quintuple` | pass |",
             "| `set-of-sextuple` | pass |",
+            "| `set-of-septuple` | pass |",
             "| `list-of-varargs-gc` | pass |",
             "| `owned-buffer-realloc-validation` | pass |",
             "| `network-address-runtime` | pass |",
@@ -244,6 +245,7 @@ final class CompatibilityReportsTest {
             "\"feature\": \"set-of-quadruple\"",
             "\"feature\": \"set-of-quintuple\"",
             "\"feature\": \"set-of-sextuple\"",
+            "\"feature\": \"set-of-septuple\"",
             "\"feature\": \"network-address-runtime\"",
             "\"feature\": \"network-inetaddress-get-by-name-literal-host\"",
             "\"feature\": \"network-inetaddress-get-all-by-name-literal-host\"",

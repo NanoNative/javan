@@ -3312,6 +3312,11 @@ final class BytecodeToIRInvokeSupport {
                 stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_set_of_sextuple", arguments)));
                 return true;
             }
+            if ("of".equals(name) && "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;".equals(descriptor)) {
+                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_set_of_septuple", arguments)));
+                return true;
+            }
             return false;
         }
         if ("copyOf".equals(name)) {

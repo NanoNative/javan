@@ -2704,6 +2704,182 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertSetOfSextupleFailureAtRuntime("set-of-sextuple-null-sixth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", (String) null);", "null Set.of element");
     }
 
+    @Test
+    void setOfSeptupleBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("set-of-septuple");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Set<String> values = Set.of("a", "b", "c", "d", "e", "f", "g");
+                    System.out.println(values.size());
+                    System.out.println(values.contains("a"));
+                    System.out.println(values.contains("b"));
+                    System.out.println(values.contains("c"));
+                    System.out.println(values.contains("d"));
+                    System.out.println(values.contains("e"));
+                    System.out.println(values.contains("f"));
+                    System.out.println(values.contains("g"));
+                    System.out.println(values.contains("later"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/set-of-septuple").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("7\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\nfalse\n");
+    }
+
+    @Test
+    void setOfSeptupleDuplicateFirstSecondFailsAtRuntime() throws Exception {
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-first-second", "Set.of(\"same\", \"same\", \"c\", \"d\", \"e\", \"f\", \"g\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSeptupleDuplicateFirstThirdFailsAtRuntime() throws Exception {
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-first-third", "Set.of(\"same\", \"b\", \"same\", \"d\", \"e\", \"f\", \"g\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSeptupleDuplicateFirstFourthFailsAtRuntime() throws Exception {
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-first-fourth", "Set.of(\"same\", \"b\", \"c\", \"same\", \"e\", \"f\", \"g\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSeptupleDuplicateFirstFifthFailsAtRuntime() throws Exception {
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-first-fifth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"same\", \"f\", \"g\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSeptupleDuplicateFirstSixthFailsAtRuntime() throws Exception {
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-first-sixth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"same\", \"g\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSeptupleDuplicateFirstSeventhFailsAtRuntime() throws Exception {
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-first-seventh", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"f\", \"same\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSeptupleDuplicateSecondThirdFailsAtRuntime() throws Exception {
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-second-third", "Set.of(\"a\", \"same\", \"same\", \"d\", \"e\", \"f\", \"g\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSeptupleDuplicateSecondFourthFailsAtRuntime() throws Exception {
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-second-fourth", "Set.of(\"a\", \"same\", \"c\", \"same\", \"e\", \"f\", \"g\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSeptupleDuplicateSecondFifthFailsAtRuntime() throws Exception {
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-second-fifth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"same\", \"f\", \"g\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSeptupleDuplicateSecondSixthFailsAtRuntime() throws Exception {
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-second-sixth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"same\", \"g\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSeptupleDuplicateSecondSeventhFailsAtRuntime() throws Exception {
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-second-seventh", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"f\", \"same\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSeptupleDuplicateThirdFourthFailsAtRuntime() throws Exception {
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-third-fourth", "Set.of(\"a\", \"b\", \"same\", \"same\", \"e\", \"f\", \"g\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSeptupleDuplicateThirdFifthFailsAtRuntime() throws Exception {
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-third-fifth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"same\", \"f\", \"g\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSeptupleDuplicateThirdSixthFailsAtRuntime() throws Exception {
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-third-sixth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"same\", \"g\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSeptupleDuplicateThirdSeventhFailsAtRuntime() throws Exception {
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-third-seventh", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"f\", \"same\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSeptupleDuplicateFourthFifthFailsAtRuntime() throws Exception {
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-fourth-fifth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"same\", \"f\", \"g\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSeptupleDuplicateFourthSixthFailsAtRuntime() throws Exception {
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-fourth-sixth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"same\", \"g\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSeptupleDuplicateFourthSeventhFailsAtRuntime() throws Exception {
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-fourth-seventh", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"f\", \"same\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSeptupleDuplicateFifthSixthFailsAtRuntime() throws Exception {
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-fifth-sixth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"same\", \"g\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSeptupleDuplicateFifthSeventhFailsAtRuntime() throws Exception {
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-fifth-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"f\", \"same\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSeptupleDuplicateSixthSeventhFailsAtRuntime() throws Exception {
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-duplicate-sixth-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"same\", \"same\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSeptupleNullFirstFailsAtRuntime() throws Exception {
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-null-first", "Set.of((String) null, \"b\", \"c\", \"d\", \"e\", \"f\", \"g\");", "null Set.of element");
+    }
+
+    @Test
+    void setOfSeptupleNullSecondFailsAtRuntime() throws Exception {
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-null-second", "Set.of(\"a\", (String) null, \"c\", \"d\", \"e\", \"f\", \"g\");", "null Set.of element");
+    }
+
+    @Test
+    void setOfSeptupleNullThirdFailsAtRuntime() throws Exception {
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-null-third", "Set.of(\"a\", \"b\", (String) null, \"d\", \"e\", \"f\", \"g\");", "null Set.of element");
+    }
+
+    @Test
+    void setOfSeptupleNullFourthFailsAtRuntime() throws Exception {
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-null-fourth", "Set.of(\"a\", \"b\", \"c\", (String) null, \"e\", \"f\", \"g\");", "null Set.of element");
+    }
+
+    @Test
+    void setOfSeptupleNullFifthFailsAtRuntime() throws Exception {
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-null-fifth", "Set.of(\"a\", \"b\", \"c\", \"d\", (String) null, \"f\", \"g\");", "null Set.of element");
+    }
+
+    @Test
+    void setOfSeptupleNullSixthFailsAtRuntime() throws Exception {
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-null-sixth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", (String) null, \"g\");", "null Set.of element");
+    }
+
+    @Test
+    void setOfSeptupleNullSeventhFailsAtRuntime() throws Exception {
+        assertSetOfSeptupleFailureAtRuntime("set-of-septuple-null-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", (String) null);", "null Set.of element");
+    }
+
     private void assertSetOfQuintupleFailureAtRuntime(
         final String projectName,
         final String statement,
@@ -2735,6 +2911,36 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     private void assertSetOfSextupleFailureAtRuntime(
+        final String projectName,
+        final String statement,
+        final String expectedMessage
+    ) throws Exception {
+        final Path project = project(projectName);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    %s
+                }
+            }
+            """.formatted(statement));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/" + projectName).toString()));
+
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains(expectedMessage);
+    }
+
+    private void assertSetOfSeptupleFailureAtRuntime(
         final String projectName,
         final String statement,
         final String expectedMessage
