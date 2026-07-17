@@ -1994,6 +1994,46 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void hashMapLoadFactorConstructorRejectsZeroLoadFactorAtRuntime() throws Exception {
+        assertMapConstructorFailureAtRuntime(
+            "hashmap-load-factor-constructor-zero-load-factor",
+            "import java.util.HashMap;",
+            "new HashMap<String, String>(16, 0.0f);",
+            "invalid map load factor"
+        );
+    }
+
+    @Test
+    void linkedHashMapLoadFactorConstructorRejectsZeroLoadFactorAtRuntime() throws Exception {
+        assertMapConstructorFailureAtRuntime(
+            "linkedhashmap-load-factor-constructor-zero-load-factor",
+            "import java.util.LinkedHashMap;",
+            "new LinkedHashMap<String, String>(8, 0.0f);",
+            "invalid map load factor"
+        );
+    }
+
+    @Test
+    void concurrentHashMapLoadFactorConstructorRejectsZeroLoadFactorAtRuntime() throws Exception {
+        assertMapConstructorFailureAtRuntime(
+            "concurrenthashmap-load-factor-constructor-zero-load-factor",
+            "import java.util.concurrent.ConcurrentHashMap;",
+            "new ConcurrentHashMap<String, String>(4, 0.0f);",
+            "invalid map load factor"
+        );
+    }
+
+    @Test
+    void concurrentHashMapConcurrencyLevelConstructorRejectsNonPositiveConcurrencyLevelAtRuntime() throws Exception {
+        assertMapConstructorFailureAtRuntime(
+            "concurrenthashmap-concurrency-level-constructor-zero-concurrency",
+            "import java.util.concurrent.ConcurrentHashMap;",
+            "new ConcurrentHashMap<String, String>(4, 0.75f, 0);",
+            "non-positive map concurrency level"
+        );
+    }
+
+    @Test
     void collectionsUnmodifiableListBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("collections-unmodifiable-list");
         writeJava(project, "com.acme.Main", """
@@ -6163,6 +6203,37 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
                 }
             }
             """.formatted(statement));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/" + projectName).toString()));
+
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains(expectedMessage);
+    }
+
+    private void assertMapConstructorFailureAtRuntime(
+        final String projectName,
+        final String imports,
+        final String statement,
+        final String expectedMessage
+    ) throws Exception {
+        final Path project = project(projectName);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            %s
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    %s
+                }
+            }
+            """.formatted(imports, statement));
 
         final CliRun run = run(tempDir, "build", project.toString());
         assertThat(run.exitCode()).as(run.stderr()).isZero();

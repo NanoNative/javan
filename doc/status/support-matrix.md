@@ -9,8 +9,8 @@ External project names do not belong in this matrix; this ledger stays compiler-
 
 | Measure | Count |
 | --- | ---: |
-| rows | 210 |
-| pass | 210 |
+| rows | 219 |
+| pass | 219 |
 | scoped | 0 |
 | target | 0 |
 | rejected | 0 |
@@ -116,9 +116,13 @@ Status mapping:
 | `linkedhashset-collection-constructor` | pass |
 | `hashmap-capacity-constructor` | pass |
 | `linkedhashmap-capacity-constructor` | pass |
+| `hashmap-load-factor-constructor` | pass |
+| `linkedhashmap-load-factor-constructor` | pass |
 | `hashmap-map-constructor` | pass |
 | `linkedhashmap-map-constructor` | pass |
 | `concurrenthashmap-capacity-constructor` | pass |
+| `concurrenthashmap-load-factor-constructor` | pass |
+| `concurrenthashmap-concurrency-level-constructor` | pass |
 | `collection-to-array` | pass |
 | `list-to-array` | pass |
 | `set-to-array` | pass |

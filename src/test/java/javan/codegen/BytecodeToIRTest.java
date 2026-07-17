@@ -19668,6 +19668,115 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersHashMapLoadFactorConstructorToRuntimeInitialization() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(IF)Ljava/util/HashMap;",
+            4,
+            2,
+            classInstruction(0, 187, "new", "java/util/HashMap"),
+            plain(1, 89, "dup"),
+            plain(2, 26, "iload_0"),
+            plain(3, 35, "fload_1"),
+            invokeSpecial(4, new MethodRef("java/util/HashMap", "<init>", "(IF)V")),
+            plain(5, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_hashmap_new", List.of())),
+            IrInstruction.callStaticVoid(
+                "javan_map_initialize_capacity_with_load_factor",
+                List.of(IrExpression.objectLocal("object0"), IrExpression.intLocal("arg0"), IrExpression.floatLocal("arg1"))
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersLinkedHashMapLoadFactorConstructorToRuntimeInitialization() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(IF)Ljava/util/LinkedHashMap;",
+            4,
+            2,
+            classInstruction(0, 187, "new", "java/util/LinkedHashMap"),
+            plain(1, 89, "dup"),
+            plain(2, 26, "iload_0"),
+            plain(3, 35, "fload_1"),
+            invokeSpecial(4, new MethodRef("java/util/LinkedHashMap", "<init>", "(IF)V")),
+            plain(5, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_hashmap_new", List.of())),
+            IrInstruction.callStaticVoid(
+                "javan_map_initialize_capacity_with_load_factor",
+                List.of(IrExpression.objectLocal("object0"), IrExpression.intLocal("arg0"), IrExpression.floatLocal("arg1"))
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersConcurrentHashMapLoadFactorConstructorToRuntimeInitialization() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(IF)Ljava/util/concurrent/ConcurrentHashMap;",
+            4,
+            2,
+            classInstruction(0, 187, "new", "java/util/concurrent/ConcurrentHashMap"),
+            plain(1, 89, "dup"),
+            plain(2, 26, "iload_0"),
+            plain(3, 35, "fload_1"),
+            invokeSpecial(4, new MethodRef("java/util/concurrent/ConcurrentHashMap", "<init>", "(IF)V")),
+            plain(5, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_hashmap_new", List.of())),
+            IrInstruction.callStaticVoid(
+                "javan_map_initialize_capacity_with_load_factor",
+                List.of(IrExpression.objectLocal("object0"), IrExpression.intLocal("arg0"), IrExpression.floatLocal("arg1"))
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersConcurrentHashMapConcurrencyLevelConstructorToRuntimeInitialization() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(IFI)Ljava/util/concurrent/ConcurrentHashMap;",
+            5,
+            3,
+            classInstruction(0, 187, "new", "java/util/concurrent/ConcurrentHashMap"),
+            plain(1, 89, "dup"),
+            plain(2, 26, "iload_0"),
+            plain(3, 35, "fload_1"),
+            plain(4, 28, "iload_2"),
+            invokeSpecial(5, new MethodRef("java/util/concurrent/ConcurrentHashMap", "<init>", "(IFI)V")),
+            plain(6, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_hashmap_new", List.of())),
+            IrInstruction.callStaticVoid(
+                "javan_map_initialize_capacity_with_load_factor_and_concurrency",
+                List.of(IrExpression.objectLocal("object0"), IrExpression.intLocal("arg0"), IrExpression.floatLocal("arg1"), IrExpression.intLocal("arg2"))
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
     void lowersMapRemoveToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,

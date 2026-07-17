@@ -870,6 +870,114 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void hashMapLoadFactorConstructorBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("hashmap-load-factor-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashMap;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final HashMap<String, String> values = new HashMap<>(16, 0.5f);
+                    values.put("left", "right");
+                    System.out.println(values.get("left"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/hashmap-load-factor-constructor").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void linkedHashMapLoadFactorConstructorBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("linkedhashmap-load-factor-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.LinkedHashMap;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final LinkedHashMap<String, String> values = new LinkedHashMap<>(8, 0.5f);
+                    values.put("left", "right");
+                    System.out.println(values.get("left"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/linkedhashmap-load-factor-constructor").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void concurrentHashMapLoadFactorConstructorBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("concurrenthashmap-load-factor-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.ConcurrentHashMap;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final ConcurrentHashMap<String, String> values = new ConcurrentHashMap<>(4, 0.5f);
+                    values.put("left", "right");
+                    System.out.println(values.get("left"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/concurrenthashmap-load-factor-constructor").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void concurrentHashMapConcurrencyLevelConstructorBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("concurrenthashmap-concurrency-level-constructor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.concurrent.ConcurrentHashMap;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final ConcurrentHashMap<String, String> values = new ConcurrentHashMap<>(4, 0.75f, 2);
+                    values.put("left", "right");
+                    System.out.println(values.get("left"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/concurrenthashmap-concurrency-level-constructor").toString())).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void linkedHashMapValuesBuildAndMatchJvmOutput() throws Exception {
         final Path project = project("linkedhashmap-values");
         writeJava(project, "com.acme.Main", """

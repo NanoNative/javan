@@ -8600,6 +8600,31 @@ final class RuntimeSourceMemorySections {
             javan_map_ensure_capacity(map, capacity);
         }
 
+        void javan_map_initialize_capacity_with_load_factor(void* value, int capacity, float load_factor) {
+            if (!(load_factor > 0.0f)) {
+                javan_panic("invalid map load factor");
+            }
+            javan_map_initialize_capacity(value, capacity);
+        }
+
+        void javan_map_initialize_capacity_with_load_factor_and_concurrency(
+            void* value,
+            int capacity,
+            float load_factor,
+            int concurrency_level
+        ) {
+            if (!(load_factor > 0.0f)) {
+                javan_panic("invalid map load factor");
+            }
+            if (concurrency_level <= 0) {
+                javan_panic("non-positive map concurrency level");
+            }
+            if (capacity < concurrency_level) {
+                capacity = concurrency_level;
+            }
+            javan_map_initialize_capacity(value, capacity);
+        }
+
         static void* javan_map_entry_alloc(void* key, void* value) {
             void* entry_value = javan_alloc(sizeof(javan_map_entry_state));
             javan_map_entry_state* entry = (javan_map_entry_state*) entry_value;

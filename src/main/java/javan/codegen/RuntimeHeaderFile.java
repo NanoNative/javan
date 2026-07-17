@@ -284,6 +284,8 @@ final class RuntimeHeaderFile {
         int javan_set_add(void* set, void* value);
         void* javan_hashmap_new(void);
         void javan_map_initialize_capacity(void* map, int capacity);
+        void javan_map_initialize_capacity_with_load_factor(void* map, int capacity, float load_factor);
+        void javan_map_initialize_capacity_with_load_factor_and_concurrency(void* map, int capacity, float load_factor, int concurrency_level);
         void* javan_map_copy_of(void* map);
         void javan_map_put_all(void* map, void* source);
         void* javan_map_unmodifiable(void* map);

@@ -565,6 +565,42 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void hashMapLoadFactorConstructorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/HashMap",
+            "<init>",
+            "(IF)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void linkedHashMapLoadFactorConstructorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/LinkedHashMap",
+            "<init>",
+            "(IF)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void concurrentHashMapLoadFactorConstructorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/ConcurrentHashMap",
+            "<init>",
+            "(IF)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void concurrentHashMapConcurrencyLevelConstructorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/concurrent/ConcurrentHashMap",
+            "<init>",
+            "(IFI)V"
+        ))).isTrue();
+    }
+
+    @Test
     void mapOfPairIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Map",

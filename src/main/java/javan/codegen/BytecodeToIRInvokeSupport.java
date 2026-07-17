@@ -3542,6 +3542,13 @@ final class BytecodeToIRInvokeSupport {
                 instructions.add(IrInstruction.callStaticVoid("javan_map_initialize_capacity", List.of(receiver, arguments.getFirst())));
                 return true;
             }
+            if ("(IF)V".equals(methodRef.descriptor())) {
+                instructions.add(IrInstruction.callStaticVoid(
+                    "javan_map_initialize_capacity_with_load_factor",
+                    List.of(receiver, arguments.get(0), arguments.get(1))
+                ));
+                return true;
+            }
             if ("(Ljava/util/Map;)V".equals(methodRef.descriptor())) {
                 instructions.add(IrInstruction.callStaticVoid("javan_map_put_all", List.of(receiver, arguments.getFirst())));
                 return true;
@@ -3551,6 +3558,24 @@ final class BytecodeToIRInvokeSupport {
             && "<init>".equals(methodRef.name())
             && "(I)V".equals(methodRef.descriptor())) {
             instructions.add(IrInstruction.callStaticVoid("javan_map_initialize_capacity", List.of(receiver, arguments.getFirst())));
+            return true;
+        }
+        if ("java/util/concurrent/ConcurrentHashMap".equals(methodRef.owner())
+            && "<init>".equals(methodRef.name())
+            && "(IF)V".equals(methodRef.descriptor())) {
+            instructions.add(IrInstruction.callStaticVoid(
+                "javan_map_initialize_capacity_with_load_factor",
+                List.of(receiver, arguments.get(0), arguments.get(1))
+            ));
+            return true;
+        }
+        if ("java/util/concurrent/ConcurrentHashMap".equals(methodRef.owner())
+            && "<init>".equals(methodRef.name())
+            && "(IFI)V".equals(methodRef.descriptor())) {
+            instructions.add(IrInstruction.callStaticVoid(
+                "javan_map_initialize_capacity_with_load_factor_and_concurrency",
+                List.of(receiver, arguments.get(0), arguments.get(1), arguments.get(2))
+            ));
             return true;
         }
         if (isJdkMapClass(methodRef.owner()) && "<init>".equals(methodRef.name()) && "()V".equals(methodRef.descriptor())) {

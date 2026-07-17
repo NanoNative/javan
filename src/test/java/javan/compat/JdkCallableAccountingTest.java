@@ -328,6 +328,30 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksHashMapLoadFactorConstructorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/HashMap", "<init>", "(IF)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksLinkedHashMapLoadFactorConstructorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/LinkedHashMap", "<init>", "(IF)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksConcurrentHashMapLoadFactorConstructorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/ConcurrentHashMap", "<init>", "(IF)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksConcurrentHashMapConcurrencyLevelConstructorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/concurrent/ConcurrentHashMap", "<init>", "(IFI)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksCollectionsEmptyListAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Collections", "emptyList", "()Ljava/util/List;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

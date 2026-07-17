@@ -505,13 +505,17 @@ public final class JdkCallSupport {
         runtime("Map.Entry.getValue", "java/util/Map$Entry", "getValue", "()Ljava/lang/Object;"),
         runtime("HashMap.<init>", "java/util/HashMap", "<init>", "()V"),
         runtime("HashMap.<init>", "java/util/HashMap", "<init>", "(I)V"),
+        runtime("HashMap.<init>", "java/util/HashMap", "<init>", "(IF)V"),
         runtime("HashMap.<init>", "java/util/HashMap", "<init>", "(Ljava/util/Map;)V"),
         runtime("LinkedHashMap.<init>", "java/util/LinkedHashMap", "<init>", "()V"),
         runtime("LinkedHashMap.<init>", "java/util/LinkedHashMap", "<init>", "(I)V"),
+        runtime("LinkedHashMap.<init>", "java/util/LinkedHashMap", "<init>", "(IF)V"),
         runtime("LinkedHashMap.<init>", "java/util/LinkedHashMap", "<init>", "(Ljava/util/Map;)V"),
         runtime("TreeMap.<init>", "java/util/TreeMap", "<init>", "()V"),
         runtime("ConcurrentHashMap.<init>", "java/util/concurrent/ConcurrentHashMap", "<init>", "()V"),
         runtime("ConcurrentHashMap.<init>", "java/util/concurrent/ConcurrentHashMap", "<init>", "(I)V"),
+        runtime("ConcurrentHashMap.<init>", "java/util/concurrent/ConcurrentHashMap", "<init>", "(IF)V"),
+        runtime("ConcurrentHashMap.<init>", "java/util/concurrent/ConcurrentHashMap", "<init>", "(IFI)V"),
         runtime("Map.copyOf", "java/util/Map", "copyOf", "(Ljava/util/Map;)Ljava/util/Map;"),
         runtime("Map.get", "java/util/Map", "get", "(Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("HashMap.get", "java/util/HashMap", "get", "(Ljava/lang/Object;)Ljava/lang/Object;"),
@@ -791,13 +795,13 @@ public final class JdkCallSupport {
             return isSupportedHashMapCall(methodRef.name(), methodRef.descriptor());
         }
         if ("java/util/LinkedHashMap".equals(methodRef.owner())) {
-            return isSupportedHashMapCall(methodRef.name(), methodRef.descriptor());
+            return isSupportedLinkedHashMapCall(methodRef.name(), methodRef.descriptor());
         }
         if ("java/util/TreeMap".equals(methodRef.owner())) {
-            return isSupportedHashMapCall(methodRef.name(), methodRef.descriptor());
+            return isSupportedTreeMapCall(methodRef.name(), methodRef.descriptor());
         }
         if ("java/util/concurrent/ConcurrentHashMap".equals(methodRef.owner())) {
-            return isSupportedHashMapCall(methodRef.name(), methodRef.descriptor());
+            return isSupportedConcurrentHashMapCall(methodRef.name(), methodRef.descriptor());
         }
         if ("java/nio/file/Path".equals(methodRef.owner())) {
             return isSupportedPathCall(methodRef.name(), methodRef.descriptor());
@@ -966,8 +970,40 @@ public final class JdkCallSupport {
         if ("<init>".equals(name)) {
             return "()V".equals(descriptor)
                 || "(I)V".equals(descriptor)
+                || "(IF)V".equals(descriptor)
                 || "(Ljava/util/Map;)V".equals(descriptor);
         }
+        return isSupportedMutableMapInstanceCall(name, descriptor);
+    }
+
+    private static boolean isSupportedLinkedHashMapCall(final String name, final String descriptor) {
+        if ("<init>".equals(name)) {
+            return "()V".equals(descriptor)
+                || "(I)V".equals(descriptor)
+                || "(IF)V".equals(descriptor)
+                || "(Ljava/util/Map;)V".equals(descriptor);
+        }
+        return isSupportedMutableMapInstanceCall(name, descriptor);
+    }
+
+    private static boolean isSupportedTreeMapCall(final String name, final String descriptor) {
+        if ("<init>".equals(name)) {
+            return "()V".equals(descriptor);
+        }
+        return isSupportedMutableMapInstanceCall(name, descriptor);
+    }
+
+    private static boolean isSupportedConcurrentHashMapCall(final String name, final String descriptor) {
+        if ("<init>".equals(name)) {
+            return "()V".equals(descriptor)
+                || "(I)V".equals(descriptor)
+                || "(IF)V".equals(descriptor)
+                || "(IFI)V".equals(descriptor);
+        }
+        return isSupportedMutableMapInstanceCall(name, descriptor);
+    }
+
+    private static boolean isSupportedMutableMapInstanceCall(final String name, final String descriptor) {
         if ("get".equals(name)) {
             return "(Ljava/lang/Object;)Ljava/lang/Object;".equals(descriptor);
         }
