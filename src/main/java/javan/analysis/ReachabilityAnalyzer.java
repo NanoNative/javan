@@ -332,7 +332,7 @@ public final class ReachabilityAnalyzer {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
             }
-            if (!targetMethods.isEmpty()) {
+            if (hasInlineDirectPredicateLambda(classes, current, instruction) || !targetMethods.isEmpty()) {
                 return;
             }
             diagnostics.add(Diagnostic.error(
@@ -353,7 +353,7 @@ public final class ReachabilityAnalyzer {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
             }
-            if (!targetMethods.isEmpty()) {
+            if (hasInlineDirectFunctionLambda(classes, current, instruction) || !targetMethods.isEmpty()) {
                 return;
             }
             diagnostics.add(Diagnostic.error(
@@ -364,6 +364,27 @@ public final class ReachabilityAnalyzer {
                 target.display(),
                 "Optional.map requires a closed-world Function implementation class or a supported direct function lambda target.",
                 "Provide a reachable Function implementation class or keep this exact optional mapping flow on the JVM until broader callback support lands."
+            ));
+            return;
+        }
+        if (isOptionalFlatMap(target)) {
+            final MethodRef functionApply = new MethodRef("java/util/function/Function", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;");
+            final List<EntryPoint> targetMethods = interfaceTargets(classes, functionApply, entryPoints);
+            if (!targetMethods.isEmpty()) {
+                enqueueAll(work, workSet, targetMethods);
+                addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
+            }
+            if (hasInlineDirectFunctionLambda(classes, current, instruction) || !targetMethods.isEmpty()) {
+                return;
+            }
+            diagnostics.add(Diagnostic.error(
+                "JAVAN012",
+                "unsupported reachable application method call",
+                current.className(),
+                current.methodName() + current.descriptor(),
+                target.display(),
+                "Optional.flatMap requires a closed-world Function implementation class or a supported direct function lambda target.",
+                "Provide a reachable Function implementation class or keep this exact optional flat-mapping flow on the JVM until broader callback support lands."
             ));
             return;
         }
@@ -816,6 +837,14 @@ public final class ReachabilityAnalyzer {
         return hasInlineDirectLambda(classes, current, instruction, InlineLambdaKind.PREDICATE);
     }
 
+    private static boolean hasInlineDirectFunctionLambda(
+        final Map<String, ClassFile> classes,
+        final EntryPoint current,
+        final Instruction instruction
+    ) {
+        return hasInlineDirectLambda(classes, current, instruction, InlineLambdaKind.FUNCTION);
+    }
+
     private static boolean hasInlineDirectSupplierLambda(
         final Map<String, ClassFile> classes,
         final EntryPoint current,
@@ -852,6 +881,9 @@ public final class ReachabilityAnalyzer {
     }
 
     private static boolean matchesInlineLambdaKind(final LambdaMetafactoryCall lambdaCall, final InlineLambdaKind lambdaKind) {
+        if (lambdaKind == InlineLambdaKind.FUNCTION) {
+            return lambdaCall.isFunction();
+        }
         if (lambdaKind == InlineLambdaKind.PREDICATE) {
             return lambdaCall.isPredicate();
         }
@@ -859,6 +891,7 @@ public final class ReachabilityAnalyzer {
     }
 
     private enum InlineLambdaKind {
+        FUNCTION,
         PREDICATE,
         SUPPLIER
     }
@@ -913,6 +946,12 @@ public final class ReachabilityAnalyzer {
     private static boolean isOptionalMap(final MethodRef target) {
         return "java/util/Optional".equals(target.owner())
             && "map".equals(target.name())
+            && "(Ljava/util/function/Function;)Ljava/util/Optional;".equals(target.descriptor());
+    }
+
+    private static boolean isOptionalFlatMap(final MethodRef target) {
+        return "java/util/Optional".equals(target.owner())
+            && "flatMap".equals(target.name())
             && "(Ljava/util/function/Function;)Ljava/util/Optional;".equals(target.descriptor());
     }
 

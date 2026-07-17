@@ -2027,6 +2027,47 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void reachabilityAcceptsOptionalFlatMapDirectConcreteImplementation() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo(
+                        "flatMapValue",
+                        "(Ljava/util/Optional;Ljava/util/function/Function;)Ljava/util/Optional;",
+                        instruction(0, 42, "aload_0"),
+                        instruction(1, 43, "aload_1"),
+                        instruction(2, 182, "invokevirtual", new MethodRef(
+                            "java/util/Optional",
+                            "flatMap",
+                            "(Ljava/util/function/Function;)Ljava/util/Optional;"
+                        )),
+                        instruction(5, 176, "areturn")
+                    )
+                ),
+                "com/acme/Loader", classWithMethods(
+                    "com/acme/Loader",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/util/function/Function"),
+                    methodInfo(
+                        "apply",
+                        "(Ljava/lang/Object;)Ljava/lang/Object;",
+                        instruction(0, 42, "aload_0"),
+                        instruction(1, 176, "areturn")
+                    )
+                )
+            ),
+            List.of(new EntryPoint("com/acme/Main", "flatMapValue", "(Ljava/util/Optional;Ljava/util/function/Function;)Ljava/util/Optional;"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+    }
+
+    @Test
     void reachabilityAcceptsSupplierGetDirectConcreteImplementation() {
         final CallGraph graph = new ReachabilityAnalyzer().analyze(
             Map.of(

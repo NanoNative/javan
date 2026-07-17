@@ -3034,6 +3034,12 @@ final class BytecodeToIRInvokeSupport {
             lowerOptionalMapLambdaCall(classFile, method, instruction, instructions, stack, localDeclarations);
             return true;
         }
+        if ("flatMap".equals(name)
+            && "(Ljava/util/function/Function;)Ljava/util/Optional;".equals(descriptor)
+            && hasTopStackKind(stack, StackKind.LAMBDA_FUNCTION)) {
+            lowerOptionalFlatMapLambdaCall(classFile, method, instruction, instructions, stack, localDeclarations);
+            return true;
+        }
         if ("orElseGet".equals(name)
             && "(Ljava/util/function/Supplier;)Ljava/lang/Object;".equals(descriptor)
             && hasTopStackKind(stack, StackKind.LAMBDA_SUPPLIER)) {
@@ -3060,6 +3066,22 @@ final class BytecodeToIRInvokeSupport {
         }
         if ("map".equals(name) && "(Ljava/util/function/Function;)Ljava/util/Optional;".equals(descriptor)) {
             lowerOptionalMapCall(
+                classes,
+                classFile,
+                method,
+                instruction,
+                instructions,
+                dispatches,
+                materializedLambdaMethods,
+                stack,
+                localDeclarations,
+                receiver,
+                arguments.getFirst()
+            );
+            return true;
+        }
+        if ("flatMap".equals(name) && "(Ljava/util/function/Function;)Ljava/util/Optional;".equals(descriptor)) {
+            lowerOptionalFlatMapCall(
                 classes,
                 classFile,
                 method,
@@ -3247,6 +3269,45 @@ final class BytecodeToIRInvokeSupport {
         stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
     }
 
+    private static void lowerOptionalFlatMapLambdaCall(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations
+    ) {
+        final DynamicLambda lambda = popDynamicLambda(classFile, method, instruction, stack, StackKind.LAMBDA_FUNCTION, "function lambda");
+        final IrExpression receiver = popObject(classFile, method, instruction, stack);
+        final String valueLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(
+            valueLocal,
+            IrExpression.objectCall("javan_optional_or_else", List.of(receiver, IrExpression.objectNull()))
+        ));
+        final String resultLocal = newObjectLocal(localDeclarations);
+        final String valuePresentLabel = "label_optional_flat_map_value_present_" + instruction.offset() + "_" + localDeclarations.size();
+        final String endLabel = "label_optional_flat_map_end_" + instruction.offset() + "_" + localDeclarations.size();
+        instructions.add(IrInstruction.branchIf(
+            valuePresentLabel,
+            IrExpression.objectComparison("!=", IrExpression.objectLocal(valueLocal), IrExpression.objectNull())
+        ));
+        instructions.add(IrInstruction.assignObject(
+            resultLocal,
+            IrExpression.objectCall("javan_optional_empty", List.of())
+        ));
+        instructions.add(IrInstruction.jump(endLabel));
+        instructions.add(IrInstruction.label(valuePresentLabel));
+        final String mappedLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(
+            mappedLocal,
+            invokeFunctionLambdaExpression(lambda, IrExpression.objectLocal(valueLocal))
+        ));
+        instructions.add(IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(IrExpression.objectLocal(mappedLocal))));
+        instructions.add(IrInstruction.assignObject(resultLocal, IrExpression.objectLocal(mappedLocal)));
+        instructions.add(IrInstruction.label(endLabel));
+        stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
+    }
+
     private static void lowerOptionalFilterCall(
         final Map<String, ClassFile> classes,
         final ClassFile classFile,
@@ -3346,6 +3407,56 @@ final class BytecodeToIRInvokeSupport {
         instructions.add(IrInstruction.jump(endLabel));
         instructions.add(IrInstruction.label(valuePresentLabel));
         instructions.add(IrInstruction.assignObject(resultLocal, IrExpression.objectLocal(valueLocal)));
+        instructions.add(IrInstruction.label(endLabel));
+        stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
+    }
+
+    private static void lowerOptionalFlatMapCall(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final Map<String, IrDispatch> dispatches,
+        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final IrExpression receiver,
+        final IrExpression function
+    ) {
+        final String valueLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(
+            valueLocal,
+            IrExpression.objectCall("javan_optional_or_else", List.of(receiver, IrExpression.objectNull()))
+        ));
+        final String resultLocal = newObjectLocal(localDeclarations);
+        final String valuePresentLabel = "label_optional_flat_map_value_present_" + instruction.offset() + "_" + localDeclarations.size();
+        final String endLabel = "label_optional_flat_map_end_" + instruction.offset() + "_" + localDeclarations.size();
+        instructions.add(IrInstruction.branchIf(
+            valuePresentLabel,
+            IrExpression.objectComparison("!=", IrExpression.objectLocal(valueLocal), IrExpression.objectNull())
+        ));
+        instructions.add(IrInstruction.assignObject(
+            resultLocal,
+            IrExpression.objectCall("javan_optional_empty", List.of())
+        ));
+        instructions.add(IrInstruction.jump(endLabel));
+        instructions.add(IrInstruction.label(valuePresentLabel));
+        final String mappedLocal = newObjectLocal(localDeclarations);
+        lowerFunctionApplyCall(
+            classes,
+            classFile,
+            method,
+            instruction,
+            instructions,
+            dispatches,
+            materializedLambdaMethods,
+            function,
+            IrExpression.objectLocal(valueLocal),
+            mappedLocal
+        );
+        instructions.add(IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(IrExpression.objectLocal(mappedLocal))));
+        instructions.add(IrInstruction.assignObject(resultLocal, IrExpression.objectLocal(mappedLocal)));
         instructions.add(IrInstruction.label(endLabel));
         stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
     }

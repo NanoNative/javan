@@ -8670,6 +8670,38 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void optionalFlatMapWithStaticFunctionBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-flat-map-static-function");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Optional.of("value").flatMap(Main::decorate).orElse("missing"));
+                    System.out.println(Optional.<String>empty().flatMap(Main::decorate).orElse("missing"));
+                }
+
+                private static Optional<String> decorate(final String value) {
+                    return Optional.of("[" + value + "]");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-flat-map-static-function").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("[value]\nmissing\n");
+    }
+
+    @Test
     void optionalIfPresentWithStaticConsumerMethodBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("optional-if-present-static-consumer");
         writeJava(project, "com.acme.Main", """

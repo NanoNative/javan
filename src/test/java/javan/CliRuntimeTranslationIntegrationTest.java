@@ -4931,6 +4931,47 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void optionalFlatMapConcreteImplementationBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-flat-map-concrete");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Optional.of("value").flatMap(new Loader()).orElse("missing"));
+                    System.out.println(Optional.<String>empty().flatMap(new Loader()).orElse("missing"));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Loader", """
+            package com.acme;
+
+            import java.util.Optional;
+            import java.util.function.Function;
+
+            public final class Loader implements Function<Object, Optional<Object>> {
+                @Override
+                public Optional<Object> apply(final Object value) {
+                    return Optional.of(value + "-native");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-flat-map-concrete").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("value-native\nmissing\n");
+    }
+
+    @Test
     void optionalFilterConcretePredicateBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("optional-filter-concrete");
         writeJava(project, "com.acme.Main", """

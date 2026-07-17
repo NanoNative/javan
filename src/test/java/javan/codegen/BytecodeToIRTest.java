@@ -1553,6 +1553,119 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersOptionalFlatMapStaticFunctionLambdaToOptionalHelpersAndDirectFunctionCall() {
+        final EntryPoint entryPoint = new EntryPoint("com/acme/Main", "flatMapValue", "(Ljava/util/Optional;)Ljava/util/Optional;");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    optionalFlatMapLambdaMethod(),
+                    optionalFlatMapLambdaImplementationMethod()
+                ))
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("flatMapValue")).singleElement().satisfies(function -> {
+            assertThat(function.locals()).containsExactly(
+                new IrLocal(IrType.OBJECT, "object0"),
+                new IrLocal(IrType.OBJECT, "object1"),
+                new IrLocal(IrType.OBJECT, "object2")
+            );
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.assignObject(
+                    "object0",
+                    IrExpression.objectCall("javan_optional_or_else", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectNull()))
+                ),
+                IrInstruction.branchIf(
+                    "label_optional_flat_map_value_present_2_2",
+                    IrExpression.objectComparison("!=", IrExpression.objectLocal("object0"), IrExpression.objectNull())
+                ),
+                IrInstruction.assignObject("object1", IrExpression.objectCall("javan_optional_empty", List.of())),
+                IrInstruction.jump("label_optional_flat_map_end_2_2"),
+                IrInstruction.label("label_optional_flat_map_value_present_2_2"),
+                IrInstruction.assignObject(
+                    "object2",
+                    IrExpression.objectCall(
+                        symbol("com/acme/Main", "lambda$flatMap$0", "(Ljava/lang/Object;)Ljava/lang/Object;"),
+                        List.of(IrExpression.objectLocal("object0"))
+                    )
+                ),
+                IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(IrExpression.objectLocal("object2"))),
+                IrInstruction.assignObject("object1", IrExpression.objectLocal("object2")),
+                IrInstruction.label("label_optional_flat_map_end_2_2"),
+                IrInstruction.returnObject(IrExpression.objectLocal("object1"))
+            );
+        });
+    }
+
+    @Test
+    void lowersOptionalFlatMapWithConcreteFunctionImplementationToOptionalHelpersAndDirectFunctionCall() {
+        final EntryPoint entryPoint = new EntryPoint(
+            "com/acme/Main",
+            "flatMapValueNonLambda",
+            "(Ljava/util/Optional;Ljava/util/function/Function;)Ljava/util/Optional;"
+        );
+        final EntryPoint applyEntry = new EntryPoint(
+            "com/acme/Loader",
+            "apply",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
+        );
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    optionalFlatMapConcreteFunctionMethod()
+                )),
+                "com/acme/Loader",
+                classFile(
+                    "com/acme/Loader",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/util/function/Function"),
+                    List.of(),
+                    List.of(functionApplyImplementationMethod())
+                )
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint, applyEntry), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("flatMapValueNonLambda")).singleElement().satisfies(function -> {
+            assertThat(function.locals()).containsExactly(
+                new IrLocal(IrType.OBJECT, "object0"),
+                new IrLocal(IrType.OBJECT, "object1"),
+                new IrLocal(IrType.OBJECT, "object2")
+            );
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.assignObject(
+                    "object0",
+                    IrExpression.objectCall("javan_optional_or_else", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectNull()))
+                ),
+                IrInstruction.branchIf(
+                    "label_optional_flat_map_value_present_2_2",
+                    IrExpression.objectComparison("!=", IrExpression.objectLocal("object0"), IrExpression.objectNull())
+                ),
+                IrInstruction.assignObject("object1", IrExpression.objectCall("javan_optional_empty", List.of())),
+                IrInstruction.jump("label_optional_flat_map_end_2_2"),
+                IrInstruction.label("label_optional_flat_map_value_present_2_2"),
+                IrInstruction.assignObject(
+                    "object2",
+                    IrExpression.objectCall(
+                        symbol("com/acme/Loader", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;"),
+                        List.of(IrExpression.objectLocal("arg1"), IrExpression.objectLocal("object0"))
+                    )
+                ),
+                IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(IrExpression.objectLocal("object2"))),
+                IrInstruction.assignObject("object1", IrExpression.objectLocal("object2")),
+                IrInstruction.label("label_optional_flat_map_end_2_2"),
+                IrInstruction.returnObject(IrExpression.objectLocal("object1"))
+            );
+        });
+    }
+
+    @Test
     void lowersDirectFunctionApplyMaterializedLambdaToDirectLambdaCall() {
         final EntryPoint entryPoint = new EntryPoint("com/acme/Main", "applyValue", "(Ljava/lang/Object;)Ljava/lang/Object;");
         final IrProgram program = new BytecodeToIR().lower(
@@ -27003,6 +27116,55 @@ final class BytecodeToIRTest {
         );
     }
 
+    private static MethodInfo optionalFlatMapLambdaMethod() {
+        return method(
+            0x0008,
+            "flatMapValue",
+            "(Ljava/util/Optional;)Ljava/util/Optional;",
+            2,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeDynamic(1, new DynamicRef(
+                "apply",
+                "()Ljava/util/function/Function;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "invokestatic com/acme/Main.lambda$flatMap$0:(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "(Ljava/lang/Object;)Ljava/lang/Object;"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;"),
+                    BootstrapArgument.methodHandle(
+                        6,
+                        new MethodRef("com/acme/Main", "lambda$flatMap$0", "(Ljava/lang/Object;)Ljava/lang/Object;")
+                    ),
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;")
+                )
+            )),
+            invokeVirtual(2, new MethodRef("java/util/Optional", "flatMap", "(Ljava/util/function/Function;)Ljava/util/Optional;")),
+            plain(3, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo optionalFlatMapConcreteFunctionMethod() {
+        return method(
+            0x0008,
+            "flatMapValueNonLambda",
+            "(Ljava/util/Optional;Ljava/util/function/Function;)Ljava/util/Optional;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/util/Optional", "flatMap", "(Ljava/util/function/Function;)Ljava/util/Optional;")),
+            plain(5, 176, "areturn")
+        );
+    }
+
     private static MethodInfo directFunctionApplyLambdaMethod() {
         return method(
             0x0008,
@@ -27529,6 +27691,19 @@ final class BytecodeToIRTest {
             1,
             plain(0, 42, "aload_0"),
             plain(1, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo optionalFlatMapLambdaImplementationMethod() {
+        return method(
+            0x0008,
+            "lambda$flatMap$0",
+            "(Ljava/lang/Object;)Ljava/lang/Object;",
+            2,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeStatic(1, new MethodRef("java/util/Optional", "ofNullable", "(Ljava/lang/Object;)Ljava/util/Optional;")),
+            plain(4, 176, "areturn")
         );
     }
 

@@ -861,7 +861,8 @@ public final class JdkCallSupport {
         runtime("BiFunction.apply", "java/util/function/BiFunction", "apply", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Predicate.test", "java/util/function/Predicate", "test", "(Ljava/lang/Object;)Z"),
         runtime("Optional.filter", "java/util/Optional", "filter", "(Ljava/util/function/Predicate;)Ljava/util/Optional;"),
-        runtime("Optional.map", "java/util/Optional", "map", "(Ljava/util/function/Function;)Ljava/util/Optional;")
+        runtime("Optional.map", "java/util/Optional", "map", "(Ljava/util/function/Function;)Ljava/util/Optional;"),
+        runtime("Optional.flatMap", "java/util/Optional", "flatMap", "(Ljava/util/function/Function;)Ljava/util/Optional;")
     );
     private static final SupportedCallIndex SUPPORTED_CALL_INDEX = new SupportedCallIndex(SUPPORTED_CALLS);
 
