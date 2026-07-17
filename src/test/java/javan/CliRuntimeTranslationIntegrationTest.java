@@ -4214,6 +4214,108 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void mapMergeConcreteImplementationBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-merge-concrete");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashMap;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final HashMap<Object, Object> values = new HashMap<>();
+                    values.put("demo", "left");
+                    System.out.println(values.merge("demo", "right", new Joiner()));
+                    System.out.println(values.get("demo"));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Joiner", """
+            package com.acme;
+
+            import java.util.function.BiFunction;
+
+            public final class Joiner implements BiFunction<Object, Object, Object> {
+                @Override
+                public Object apply(final Object left, final Object right) {
+                    return left + ":" + right;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-merge-concrete").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("left:right\nleft:right\n");
+    }
+
+    @Test
+    void mapMergeMissingKeyBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-merge-missing");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, String> values = new HashMap<>();
+                    System.out.println(values.merge("demo", "value", (left, right) -> left + ":" + right));
+                    System.out.println(values.get("demo"));
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-merge-missing").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("value\nvalue\n1\n");
+    }
+
+    @Test
+    void mapMergeNullRemapRemovesEntryBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-merge-null-remap");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, String> values = new HashMap<>();
+                    values.put("demo", "value");
+                    System.out.println(values.merge("demo", "other", (left, right) -> null));
+                    System.out.println(values.containsKey("demo"));
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-merge-null-remap").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("null\nfalse\n0\n");
+    }
+
+    @Test
     void mapForEachLambdaBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("map-foreach-lambda");
         writeJava(project, "com.acme.Main", """

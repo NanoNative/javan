@@ -50,21 +50,21 @@ Current support ledger for the active JDK 25 evidence set:
 
 | Measure | Count |
 | --- | ---: |
-| support rows | 296 |
-| pass rows | 296 |
+| support rows | 297 |
+| pass rows | 297 |
 | scoped rows | 0 |
 | target rows | 0 |
 | rejected rows | 0 |
-| accounted rows | 296 |
+| accounted rows | 297 |
 | unaccounted rows | 0 |
 | exact supported JDK callable classes | 485 |
 | exact supported JDK constructors | 723 |
-| exact supported JDK methods | 699 |
-| exact supported JDK callables | 1422 / 267886 (0.5%) |
+| exact supported JDK methods | 702 |
+| exact supported JDK callables | 1425 / 267886 (0.5%) |
 | exact explicit rejected JDK callables | 174598 |
-| exact done JDK callables | 176020 / 267886 (65.7%) |
-| exact unknown JDK callables | 91866 |
-| exact supported JDK callables left | 266464 |
+| exact done JDK callables | 176023 / 267886 (65.7%) |
+| exact unknown JDK callables | 91863 |
+| exact supported JDK callables left | 266461 |
 | flow-qualified reachable current-thread lifecycle rejects | 0 |
 | flow-qualified unreachable current-thread lifecycle rejects | 0 |
 | flow-qualified reachable thread-builder receiver-shape rejects | 0 |
