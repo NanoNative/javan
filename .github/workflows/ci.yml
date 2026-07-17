@@ -110,13 +110,26 @@ jobs:
           import xml.etree.ElementTree as ET
 
           report = pathlib.Path("target/site/jacoco/jacoco.xml")
+          summary_path = pathlib.Path(os.environ["GITHUB_STEP_SUMMARY"])
           target_ratio = float(os.environ["JAVAN_COVERAGE_SOFT_TARGET"])
           if not report.exists():
               print("::warning::JaCoCo report missing; coverage summary skipped.")
+              summary_path.write_text(
+                  "# Coverage\n\nJaCoCo report missing. Coverage summary skipped.\n",
+                  encoding="utf-8"
+              )
               raise SystemExit(0)
 
           root = ET.parse(report).getroot()
           counters = {counter.attrib["type"]: counter.attrib for counter in root.findall("counter")}
+          summary_lines = [
+              "# Coverage",
+              "",
+              f"Soft target: {target_ratio:.0%} (signal only, not a workflow gate)",
+              "",
+              "| Counter | Covered | Total | Ratio | Status |",
+              "| --- | ---: | ---: | ---: | --- |",
+          ]
           for counter_type in ("LINE", "BRANCH"):
               counter = counters.get(counter_type)
               if counter is None:
@@ -126,12 +139,28 @@ jobs:
               total = missed + covered
               ratio = covered / total if total else 1.0
               ratio_text = f"{covered}/{total} = {ratio:.6%}"
+              status = "meets target" if ratio >= target_ratio else "below target"
               print(f"JaCoCo {counter_type.lower()} bundle ratio: {ratio_text}")
               if ratio < target_ratio:
                   print(f"::warning::JaCoCo {counter_type.lower()} coverage is below soft target {target_ratio:.0%}: {ratio_text}")
               else:
                   print(f"::notice::JaCoCo {counter_type.lower()} coverage meets soft target {target_ratio:.0%}: {ratio_text}")
+              summary_lines.append(
+                  f"| {counter_type.lower()} | {covered} | {total} | {ratio:.2%} | {status} |"
+              )
+          summary_path.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
           PY
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: jacoco-${{ matrix.target }}
+          retention-days: 7
+          if-no-files-found: warn
+          path: |
+            target/site/jacoco/**
+            target/jacoco-merged.exec
 
   native-smoke:
     name: native-smoke (${{ matrix.target }})
