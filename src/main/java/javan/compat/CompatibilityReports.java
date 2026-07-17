@@ -599,6 +599,8 @@ public final class CompatibilityReports {
             pass("map-foreach"),
             pass("map-clear"),
             pass("map-put-all"),
+            pass("map-replace"),
+            pass("map-replace-key-value"),
             pass("map-is-empty"),
             pass("map-size"),
             pass("map-values"),

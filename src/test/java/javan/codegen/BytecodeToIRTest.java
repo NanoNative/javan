@@ -22860,6 +22860,130 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersMapReplaceToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/Map;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+            3,
+            3,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            plain(2, 44, "aload_2"),
+            invokeVirtual(3, new MethodRef("java/util/Map", "replace", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")),
+            plain(4, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_map_replace",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.objectLocal("arg2"))
+                )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersHashMapReplaceToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/HashMap;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+            3,
+            3,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            plain(2, 44, "aload_2"),
+            invokeVirtual(3, new MethodRef("java/util/HashMap", "replace", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")),
+            plain(4, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject(
+                "object0",
+                IrExpression.objectCall(
+                    "javan_map_replace",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.objectLocal("arg2"))
+                )
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersMapReplaceKeyValueToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/Map;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Z",
+            4,
+            4,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            plain(2, 44, "aload_2"),
+            plain(3, 45, "aload_3"),
+            invokeVirtual(4, new MethodRef("java/util/Map", "replace", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Z")),
+            plain(5, 172, "ireturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.INT, "int0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignInt(
+                "int0",
+                IrExpression.intCall(
+                    "javan_map_replace_entry",
+                    List.of(
+                        IrExpression.objectLocal("arg0"),
+                        IrExpression.objectLocal("arg1"),
+                        IrExpression.objectLocal("arg2"),
+                        IrExpression.objectLocal("arg3")
+                    )
+                )
+            ),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
+        );
+    }
+
+    @Test
+    void lowersHashMapReplaceKeyValueToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/HashMap;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Z",
+            4,
+            4,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            plain(2, 44, "aload_2"),
+            plain(3, 45, "aload_3"),
+            invokeVirtual(4, new MethodRef("java/util/HashMap", "replace", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Z")),
+            plain(5, 172, "ireturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.INT, "int0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignInt(
+                "int0",
+                IrExpression.intCall(
+                    "javan_map_replace_entry",
+                    List.of(
+                        IrExpression.objectLocal("arg0"),
+                        IrExpression.objectLocal("arg1"),
+                        IrExpression.objectLocal("arg2"),
+                        IrExpression.objectLocal("arg3")
+                    )
+                )
+            ),
+            IrInstruction.returnInt(IrExpression.intLocal("int0"))
+        );
+    }
+
+    @Test
     void lowersHashMapPutIfAbsentToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,

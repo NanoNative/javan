@@ -4450,6 +4450,20 @@ final class BytecodeToIRInvokeSupport {
                 pushObjectCall(instructions, stack, localDeclarations, "javan_map_put_if_absent", List.of(receiver, arguments.get(0), arguments.get(1)));
                 return true;
             }
+            if ("replace(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(signature)) {
+                pushObjectCall(instructions, stack, localDeclarations, "javan_map_replace", List.of(receiver, arguments.get(0), arguments.get(1)));
+                return true;
+            }
+            if ("replace(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Z".equals(signature)) {
+                pushIntCall(
+                    instructions,
+                    stack,
+                    localDeclarations,
+                    "javan_map_replace_entry",
+                    List.of(receiver, arguments.get(0), arguments.get(1), arguments.get(2))
+                );
+                return true;
+            }
             if ("clear()V".equals(signature)) {
                 instructions.add(IrInstruction.callStaticVoid("javan_map_clear", List.of(receiver)));
                 return true;

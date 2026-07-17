@@ -9891,6 +9891,40 @@ final class RuntimeSourceMemorySections {
             return NULL;
         }
 
+        void* javan_map_replace(void* value, void* key, void* element) {
+            javan_object_map* map = javan_map_checked(value);
+            javan_map_mutable_checked(map);
+            int index = javan_map_find(map, key);
+            if (index < 0) {
+                return NULL;
+            }
+            void* previous = javan_map_value_unchecked(map, index);
+            if (map->backing != NULL) {
+                map->backing->values[index] = element;
+                return previous;
+            }
+            map->values[index] = element;
+            return previous;
+        }
+
+        int javan_map_replace_entry(void* value, void* key, void* expected_value, void* new_value) {
+            javan_object_map* map = javan_map_checked(value);
+            javan_map_mutable_checked(map);
+            int index = javan_map_find(map, key);
+            if (index < 0) {
+                return 0;
+            }
+            if (javan_object_equals(javan_map_value_unchecked(map, index), expected_value) == 0) {
+                return 0;
+            }
+            if (map->backing != NULL) {
+                map->backing->values[index] = new_value;
+                return 1;
+            }
+            map->values[index] = new_value;
+            return 1;
+        }
+
         void javan_map_clear(void* value) {
             javan_object_map* map = javan_map_checked(value);
             javan_map_mutable_checked(map);

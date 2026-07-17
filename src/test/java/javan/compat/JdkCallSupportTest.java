@@ -2870,6 +2870,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void mapReplaceIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Map",
+            "replace",
+            "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void mapReplaceKeyValueIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Map",
+            "replace",
+            "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Z"
+        ))).isTrue();
+    }
+
+    @Test
     void mapIsEmptyIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Map",

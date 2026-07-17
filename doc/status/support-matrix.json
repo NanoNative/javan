@@ -11,8 +11,8 @@
     "rule": "done = supported variants + rejected variants; unknown leftovers must be 0 for a release-gated JDK"
   },
   "counts": {
-    "rows": 290,
-    "pass": 290,
+    "rows": 292,
+    "pass": 292,
     "scoped": 0,
     "target": 0,
     "rejected": 0
@@ -197,6 +197,8 @@
     {"feature": "map-foreach", "jdk25": "pass"},
     {"feature": "map-clear", "jdk25": "pass"},
     {"feature": "map-put-all", "jdk25": "pass"},
+    {"feature": "map-replace", "jdk25": "pass"},
+    {"feature": "map-replace-key-value", "jdk25": "pass"},
     {"feature": "map-is-empty", "jdk25": "pass"},
     {"feature": "map-size", "jdk25": "pass"},
     {"feature": "map-values", "jdk25": "pass"},

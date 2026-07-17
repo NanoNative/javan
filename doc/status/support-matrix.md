@@ -9,8 +9,8 @@ External project names do not belong in this matrix; this ledger stays compiler-
 
 | Measure | Count |
 | --- | ---: |
-| rows | 290 |
-| pass | 290 |
+| rows | 292 |
+| pass | 292 |
 | scoped | 0 |
 | target | 0 |
 | rejected | 0 |
@@ -205,6 +205,8 @@ Status mapping:
 | `map-foreach` | pass |
 | `map-clear` | pass |
 | `map-put-all` | pass |
+| `map-replace` | pass |
+| `map-replace-key-value` | pass |
 | `map-is-empty` | pass |
 | `map-size` | pass |
 | `map-values` | pass |

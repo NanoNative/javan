@@ -796,6 +796,18 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksMapReplaceAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "replace", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksMapReplaceKeyValueAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "replace", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksMapIsEmptyAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "isEmpty", "()Z")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
