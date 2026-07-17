@@ -4469,6 +4469,46 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void optionalFilterConcretePredicateBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-filter-concrete");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Optional.of("value").filter(new KeepPredicate()).orElse("missing"));
+                    System.out.println(Optional.of("drop").filter(new KeepPredicate()).orElse("missing"));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.KeepPredicate", """
+            package com.acme;
+
+            import java.util.function.Predicate;
+
+            public final class KeepPredicate implements Predicate<Object> {
+                @Override
+                public boolean test(final Object value) {
+                    return "value".equals(value);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-filter-concrete").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("value\nmissing\n");
+    }
+
+    @Test
     void hashMapComputeIfAbsentConcreteImplementationBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("hashmap-compute-if-absent-concrete");
         writeJava(project, "com.acme.Main", """

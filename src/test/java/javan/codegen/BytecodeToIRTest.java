@@ -1678,22 +1678,74 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void rejectsOptionalFilterWhenPredicateArgumentIsNotDynamicLambda() {
-        assertThatThrownBy(() -> lowerMain(method(
-            0x0008,
+    void lowersOptionalFilterWithConcretePredicateImplementationToOptionalHelpersAndDirectPredicateCall() {
+        final EntryPoint entryPoint = new EntryPoint(
+            "com/acme/Main",
             "filterValueNonLambda",
-            "(Ljava/util/Optional;Ljava/util/function/Predicate;)Ljava/util/Optional;",
-            2,
-            2,
-            plain(0, 42, "aload_0"),
-            plain(1, 43, "aload_1"),
-            invokeVirtual(2, new MethodRef("java/util/Optional", "filter", "(Ljava/util/function/Predicate;)Ljava/util/Optional;")),
-            plain(5, 176, "areturn")
-        )))
-            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
-                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
-                assertThat(exception.diagnostic().subject()).isEqualTo("invokevirtual java/util/Optional.filter(Ljava/util/function/Predicate;)Ljava/util/Optional;");
-            });
+            "(Ljava/util/Optional;Ljava/util/function/Predicate;)Ljava/util/Optional;"
+        );
+        final EntryPoint predicateEntry = new EntryPoint(
+            "com/acme/Matcher",
+            "test",
+            "(Ljava/lang/Object;)Z"
+        );
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    optionalFilterConcretePredicateMethod()
+                )),
+                "com/acme/Matcher",
+                classFile(
+                    "com/acme/Matcher",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/util/function/Predicate"),
+                    List.of(),
+                    List.of(predicateTestImplementationMethod())
+                )
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint, predicateEntry), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("filterValueNonLambda")).singleElement().satisfies(function -> {
+            assertThat(function.locals()).containsExactly(
+                new IrLocal(IrType.OBJECT, "object0"),
+                new IrLocal(IrType.OBJECT, "object1"),
+                new IrLocal(IrType.INT, "int2")
+            );
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.assignObject(
+                    "object0",
+                    IrExpression.objectCall("javan_optional_or_else", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectNull()))
+                ),
+                IrInstruction.branchIf(
+                    "label_optional_filter_value_present_2_2",
+                    IrExpression.objectComparison("!=", IrExpression.objectLocal("object0"), IrExpression.objectNull())
+                ),
+                IrInstruction.assignObject("object1", IrExpression.objectCall("javan_optional_empty", List.of())),
+                IrInstruction.jump("label_optional_filter_end_2_2"),
+                IrInstruction.label("label_optional_filter_value_present_2_2"),
+                IrInstruction.assignInt(
+                    "int2",
+                    IrExpression.intCall(
+                        "javan_com_acme_Matcher_test__Ljava_lang_Object__Z",
+                        List.of(IrExpression.objectLocal("arg1"), IrExpression.objectLocal("object0"))
+                    )
+                ),
+                IrInstruction.branchIf(
+                    "label_optional_filter_keep_2_2",
+                    IrExpression.intComparison("!=", IrExpression.intLocal("int2"), IrExpression.intLiteral(0))
+                ),
+                IrInstruction.assignObject("object1", IrExpression.objectCall("javan_optional_empty", List.of())),
+                IrInstruction.jump("label_optional_filter_end_2_2"),
+                IrInstruction.label("label_optional_filter_keep_2_2"),
+                IrInstruction.assignObject("object1", IrExpression.objectLocal("arg0")),
+                IrInstruction.label("label_optional_filter_end_2_2"),
+                IrInstruction.returnObject(IrExpression.objectLocal("object1"))
+            );
+        });
     }
 
     @Test
@@ -26657,6 +26709,20 @@ final class BytecodeToIRTest {
             )),
             invokeVirtual(2, new MethodRef("java/util/Optional", "filter", "(Ljava/util/function/Predicate;)Ljava/util/Optional;")),
             plain(3, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo optionalFilterConcretePredicateMethod() {
+        return method(
+            0x0008,
+            "filterValueNonLambda",
+            "(Ljava/util/Optional;Ljava/util/function/Predicate;)Ljava/util/Optional;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/util/Optional", "filter", "(Ljava/util/function/Predicate;)Ljava/util/Optional;")),
+            plain(5, 176, "areturn")
         );
     }
 

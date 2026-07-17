@@ -325,6 +325,25 @@ public final class ReachabilityAnalyzer {
             ));
             return;
         }
+        if (isOptionalFilter(target)) {
+            final MethodRef predicateTest = new MethodRef("java/util/function/Predicate", "test", "(Ljava/lang/Object;)Z");
+            final List<EntryPoint> targetMethods = interfaceTargets(classes, predicateTest, entryPoints);
+            if (!targetMethods.isEmpty()) {
+                enqueueAll(work, workSet, targetMethods);
+                addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
+                return;
+            }
+            diagnostics.add(Diagnostic.error(
+                "JAVAN012",
+                "unsupported reachable application method call",
+                current.className(),
+                current.methodName() + current.descriptor(),
+                target.display(),
+                "Optional.filter requires a closed-world Predicate implementation class or a supported direct predicate lambda target.",
+                "Provide a reachable Predicate implementation class or keep this exact optional filter flow on the JVM until broader callback support lands."
+            ));
+            return;
+        }
         if (isOptionalMap(target)) {
             final MethodRef functionApply = new MethodRef("java/util/function/Function", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;");
             final List<EntryPoint> targetMethods = interfaceTargets(classes, functionApply, entryPoints);
@@ -666,6 +685,12 @@ public final class ReachabilityAnalyzer {
             || "java/util/HashMap".equals(target.owner())
             || "java/util/LinkedHashMap".equals(target.owner())
             || "java/util/TreeMap".equals(target.owner());
+    }
+
+    private static boolean isOptionalFilter(final MethodRef target) {
+        return "java/util/Optional".equals(target.owner())
+            && "filter".equals(target.name())
+            && "(Ljava/util/function/Predicate;)Ljava/util/Optional;".equals(target.descriptor());
     }
 
     private static boolean isOptionalMap(final MethodRef target) {
