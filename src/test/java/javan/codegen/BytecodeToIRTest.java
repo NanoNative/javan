@@ -19512,6 +19512,27 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersCollectionsUnmodifiableMapToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/Map;)Ljava/util/Map;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeStatic(1, new MethodRef("java/util/Collections", "unmodifiableMap", "(Ljava/util/Map;)Ljava/util/Map;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_map_unmodifiable",
+                List.of(IrExpression.objectLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
     void rejectsMapCopyOfWithWrongDescriptor() {
         assertThatThrownBy(() -> lowerMain(method(
             0x0008,

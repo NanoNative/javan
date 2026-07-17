@@ -219,6 +219,7 @@ public final class JdkCallSupport {
         runtime("Collections.emptyList", "java/util/Collections", "emptyList", "()Ljava/util/List;"),
         runtime("Collections.singletonMap", "java/util/Collections", "singletonMap", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;"),
         runtime("Collections.emptyMap", "java/util/Collections", "emptyMap", "()Ljava/util/Map;"),
+        runtime("Collections.unmodifiableMap", "java/util/Collections", "unmodifiableMap", "(Ljava/util/Map;)Ljava/util/Map;"),
         runtime("Map.of", "java/util/Map", "of", "()Ljava/util/Map;"),
         runtime("Map.of", "java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;"),
         runtime("Map.of", "java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;"),

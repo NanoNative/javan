@@ -9,8 +9,8 @@ External project names do not belong in this matrix; this ledger stays compiler-
 
 | Measure | Count |
 | --- | ---: |
-| rows | 188 |
-| pass | 188 |
+| rows | 189 |
+| pass | 189 |
 | scoped | 0 |
 | target | 0 |
 | rejected | 0 |
@@ -111,6 +111,7 @@ Status mapping:
 | `collections-singleton-list` | pass |
 | `collections-empty-list` | pass |
 | `collections-singleton-map` | pass |
+| `collections-unmodifiable-map` | pass |
 | `map-entry` | pass |
 | `map-of-singleton` | pass |
 | `map-of-pair` | pass |

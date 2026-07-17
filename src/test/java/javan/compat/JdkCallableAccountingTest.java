@@ -301,6 +301,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksCollectionsUnmodifiableMapAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Collections", "unmodifiableMap", "(Ljava/util/Map;)Ljava/util/Map;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksMapOfSingletonAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

@@ -1711,6 +1711,59 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void collectionsUnmodifiableMapBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("collections-unmodifiable-map");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Collections;
+            import java.util.HashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, Integer> mutable = new HashMap<>();
+                    mutable.put("x", 7);
+                    final Map<String, Integer> values = Collections.unmodifiableMap(mutable);
+                    System.out.println(values.isEmpty());
+                    System.out.println(values.size());
+                    System.out.println(values.containsKey("x"));
+                    System.out.println(values.get("x"));
+                    mutable.put("y", 9);
+                    System.out.println(values.containsKey("y"));
+                    System.out.println(values.get("y"));
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/collections-unmodifiable-map").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("false\n1\ntrue\n7\ntrue\n9\n2\n");
+    }
+
+    @Test
+    void collectionsUnmodifiableMapRejectsMutationAtRuntime() throws Exception {
+        assertCollectionsUnmodifiableMapFailureAtRuntime(
+            "collections-unmodifiable-map-put",
+            """
+            final Map<String, Integer> mutable = new HashMap<>();
+            mutable.put("x", 7);
+            final Map<String, Integer> values = Collections.unmodifiableMap(mutable);
+            values.put("y", 9);
+            """,
+            "unsupported operation on immutable map"
+        );
+    }
+
+    @Test
     void mapOfSingletonBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("map-of-singleton");
         writeJava(project, "com.acme.Main", """
@@ -5612,6 +5665,38 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         writeJava(project, "com.acme.Main", """
             package com.acme;
 
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    %s
+                }
+            }
+            """.formatted(statement));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/" + projectName).toString()));
+
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains(expectedMessage);
+    }
+
+    private void assertCollectionsUnmodifiableMapFailureAtRuntime(
+        final String projectName,
+        final String statement,
+        final String expectedMessage
+    ) throws Exception {
+        final Path project = project(projectName);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Collections;
+            import java.util.HashMap;
             import java.util.Map;
 
             public final class Main {

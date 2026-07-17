@@ -193,6 +193,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void collectionsUnmodifiableMapIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Collections",
+            "unmodifiableMap",
+            "(Ljava/util/Map;)Ljava/util/Map;"
+        ))).isTrue();
+    }
+
+    @Test
     void mapOfSingletonIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Map",

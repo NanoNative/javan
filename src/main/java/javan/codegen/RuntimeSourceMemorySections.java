@@ -71,6 +71,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_RUNTIME_KIND_ATOMIC_REFERENCE 32
         #define JAVAN_RUNTIME_KIND_RESOURCE_INPUT_STREAM 33
         #define JAVAN_LIST_VIEW_UNMODIFIABLE 1
+        #define JAVAN_MAP_VIEW_UNMODIFIABLE 1
         #define JAVAN_BUILTIN_INSTANCEOF_COLLECTION 1
         #define JAVAN_BUILTIN_INSTANCEOF_MAP 2
         #define JAVAN_BUILTIN_INSTANCEOF_MAP_ENTRY 3
@@ -104,15 +105,15 @@ final class RuntimeSourceMemorySections {
             javan_object_list* list;
         } javan_object_iterator;
 
-        typedef struct {
+        typedef struct javan_object_map {
             int magic;
             int length;
             int capacity;
             int immutable;
             int mod_count;
+            int view_flags;
             int reserved0;
-            int reserved1;
-            int reserved2;
+            struct javan_object_map* backing;
             void** keys;
             void** values;
         } javan_object_map;
@@ -1544,6 +1545,7 @@ final class RuntimeSourceMemorySections {
                 if (map->magic != JAVAN_OBJECT_MAP_MAGIC || map->length < 0 || map->capacity < 0 || map->length > map->capacity) {
                     javan_panic("invalid runtime map metadata");
                 }
+                javan_validate_runtime_managed_reference((void*) map->backing);
                 javan_validate_owned_runtime_buffer_reference((void*) map->keys);
                 javan_validate_owned_runtime_buffer_reference((void*) map->values);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_STRING_BUILDER) {
@@ -2266,6 +2268,7 @@ final class RuntimeSourceMemorySections {
                 if (map != NULL && map->magic == JAVAN_OBJECT_MAP_MAGIC) {
                     javan_free_owned_runtime_buffer((void*) map->keys);
                     javan_free_owned_runtime_buffer((void*) map->values);
+                    map->backing = NULL;
                     map->keys = NULL;
                     map->values = NULL;
                     map->capacity = 0;
@@ -6096,6 +6099,7 @@ final class RuntimeSourceMemorySections {
             if (map == NULL || map->magic != JAVAN_OBJECT_MAP_MAGIC) {
                 return;
             }
+            javan_gc_mark_value((void*) map->backing);
             javan_gc_mark_value((void*) map->keys);
             javan_gc_mark_value((void*) map->values);
             for (int index = 0; index < map->length; index++) {
@@ -8368,6 +8372,8 @@ final class RuntimeSourceMemorySections {
             map->capacity = capacity;
             map->immutable = immutable;
             map->mod_count = 0;
+            map->view_flags = 0;
+            map->backing = NULL;
             map->keys = NULL;
             map->values = NULL;
             javan_update_runtime_allocation_kind((void*) map, JAVAN_RUNTIME_KIND_OBJECT_MAP);
@@ -8391,6 +8397,25 @@ final class RuntimeSourceMemorySections {
             return map;
         }
 
+        static javan_object_map* javan_map_new_view(javan_object_map* backing, int immutable, int view_flags) {
+            if (backing == NULL) {
+                javan_panic("null map backing");
+            }
+            javan_object_map* map = NULL;
+            void** roots[] = {
+                (void**) &backing,
+                (void**) &map
+            };
+            javan_root_frame_push(roots, 2);
+            map = javan_map_new_with_capacity(0, immutable);
+            map->view_flags = view_flags;
+            map->backing = backing;
+            map->length = 0;
+            map->capacity = 0;
+            javan_root_frame_pop(roots);
+            return map;
+        }
+
         static javan_object_map* javan_map_checked(void* value) {
             if (value == NULL) {
                 javan_panic("null map");
@@ -8406,6 +8431,34 @@ final class RuntimeSourceMemorySections {
             if (map->immutable != 0) {
                 javan_panic("unsupported operation on immutable map");
             }
+        }
+
+        static int javan_map_logical_length(javan_object_map* map) {
+            if (map->backing != NULL) {
+                return javan_map_logical_length(map->backing);
+            }
+            return map->length;
+        }
+
+        static int javan_map_observed_mod_count(javan_object_map* map) {
+            if (map->backing != NULL) {
+                return javan_map_observed_mod_count(map->backing);
+            }
+            return map->mod_count;
+        }
+
+        static void* javan_map_key_unchecked(javan_object_map* map, int index) {
+            if (map->backing != NULL) {
+                return javan_map_key_unchecked(map->backing, index);
+            }
+            return map->keys[index];
+        }
+
+        static void* javan_map_value_unchecked(javan_object_map* map, int index) {
+            if (map->backing != NULL) {
+                return javan_map_value_unchecked(map->backing, index);
+            }
+            return map->values[index];
         }
 
         static void javan_map_ensure_capacity(javan_object_map* map, int required) {
@@ -8458,8 +8511,9 @@ final class RuntimeSourceMemorySections {
         }
 
         static int javan_map_find(javan_object_map* map, void* key) {
-            for (int index = 0; index < map->length; index++) {
-                if (javan_map_key_equals(map->keys[index], key) != 0) {
+            int length = javan_map_logical_length(map);
+            for (int index = 0; index < length; index++) {
+                if (javan_map_key_equals(javan_map_key_unchecked(map, index), key) != 0) {
                     return index;
                 }
             }
@@ -9195,26 +9249,35 @@ final class RuntimeSourceMemorySections {
                 (void**) &source
             };
             javan_root_frame_push(javan_map_copy_roots, 1);
-            javan_object_map* result = javan_map_new_with_capacity(source->length, 1);
-            for (int index = 0; index < source->length; index++) {
-                result->keys[index] = source->keys[index];
-                result->values[index] = source->values[index];
+            int length = javan_map_logical_length(source);
+            javan_object_map* result = javan_map_new_with_capacity(length, 1);
+            for (int index = 0; index < length; index++) {
+                result->keys[index] = javan_map_key_unchecked(source, index);
+                result->values[index] = javan_map_value_unchecked(source, index);
             }
-            result->length = source->length;
+            result->length = length;
             javan_root_frame_pop(javan_map_copy_roots);
             return result;
+        }
+
+        void* javan_map_unmodifiable(void* value) {
+            javan_object_map* map = javan_map_checked(value);
+            if (map->immutable != 0 && map->backing != NULL && (map->view_flags & JAVAN_MAP_VIEW_UNMODIFIABLE) != 0) {
+                return map;
+            }
+            return javan_map_new_view(map, 1, JAVAN_MAP_VIEW_UNMODIFIABLE);
         }
 
         void* javan_map_get(void* value, void* key) {
             javan_object_map* map = javan_map_checked(value);
             int index = javan_map_find(map, key);
-            return index < 0 ? NULL : map->values[index];
+            return index < 0 ? NULL : javan_map_value_unchecked(map, index);
         }
 
         void* javan_map_get_or_default(void* value, void* key, void* fallback) {
             javan_object_map* map = javan_map_checked(value);
             int index = javan_map_find(map, key);
-            return index < 0 ? fallback : map->values[index];
+            return index < 0 ? fallback : javan_map_value_unchecked(map, index);
         }
 
         void* javan_map_put(void* value, void* key, void* element) {
@@ -9291,11 +9354,11 @@ final class RuntimeSourceMemorySections {
         }
 
         int javan_map_size(void* value) {
-            return javan_map_checked(value)->length;
+            return javan_map_logical_length(javan_map_checked(value));
         }
 
         int javan_map_is_empty(void* value) {
-            return javan_map_checked(value)->length == 0;
+            return javan_map_logical_length(javan_map_checked(value)) == 0;
         }
 
         void* javan_map_key_set(void* value) {
@@ -9308,8 +9371,9 @@ final class RuntimeSourceMemorySections {
             javan_root_frame_push(javan_map_key_set_roots, 2);
             set_value = javan_hashset_new();
             javan_object_list* set = (javan_object_list*) set_value;
-            for (int index = 0; index < map->length; index++) {
-                javan_set_add(set, map->keys[index]);
+            int length = javan_map_logical_length(map);
+            for (int index = 0; index < length; index++) {
+                javan_set_add(set, javan_map_key_unchecked(map, index));
             }
             javan_root_frame_pop(javan_map_key_set_roots);
             return set_value;
@@ -9326,9 +9390,10 @@ final class RuntimeSourceMemorySections {
                 (void**) &entry_value
             };
             javan_root_frame_push(roots, 3);
-            list_value = javan_list_new_with_capacity(map->length, 1);
-            for (int index = 0; index < map->length; index++) {
-                entry_value = javan_map_entry_alloc(map->keys[index], map->values[index]);
+            int length = javan_map_logical_length(map);
+            list_value = javan_list_new_with_capacity(length, 1);
+            for (int index = 0; index < length; index++) {
+                entry_value = javan_map_entry_alloc(javan_map_key_unchecked(map, index), javan_map_value_unchecked(map, index));
                 javan_list_append_raw((javan_object_list*) list_value, entry_value);
                 entry_value = NULL;
             }
@@ -9350,9 +9415,10 @@ final class RuntimeSourceMemorySections {
                 (void**) &map
             };
             javan_root_frame_push(javan_map_values_roots, 1);
-            javan_object_list* list = javan_list_new_with_capacity(map->length, 1);
-            for (int index = 0; index < map->length; index++) {
-                javan_list_append_raw(list, map->values[index]);
+            int length = javan_map_logical_length(map);
+            javan_object_list* list = javan_list_new_with_capacity(length, 1);
+            for (int index = 0; index < length; index++) {
+                javan_list_append_raw(list, javan_map_value_unchecked(map, index));
             }
             javan_root_frame_pop(javan_map_values_roots);
             return list;

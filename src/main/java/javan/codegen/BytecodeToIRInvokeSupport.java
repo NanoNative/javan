@@ -3312,6 +3312,11 @@ final class BytecodeToIRInvokeSupport {
                 stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_empty", List.of())));
                 return true;
             }
+            if ("unmodifiableMap".equals(name) && "(Ljava/util/Map;)Ljava/util/Map;".equals(descriptor)) {
+                final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_unmodifiable", arguments)));
+                return true;
+            }
             if (!"unmodifiableSet".equals(name) || !"(Ljava/util/Set;)Ljava/util/Set;".equals(descriptor)) {
                 return false;
             }
