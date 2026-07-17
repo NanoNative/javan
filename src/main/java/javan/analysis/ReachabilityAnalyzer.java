@@ -304,6 +304,27 @@ public final class ReachabilityAnalyzer {
             ));
             return;
         }
+        if (isMapComputeIfAbsent(target)) {
+            final MethodRef functionApply = new MethodRef("java/util/function/Function", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;");
+            final List<EntryPoint> targetMethods = interfaceTargets(classes, functionApply, entryPoints);
+            if (!targetMethods.isEmpty()) {
+                enqueueAll(work, workSet, targetMethods);
+                addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
+            }
+            if (!targetMethods.isEmpty()) {
+                return;
+            }
+            diagnostics.add(Diagnostic.error(
+                "JAVAN012",
+                "unsupported reachable application method call",
+                current.className(),
+                current.methodName() + current.descriptor(),
+                target.display(),
+                "Map.computeIfAbsent requires a closed-world Function implementation class or a supported direct function lambda target.",
+                "Provide a reachable Function implementation class or keep this exact map compute-if-absent flow on the JVM until broader callback support lands."
+            ));
+            return;
+        }
         if (isMapComputeIfPresent(target) || isMapCompute(target) || isMapMerge(target)) {
             final MethodRef biFunctionApply = new MethodRef("java/util/function/BiFunction", "apply", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;");
             final List<EntryPoint> targetMethods = interfaceTargets(classes, biFunctionApply, entryPoints);
@@ -615,6 +636,17 @@ public final class ReachabilityAnalyzer {
         return "java/util/function/BiFunction".equals(target.owner())
             && "apply".equals(target.name())
             && "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(target.descriptor());
+    }
+
+    private static boolean isMapComputeIfAbsent(final MethodRef target) {
+        if (!"computeIfAbsent".equals(target.name())
+            || !"(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;".equals(target.descriptor())) {
+            return false;
+        }
+        return "java/util/Map".equals(target.owner())
+            || "java/util/HashMap".equals(target.owner())
+            || "java/util/LinkedHashMap".equals(target.owner())
+            || "java/util/TreeMap".equals(target.owner());
     }
 
     private static boolean isMapComputeIfPresent(final MethodRef target) {

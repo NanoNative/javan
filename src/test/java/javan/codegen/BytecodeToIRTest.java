@@ -2221,6 +2221,151 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersMapComputeIfAbsentWithConcreteFunctionToMapHelpersAndDirectApplyCall() {
+        final EntryPoint entryPoint = new EntryPoint(
+            "com/acme/Main",
+            "computeIfAbsent",
+            "(Ljava/util/Map;Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;"
+        );
+        final EntryPoint applyEntry = new EntryPoint(
+            "com/acme/Loader",
+            "apply",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
+        );
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    mapComputeIfAbsentConcreteFunctionMethod()
+                )),
+                "com/acme/Loader",
+                classFile(
+                    "com/acme/Loader",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/util/function/Function"),
+                    List.of(),
+                    List.of(functionApplyImplementationMethod())
+                )
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint, applyEntry), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("computeIfAbsent")).singleElement().satisfies(function -> {
+            assertThat(function.locals()).containsExactly(
+                new IrLocal(IrType.OBJECT, "object0"),
+                new IrLocal(IrType.OBJECT, "object1"),
+                new IrLocal(IrType.OBJECT, "object2")
+            );
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.assignObject(
+                    "object0",
+                    IrExpression.objectCall("javan_map_get", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
+                ),
+                IrInstruction.branchIf(
+                    "label_map_compute_if_absent_present_3_2",
+                    IrExpression.objectComparison("!=", IrExpression.objectLocal("object0"), IrExpression.objectNull())
+                ),
+                IrInstruction.assignObject(
+                    "object2",
+                    IrExpression.objectCall(
+                        "javan_com_acme_Loader_apply__Ljava_lang_Object__Ljava_lang_Object_",
+                        List.of(IrExpression.objectLocal("arg2"), IrExpression.objectLocal("arg1"))
+                    )
+                ),
+                IrInstruction.branchIf(
+                    "label_map_compute_if_absent_store_3_2",
+                    IrExpression.objectComparison("!=", IrExpression.objectLocal("object2"), IrExpression.objectNull())
+                ),
+                IrInstruction.assignObject("object1", IrExpression.objectLocal("object2")),
+                IrInstruction.jump("label_map_compute_if_absent_end_3_2"),
+                IrInstruction.label("label_map_compute_if_absent_store_3_2"),
+                IrInstruction.callStaticVoid(
+                    "javan_map_put",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.objectLocal("object2"))
+                ),
+                IrInstruction.assignObject("object1", IrExpression.objectLocal("object2")),
+                IrInstruction.jump("label_map_compute_if_absent_end_3_2"),
+                IrInstruction.label("label_map_compute_if_absent_present_3_2"),
+                IrInstruction.assignObject("object1", IrExpression.objectLocal("object0")),
+                IrInstruction.label("label_map_compute_if_absent_end_3_2"),
+                IrInstruction.returnObject(IrExpression.objectLocal("object1"))
+            );
+        });
+    }
+
+    @Test
+    void lowersHashMapComputeIfAbsentWithConcreteFunctionToSameMapHelpers() {
+        final EntryPoint entryPoint = new EntryPoint(
+            "com/acme/Main",
+            "computeHashMapIfAbsent",
+            "(Ljava/util/HashMap;Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;"
+        );
+        final EntryPoint applyEntry = new EntryPoint(
+            "com/acme/Loader",
+            "apply",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
+        );
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    hashMapComputeIfAbsentConcreteFunctionMethod()
+                )),
+                "com/acme/Loader",
+                classFile(
+                    "com/acme/Loader",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/util/function/Function"),
+                    List.of(),
+                    List.of(functionApplyImplementationMethod())
+                )
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint, applyEntry), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("computeHashMapIfAbsent")).singleElement().satisfies(function ->
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.assignObject(
+                    "object0",
+                    IrExpression.objectCall("javan_map_get", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1")))
+                ),
+                IrInstruction.branchIf(
+                    "label_map_compute_if_absent_present_3_2",
+                    IrExpression.objectComparison("!=", IrExpression.objectLocal("object0"), IrExpression.objectNull())
+                ),
+                IrInstruction.assignObject(
+                    "object2",
+                    IrExpression.objectCall(
+                        "javan_com_acme_Loader_apply__Ljava_lang_Object__Ljava_lang_Object_",
+                        List.of(IrExpression.objectLocal("arg2"), IrExpression.objectLocal("arg1"))
+                    )
+                ),
+                IrInstruction.branchIf(
+                    "label_map_compute_if_absent_store_3_2",
+                    IrExpression.objectComparison("!=", IrExpression.objectLocal("object2"), IrExpression.objectNull())
+                ),
+                IrInstruction.assignObject("object1", IrExpression.objectLocal("object2")),
+                IrInstruction.jump("label_map_compute_if_absent_end_3_2"),
+                IrInstruction.label("label_map_compute_if_absent_store_3_2"),
+                IrInstruction.callStaticVoid(
+                    "javan_map_put",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.objectLocal("object2"))
+                ),
+                IrInstruction.assignObject("object1", IrExpression.objectLocal("object2")),
+                IrInstruction.jump("label_map_compute_if_absent_end_3_2"),
+                IrInstruction.label("label_map_compute_if_absent_present_3_2"),
+                IrInstruction.assignObject("object1", IrExpression.objectLocal("object0")),
+                IrInstruction.label("label_map_compute_if_absent_end_3_2"),
+                IrInstruction.returnObject(IrExpression.objectLocal("object1"))
+            )
+        );
+    }
+
+    @Test
     void lowersMapComputeWithConcreteBiFunctionToMapHelpersAndDirectApplyCall() {
         final EntryPoint entryPoint = new EntryPoint(
             "com/acme/Main",
@@ -26774,6 +26919,48 @@ final class BytecodeToIRTest {
         return method(
             0x0008,
             "lambda$compute$0",
+            "(Ljava/lang/Object;)Ljava/lang/Object;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            plain(1, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo mapComputeIfAbsentConcreteFunctionMethod() {
+        return method(
+            0x0008,
+            "computeIfAbsent",
+            "(Ljava/util/Map;Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;",
+            3,
+            3,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            plain(2, 44, "aload_2"),
+            invokeInterface(3, new MethodRef("java/util/Map", "computeIfAbsent", "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;")),
+            plain(8, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo hashMapComputeIfAbsentConcreteFunctionMethod() {
+        return method(
+            0x0008,
+            "computeHashMapIfAbsent",
+            "(Ljava/util/HashMap;Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;",
+            3,
+            3,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            plain(2, 44, "aload_2"),
+            invokeVirtual(3, new MethodRef("java/util/HashMap", "computeIfAbsent", "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;")),
+            plain(8, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo functionApplyImplementationMethod() {
+        return method(
+            0x0001,
+            "apply",
             "(Ljava/lang/Object;)Ljava/lang/Object;",
             1,
             1,

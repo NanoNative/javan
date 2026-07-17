@@ -4643,6 +4643,23 @@ final class BytecodeToIRInvokeSupport {
                 stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
                 return true;
             }
+            if ("computeIfAbsent(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;".equals(signature)) {
+                final String resultLocal = lowerMapComputeIfAbsentCall(
+                    classes,
+                    classFile,
+                    method,
+                    instruction,
+                    instructions,
+                    dispatches,
+                    materializedLambdaMethods,
+                    localDeclarations,
+                    receiver,
+                    arguments.get(0),
+                    arguments.get(1)
+                );
+                stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
+                return true;
+            }
             if ("remove(Ljava/lang/Object;)Ljava/lang/Object;".equals(signature)) {
                 pushObjectCall(instructions, stack, localDeclarations, "javan_map_remove", List.of(receiver, arguments.getFirst()));
                 return true;
@@ -5012,6 +5029,64 @@ final class BytecodeToIRInvokeSupport {
         return resultLocal;
     }
 
+    private static String lowerMapComputeIfAbsentCall(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final Map<String, IrDispatch> dispatches,
+        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final Map<Integer, IrLocal> localDeclarations,
+        final IrExpression map,
+        final IrExpression key,
+        final IrExpression function
+    ) {
+        final String existingLocal = newObjectLocal(localDeclarations);
+        final String resultLocal = newObjectLocal(localDeclarations);
+        final String presentLabel = "label_map_compute_if_absent_present_" + instruction.offset() + "_" + localDeclarations.size();
+        final String storeLabel = "label_map_compute_if_absent_store_" + instruction.offset() + "_" + localDeclarations.size();
+        final String endLabel = "label_map_compute_if_absent_end_" + instruction.offset() + "_" + localDeclarations.size();
+        instructions.add(IrInstruction.assignObject(
+            existingLocal,
+            IrExpression.objectCall("javan_map_get", List.of(map, key))
+        ));
+        instructions.add(IrInstruction.branchIf(
+            presentLabel,
+            IrExpression.objectComparison("!=", IrExpression.objectLocal(existingLocal), IrExpression.objectNull())
+        ));
+        final String computedLocal = newObjectLocal(localDeclarations);
+        lowerFunctionApplyCall(
+            classes,
+            classFile,
+            method,
+            instruction,
+            instructions,
+            dispatches,
+            materializedLambdaMethods,
+            function,
+            key,
+            computedLocal
+        );
+        instructions.add(IrInstruction.branchIf(
+            storeLabel,
+            IrExpression.objectComparison("!=", IrExpression.objectLocal(computedLocal), IrExpression.objectNull())
+        ));
+        instructions.add(IrInstruction.assignObject(resultLocal, IrExpression.objectLocal(computedLocal)));
+        instructions.add(IrInstruction.jump(endLabel));
+        instructions.add(IrInstruction.label(storeLabel));
+        instructions.add(IrInstruction.callStaticVoid(
+            "javan_map_put",
+            List.of(map, key, IrExpression.objectLocal(computedLocal))
+        ));
+        instructions.add(IrInstruction.assignObject(resultLocal, IrExpression.objectLocal(computedLocal)));
+        instructions.add(IrInstruction.jump(endLabel));
+        instructions.add(IrInstruction.label(presentLabel));
+        instructions.add(IrInstruction.assignObject(resultLocal, IrExpression.objectLocal(existingLocal)));
+        instructions.add(IrInstruction.label(endLabel));
+        return resultLocal;
+    }
+
     private static String lowerMapMergeCall(
         final Map<String, ClassFile> classes,
         final ClassFile classFile,
@@ -5201,6 +5276,54 @@ final class BytecodeToIRInvokeSupport {
             instructions.add(IrInstruction.assignObject(
                 resultLocal,
                 IrExpression.objectCall(MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL, List.of(biFunction, firstArgument, secondArgument))
+            ));
+            return;
+        }
+        throw unsupported(classFile, method, instruction);
+    }
+
+    private static void lowerFunctionApplyCall(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final Map<String, IrDispatch> dispatches,
+        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final IrExpression function,
+        final IrExpression argument,
+        final String resultLocal
+    ) {
+        final MethodRef functionApply = new MethodRef("java/util/function/Function", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;");
+        final List<EntryPoint> targets = interfaceTargets(classes, functionApply);
+        if (targets.size() > 1) {
+            final String dispatchSymbol = dispatchSymbol(functionApply);
+            dispatches.putIfAbsent(dispatchSymbol, dispatch(dispatchSymbol, MethodDescriptor.parse(functionApply.descriptor()), targets));
+            instructions.add(IrInstruction.assignObject(
+                resultLocal,
+                IrExpression.objectCall(dispatchSymbol, List.of(function, argument))
+            ));
+            return;
+        }
+        if (!targets.isEmpty()) {
+            instructions.add(IrInstruction.assignObject(
+                resultLocal,
+                IrExpression.objectCall(symbol(targets.getFirst()), List.of(function, argument))
+            ));
+            return;
+        }
+        final Optional<EntryPoint> defaultTarget = defaultInterfaceTarget(classes, functionApply);
+        if (defaultTarget.isPresent()) {
+            instructions.add(IrInstruction.assignObject(
+                resultLocal,
+                IrExpression.objectCall(symbol(defaultTarget.orElseThrow()), List.of(function, argument))
+            ));
+            return;
+        }
+        if (materializedLambdaMethods.get(functionApply) == MaterializedLambdaDispatchKind.OBJECT) {
+            instructions.add(IrInstruction.assignObject(
+                resultLocal,
+                IrExpression.objectCall(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL, List.of(function, argument))
             ));
             return;
         }
