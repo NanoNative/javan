@@ -87,7 +87,7 @@ jobs:
 
       - name: Prefetch external smoke artifacts
         run: |
-          .github/scripts/list-external-smoke-artifacts.sh | while IFS= read -r artifact; do
+          .github/scripts/list-external-probe-artifacts.sh | while IFS= read -r artifact; do
             mvn -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" dependency:get -Dartifact="$artifact" -Dtransitive=false
           done
 

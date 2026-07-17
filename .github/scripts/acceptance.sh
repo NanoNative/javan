@@ -35,7 +35,7 @@ fi
 PASS_COUNT=0
 NATIVE_PROFILE_PROJECTS=src/test/resources/projects/native-profile
 NEGATIVE_PROJECTS=src/test/resources/projects/negative
-EXTERNAL_SMOKE=${JAVAN_EXTERNAL_SMOKE_DIR:-${JAVAN_REAL_PROBES_DIR:-src/test/resources/projects/external-smoke}}
+EXTERNAL_SMOKE=${JAVAN_EXTERNAL_SMOKE_DIR:-${JAVAN_REAL_PROBES_DIR:-src/test/resources/external-probes}}
 REQUIRE_EXTERNAL_SMOKE=${JAVAN_REQUIRE_EXTERNAL_SMOKE:-${JAVAN_REQUIRE_REAL_PROBES:-false}}
 ACCEPTANCE_ONLY=${JAVAN_ACCEPTANCE_ONLY:-}
 
@@ -601,7 +601,7 @@ accepts_optional_real_probes() {
 
 cd "$ROOT"
 
-if [ "$ACCEPTANCE_ONLY" = "external-smoke" ] || [ "$ACCEPTANCE_ONLY" = "real-probes" ]; then
+if [ "$ACCEPTANCE_ONLY" = "external-probe" ] || [ "$ACCEPTANCE_ONLY" = "real-probes" ]; then
   accepts_optional_real_probes
   printf '%s\n' "Acceptance passed: $PASS_COUNT checks"
   exit 0

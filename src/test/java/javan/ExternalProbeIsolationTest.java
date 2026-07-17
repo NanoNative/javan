@@ -24,6 +24,7 @@ final class ExternalProbeIsolationTest {
     private static final Path SCRIPT_SOURCES = Path.of(".github/scripts");
     private static final Path DOC_STATUS = Path.of("doc/status");
     private static final Path TEST_RESOURCES = Path.of("src/test/resources");
+    private static final Path EXTERNAL_PROBES = TEST_RESOURCES.resolve("external-probes");
     private static final Path PUBLIC_EXAMPLE = Path.of("example");
     private static final Path SUPPORT_MATRIX = DOC_STATUS.resolve("support-matrix.md");
     private static final Path SUPPORT_MATRIX_JSON = DOC_STATUS.resolve("support-matrix.json");
@@ -57,8 +58,18 @@ final class ExternalProbeIsolationTest {
     }
 
     @Test
+    void compilerOwnedProjectsTreeDoesNotContainExternalProbeRoot() {
+        assertThat(TEST_RESOURCES.resolve("projects/external-probes"))
+            .as("external probes must stay outside the compiler-owned test project tree")
+            .doesNotExist();
+        assertThat(EXTERNAL_PROBES)
+            .as("dedicated external probe root must exist")
+            .isDirectory();
+    }
+
+    @Test
     void onlyDedicatedExternalSmokeResourcesMayReferenceExternalProbeIdentities() throws Exception {
-        final Path allowedRoot = TEST_RESOURCES.resolve("projects/external-smoke");
+        final Path allowedRoot = EXTERNAL_PROBES;
         try (Stream<Path> files = Files.walk(TEST_RESOURCES)) {
             final List<Path> resourceFiles = files
                 .filter(Files::isRegularFile)
@@ -113,18 +124,18 @@ final class ExternalProbeIsolationTest {
             if (allowedDocs.contains(file)) {
                 assertThat(content)
                     .as(file + " should remain the dedicated place that documents external probe infrastructure")
-                    .contains("external-smoke");
+                    .contains("external-probes");
                 continue;
             }
             assertThat(content)
                 .as(file + " should not reference the dedicated external probe directory")
-                .doesNotContain("external-smoke");
+                .doesNotContain("external-probes");
             assertThat(content)
                 .as(file + " should not reference probe metadata files")
                 .doesNotContain("probe.properties");
             assertThat(content)
                 .as(file + " should not reference the shared external probe build helper")
-                .doesNotContain("build-external-smoke.sh");
+                .doesNotContain("build-external-probe.sh");
         }
     }
 
@@ -262,8 +273,8 @@ final class ExternalProbeIsolationTest {
                 }
                 final String content = Files.readString(file);
                 assertThat(content)
-                    .as(file + " should not reference the dedicated external-smoke directory")
-                    .doesNotContain("external-smoke");
+                    .as(file + " should not reference the dedicated external-probes directory")
+                    .doesNotContain("external-probes");
                 assertThat(content)
                     .as(file + " should not reference probe metadata files")
                     .doesNotContain("probe.properties");
@@ -313,7 +324,7 @@ final class ExternalProbeIsolationTest {
 
     @Test
     void externalProbeBuildScriptsStayMetadataDrivenAndProjectNeutral() throws Exception {
-        final Path helper = TEST_RESOURCES.resolve("projects/external-smoke/build-external-smoke.sh");
+        final Path helper = EXTERNAL_PROBES.resolve("build-external-probe.sh");
         final String helperContent = Files.readString(helper);
 
         assertThat(helperContent)
@@ -329,7 +340,7 @@ final class ExternalProbeIsolationTest {
             final String content = Files.readString(script);
             assertThat(content)
                 .as(script + " should delegate to the shared metadata-driven resolver")
-                .contains("../build-external-smoke.sh")
+                .contains("../build-external-probe.sh")
                 .doesNotContain("JAVAN_PROBE_MAVEN_COORDINATE");
             assertOnlyGenericProbeOverrides(content, script);
             assertTextExcludesExternalProbeIdentities(content, script);

@@ -125,7 +125,7 @@ public final class RuntimeFootprintReports {
                 "release flag is accepted; size/speed specialization remains conservative"),
             new Footprint("debug-symbols", false, false, "not-requested", "native debug symbol policy is not implemented"),
             new Footprint("live-profiling", false, false, "not-linked", "profiling hooks are not linked by default"),
-            new Footprint("sanitizer-instrumented", false, false, "external-smoke", "sanitizer smoke uses .github/scripts/sanitizer-smoke.sh")
+            new Footprint("sanitizer-instrumented", false, false, "external-probe", "sanitizer smoke uses .github/scripts/sanitizer-smoke.sh")
         );
     }
 

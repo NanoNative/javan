@@ -38,7 +38,7 @@ Current public showcase:
 
 Optional real-project probes:
 
-- `src/test/resources/projects/external-smoke/*`: external compatibility smoke against selected
+- `src/test/resources/external-probes/*`: external compatibility smoke against selected
   third-party artifacts. Probe identity, coordinates, expected stdout, and the required mapping
   back to a compiler-owned generic regression all live in per-probe metadata and in the dedicated
   ledger at `doc/status/real-project-readiness.md`.

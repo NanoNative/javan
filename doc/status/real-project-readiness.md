@@ -1,8 +1,8 @@
 # Real Project Readiness
 
-This ledger describes the dedicated external-smoke boundary without teaching Javan any
+This ledger describes the dedicated external-probes boundary without teaching Javan any
 upstream project identity. Hardcoded upstream coordinates and package names belong only in
-the probe metadata and tiny probe sources under `src/test/resources/projects/external-smoke/*`.
+the probe metadata and tiny probe sources under `src/test/resources/external-probes/*`.
 They are a pinned moving slice of upstream artifacts, not compiler-owned support claims
 and not internal fixtures or product knowledge.
 
@@ -18,7 +18,7 @@ Probe summary:
 These external probes are intentionally excluded from `doc/status/support-matrix.*`,
 `doc/status/jdk-compatibility.md`, and the core JDK support ledger. They are compatibility
 smoke only, driven by per-probe metadata and exact stdout expectations under
-`src/test/resources/projects/external-smoke/*`.
+`src/test/resources/external-probes/*`.
 
 The probe directories themselves are intentionally generic `artifact-*` names. Upstream
 identities stay in `probe.properties` and the tiny Java source that imports the external
@@ -39,7 +39,7 @@ line.
 
 Read that literally: upstream project identities are not part of javan's compiler knowledge. They
 are moving upstream artifacts. Javan is only allowed to know them inside the dedicated
-external-smoke boundary. Compiler-owned tests must stay generic even when an external probe breaks.
+external-probes boundary. Compiler-owned tests must stay generic even when an external probe breaks.
 If one of them exposes a compiler gap, the permanent fix belongs in a generic JDK/runtime
 regression first, then the probe stays only as a published-artifact compatibility check.
 
@@ -94,15 +94,15 @@ Boundary rules:
 - compiler-owned tests must stay generic and project-neutral
 - support rows, intrinsics, substitutions, and verifier rules must stay JDK/runtime-shaped
 - external project names may stay hardcoded only in:
-  - `src/test/resources/projects/external-smoke/*/probe.properties`
-  - `src/test/resources/projects/external-smoke/*/src/main/java/**`
+  - `src/test/resources/external-probes/*/probe.properties`
+  - `src/test/resources/external-probes/*/src/main/java/**`
 
 The dedicated acceptance harness, generic dependency regressions, and status dashboards are all
 expected to remain metadata-driven and free of hardcoded probe identities.
 
 When one of these probes finds a gap, the durable fix must be captured by compiler-owned tests
 that prove the JDK/runtime shape directly, without naming the upstream project in the core support
-line. Probe metadata and tiny probe source under `src/test/resources/projects/external-smoke/*` are
+line. Probe metadata and tiny probe source under `src/test/resources/external-probes/*` are
 intentionally the only places where those project identities may stay hardcoded for acceptance;
 Javan itself must not encode project-specific support rules.
 
@@ -121,7 +121,7 @@ generic compiler-owned dependency tests or a new generic equivalent, not in an u
 specific support row.
 
 `.github/scripts/acceptance.sh` now auto-discovers probe directories and CI prefetches the pinned
-artifacts from probe metadata via `.github/scripts/list-external-smoke-artifacts.sh` before `mvn verify`,
+artifacts from probe metadata via `.github/scripts/list-external-probe-artifacts.sh` before `mvn verify`,
 so the current discovered probe set is required in the external-probe acceptance gate.
 Local runs still skip cleanly when the declared dependency is absent.
 

@@ -71,7 +71,7 @@ final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupp
 
     @Test
     void acceptanceRealProbesFailWhenRequiredArtifactsAreMissing() throws Exception {
-        final Path probesRoot = tempDir.resolve("external-smoke");
+        final Path probesRoot = tempDir.resolve("external-probes");
         writeProbeProject(
             probesRoot.resolve("alpha"),
             "alpha",
@@ -105,7 +105,7 @@ final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupp
             Duration.ofSeconds(20),
             Map.of(
                 "JAVAN_BIN", wrapper.toString(),
-                "JAVAN_ACCEPTANCE_ONLY", "external-smoke",
+                "JAVAN_ACCEPTANCE_ONLY", "external-probe",
                 "JAVAN_REQUIRE_EXTERNAL_SMOKE", "true",
                 "JAVAN_MAVEN_REPO", repo.toString(),
                 "JAVAN_EXTERNAL_SMOKE_DIR", probesRoot.toString()
@@ -119,7 +119,7 @@ final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupp
 
     @Test
     void acceptanceRealProbesHonorConfiguredMavenRepository() throws Exception {
-        final Path probesRoot = tempDir.resolve("external-smoke");
+        final Path probesRoot = tempDir.resolve("external-probes");
         writeProbeProject(
             probesRoot.resolve("alpha"),
             "alpha",
@@ -215,7 +215,7 @@ final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupp
             Duration.ofSeconds(60),
             Map.of(
                 "JAVAN_BIN", wrapper.toString(),
-                "JAVAN_ACCEPTANCE_ONLY", "external-smoke",
+                "JAVAN_ACCEPTANCE_ONLY", "external-probe",
                 "JAVAN_REQUIRE_EXTERNAL_SMOKE", "true",
                 "JAVAN_MAVEN_REPO", repo.toString(),
                 "JAVAN_EXTERNAL_SMOKE_DIR", probesRoot.toString()
@@ -234,7 +234,7 @@ final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupp
 
     @Test
     void realProbeDiscoveryIsDirectoryMetadataDriven() throws Exception {
-        final Path probesRoot = tempDir.resolve("external-smoke");
+        final Path probesRoot = tempDir.resolve("external-probes");
         writeProbe(probesRoot.resolve("zeta-dir"), "beta", "com.example", "beta-lib", "1.0.0", "beta-out\n");
         writeProbe(probesRoot.resolve("alpha-dir"), "alpha", "com.example", "alpha-lib", "2.0.0", "alpha-out\n");
 
@@ -265,14 +265,14 @@ final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupp
 
     @Test
     void realProbeArtifactListingIsMetadataDrivenAndDeduplicated() throws Exception {
-        final Path probesRoot = tempDir.resolve("external-smoke");
+        final Path probesRoot = tempDir.resolve("external-probes");
         writeProbe(probesRoot.resolve("beta"), "beta", "com.example", "beta-lib", "1.0.0", "beta-out\n");
         writeProbe(probesRoot.resolve("alpha"), "alpha", "com.example", "alpha-lib", "2.0.0", "alpha-out\n");
         writeProbe(probesRoot.resolve("alpha-copy"), "alpha-copy", "com.example", "alpha-lib", "2.0.0", "alpha-copy-out\n");
 
         final ProcessResult run = process(
             tempDir,
-            List.of("sh", Path.of(".github/scripts/list-external-smoke-artifacts.sh").toAbsolutePath().normalize().toString(), probesRoot.toString()),
+            List.of("sh", Path.of(".github/scripts/list-external-probe-artifacts.sh").toAbsolutePath().normalize().toString(), probesRoot.toString()),
             Duration.ofSeconds(20)
         );
 
@@ -286,7 +286,7 @@ final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupp
 
     @Test
     void realProbeArtifactListingFailsClearlyWhenMetadataIsIncomplete() throws Exception {
-        final Path probesRoot = tempDir.resolve("external-smoke");
+        final Path probesRoot = tempDir.resolve("external-probes");
         final Path brokenProbe = probesRoot.resolve("broken");
         Files.createDirectories(brokenProbe);
         Files.writeString(
@@ -300,7 +300,7 @@ final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupp
 
         final ProcessResult run = process(
             tempDir,
-            List.of("sh", Path.of(".github/scripts/list-external-smoke-artifacts.sh").toAbsolutePath().normalize().toString(), probesRoot.toString()),
+            List.of("sh", Path.of(".github/scripts/list-external-probe-artifacts.sh").toAbsolutePath().normalize().toString(), probesRoot.toString()),
             Duration.ofSeconds(20)
         );
 
@@ -333,7 +333,7 @@ final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupp
             ))
         );
 
-        final Path probesRoot = tempDir.resolve("external-smoke");
+        final Path probesRoot = tempDir.resolve("external-probes");
         final Path probe = probesRoot.resolve("alpha");
         writeProbeProject(
             probe,
@@ -359,15 +359,15 @@ final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupp
             "alpha\n"
         );
 
-        final Path helper = probe.getParent().resolve("build-external-smoke.sh");
-        Files.copy(Path.of("src/test/resources/projects/external-smoke/build-external-smoke.sh"), helper);
+        final Path helper = probe.getParent().resolve("build-external-probe.sh");
+        Files.copy(Path.of("src/test/resources/external-probes/build-external-probe.sh"), helper);
         final Path wrapper = probe.resolve("build-example.sh");
         writeExecutableScript(wrapper, """
             #!/bin/sh
             set -eu
 
             ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-            exec "$ROOT/../build-external-smoke.sh" "$ROOT"
+            exec "$ROOT/../build-external-probe.sh" "$ROOT"
             """);
         assertThat(helper.toFile().setExecutable(true)).isTrue();
 
