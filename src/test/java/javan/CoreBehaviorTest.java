@@ -1149,13 +1149,13 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void jdkCallSupportRejectsUnknownMapCall() {
-        assertThat(JdkCallSupport.isSupported(new MethodRef("java/util/Map", "clear", "()V"))).isFalse();
+    void jdkCallSupportAcceptsMapClear() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/util/Map", "clear", "()V"))).isTrue();
     }
 
     @Test
-    void jdkCallSupportRejectsUnknownHashMapCall() {
-        assertThat(JdkCallSupport.isSupported(new MethodRef("java/util/HashMap", "clear", "()V"))).isFalse();
+    void jdkCallSupportAcceptsHashMapClear() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/util/HashMap", "clear", "()V"))).isTrue();
     }
 
     @Test

@@ -11,8 +11,8 @@
     "rule": "done = supported variants + rejected variants; unknown leftovers must be 0 for a release-gated JDK"
   },
   "counts": {
-    "rows": 211,
-    "pass": 211,
+    "rows": 212,
+    "pass": 212,
     "scoped": 0,
     "target": 0,
     "rejected": 0
@@ -117,6 +117,7 @@
     {"feature": "collections-singleton-map", "jdk25": "pass"},
     {"feature": "collections-unmodifiable-map", "jdk25": "pass"},
     {"feature": "map-entry", "jdk25": "pass"},
+    {"feature": "map-clear", "jdk25": "pass"},
     {"feature": "map-put-all", "jdk25": "pass"},
     {"feature": "map-is-empty", "jdk25": "pass"},
     {"feature": "map-size", "jdk25": "pass"},

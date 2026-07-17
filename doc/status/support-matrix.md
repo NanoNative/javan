@@ -125,6 +125,7 @@ Status mapping:
 | `collections-singleton-map` | pass |
 | `collections-unmodifiable-map` | pass |
 | `map-entry` | pass |
+| `map-clear` | pass |
 | `map-put-all` | pass |
 | `map-is-empty` | pass |
 | `map-size` | pass |

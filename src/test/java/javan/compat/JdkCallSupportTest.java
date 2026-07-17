@@ -1619,6 +1619,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void mapClearIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Map",
+            "clear",
+            "()V"
+        ))).isTrue();
+    }
+
+    @Test
     void mapPutAllIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Map",

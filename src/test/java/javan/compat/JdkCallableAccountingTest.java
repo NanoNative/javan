@@ -274,6 +274,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksMapClearAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "clear", "()V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksMapPutAllAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "putAll", "(Ljava/util/Map;)V")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

@@ -4112,6 +4112,10 @@ final class BytecodeToIRInvokeSupport {
                 pushObjectCall(instructions, stack, localDeclarations, "javan_map_put_if_absent", List.of(receiver, arguments.get(0), arguments.get(1)));
                 return true;
             }
+            if ("clear()V".equals(signature)) {
+                instructions.add(IrInstruction.callStaticVoid("javan_map_clear", List.of(receiver)));
+                return true;
+            }
             if ("putAll(Ljava/util/Map;)V".equals(signature)) {
                 instructions.add(IrInstruction.callStaticVoid("javan_map_put_all", List.of(receiver, arguments.getFirst())));
                 return true;

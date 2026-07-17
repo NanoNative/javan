@@ -518,6 +518,7 @@ public final class JdkCallSupport {
         runtime("Map.getOrDefault", "java/util/Map", "getOrDefault", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Map.put", "java/util/Map", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Map.putIfAbsent", "java/util/Map", "putIfAbsent", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("Map.clear", "java/util/Map", "clear", "()V"),
         runtime("Map.putAll", "java/util/Map", "putAll", "(Ljava/util/Map;)V"),
         runtime("Map.remove", "java/util/Map", "remove", "(Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Map.remove", "java/util/Map", "remove", "(Ljava/lang/Object;Ljava/lang/Object;)Z"),
@@ -532,6 +533,10 @@ public final class JdkCallSupport {
         runtime("LinkedHashMap.putIfAbsent", "java/util/LinkedHashMap", "putIfAbsent", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("TreeMap.putIfAbsent", "java/util/TreeMap", "putIfAbsent", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("ConcurrentHashMap.putIfAbsent", "java/util/concurrent/ConcurrentHashMap", "putIfAbsent", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("HashMap.clear", "java/util/HashMap", "clear", "()V"),
+        runtime("LinkedHashMap.clear", "java/util/LinkedHashMap", "clear", "()V"),
+        runtime("TreeMap.clear", "java/util/TreeMap", "clear", "()V"),
+        runtime("ConcurrentHashMap.clear", "java/util/concurrent/ConcurrentHashMap", "clear", "()V"),
         runtime("HashMap.putAll", "java/util/HashMap", "putAll", "(Ljava/util/Map;)V"),
         runtime("LinkedHashMap.putAll", "java/util/LinkedHashMap", "putAll", "(Ljava/util/Map;)V"),
         runtime("TreeMap.putAll", "java/util/TreeMap", "putAll", "(Ljava/util/Map;)V"),
@@ -929,6 +934,9 @@ public final class JdkCallSupport {
         if ("putIfAbsent".equals(name)) {
             return "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(descriptor);
         }
+        if ("clear".equals(name)) {
+            return "()V".equals(descriptor);
+        }
         if ("remove".equals(name)) {
             return "(Ljava/lang/Object;)Ljava/lang/Object;".equals(descriptor)
                 || "(Ljava/lang/Object;Ljava/lang/Object;)Z".equals(descriptor);
@@ -963,6 +971,9 @@ public final class JdkCallSupport {
         }
         if ("putIfAbsent".equals(name)) {
             return "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(descriptor);
+        }
+        if ("clear".equals(name)) {
+            return "()V".equals(descriptor);
         }
         if ("remove".equals(name)) {
             return "(Ljava/lang/Object;)Ljava/lang/Object;".equals(descriptor)

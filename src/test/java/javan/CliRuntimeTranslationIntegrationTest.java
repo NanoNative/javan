@@ -646,6 +646,37 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void hashMapClearBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("hashmap-clear");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashMap;
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, String> values = new HashMap<>();
+                    values.put("left", "right");
+                    values.put("other", "value");
+                    values.clear();
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/hashmap-clear").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("0\n");
+    }
+
+    @Test
     void hashMapSizeBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("hashmap-size");
         writeJava(project, "com.acme.Main", """
