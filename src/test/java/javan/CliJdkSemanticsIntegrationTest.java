@@ -2110,6 +2110,26 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void hashSetCapacityConstructorRejectsNegativeCapacityAtRuntime() throws Exception {
+        assertSetConstructorFailureAtRuntime(
+            "hashset-capacity-constructor-negative-capacity",
+            "import java.util.HashSet;",
+            "new HashSet<String>(-1);",
+            "Illegal initial capacity: -1"
+        );
+    }
+
+    @Test
+    void linkedHashSetCapacityConstructorRejectsNegativeCapacityAtRuntime() throws Exception {
+        assertSetConstructorFailureAtRuntime(
+            "linkedhashset-capacity-constructor-negative-capacity",
+            "import java.util.LinkedHashSet;",
+            "new LinkedHashSet<String>(-1);",
+            "Illegal initial capacity: -1"
+        );
+    }
+
+    @Test
     void collectionsUnmodifiableListBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("collections-unmodifiable-list");
         writeJava(project, "com.acme.Main", """
@@ -6352,6 +6372,37 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     private void assertSetStaticFactoryFailureAtRuntime(
+        final String projectName,
+        final String imports,
+        final String statement,
+        final String expectedMessage
+    ) throws Exception {
+        final Path project = project(projectName);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            %s
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    %s
+                }
+            }
+            """.formatted(imports, statement));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/" + projectName).toString()));
+
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains(expectedMessage);
+    }
+
+    private void assertSetConstructorFailureAtRuntime(
         final String projectName,
         final String imports,
         final String statement,

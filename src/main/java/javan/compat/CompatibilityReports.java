@@ -510,6 +510,8 @@ public final class CompatibilityReports {
             pass("set-contains-all"),
             pass("set-remove"),
             pass("set-clear"),
+            pass("hashset-capacity-constructor"),
+            pass("linkedhashset-capacity-constructor"),
             pass("hashset-collection-constructor"),
             pass("linkedhashset-collection-constructor"),
             pass("hashset-static-factory"),

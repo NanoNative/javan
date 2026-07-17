@@ -19538,6 +19538,58 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersHashSetCapacityConstructorToRuntimeInitialization() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(I)Ljava/util/HashSet;",
+            3,
+            1,
+            classInstruction(0, 187, "new", "java/util/HashSet"),
+            plain(1, 89, "dup"),
+            plain(2, 26, "iload_0"),
+            invokeSpecial(3, new MethodRef("java/util/HashSet", "<init>", "(I)V")),
+            plain(4, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_hashset_new", List.of())),
+            IrInstruction.callStaticVoid(
+                "javan_set_initialize_capacity",
+                List.of(IrExpression.objectLocal("object0"), IrExpression.intLocal("arg0"))
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersLinkedHashSetCapacityConstructorToRuntimeInitialization() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(I)Ljava/util/LinkedHashSet;",
+            3,
+            1,
+            classInstruction(0, 187, "new", "java/util/LinkedHashSet"),
+            plain(1, 89, "dup"),
+            plain(2, 26, "iload_0"),
+            invokeSpecial(3, new MethodRef("java/util/LinkedHashSet", "<init>", "(I)V")),
+            plain(4, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall("javan_hashset_new", List.of())),
+            IrInstruction.callStaticVoid(
+                "javan_set_initialize_capacity",
+                List.of(IrExpression.objectLocal("object0"), IrExpression.intLocal("arg0"))
+            ),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
     void lowersHashMapMapConstructorToRuntimePopulation() {
         final IrFunction function = lowerMain(method(
             0x0008,

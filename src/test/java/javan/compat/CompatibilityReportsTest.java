@@ -76,12 +76,12 @@ final class CompatibilityReportsTest {
         assertThat(summary).contains(
             "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 5, \"leftCallables\": 3, \"coveragePercent\": \"40.0\"}",
             "\"exactJdkCallableAccounting\": {\"supportedCallables\": 2, \"explicitRejectedCallables\": 3, \"doneCallables\": 5, \"unknownCallables\": 0, \"totalCallables\": 5, \"donePercent\": \"100.0\"}",
-            "\"supportRows\": 234",
-            "\"passRows\": 234",
+            "\"supportRows\": 236",
+            "\"passRows\": 236",
             "\"scopedRows\": 0",
             "\"targetRows\": 0",
             "\"rejectedRows\": 0",
-            "\"accountedRows\": 234",
+            "\"accountedRows\": 236",
             "\"unaccountedRows\": 0"
         );
     }
@@ -133,6 +133,8 @@ final class CompatibilityReportsTest {
             "| `set-contains-all` | pass |",
             "| `set-remove` | pass |",
             "| `set-clear` | pass |",
+            "| `hashset-capacity-constructor` | pass |",
+            "| `linkedhashset-capacity-constructor` | pass |",
             "| `hashset-collection-constructor` | pass |",
             "| `linkedhashset-collection-constructor` | pass |",
             "| `hashset-static-factory` | pass |",
@@ -301,6 +303,8 @@ final class CompatibilityReportsTest {
             "\"feature\": \"set-contains-all\"",
             "\"feature\": \"set-remove\"",
             "\"feature\": \"set-clear\"",
+            "\"feature\": \"hashset-capacity-constructor\"",
+            "\"feature\": \"linkedhashset-capacity-constructor\"",
             "\"feature\": \"hashset-collection-constructor\"",
             "\"feature\": \"linkedhashset-collection-constructor\"",
             "\"feature\": \"hashset-static-factory\"",

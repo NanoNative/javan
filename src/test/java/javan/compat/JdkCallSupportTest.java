@@ -196,11 +196,29 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void hashSetCapacityConstructorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/HashSet",
+            "<init>",
+            "(I)V"
+        ))).isTrue();
+    }
+
+    @Test
     void linkedHashSetNewLinkedHashSetIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/LinkedHashSet",
             "newLinkedHashSet",
             "(I)Ljava/util/LinkedHashSet;"
+        ))).isTrue();
+    }
+
+    @Test
+    void linkedHashSetCapacityConstructorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/LinkedHashSet",
+            "<init>",
+            "(I)V"
         ))).isTrue();
     }
 

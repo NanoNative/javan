@@ -238,8 +238,20 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksHashSetCapacityConstructorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/HashSet", "<init>", "(I)V")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksLinkedHashSetNewLinkedHashSetAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/LinkedHashSet", "newLinkedHashSet", "(I)Ljava/util/LinkedHashSet;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksLinkedHashSetCapacityConstructorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/LinkedHashSet", "<init>", "(I)V")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
