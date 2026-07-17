@@ -8501,6 +8501,37 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void optionalOrWithStaticSupplierBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-or");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Optional.of("value").or(Main::fallback).orElse("missing"));
+                    System.out.println(Optional.<String>empty().or(Main::fallback).orElse("missing"));
+                }
+
+                private static Optional<String> fallback() {
+                    return Optional.of("[fallback]");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-or").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("value\n[fallback]\n");
+    }
+
+    @Test
     void optionalGetBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("optional-get");
         writeJava(project, "com.acme.Main", """

@@ -244,6 +244,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksOptionalOrAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Optional", "or", "(Ljava/util/function/Supplier;)Ljava/util/Optional;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksHashMapNewHashMapAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/HashMap", "newHashMap", "(I)Ljava/util/HashMap;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

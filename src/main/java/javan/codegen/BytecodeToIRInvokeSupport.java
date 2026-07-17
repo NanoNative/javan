@@ -3040,6 +3040,12 @@ final class BytecodeToIRInvokeSupport {
             lowerOptionalFlatMapLambdaCall(classFile, method, instruction, instructions, stack, localDeclarations);
             return true;
         }
+        if ("or".equals(name)
+            && "(Ljava/util/function/Supplier;)Ljava/util/Optional;".equals(descriptor)
+            && hasTopStackKind(stack, StackKind.LAMBDA_SUPPLIER)) {
+            lowerOptionalOrLambdaCall(classFile, method, instruction, instructions, stack, localDeclarations);
+            return true;
+        }
         if ("orElseGet".equals(name)
             && "(Ljava/util/function/Supplier;)Ljava/lang/Object;".equals(descriptor)
             && hasTopStackKind(stack, StackKind.LAMBDA_SUPPLIER)) {
@@ -3105,6 +3111,22 @@ final class BytecodeToIRInvokeSupport {
                 instructions,
                 dispatches,
                 materializedLambdaMethods,
+                localDeclarations,
+                receiver,
+                arguments.getFirst()
+            );
+            return true;
+        }
+        if ("or".equals(name) && "(Ljava/util/function/Supplier;)Ljava/util/Optional;".equals(descriptor)) {
+            lowerOptionalOrCall(
+                classes,
+                classFile,
+                method,
+                instruction,
+                instructions,
+                dispatches,
+                materializedLambdaMethods,
+                stack,
                 localDeclarations,
                 receiver,
                 arguments.getFirst()
@@ -3269,6 +3291,40 @@ final class BytecodeToIRInvokeSupport {
         stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
     }
 
+    private static void lowerOptionalOrLambdaCall(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations
+    ) {
+        final DynamicLambda lambda = popDynamicLambda(classFile, method, instruction, stack, StackKind.LAMBDA_SUPPLIER, "supplier lambda");
+        final IrExpression receiver = popObject(classFile, method, instruction, stack);
+        final String valueLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(
+            valueLocal,
+            IrExpression.objectCall("javan_optional_or_else", List.of(receiver, IrExpression.objectNull()))
+        ));
+        final String resultLocal = newObjectLocal(localDeclarations);
+        final String valuePresentLabel = "label_optional_or_value_present_" + instruction.offset() + "_" + localDeclarations.size();
+        final String endLabel = "label_optional_or_end_" + instruction.offset() + "_" + localDeclarations.size();
+        instructions.add(IrInstruction.branchIf(
+            valuePresentLabel,
+            IrExpression.objectComparison("!=", IrExpression.objectLocal(valueLocal), IrExpression.objectNull())
+        ));
+        instructions.add(IrInstruction.assignObject(
+            resultLocal,
+            invokeSupplierLambdaExpression(lambda)
+        ));
+        instructions.add(IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(IrExpression.objectLocal(resultLocal))));
+        instructions.add(IrInstruction.jump(endLabel));
+        instructions.add(IrInstruction.label(valuePresentLabel));
+        instructions.add(IrInstruction.assignObject(resultLocal, receiver));
+        instructions.add(IrInstruction.label(endLabel));
+        stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
+    }
+
     private static void lowerOptionalFlatMapLambdaCall(
         final ClassFile classFile,
         final MethodInfo method,
@@ -3363,6 +3419,50 @@ final class BytecodeToIRInvokeSupport {
         ));
         instructions.add(IrInstruction.jump(endLabel));
         instructions.add(IrInstruction.label(keepLabel));
+        instructions.add(IrInstruction.assignObject(resultLocal, receiver));
+        instructions.add(IrInstruction.label(endLabel));
+        stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
+    }
+
+    private static void lowerOptionalOrCall(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final Map<String, IrDispatch> dispatches,
+        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final IrExpression receiver,
+        final IrExpression supplier
+    ) {
+        final String valueLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(
+            valueLocal,
+            IrExpression.objectCall("javan_optional_or_else", List.of(receiver, IrExpression.objectNull()))
+        ));
+        final String resultLocal = newObjectLocal(localDeclarations);
+        final String valuePresentLabel = "label_optional_or_value_present_" + instruction.offset() + "_" + localDeclarations.size();
+        final String endLabel = "label_optional_or_end_" + instruction.offset() + "_" + localDeclarations.size();
+        instructions.add(IrInstruction.branchIf(
+            valuePresentLabel,
+            IrExpression.objectComparison("!=", IrExpression.objectLocal(valueLocal), IrExpression.objectNull())
+        ));
+        lowerSupplierGetCall(
+            classes,
+            classFile,
+            method,
+            instruction,
+            instructions,
+            dispatches,
+            materializedLambdaMethods,
+            supplier,
+            resultLocal
+        );
+        instructions.add(IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(IrExpression.objectLocal(resultLocal))));
+        instructions.add(IrInstruction.jump(endLabel));
+        instructions.add(IrInstruction.label(valuePresentLabel));
         instructions.add(IrInstruction.assignObject(resultLocal, receiver));
         instructions.add(IrInstruction.label(endLabel));
         stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));

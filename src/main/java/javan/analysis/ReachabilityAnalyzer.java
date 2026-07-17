@@ -409,6 +409,27 @@ public final class ReachabilityAnalyzer {
             ));
             return;
         }
+        if (isOptionalOr(target)) {
+            final MethodRef supplierGet = new MethodRef("java/util/function/Supplier", "get", "()Ljava/lang/Object;");
+            final List<EntryPoint> targetMethods = interfaceTargets(classes, supplierGet, entryPoints);
+            if (!targetMethods.isEmpty()) {
+                enqueueAll(work, workSet, targetMethods);
+                addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
+            }
+            if (hasInlineDirectSupplierLambda(classes, current, instruction) || !targetMethods.isEmpty()) {
+                return;
+            }
+            diagnostics.add(Diagnostic.error(
+                "JAVAN012",
+                "unsupported reachable application method call",
+                current.className(),
+                current.methodName() + current.descriptor(),
+                target.display(),
+                "Optional.or requires a closed-world Supplier implementation class or a supported direct supplier lambda target.",
+                "Provide a reachable Supplier implementation class or keep this exact optional fallback-optional flow on the JVM until broader callback support lands."
+            ));
+            return;
+        }
         if (isOptionalOrElseGet(target)) {
             final MethodRef supplierGet = new MethodRef("java/util/function/Supplier", "get", "()Ljava/lang/Object;");
             final List<EntryPoint> targetMethods = interfaceTargets(classes, supplierGet, entryPoints);
@@ -959,6 +980,12 @@ public final class ReachabilityAnalyzer {
         return "java/util/Optional".equals(target.owner())
             && "ifPresent".equals(target.name())
             && "(Ljava/util/function/Consumer;)V".equals(target.descriptor());
+    }
+
+    private static boolean isOptionalOr(final MethodRef target) {
+        return "java/util/Optional".equals(target.owner())
+            && "or".equals(target.name())
+            && "(Ljava/util/function/Supplier;)Ljava/util/Optional;".equals(target.descriptor());
     }
 
     private static boolean isOptionalOrElseGet(final MethodRef target) {

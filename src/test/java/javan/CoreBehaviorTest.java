@@ -2068,6 +2068,47 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void reachabilityAcceptsOptionalOrDirectConcreteImplementation() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo(
+                        "orValue",
+                        "(Ljava/util/Optional;Ljava/util/function/Supplier;)Ljava/util/Optional;",
+                        instruction(0, 42, "aload_0"),
+                        instruction(1, 43, "aload_1"),
+                        instruction(2, 182, "invokevirtual", new MethodRef(
+                            "java/util/Optional",
+                            "or",
+                            "(Ljava/util/function/Supplier;)Ljava/util/Optional;"
+                        )),
+                        instruction(5, 176, "areturn")
+                    )
+                ),
+                "com/acme/FallbackSupplier", classWithMethods(
+                    "com/acme/FallbackSupplier",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/util/function/Supplier"),
+                    methodInfo(
+                        "get",
+                        "()Ljava/lang/Object;",
+                        instruction(0, 1, "aconst_null"),
+                        instruction(1, 176, "areturn")
+                    )
+                )
+            ),
+            List.of(new EntryPoint("com/acme/Main", "orValue", "(Ljava/util/Optional;Ljava/util/function/Supplier;)Ljava/util/Optional;"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+    }
+
+    @Test
     void reachabilityAcceptsSupplierGetDirectConcreteImplementation() {
         final CallGraph graph = new ReachabilityAnalyzer().analyze(
             Map.of(

@@ -5080,6 +5080,47 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void optionalOrConcreteSupplierBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-or-concrete");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Optional.of("value").or(new FallbackSupplier()).orElse("missing"));
+                    System.out.println(Optional.<String>empty().or(new FallbackSupplier()).orElse("missing"));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.FallbackSupplier", """
+            package com.acme;
+
+            import java.util.Optional;
+            import java.util.function.Supplier;
+
+            public final class FallbackSupplier implements Supplier<Optional<String>> {
+                @Override
+                public Optional<String> get() {
+                    return Optional.of("fallback");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-or-concrete").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("value\nfallback\n");
+    }
+
+    @Test
     void optionalIfPresentMaterializedConsumerLambdaBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("optional-if-present-lambda");
         writeJava(project, "com.acme.Main", """

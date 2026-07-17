@@ -1666,6 +1666,115 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersOptionalOrSupplierLambdaToOptionalHelpersAndDirectSupplierCall() {
+        final EntryPoint entryPoint = new EntryPoint("com/acme/Main", "orValue", "(Ljava/util/Optional;)Ljava/util/Optional;");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    optionalOrLambdaMethod(),
+                    optionalOrLambdaImplementationMethod()
+                ))
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("orValue")).singleElement().satisfies(function -> {
+            assertThat(function.locals()).containsExactly(
+                new IrLocal(IrType.OBJECT, "object0"),
+                new IrLocal(IrType.OBJECT, "object1")
+            );
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.assignObject(
+                    "object0",
+                    IrExpression.objectCall("javan_optional_or_else", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectNull()))
+                ),
+                IrInstruction.branchIf(
+                    "label_optional_or_value_present_2_2",
+                    IrExpression.objectComparison("!=", IrExpression.objectLocal("object0"), IrExpression.objectNull())
+                ),
+                IrInstruction.assignObject(
+                    "object1",
+                    IrExpression.objectCall(
+                        symbol("com/acme/Main", "lambda$or$0", "()Ljava/lang/Object;"),
+                        List.of()
+                    )
+                ),
+                IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(IrExpression.objectLocal("object1"))),
+                IrInstruction.jump("label_optional_or_end_2_2"),
+                IrInstruction.label("label_optional_or_value_present_2_2"),
+                IrInstruction.assignObject("object1", IrExpression.objectLocal("arg0")),
+                IrInstruction.label("label_optional_or_end_2_2"),
+                IrInstruction.returnObject(IrExpression.objectLocal("object1"))
+            );
+        });
+    }
+
+    @Test
+    void lowersOptionalOrConcreteSupplierImplementationToOptionalHelpersAndDirectSupplierCall() {
+        final EntryPoint entryPoint = new EntryPoint(
+            "com/acme/Main",
+            "orValueNonLambda",
+            "(Ljava/util/Optional;Ljava/util/function/Supplier;)Ljava/util/Optional;"
+        );
+        final EntryPoint supplierEntry = new EntryPoint(
+            "com/acme/FallbackSupplier",
+            "get",
+            "()Ljava/lang/Object;"
+        );
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    optionalOrConcreteSupplierMethod()
+                )),
+                "com/acme/FallbackSupplier",
+                classFile(
+                    "com/acme/FallbackSupplier",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/util/function/Supplier"),
+                    List.of(),
+                    List.of(supplierGetImplementationMethod())
+                )
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint, supplierEntry), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("orValueNonLambda")).singleElement().satisfies(function -> {
+            assertThat(function.locals()).containsExactly(
+                new IrLocal(IrType.OBJECT, "object0"),
+                new IrLocal(IrType.OBJECT, "object1")
+            );
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.assignObject(
+                    "object0",
+                    IrExpression.objectCall("javan_optional_or_else", List.of(IrExpression.objectLocal("arg0"), IrExpression.objectNull()))
+                ),
+                IrInstruction.branchIf(
+                    "label_optional_or_value_present_2_2",
+                    IrExpression.objectComparison("!=", IrExpression.objectLocal("object0"), IrExpression.objectNull())
+                ),
+                IrInstruction.assignObject(
+                    "object1",
+                    IrExpression.objectCall(
+                        symbol("com/acme/FallbackSupplier", "get", "()Ljava/lang/Object;"),
+                        List.of(IrExpression.objectLocal("arg1"))
+                    )
+                ),
+                IrInstruction.callStaticVoid("javan_objects_require_non_null", List.of(IrExpression.objectLocal("object1"))),
+                IrInstruction.jump("label_optional_or_end_2_2"),
+                IrInstruction.label("label_optional_or_value_present_2_2"),
+                IrInstruction.assignObject("object1", IrExpression.objectLocal("arg0")),
+                IrInstruction.label("label_optional_or_end_2_2"),
+                IrInstruction.returnObject(IrExpression.objectLocal("object1"))
+            );
+        });
+    }
+
+    @Test
     void lowersDirectFunctionApplyMaterializedLambdaToDirectLambdaCall() {
         final EntryPoint entryPoint = new EntryPoint("com/acme/Main", "applyValue", "(Ljava/lang/Object;)Ljava/lang/Object;");
         final IrProgram program = new BytecodeToIR().lower(
@@ -27374,6 +27483,55 @@ final class BytecodeToIRTest {
         );
     }
 
+    private static MethodInfo optionalOrLambdaMethod() {
+        return method(
+            0x0008,
+            "orValue",
+            "(Ljava/util/Optional;)Ljava/util/Optional;",
+            2,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeDynamic(1, new DynamicRef(
+                "get",
+                "()Ljava/util/function/Supplier;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "()Ljava/lang/Object;",
+                    "invokestatic com/acme/Main.lambda$or$0:()Ljava/lang/Object;",
+                    "()Ljava/lang/Object;"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("()Ljava/lang/Object;"),
+                    BootstrapArgument.methodHandle(
+                        6,
+                        new MethodRef("com/acme/Main", "lambda$or$0", "()Ljava/lang/Object;")
+                    ),
+                    BootstrapArgument.methodType("()Ljava/lang/Object;")
+                )
+            )),
+            invokeVirtual(2, new MethodRef("java/util/Optional", "or", "(Ljava/util/function/Supplier;)Ljava/util/Optional;")),
+            plain(3, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo optionalOrConcreteSupplierMethod() {
+        return method(
+            0x0008,
+            "orValueNonLambda",
+            "(Ljava/util/Optional;Ljava/util/function/Supplier;)Ljava/util/Optional;",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/util/Optional", "or", "(Ljava/util/function/Supplier;)Ljava/util/Optional;")),
+            plain(5, 176, "areturn")
+        );
+    }
+
     private static MethodInfo optionalOrElseGetConcreteSupplierMethod() {
         return method(
             0x0008,
@@ -27752,6 +27910,19 @@ final class BytecodeToIRTest {
             0,
             stringConstant(0, "fallback"),
             plain(1, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo optionalOrLambdaImplementationMethod() {
+        return method(
+            0x0008,
+            "lambda$or$0",
+            "()Ljava/lang/Object;",
+            1,
+            0,
+            stringConstant(0, "fallback"),
+            invokeStatic(1, new MethodRef("java/util/Optional", "of", "(Ljava/lang/Object;)Ljava/util/Optional;")),
+            plain(4, 176, "areturn")
         );
     }
 
