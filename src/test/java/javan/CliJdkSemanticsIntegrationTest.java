@@ -2130,6 +2130,183 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void mapOfSextupleBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-of-sextuple");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, Integer> values = Map.of("a", 1, "b", 2, "c", 3, "d", 4, "e", 5, "f", 6);
+                    System.out.println(values.isEmpty());
+                    System.out.println(values.size());
+                    System.out.println(values.containsKey("a"));
+                    System.out.println(values.containsKey("b"));
+                    System.out.println(values.containsKey("c"));
+                    System.out.println(values.containsKey("d"));
+                    System.out.println(values.containsKey("e"));
+                    System.out.println(values.containsKey("f"));
+                    System.out.println(values.containsKey("missing"));
+                    System.out.println(values.get("a"));
+                    System.out.println(values.get("b"));
+                    System.out.println(values.get("c"));
+                    System.out.println(values.get("d"));
+                    System.out.println(values.get("e"));
+                    System.out.println(values.get("f"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-of-sextuple").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("false\n6\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\nfalse\n1\n2\n3\n4\n5\n6\n");
+    }
+
+    @Test
+    void mapOfSextupleDuplicateFirstSecondFailsAtRuntime() throws Exception {
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-first-second", "Map.of(\"same\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfSextupleDuplicateFirstThirdFailsAtRuntime() throws Exception {
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-first-third", "Map.of(\"same\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfSextupleDuplicateFirstFourthFailsAtRuntime() throws Exception {
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-first-fourth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfSextupleDuplicateFirstFifthFailsAtRuntime() throws Exception {
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-first-fifth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfSextupleDuplicateFirstSixthFailsAtRuntime() throws Exception {
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-first-sixth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfSextupleDuplicateSecondThirdFailsAtRuntime() throws Exception {
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-second-third", "Map.of(\"a\", 1, \"same\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfSextupleDuplicateSecondFourthFailsAtRuntime() throws Exception {
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-second-fourth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfSextupleDuplicateSecondFifthFailsAtRuntime() throws Exception {
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-second-fifth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfSextupleDuplicateSecondSixthFailsAtRuntime() throws Exception {
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-second-sixth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfSextupleDuplicateThirdFourthFailsAtRuntime() throws Exception {
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-third-fourth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"same\", 4, \"e\", 5, \"f\", 6);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfSextupleDuplicateThirdFifthFailsAtRuntime() throws Exception {
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-third-fifth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"same\", 5, \"f\", 6);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfSextupleDuplicateThirdSixthFailsAtRuntime() throws Exception {
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-third-sixth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"same\", 6);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfSextupleDuplicateFourthFifthFailsAtRuntime() throws Exception {
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-fourth-fifth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"same\", 5, \"f\", 6);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfSextupleDuplicateFourthSixthFailsAtRuntime() throws Exception {
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-fourth-sixth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"same\", 6);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfSextupleDuplicateFifthSixthFailsAtRuntime() throws Exception {
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-duplicate-fifth-sixth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"same\", 6);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfSextupleNullFirstKeyFailsAtRuntime() throws Exception {
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-first-key", "Map.of((String) null, 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfSextupleNullFirstValueFailsAtRuntime() throws Exception {
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-first-value", "Map.of(\"a\", (Integer) null, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfSextupleNullSecondKeyFailsAtRuntime() throws Exception {
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-second-key", "Map.of(\"a\", 1, (String) null, 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfSextupleNullSecondValueFailsAtRuntime() throws Exception {
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-second-value", "Map.of(\"a\", 1, \"b\", (Integer) null, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfSextupleNullThirdKeyFailsAtRuntime() throws Exception {
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-third-key", "Map.of(\"a\", 1, \"b\", 2, (String) null, 3, \"d\", 4, \"e\", 5, \"f\", 6);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfSextupleNullThirdValueFailsAtRuntime() throws Exception {
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-third-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", (Integer) null, \"d\", 4, \"e\", 5, \"f\", 6);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfSextupleNullFourthKeyFailsAtRuntime() throws Exception {
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-fourth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, (String) null, 4, \"e\", 5, \"f\", 6);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfSextupleNullFourthValueFailsAtRuntime() throws Exception {
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-fourth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", (Integer) null, \"e\", 5, \"f\", 6);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfSextupleNullFifthKeyFailsAtRuntime() throws Exception {
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-fifth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, (String) null, 5, \"f\", 6);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfSextupleNullFifthValueFailsAtRuntime() throws Exception {
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-fifth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", (Integer) null, \"f\", 6);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfSextupleNullSixthKeyFailsAtRuntime() throws Exception {
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-sixth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, (String) null, 6);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfSextupleNullSixthValueFailsAtRuntime() throws Exception {
+        assertMapOfSextupleFailureAtRuntime("map-of-sextuple-null-sixth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", (Integer) null);", "null Map.of entry");
+    }
+
+    @Test
     void setOfEmptyBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("set-of-empty");
         writeJava(project, "com.acme.Main", """
@@ -4269,6 +4446,36 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     private void assertMapOfQuintupleFailureAtRuntime(
+        final String projectName,
+        final String statement,
+        final String expectedMessage
+    ) throws Exception {
+        final Path project = project(projectName);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    %s
+                }
+            }
+            """.formatted(statement));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/" + projectName).toString()));
+
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains(expectedMessage);
+    }
+
+    private void assertMapOfSextupleFailureAtRuntime(
         final String projectName,
         final String statement,
         final String expectedMessage

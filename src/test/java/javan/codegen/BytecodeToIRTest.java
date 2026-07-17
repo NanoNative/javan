@@ -8898,6 +8898,53 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersMapOfSextupleToRuntimeHelper() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;",
+            12,
+            12,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            plain(2, 44, "aload_2"),
+            plain(3, 45, "aload_3"),
+            plainOperands(4, 25, "aload", 4),
+            plainOperands(5, 25, "aload", 5),
+            plainOperands(6, 25, "aload", 6),
+            plainOperands(7, 25, "aload", 7),
+            plainOperands(8, 25, "aload", 8),
+            plainOperands(9, 25, "aload", 9),
+            plainOperands(10, 25, "aload", 10),
+            plainOperands(11, 25, "aload", 11),
+            invokeStatic(12, new MethodRef("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;")),
+            plain(13, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(
+                IrExpression.objectCall(
+                    "javan_map_sextuple",
+                    List.of(
+                        IrExpression.objectLocal("arg0"),
+                        IrExpression.objectLocal("arg1"),
+                        IrExpression.objectLocal("arg2"),
+                        IrExpression.objectLocal("arg3"),
+                        IrExpression.objectLocal("arg4"),
+                        IrExpression.objectLocal("arg5"),
+                        IrExpression.objectLocal("arg6"),
+                        IrExpression.objectLocal("arg7"),
+                        IrExpression.objectLocal("arg8"),
+                        IrExpression.objectLocal("arg9"),
+                        IrExpression.objectLocal("arg10"),
+                        IrExpression.objectLocal("arg11")
+                    )
+                )
+            )
+        );
+    }
+
+    @Test
     void lowersSetOfEmptyToRuntimeHelper() {
         final IrFunction function = lowerMain(method(
             0x0008,
