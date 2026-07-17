@@ -2792,6 +2792,324 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void mapOfNonupleBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("map-of-nonuple");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Map<String, Integer> values = Map.of("a", 1, "b", 2, "c", 3, "d", 4, "e", 5, "f", 6, "g", 7, "h", 8, "i", 9);
+                    System.out.println(values.isEmpty());
+                    System.out.println(values.size());
+                    System.out.println(values.containsKey("a"));
+                    System.out.println(values.containsKey("b"));
+                    System.out.println(values.containsKey("c"));
+                    System.out.println(values.containsKey("d"));
+                    System.out.println(values.containsKey("e"));
+                    System.out.println(values.containsKey("f"));
+                    System.out.println(values.containsKey("g"));
+                    System.out.println(values.containsKey("h"));
+                    System.out.println(values.containsKey("i"));
+                    System.out.println(values.containsKey("missing"));
+                    System.out.println(values.get("a"));
+                    System.out.println(values.get("b"));
+                    System.out.println(values.get("c"));
+                    System.out.println(values.get("d"));
+                    System.out.println(values.get("e"));
+                    System.out.println(values.get("f"));
+                    System.out.println(values.get("g"));
+                    System.out.println(values.get("h"));
+                    System.out.println(values.get("i"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/map-of-nonuple").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("false\n9\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\nfalse\n1\n2\n3\n4\n5\n6\n7\n8\n9\n");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateFirstSecondFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-first-second", "Map.of(\"same\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateFirstThirdFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-first-third", "Map.of(\"same\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateFirstFourthFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-first-fourth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateFirstFifthFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-first-fifth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateFirstSixthFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-first-sixth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateFirstSeventhFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-first-seventh", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateFirstEighthFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-first-eighth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"i\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateFirstNinthFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-first-ninth", "Map.of(\"same\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"same\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateSecondThirdFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-second-third", "Map.of(\"a\", 1, \"same\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateSecondFourthFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-second-fourth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateSecondFifthFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-second-fifth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateSecondSixthFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-second-sixth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateSecondSeventhFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-second-seventh", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateSecondEighthFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-second-eighth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"i\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateSecondNinthFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-second-ninth", "Map.of(\"a\", 1, \"same\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"same\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateThirdFourthFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-third-fourth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateThirdFifthFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-third-fifth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateThirdSixthFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-third-sixth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateThirdSeventhFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-third-seventh", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateThirdEighthFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-third-eighth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"i\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateThirdNinthFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-third-ninth", "Map.of(\"a\", 1, \"b\", 2, \"same\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"same\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateFourthFifthFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-fourth-fifth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateFourthSixthFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-fourth-sixth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateFourthSeventhFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-fourth-seventh", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateFourthEighthFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-fourth-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"i\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateFourthNinthFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-fourth-ninth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"same\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"same\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateFifthSixthFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-fifth-sixth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateFifthSeventhFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-fifth-seventh", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateFifthEighthFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-fifth-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"i\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateFifthNinthFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-fifth-ninth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"same\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"same\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateSixthSeventhFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-sixth-seventh", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"same\", 7, \"h\", 8, \"i\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateSixthEighthFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-sixth-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"same\", 8, \"i\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateSixthNinthFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-sixth-ninth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"same\", 6, \"g\", 7, \"h\", 8, \"same\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateSeventhEighthFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-seventh-eighth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"same\", 8, \"i\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateSeventhNinthFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-seventh-ninth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"same\", 7, \"h\", 8, \"same\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleDuplicateEighthNinthFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-duplicate-eighth-ninth", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"same\", 8, \"same\", 9);", "duplicate Map.of key");
+    }
+
+    @Test
+    void mapOfNonupleNullFirstKeyFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-first-key", "Map.of((String) null, 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfNonupleNullFirstValueFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-first-value", "Map.of(\"a\", (Integer) null, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfNonupleNullSecondKeyFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-second-key", "Map.of(\"a\", 1, (String) null, 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfNonupleNullSecondValueFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-second-value", "Map.of(\"a\", 1, \"b\", (Integer) null, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfNonupleNullThirdKeyFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-third-key", "Map.of(\"a\", 1, \"b\", 2, (String) null, 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfNonupleNullThirdValueFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-third-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", (Integer) null, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfNonupleNullFourthKeyFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-fourth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, (String) null, 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfNonupleNullFourthValueFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-fourth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", (Integer) null, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfNonupleNullFifthKeyFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-fifth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, (String) null, 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfNonupleNullFifthValueFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-fifth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", (Integer) null, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", 9);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfNonupleNullSixthKeyFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-sixth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, (String) null, 6, \"g\", 7, \"h\", 8, \"i\", 9);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfNonupleNullSixthValueFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-sixth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", (Integer) null, \"g\", 7, \"h\", 8, \"i\", 9);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfNonupleNullSeventhKeyFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-seventh-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, (String) null, 7, \"h\", 8, \"i\", 9);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfNonupleNullSeventhValueFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-seventh-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", (Integer) null, \"h\", 8, \"i\", 9);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfNonupleNullEighthKeyFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-eighth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, (String) null, 8, \"i\", 9);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfNonupleNullEighthValueFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-eighth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", (Integer) null, \"i\", 9);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfNonupleNullNinthKeyFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-ninth-key", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, (String) null, 9);", "null Map.of entry");
+    }
+
+    @Test
+    void mapOfNonupleNullNinthValueFailsAtRuntime() throws Exception {
+        assertMapOfNonupleFailureAtRuntime("map-of-nonuple-null-ninth-value", "Map.of(\"a\", 1, \"b\", 2, \"c\", 3, \"d\", 4, \"e\", 5, \"f\", 6, \"g\", 7, \"h\", 8, \"i\", (Integer) null);", "null Map.of entry");
+    }
+
+    @Test
     void setOfEmptyBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("set-of-empty");
         writeJava(project, "com.acme.Main", """
@@ -5141,6 +5459,36 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     private void assertMapOfOctupleFailureAtRuntime(
+        final String projectName,
+        final String statement,
+        final String expectedMessage
+    ) throws Exception {
+        final Path project = project(projectName);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Map;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    %s
+                }
+            }
+            """.formatted(statement));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/" + projectName).toString()));
+
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains(expectedMessage);
+    }
+
+    private void assertMapOfNonupleFailureAtRuntime(
         final String projectName,
         final String statement,
         final String expectedMessage
