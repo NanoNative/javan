@@ -61,7 +61,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Checkout release source
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: ${{ steps.plan.outputs.tag }}
 

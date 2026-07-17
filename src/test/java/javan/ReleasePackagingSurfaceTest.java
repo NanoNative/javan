@@ -213,7 +213,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
 
         assertThat(releaseWorkflow)
             .contains("- name: Download packages")
-            .contains("uses: actions/download-artifact@v5")
+            .contains("uses: actions/download-artifact@v8")
             .contains("merge-multiple: true")
             .contains("- name: Prepare release metadata");
     }

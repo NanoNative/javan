@@ -101,7 +101,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Set up JDK
         uses: actions/setup-java@v5
@@ -163,7 +163,7 @@ jobs:
         run: JAVAN_VERSION='${{ needs.plan.outputs.version }}' JAVAN_PACKAGE_TARGET='${{ matrix.package-target }}' sh .github/scripts/verify-release.sh
 
       - name: Upload package
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: javan-${{ matrix.package-target }}
           retention-days: 1
@@ -187,7 +187,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Set up JDK
         uses: actions/setup-java@v5
@@ -236,7 +236,7 @@ jobs:
         run: JAVAN_VERSION='${{ needs.plan.outputs.version }}' JAVAN_PACKAGE_TARGET='${{ matrix.package-target }}' sh .github/scripts/verify-release.sh
 
       - name: Upload package
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: javan-${{ matrix.package-target }}
           retention-days: 1
@@ -265,13 +265,13 @@ jobs:
           fi
 
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           token: ${{ secrets.BOT_TOKEN }}
 
       - name: Download packages
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           path: dist/release
           merge-multiple: true

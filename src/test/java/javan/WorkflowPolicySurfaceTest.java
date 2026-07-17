@@ -133,6 +133,19 @@ final class WorkflowPolicySurfaceTest {
     }
 
     @Test
+    void workflowsUseNode24ReadyArtifactAndCheckoutActionMajors() throws Exception {
+        assertThat(Files.readString(CI_WORKFLOW))
+            .contains("uses: actions/checkout@v7")
+            .contains("uses: actions/upload-artifact@v6");
+        assertThat(Files.readString(RELEASE_WORKFLOW))
+            .contains("uses: actions/checkout@v7")
+            .contains("uses: actions/upload-artifact@v6")
+            .contains("uses: actions/download-artifact@v8");
+        assertThat(Files.readString(CONTAINER_IMAGES_WORKFLOW))
+            .contains("uses: actions/checkout@v7");
+    }
+
+    @Test
     void junitPlatformKeepsParallelExecutionEnabledByDefault() throws Exception {
         assertThat(Files.readString(JUNIT_PLATFORM_PROPERTIES))
             .contains("junit.jupiter.execution.parallel.enabled = true")
