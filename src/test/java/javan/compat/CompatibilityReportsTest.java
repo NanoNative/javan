@@ -83,12 +83,12 @@ final class CompatibilityReportsTest {
         assertThat(summary).contains(
             "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 5, \"leftCallables\": 3, \"coveragePercent\": \"40.0\"}",
             "\"exactJdkCallableAccounting\": {\"supportedCallables\": 2, \"explicitRejectedCallables\": 3, \"doneCallables\": 5, \"unknownCallables\": 0, \"totalCallables\": 5, \"donePercent\": \"100.0\"}",
-            "\"supportRows\": 269",
-            "\"passRows\": 269",
+            "\"supportRows\": 271",
+            "\"passRows\": 271",
             "\"scopedRows\": 0",
             "\"targetRows\": 0",
             "\"rejectedRows\": 0",
-            "\"accountedRows\": 269",
+            "\"accountedRows\": 271",
             "\"unaccountedRows\": 0"
         );
     }
@@ -140,6 +140,7 @@ final class CompatibilityReportsTest {
             "| `collection-contains-all` | pass |",
             "| `collection-remove` | pass |",
             "| `collection-clear` | pass |",
+            "| `list-remove-object` | pass |",
             "| `list-index-of` | pass |",
             "| `list-last-index-of` | pass |",
             "| `list-remove-at` | pass |",
@@ -163,6 +164,7 @@ final class CompatibilityReportsTest {
             "| `arraylist-direct-owner-read-surface` | pass |",
             "| `arraylist-direct-owner-get-first` | pass |",
             "| `arraylist-direct-owner-get-last` | pass |",
+            "| `arraylist-direct-owner-remove-object` | pass |",
             "| `arraylist-direct-owner-index-of` | pass |",
             "| `arraylist-direct-owner-last-index-of` | pass |",
             "| `arraylist-direct-owner-set` | pass |",
@@ -341,6 +343,7 @@ final class CompatibilityReportsTest {
             "\"feature\": \"collection-contains-all\"",
             "\"feature\": \"collection-remove\"",
             "\"feature\": \"collection-clear\"",
+            "\"feature\": \"list-remove-object\"",
             "\"feature\": \"list-index-of\"",
             "\"feature\": \"list-last-index-of\"",
             "\"feature\": \"list-remove-at\"",
@@ -363,6 +366,7 @@ final class CompatibilityReportsTest {
             "\"feature\": \"arraylist-direct-owner-read-surface\"",
             "\"feature\": \"arraylist-direct-owner-get-first\"",
             "\"feature\": \"arraylist-direct-owner-get-last\"",
+            "\"feature\": \"arraylist-direct-owner-remove-object\"",
             "\"feature\": \"arraylist-direct-owner-index-of\"",
             "\"feature\": \"arraylist-direct-owner-last-index-of\"",
             "\"feature\": \"arraylist-direct-owner-set\"",

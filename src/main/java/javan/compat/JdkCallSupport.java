@@ -927,7 +927,8 @@ public final class JdkCallSupport {
             return "(Ljava/lang/Object;)I".equals(descriptor);
         }
         if ("remove".equals(name)) {
-            return "(I)Ljava/lang/Object;".equals(descriptor);
+            return "(I)Ljava/lang/Object;".equals(descriptor)
+                || "(Ljava/lang/Object;)Z".equals(descriptor);
         }
         if ("removeLast".equals(name)) {
             return "()Ljava/lang/Object;".equals(descriptor);
@@ -1000,7 +1001,8 @@ public final class JdkCallSupport {
             return "(ILjava/lang/Object;)Ljava/lang/Object;".equals(descriptor);
         }
         if ("remove".equals(name)) {
-            return "(I)Ljava/lang/Object;".equals(descriptor);
+            return "(I)Ljava/lang/Object;".equals(descriptor)
+                || "(Ljava/lang/Object;)Z".equals(descriptor);
         }
         if ("removeLast".equals(name)) {
             return "()Ljava/lang/Object;".equals(descriptor);
