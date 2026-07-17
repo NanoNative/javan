@@ -4124,6 +4124,10 @@ final class BytecodeToIRInvokeSupport {
                 pushIntCall(instructions, stack, localDeclarations, "javan_map_contains_key", List.of(receiver, arguments.getFirst()));
                 return true;
             }
+            if ("containsValue(Ljava/lang/Object;)Z".equals(signature)) {
+                pushIntCall(instructions, stack, localDeclarations, "javan_map_contains_value", List.of(receiver, arguments.getFirst()));
+                return true;
+            }
             if ("size()I".equals(signature)) {
                 stack.add(StackValue.intExpression(IrExpression.intCall("javan_map_size", List.of(receiver))));
                 return true;

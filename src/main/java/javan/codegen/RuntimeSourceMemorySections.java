@@ -9484,6 +9484,17 @@ final class RuntimeSourceMemorySections {
             return javan_map_find(javan_map_checked(value), key) >= 0;
         }
 
+        int javan_map_contains_value(void* value, void* expected_value) {
+            javan_object_map* map = javan_map_checked(value);
+            int length = javan_map_logical_length(map);
+            for (int index = 0; index < length; index++) {
+                if (javan_object_equals(javan_map_value_unchecked(map, index), expected_value) != 0) {
+                    return 1;
+                }
+            }
+            return 0;
+        }
+
         int javan_map_size(void* value) {
             return javan_map_logical_length(javan_map_checked(value));
         }
