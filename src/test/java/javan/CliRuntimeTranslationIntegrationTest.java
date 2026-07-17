@@ -4112,7 +4112,7 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void predicateTestConcreteImplementationBuildsAndMatchesJvmOutput() throws Exception {
+    void predicateTestDirectConcreteImplementationBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("predicate-test-concrete");
         writeJava(project, "com.acme.Main", """
             package com.acme;
@@ -4342,6 +4342,72 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/supplier-get-lambda").toString())).stdout()).isEqualTo(jvmOutput);
         assertThat(jvmOutput).isEqualTo("fallback\n");
+    }
+
+    @Test
+    void predicateTestConcreteImplementationBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("predicate-test-concrete-direct");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Predicate;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Predicate<String> predicate = new Matcher();
+                    System.out.println(predicate.test("value"));
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Matcher", """
+            package com.acme;
+
+            import java.util.function.Predicate;
+
+            public final class Matcher implements Predicate<String> {
+                @Override
+                public boolean test(final String value) {
+                    return value.equals("value");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/predicate-test-concrete-direct").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n");
+    }
+
+    @Test
+    void predicateTestDirectZeroCaptureLambdaBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("predicate-test-lambda-direct");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Predicate;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Predicate<String> predicate = value -> value.equals("value");
+                    System.out.println(predicate.test("value"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/predicate-test-lambda-direct").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n");
     }
 
     @Test

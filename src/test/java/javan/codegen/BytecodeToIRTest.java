@@ -1656,6 +1656,71 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersDirectPredicateTestMaterializedLambdaToDirectLambdaCall() {
+        final EntryPoint entryPoint = new EntryPoint("com/acme/Main", "testValue", "(Ljava/lang/Object;)Z");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    directPredicateTestLambdaMethod(),
+                    directPredicateTestLambdaImplementationMethod()
+                ))
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("testValue")).singleElement().satisfies(function -> {
+            assertThat(function.locals()).isEmpty();
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.returnInt(IrExpression.intCall(
+                    symbol("com/acme/Main", "lambda$test$0", "(Ljava/lang/Object;)Z"),
+                    List.of(IrExpression.objectLocal("arg0"))
+                ))
+            );
+        });
+    }
+
+    @Test
+    void lowersDirectPredicateTestConcreteImplementationToDirectCall() {
+        final EntryPoint entryPoint = new EntryPoint(
+            "com/acme/Main",
+            "testValueNonLambda",
+            "(Ljava/lang/Object;Ljava/util/function/Predicate;)Z"
+        );
+        final EntryPoint predicateEntry = new EntryPoint("com/acme/Matcher", "test", "(Ljava/lang/Object;)Z");
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0, List.of(), List.of(), List.of(
+                    directPredicateTestConcreteMethod()
+                )),
+                "com/acme/Matcher",
+                classFile(
+                    "com/acme/Matcher",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/util/function/Predicate"),
+                    List.of(),
+                    List.of(predicateTestImplementationMethod())
+                )
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint, predicateEntry), List.of()),
+            SourceLineIndex.empty()
+        );
+
+        assertThat(program.functions()).filteredOn(function -> function.name().equals("testValueNonLambda")).singleElement().satisfies(function -> {
+            assertThat(function.locals()).isEmpty();
+            assertThat(function.instructions()).containsExactly(
+                IrInstruction.returnInt(IrExpression.intCall(
+                    "javan_com_acme_Matcher_test__Ljava_lang_Object__Z",
+                    List.of(IrExpression.objectLocal("arg1"), IrExpression.objectLocal("arg0"))
+                ))
+            );
+        });
+    }
+
+    @Test
     void rejectsOptionalMapCapturedLambdaWithWrongImplementationArity() {
         assertThatThrownBy(() -> lowerMain(optionalCapturedMapWrongArityLambdaMethod()))
             .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
@@ -26917,6 +26982,55 @@ final class BytecodeToIRTest {
         );
     }
 
+    private static MethodInfo directPredicateTestLambdaMethod() {
+        return method(
+            0x0008,
+            "testValue",
+            "(Ljava/lang/Object;)Z",
+            2,
+            1,
+            invokeDynamic(0, new DynamicRef(
+                "test",
+                "()Ljava/util/function/Predicate;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;)Z",
+                    "invokestatic com/acme/Main.lambda$test$0:(Ljava/lang/Object;)Z",
+                    "(Ljava/lang/Object;)Z"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Z"),
+                    BootstrapArgument.methodHandle(
+                        6,
+                        new MethodRef("com/acme/Main", "lambda$test$0", "(Ljava/lang/Object;)Z")
+                    ),
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Z")
+                )
+            )),
+            plain(1, 42, "aload_0"),
+            invokeInterface(2, new MethodRef("java/util/function/Predicate", "test", "(Ljava/lang/Object;)Z")),
+            plain(7, 172, "ireturn")
+        );
+    }
+
+    private static MethodInfo directPredicateTestConcreteMethod() {
+        return method(
+            0x0008,
+            "testValueNonLambda",
+            "(Ljava/lang/Object;Ljava/util/function/Predicate;)Z",
+            2,
+            2,
+            plain(0, 43, "aload_1"),
+            plain(1, 42, "aload_0"),
+            invokeInterface(2, new MethodRef("java/util/function/Predicate", "test", "(Ljava/lang/Object;)Z")),
+            plain(7, 172, "ireturn")
+        );
+    }
+
     private static MethodInfo optionalOrElseGetLambdaMethod() {
         return method(
             0x0008,
@@ -27293,6 +27407,18 @@ final class BytecodeToIRTest {
             0,
             stringConstant(0, "fallback"),
             plain(1, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo directPredicateTestLambdaImplementationMethod() {
+        return method(
+            0x0008,
+            "lambda$test$0",
+            "(Ljava/lang/Object;)Z",
+            1,
+            1,
+            plain(0, 4, "iconst_1"),
+            plain(1, 172, "ireturn")
         );
     }
 

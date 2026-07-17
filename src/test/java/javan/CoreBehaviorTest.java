@@ -2098,6 +2098,101 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void reachabilityAcceptsPredicateTestDirectConcreteImplementation() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo(
+                        "test",
+                        "(Ljava/lang/Object;Ljava/util/function/Predicate;)Z",
+                        instruction(0, 43, "aload_1"),
+                        instruction(1, 42, "aload_0"),
+                        instruction(2, 185, "invokeinterface", new MethodRef(
+                            "java/util/function/Predicate",
+                            "test",
+                            "(Ljava/lang/Object;)Z"
+                        )),
+                        instruction(7, 172, "ireturn")
+                    )
+                ),
+                "com/acme/Matcher", classWithMethods(
+                    "com/acme/Matcher",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/util/function/Predicate"),
+                    methodInfo(
+                        "test",
+                        "(Ljava/lang/Object;)Z",
+                        instruction(0, 4, "iconst_1"),
+                        instruction(1, 172, "ireturn")
+                    )
+                )
+            ),
+            List.of(new EntryPoint("com/acme/Main", "test", "(Ljava/lang/Object;Ljava/util/function/Predicate;)Z"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+    }
+
+    @Test
+    void reachabilityAcceptsPredicateTestDirectLambda() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of("com/acme/Main", classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                methodInfo(
+                    "test",
+                    "(Ljava/lang/Object;)Z",
+                    invokeDynamicInstruction(0, new DynamicRef(
+                        "test",
+                        "()Ljava/util/function/Predicate;",
+                        "java/lang/invoke/LambdaMetafactory",
+                        "metafactory",
+                        "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                            + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                            + "Ljava/lang/invoke/CallSite;",
+                        List.of(
+                            "(Ljava/lang/Object;)Z",
+                            "invokestatic com/acme/Main.lambda$test$0:(Ljava/lang/Object;)Z",
+                            "(Ljava/lang/Object;)Z"
+                        ),
+                        List.of(
+                            BootstrapArgument.methodType("(Ljava/lang/Object;)Z"),
+                            BootstrapArgument.methodHandle(
+                                6,
+                                new MethodRef("com/acme/Main", "lambda$test$0", "(Ljava/lang/Object;)Z")
+                            ),
+                            BootstrapArgument.methodType("(Ljava/lang/Object;)Z")
+                        )
+                    )),
+                    instruction(1, 42, "aload_0"),
+                    instruction(2, 185, "invokeinterface", new MethodRef(
+                        "java/util/function/Predicate",
+                        "test",
+                        "(Ljava/lang/Object;)Z"
+                    )),
+                    instruction(7, 172, "ireturn")
+                ),
+                methodInfo(
+                    "lambda$test$0",
+                    "(Ljava/lang/Object;)Z",
+                    instruction(0, 4, "iconst_1"),
+                    instruction(1, 172, "ireturn")
+                )
+            )),
+            List.of(new EntryPoint("com/acme/Main", "test", "(Ljava/lang/Object;)Z"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+    }
+
+    @Test
     void reachabilityResolvesSpecialNonConstructorCall() {
         final CallGraph graph = new ReachabilityAnalyzer().analyze(
             Map.of(

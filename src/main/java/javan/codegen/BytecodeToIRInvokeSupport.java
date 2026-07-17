@@ -7476,6 +7476,10 @@ final class BytecodeToIRInvokeSupport {
         if (lowerJdkCollectionInstanceCall(classes, classFile, method, instruction, dispatches, materializedLambdaMethods, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
+        if (isPredicateTest(methodRef) && hasPredicateLambdaReceiverOnStack(stack)) {
+            lowerPredicateTestLambdaCall(classFile, method, instruction, stack);
+            return;
+        }
         if (isSupplierGet(methodRef) && hasTopStackKind(stack, StackKind.LAMBDA_SUPPLIER)) {
             lowerSupplierGetLambdaCall(classFile, method, instruction, stack);
             return;
@@ -7551,6 +7555,17 @@ final class BytecodeToIRInvokeSupport {
     ) {
         final DynamicLambda lambda = popDynamicLambda(classFile, method, instruction, stack, StackKind.LAMBDA_SUPPLIER, "supplier lambda");
         stack.add(StackValue.objectExpression(invokeSupplierLambdaExpression(lambda)));
+    }
+
+    private static void lowerPredicateTestLambdaCall(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<StackValue> stack
+    ) {
+        final IrExpression argument = popObject(classFile, method, stack);
+        final DynamicLambda lambda = popDynamicLambda(classFile, method, instruction, stack, StackKind.LAMBDA_PREDICATE, "predicate lambda");
+        stack.add(StackValue.intExpression(invokePredicateLambdaExpression(lambda, argument)));
     }
 
     private static boolean lowerVirtualThreadBuilderInterfaceCall(
@@ -8591,6 +8606,10 @@ final class BytecodeToIRInvokeSupport {
         return stack.size() >= 2 && stack.get(stack.size() - 2).kind() == StackKind.LAMBDA_FUNCTION;
     }
 
+    private static boolean hasPredicateLambdaReceiverOnStack(final List<StackValue> stack) {
+        return stack.size() >= 2 && stack.get(stack.size() - 2).kind() == StackKind.LAMBDA_PREDICATE;
+    }
+
     private static boolean isFunctionApply(final MethodRef methodRef) {
         return "java/util/function/Function".equals(methodRef.owner())
             && "apply".equals(methodRef.name())
@@ -8601,6 +8620,12 @@ final class BytecodeToIRInvokeSupport {
         return "java/util/function/Supplier".equals(methodRef.owner())
             && "get".equals(methodRef.name())
             && "()Ljava/lang/Object;".equals(methodRef.descriptor());
+    }
+
+    private static boolean isPredicateTest(final MethodRef methodRef) {
+        return "java/util/function/Predicate".equals(methodRef.owner())
+            && "test".equals(methodRef.name())
+            && "(Ljava/lang/Object;)Z".equals(methodRef.descriptor());
     }
 
     private static DynamicLambda popDynamicLambda(
