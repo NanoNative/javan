@@ -19,6 +19,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     private static final Path CONTAINER_WORKFLOW = Path.of(".github/workflows/container-images.yml");
     private static final Path VERIFY_RELEASE = Path.of(".github/scripts/verify-release.sh");
     private static final Path VERIFY_CI_PACKAGE_SMOKE = Path.of(".github/scripts/verify-ci-package-smoke.sh");
+    private static final Path REPO_ROOT = Path.of("").toAbsolutePath().normalize();
 
     @Test
     void homebrewFormulaGenerationRendersPinnedUrlsAndChecksumsForAllPlatforms() throws Exception {
@@ -31,8 +32,8 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         final Path formula = releaseDir.resolve("javan.rb");
 
         final ProcessResult run = process(
-            Path.of("/Users/yuna/projects/javan-project/javan"),
-            List.of("sh", ".github/scripts/generate-homebrew-formula.sh", version, "NanoNative/javan"),
+            REPO_ROOT,
+            List.of("sh", REPO_ROOT.resolve(".github/scripts/generate-homebrew-formula.sh").toString(), version, "NanoNative/javan"),
             Duration.ofSeconds(20),
             Map.of(
                 "JAVAN_RELEASE_DIR", releaseDir.toString(),
@@ -63,8 +64,8 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         Files.writeString(releaseDir.resolve("javan-" + version + "-linux-x64.tar.gz"), "linux-x64", StandardCharsets.UTF_8);
 
         final ProcessResult run = process(
-            Path.of("/Users/yuna/projects/javan-project/javan"),
-            List.of("sh", ".github/scripts/generate-homebrew-formula.sh", version, "NanoNative/javan"),
+            REPO_ROOT,
+            List.of("sh", REPO_ROOT.resolve(".github/scripts/generate-homebrew-formula.sh").toString(), version, "NanoNative/javan"),
             Duration.ofSeconds(20),
             Map.of("JAVAN_RELEASE_DIR", releaseDir.toString())
         );
@@ -85,8 +86,8 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         final Path formula = releaseDir.resolve("javan.rb");
 
         final ProcessResult generate = process(
-            Path.of("/Users/yuna/projects/javan-project/javan"),
-            List.of("sh", ".github/scripts/generate-homebrew-formula.sh", version, "NanoNative/javan"),
+            REPO_ROOT,
+            List.of("sh", REPO_ROOT.resolve(".github/scripts/generate-homebrew-formula.sh").toString(), version, "NanoNative/javan"),
             Duration.ofSeconds(20),
             Map.of(
                 "JAVAN_RELEASE_DIR", releaseDir.toString(),
@@ -96,8 +97,8 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         assertThat(generate.exitCode()).isZero();
 
         final ProcessResult verify = process(
-            Path.of("/Users/yuna/projects/javan-project/javan"),
-            List.of("sh", ".github/scripts/verify-homebrew-formula.sh", formula.toString(), version, "NanoNative/javan"),
+            REPO_ROOT,
+            List.of("sh", REPO_ROOT.resolve(".github/scripts/verify-homebrew-formula.sh").toString(), formula.toString(), version, "NanoNative/javan"),
             Duration.ofSeconds(20),
             Map.of("JAVAN_RELEASE_DIR", releaseDir.toString())
         );
@@ -182,7 +183,9 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
 
         assertThat(ciWorkflow)
             .contains("needs:")
-            .contains("- verify")
+            .contains("- verify-core")
+            .contains("- verify-cli-integration")
+            .contains("- native-smoke")
             .contains("- windows-runtime-smoke")
             .contains("uses: ./.github/workflows/release.yml");
     }

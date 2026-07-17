@@ -20770,7 +20770,13 @@ final class BytecodeToIRTest {
                 IrInstruction.label("label_optional_if_present_value_present_2_1"),
                 IrInstruction.callStaticVoid(
                     "javan_materialized_lambda_apply_void",
-                    List.of(IrExpression.objectLocal("lambda0"), IrExpression.objectLocal("object0"))
+                    List.of(
+                        IrExpression.objectCall(
+                            "javan_materialized_lambda_new",
+                            List.of(IrExpression.intLiteral(1))
+                        ),
+                        IrExpression.objectLocal("object0")
+                    )
                 ),
                 IrInstruction.label("label_optional_if_present_end_2_1"),
                 IrInstruction.returnVoid()
