@@ -508,6 +508,8 @@ public final class CompatibilityReports {
             pass("set-contains-all"),
             pass("hashset-collection-constructor"),
             pass("linkedhashset-collection-constructor"),
+            pass("hashset-static-factory"),
+            pass("linkedhashset-static-factory"),
             pass("hashmap-capacity-constructor"),
             pass("linkedhashmap-capacity-constructor"),
             pass("hashmap-load-factor-constructor"),

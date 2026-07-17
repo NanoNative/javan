@@ -1043,6 +1043,75 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void hashSetNewHashSetStaticFactoryBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("hashset-static-factory");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashSet;
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Set<String> values = HashSet.newHashSet(3);
+                    values.add("alpha");
+                    values.add("beta");
+                    values.add("gamma");
+                    System.out.println(values.contains("alpha"));
+                    System.out.println(values.contains("beta"));
+                    System.out.println(values.contains("gamma"));
+                    System.out.println(values.contains("missing"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/hashset-static-factory").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\ntrue\ntrue\nfalse\n");
+    }
+
+    @Test
+    void linkedHashSetNewLinkedHashSetStaticFactoryBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("linkedhashset-static-factory");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.LinkedHashSet;
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Set<String> values = LinkedHashSet.newLinkedHashSet(3);
+                    values.add("alpha");
+                    values.add("beta");
+                    values.add("gamma");
+                    final Object[] elements = values.toArray();
+                    System.out.println(elements[0]);
+                    System.out.println(elements[1]);
+                    System.out.println(elements[2]);
+                    System.out.println(values.contains("missing"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/linkedhashset-static-factory").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("alpha\nbeta\ngamma\nfalse\n");
+    }
+
+    @Test
     void linkedHashMapValuesBuildAndMatchJvmOutput() throws Exception {
         final Path project = project("linkedhashmap-values");
         writeJava(project, "com.acme.Main", """

@@ -3228,6 +3228,20 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_linkedhashmap_new_with_expected_mappings", arguments)));
             return true;
         }
+        if ("java/util/HashSet".equals(owner)
+            && "newHashSet".equals(name)
+            && "(I)Ljava/util/HashSet;".equals(descriptor)) {
+            final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_hashset_new_with_expected_elements", arguments)));
+            return true;
+        }
+        if ("java/util/LinkedHashSet".equals(owner)
+            && "newLinkedHashSet".equals(name)
+            && "(I)Ljava/util/LinkedHashSet;".equals(descriptor)) {
+            final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_linkedhashset_new_with_expected_elements", arguments)));
+            return true;
+        }
         if ("java/util/Map".equals(owner)) {
             if ("entry".equals(name) && "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map$Entry;".equals(descriptor)) {
                 final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));

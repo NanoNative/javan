@@ -265,6 +265,8 @@ final class RuntimeHeaderFile {
         int javan_iterator_has_next(void* iterator);
         void* javan_iterator_next(void* iterator);
         void* javan_hashset_new(void);
+        void* javan_hashset_new_with_expected_elements(int num_elements);
+        void* javan_linkedhashset_new_with_expected_elements(int num_elements);
         void javan_hashset_add_all(void* set, void* collection);
         void* javan_set_empty(void);
         void* javan_set_copy_of(void* collection);

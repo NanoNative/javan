@@ -19849,6 +19849,48 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersHashSetNewHashSetStaticFactoryToRuntimeAllocation() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(I)Ljava/util/HashSet;",
+            1,
+            1,
+            plain(0, 26, "iload_0"),
+            invokeStatic(1, new MethodRef("java/util/HashSet", "newHashSet", "(I)Ljava/util/HashSet;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_hashset_new_with_expected_elements",
+                List.of(IrExpression.intLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersLinkedHashSetNewLinkedHashSetStaticFactoryToRuntimeAllocation() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(I)Ljava/util/LinkedHashSet;",
+            1,
+            1,
+            plain(0, 26, "iload_0"),
+            invokeStatic(1, new MethodRef("java/util/LinkedHashSet", "newLinkedHashSet", "(I)Ljava/util/LinkedHashSet;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_linkedhashset_new_with_expected_elements",
+                List.of(IrExpression.intLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
     void lowersMapRemoveToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,

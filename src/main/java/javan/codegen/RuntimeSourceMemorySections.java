@@ -8600,6 +8600,24 @@ final class RuntimeSourceMemorySections {
             return 2147483647;
         }
 
+        void* javan_hashset_new_with_expected_elements(int num_elements) {
+            if (num_elements < 0) {
+                char buffer[64];
+                snprintf(buffer, sizeof(buffer), "Negative number of elements: %d", num_elements);
+                javan_panic(buffer);
+            }
+            return javan_list_new_with_capacity(javan_hashmap_capacity_for_expected_mappings(num_elements), 0);
+        }
+
+        void* javan_linkedhashset_new_with_expected_elements(int num_elements) {
+            if (num_elements < 0) {
+                char buffer[64];
+                snprintf(buffer, sizeof(buffer), "Negative number of elements: %d", num_elements);
+                javan_panic(buffer);
+            }
+            return javan_list_new_with_capacity(javan_hashmap_capacity_for_expected_mappings(num_elements), 0);
+        }
+
         void* javan_hashmap_new_with_expected_mappings(int num_mappings) {
             return javan_map_new_with_capacity(javan_hashmap_capacity_for_expected_mappings(num_mappings), 0);
         }
