@@ -2396,6 +2396,205 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void setOfQuintupleBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("set-of-quintuple");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Set<String> values = Set.of("a", "b", "c", "d", "e");
+                    System.out.println(values.size());
+                    System.out.println(values.contains("a"));
+                    System.out.println(values.contains("b"));
+                    System.out.println(values.contains("c"));
+                    System.out.println(values.contains("d"));
+                    System.out.println(values.contains("e"));
+                    System.out.println(values.contains("later"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/set-of-quintuple").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("5\ntrue\ntrue\ntrue\ntrue\ntrue\nfalse\n");
+    }
+
+    @Test
+    void setOfQuintupleDuplicateFirstSecondFailsAtRuntime() throws Exception {
+        assertSetOfQuintupleFailureAtRuntime(
+            "set-of-quintuple-duplicate-first-second",
+            "Set.of(\"same\", \"same\", \"c\", \"d\", \"e\");",
+            "duplicate Set.of element"
+        );
+    }
+
+    @Test
+    void setOfQuintupleDuplicateFirstThirdFailsAtRuntime() throws Exception {
+        assertSetOfQuintupleFailureAtRuntime(
+            "set-of-quintuple-duplicate-first-third",
+            "Set.of(\"same\", \"b\", \"same\", \"d\", \"e\");",
+            "duplicate Set.of element"
+        );
+    }
+
+    @Test
+    void setOfQuintupleDuplicateFirstFourthFailsAtRuntime() throws Exception {
+        assertSetOfQuintupleFailureAtRuntime(
+            "set-of-quintuple-duplicate-first-fourth",
+            "Set.of(\"same\", \"b\", \"c\", \"same\", \"e\");",
+            "duplicate Set.of element"
+        );
+    }
+
+    @Test
+    void setOfQuintupleDuplicateFirstFifthFailsAtRuntime() throws Exception {
+        assertSetOfQuintupleFailureAtRuntime(
+            "set-of-quintuple-duplicate-first-fifth",
+            "Set.of(\"same\", \"b\", \"c\", \"d\", \"same\");",
+            "duplicate Set.of element"
+        );
+    }
+
+    @Test
+    void setOfQuintupleDuplicateSecondThirdFailsAtRuntime() throws Exception {
+        assertSetOfQuintupleFailureAtRuntime(
+            "set-of-quintuple-duplicate-second-third",
+            "Set.of(\"a\", \"same\", \"same\", \"d\", \"e\");",
+            "duplicate Set.of element"
+        );
+    }
+
+    @Test
+    void setOfQuintupleDuplicateSecondFourthFailsAtRuntime() throws Exception {
+        assertSetOfQuintupleFailureAtRuntime(
+            "set-of-quintuple-duplicate-second-fourth",
+            "Set.of(\"a\", \"same\", \"c\", \"same\", \"e\");",
+            "duplicate Set.of element"
+        );
+    }
+
+    @Test
+    void setOfQuintupleDuplicateSecondFifthFailsAtRuntime() throws Exception {
+        assertSetOfQuintupleFailureAtRuntime(
+            "set-of-quintuple-duplicate-second-fifth",
+            "Set.of(\"a\", \"same\", \"c\", \"d\", \"same\");",
+            "duplicate Set.of element"
+        );
+    }
+
+    @Test
+    void setOfQuintupleDuplicateThirdFourthFailsAtRuntime() throws Exception {
+        assertSetOfQuintupleFailureAtRuntime(
+            "set-of-quintuple-duplicate-third-fourth",
+            "Set.of(\"a\", \"b\", \"same\", \"same\", \"e\");",
+            "duplicate Set.of element"
+        );
+    }
+
+    @Test
+    void setOfQuintupleDuplicateThirdFifthFailsAtRuntime() throws Exception {
+        assertSetOfQuintupleFailureAtRuntime(
+            "set-of-quintuple-duplicate-third-fifth",
+            "Set.of(\"a\", \"b\", \"same\", \"d\", \"same\");",
+            "duplicate Set.of element"
+        );
+    }
+
+    @Test
+    void setOfQuintupleDuplicateFourthFifthFailsAtRuntime() throws Exception {
+        assertSetOfQuintupleFailureAtRuntime(
+            "set-of-quintuple-duplicate-fourth-fifth",
+            "Set.of(\"a\", \"b\", \"c\", \"same\", \"same\");",
+            "duplicate Set.of element"
+        );
+    }
+
+    @Test
+    void setOfQuintupleNullFirstFailsAtRuntime() throws Exception {
+        assertSetOfQuintupleFailureAtRuntime(
+            "set-of-quintuple-null-first",
+            "Set.of((String) null, \"b\", \"c\", \"d\", \"e\");",
+            "null Set.of element"
+        );
+    }
+
+    @Test
+    void setOfQuintupleNullSecondFailsAtRuntime() throws Exception {
+        assertSetOfQuintupleFailureAtRuntime(
+            "set-of-quintuple-null-second",
+            "Set.of(\"a\", (String) null, \"c\", \"d\", \"e\");",
+            "null Set.of element"
+        );
+    }
+
+    @Test
+    void setOfQuintupleNullThirdFailsAtRuntime() throws Exception {
+        assertSetOfQuintupleFailureAtRuntime(
+            "set-of-quintuple-null-third",
+            "Set.of(\"a\", \"b\", (String) null, \"d\", \"e\");",
+            "null Set.of element"
+        );
+    }
+
+    @Test
+    void setOfQuintupleNullFourthFailsAtRuntime() throws Exception {
+        assertSetOfQuintupleFailureAtRuntime(
+            "set-of-quintuple-null-fourth",
+            "Set.of(\"a\", \"b\", \"c\", (String) null, \"e\");",
+            "null Set.of element"
+        );
+    }
+
+    @Test
+    void setOfQuintupleNullFifthFailsAtRuntime() throws Exception {
+        assertSetOfQuintupleFailureAtRuntime(
+            "set-of-quintuple-null-fifth",
+            "Set.of(\"a\", \"b\", \"c\", \"d\", (String) null);",
+            "null Set.of element"
+        );
+    }
+
+    private void assertSetOfQuintupleFailureAtRuntime(
+        final String projectName,
+        final String statement,
+        final String expectedMessage
+    ) throws Exception {
+        final Path project = project(projectName);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    %s
+                }
+            }
+            """.formatted(statement));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/" + projectName).toString()));
+
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains(expectedMessage);
+    }
+
+    @Test
     void booleanEqualsBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("boolean-equals");
         writeJava(project, "com.acme.Main", """
