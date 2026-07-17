@@ -85,11 +85,9 @@ jobs:
           repo=$(mvn -q help:evaluate -Dexpression=settings.localRepository -DforceStdout | tail -n 1)
           echo "MAVEN_REPO_LOCAL=$repo" >> "$GITHUB_ENV"
 
-      - name: Prefetch external smoke artifacts
+      - name: Install bundled external smoke artifacts
         run: |
-          .github/scripts/list-external-probe-artifacts.sh | while IFS= read -r artifact; do
-            mvn -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" dependency:get -Dartifact="$artifact" -Dtransitive=false
-          done
+          sh .github/scripts/install-external-probe-artifacts.sh "$MAVEN_REPO_LOCAL"
 
       - name: Verify Maven suite
         run: |

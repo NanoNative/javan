@@ -1,6 +1,6 @@
 package com.acme;
 
-import berlin.yuna.typemap.model.Pair;
+import org.example.externalprobe.pair.Pair;
 
 public final class Main {
     private Main() {

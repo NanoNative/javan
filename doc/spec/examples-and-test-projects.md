@@ -39,9 +39,12 @@ Current public showcase:
 Optional real-project probes:
 
 - `src/test/resources/external-probes/*`: external compatibility smoke against selected
-  third-party artifacts. Probe identity, coordinates, expected stdout, and the required mapping
-  back to a compiler-owned generic regression all live in per-probe metadata and in the dedicated
-  ledger at `doc/status/real-project-readiness.md`.
+  reproducible external artifacts. Probe identity, coordinates, expected stdout, and the required
+  mapping back to a compiler-owned generic regression all live in per-probe metadata and in the
+  dedicated ledger at `doc/status/real-project-readiness.md`.
+- `src/test/resources/external-artifacts/*`: bundled source for the reproducible external artifact
+  jars used by the external smoke gate. These jars keep CI deterministic; evolving real example
+  repositories stay outside the compiler-owned regression line.
 
 The current pinned set is acceptance evidence only. Upstream artifact names and package structure
 must stay out of the compiler-owned support line, which has to remain generic enough that those

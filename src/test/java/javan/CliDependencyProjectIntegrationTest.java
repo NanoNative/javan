@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 /*
  * Compiler-owned dependency and packaging scenarios.
  *
- * These tests stay generic on purpose. Real third-party example projects belong in
+ * These tests stay generic on purpose. External example projects belong in
  * CliExternalProbeAcceptanceIntegrationTest so core support claims never depend on
  * any external project identity.
  */

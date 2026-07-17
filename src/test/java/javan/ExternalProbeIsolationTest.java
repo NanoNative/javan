@@ -25,6 +25,7 @@ final class ExternalProbeIsolationTest {
     private static final Path DOC_STATUS = Path.of("doc/status");
     private static final Path TEST_RESOURCES = Path.of("src/test/resources");
     private static final Path EXTERNAL_PROBES = TEST_RESOURCES.resolve("external-probes");
+    private static final Path EXTERNAL_ARTIFACTS = TEST_RESOURCES.resolve("external-artifacts");
     private static final Path PUBLIC_EXAMPLE = Path.of("example");
     private static final Path SUPPORT_MATRIX = DOC_STATUS.resolve("support-matrix.md");
     private static final Path SUPPORT_MATRIX_JSON = DOC_STATUS.resolve("support-matrix.json");
@@ -65,15 +66,18 @@ final class ExternalProbeIsolationTest {
         assertThat(EXTERNAL_PROBES)
             .as("dedicated external probe root must exist")
             .isDirectory();
+        assertThat(EXTERNAL_ARTIFACTS)
+            .as("dedicated bundled external artifact root must exist")
+            .isDirectory();
     }
 
     @Test
     void onlyDedicatedExternalSmokeResourcesMayReferenceExternalProbeIdentities() throws Exception {
-        final Path allowedRoot = EXTERNAL_PROBES;
+        final Set<Path> allowedRoots = Set.of(EXTERNAL_PROBES, EXTERNAL_ARTIFACTS);
         try (Stream<Path> files = Files.walk(TEST_RESOURCES)) {
             final List<Path> resourceFiles = files
                 .filter(Files::isRegularFile)
-                .filter(file -> !file.startsWith(allowedRoot))
+                .filter(file -> allowedRoots.stream().noneMatch(file::startsWith))
                 .sorted(Comparator.comparing(Path::toString))
                 .toList();
             for (final Path file : resourceFiles) {
@@ -205,7 +209,9 @@ final class ExternalProbeIsolationTest {
 
     @Test
     void shortPlainArtifactIdsStillProduceForbiddenIdentityPatterns() throws Exception {
-        final String sample = new String(new char[]{'n', 'a', 'n', 'o'});
+        final List<ExternalProbeCatalog.ExternalProbe> probes = ExternalProbeCatalog.realProbes();
+        assertThat(probes).isNotEmpty();
+        final String sample = probes.get(0).artifactId();
         assertThat(ExternalProbeIdentities.identityPatterns())
             .anySatisfy(pattern -> assertThat(pattern.matcher(sample).find()).isTrue());
     }

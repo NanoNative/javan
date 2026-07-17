@@ -7,7 +7,7 @@ public final class Main {
     }
 
     public static void main(final String[] args) throws Exception {
-        final var scheduler = new org.nanonative.nano.core.model.Scheduler("probe");
+        final var scheduler = new org.example.externalprobe.scheduler.Scheduler("probe");
         scheduler.schedule(new Task(), 10L, TimeUnit.MILLISECONDS);
         Thread.sleep(30L);
         scheduler.shutdown();

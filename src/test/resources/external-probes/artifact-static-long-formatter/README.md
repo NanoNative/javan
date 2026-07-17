@@ -1,6 +1,6 @@
 # External Static Duration Probe
 
-Builds a small app against the currently pinned published duration-helper artifact and compiles it
+Builds a small app against the currently pinned bundled duration-helper artifact and compiles it
 to a native executable with `javan`.
 
 This is external compatibility smoke only. The durable compiler regression for this shape lives in

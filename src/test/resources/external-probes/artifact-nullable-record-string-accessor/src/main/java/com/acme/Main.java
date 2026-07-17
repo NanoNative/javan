@@ -1,6 +1,6 @@
 package com.acme;
 
-import org.nanonative.nano.services.metric.model.MetricUpdate;
+import org.example.externalprobe.metric.MetricUpdate;
 
 public final class Main {
     private Main() {

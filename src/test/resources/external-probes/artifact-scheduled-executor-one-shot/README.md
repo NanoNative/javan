@@ -1,6 +1,6 @@
 # External Scheduled Executor Probe
 
-Builds a small app against the currently pinned published scheduler artifact and compiles it to a
+Builds a small app against the currently pinned bundled scheduler artifact and compiles it to a
 native executable with `javan`.
 
 This is external compatibility smoke only. The durable compiler regression for this shape lives in

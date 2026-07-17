@@ -27,9 +27,9 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 /**
  * External example compatibility smoke only.
  *
- * <p>These probes prove that javan can consume selected real third-party artifacts, but they do
- * not define JDK support rows or compiler-owned scenario coverage. This harness must stay
- * metadata-driven and must not hardcode individual probe identities.
+ * <p>These probes prove that javan can consume selected external artifacts, but they do not define
+ * JDK support rows or compiler-owned scenario coverage. This harness must stay metadata-driven and
+ * must not hardcode individual probe identities.
  */
 @Execution(SAME_THREAD)
 @Tag("external-probe")
@@ -61,10 +61,12 @@ final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupp
     }
 
     @TestFactory
-    Stream<DynamicTest> pinnedArtifactProbesBuildAgainstPublishedArtifactsAndMatchJvmOutput() throws Exception {
+    Stream<DynamicTest> bundledArtifactProbesBuildAgainstDeclaredArtifactsAndMatchJvmOutput() throws Exception {
+        final Path repo = tempDir.resolve("bundled-external-probe-repo");
+        installBundledExternalProbeArtifacts(repo);
         return realProbes().stream().map(probe -> DynamicTest.dynamicTest(probe.project(), () -> {
-            final Path artifact = pinnedMavenArtifact(probe.groupId(), probe.artifactId(), probe.version());
-            Assumptions.assumeTrue(Files.isRegularFile(artifact), "Pinned artifact is not available in the local Maven cache: " + probe.coordinate());
+            final Path artifact = mavenArtifact(repo, probe.groupId(), probe.artifactId(), probe.version());
+            Assumptions.assumeTrue(Files.isRegularFile(artifact), "Bundled artifact is not available in the local Maven cache: " + probe.coordinate());
             assertExternalProbeMatchesJvmOutput(probe, artifact);
         }));
     }
@@ -403,6 +405,31 @@ final class CliExternalProbeAcceptanceIntegrationTest extends CliIntegrationSupp
 
     private static List<ExternalProbeCatalog.ExternalProbe> realProbes(final Path probesRoot) throws IOException {
         return ExternalProbeCatalog.realProbes(probesRoot);
+    }
+
+    private void installBundledExternalProbeArtifacts(final Path repository) throws Exception {
+        final ProcessResult run = process(
+            tempDir,
+            List.of(
+                "sh",
+                Path.of(".github/scripts/install-external-probe-artifacts.sh").toAbsolutePath().normalize().toString(),
+                repository.toString(),
+                Path.of("src/test/resources/external-artifacts").toAbsolutePath().normalize().toString(),
+                Path.of("src/test/resources/external-probes").toAbsolutePath().normalize().toString()
+            ),
+            Duration.ofSeconds(60)
+        );
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stderr()).isEmpty();
+    }
+
+    private static Path mavenArtifact(final Path repository, final String groupId, final String artifactId, final String version) {
+        return repository
+            .resolve(groupId.replace('.', '/'))
+            .resolve(artifactId)
+            .resolve(version)
+            .resolve(artifactId + "-" + version + ".jar");
     }
 
     @Test

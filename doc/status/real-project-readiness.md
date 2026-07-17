@@ -1,18 +1,19 @@
 # Real Project Readiness
 
 This ledger describes the dedicated external-probes boundary without teaching Javan any
-upstream project identity. Hardcoded upstream coordinates and package names belong only in
-the probe metadata and tiny probe sources under `src/test/resources/external-probes/*`.
-They are a pinned moving slice of upstream artifacts, not compiler-owned support claims
-and not internal fixtures or product knowledge.
+project-specific compiler semantics. Hardcoded external artifact coordinates and package names
+belong only in the probe metadata, bundled artifact sources under
+`src/test/resources/external-artifacts/*`, and the tiny probe apps under
+`src/test/resources/external-probes/*`. They are compatibility smoke only, not compiler-owned
+support claims and not product knowledge.
 
 Probe summary:
 
 | Probe class | Probe status | Current evidence | Missing release gate |
 | --- | --- | --- | --- |
-| External library artifact smoke | Smoke | One pinned third-party library probe builds natively against its published artifact and is exercised by the required external-probe acceptance gate plus focused CLI integration. | Broader external-library dependency graphs and quieter unreachable-dependency diagnostics. |
-| External helper/library smoke | Smoke | Several pinned third-party helper/library probes build natively against their published artifacts and are exercised by the required external-probe acceptance gate plus focused CLI integration. | Broader helper surfaces, broader dependency graphs, and quieter unreachable-dependency diagnostics. |
-| External scheduler/runtime smoke | Smoke | Several pinned third-party scheduler/runtime probes build natively against their published artifacts and are exercised by the required external-probe acceptance gate plus focused CLI integration. | Broader service graphs and scheduler-adjacent runtime coverage beyond the current lifecycle slice. |
+| External library artifact smoke | Smoke | One bundled external library probe builds natively against a reproducible jar installed into the local Maven repository and is exercised by the required external-probe acceptance gate plus focused CLI integration. | Broader external-library dependency graphs and quieter unreachable-dependency diagnostics. |
+| External helper/library smoke | Smoke | Several bundled helper/library probes build natively against reproducible jars installed into the local Maven repository and are exercised by the required external-probe acceptance gate plus focused CLI integration. | Broader helper surfaces, broader dependency graphs, and quieter unreachable-dependency diagnostics. |
+| External scheduler/runtime smoke | Smoke | Several bundled scheduler/runtime probes build natively against reproducible jars installed into the local Maven repository and are exercised by the required external-probe acceptance gate plus focused CLI integration. | Broader service graphs and scheduler-adjacent runtime coverage beyond the current lifecycle slice. |
 | External HTTP service smoke | Planned smoke | One pinned external HTTP-service-shaped probe currently fails clearly with `JAVAN061` and reports `network/http`. | Broader HTTP service runtime, resources, thread/blocking model, and dev-console/reflection exclusion. |
 
 These external probes are intentionally excluded from `doc/status/support-matrix.*`,
@@ -28,20 +29,20 @@ Those probe labels are not product vocabulary either. They are temporary smoke h
 current pinned external set, and they are allowed to change without renaming compiler-owned tests,
 support ledgers, or JDK accounting.
 
-The current pinned set is just a moving slice of published third-party artifacts. That is not
-product knowledge, not a support allowlist, and not a stable contract. The compiler-owned test
-and support line must remain generic so the same regressions still make sense after the probe set
-changes.
+The current pinned set is a reproducible external-artifact slice checked into this repository.
+That is still not product knowledge, not a support allowlist, and not a stable contract. The
+compiler-owned test and support line must remain generic so the same regressions still make sense
+after the probe set changes.
 
-That includes the current pinned third-party smoke set. Those artifacts may evolve independently.
-Javan must not encode their names, packages, or semantics anywhere in the compiler-owned support
-line.
+That includes any live external example repository tested outside this deterministic gate. Those
+projects may evolve independently. Javan must not encode their names, packages, or semantics
+anywhere in the compiler-owned support line.
 
-Read that literally: upstream project identities are not part of javan's compiler knowledge. They
-are moving upstream artifacts. Javan is only allowed to know them inside the dedicated
-external-probes boundary. Compiler-owned tests must stay generic even when an external probe breaks.
-If one of them exposes a compiler gap, the permanent fix belongs in a generic JDK/runtime
-regression first, then the probe stays only as a published-artifact compatibility check.
+Read that literally: project identities are not part of javan's compiler knowledge. Javan is only
+allowed to know them inside the dedicated external smoke boundary. Compiler-owned tests must stay
+generic even when an external probe breaks. If one of them exposes a compiler gap, the permanent
+fix belongs in a generic JDK/runtime regression first, then the probe stays only as a
+compatibility check.
 
 Each probe now also declares `genericEvidence=...` in `probe.properties`. That metadata must point
 at an existing compiler-owned generic regression test, so a real-project smoke case cannot exist
@@ -51,7 +52,7 @@ The acceptance harness now reads all real-probe metadata through one shared test
 catalog is allowed to load probe names and coordinates from metadata; the harness itself, this
 ledger, and the compiler-owned support line must stay project-neutral.
 
-Today the pinned probes happen to point at specific upstream artifacts, but that is incidental
+Today the pinned probes point at bundled reproducible artifacts, but that is still incidental
 evidence, not product knowledge. If the pinned set changes tomorrow, the compiler-owned support
 line and its generic regression names must still read the same.
 
@@ -64,9 +65,9 @@ Local probe helper scripts now follow the same rule: they resolve classpaths fro
 probe's `probe.properties` metadata and generic `JAVAN_PROBE_*` overrides instead of probe-named
 environment variables or hardcoded artifact paths.
 
-They are not static compiler knowledge. Upstream project code may change at any time. Javan is
+They are not static compiler knowledge. Live external project code may change at any time. Javan is
 allowed to keep named smoke probes here only as compatibility evidence for the currently pinned
-artifacts; support claims must still be expressed in generic JDK/runtime terms elsewhere.
+artifact shapes; support claims must still be expressed in generic JDK/runtime terms elsewhere.
 
 Read that as a moving snapshot, not as a frozen allowlist. The current probe directories may
 change, grow, or disappear over time. Javan must still stay project-neutral outside this dedicated
@@ -120,10 +121,11 @@ That mapping is the rule: when an external probe breaks, the permanent fix belon
 generic compiler-owned dependency tests or a new generic equivalent, not in an upstream-project-
 specific support row.
 
-`.github/scripts/acceptance.sh` now auto-discovers probe directories and CI prefetches the pinned
-artifacts from probe metadata via `.github/scripts/list-external-probe-artifacts.sh` before `mvn verify`,
-so the current discovered probe set is required in the external-probe acceptance gate.
-Local runs still skip cleanly when the declared dependency is absent.
+`.github/scripts/acceptance.sh` now auto-discovers probe directories and CI installs the bundled
+artifact jars declared by probe metadata via `.github/scripts/install-external-probe-artifacts.sh`
+before `mvn verify`, so the current discovered probe set is required in the external-probe
+acceptance gate. Local runs still support explicit dependency overrides when investigation needs a
+different jar or classes directory.
 
 These probes prove only that the backend can consume the currently pinned external dependency
 bytecode for simple object
@@ -140,16 +142,16 @@ Known blockers before broader real-project coverage:
 - broader dependency-jar surface beyond the current smoke slices, especially deeper class-initialization graphs, richer collection/map helpers, additional atomics, more functional-interface shapes, and wider string/temporal helper families
 - broader service runtime coverage, especially HTTP server APIs above the current raw loopback responder slices, HTTPS/TLS, certificates, long-lived service thread ownership, and resource-heavy app packaging
 - richer Java semantic coverage, especially general try/catch/finally lowering, broader dynamic-call sites, wider enum/class-introspection edges, and full UTF-16 string semantics
-- more dependency-version variance proof, because pinned artifact smoke is not the same as broad upstream-version compatibility
+- more dependency-version variance proof, because reproducible bundled smoke is not the same as broad upstream-version compatibility
 
 This document stays at the compatibility-smoke level. Detailed compiler/runtime support claims
 belong in `doc/status/support-matrix.md`, `doc/status/jdk-compatibility.md`, and the
 compiler-owned tests under `src/test/java/javan/*`.
 
-Fresh external-service packaging may still fail when a broader third-party graph pulls in
+Fresh external-service packaging may still fail when a broader external graph pulls in
 transitive API variants that the current dependency/runtime surface does not yet cover. The
 real probes accept explicit dependency overrides for local investigation, but the release gate
-uses the pinned published artifacts declared in probe metadata rather than sibling checkouts.
+uses the pinned bundled artifacts declared in probe metadata rather than sibling checkouts.
 
 Next gates before claiming broader external-service compatibility:
 
