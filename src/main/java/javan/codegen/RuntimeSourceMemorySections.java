@@ -7861,6 +7861,33 @@ final class RuntimeSourceMemorySections {
             return set;
         }
 
+        void* javan_set_of_triple(void* left, void* middle, void* right) {
+            if (left == NULL || middle == NULL || right == NULL) {
+                javan_panic("null Set.of element");
+            }
+            if (javan_object_equals(left, middle) != 0
+                || javan_object_equals(left, right) != 0
+                || javan_object_equals(middle, right) != 0) {
+                javan_panic("duplicate Set.of element");
+            }
+            void* left_root = left;
+            void* middle_root = middle;
+            void* right_root = right;
+            void** javan_set_of_triple_roots[] = {
+                (void**) &left_root,
+                (void**) &middle_root,
+                (void**) &right_root
+            };
+            javan_root_frame_push(javan_set_of_triple_roots, 3);
+            javan_object_list* set = (javan_object_list*) javan_hashset_new();
+            javan_set_add(set, left_root);
+            javan_set_add(set, middle_root);
+            javan_set_add(set, right_root);
+            set->immutable = 1;
+            javan_root_frame_pop(javan_set_of_triple_roots);
+            return set;
+        }
+
         void* javan_set_singleton(void* value) {
             void* value_root = value;
             void** javan_set_singleton_roots[] = {

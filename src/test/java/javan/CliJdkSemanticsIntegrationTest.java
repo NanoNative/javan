@@ -1953,6 +1953,146 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void setOfTripleBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("set-of-triple");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Set<String> values = Set.of("left", "middle", "right");
+                    System.out.println(values.size());
+                    System.out.println(values.contains("left"));
+                    System.out.println(values.contains("middle"));
+                    System.out.println(values.contains("right"));
+                    System.out.println(values.contains("later"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/set-of-triple").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("3\ntrue\ntrue\ntrue\nfalse\n");
+    }
+
+    @Test
+    void setOfTripleDuplicateFirstMiddleFailsAtRuntime() throws Exception {
+        final Path project = project("set-of-triple-duplicate-first-middle");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    Set.of("same", "same", "right");
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/set-of-triple-duplicate-first-middle").toString()));
+
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("duplicate Set.of element");
+    }
+
+    @Test
+    void setOfTripleDuplicateFirstRightFailsAtRuntime() throws Exception {
+        final Path project = project("set-of-triple-duplicate-first-right");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    Set.of("same", "middle", "same");
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/set-of-triple-duplicate-first-right").toString()));
+
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("duplicate Set.of element");
+    }
+
+    @Test
+    void setOfTripleDuplicateMiddleRightFailsAtRuntime() throws Exception {
+        final Path project = project("set-of-triple-duplicate-middle-right");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    Set.of("left", "same", "same");
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/set-of-triple-duplicate-middle-right").toString()));
+
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("duplicate Set.of element");
+    }
+
+    @Test
+    void setOfTripleNullFailsAtRuntime() throws Exception {
+        final Path project = project("set-of-triple-null");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    Set.of("left", (String) null, "right");
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/set-of-triple-null").toString()));
+
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains("null Set.of element");
+    }
+
+    @Test
     void booleanEqualsBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("boolean-equals");
         writeJava(project, "com.acme.Main", """

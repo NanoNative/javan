@@ -8829,6 +8829,31 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersSetOfTripleToRuntimeHelper() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;",
+            4,
+            3,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            plain(2, 44, "aload_2"),
+            invokeStatic(3, new MethodRef("java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;")),
+            plain(4, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(
+                IrExpression.objectCall(
+                    "javan_set_of_triple",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"), IrExpression.objectLocal("arg2"))
+                )
+            )
+        );
+    }
+
+    @Test
     void rejectsSetCopyOfWithWrongDescriptor() {
         assertThatThrownBy(() -> lowerMain(method(
             0x0008,
@@ -8864,6 +8889,28 @@ final class BytecodeToIRTest {
                 assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
                 assertThat(exception.diagnostic().subject())
                     .isEqualTo("invokestatic java/util/Set.of(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;");
+            });
+    }
+
+    @Test
+    void rejectsSetOfTripleWithWrongDescriptor() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;",
+            4,
+            4,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            plain(2, 44, "aload_2"),
+            plain(3, 45, "aload_3"),
+            invokeStatic(4, new MethodRef("java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;")),
+            plain(5, 176, "areturn")
+        )))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject())
+                    .isEqualTo("invokestatic java/util/Set.of(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;");
             });
     }
 
