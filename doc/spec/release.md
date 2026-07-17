@@ -54,7 +54,6 @@ Required release package targets:
 | `linux-x64` | `ubuntu-24.04` |
 | `linux-aarch64` | `ubuntu-24.04-arm` |
 | `macos-aarch64` | `macos-15` |
-| `macos-x64` | `macos-15-intel` |
 
 Windows is tracked but not in the first release gate. It still needs a native linker path,
 `.exe` package verification, and CI coverage before it is claimed.
@@ -70,7 +69,7 @@ package-backed sanitizer leg reuses the generated self-host C output from the im
 preceding packaged self-build, and existing `platform-smoke` rows keep the self-host
 proof but narrow its probes to `--version` plus the tiny build/check loop instead of
 rerunning the full packaged `check/report target/classes` cycle. For
-M13R, remote validation remains 0/4 completed until those rows pass with package-backed
+M13R, remote validation remains 0/3 completed until those rows pass with package-backed
 sanitizer proof.
 
 ## Acceptance Coverage

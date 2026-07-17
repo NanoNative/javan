@@ -500,7 +500,19 @@ public final class JdkCallSupport {
         runtime("LinkedHashSet.<init>", "java/util/LinkedHashSet", "<init>", "()V", "(Ljava/util/Collection;)V"),
         runtime("LinkedHashSet.newLinkedHashSet", "java/util/LinkedHashSet", "newLinkedHashSet", "(I)Ljava/util/LinkedHashSet;"),
         runtime("HashSet.add", "java/util/HashSet", "add", "(Ljava/lang/Object;)Z"),
+        runtime("HashSet.contains", "java/util/HashSet", "contains", "(Ljava/lang/Object;)Z"),
+        runtime("HashSet.containsAll", "java/util/HashSet", "containsAll", "(Ljava/util/Collection;)Z"),
+        runtime("HashSet.size", "java/util/HashSet", "size", "()I"),
+        runtime("HashSet.isEmpty", "java/util/HashSet", "isEmpty", "()Z"),
+        runtime("HashSet.iterator", "java/util/HashSet", "iterator", "()Ljava/util/Iterator;"),
+        runtime("HashSet.toArray", "java/util/HashSet", "toArray", "()[Ljava/lang/Object;"),
         runtime("LinkedHashSet.add", "java/util/LinkedHashSet", "add", "(Ljava/lang/Object;)Z"),
+        runtime("LinkedHashSet.contains", "java/util/LinkedHashSet", "contains", "(Ljava/lang/Object;)Z"),
+        runtime("LinkedHashSet.containsAll", "java/util/LinkedHashSet", "containsAll", "(Ljava/util/Collection;)Z"),
+        runtime("LinkedHashSet.size", "java/util/LinkedHashSet", "size", "()I"),
+        runtime("LinkedHashSet.isEmpty", "java/util/LinkedHashSet", "isEmpty", "()Z"),
+        runtime("LinkedHashSet.iterator", "java/util/LinkedHashSet", "iterator", "()Ljava/util/Iterator;"),
+        runtime("LinkedHashSet.toArray", "java/util/LinkedHashSet", "toArray", "()[Ljava/lang/Object;"),
         runtime("Iterator.hasNext", "java/util/Iterator", "hasNext", "()Z"),
         runtime("Iterator.next", "java/util/Iterator", "next", "()Ljava/lang/Object;"),
         runtime("Map.Entry.getKey", "java/util/Map$Entry", "getKey", "()Ljava/lang/Object;"),
@@ -1486,6 +1498,15 @@ public final class JdkCallSupport {
             return true;
         }
         if ("java/util/Collection".equals(owner)) {
+            return true;
+        }
+        if ("java/util/Set".equals(owner)) {
+            return true;
+        }
+        if ("java/util/HashSet".equals(owner)) {
+            return true;
+        }
+        if ("java/util/LinkedHashSet".equals(owner)) {
             return true;
         }
         if ("java/lang/Iterable".equals(owner)) {

@@ -5,6 +5,9 @@ import javan.detect.InputKind;
 import javan.detect.ProjectLayout;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.ResourceAccessMode;
+import org.junit.jupiter.api.parallel.ResourceLock;
+import org.junit.jupiter.api.parallel.Resources;
 
 import javax.tools.JavaCompiler;
 import javax.tools.ToolProvider;
@@ -21,6 +24,7 @@ import java.util.jar.JarOutputStream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+@ResourceLock(value = Resources.SYSTEM_PROPERTIES, mode = ResourceAccessMode.READ_WRITE)
 final class ClassMetadataScannerTest {
     @TempDir
     private Path tempDir;

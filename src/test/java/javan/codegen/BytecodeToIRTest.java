@@ -19815,13 +19815,11 @@ final class BytecodeToIRTest {
             plain(2, 176, "areturn")
         ));
 
-        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.assignObject("object0", IrExpression.objectCall(
+            IrInstruction.returnObject(IrExpression.objectCall(
                 "javan_hashmap_new_with_expected_mappings",
                 List.of(IrExpression.intLocal("arg0"))
-            )),
-            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+            ))
         );
     }
 
@@ -19838,13 +19836,11 @@ final class BytecodeToIRTest {
             plain(2, 176, "areturn")
         ));
 
-        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
         assertThat(function.instructions()).containsExactly(
-            IrInstruction.assignObject("object0", IrExpression.objectCall(
+            IrInstruction.returnObject(IrExpression.objectCall(
                 "javan_linkedhashmap_new_with_expected_mappings",
                 List.of(IrExpression.intLocal("arg0"))
-            )),
-            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+            ))
         );
     }
 
@@ -19886,6 +19882,92 @@ final class BytecodeToIRTest {
             IrInstruction.returnObject(IrExpression.objectCall(
                 "javan_linkedhashset_new_with_expected_elements",
                 List.of(IrExpression.intLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersHashSetContainsToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/HashSet;Ljava/lang/Object;)Z",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/util/HashSet", "contains", "(Ljava/lang/Object;)Z")),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_list_contains",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersHashSetIteratorToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/HashSet;)Ljava/util/Iterator;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/util/HashSet", "iterator", "()Ljava/util/Iterator;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_list_iterator",
+                List.of(IrExpression.objectLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersLinkedHashSetContainsAllToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/LinkedHashSet;Ljava/util/Collection;)Z",
+            2,
+            2,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            invokeVirtual(2, new MethodRef("java/util/LinkedHashSet", "containsAll", "(Ljava/util/Collection;)Z")),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_list_contains_all",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.objectLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersLinkedHashSetToArrayToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/util/LinkedHashSet;)[Ljava/lang/Object;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/util/LinkedHashSet", "toArray", "()[Ljava/lang/Object;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_list_to_array",
+                List.of(IrExpression.objectLocal("arg0"))
             ))
         );
     }

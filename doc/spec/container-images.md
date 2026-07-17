@@ -43,7 +43,8 @@ The images are Linux images.
 
 The release workflow:
 
-1. Builds Linux x64, Linux arm64, macOS x64, and macOS arm64 release archives.
+1. Builds Linux x64, Linux arm64, and macOS arm64 release archives. macOS x64 is
+   deferred until the active package matrix is stable again.
 2. Publishes those archives as immutable GitHub release assets.
 3. Stops. Image publication is not on the package-publish critical path.
 

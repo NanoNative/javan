@@ -51,6 +51,15 @@ final class WorkflowPolicySurfaceTest {
     }
 
     @Test
+    void releaseWorkflowKeepsMacOsX64Disabled() throws Exception {
+        assertThat(Files.readString(RELEASE_WORKFLOW))
+            .doesNotContain("package-target: macos-x64")
+            .doesNotContain("os: macos-13")
+            .doesNotContain("os: macos-14")
+            .doesNotContain("macos-15-intel");
+    }
+
+    @Test
     void junitPlatformKeepsStableClassLevelParallelism() throws Exception {
         assertThat(Files.readString(JUNIT_PLATFORM_PROPERTIES))
             .contains("junit.jupiter.execution.parallel.enabled = true")

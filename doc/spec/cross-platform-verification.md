@@ -12,7 +12,8 @@ mutable external services, or whatever tool version wandered into `PATH` this mo
 This policy covers:
 
 - required local macOS native smoke
-- CI-based Linux/macOS x64 and aarch64 verification
+- CI-based Linux x64, Linux aarch64, and macOS aarch64 verification, with
+  macOS x64 deferred until the active matrix is stable
 - Docker-based Linux x64 and Linux aarch64 verification where available
 - future Windows verification
 - JDK matrix checks
@@ -74,8 +75,8 @@ entrypoints on each required target.
 | linux-x64 | `ubuntu-24.04` | `mvn verify`, acceptance, host `--target`, sanitizer suite with self-host proof |
 | linux-aarch64 | `ubuntu-24.04-arm` | `mvn verify`, acceptance, host `--target`, sanitizer suite with self-host proof |
 | macos-aarch64 | `macos-15` | `mvn verify`, acceptance, host `--target`, sanitizer suite with self-host proof |
-| macos-x64 | `macos-15-intel` | `mvn verify`, acceptance, host `--target`, sanitizer suite with self-host proof |
 
+`macos-x64` remains a deferred row until the active matrix is stable again.
 Windows targets remain tracked rows until the runtime and linker path are ported.
 
 ## Container Matrix

@@ -244,6 +244,78 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksHashSetContainsAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/HashSet", "contains", "(Ljava/lang/Object;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksHashSetContainsAllAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/HashSet", "containsAll", "(Ljava/util/Collection;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksHashSetSizeAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/HashSet", "size", "()I")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksHashSetIsEmptyAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/HashSet", "isEmpty", "()Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksHashSetIteratorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/HashSet", "iterator", "()Ljava/util/Iterator;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksHashSetToArrayAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/HashSet", "toArray", "()[Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksLinkedHashSetContainsAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/LinkedHashSet", "contains", "(Ljava/lang/Object;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksLinkedHashSetContainsAllAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/LinkedHashSet", "containsAll", "(Ljava/util/Collection;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksLinkedHashSetSizeAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/LinkedHashSet", "size", "()I")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksLinkedHashSetIsEmptyAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/LinkedHashSet", "isEmpty", "()Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksLinkedHashSetIteratorAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/LinkedHashSet", "iterator", "()Ljava/util/Iterator;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksLinkedHashSetToArrayAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/LinkedHashSet", "toArray", "()[Ljava/lang/Object;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksMapOfQuadrupleAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

@@ -205,6 +205,114 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void hashSetContainsIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/HashSet",
+            "contains",
+            "(Ljava/lang/Object;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void hashSetContainsAllIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/HashSet",
+            "containsAll",
+            "(Ljava/util/Collection;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void hashSetSizeIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/HashSet",
+            "size",
+            "()I"
+        ))).isTrue();
+    }
+
+    @Test
+    void hashSetIsEmptyIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/HashSet",
+            "isEmpty",
+            "()Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void hashSetIteratorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/HashSet",
+            "iterator",
+            "()Ljava/util/Iterator;"
+        ))).isTrue();
+    }
+
+    @Test
+    void hashSetToArrayIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/HashSet",
+            "toArray",
+            "()[Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
+    void linkedHashSetContainsIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/LinkedHashSet",
+            "contains",
+            "(Ljava/lang/Object;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void linkedHashSetContainsAllIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/LinkedHashSet",
+            "containsAll",
+            "(Ljava/util/Collection;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void linkedHashSetSizeIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/LinkedHashSet",
+            "size",
+            "()I"
+        ))).isTrue();
+    }
+
+    @Test
+    void linkedHashSetIsEmptyIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/LinkedHashSet",
+            "isEmpty",
+            "()Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void linkedHashSetIteratorIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/LinkedHashSet",
+            "iterator",
+            "()Ljava/util/Iterator;"
+        ))).isTrue();
+    }
+
+    @Test
+    void linkedHashSetToArrayIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/LinkedHashSet",
+            "toArray",
+            "()[Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
     void collectionToArrayIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Collection",
@@ -1006,6 +1114,24 @@ final class JdkCallSupportTest {
             "factory",
             "()Ljava/util/concurrent/ThreadFactory;"
         ))).containsExactly("threads");
+    }
+
+    @Test
+    void hashSetContainsRequiresCollectionsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/HashSet",
+            "contains",
+            "(Ljava/lang/Object;)Z"
+        ))).containsExactly("collections");
+    }
+
+    @Test
+    void linkedHashSetToArrayRequiresCollectionsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/LinkedHashSet",
+            "toArray",
+            "()[Ljava/lang/Object;"
+        ))).containsExactly("collections");
     }
 
     @Test

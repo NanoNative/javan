@@ -76,12 +76,12 @@ final class CompatibilityReportsTest {
         assertThat(summary).contains(
             "\"exactSupportedJdkCallables\": {\"classes\": 1, \"constructors\": 1, \"methods\": 1, \"callables\": 2, \"totalCallables\": 5, \"leftCallables\": 3, \"coveragePercent\": \"40.0\"}",
             "\"exactJdkCallableAccounting\": {\"supportedCallables\": 2, \"explicitRejectedCallables\": 3, \"doneCallables\": 5, \"unknownCallables\": 0, \"totalCallables\": 5, \"donePercent\": \"100.0\"}",
-            "\"supportRows\": 224",
-            "\"passRows\": 224",
+            "\"supportRows\": 226",
+            "\"passRows\": 226",
             "\"scopedRows\": 0",
             "\"targetRows\": 0",
             "\"rejectedRows\": 0",
-            "\"accountedRows\": 224",
+            "\"accountedRows\": 226",
             "\"unaccountedRows\": 0"
         );
     }
@@ -133,6 +133,8 @@ final class CompatibilityReportsTest {
             "| `linkedhashset-collection-constructor` | pass |",
             "| `hashset-static-factory` | pass |",
             "| `linkedhashset-static-factory` | pass |",
+            "| `hashset-direct-owner-read-surface` | pass |",
+            "| `linkedhashset-direct-owner-read-surface` | pass |",
             "| `hashmap-capacity-constructor` | pass |",
             "| `linkedhashmap-capacity-constructor` | pass |",
             "| `hashmap-load-factor-constructor` | pass |",
@@ -291,6 +293,8 @@ final class CompatibilityReportsTest {
             "\"feature\": \"linkedhashset-collection-constructor\"",
             "\"feature\": \"hashset-static-factory\"",
             "\"feature\": \"linkedhashset-static-factory\"",
+            "\"feature\": \"hashset-direct-owner-read-surface\"",
+            "\"feature\": \"linkedhashset-direct-owner-read-surface\"",
             "\"feature\": \"hashmap-map-constructor\"",
             "\"feature\": \"linkedhashmap-map-constructor\"",
             "\"feature\": \"hashmap-static-factory\"",
