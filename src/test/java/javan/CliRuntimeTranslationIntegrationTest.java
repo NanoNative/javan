@@ -978,6 +978,71 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void hashMapNewHashMapStaticFactoryBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("hashmap-static-factory");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashMap;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final HashMap<String, Integer> values = HashMap.newHashMap(3);
+                    values.put("a", 1);
+                    values.put("b", 2);
+                    System.out.println(values.size());
+                    System.out.println(values.get("a"));
+                    System.out.println(values.containsKey("b"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/hashmap-static-factory").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("2\n1\ntrue\n");
+    }
+
+    @Test
+    void linkedHashMapNewLinkedHashMapStaticFactoryBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("linkedhashmap-static-factory");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.LinkedHashMap;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final LinkedHashMap<String, String> values = LinkedHashMap.newLinkedHashMap(3);
+                    values.put("third", "c");
+                    values.put("first", "a");
+                    values.put("second", "b");
+                    final Object[] keys = values.keySet().toArray();
+                    System.out.println(values.size());
+                    System.out.println(keys[0]);
+                    System.out.println(keys[1]);
+                    System.out.println(keys[2]);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/linkedhashmap-static-factory").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("3\nthird\nfirst\nsecond\n");
+    }
+
+    @Test
     void linkedHashMapValuesBuildAndMatchJvmOutput() throws Exception {
         final Path project = project("linkedhashmap-values");
         writeJava(project, "com.acme.Main", """

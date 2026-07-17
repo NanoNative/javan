@@ -8585,6 +8585,29 @@ final class RuntimeSourceMemorySections {
             return javan_map_new_with_capacity(0, 0);
         }
 
+        static int javan_hashmap_capacity_for_expected_mappings(int num_mappings) {
+            if (num_mappings < 0) {
+                char buffer[64];
+                snprintf(buffer, sizeof(buffer), "Negative number of mappings: %d", num_mappings);
+                javan_panic(buffer);
+            }
+            if (num_mappings < 3) {
+                return num_mappings + 1;
+            }
+            if (num_mappings < 1073741824) {
+                return (int) (((float) num_mappings / 0.75f) + 1.0f);
+            }
+            return 2147483647;
+        }
+
+        void* javan_hashmap_new_with_expected_mappings(int num_mappings) {
+            return javan_map_new_with_capacity(javan_hashmap_capacity_for_expected_mappings(num_mappings), 0);
+        }
+
+        void* javan_linkedhashmap_new_with_expected_mappings(int num_mappings) {
+            return javan_map_new_with_capacity(javan_hashmap_capacity_for_expected_mappings(num_mappings), 0);
+        }
+
         void javan_map_initialize_capacity(void* value, int capacity) {
             javan_object_map* map = javan_map_checked(value);
             javan_map_mutable_checked(map);

@@ -514,6 +514,8 @@ public final class CompatibilityReports {
             pass("linkedhashmap-load-factor-constructor"),
             pass("hashmap-map-constructor"),
             pass("linkedhashmap-map-constructor"),
+            pass("hashmap-static-factory"),
+            pass("linkedhashmap-static-factory"),
             pass("concurrenthashmap-capacity-constructor"),
             pass("concurrenthashmap-map-constructor"),
             pass("concurrenthashmap-load-factor-constructor"),

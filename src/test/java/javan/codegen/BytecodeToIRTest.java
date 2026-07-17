@@ -19803,6 +19803,52 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersHashMapNewHashMapStaticFactoryToRuntimeAllocation() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(I)Ljava/util/HashMap;",
+            1,
+            1,
+            plain(0, 26, "iload_0"),
+            invokeStatic(1, new MethodRef("java/util/HashMap", "newHashMap", "(I)Ljava/util/HashMap;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall(
+                "javan_hashmap_new_with_expected_mappings",
+                List.of(IrExpression.intLocal("arg0"))
+            )),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
+    void lowersLinkedHashMapNewLinkedHashMapStaticFactoryToRuntimeAllocation() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(I)Ljava/util/LinkedHashMap;",
+            1,
+            1,
+            plain(0, 26, "iload_0"),
+            invokeStatic(1, new MethodRef("java/util/LinkedHashMap", "newLinkedHashMap", "(I)Ljava/util/LinkedHashMap;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.OBJECT, "object0"));
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.assignObject("object0", IrExpression.objectCall(
+                "javan_linkedhashmap_new_with_expected_mappings",
+                List.of(IrExpression.intLocal("arg0"))
+            )),
+            IrInstruction.returnObject(IrExpression.objectLocal("object0"))
+        );
+    }
+
+    @Test
     void lowersMapRemoveToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,

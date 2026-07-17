@@ -3214,6 +3214,20 @@ final class BytecodeToIRInvokeSupport {
         final String owner = methodRef.owner();
         final String name = methodRef.name();
         final String descriptor = methodRef.descriptor();
+        if ("java/util/HashMap".equals(owner)
+            && "newHashMap".equals(name)
+            && "(I)Ljava/util/HashMap;".equals(descriptor)) {
+            final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_hashmap_new_with_expected_mappings", arguments)));
+            return true;
+        }
+        if ("java/util/LinkedHashMap".equals(owner)
+            && "newLinkedHashMap".equals(name)
+            && "(I)Ljava/util/LinkedHashMap;".equals(descriptor)) {
+            final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));
+            stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_linkedhashmap_new_with_expected_mappings", arguments)));
+            return true;
+        }
         if ("java/util/Map".equals(owner)) {
             if ("entry".equals(name) && "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map$Entry;".equals(descriptor)) {
                 final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()));

@@ -2070,6 +2070,26 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void hashMapNewHashMapStaticFactoryRejectsNegativeMappingsAtRuntime() throws Exception {
+        assertMapStaticFactoryFailureAtRuntime(
+            "hashmap-static-factory-negative-mappings",
+            "import java.util.HashMap;",
+            "final HashMap<String, String> values = HashMap.newHashMap(-1); System.out.println(values.size());",
+            "Negative number of mappings: -1"
+        );
+    }
+
+    @Test
+    void linkedHashMapNewLinkedHashMapStaticFactoryRejectsNegativeMappingsAtRuntime() throws Exception {
+        assertMapStaticFactoryFailureAtRuntime(
+            "linkedhashmap-static-factory-negative-mappings",
+            "import java.util.LinkedHashMap;",
+            "final LinkedHashMap<String, String> values = LinkedHashMap.newLinkedHashMap(-1); System.out.println(values.size());",
+            "Negative number of mappings: -1"
+        );
+    }
+
+    @Test
     void collectionsUnmodifiableListBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("collections-unmodifiable-list");
         writeJava(project, "com.acme.Main", """
@@ -6250,6 +6270,37 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     private void assertMapConstructorFailureAtRuntime(
+        final String projectName,
+        final String imports,
+        final String statement,
+        final String expectedMessage
+    ) throws Exception {
+        final Path project = project(projectName);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            %s
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    %s
+                }
+            }
+            """.formatted(imports, statement));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/" + projectName).toString()));
+
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains(expectedMessage);
+    }
+
+    private void assertMapStaticFactoryFailureAtRuntime(
         final String projectName,
         final String imports,
         final String statement,

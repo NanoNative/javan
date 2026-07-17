@@ -220,6 +220,18 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksHashMapNewHashMapAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/HashMap", "newHashMap", "(I)Ljava/util/HashMap;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksLinkedHashMapNewLinkedHashMapAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/LinkedHashMap", "newLinkedHashMap", "(I)Ljava/util/LinkedHashMap;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksMapOfQuadrupleAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Map", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

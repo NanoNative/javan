@@ -507,10 +507,12 @@ public final class JdkCallSupport {
         runtime("HashMap.<init>", "java/util/HashMap", "<init>", "(I)V"),
         runtime("HashMap.<init>", "java/util/HashMap", "<init>", "(IF)V"),
         runtime("HashMap.<init>", "java/util/HashMap", "<init>", "(Ljava/util/Map;)V"),
+        runtime("HashMap.newHashMap", "java/util/HashMap", "newHashMap", "(I)Ljava/util/HashMap;"),
         runtime("LinkedHashMap.<init>", "java/util/LinkedHashMap", "<init>", "()V"),
         runtime("LinkedHashMap.<init>", "java/util/LinkedHashMap", "<init>", "(I)V"),
         runtime("LinkedHashMap.<init>", "java/util/LinkedHashMap", "<init>", "(IF)V"),
         runtime("LinkedHashMap.<init>", "java/util/LinkedHashMap", "<init>", "(Ljava/util/Map;)V"),
+        runtime("LinkedHashMap.newLinkedHashMap", "java/util/LinkedHashMap", "newLinkedHashMap", "(I)Ljava/util/LinkedHashMap;"),
         runtime("TreeMap.<init>", "java/util/TreeMap", "<init>", "()V"),
         runtime("ConcurrentHashMap.<init>", "java/util/concurrent/ConcurrentHashMap", "<init>", "()V"),
         runtime("ConcurrentHashMap.<init>", "java/util/concurrent/ConcurrentHashMap", "<init>", "(I)V"),
@@ -974,6 +976,9 @@ public final class JdkCallSupport {
                 || "(IF)V".equals(descriptor)
                 || "(Ljava/util/Map;)V".equals(descriptor);
         }
+        if ("newHashMap".equals(name)) {
+            return "(I)Ljava/util/HashMap;".equals(descriptor);
+        }
         return isSupportedMutableMapInstanceCall(name, descriptor);
     }
 
@@ -983,6 +988,9 @@ public final class JdkCallSupport {
                 || "(I)V".equals(descriptor)
                 || "(IF)V".equals(descriptor)
                 || "(Ljava/util/Map;)V".equals(descriptor);
+        }
+        if ("newLinkedHashMap".equals(name)) {
+            return "(I)Ljava/util/LinkedHashMap;".equals(descriptor);
         }
         return isSupportedMutableMapInstanceCall(name, descriptor);
     }

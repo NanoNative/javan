@@ -169,6 +169,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void hashMapNewHashMapIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/HashMap",
+            "newHashMap",
+            "(I)Ljava/util/HashMap;"
+        ))).isTrue();
+    }
+
+    @Test
+    void linkedHashMapNewLinkedHashMapIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/LinkedHashMap",
+            "newLinkedHashMap",
+            "(I)Ljava/util/LinkedHashMap;"
+        ))).isTrue();
+    }
+
+    @Test
     void collectionToArrayIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Collection",
