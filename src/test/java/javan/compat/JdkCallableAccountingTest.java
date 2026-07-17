@@ -280,8 +280,56 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksCollectionRemoveAllAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Collection", "removeAll", "(Ljava/util/Collection;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksCollectionRetainAllAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Collection", "retainAll", "(Ljava/util/Collection;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksListRemoveAllAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/List", "removeAll", "(Ljava/util/Collection;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksListRetainAllAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/List", "retainAll", "(Ljava/util/Collection;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksArrayListRemoveAllAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "removeAll", "(Ljava/util/Collection;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksArrayListRetainAllAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/ArrayList", "retainAll", "(Ljava/util/Collection;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksSetAddAllAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Set", "addAll", "(Ljava/util/Collection;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksSetRemoveAllAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Set", "removeAll", "(Ljava/util/Collection;)Z")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
+    void marksSetRetainAllAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Set", "retainAll", "(Ljava/util/Collection;)Z")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 

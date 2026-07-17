@@ -2220,6 +2220,72 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void collectionRemoveAllUsesSetSemanticsForSetReceiverAtRuntime() throws Exception {
+        final Path project = project("collection-remove-all-set-receiver");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Collection;
+            import java.util.LinkedHashSet;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Collection<String> values = new LinkedHashSet<>(List.of("b", "a", "c"));
+                    System.out.println(values.removeAll(List.of("a", "x")));
+                    final Object[] snapshot = values.toArray();
+                    System.out.println(snapshot[0]);
+                    System.out.println(snapshot[1]);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/collection-remove-all-set-receiver").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\nb\nc\n");
+    }
+
+    @Test
+    void collectionRetainAllUsesSetSemanticsForSetReceiverAtRuntime() throws Exception {
+        final Path project = project("collection-retain-all-set-receiver");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Collection;
+            import java.util.LinkedHashSet;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Collection<String> values = new LinkedHashSet<>(List.of("b", "a", "c"));
+                    System.out.println(values.retainAll(List.of("c", "b", "x")));
+                    final Object[] snapshot = values.toArray();
+                    System.out.println(snapshot[0]);
+                    System.out.println(snapshot[1]);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/collection-retain-all-set-receiver").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\nb\nc\n");
+    }
+
+    @Test
     void collectionsUnmodifiableCollectionRejectsDirectAddAtRuntime() throws Exception {
         assertCollectionsUnmodifiableCollectionFailureAtRuntime(
             "collections-unmodifiable-collection-direct-add",
@@ -2228,6 +2294,34 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
             mutable.add("x");
             final Collection<String> values = Collections.unmodifiableCollection(mutable);
             values.add("y");
+            """,
+            "unsupported operation on immutable list"
+        );
+    }
+
+    @Test
+    void collectionsUnmodifiableCollectionRejectsDirectRemoveAllAtRuntime() throws Exception {
+        assertCollectionsUnmodifiableCollectionFailureAtRuntime(
+            "collections-unmodifiable-collection-direct-remove-all",
+            """
+            final ArrayList<String> mutable = new ArrayList<>();
+            mutable.add("x");
+            final Collection<String> values = Collections.unmodifiableCollection(mutable);
+            values.removeAll(java.util.List.of("x"));
+            """,
+            "unsupported operation on immutable list"
+        );
+    }
+
+    @Test
+    void collectionsUnmodifiableCollectionRejectsDirectRetainAllAtRuntime() throws Exception {
+        assertCollectionsUnmodifiableCollectionFailureAtRuntime(
+            "collections-unmodifiable-collection-direct-retain-all",
+            """
+            final ArrayList<String> mutable = new ArrayList<>();
+            mutable.add("x");
+            final Collection<String> values = Collections.unmodifiableCollection(mutable);
+            values.retainAll(java.util.List.of("x"));
             """,
             "unsupported operation on immutable list"
         );

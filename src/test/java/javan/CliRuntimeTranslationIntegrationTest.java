@@ -443,6 +443,76 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void collectionRemoveAllBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("collection-remove-all");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.Collection;
+            import java.util.Collections;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final ArrayList<String> mutable = new ArrayList<>();
+                    mutable.add("left");
+                    mutable.add("right");
+                    final Collection<String> values = mutable;
+                    final Collection<String> probe = Collections.unmodifiableCollection(mutable);
+                    System.out.println(values.removeAll(probe));
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/collection-remove-all").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n0\n");
+    }
+
+    @Test
+    void collectionRetainAllBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("collection-retain-all");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.Collection;
+            import java.util.Collections;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final ArrayList<String> mutable = new ArrayList<>();
+                    mutable.add("left");
+                    mutable.add("right");
+                    final Collection<String> values = mutable;
+                    final Collection<String> probe = Collections.unmodifiableCollection(mutable);
+                    System.out.println(values.retainAll(probe));
+                    System.out.println(values.size());
+                    System.out.println(values.contains("left"));
+                    System.out.println(values.contains("right"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/collection-retain-all").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("false\n2\ntrue\ntrue\n");
+    }
+
+    @Test
     void listAddFirstBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("list-add-first");
         writeJava(project, "com.acme.Main", """
@@ -470,6 +540,68 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/list-add-first").toString())).stdout()).isEqualTo(jvmOutput);
         assertThat(jvmOutput).isEqualTo("left\n");
+    }
+
+    @Test
+    void listRemoveAllBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("list-remove-all");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<String> values = new ArrayList<>(List.of("a", "b", "c", "b"));
+                    System.out.println(values.removeAll(List.of("b", "x")));
+                    System.out.println(values.size());
+                    System.out.println(values.get(0));
+                    System.out.println(values.get(1));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/list-remove-all").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n2\na\nc\n");
+    }
+
+    @Test
+    void listRetainAllBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("list-retain-all");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<String> values = new ArrayList<>(List.of("a", "b", "c", "b"));
+                    System.out.println(values.retainAll(List.of("b", "x")));
+                    System.out.println(values.size());
+                    System.out.println(values.get(0));
+                    System.out.println(values.get(1));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/list-retain-all").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n2\nb\nb\n");
     }
 
     @Test
@@ -1171,6 +1303,70 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void arrayListDirectOwnerRemoveAllBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("arraylist-direct-owner-remove-all");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final ArrayList<String> values = new ArrayList<>(List.of("a", "b", "c", "b"));
+                    final List<String> view = values;
+                    System.out.println(values.removeAll(List.of("b", "x")));
+                    System.out.println(view.size());
+                    System.out.println(view.get(0));
+                    System.out.println(view.get(1));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/arraylist-direct-owner-remove-all").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n2\na\nc\n");
+    }
+
+    @Test
+    void arrayListDirectOwnerRetainAllBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("arraylist-direct-owner-retain-all");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final ArrayList<String> values = new ArrayList<>(List.of("a", "b", "c", "b"));
+                    final List<String> view = values;
+                    System.out.println(values.retainAll(List.of("b", "x")));
+                    System.out.println(view.size());
+                    System.out.println(view.get(0));
+                    System.out.println(view.get(1));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/arraylist-direct-owner-retain-all").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n2\nb\nb\n");
+    }
+
+    @Test
     void hashSetCapacityConstructorBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("hashset-capacity-constructor");
         writeJava(project, "com.acme.Main", """
@@ -1427,6 +1623,72 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void setRemoveAllBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("set-remove-all");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.LinkedHashSet;
+            import java.util.List;
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Set<String> values = new LinkedHashSet<>(List.of("a", "b", "c"));
+                    System.out.println(values.removeAll(List.of("a", "x")));
+                    System.out.println(values.size());
+                    final Object[] snapshot = values.toArray();
+                    System.out.println(snapshot[0]);
+                    System.out.println(snapshot[1]);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/set-remove-all").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n2\nb\nc\n");
+    }
+
+    @Test
+    void setRetainAllBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("set-retain-all");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.LinkedHashSet;
+            import java.util.List;
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Set<String> values = new LinkedHashSet<>(List.of("a", "b", "c"));
+                    System.out.println(values.retainAll(List.of("c", "a")));
+                    System.out.println(values.size());
+                    final Object[] snapshot = values.toArray();
+                    System.out.println(snapshot[0]);
+                    System.out.println(snapshot[1]);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/set-retain-all").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n2\na\nc\n");
+    }
+
+    @Test
     void hashSetDirectOwnerAddAllBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("hashset-direct-owner-add-all");
         writeJava(project, "com.acme.Main", """
@@ -1453,6 +1715,66 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/hashset-direct-owner-add-all").toString())).stdout()).isEqualTo(jvmOutput);
         assertThat(jvmOutput).isEqualTo("true\n3\n");
+    }
+
+    @Test
+    void hashSetDirectOwnerRemoveAllBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("hashset-direct-owner-remove-all");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashSet;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final HashSet<String> values = new HashSet<>(List.of("alpha", "beta", "gamma"));
+                    System.out.println(values.removeAll(List.of("beta", "delta")));
+                    System.out.println(values.contains("beta"));
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/hashset-direct-owner-remove-all").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\nfalse\n2\n");
+    }
+
+    @Test
+    void hashSetDirectOwnerRetainAllBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("hashset-direct-owner-retain-all");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.HashSet;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final HashSet<String> values = new HashSet<>(List.of("alpha", "beta", "gamma"));
+                    System.out.println(values.retainAll(List.of("gamma", "delta")));
+                    System.out.println(values.contains("alpha"));
+                    System.out.println(values.size());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/hashset-direct-owner-retain-all").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\nfalse\n1\n");
     }
 
     @Test
@@ -1488,6 +1810,70 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void linkedHashSetDirectOwnerRemoveAllBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("linkedhashset-direct-owner-remove-all");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.LinkedHashSet;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final LinkedHashSet<String> values = new LinkedHashSet<>(List.of("b", "a", "c"));
+                    System.out.println(values.removeAll(List.of("a", "x")));
+                    System.out.println(values.size());
+                    final Object[] snapshot = values.toArray();
+                    System.out.println(snapshot[0]);
+                    System.out.println(snapshot[1]);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/linkedhashset-direct-owner-remove-all").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n2\nb\nc\n");
+    }
+
+    @Test
+    void linkedHashSetDirectOwnerRetainAllBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("linkedhashset-direct-owner-retain-all");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.LinkedHashSet;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final LinkedHashSet<String> values = new LinkedHashSet<>(List.of("b", "a", "c"));
+                    System.out.println(values.retainAll(List.of("c", "b")));
+                    System.out.println(values.size());
+                    final Object[] snapshot = values.toArray();
+                    System.out.println(snapshot[0]);
+                    System.out.println(snapshot[1]);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/linkedhashset-direct-owner-retain-all").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n2\nb\nc\n");
+    }
+
+    @Test
     void collectionRemoveBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("collection-remove");
         writeJava(project, "com.acme.Main", """
@@ -1519,6 +1905,39 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/collection-remove").toString())).stdout()).isEqualTo(jvmOutput);
         assertThat(jvmOutput).isEqualTo("true\nfalse\n2\n");
+    }
+
+    @Test
+    void collectionRetainAllWithSetReceiverBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("collection-retain-all-set-receiver");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Collection;
+            import java.util.LinkedHashSet;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Collection<String> values = new LinkedHashSet<>(List.of("b", "a", "c"));
+                    System.out.println(values.retainAll(List.of("c", "b", "x")));
+                    System.out.println(values.size());
+                    final Object[] snapshot = values.toArray();
+                    System.out.println(snapshot[0]);
+                    System.out.println(snapshot[1]);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/collection-retain-all-set-receiver").toString())).stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("true\n2\nb\nc\n");
     }
 
     @Test

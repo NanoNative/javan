@@ -7498,6 +7498,13 @@ final class RuntimeSourceMemorySections {
             return 0;
         }
 
+        static javan_object_list* javan_list_storage_owner(javan_object_list* list) {
+            while (list->backing != NULL) {
+                list = list->backing;
+            }
+            return list;
+        }
+
         void* javan_list_unmodifiable(void* value) {
             javan_object_list* list = javan_list_checked(value);
             if (list->immutable != 0 && list->backing != NULL && (list->view_flags & JAVAN_LIST_VIEW_UNMODIFIABLE) != 0) {
@@ -7827,6 +7834,76 @@ final class RuntimeSourceMemorySections {
                 return 1;
             }
             return 0;
+        }
+
+        int javan_list_remove_all(void* value, void* other) {
+            javan_object_list* list = javan_list_checked(value);
+            javan_object_list* probe = javan_list_checked(other);
+            javan_list_mutable_checked(list);
+            if (javan_list_storage_owner(list) == javan_list_storage_owner(probe)) {
+                int changed = javan_list_logical_length(list) != 0;
+                if (changed != 0) {
+                    javan_list_clear(value);
+                }
+                return changed;
+            }
+            void** javan_list_remove_all_roots[] = {
+                (void**) &list,
+                (void**) &probe
+            };
+            javan_root_frame_push(javan_list_remove_all_roots, 2);
+            int length = javan_list_logical_length(list);
+            int write_index = 0;
+            int changed = 0;
+            for (int index = 0; index < length; index++) {
+                void* element = javan_list_get_unchecked(list, index);
+                if (javan_list_contains(probe, element) != 0) {
+                    changed = 1;
+                    continue;
+                }
+                list->values[write_index] = element;
+                write_index++;
+            }
+            if (changed != 0) {
+                memset(list->values + write_index, 0, (unsigned long) (length - write_index) * sizeof(void*));
+                list->length = write_index;
+                list->mod_count++;
+            }
+            javan_root_frame_pop(javan_list_remove_all_roots);
+            return changed;
+        }
+
+        int javan_list_retain_all(void* value, void* other) {
+            javan_object_list* list = javan_list_checked(value);
+            javan_object_list* probe = javan_list_checked(other);
+            javan_list_mutable_checked(list);
+            if (javan_list_storage_owner(list) == javan_list_storage_owner(probe)) {
+                return 0;
+            }
+            void** javan_list_retain_all_roots[] = {
+                (void**) &list,
+                (void**) &probe
+            };
+            javan_root_frame_push(javan_list_retain_all_roots, 2);
+            int length = javan_list_logical_length(list);
+            int write_index = 0;
+            int changed = 0;
+            for (int index = 0; index < length; index++) {
+                void* element = javan_list_get_unchecked(list, index);
+                if (javan_list_contains(probe, element) == 0) {
+                    changed = 1;
+                    continue;
+                }
+                list->values[write_index] = element;
+                write_index++;
+            }
+            if (changed != 0) {
+                memset(list->values + write_index, 0, (unsigned long) (length - write_index) * sizeof(void*));
+                list->length = write_index;
+                list->mod_count++;
+            }
+            javan_root_frame_pop(javan_list_retain_all_roots);
+            return changed;
         }
 
         int javan_list_contains_all(void* value, void* other) {

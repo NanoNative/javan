@@ -440,6 +440,8 @@ public final class JdkCallSupport {
         runtime("ArrayList.<init>", "java/util/ArrayList", "<init>", "()V", "(I)V", "(Ljava/util/Collection;)V"),
         runtime("ArrayList.add", "java/util/ArrayList", "add", "(Ljava/lang/Object;)Z"),
         runtime("ArrayList.addAll", "java/util/ArrayList", "addAll", "(Ljava/util/Collection;)Z"),
+        runtime("ArrayList.removeAll", "java/util/ArrayList", "removeAll", "(Ljava/util/Collection;)Z"),
+        runtime("ArrayList.retainAll", "java/util/ArrayList", "retainAll", "(Ljava/util/Collection;)Z"),
         runtime("List.of", "java/util/List", "of", "()Ljava/util/List;"),
         runtime("List.of", "java/util/List", "of", "(Ljava/lang/Object;)Ljava/util/List;"),
         runtime("List.of", "java/util/List", "of", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;"),
@@ -470,6 +472,8 @@ public final class JdkCallSupport {
         runtime("List.add", "java/util/List", "add", "(ILjava/lang/Object;)V"),
         runtime("ArrayList.add", "java/util/ArrayList", "add", "(ILjava/lang/Object;)V"),
         runtime("List.addAll", "java/util/List", "addAll", "(Ljava/util/Collection;)Z"),
+        runtime("List.removeAll", "java/util/List", "removeAll", "(Ljava/util/Collection;)Z"),
+        runtime("List.retainAll", "java/util/List", "retainAll", "(Ljava/util/Collection;)Z"),
         runtime("List.size", "java/util/List", "size", "()I"),
         runtime("List.isEmpty", "java/util/List", "isEmpty", "()Z"),
         runtime("List.contains", "java/util/List", "contains", "(Ljava/lang/Object;)Z"),
@@ -480,12 +484,16 @@ public final class JdkCallSupport {
         runtime("Collection.contains", "java/util/Collection", "contains", "(Ljava/lang/Object;)Z"),
         runtime("Collection.add", "java/util/Collection", "add", "(Ljava/lang/Object;)Z"),
         runtime("Collection.addAll", "java/util/Collection", "addAll", "(Ljava/util/Collection;)Z"),
+        runtime("Collection.removeAll", "java/util/Collection", "removeAll", "(Ljava/util/Collection;)Z"),
+        runtime("Collection.retainAll", "java/util/Collection", "retainAll", "(Ljava/util/Collection;)Z"),
         runtime("Collection.remove", "java/util/Collection", "remove", "(Ljava/lang/Object;)Z"),
         runtime("Collection.containsAll", "java/util/Collection", "containsAll", "(Ljava/util/Collection;)Z"),
         runtime("Collection.clear", "java/util/Collection", "clear", "()V"),
         runtime("Collection.toArray", "java/util/Collection", "toArray", "()[Ljava/lang/Object;"),
         runtime("Set.add", "java/util/Set", "add", "(Ljava/lang/Object;)Z"),
         runtime("Set.addAll", "java/util/Set", "addAll", "(Ljava/util/Collection;)Z"),
+        runtime("Set.removeAll", "java/util/Set", "removeAll", "(Ljava/util/Collection;)Z"),
+        runtime("Set.retainAll", "java/util/Set", "retainAll", "(Ljava/util/Collection;)Z"),
         runtime("Set.contains", "java/util/Set", "contains", "(Ljava/lang/Object;)Z"),
         runtime("Set.remove", "java/util/Set", "remove", "(Ljava/lang/Object;)Z"),
         runtime("Set.containsAll", "java/util/Set", "containsAll", "(Ljava/util/Collection;)Z"),
@@ -508,6 +516,8 @@ public final class JdkCallSupport {
         runtime("LinkedHashSet.newLinkedHashSet", "java/util/LinkedHashSet", "newLinkedHashSet", "(I)Ljava/util/LinkedHashSet;"),
         runtime("HashSet.add", "java/util/HashSet", "add", "(Ljava/lang/Object;)Z"),
         runtime("HashSet.addAll", "java/util/HashSet", "addAll", "(Ljava/util/Collection;)Z"),
+        runtime("HashSet.removeAll", "java/util/HashSet", "removeAll", "(Ljava/util/Collection;)Z"),
+        runtime("HashSet.retainAll", "java/util/HashSet", "retainAll", "(Ljava/util/Collection;)Z"),
         runtime("HashSet.contains", "java/util/HashSet", "contains", "(Ljava/lang/Object;)Z"),
         runtime("HashSet.remove", "java/util/HashSet", "remove", "(Ljava/lang/Object;)Z"),
         runtime("HashSet.containsAll", "java/util/HashSet", "containsAll", "(Ljava/util/Collection;)Z"),
@@ -518,6 +528,8 @@ public final class JdkCallSupport {
         runtime("HashSet.toArray", "java/util/HashSet", "toArray", "()[Ljava/lang/Object;"),
         runtime("LinkedHashSet.add", "java/util/LinkedHashSet", "add", "(Ljava/lang/Object;)Z"),
         runtime("LinkedHashSet.addAll", "java/util/LinkedHashSet", "addAll", "(Ljava/util/Collection;)Z"),
+        runtime("LinkedHashSet.removeAll", "java/util/LinkedHashSet", "removeAll", "(Ljava/util/Collection;)Z"),
+        runtime("LinkedHashSet.retainAll", "java/util/LinkedHashSet", "retainAll", "(Ljava/util/Collection;)Z"),
         runtime("LinkedHashSet.contains", "java/util/LinkedHashSet", "contains", "(Ljava/lang/Object;)Z"),
         runtime("LinkedHashSet.remove", "java/util/LinkedHashSet", "remove", "(Ljava/lang/Object;)Z"),
         runtime("LinkedHashSet.containsAll", "java/util/LinkedHashSet", "containsAll", "(Ljava/util/Collection;)Z"),
@@ -862,6 +874,12 @@ public final class JdkCallSupport {
         if ("addAll".equals(name)) {
             return "(Ljava/util/Collection;)Z".equals(descriptor);
         }
+        if ("removeAll".equals(name)) {
+            return "(Ljava/util/Collection;)Z".equals(descriptor);
+        }
+        if ("retainAll".equals(name)) {
+            return "(Ljava/util/Collection;)Z".equals(descriptor);
+        }
         if ("size".equals(name)) {
             return "()I".equals(descriptor);
         }
@@ -917,10 +935,16 @@ public final class JdkCallSupport {
         if ("add".equals(name) && "(ILjava/lang/Object;)V".equals(descriptor)) {
             return true;
         }
-        if (!"addAll".equals(name)) {
-            return false;
+        if ("addAll".equals(name)) {
+            return "(Ljava/util/Collection;)Z".equals(descriptor);
         }
-        return "(Ljava/util/Collection;)Z".equals(descriptor);
+        if ("removeAll".equals(name)) {
+            return "(Ljava/util/Collection;)Z".equals(descriptor);
+        }
+        if ("retainAll".equals(name)) {
+            return "(Ljava/util/Collection;)Z".equals(descriptor);
+        }
+        return false;
     }
 
     private static boolean isSupportedCollectionCall(final String name, final String descriptor) {
@@ -933,8 +957,26 @@ public final class JdkCallSupport {
         if ("contains".equals(name)) {
             return "(Ljava/lang/Object;)Z".equals(descriptor);
         }
+        if ("add".equals(name)) {
+            return "(Ljava/lang/Object;)Z".equals(descriptor);
+        }
+        if ("addAll".equals(name)) {
+            return "(Ljava/util/Collection;)Z".equals(descriptor);
+        }
+        if ("remove".equals(name)) {
+            return "(Ljava/lang/Object;)Z".equals(descriptor);
+        }
+        if ("removeAll".equals(name)) {
+            return "(Ljava/util/Collection;)Z".equals(descriptor);
+        }
+        if ("retainAll".equals(name)) {
+            return "(Ljava/util/Collection;)Z".equals(descriptor);
+        }
         if ("containsAll".equals(name)) {
             return "(Ljava/util/Collection;)Z".equals(descriptor);
+        }
+        if ("clear".equals(name)) {
+            return "()V".equals(descriptor);
         }
         if ("toArray".equals(name)) {
             return "()[Ljava/lang/Object;".equals(descriptor);

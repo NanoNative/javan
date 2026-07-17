@@ -259,10 +259,82 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void collectionRemoveAllIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Collection",
+            "removeAll",
+            "(Ljava/util/Collection;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void collectionRetainAllIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Collection",
+            "retainAll",
+            "(Ljava/util/Collection;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void listRemoveAllIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/List",
+            "removeAll",
+            "(Ljava/util/Collection;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void listRetainAllIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/List",
+            "retainAll",
+            "(Ljava/util/Collection;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void arrayListRemoveAllIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/ArrayList",
+            "removeAll",
+            "(Ljava/util/Collection;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void arrayListRetainAllIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/ArrayList",
+            "retainAll",
+            "(Ljava/util/Collection;)Z"
+        ))).isTrue();
+    }
+
+    @Test
     void setAddAllIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/Set",
             "addAll",
+            "(Ljava/util/Collection;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void setRemoveAllIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Set",
+            "removeAll",
+            "(Ljava/util/Collection;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void setRetainAllIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Set",
+            "retainAll",
             "(Ljava/util/Collection;)Z"
         ))).isTrue();
     }
@@ -277,10 +349,46 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void hashSetRemoveAllIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/HashSet",
+            "removeAll",
+            "(Ljava/util/Collection;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void hashSetRetainAllIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/HashSet",
+            "retainAll",
+            "(Ljava/util/Collection;)Z"
+        ))).isTrue();
+    }
+
+    @Test
     void linkedHashSetAddAllIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/LinkedHashSet",
             "addAll",
+            "(Ljava/util/Collection;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void linkedHashSetRemoveAllIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/LinkedHashSet",
+            "removeAll",
+            "(Ljava/util/Collection;)Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void linkedHashSetRetainAllIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/LinkedHashSet",
+            "retainAll",
             "(Ljava/util/Collection;)Z"
         ))).isTrue();
     }
@@ -1302,6 +1410,24 @@ final class JdkCallSupportTest {
             "java/util/Collection",
             "add",
             "(Ljava/lang/Object;)Z"
+        ))).containsExactly("collections");
+    }
+
+    @Test
+    void collectionRemoveAllRequiresCollectionsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/Collection",
+            "removeAll",
+            "(Ljava/util/Collection;)Z"
+        ))).containsExactly("collections");
+    }
+
+    @Test
+    void collectionRetainAllRequiresCollectionsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/util/Collection",
+            "retainAll",
+            "(Ljava/util/Collection;)Z"
         ))).containsExactly("collections");
     }
 
