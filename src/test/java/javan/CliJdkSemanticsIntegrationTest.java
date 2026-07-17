@@ -3674,7 +3674,93 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertSetOfDecupleFailureAtRuntime("set-of-decuple-null-tenth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\", (String) null);", "null Set.of element");
     }
 
+    @Test
+    void setOfVarargsArrayBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("set-of-varargs-array");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String[] values = {"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"};
+                    final Set<String> set = Set.of(values);
+                    System.out.println(set.size());
+                    System.out.println(set.contains("a"));
+                    System.out.println(set.contains("k"));
+                    System.out.println(set.contains("later"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/set-of-varargs-array").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("11\ntrue\ntrue\nfalse\n");
+    }
+
+    @Test
+    void setOfVarargsArrayDuplicateFailsAtRuntime() throws Exception {
+        assertSetOfVarargsArrayFailureAtRuntime(
+            "set-of-varargs-array-duplicate",
+            """
+                final String[] values = {"a", "b", "same", "d", "same", "f", "g", "h", "i", "j", "k"};
+                Set.of(values);
+                """,
+            "duplicate Set.of element"
+        );
+    }
+
+    @Test
+    void setOfVarargsArrayNullFailsAtRuntime() throws Exception {
+        assertSetOfVarargsArrayFailureAtRuntime(
+            "set-of-varargs-array-null",
+            """
+                final String[] values = {"a", "b", "c", "d", null, "f", "g", "h", "i", "j", "k"};
+                Set.of(values);
+                """,
+            "null Set.of element"
+        );
+    }
+
     private void assertSetOfQuintupleFailureAtRuntime(
+        final String projectName,
+        final String statement,
+        final String expectedMessage
+    ) throws Exception {
+        final Path project = project(projectName);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    %s
+                }
+            }
+            """.formatted(statement));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/" + projectName).toString()));
+
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains(expectedMessage);
+    }
+
+    private void assertSetOfVarargsArrayFailureAtRuntime(
         final String projectName,
         final String statement,
         final String expectedMessage

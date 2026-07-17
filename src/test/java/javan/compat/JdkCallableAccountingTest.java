@@ -199,6 +199,12 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksSetOfVarargsArrayAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Set", "of", "([Ljava/lang/Object;)Ljava/util/Set;")))
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksCollectionsEmptyListAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/util/Collections", "emptyList", "()Ljava/util/List;")))
             .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);

@@ -11,8 +11,8 @@
     "rule": "done = supported variants + rejected variants; unknown leftovers must be 0 for a release-gated JDK"
   },
   "counts": {
-    "rows": 175,
-    "pass": 175,
+    "rows": 178,
+    "pass": 178,
     "scoped": 0,
     "target": 0,
     "rejected": 0
@@ -116,6 +116,7 @@
     {"feature": "set-of-octuple", "jdk25": "pass"},
     {"feature": "set-of-nonuple", "jdk25": "pass"},
     {"feature": "set-of-decuple", "jdk25": "pass"},
+    {"feature": "set-of-varargs-array", "jdk25": "pass"},
     {"feature": "list-of-varargs-gc", "jdk25": "pass"},
     {"feature": "owned-buffer-realloc-validation", "jdk25": "pass"},
     {"feature": "stringbuilder-setlength-overflow-panic", "jdk25": "pass"},

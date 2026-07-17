@@ -8301,6 +8301,31 @@ final class RuntimeSourceMemorySections {
             return set;
         }
 
+        void* javan_set_of_array(void* array) {
+            javan_array_header* header = javan_array_checked(array);
+            javan_array_kind_checked(header, JAVAN_ARRAY_KIND_OBJECT);
+            javan_object_array* values = (javan_object_array*) header;
+            void* result_value = NULL;
+            void** javan_set_of_array_roots[] = {
+                (void**) &values,
+                (void**) &result_value
+            };
+            javan_root_frame_push(javan_set_of_array_roots, 2);
+            result_value = javan_hashset_new();
+            for (int index = 0; index < values->length; index++) {
+                void* element = values->values[index];
+                if (element == NULL) {
+                    javan_panic("null Set.of element");
+                }
+                if (javan_set_add(result_value, element) == 0) {
+                    javan_panic("duplicate Set.of element");
+                }
+            }
+            ((javan_object_list*) result_value)->immutable = 1;
+            javan_root_frame_pop(javan_set_of_array_roots);
+            return result_value;
+        }
+
         void* javan_set_singleton(void* value) {
             void* value_root = value;
             void** javan_set_singleton_roots[] = {
