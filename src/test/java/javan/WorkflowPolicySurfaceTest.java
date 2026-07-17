@@ -4,6 +4,8 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -13,6 +15,7 @@ final class WorkflowPolicySurfaceTest {
     private static final Path CONTAINER_IMAGES_WORKFLOW = Path.of(".github/workflows/container-images.yml");
     private static final Path JUNIT_PLATFORM_PROPERTIES = Path.of("src/test/resources/junit-platform.properties");
     private static final Path POM = Path.of("pom.xml");
+    private static final Path WORKFLOW_ROOT = Path.of(".github/workflows");
 
     @Test
     void ciWorkflowAvoidsTopLevelConcurrencyQueueing() throws Exception {
@@ -30,6 +33,15 @@ final class WorkflowPolicySurfaceTest {
     void containerImagesWorkflowAvoidsTopLevelConcurrencyQueueing() throws Exception {
         assertThat(Files.readString(CONTAINER_IMAGES_WORKFLOW))
             .doesNotContain("concurrency:");
+    }
+
+    @Test
+    void workflowsDoNotEnableCancelInProgress() throws Exception {
+        for (final Path workflow : workflowFiles()) {
+            assertThat(Files.readString(workflow))
+                .as(workflow + " must not auto-cancel in-flight runs")
+                .doesNotContain("cancel-in-progress:");
+        }
     }
 
     @Test
@@ -71,7 +83,7 @@ final class WorkflowPolicySurfaceTest {
             .contains("if: \"${{ github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore: release ') }}\"")
             .contains("name: verify (${{ matrix.target }})")
             .contains("name: native-smoke (${{ matrix.target }})")
-            .contains("name: windows-runtime-smoke");
+            .contains("name: windows-runtime-smoke (${{ matrix.shard }})");
     }
 
     @Test
@@ -89,5 +101,14 @@ final class WorkflowPolicySurfaceTest {
             .contains("junit.jupiter.execution.parallel.enabled = true")
             .contains("junit.jupiter.execution.parallel.mode.default = concurrent")
             .contains("junit.jupiter.execution.parallel.mode.classes.default = concurrent");
+    }
+
+    private static List<Path> workflowFiles() throws Exception {
+        try (Stream<Path> files = Files.list(WORKFLOW_ROOT)) {
+            return files
+                .filter(Files::isRegularFile)
+                .sorted()
+                .toList();
+        }
     }
 }
