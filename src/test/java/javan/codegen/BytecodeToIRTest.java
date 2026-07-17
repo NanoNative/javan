@@ -9070,6 +9070,49 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersSetOfDecupleToRuntimeHelper() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;",
+            11,
+            10,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            plain(2, 44, "aload_2"),
+            plain(3, 45, "aload_3"),
+            plainOperands(4, 25, "aload", 4),
+            plainOperands(5, 25, "aload", 5),
+            plainOperands(6, 25, "aload", 6),
+            plainOperands(7, 25, "aload", 7),
+            plainOperands(8, 25, "aload", 8),
+            plainOperands(9, 25, "aload", 9),
+            invokeStatic(10, new MethodRef("java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;")),
+            plain(11, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(
+                IrExpression.objectCall(
+                    "javan_set_of_decuple",
+                    List.of(
+                        IrExpression.objectLocal("arg0"),
+                        IrExpression.objectLocal("arg1"),
+                        IrExpression.objectLocal("arg2"),
+                        IrExpression.objectLocal("arg3"),
+                        IrExpression.objectLocal("arg4"),
+                        IrExpression.objectLocal("arg5"),
+                        IrExpression.objectLocal("arg6"),
+                        IrExpression.objectLocal("arg7"),
+                        IrExpression.objectLocal("arg8"),
+                        IrExpression.objectLocal("arg9")
+                    )
+                )
+            )
+        );
+    }
+
+    @Test
     void rejectsSetCopyOfWithWrongDescriptor() {
         assertThatThrownBy(() -> lowerMain(method(
             0x0008,
@@ -9247,6 +9290,34 @@ final class BytecodeToIRTest {
                 assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
                 assertThat(exception.diagnostic().subject())
                     .isEqualTo("invokestatic java/util/Set.of(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;I)Ljava/util/Set;");
+            });
+    }
+
+    @Test
+    void rejectsSetOfDecupleWithWrongDescriptor() {
+        assertThatThrownBy(() -> lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;I)Ljava/util/Set;",
+            10,
+            10,
+            plain(0, 42, "aload_0"),
+            plain(1, 43, "aload_1"),
+            plain(2, 44, "aload_2"),
+            plain(3, 45, "aload_3"),
+            plainOperands(4, 25, "aload", 4),
+            plainOperands(5, 25, "aload", 5),
+            plainOperands(6, 25, "aload", 6),
+            plainOperands(7, 25, "aload", 7),
+            plainOperands(8, 25, "aload", 8),
+            plainOperands(9, 21, "iload", 9),
+            invokeStatic(10, new MethodRef("java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;I)Ljava/util/Set;")),
+            plain(11, 176, "areturn")
+        )))
+            .isInstanceOfSatisfying(DiagnosticException.class, exception -> {
+                assertThat(exception.diagnostic().code()).isEqualTo("JAVAN040");
+                assertThat(exception.diagnostic().subject())
+                    .isEqualTo("invokestatic java/util/Set.of(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;I)Ljava/util/Set;");
             });
     }
 

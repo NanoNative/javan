@@ -451,6 +451,7 @@ public final class JdkCallSupport {
         runtime("Set.of", "java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;"),
         runtime("Set.of", "java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;"),
         runtime("Set.of", "java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;"),
+        runtime("Set.of", "java/util/Set", "of", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;"),
         runtime("List.add", "java/util/List", "add", "(Ljava/lang/Object;)Z"),
         runtime("List.add", "java/util/List", "add", "(ILjava/lang/Object;)V"),
         runtime("ArrayList.add", "java/util/ArrayList", "add", "(ILjava/lang/Object;)V"),

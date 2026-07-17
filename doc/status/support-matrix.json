@@ -114,6 +114,8 @@
     {"feature": "set-of-sextuple", "jdk25": "pass"},
     {"feature": "set-of-septuple", "jdk25": "pass"},
     {"feature": "set-of-octuple", "jdk25": "pass"},
+    {"feature": "set-of-nonuple", "jdk25": "pass"},
+    {"feature": "set-of-decuple", "jdk25": "pass"},
     {"feature": "list-of-varargs-gc", "jdk25": "pass"},
     {"feature": "owned-buffer-realloc-validation", "jdk25": "pass"},
     {"feature": "stringbuilder-setlength-overflow-panic", "jdk25": "pass"},

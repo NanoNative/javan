@@ -273,6 +273,7 @@ final class RuntimeHeaderFile {
         void* javan_set_of_septuple(void* first, void* second, void* third, void* fourth, void* fifth, void* sixth, void* seventh);
         void* javan_set_of_octuple(void* first, void* second, void* third, void* fourth, void* fifth, void* sixth, void* seventh, void* eighth);
         void* javan_set_of_nonuple(void* first, void* second, void* third, void* fourth, void* fifth, void* sixth, void* seventh, void* eighth, void* ninth);
+        void* javan_set_of_decuple(void* first, void* second, void* third, void* fourth, void* fifth, void* sixth, void* seventh, void* eighth, void* ninth, void* tenth);
         void* javan_set_singleton(void* value);
         void* javan_set_unmodifiable(void* set);
         int javan_set_add(void* set, void* value);

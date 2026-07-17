@@ -3360,6 +3360,320 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         assertSetOfNonupleFailureAtRuntime("set-of-nonuple-null-ninth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", (String) null);", "null Set.of element");
     }
 
+    @Test
+    void setOfDecupleBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("set-of-decuple");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Set<String> values = Set.of("a", "b", "c", "d", "e", "f", "g", "h", "i", "j");
+                    System.out.println(values.size());
+                    System.out.println(values.contains("a"));
+                    System.out.println(values.contains("b"));
+                    System.out.println(values.contains("c"));
+                    System.out.println(values.contains("d"));
+                    System.out.println(values.contains("e"));
+                    System.out.println(values.contains("f"));
+                    System.out.println(values.contains("g"));
+                    System.out.println(values.contains("h"));
+                    System.out.println(values.contains("i"));
+                    System.out.println(values.contains("j"));
+                    System.out.println(values.contains("later"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/set-of-decuple").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("10\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\nfalse\n");
+    }
+
+    @Test
+    void setOfDecupleDuplicateFirstSecondFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-first-second", "Set.of(\"same\", \"same\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateFirstThirdFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-first-third", "Set.of(\"same\", \"b\", \"same\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateFirstFourthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-first-fourth", "Set.of(\"same\", \"b\", \"c\", \"same\", \"e\", \"f\", \"g\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateFirstFifthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-first-fifth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"same\", \"f\", \"g\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateFirstSixthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-first-sixth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"same\", \"g\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateFirstSeventhFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-first-seventh", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"f\", \"same\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateFirstEighthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-first-eighth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"same\", \"i\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateFirstNinthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-first-ninth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"same\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateFirstTenthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-first-tenth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\", \"same\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateSecondThirdFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-second-third", "Set.of(\"a\", \"same\", \"same\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateSecondFourthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-second-fourth", "Set.of(\"a\", \"same\", \"c\", \"same\", \"e\", \"f\", \"g\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateSecondFifthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-second-fifth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"same\", \"f\", \"g\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateSecondSixthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-second-sixth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"same\", \"g\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateSecondSeventhFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-second-seventh", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"f\", \"same\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateSecondEighthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-second-eighth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"f\", \"g\", \"same\", \"i\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateSecondNinthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-second-ninth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"same\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateSecondTenthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-second-tenth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\", \"same\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateThirdFourthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-third-fourth", "Set.of(\"a\", \"b\", \"same\", \"same\", \"e\", \"f\", \"g\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateThirdFifthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-third-fifth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"same\", \"f\", \"g\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateThirdSixthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-third-sixth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"same\", \"g\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateThirdSeventhFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-third-seventh", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"f\", \"same\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateThirdEighthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-third-eighth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"f\", \"g\", \"same\", \"i\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateThirdNinthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-third-ninth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"f\", \"g\", \"h\", \"same\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateThirdTenthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-third-tenth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\", \"same\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateFourthFifthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-fourth-fifth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"same\", \"f\", \"g\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateFourthSixthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-fourth-sixth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"same\", \"g\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateFourthSeventhFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-fourth-seventh", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"f\", \"same\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateFourthEighthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-fourth-eighth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"f\", \"g\", \"same\", \"i\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateFourthNinthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-fourth-ninth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"f\", \"g\", \"h\", \"same\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateFourthTenthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-fourth-tenth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"f\", \"g\", \"h\", \"i\", \"same\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateFifthSixthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-fifth-sixth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"same\", \"g\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateFifthSeventhFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-fifth-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"f\", \"same\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateFifthEighthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-fifth-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"f\", \"g\", \"same\", \"i\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateFifthNinthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-fifth-ninth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"f\", \"g\", \"h\", \"same\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateFifthTenthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-fifth-tenth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"f\", \"g\", \"h\", \"i\", \"same\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateSixthSeventhFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-sixth-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"same\", \"same\", \"h\", \"i\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateSixthEighthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-sixth-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"same\", \"g\", \"same\", \"i\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateSixthNinthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-sixth-ninth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"same\", \"g\", \"h\", \"same\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateSixthTenthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-sixth-tenth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"same\", \"g\", \"h\", \"i\", \"same\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateSeventhEighthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-seventh-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"same\", \"same\", \"i\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateSeventhNinthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-seventh-ninth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"same\", \"h\", \"same\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateSeventhTenthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-seventh-tenth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"same\", \"h\", \"i\", \"same\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateEighthNinthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-eighth-ninth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"same\", \"same\", \"j\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateEighthTenthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-eighth-tenth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"same\", \"i\", \"same\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleDuplicateNinthTenthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-duplicate-ninth-tenth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"same\", \"same\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfDecupleNullFirstFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-null-first", "Set.of((String) null, \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\", \"j\");", "null Set.of element");
+    }
+
+    @Test
+    void setOfDecupleNullSecondFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-null-second", "Set.of(\"a\", (String) null, \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\", \"j\");", "null Set.of element");
+    }
+
+    @Test
+    void setOfDecupleNullThirdFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-null-third", "Set.of(\"a\", \"b\", (String) null, \"d\", \"e\", \"f\", \"g\", \"h\", \"i\", \"j\");", "null Set.of element");
+    }
+
+    @Test
+    void setOfDecupleNullFourthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-null-fourth", "Set.of(\"a\", \"b\", \"c\", (String) null, \"e\", \"f\", \"g\", \"h\", \"i\", \"j\");", "null Set.of element");
+    }
+
+    @Test
+    void setOfDecupleNullFifthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-null-fifth", "Set.of(\"a\", \"b\", \"c\", \"d\", (String) null, \"f\", \"g\", \"h\", \"i\", \"j\");", "null Set.of element");
+    }
+
+    @Test
+    void setOfDecupleNullSixthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-null-sixth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", (String) null, \"g\", \"h\", \"i\", \"j\");", "null Set.of element");
+    }
+
+    @Test
+    void setOfDecupleNullSeventhFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-null-seventh", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", (String) null, \"h\", \"i\", \"j\");", "null Set.of element");
+    }
+
+    @Test
+    void setOfDecupleNullEighthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-null-eighth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", (String) null, \"i\", \"j\");", "null Set.of element");
+    }
+
+    @Test
+    void setOfDecupleNullNinthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-null-ninth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", (String) null, \"j\");", "null Set.of element");
+    }
+
+    @Test
+    void setOfDecupleNullTenthFailsAtRuntime() throws Exception {
+        assertSetOfDecupleFailureAtRuntime("set-of-decuple-null-tenth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\", (String) null);", "null Set.of element");
+    }
+
     private void assertSetOfQuintupleFailureAtRuntime(
         final String projectName,
         final String statement,
@@ -3481,6 +3795,36 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     private void assertSetOfNonupleFailureAtRuntime(
+        final String projectName,
+        final String statement,
+        final String expectedMessage
+    ) throws Exception {
+        final Path project = project(projectName);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    %s
+                }
+            }
+            """.formatted(statement));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/" + projectName).toString()));
+
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains(expectedMessage);
+    }
+
+    private void assertSetOfDecupleFailureAtRuntime(
         final String projectName,
         final String statement,
         final String expectedMessage
