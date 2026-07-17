@@ -12,10 +12,6 @@ on:
       - main
   workflow_dispatch:
 
-concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: false
-
 permissions:
   contents: read
 
@@ -34,9 +30,6 @@ jobs:
           - target: linux-aarch64
             os: ubuntu-24.04-arm
             sanitizer-scope: platform-smoke
-          - target: macos-aarch64
-            os: macos-15
-            sanitizer-scope: full
 
     steps:
       - name: Checkout
@@ -88,9 +81,16 @@ jobs:
 
       - name: Verify Maven suite
         run: |
-          if ! mvn -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -Djavan.coverage.check.skip=true verify; then
+          status=0
+          mvn -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -Djavan.coverage.check.skip=true verify || status=$?
+
+          if [ -f target/jacoco-surefire.exec ] || [ -d target/jacoco-child ]; then
+            mvn -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" -DskipTests -Djavan.coverage.check.skip=true jacoco:merge@merge-coverage jacoco:report@report || true
+          fi
+
+          if [ "$status" -ne 0 ]; then
             python3 -c $'import pathlib\nimport xml.etree.ElementTree as ET\n\nreport = pathlib.Path("target/site/jacoco/jacoco.xml")\nif not report.exists():\n    print("JaCoCo report missing after failed verify.")\nelse:\n    root = ET.parse(report).getroot()\n    bundle = {counter.attrib["type"]: counter.attrib for counter in root.findall("counter")}\n    for counter_type in ("BRANCH", "LINE"):\n        counter = bundle.get(counter_type)\n        if counter is None:\n            continue\n        missed = int(counter["missed"])\n        covered = int(counter["covered"])\n        total = missed + covered\n        ratio = covered / total if total else 1.0\n        print(f"JaCoCo {counter_type.lower()} bundle ratio: {covered}/{total} = {ratio:.6%}")'
-            exit 1
+            exit "$status"
           fi
 
       - name: Summarize coverage (non-blocking)

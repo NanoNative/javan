@@ -11,10 +11,6 @@ on:
         required: true
         type: string
 
-concurrency:
-  group: container-images-${{ github.ref }}-${{ github.event.release.tag_name || inputs.tag || github.run_id }}
-  cancel-in-progress: false
-
 permissions:
   contents: read
   packages: write
