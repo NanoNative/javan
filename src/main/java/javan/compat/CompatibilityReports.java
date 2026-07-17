@@ -513,6 +513,7 @@ public final class CompatibilityReports {
             pass("set-of-triple"),
             pass("set-of-quadruple"),
             pass("set-of-quintuple"),
+            pass("set-of-sextuple"),
             pass("list-of-varargs-gc"),
             pass("owned-buffer-realloc-validation"),
             pass("stringbuilder-setlength-overflow-panic"),

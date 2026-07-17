@@ -2564,7 +2564,177 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         );
     }
 
+    @Test
+    void setOfSextupleBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("set-of-sextuple");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Set<String> values = Set.of("a", "b", "c", "d", "e", "f");
+                    System.out.println(values.size());
+                    System.out.println(values.contains("a"));
+                    System.out.println(values.contains("b"));
+                    System.out.println(values.contains("c"));
+                    System.out.println(values.contains("d"));
+                    System.out.println(values.contains("e"));
+                    System.out.println(values.contains("f"));
+                    System.out.println(values.contains("later"));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/set-of-sextuple").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("6\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\nfalse\n");
+    }
+
+    @Test
+    void setOfSextupleDuplicateFirstSecondFailsAtRuntime() throws Exception {
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-first-second", "Set.of(\"same\", \"same\", \"c\", \"d\", \"e\", \"f\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSextupleDuplicateFirstThirdFailsAtRuntime() throws Exception {
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-first-third", "Set.of(\"same\", \"b\", \"same\", \"d\", \"e\", \"f\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSextupleDuplicateFirstFourthFailsAtRuntime() throws Exception {
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-first-fourth", "Set.of(\"same\", \"b\", \"c\", \"same\", \"e\", \"f\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSextupleDuplicateFirstFifthFailsAtRuntime() throws Exception {
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-first-fifth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"same\", \"f\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSextupleDuplicateFirstSixthFailsAtRuntime() throws Exception {
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-first-sixth", "Set.of(\"same\", \"b\", \"c\", \"d\", \"e\", \"same\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSextupleDuplicateSecondThirdFailsAtRuntime() throws Exception {
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-second-third", "Set.of(\"a\", \"same\", \"same\", \"d\", \"e\", \"f\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSextupleDuplicateSecondFourthFailsAtRuntime() throws Exception {
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-second-fourth", "Set.of(\"a\", \"same\", \"c\", \"same\", \"e\", \"f\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSextupleDuplicateSecondFifthFailsAtRuntime() throws Exception {
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-second-fifth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"same\", \"f\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSextupleDuplicateSecondSixthFailsAtRuntime() throws Exception {
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-second-sixth", "Set.of(\"a\", \"same\", \"c\", \"d\", \"e\", \"same\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSextupleDuplicateThirdFourthFailsAtRuntime() throws Exception {
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-third-fourth", "Set.of(\"a\", \"b\", \"same\", \"same\", \"e\", \"f\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSextupleDuplicateThirdFifthFailsAtRuntime() throws Exception {
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-third-fifth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"same\", \"f\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSextupleDuplicateThirdSixthFailsAtRuntime() throws Exception {
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-third-sixth", "Set.of(\"a\", \"b\", \"same\", \"d\", \"e\", \"same\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSextupleDuplicateFourthFifthFailsAtRuntime() throws Exception {
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-fourth-fifth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"same\", \"f\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSextupleDuplicateFourthSixthFailsAtRuntime() throws Exception {
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-fourth-sixth", "Set.of(\"a\", \"b\", \"c\", \"same\", \"e\", \"same\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSextupleDuplicateFifthSixthFailsAtRuntime() throws Exception {
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-duplicate-fifth-sixth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"same\", \"same\");", "duplicate Set.of element");
+    }
+
+    @Test
+    void setOfSextupleNullFirstFailsAtRuntime() throws Exception {
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-null-first", "Set.of((String) null, \"b\", \"c\", \"d\", \"e\", \"f\");", "null Set.of element");
+    }
+
+    @Test
+    void setOfSextupleNullSecondFailsAtRuntime() throws Exception {
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-null-second", "Set.of(\"a\", (String) null, \"c\", \"d\", \"e\", \"f\");", "null Set.of element");
+    }
+
+    @Test
+    void setOfSextupleNullThirdFailsAtRuntime() throws Exception {
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-null-third", "Set.of(\"a\", \"b\", (String) null, \"d\", \"e\", \"f\");", "null Set.of element");
+    }
+
+    @Test
+    void setOfSextupleNullFourthFailsAtRuntime() throws Exception {
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-null-fourth", "Set.of(\"a\", \"b\", \"c\", (String) null, \"e\", \"f\");", "null Set.of element");
+    }
+
+    @Test
+    void setOfSextupleNullFifthFailsAtRuntime() throws Exception {
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-null-fifth", "Set.of(\"a\", \"b\", \"c\", \"d\", (String) null, \"f\");", "null Set.of element");
+    }
+
+    @Test
+    void setOfSextupleNullSixthFailsAtRuntime() throws Exception {
+        assertSetOfSextupleFailureAtRuntime("set-of-sextuple-null-sixth", "Set.of(\"a\", \"b\", \"c\", \"d\", \"e\", (String) null);", "null Set.of element");
+    }
+
     private void assertSetOfQuintupleFailureAtRuntime(
+        final String projectName,
+        final String statement,
+        final String expectedMessage
+    ) throws Exception {
+        final Path project = project(projectName);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Set;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    %s
+                }
+            }
+            """.formatted(statement));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/" + projectName).toString()));
+
+        assertThat(nativeRun.exitCode()).isNotZero();
+        assertThat(nativeRun.stderr()).contains(expectedMessage);
+    }
+
+    private void assertSetOfSextupleFailureAtRuntime(
         final String projectName,
         final String statement,
         final String expectedMessage

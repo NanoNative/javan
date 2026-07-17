@@ -9,8 +9,8 @@ External project names do not belong in this matrix; this ledger stays compiler-
 
 | Measure | Count |
 | --- | ---: |
-| rows | 172 |
-| pass | 172 |
+| rows | 173 |
+| pass | 173 |
 | scoped | 0 |
 | target | 0 |
 | rejected | 0 |
@@ -119,6 +119,7 @@ Status mapping:
 | `set-of-triple` | pass |
 | `set-of-quadruple` | pass |
 | `set-of-quintuple` | pass |
+| `set-of-sextuple` | pass |
 | `list-of-varargs-gc` | pass |
 | `owned-buffer-realloc-validation` | pass |
 | `stringbuilder-setlength-overflow-panic` | pass |
