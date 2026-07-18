@@ -100,13 +100,13 @@ final class WorkflowPolicySurfaceTest {
     }
 
     @Test
-    void ciWorkflowKeepsMacOsX64Disabled() throws Exception {
+    void ciWorkflowKeepsMacOsOutOfRemoteNativeMatrix() throws Exception {
         assertThat(Files.readString(CI_WORKFLOW))
             .contains("branches:\n      - main")
             .contains("pull_request:\n    branches:\n      - main")
             .contains("target: linux-x64")
             .contains("target: linux-aarch64")
-            .contains("target: macos-aarch64")
+            .doesNotContain("target: macos-aarch64")
             .doesNotContain("target: macos-x64")
             .doesNotContain("os: macos-13")
             .doesNotContain("os: macos-14");

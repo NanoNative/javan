@@ -120,13 +120,13 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     }
 
     @Test
-    void ciWorkflowKeepsLinuxAndMacHostVerifyTargets() throws Exception {
+    void ciWorkflowKeepsLinuxHostVerifyTargetsWithoutRemoteMacOsRunner() throws Exception {
         final String ciWorkflow = Files.readString(CI_WORKFLOW);
 
         assertThat(ciWorkflow)
             .contains("target: linux-x64")
             .contains("target: linux-aarch64")
-            .contains("target: macos-aarch64");
+            .doesNotContain("target: macos-aarch64");
     }
 
     @Test
