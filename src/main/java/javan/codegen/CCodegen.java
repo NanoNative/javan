@@ -706,6 +706,21 @@ public final class CCodegen {
         c.append("    if (self == 0) {").append(System.lineSeparator());
         c.append("        javan_panic(\"null dispatch\");").append(System.lineSeparator());
         c.append("    }").append(System.lineSeparator());
+        for (final IrDispatchTarget target : dispatch.targets()) {
+            final String constant = program.enumDispatchConstants().get(target.owner());
+            if (constant == null) {
+                continue;
+            }
+            c.append("    if (javan_string_equals((const char*) javan_printable_object_string(self), ")
+                .append(emitCStringLiteral(constant))
+                .append(") != 0) {").append(System.lineSeparator());
+            if (dispatch.returnType() == javan.ir.IrType.VOID) {
+                c.append("        ").append(target.functionSymbol()).append("(").append(dispatchArguments(dispatch)).append("); return;");
+            } else {
+                c.append("        return ").append(target.functionSymbol()).append("(").append(dispatchArguments(dispatch)).append(");");
+            }
+            c.append(System.lineSeparator()).append("    }").append(System.lineSeparator());
+        }
         c.append("    switch (((struct javan_object_header*) self)->_javan_type_id) {").append(System.lineSeparator());
         for (final IrDispatchTarget target : dispatch.targets()) {
             c.append("        case ")

@@ -119,8 +119,36 @@ public final class BytecodeToIR {
             List.copyOf(functions),
             List.copyOf(dispatches.values()),
             symbol(callGraph.entryPoint()),
-            List.copyOf(materializedLambdaTargets)
+            List.copyOf(materializedLambdaTargets),
+            enumDispatchConstants(classes)
         );
+    }
+
+    private static Map<String, String> enumDispatchConstants(final Map<String, ClassFile> classes) {
+        final Map<String, String> result = new LinkedHashMap<>();
+        for (final ClassFile enumClass : classes.values()) {
+            if (!enumClass.isEnum()) {
+                continue;
+            }
+            final Optional<MethodInfo> initializer = enumClass.method("<clinit>", "()V");
+            if (initializer.isEmpty() || initializer.orElseThrow().code().isEmpty()) {
+                continue;
+            }
+            String allocatedClass = "";
+            for (final Instruction instruction : initializer.orElseThrow().code().orElseThrow().instructions()) {
+                if (instruction.opcode() == 187 && instruction.className().isPresent()) {
+                    allocatedClass = instruction.className().orElseThrow();
+                }
+                if (instruction.opcode() == 179 && instruction.fieldRef().isPresent()) {
+                    final FieldRef field = instruction.fieldRef().orElseThrow();
+                    if (enumClass.name().equals(field.owner()) && !allocatedClass.isEmpty()) {
+                        result.put(allocatedClass, field.name());
+                    }
+                    allocatedClass = "";
+                }
+            }
+        }
+        return Map.copyOf(result);
     }
 
     static IrFunction lowerFunction(
