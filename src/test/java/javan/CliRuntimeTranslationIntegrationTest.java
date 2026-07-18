@@ -5062,9 +5062,9 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
 
             import java.util.function.Supplier;
 
-            public final class FallbackSupplier implements Supplier<Object> {
+            public final class FallbackSupplier implements Supplier<String> {
                 @Override
-                public Object get() {
+                public String get() {
                     return "fallback";
                 }
             }

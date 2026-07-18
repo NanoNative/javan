@@ -167,6 +167,7 @@ public final class BytecodeToIR {
         final Map<Integer, IrExpression> locals = new HashMap<>();
         final Map<Integer, StackKind> objectLocalKinds = new HashMap<>();
         final Map<Integer, String> objectLocalThrowableTypes = new HashMap<>();
+        final Map<Integer, DynamicLambda> objectLocalLambdas = new HashMap<>();
         final Map<Integer, IrLocal> localDeclarations = new LinkedHashMap<>();
         final Map<Integer, StackValue> pendingExceptionHandlerStacks = new HashMap<>();
         final CodeAttribute code = method.code().orElseThrow();
@@ -213,6 +214,7 @@ public final class BytecodeToIR {
                 locals,
                 objectLocalKinds,
                 objectLocalThrowableTypes,
+                objectLocalLambdas,
                 localDeclarations,
                 dispatches,
                 skippedOffsets,
@@ -232,6 +234,7 @@ public final class BytecodeToIR {
                 locals,
                 objectLocalKinds,
                 objectLocalThrowableTypes,
+                objectLocalLambdas,
                 localDeclarations,
                 dispatches,
                 skippedOffsets,
@@ -251,6 +254,7 @@ public final class BytecodeToIR {
                 locals,
                 objectLocalKinds,
                 objectLocalThrowableTypes,
+                objectLocalLambdas,
                 localDeclarations,
                 dispatches,
                 functionOrNullTargetIds,
@@ -490,6 +494,7 @@ public final class BytecodeToIR {
         final Map<Integer, IrExpression> locals,
         final Map<Integer, StackKind> objectLocalKinds,
         final Map<Integer, String> objectLocalThrowableTypes,
+        final Map<Integer, DynamicLambda> objectLocalLambdas,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
         final Map<String, Integer> functionOrNullTargetIds,
@@ -580,13 +585,13 @@ public final class BytecodeToIR {
                 stack.add(StackValue.doubleExpression(local(classFile, method, locals, instruction.opcode() - 38, IrType.DOUBLE)));
                 break;
             case 25:
-                stack.add(localObjectValue(classFile, method, locals, objectLocalKinds, objectLocalThrowableTypes, unsigned(instruction.operands()[0])));
+                stack.add(localObjectValue(classFile, method, locals, objectLocalKinds, objectLocalThrowableTypes, objectLocalLambdas, unsigned(instruction.operands()[0])));
                 break;
             case 42:
             case 43:
             case 44:
             case 45:
-                stack.add(localObjectValue(classFile, method, locals, objectLocalKinds, objectLocalThrowableTypes, instruction.opcode() - 42));
+                stack.add(localObjectValue(classFile, method, locals, objectLocalKinds, objectLocalThrowableTypes, objectLocalLambdas, instruction.opcode() - 42));
                 break;
             case 46:
                 loadIntArray(classFile, method, stack);
@@ -649,13 +654,13 @@ public final class BytecodeToIR {
                 storeDouble(classFile, method, instructions, stack, locals, localDeclarations, instruction.opcode() - 71);
                 break;
             case 58:
-                storeObject(classFile, method, instruction, instructions, stack, locals, objectLocalKinds, objectLocalThrowableTypes, localDeclarations, unsigned(instruction.operands()[0]));
+                storeObject(classFile, method, instruction, instructions, stack, locals, objectLocalKinds, objectLocalThrowableTypes, objectLocalLambdas, localDeclarations, unsigned(instruction.operands()[0]));
                 break;
             case 75:
             case 76:
             case 77:
             case 78:
-                storeObject(classFile, method, instruction, instructions, stack, locals, objectLocalKinds, objectLocalThrowableTypes, localDeclarations, instruction.opcode() - 75);
+                storeObject(classFile, method, instruction, instructions, stack, locals, objectLocalKinds, objectLocalThrowableTypes, objectLocalLambdas, localDeclarations, instruction.opcode() - 75);
                 break;
             case 79:
                 storeIntArray(classFile, method, instructions, stack);
@@ -1248,13 +1253,51 @@ public final class BytecodeToIR {
         final Map<Integer, IrLocal> localDeclarations,
         final int slot
     ) {
+        storeObject(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            locals,
+            objectLocalKinds,
+            objectLocalThrowableTypes,
+            new HashMap<>(),
+            localDeclarations,
+            slot
+        );
+    }
+
+    static void storeObject(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrExpression> locals,
+        final Map<Integer, StackKind> objectLocalKinds,
+        final Map<Integer, String> objectLocalThrowableTypes,
+        final Map<Integer, DynamicLambda> objectLocalLambdas,
+        final Map<Integer, IrLocal> localDeclarations,
+        final int slot
+    ) {
         if (stack.isEmpty()) {
             if (isSyntheticSwitchMapInitializer(classFile, method) && isEnumSwitchMapHandlerInstruction(instruction.opcode())) {
                 return;
             }
             throw invalidStack(classFile, method, instruction, "object store requires a value on the bytecode stack");
         }
+        final StackValue top = stack.getLast();
+        if (top.dynamicLambda().isPresent()) {
+            stack.removeLast();
+            objectLocalLambdas.put(slot, top.dynamicLambda().orElseThrow());
+            objectLocalKinds.put(slot, top.kind());
+            objectLocalThrowableTypes.remove(slot);
+            locals.remove(slot);
+            return;
+        }
         final StackValue value = popObjectValue(classFile, method, instruction, stack);
+        objectLocalLambdas.remove(slot);
         final IrExpression target = localOrCreate(locals, localDeclarations, slot, IrType.OBJECT);
         instructions.add(IrInstruction.assignObject(target.value(), stackValueExpression(value)));
         updateObjectLocalKind(objectLocalKinds, slot, value.kind());
@@ -1759,6 +1802,35 @@ public final class BytecodeToIR {
         final Map<Integer, String> objectLocalThrowableTypes,
         final int slot
     ) {
+        return localObjectValue(
+            classFile,
+            method,
+            locals,
+            objectLocalKinds,
+            objectLocalThrowableTypes,
+            new HashMap<>(),
+            slot
+        );
+    }
+
+    static StackValue localObjectValue(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Map<Integer, IrExpression> locals,
+        final Map<Integer, StackKind> objectLocalKinds,
+        final Map<Integer, String> objectLocalThrowableTypes,
+        final Map<Integer, DynamicLambda> objectLocalLambdas,
+        final int slot
+    ) {
+        final DynamicLambda lambda = objectLocalLambdas.get(slot);
+        if (lambda != null) {
+            return switch (objectLocalKinds.getOrDefault(slot, StackKind.OBJECT)) {
+                case LAMBDA_FUNCTION -> StackValue.lambdaFunction(lambda);
+                case LAMBDA_PREDICATE -> StackValue.lambdaPredicate(lambda);
+                case LAMBDA_SUPPLIER -> StackValue.lambdaSupplier(lambda);
+                default -> throw new IllegalStateException("Unsupported lambda local kind: " + objectLocalKinds.get(slot));
+            };
+        }
         final IrExpression expression = local(classFile, method, locals, slot, IrType.OBJECT);
         final StackKind kind = objectLocalKinds.getOrDefault(slot, StackKind.OBJECT);
         if (kind == StackKind.OBJECT) {
