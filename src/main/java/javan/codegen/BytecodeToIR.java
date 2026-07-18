@@ -1824,12 +1824,17 @@ public final class BytecodeToIR {
     ) {
         final DynamicLambda lambda = objectLocalLambdas.get(slot);
         if (lambda != null) {
-            return switch (objectLocalKinds.getOrDefault(slot, StackKind.OBJECT)) {
-                case LAMBDA_FUNCTION -> StackValue.lambdaFunction(lambda);
-                case LAMBDA_PREDICATE -> StackValue.lambdaPredicate(lambda);
-                case LAMBDA_SUPPLIER -> StackValue.lambdaSupplier(lambda);
-                default -> throw new IllegalStateException("Unsupported lambda local kind: " + objectLocalKinds.get(slot));
-            };
+            final StackKind kind = objectLocalKinds.getOrDefault(slot, StackKind.OBJECT);
+            if (kind == StackKind.LAMBDA_FUNCTION) {
+                return StackValue.lambdaFunction(lambda);
+            }
+            if (kind == StackKind.LAMBDA_PREDICATE) {
+                return StackValue.lambdaPredicate(lambda);
+            }
+            if (kind == StackKind.LAMBDA_SUPPLIER) {
+                return StackValue.lambdaSupplier(lambda);
+            }
+            throw new IllegalStateException("Unsupported lambda local kind: " + kind);
         }
         final IrExpression expression = local(classFile, method, locals, slot, IrType.OBJECT);
         final StackKind kind = objectLocalKinds.getOrDefault(slot, StackKind.OBJECT);
