@@ -522,7 +522,8 @@ Trade-offs:
 
 Acceptance criteria:
 
-- host-native CI covers `linux-x64`, `linux-aarch64`, `macos-aarch64`, and `macos-x64`
+- host-native CI covers `linux-x64` and `linux-aarch64`; the required local host gate
+  covers macOS aarch64, while `macos-x64` remains deferred
 - runtime footprint reports list host target, requested target, actual target, artifact
   bytes, footprint statuses, and OS/ARCH coverage rows
 - mismatched `--target` fails before native codegen until cross-linking is implemented

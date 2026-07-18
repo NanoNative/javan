@@ -22,13 +22,12 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     private static final Path REPO_ROOT = Path.of("").toAbsolutePath().normalize();
 
     @Test
-    void homebrewFormulaGenerationRendersPinnedUrlsAndChecksumsForAllPlatforms() throws Exception {
+    void homebrewFormulaGenerationRendersPinnedLinuxUrlsAndChecksums() throws Exception {
         final Path releaseDir = tempDir.resolve("release");
         Files.createDirectories(releaseDir);
         final String version = "2026.7.16";
         writeReleaseArtifact(releaseDir, "javan-" + version + "-linux-x64.tar.gz", "linux-x64");
         writeReleaseArtifact(releaseDir, "javan-" + version + "-linux-aarch64.tar.gz", "linux-aarch64");
-        writeReleaseArtifact(releaseDir, "javan-" + version + "-macos-aarch64.tar.gz", "macos-aarch64");
         final Path formula = releaseDir.resolve("javan.rb");
 
         final ProcessResult run = process(
@@ -51,7 +50,7 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
             .contains("version \"" + version + "\"")
             .contains("javan-" + version + "-linux-x64.tar.gz")
             .contains("javan-" + version + "-linux-aarch64.tar.gz")
-            .contains("javan-" + version + "-macos-aarch64.tar.gz")
+            .doesNotContain("macos-aarch64")
             .contains("assert_match version.to_s, shell_output(\"#{bin}/javan --version\")")
             .contains("assert_match \"javan home:\", shell_output(\"#{bin}/javan doctor\")");
     }
@@ -82,7 +81,6 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
         final String version = "2026.7.16";
         writeReleaseArtifact(releaseDir, "javan-" + version + "-linux-x64.tar.gz", "linux-x64");
         writeReleaseArtifact(releaseDir, "javan-" + version + "-linux-aarch64.tar.gz", "linux-aarch64");
-        writeReleaseArtifact(releaseDir, "javan-" + version + "-macos-aarch64.tar.gz", "macos-aarch64");
         final Path formula = releaseDir.resolve("javan.rb");
 
         final ProcessResult generate = process(
@@ -194,13 +192,14 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     }
 
     @Test
-    void releaseWorkflowKeepsAllFourPackageTargets() throws Exception {
+    void releaseWorkflowKeepsLinuxPackageTargetsAndDisablesMacOsPackaging() throws Exception {
         final String releaseWorkflow = Files.readString(RELEASE_WORKFLOW);
 
         assertThat(releaseWorkflow)
             .contains("package-target: linux-x64")
             .contains("package-target: linux-aarch64")
-            .contains("package-target: macos-aarch64");
+            .contains("build-macos:")
+            .contains("if: false");
     }
 
     @Test

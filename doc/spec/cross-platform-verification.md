@@ -75,7 +75,8 @@ entrypoints on each required target.
 | linux-x64 | `ubuntu-24.04` | `mvn verify`, acceptance, host `--target`, sanitizer suite with self-host proof |
 | linux-aarch64 | `ubuntu-24.04-arm` | `mvn verify`, acceptance, host `--target`, sanitizer suite with self-host proof |
 
-`macos-x64` remains a deferred row until the active matrix is stable again.
+macOS aarch64 remains a required local host gate and is not a remote release row.
+`macos-x64` remains deferred until a future release contract admits it.
 Windows targets remain tracked rows until the runtime and linker path are ported.
 
 ## Container Matrix
