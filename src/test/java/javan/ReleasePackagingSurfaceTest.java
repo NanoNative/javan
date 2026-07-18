@@ -192,14 +192,28 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     }
 
     @Test
+    void mainPushReleasePathBuildsPackagesAsDryRunWithoutBotToken() throws Exception {
+        final String ciWorkflow = Files.readString(CI_WORKFLOW);
+        final String releaseWorkflow = Files.readString(RELEASE_WORKFLOW);
+
+        assertThat(ciWorkflow)
+            .contains("release_enabled: true")
+            .contains("dry_run: true");
+        assertThat(releaseWorkflow)
+            .contains("dry_run=\"$INPUT_DRY_RUN\"")
+            .contains("dry_run=\"$INPUT_DRY_RUN\"\n          elif");
+    }
+
+    @Test
     void releaseWorkflowKeepsLinuxPackageTargetsAndDisablesMacOsPackaging() throws Exception {
         final String releaseWorkflow = Files.readString(RELEASE_WORKFLOW);
 
         assertThat(releaseWorkflow)
             .contains("package-target: linux-x64")
             .contains("package-target: linux-aarch64")
-            .contains("build-macos:")
-            .contains("if: false");
+            .doesNotContain("build-macos:")
+            .doesNotContain("macos-aarch64")
+            .doesNotContain("macos-15");
     }
 
     @Test
