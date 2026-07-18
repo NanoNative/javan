@@ -659,6 +659,55 @@ final class CliIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void constantSpecificEnumVirtualDispatchBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("enum-constant-specific-dispatch");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    for (final Kind kind : Kind.values()) {
+                        System.out.println(kind.label());
+                    }
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Kind", """
+            package com.acme;
+
+            public enum Kind {
+                FIRST {
+                    @Override
+                    String label() {
+                        return "first";
+                    }
+                },
+                SECOND {
+                    @Override
+                    String label() {
+                        return "second";
+                    }
+                };
+
+                abstract String label();
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isZero();
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/enum-constant-specific-dispatch").toString()));
+        assertThat(nativeRun.stdout())
+            .as("exit=%s stderr=%s", nativeRun.exitCode(), nativeRun.stderr())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("first\nsecond\n");
+    }
+
+    @Test
     void enumValueOfFailsDuringCheck() throws Exception {
         final Path project = project("enum-value-of");
         writeJava(project, "com.acme.Main", """
