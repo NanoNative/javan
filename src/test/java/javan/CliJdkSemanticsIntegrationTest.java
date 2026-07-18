@@ -8949,7 +8949,10 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
         final CliRun run = run(tempDir, "build", project.toString());
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
-        assertThat(process(project, List.of(project.resolve(".javan/bin/default-method-functional-interface-concrete").toString())).stdout())
+        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/default-method-functional-interface-concrete").toString()));
+        assertThat(nativeRun.exitCode()).as(nativeRun.stderr()).isZero();
+        assertThat(nativeRun.stderr()).isEmpty();
+        assertThat(nativeRun.stdout())
             .isEqualTo(jvmOutput);
         assertThat(jvmOutput).isEqualTo("demo\nnull\n");
     }

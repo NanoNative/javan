@@ -311,7 +311,7 @@ public final class ReachabilityAnalyzer {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
             }
-            if (!targetMethods.isEmpty()) {
+            if (hasInlineDirectFunctionLambda(classes, current, instruction) || !targetMethods.isEmpty()) {
                 return;
             }
             diagnostics.add(Diagnostic.error(
@@ -507,7 +507,9 @@ public final class ReachabilityAnalyzer {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
             }
-            if (containsMethodRef(materializedLambdaMethods, target) || !targetMethods.isEmpty()) {
+            if (hasInlineDirectPredicateLambda(classes, current, instruction)
+                || containsMethodRef(materializedLambdaMethods, target)
+                || !targetMethods.isEmpty()) {
                 return;
             }
             diagnostics.add(Diagnostic.error(
@@ -567,7 +569,9 @@ public final class ReachabilityAnalyzer {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
             }
-            if (containsMethodRef(materializedLambdaMethods, target) || !targetMethods.isEmpty()) {
+            if (hasInlineDirectSupplierLambda(classes, current, instruction)
+                || containsMethodRef(materializedLambdaMethods, target)
+                || !targetMethods.isEmpty()) {
                 return;
             }
             diagnostics.add(Diagnostic.error(
@@ -587,7 +591,9 @@ public final class ReachabilityAnalyzer {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
             }
-            if (containsMethodRef(materializedLambdaMethods, target) || !targetMethods.isEmpty()) {
+            if (hasInlineDirectFunctionLambda(classes, current, instruction)
+                || containsMethodRef(materializedLambdaMethods, target)
+                || !targetMethods.isEmpty()) {
                 return;
             }
             diagnostics.add(Diagnostic.error(
@@ -637,10 +643,17 @@ public final class ReachabilityAnalyzer {
                 final EntryPoint callee = defaultTarget.orElseThrow();
                 enqueue(work, workSet, callee);
                 addEdge(callEdges, current, callee, CallEdge.Kind.CALL);
+                if (isCatchNullFunctionalInterfaceCall(classes, target)) {
+                    final MethodRef implementationTarget = new MethodRef(target.owner(), "applyWithException", target.descriptor());
+                    final List<EntryPoint> targetMethods = interfaceTargets(classes, implementationTarget, entryPoints);
+                    enqueueAll(work, workSet, targetMethods);
+                    addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
+                }
                 return;
             }
             if (isCatchNullFunctionalInterfaceCall(classes, target)) {
-                final List<EntryPoint> targetMethods = interfaceTargets(classes, target, entryPoints);
+                final MethodRef implementationTarget = new MethodRef(target.owner(), "applyWithException", target.descriptor());
+                final List<EntryPoint> targetMethods = interfaceTargets(classes, implementationTarget, entryPoints);
                 if (!targetMethods.isEmpty()) {
                     enqueueAll(work, workSet, targetMethods);
                     addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
@@ -885,20 +898,37 @@ public final class ReachabilityAnalyzer {
             return false;
         }
         final List<Instruction> instructions = method.orElseThrow().code().orElseThrow().instructions();
-        for (int index = 1; index < instructions.size(); index++) {
+        for (int index = 0; index < instructions.size(); index++) {
             if (instructions.get(index).offset() != instruction.offset()) {
                 continue;
             }
-            final Instruction producer = instructions.get(index - 1);
-            if (producer.opcode() != 186 || producer.dynamicRef().isEmpty()) {
-                return false;
+            for (int producerIndex = index - 1; producerIndex >= 0; producerIndex--) {
+                final Instruction producer = instructions.get(producerIndex);
+                if (producer.opcode() == 186 && producer.dynamicRef().isPresent()) {
+                    final Optional<LambdaMetafactoryCall> lambdaCall = LambdaMetafactoryCall.resolve(producer.dynamicRef().orElseThrow());
+                    return lambdaCall.isPresent()
+                        && matchesInlineLambdaKind(lambdaCall.orElseThrow(), lambdaKind)
+                        && lambdaCall.orElseThrow().isDirectlyLowerable();
+                }
+                if (isControlFlowBoundary(producer.opcode())) {
+                    return false;
+                }
             }
-            final Optional<LambdaMetafactoryCall> lambdaCall = LambdaMetafactoryCall.resolve(producer.dynamicRef().orElseThrow());
-            return lambdaCall.isPresent()
-                && matchesInlineLambdaKind(lambdaCall.orElseThrow(), lambdaKind)
-                && lambdaCall.orElseThrow().isDirectlyLowerable();
+            return false;
         }
         return false;
+    }
+
+    private static boolean isControlFlowBoundary(final int opcode) {
+        return opcode == 167 || opcode == 168 || opcode == 169 || opcode == 170 || opcode == 171
+            || opcode == 172 || opcode == 173 || opcode == 174 || opcode == 175 || opcode == 176
+            || opcode == 177
+            || opcode == 182 || opcode == 183 || opcode == 184 || opcode == 185 || opcode == 186
+            || opcode == 191 || opcode == 194 || opcode == 195
+            || (opcode >= 54 && opcode <= 58)
+            || (opcode >= 79 && opcode <= 95)
+            || (opcode >= 153 && opcode <= 166)
+            || opcode == 198 || opcode == 199;
     }
 
     private static boolean matchesInlineLambdaKind(final LambdaMetafactoryCall lambdaCall, final InlineLambdaKind lambdaKind) {

@@ -60,6 +60,7 @@ final class IntrinsicUsageReportsTest {
         assertThat(report.intrinsics()).containsExactly(
             new IntrinsicCallCount("Objects.requireNonNull", 0),
             new IntrinsicCallCount("Objects.requireNonNullElse", 0),
+            new IntrinsicCallCount("Objects.requireNonNullElseGet", 0),
             new IntrinsicCallCount("Objects.isNull", 0),
             new IntrinsicCallCount("Objects.nonNull", 0),
             new IntrinsicCallCount("Objects.toString", 0),
