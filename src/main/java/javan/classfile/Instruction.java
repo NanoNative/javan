@@ -18,6 +18,7 @@ import java.util.Optional;
  * @param floatValue resolved float literal when the instruction loads one
  * @param doubleValue resolved double literal when the instruction loads one
  * @param dynamicRef resolved invokedynamic metadata when present
+ * @param constantPoolTag resolved constant-pool tag for {@code ldc}/{@code ldc_w}/{@code ldc2_w} instructions when present
  */
 public record Instruction(
     int offset,
@@ -32,8 +33,59 @@ public record Instruction(
     Optional<Long> longValue,
     Optional<Float> floatValue,
     Optional<Double> doubleValue,
-    Optional<DynamicRef> dynamicRef
+    Optional<DynamicRef> dynamicRef,
+    Optional<Integer> constantPoolTag
 ) {
+    /**
+     * Creates an instruction without explicit constant-pool tag metadata.
+     *
+     * @param offset bytecode offset
+     * @param opcode unsigned opcode value
+     * @param mnemonic JVM mnemonic
+     * @param operands raw operand bytes
+     * @param methodRef resolved method reference when present
+     * @param fieldRef resolved field reference when present
+     * @param className resolved class name when present
+     * @param stringValue resolved string literal when present
+     * @param intValue resolved int literal when present
+     * @param longValue resolved long literal when present
+     * @param floatValue resolved float literal when present
+     * @param doubleValue resolved double literal when present
+     * @param dynamicRef resolved invokedynamic metadata when present
+     */
+    public Instruction(
+        final int offset,
+        final int opcode,
+        final String mnemonic,
+        final byte[] operands,
+        final Optional<MethodRef> methodRef,
+        final Optional<FieldRef> fieldRef,
+        final Optional<String> className,
+        final Optional<String> stringValue,
+        final Optional<Integer> intValue,
+        final Optional<Long> longValue,
+        final Optional<Float> floatValue,
+        final Optional<Double> doubleValue,
+        final Optional<DynamicRef> dynamicRef
+    ) {
+        this(
+            offset,
+            opcode,
+            mnemonic,
+            operands,
+            methodRef,
+            fieldRef,
+            className,
+            stringValue,
+            intValue,
+            longValue,
+            floatValue,
+            doubleValue,
+            dynamicRef,
+            Optional.empty()
+        );
+    }
+
     /**
      * Creates an instruction without float/double literal metadata.
      *
@@ -75,7 +127,8 @@ public record Instruction(
             longValue,
             Optional.empty(),
             Optional.empty(),
-            dynamicRef
+            dynamicRef,
+            Optional.empty()
         );
     }
 }

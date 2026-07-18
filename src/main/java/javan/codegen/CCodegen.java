@@ -1,15 +1,18 @@
 package javan.codegen;
 
 import javan.ir.IrFunction;
+import javan.ir.IrMaterializedLambdaTarget;
 import javan.build.AbiType;
 import javan.build.ExportedMethod;
 import javan.classfile.MethodRef;
 import javan.ir.IrClass;
 import javan.ir.IrDispatch;
 import javan.ir.IrDispatchTarget;
+import javan.ir.IrExpression;
 import javan.ir.IrInstruction;
 import javan.ir.IrProgram;
 import javan.ir.IrSourceLocation;
+import javan.ir.IrType;
 import javan.util.Files2;
 import javan.util.Strings2;
 
@@ -22,6 +25,23 @@ import java.util.List;
  */
 public final class CCodegen {
     private static final String RUNNABLE_RUN_DISPATCH_SYMBOL = BytecodeToIR.dispatchSymbol(new MethodRef("java/lang/Runnable", "run", "()V"));
+    private static final String MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL = "javan_materialized_lambda_apply_object";
+    private static final String MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL = "javan_materialized_lambda_apply_object2";
+    private static final String MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL = "javan_materialized_lambda_apply_boolean";
+    private static final String MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL = "javan_materialized_lambda_apply_void";
+    private static final String MATERIALIZED_LAMBDA_VOID2_APPLY_SYMBOL = "javan_materialized_lambda_apply_void2";
+    private static final String EXACT_ENUM_LOOKUP_SYMBOL = "javan_exact_enum_lookup";
+    private static final String EXACT_CATCH_NULL_APPLY_SYMBOL = "javan_exact_catch_null_apply";
+    private static final String EXACT_TEMPORAL_OF_UNSUPPORTED_SYMBOL = "javan_exact_temporal_of_unsupported";
+    private static final String EXACT_TEMPORAL_STRING_BRIDGE_UNSUPPORTED_SYMBOL = "javan_exact_temporal_string_bridge_unsupported";
+    private static final String EXACT_CALENDAR_OF_MILLIS_UNSUPPORTED_SYMBOL = "javan_exact_calendar_of_millis_unsupported";
+    private static final String EXACT_CALENDAR_OF_DATE_UNSUPPORTED_SYMBOL = "javan_exact_calendar_of_date_unsupported";
+    private static final String EXACT_CALENDAR_OF_LOCAL_TIME_UNSUPPORTED_SYMBOL = "javan_exact_calendar_of_local_time_unsupported";
+    private static final String EXACT_THROWABLE_STRING_OF_UNSUPPORTED_SYMBOL = "javan_exact_throwable_string_of_unsupported";
+    private static final String TEMPORAL_CONVERSION_LAMBDA_UNSUPPORTED_SYMBOL = "javan_temporal_conversion_lambda_unsupported";
+    private static final String GENERATED_ENUM_BY_NAME_SYMBOL = "javan_generated_enum_by_name";
+    private static final String GENERATED_ENUM_BY_ORDINAL_SYMBOL = "javan_generated_enum_by_ordinal";
+    private static final String FALLIBLE_APPLY_METHOD_NAME = "applyWithException";
 
     /**
      * Writes the generated C program.
@@ -34,7 +54,8 @@ public final class CCodegen {
     public Path generate(final IrProgram program, final Path generatedDirectory) throws IOException {
         final StringBuilder c = new StringBuilder();
         c.append("#include \"javan_runtime.h\"").append(System.lineSeparator());
-        c.append("#include <stddef.h>").append(System.lineSeparator()).append(System.lineSeparator());
+        c.append("#include <stddef.h>").append(System.lineSeparator());
+        c.append("#include <stdio.h>").append(System.lineSeparator()).append(System.lineSeparator());
         emitObjectHeader(c);
         for (final IrClass classInfo : program.classes()) {
             emitStruct(classInfo, c);
@@ -71,10 +92,22 @@ public final class CCodegen {
             c.append(";").append(System.lineSeparator());
         }
         c.append("void javan_thread_run_target(void* target);").append(System.lineSeparator());
+        if (!program.materializedLambdaTargets().isEmpty()) {
+            c.append("static void* ").append(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
+            c.append("static void* ").append(MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL).append("(void* self, void* first_arg, void* second_arg);").append(System.lineSeparator());
+            c.append("static int ").append(MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
+            c.append("static void ").append(MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
+            c.append("static void ").append(MATERIALIZED_LAMBDA_VOID2_APPLY_SYMBOL).append("(void* self, void* first_arg, void* second_arg);").append(System.lineSeparator());
+        }
         c.append(System.lineSeparator());
         emitAllocators(program, c);
+        emitGeneratedObjectClassHelpers(program, c);
         emitEnumOrdinalHelpers(program, c);
+        emitExactEnumLookupHelpers(program, c);
+        emitExactFunctionOrNullHelpers(program, c);
+        emitExactTemporalBridgeHelpers(c);
         emitThreadHelpers(program, c);
+        emitMaterializedLambdaHelpers(program, c);
         for (final IrDispatch dispatch : program.dispatches()) {
             emitDispatch(program, dispatch, c);
         }
@@ -100,7 +133,8 @@ public final class CCodegen {
     ) throws IOException {
         final StringBuilder c = new StringBuilder();
         c.append("#include \"javan_runtime.h\"").append(System.lineSeparator());
-        c.append("#include <stddef.h>").append(System.lineSeparator()).append(System.lineSeparator());
+        c.append("#include <stddef.h>").append(System.lineSeparator());
+        c.append("#include <stdio.h>").append(System.lineSeparator()).append(System.lineSeparator());
         emitObjectHeader(c);
         for (final IrClass classInfo : program.classes()) {
             emitStruct(classInfo, c);
@@ -135,10 +169,21 @@ public final class CCodegen {
             c.append(";").append(System.lineSeparator());
         }
         c.append("void javan_thread_run_target(void* target);").append(System.lineSeparator());
+        if (!program.materializedLambdaTargets().isEmpty()) {
+            c.append("static void* ").append(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
+            c.append("static void* ").append(MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL).append("(void* self, void* first_arg, void* second_arg);").append(System.lineSeparator());
+            c.append("static int ").append(MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
+            c.append("static void ").append(MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
+            c.append("static void ").append(MATERIALIZED_LAMBDA_VOID2_APPLY_SYMBOL).append("(void* self, void* first_arg, void* second_arg);").append(System.lineSeparator());
+        }
         c.append(System.lineSeparator());
         emitAllocators(program, c);
+        emitGeneratedObjectClassHelpers(program, c);
         emitEnumOrdinalHelpers(program, c);
+        emitExactEnumLookupHelpers(program, c);
+        emitExactFunctionOrNullHelpers(program, c);
         emitThreadHelpers(program, c);
+        emitMaterializedLambdaHelpers(program, c);
         for (final IrDispatch dispatch : program.dispatches()) {
             emitDispatch(program, dispatch, c);
         }
@@ -154,14 +199,15 @@ public final class CCodegen {
     }
 
     private static void emitObjectHeader(final StringBuilder c) {
-        c.append("struct javan_object_header {").append(System.lineSeparator());
-        c.append("    int _javan_type_id;").append(System.lineSeparator());
-        c.append("};").append(System.lineSeparator()).append(System.lineSeparator());
+        // Declared in javan_runtime.h so runtime helpers and generated code share one object layout.
     }
 
     private static void emitStruct(final IrClass classInfo, final StringBuilder c) {
         c.append("struct ").append(classInfo.symbol()).append(" {").append(System.lineSeparator());
         c.append("    int _javan_type_id;").append(System.lineSeparator());
+        c.append("    void* _javan_runtime_state;").append(System.lineSeparator());
+        c.append("    int _javan_runtime_kind;").append(System.lineSeparator());
+        c.append("    int _javan_runtime_reserved;").append(System.lineSeparator());
         if (classInfo.fields().isEmpty()) {
             c.append("    char _javan_empty;").append(System.lineSeparator());
         } else {
@@ -209,8 +255,10 @@ public final class CCodegen {
                 c.append("    {")
                     .append(ids.get(classInfo.jvmName()).intValue())
                     .append(", \"")
-                    .append(escapeCString(classInfo.jvmName()))
+                    .append(escapeCString(displayClassName(classInfo.jvmName())))
                     .append("\", ")
+                    .append(classInfo.enumConstants().isEmpty() ? 0 : 1)
+                    .append(", ")
                     .append(objectFields.size())
                     .append(", ");
                 if (objectFields.isEmpty()) {
@@ -345,6 +393,9 @@ public final class CCodegen {
                 .append(typeIds.get(classInfo.jvmName()).intValue())
                 .append(";")
                 .append(System.lineSeparator());
+            c.append("    object->_javan_runtime_state = (void*) 0;").append(System.lineSeparator());
+            c.append("    object->_javan_runtime_kind = 0;").append(System.lineSeparator());
+            c.append("    object->_javan_runtime_reserved = 0;").append(System.lineSeparator());
             c.append("    javan_register_object((void*) object, ")
                 .append(typeIds.get(classInfo.jvmName()).intValue())
                 .append(");")
@@ -375,6 +426,277 @@ public final class CCodegen {
             c.append("    return -1;").append(System.lineSeparator());
             c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
         }
+    }
+
+    private static void emitExactEnumLookupHelpers(final IrProgram program, final StringBuilder c) {
+        final java.util.Map<String, Integer> typeIds = typeIds(program);
+        c.append("static void* ").append(GENERATED_ENUM_BY_NAME_SYMBOL).append("(void* class_value, void* name_value) {").append(System.lineSeparator());
+        c.append("    void* printable = javan_printable_object_string(name_value);").append(System.lineSeparator());
+        c.append("    switch (javan_class_exact_type_id(class_value)) {").append(System.lineSeparator());
+        for (final IrClass classInfo : program.classes()) {
+            if (classInfo.enumConstants().isEmpty()) {
+                continue;
+            }
+            c.append("        case ").append(typeIds.get(classInfo.jvmName()).intValue()).append(":").append(System.lineSeparator());
+            for (final String constant : classInfo.enumConstants()) {
+                c.append("            if (javan_string_equals((const char*) printable, ")
+                    .append(emitCStringLiteral(constant))
+                    .append(")) { return ")
+                    .append(staticFieldSymbol(classInfo.jvmName(), constant))
+                    .append("; }")
+                    .append(System.lineSeparator());
+            }
+            c.append("            return 0;").append(System.lineSeparator());
+        }
+        c.append("        default: return 0;").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+
+        c.append("static void* ").append(GENERATED_ENUM_BY_ORDINAL_SYMBOL).append("(void* class_value, int ordinal) {").append(System.lineSeparator());
+        c.append("    switch (javan_class_exact_type_id(class_value)) {").append(System.lineSeparator());
+        for (final IrClass classInfo : program.classes()) {
+            if (classInfo.enumConstants().isEmpty()) {
+                continue;
+            }
+            c.append("        case ").append(typeIds.get(classInfo.jvmName()).intValue()).append(":").append(System.lineSeparator());
+            c.append("            switch (ordinal) {").append(System.lineSeparator());
+            for (int index = 0; index < classInfo.enumConstants().size(); index++) {
+                final String constant = classInfo.enumConstants().get(index);
+                c.append("                case ").append(index).append(": return ")
+                    .append(staticFieldSymbol(classInfo.jvmName(), constant))
+                    .append(";")
+                    .append(System.lineSeparator());
+            }
+            c.append("                default: return 0;").append(System.lineSeparator());
+            c.append("            }").append(System.lineSeparator());
+        }
+        c.append("        default: return 0;").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+
+        c.append("static void* ").append(EXACT_ENUM_LOOKUP_SYMBOL).append("(void* value, void* class_value) {").append(System.lineSeparator());
+        c.append("    if (javan_is_supported_number(value) != 0) {").append(System.lineSeparator());
+        c.append("        return ").append(GENERATED_ENUM_BY_ORDINAL_SYMBOL)
+            .append("(class_value, javan_number_int_value(value));")
+            .append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        c.append("    return ").append(GENERATED_ENUM_BY_NAME_SYMBOL).append("(class_value, value);").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+    }
+
+    private static void emitExactFunctionOrNullHelpers(final IrProgram program, final StringBuilder c) {
+        final java.util.Set<String> bridgeOwners = new java.util.LinkedHashSet<>();
+        for (final IrFunction function : program.functions()) {
+            if ("apply".equals(function.name()) && isExactCatchNullBridge(function)) {
+                bridgeOwners.add(function.owner());
+            }
+        }
+        final java.util.Map<String, Integer> typeIds = typeIds(program);
+        final List<IrFunction> concreteTargets = new java.util.ArrayList<>();
+        for (final IrFunction function : program.functions()) {
+            if (bridgeOwners.contains(function.owner())) {
+                continue;
+            }
+            if (!FALLIBLE_APPLY_METHOD_NAME.equals(function.name())) {
+                continue;
+            }
+            if (!hasUnaryReferenceObjectShape(function)) {
+                continue;
+            }
+            concreteTargets.add(function);
+        }
+        c.append("static void* ").append(EXACT_CATCH_NULL_APPLY_SYMBOL).append("(void* self, void* arg) {").append(System.lineSeparator());
+        c.append("    if (self == 0) {").append(System.lineSeparator());
+        c.append("        javan_panic(\"catch-null function receiver is null\");").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        c.append("    struct javan_object_header* header = (struct javan_object_header*) self;").append(System.lineSeparator());
+        if (!program.materializedLambdaTargets().isEmpty()) {
+            c.append("    if (header->_javan_type_id == 0) {").append(System.lineSeparator());
+            c.append("        if (header->_javan_runtime_kind != JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA) {").append(System.lineSeparator());
+            c.append("            javan_panic(\"unsupported catch-null function receiver shape\");").append(System.lineSeparator());
+            c.append("        }").append(System.lineSeparator());
+            emitRecoverableFunctionOrNullCall(c, MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL, List.of("self", "arg"));
+            c.append("    }").append(System.lineSeparator());
+        } else {
+            c.append("    if (header->_javan_type_id == 0) {").append(System.lineSeparator());
+            c.append("        javan_panic(\"unsupported catch-null function receiver shape\");").append(System.lineSeparator());
+            c.append("    }").append(System.lineSeparator());
+        }
+        c.append("    switch (header->_javan_type_id) {").append(System.lineSeparator());
+        for (final IrFunction target : concreteTargets) {
+            final Integer typeId = typeIds.get(target.owner());
+            if (typeId == null) {
+                continue;
+            }
+            c.append("        case ").append(typeId.intValue()).append(": {").append(System.lineSeparator());
+            emitRecoverableFunctionOrNullCall(c, target.symbol(), List.of("self", "arg"), 12);
+            c.append("        }").append(System.lineSeparator());
+        }
+        c.append("        default: javan_panic(\"unsupported catch-null function receiver shape\");").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        c.append("    return 0;").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+    }
+
+    private static boolean isExactCatchNullBridge(final IrFunction function) {
+        if (!hasUnaryReferenceObjectShape(function)) {
+            return false;
+        }
+        if (function.instructions().size() != 1) {
+            return false;
+        }
+        final IrInstruction instruction = function.instructions().getFirst();
+        if (instruction.op() != IrInstruction.Op.RETURN_OBJECT || instruction.expression().isEmpty()) {
+            return false;
+        }
+        final IrExpression expression = instruction.expression().orElseThrow();
+        return expression.kind() == IrExpression.Kind.CALL
+            && EXACT_CATCH_NULL_APPLY_SYMBOL.equals(expression.value());
+    }
+
+    private static boolean hasUnaryReferenceObjectShape(final IrFunction function) {
+        return function.parameters().size() == 2
+            && function.parameters().get(0).type() == IrType.OBJECT
+            && function.parameters().get(1).type() == IrType.OBJECT
+            && function.returnType() == IrType.OBJECT;
+    }
+
+    private static void emitExactTemporalBridgeHelpers(final StringBuilder c) {
+        c.append("static void* ").append(EXACT_TEMPORAL_OF_UNSUPPORTED_SYMBOL)
+            .append("(void* class_value, void* text, void* function) {").append(System.lineSeparator());
+        c.append("    (void) text;").append(System.lineSeparator());
+        c.append("    (void) function;").append(System.lineSeparator());
+        c.append("    const char* class_name = (const char*) javan_printable_object_string(class_value);").append(System.lineSeparator());
+        c.append("    char message[256];").append(System.lineSeparator());
+        c.append("    if (class_name != 0) {").append(System.lineSeparator());
+        c.append("        snprintf(message, sizeof(message), \"unsupported exact temporal conversion runtime for %s\", class_name);").append(System.lineSeparator());
+        c.append("    } else {").append(System.lineSeparator());
+        c.append("        snprintf(message, sizeof(message), \"unsupported exact temporal conversion runtime\");").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        c.append("    javan_panic(message);").append(System.lineSeparator());
+        c.append("    return 0;").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+
+        c.append("static void* ").append(EXACT_TEMPORAL_STRING_BRIDGE_UNSUPPORTED_SYMBOL)
+            .append("(void* text, void* target_name) {").append(System.lineSeparator());
+        c.append("    (void) text;").append(System.lineSeparator());
+        c.append("    const char* target = (const char*) javan_printable_object_string(target_name);").append(System.lineSeparator());
+        c.append("    char message[256];").append(System.lineSeparator());
+        c.append("    if (target != 0) {").append(System.lineSeparator());
+        c.append("        snprintf(message, sizeof(message), \"unsupported exact temporal registration bridge runtime for %s\", target);").append(System.lineSeparator());
+        c.append("    } else {").append(System.lineSeparator());
+        c.append("        snprintf(message, sizeof(message), \"unsupported exact temporal registration bridge runtime\");").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        c.append("    javan_panic(message);").append(System.lineSeparator());
+        c.append("    return 0;").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+
+        c.append("static void* ").append(EXACT_CALENDAR_OF_MILLIS_UNSUPPORTED_SYMBOL)
+            .append("(long long value) {").append(System.lineSeparator());
+        c.append("    (void) value;").append(System.lineSeparator());
+        c.append("    javan_panic(\"unsupported exact Calendar conversion runtime from epoch millis\");").append(System.lineSeparator());
+        c.append("    return 0;").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+
+        c.append("static void* ").append(EXACT_CALENDAR_OF_DATE_UNSUPPORTED_SYMBOL)
+            .append("(void* value) {").append(System.lineSeparator());
+        c.append("    (void) value;").append(System.lineSeparator());
+        c.append("    javan_panic(\"unsupported exact Calendar conversion runtime from java.util.Date\");").append(System.lineSeparator());
+        c.append("    return 0;").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+
+        c.append("static void* ").append(EXACT_CALENDAR_OF_LOCAL_TIME_UNSUPPORTED_SYMBOL)
+            .append("(void* value) {").append(System.lineSeparator());
+        c.append("    (void) value;").append(System.lineSeparator());
+        c.append("    javan_panic(\"unsupported exact Calendar conversion runtime from java.time.LocalTime\");").append(System.lineSeparator());
+        c.append("    return 0;").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+
+        c.append("static void* ").append(EXACT_THROWABLE_STRING_OF_UNSUPPORTED_SYMBOL)
+            .append("(void* value) {").append(System.lineSeparator());
+        c.append("    (void) value;").append(System.lineSeparator());
+        c.append("    javan_panic(\"unsupported exact Throwable string rendering runtime\");").append(System.lineSeparator());
+        c.append("    return 0;").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+
+        c.append("static void* ").append(TEMPORAL_CONVERSION_LAMBDA_UNSUPPORTED_SYMBOL)
+            .append("(void* method_display) {").append(System.lineSeparator());
+        c.append("    char message[512];").append(System.lineSeparator());
+        c.append("    const char* method_text = (const char*) javan_printable_object_string(method_display);").append(System.lineSeparator());
+        c.append("    snprintf(message, sizeof(message), \"unsupported temporal conversion lambda runtime: %s\", method_text);")
+            .append(System.lineSeparator());
+        c.append("    javan_panic(message);").append(System.lineSeparator());
+        c.append("    return 0;").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+    }
+
+    private static void emitRecoverableFunctionOrNullCall(
+        final StringBuilder c,
+        final String symbol,
+        final List<String> arguments
+    ) {
+        emitRecoverableFunctionOrNullCall(c, symbol, arguments, 8);
+    }
+
+    private static void emitRecoverableFunctionOrNullCall(
+        final StringBuilder c,
+        final String symbol,
+        final List<String> arguments,
+        final int indent
+    ) {
+        final StringBuilder paddingBuilder = new StringBuilder();
+        for (int index = 0; index < indent; index++) {
+            paddingBuilder.append(' ');
+        }
+        final String padding = paddingBuilder.toString();
+        final StringBuilder argumentsBuilder = new StringBuilder();
+        for (int index = 0; index < arguments.size(); index++) {
+            if (index > 0) {
+                argumentsBuilder.append(", ");
+            }
+            argumentsBuilder.append(arguments.get(index));
+        }
+        c.append(padding).append("JavanPanicScope javan_function_or_null_scope;").append(System.lineSeparator());
+        c.append(padding).append("jmp_buf javan_function_or_null_target;").append(System.lineSeparator());
+        c.append(padding).append("javan_panic_scope_push(&javan_function_or_null_scope, &javan_function_or_null_target);").append(System.lineSeparator());
+        c.append(padding).append("if (setjmp(javan_function_or_null_target) != 0) {").append(System.lineSeparator());
+        c.append(padding).append("    javan_clear_error();").append(System.lineSeparator());
+        c.append(padding).append("    return 0;").append(System.lineSeparator());
+        c.append(padding).append("}").append(System.lineSeparator());
+        c.append(padding).append("void* javan_function_or_null_result = ")
+            .append(symbol)
+            .append("(")
+            .append(argumentsBuilder.toString())
+            .append(");")
+            .append(System.lineSeparator());
+        c.append(padding).append("javan_panic_scope_pop(&javan_function_or_null_scope);").append(System.lineSeparator());
+        c.append(padding).append("return javan_function_or_null_result;").append(System.lineSeparator());
+    }
+
+    private static void emitGeneratedObjectClassHelpers(final IrProgram program, final StringBuilder c) {
+        final java.util.Map<String, Integer> typeIds = typeIds(program);
+        c.append("void* javan_generated_object_get_class(void* value) {").append(System.lineSeparator());
+        c.append("    if (value == 0) {").append(System.lineSeparator());
+        c.append("        javan_panic(\"null object has no class\");").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        c.append("    switch (((struct javan_object_header*) value)->_javan_type_id) {").append(System.lineSeparator());
+        for (final IrClass classInfo : program.classes()) {
+            final int typeId = typeIds.get(classInfo.jvmName()).intValue();
+            c.append("        case ").append(typeId).append(": return javan_runtime_class_literal(")
+                .append(emitCStringLiteral(displayClassName(classInfo.jvmName())))
+                .append(", ")
+                .append(typeId)
+                .append(", ")
+                .append(classInfo.enumConstants().isEmpty() ? 0 : 1)
+                .append(", 0, 1, ")
+                .append(typeId)
+                .append(");")
+                .append(System.lineSeparator());
+        }
+        c.append("        default: javan_panic(\"unsupported generated object type\");").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        c.append("    return 0;").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
     }
 
     private static void emitDispatch(final IrProgram program, final IrDispatch dispatch, final StringBuilder c) {
@@ -413,6 +735,135 @@ public final class CCodegen {
             c.append("    javan_panic(\"Thread.start with Runnable target has no closed-world Runnable.run implementation\");").append(System.lineSeparator());
         }
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+    }
+
+    private static void emitMaterializedLambdaHelpers(final IrProgram program, final StringBuilder c) {
+        if (program.materializedLambdaTargets().isEmpty()) {
+            return;
+        }
+        c.append("static void* ").append(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL).append("(void* self, void* arg) {")
+            .append(System.lineSeparator());
+        c.append("    switch (javan_materialized_lambda_target_id(self)) {").append(System.lineSeparator());
+        for (final IrMaterializedLambdaTarget target : program.materializedLambdaTargets()) {
+            if (target.booleanResult() || target.voidResult()) {
+                continue;
+            }
+            if (materializedLambdaArity(target) != 1) {
+                continue;
+            }
+            c.append("        case ").append(target.targetId()).append(": return ");
+            emitMaterializedLambdaInvocation(c, target, "self", List.of("arg"));
+            c.append(";").append(System.lineSeparator());
+        }
+        c.append("        default: javan_panic(\"unsupported materialized object lambda target\");").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        c.append("    return 0;").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+
+        c.append("static void* ").append(MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL).append("(void* self, void* first_arg, void* second_arg) {")
+            .append(System.lineSeparator());
+        c.append("    switch (javan_materialized_lambda_target_id(self)) {").append(System.lineSeparator());
+        for (final IrMaterializedLambdaTarget target : program.materializedLambdaTargets()) {
+            if (target.booleanResult() || target.voidResult()) {
+                continue;
+            }
+            if (materializedLambdaArity(target) != 2) {
+                continue;
+            }
+            c.append("        case ").append(target.targetId()).append(": return ");
+            emitMaterializedLambdaInvocation(c, target, "self", List.of("first_arg", "second_arg"));
+            c.append(";").append(System.lineSeparator());
+        }
+        c.append("        default: javan_panic(\"unsupported materialized two-argument object lambda target\");").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        c.append("    return 0;").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+
+        c.append("static int ").append(MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL).append("(void* self, void* arg) {")
+            .append(System.lineSeparator());
+        c.append("    switch (javan_materialized_lambda_target_id(self)) {").append(System.lineSeparator());
+        for (final IrMaterializedLambdaTarget target : program.materializedLambdaTargets()) {
+            if (!target.booleanResult() || target.voidResult()) {
+                continue;
+            }
+            if (materializedLambdaArity(target) != 1) {
+                continue;
+            }
+            c.append("        case ").append(target.targetId()).append(": return ");
+            emitMaterializedLambdaInvocation(c, target, "self", List.of("arg"));
+            c.append(";").append(System.lineSeparator());
+        }
+        c.append("        default: javan_panic(\"unsupported materialized boolean lambda target\");").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        c.append("    return 0;").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+
+        c.append("static void ").append(MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL).append("(void* self, void* arg) {")
+            .append(System.lineSeparator());
+        c.append("    switch (javan_materialized_lambda_target_id(self)) {").append(System.lineSeparator());
+        for (final IrMaterializedLambdaTarget target : program.materializedLambdaTargets()) {
+            if (!target.voidResult()) {
+                continue;
+            }
+            if (materializedLambdaArity(target) != 1) {
+                continue;
+            }
+            c.append("        case ").append(target.targetId()).append(": ");
+            emitMaterializedLambdaInvocation(c, target, "self", List.of("arg"));
+            c.append("; return;").append(System.lineSeparator());
+        }
+        c.append("        default: javan_panic(\"unsupported materialized void lambda target\");").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+
+        c.append("static void ").append(MATERIALIZED_LAMBDA_VOID2_APPLY_SYMBOL).append("(void* self, void* first_arg, void* second_arg) {")
+            .append(System.lineSeparator());
+        c.append("    switch (javan_materialized_lambda_target_id(self)) {").append(System.lineSeparator());
+        for (final IrMaterializedLambdaTarget target : program.materializedLambdaTargets()) {
+            if (!target.voidResult()) {
+                continue;
+            }
+            if (materializedLambdaArity(target) != 2) {
+                continue;
+            }
+            c.append("        case ").append(target.targetId()).append(": ");
+            emitMaterializedLambdaInvocation(c, target, "self", List.of("first_arg", "second_arg"));
+            c.append("; return;").append(System.lineSeparator());
+        }
+        c.append("        default: javan_panic(\"unsupported materialized two-argument void lambda target\");").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
+        c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
+    }
+
+    private static void emitMaterializedLambdaInvocation(
+        final StringBuilder c,
+        final IrMaterializedLambdaTarget target,
+        final String selfExpression,
+        final List<String> argumentExpressions
+    ) {
+        c.append(target.functionSymbol()).append("(");
+        boolean first = true;
+        for (int index = 0; index < target.captureCount(); index++) {
+            if (!first) {
+                c.append(", ");
+            }
+            c.append("javan_materialized_lambda_capture(").append(selfExpression).append(", ").append(index).append(")");
+            first = false;
+        }
+        if (!first) {
+            c.append(", ");
+        }
+        for (int index = 0; index < argumentExpressions.size(); index++) {
+            if (index > 0) {
+                c.append(", ");
+            }
+            c.append(argumentExpressions.get(index));
+        }
+        c.append(")");
+    }
+
+    private static int materializedLambdaArity(final IrMaterializedLambdaTarget target) {
+        return MethodDescriptor.parse(target.interfaceMethodDescriptor()).parameterTypes().size();
     }
 
     private static void emitFunction(
@@ -1518,7 +1969,11 @@ public final class CCodegen {
                 case OBJECT_ALLOCATION:
                     return allocatorSymbol(expression.value()) + "()";
                 case OBJECT_ARRAY_ALLOCATION:
-                    return "javan_object_array_new(" + expression(expression.arguments().get(0)) + ")";
+                    return "javan_object_array_new("
+                        + expression(expression.arguments().get(0))
+                        + ", "
+                        + emitCStringLiteral(Strings2.isBlank(expression.value()) ? "[Ljava.lang.Object;" : expression.value())
+                        + ")";
                 case OBJECT_ARRAY_LOAD:
                     return "javan_object_array_get("
                         + expression(expression.arguments().get(0))
@@ -2281,22 +2736,22 @@ public final class CCodegen {
     private static String escapeCString(final String value) {
         final StringBuilder result = new StringBuilder();
         for (int index = 0; index < value.length(); index++) {
-            result.append(escapeCChar(value.charAt(index)));
+            appendEscapedCChar(result, value.charAt(index));
         }
         return result.toString();
     }
 
     private static String emitCStringLiteral(final String value) {
         final int maxChunkLength = 120;
-        final StringBuilder result = new StringBuilder();
-        StringBuilder chunk = new StringBuilder();
+        final StringBuilder result = new StringBuilder(value.length() + 16);
+        StringBuilder chunk = new StringBuilder(Math.min(value.length(), maxChunkLength));
         for (int index = 0; index < value.length(); index++) {
-            final String escaped = escapeCChar(value.charAt(index));
-            if (!chunk.isEmpty() && chunk.length() + escaped.length() > maxChunkLength) {
+            final int escapedLength = escapedCCharLength(value.charAt(index));
+            if (!chunk.isEmpty() && chunk.length() + escapedLength > maxChunkLength) {
                 appendCStringChunk(result, chunk);
-                chunk = new StringBuilder();
+                chunk = new StringBuilder(Math.min(value.length() - index, maxChunkLength));
             }
-            chunk.append(escaped);
+            appendEscapedCChar(chunk, value.charAt(index));
         }
         appendCStringChunk(result, chunk);
         return result.toString();
@@ -2309,31 +2764,50 @@ public final class CCodegen {
         result.append('"').append(chunk.toString()).append('"');
     }
 
-    private static String escapeCChar(final char ch) {
-        final StringBuilder result = new StringBuilder();
+    private static int escapedCCharLength(final char ch) {
         switch (ch) {
             case '\\':
-                return "\\\\";
             case '"':
-                return "\\\"";
             case '\n':
-                return "\\n";
             case '\r':
-                return "\\r";
             case '\t':
-                return "\\t";
+                return 2;
             default:
                 if (ch < 32 || ch > 126) {
-                    result.append('\\');
-                    appendOctal(result, ch);
-                    return result.toString();
+                    return 4;
                 }
-                result.append(ch);
-                return result.toString();
+                return 1;
         }
     }
 
-    private static void appendOctal(final StringBuilder result, final int value) {
+    private static void appendEscapedCChar(final StringBuilder result, final char ch) {
+        switch (ch) {
+            case '\\':
+                result.append('\\').append('\\');
+                return;
+            case '"':
+                result.append('\\').append('"');
+                return;
+            case '\n':
+                result.append('\\').append('n');
+                return;
+            case '\r':
+                result.append('\\').append('r');
+                return;
+            case '\t':
+                result.append('\\').append('t');
+                return;
+            default:
+                if (ch < 32 || ch > 126) {
+                    result.append('\\');
+                    appendEscapedOctal(result, ch);
+                    return;
+                }
+                result.append(ch);
+        }
+    }
+
+    private static void appendEscapedOctal(final StringBuilder result, final int value) {
         result.append((char) ('0' + ((value >> 6) & 7)));
         result.append((char) ('0' + ((value >> 3) & 7)));
         result.append((char) ('0' + (value & 7)));

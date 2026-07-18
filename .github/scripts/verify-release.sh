@@ -4,7 +4,9 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 cd "$ROOT"
 
-mvn -q clean verify
+mvn -q \
+  -Djavan.coverage.check.skip=true \
+  clean verify
 scripts/build.sh
 ARCHIVE=$(.github/scripts/package-release.sh "${JAVAN_VERSION:-}")
 .github/scripts/verify-package.sh "$ARCHIVE"

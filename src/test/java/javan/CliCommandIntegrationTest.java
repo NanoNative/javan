@@ -81,7 +81,7 @@ final class CliCommandIntegrationTest {
 
     @Test
     void javacVersionDelegatesToJavac() {
-        final ProcessResult javac = process(tempDir, List.of("javac", "-version"));
+        final ProcessResult javac = process(tempDir, List.of(CliTestHarness.currentJavacCommand(), "-version"));
 
         final CliRun run = run(tempDir, "javac", "-version");
 

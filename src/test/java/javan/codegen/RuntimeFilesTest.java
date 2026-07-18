@@ -1,6 +1,7 @@
 package javan.codegen;
 
 import javan.TestProcesses;
+import javan.build.ResourceBundler;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Execution;
@@ -10,6 +11,7 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -34,6 +36,34 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void resourceSectionEscapesNonPrintableResourcePathsWithoutStringFormat() throws Exception {
+        final Path source = Files.write(tempDir.resolve("raw.bin"), new byte[]{1});
+
+        final String section = RuntimeSourceResourceSection.render(
+            List.of(new ResourceBundler.ResourceFile("assets/\u0001.bin", source, 1))
+        );
+
+        assertThat(section).contains("assets/\\001.bin");
+    }
+
+    @Test
+    void writeGuardsSocketTimeoutHelpersBehindWindowsUnsupportedBranches() throws Exception {
+        final Path runtime = new RuntimeFiles().write(tempDir);
+
+        assertThat(Files.readString(runtime)).contains(
+            "static void javan_socket_apply_receive_timeout(int fd, int timeout_millis, const char* message) {",
+            "#if defined(_WIN32)",
+            "javan_socket_runtime_unsupported();",
+            "#else",
+            "timeout.tv_usec = (long) ((timeout_millis % 1000) * 1000);",
+            "static void javan_socket_wait_readable(int fd, int timeout_millis, const char* timeout_message, const char* wait_message) {",
+            "static void javan_socket_connect_native_timeout(int fd, const struct sockaddr* address, socklen_t address_length, int timeout_millis) {",
+            "int flags = fcntl(fd, F_GETFL, 0);",
+            "timeout_value.tv_usec = (long) ((timeout % 1000) * 1000);"
+        );
+    }
+
+    @Test
     void runtimeSystemErrPrintlnIntWritesOneLine() throws Exception {
         final String stderr = runRuntimeBoundaryProbeStderr(
             """
@@ -45,7 +75,7 @@ final class RuntimeFilesTest {
                 return 0;
             }
             """,
-            "128"
+            "512"
         );
 
         assertThat(stderr).isEqualTo("7\n");
@@ -63,10 +93,154 @@ final class RuntimeFilesTest {
                 return 0;
             }
             """,
-            "128"
+            "4096"
         );
 
         assertThat(stdout).isEqualTo("null");
+    }
+
+    @Test
+    void runtimePrintObjectValuePrintsIntegerWrapper() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                javan_printstream_println_object(javan_system_out(), javan_integer_value_of(7));
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("7\n");
+    }
+
+    @Test
+    void runtimePrintObjectValuePrintsLongWrapper() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                javan_printstream_println_object(javan_system_out(), javan_long_value_of(9LL));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("9\n");
+    }
+
+    @Test
+    void runtimePrintObjectValuePrintsFloatWrapper() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                javan_printstream_println_object(javan_system_out(), javan_float_value_of(1.5f));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("1.5\n");
+    }
+
+    @Test
+    void runtimePrintObjectValuePrintsDoubleWrapper() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                javan_printstream_println_object(javan_system_out(), javan_double_value_of(2.5));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("2.5\n");
+    }
+
+    @Test
+    void runtimePrintObjectValuePrintsBooleanWrapper() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                javan_printstream_println_object(javan_system_out(), javan_boolean_value_of(1));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("true\n");
+    }
+
+    @Test
+    void runtimePrintObjectValuePrintsByteWrapper() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                javan_printstream_println_object(javan_system_out(), javan_byte_value_of(12));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("12\n");
+    }
+
+    @Test
+    void runtimePrintObjectValuePrintsShortWrapper() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                javan_printstream_println_object(javan_system_out(), javan_short_value_of(34));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("34\n");
+    }
+
+    @Test
+    void runtimePrintObjectValuePrintsCharacterWrapper() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                javan_printstream_println_object(javan_system_out(), javan_character_value_of('j'));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("j\n");
     }
 
     @Test
@@ -101,6 +275,22 @@ final class RuntimeFilesTest {
             "unsigned long growth = new_size - old_size;",
             "javan_panic(\"unknown runtime allocation\")",
             "javan_find_allocation(value, &previous)"
+        );
+    }
+
+    @Test
+    void writeIncludesAllocationLookupCacheForHotPaths() throws Exception {
+        final Path runtime = new RuntimeFiles().write(tempDir);
+
+        assertThat(Files.readString(runtime)).contains(
+            "#define JAVAN_ALLOCATION_CACHE_SIZE 4",
+            "static void* javan_allocation_cache_values[JAVAN_ALLOCATION_CACHE_SIZE];",
+            "static javan_allocation_node* javan_allocation_cache_nodes[JAVAN_ALLOCATION_CACHE_SIZE];",
+            "static javan_allocation_node* javan_allocation_cache_lookup(void* value) {",
+            "javan_allocation_cache_store(value, node);",
+            "javan_allocation_cache_remove(value);",
+            "if (previous == NULL) {",
+            "javan_allocation_node* cached = javan_allocation_cache_lookup(value);"
         );
     }
 
@@ -206,6 +396,9 @@ final class RuntimeFilesTest {
             "|| type_id == JAVAN_TYPE_JAVA_LANG_INTEGER",
             "|| type_id == JAVAN_TYPE_JAVA_LANG_DOUBLE",
             "|| type_id == JAVAN_TYPE_JAVA_LANG_BOOLEAN",
+            "|| type_id == JAVAN_TYPE_JAVA_LANG_BYTE",
+            "|| type_id == JAVAN_TYPE_JAVA_LANG_SHORT",
+            "|| type_id == JAVAN_TYPE_JAVA_LANG_CHARACTER",
             "|| type_id == JAVAN_TYPE_JAVA_NIO_FILE_ATTRIBUTE_FILE_TIME",
             "|| type_id == JAVAN_TYPE_JAVA_TIME_DURATION",
             "|| type_id == JAVAN_TYPE_JAVA_LANG_THREAD",
@@ -220,10 +413,19 @@ final class RuntimeFilesTest {
 
         assertThat(Files.readString(runtime)).contains(
             "typedef struct javan_root_frame",
+            "#define JAVAN_ROOT_FRAME_CACHE_LIMIT 32",
             "JavanTypeDescriptor* javan_type_descriptors_value = NULL;",
             "void javan_register_type_descriptors(JavanTypeDescriptor* descriptors, int count)",
             "void javan_root_frame_push(void*** roots, int count)",
             "void javan_root_frame_pop(void*** roots)",
+            "static JAVAN_THREAD_LOCAL javan_root_frame* javan_root_frame_cache_value = NULL;",
+            "static JAVAN_THREAD_LOCAL int javan_root_frame_cache_count_value = 0;",
+            "static javan_root_frame* javan_root_frame_take(void) {",
+            "static void javan_root_frame_release(javan_root_frame* frame) {",
+            "static void javan_root_frame_cache_cleanup(void) {",
+            "javan_root_frame* frame = javan_root_frame_take();",
+            "javan_root_frame_release(frame);",
+            "javan_root_frame_cache_cleanup();",
             "int javan_heap_type_descriptor_count(void)",
             "int javan_heap_root_frame_depth(void)",
             "int javan_heap_frame_root_count(void)",
@@ -433,7 +635,9 @@ final class RuntimeFilesTest {
             "static void javan_thread_mark_completed(javan_thread* thread) {",
             "object->virtual_thread = 0;",
             "object->name = NULL;",
+            "object->id = javan_thread_next_id();",
             "thread->target = NULL;",
+            "static long long javan_thread_next_id(void) {",
             "static int javan_thread_has_live_lifecycle(javan_thread* thread) {",
             "static void javan_thread_completion_reset(javan_thread* thread) {",
             "static void javan_thread_completion_signal(javan_thread* thread) {",
@@ -445,6 +649,8 @@ final class RuntimeFilesTest {
             "void* javan_thread_current(void) {",
             "void* javan_thread_get_name(void* value) {",
             "void javan_thread_set_name(void* value, void* name) {",
+            "void javan_thread_set_name_nullable(void* value, void* name) {",
+            "long long javan_thread_get_id(void* value) {",
             "void javan_thread_detach_current(void) {",
             "javan_panic(\"cannot detach current thread with live root frames\")",
             "javan_panic(\"cannot detach current thread with live native resources\")",
@@ -593,6 +799,107 @@ final class RuntimeFilesTest {
         );
 
         assertThat(stdout).isEqualTo("cannot detach current thread with live root frames\n");
+    }
+
+    @Test
+    void runtimeThreadDetachCurrentSucceedsAfterRepeatedBalancedRootFrames() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                for (int index = 0; index < 128; index++) {
+                    void* current = javan_thread_current();
+                    void** roots[] = {
+                        (void**) &current
+                    };
+                    javan_root_frame_push(roots, 1);
+                    javan_root_frame_pop(roots);
+                }
+                printf("before=%lu:%d:%d\\n",
+                    javan_heap_registered_thread_roots(),
+                    javan_heap_current_thread_root_present(),
+                    javan_heap_root_frame_depth());
+                javan_thread_detach_current();
+                printf("after=%lu:%d:%d\\n",
+                    javan_heap_registered_thread_roots(),
+                    javan_heap_current_thread_root_present(),
+                    javan_heap_root_frame_depth());
+                (void) javan_thread_current();
+                printf("reboot=%lu:%d:%d\\n",
+                    javan_heap_registered_thread_roots(),
+                    javan_heap_current_thread_root_present(),
+                    javan_heap_root_frame_depth());
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            before=1:1:0
+            after=0:0:0
+            reboot=1:1:0
+            """
+        );
+    }
+
+    @Test
+    void runtimeRecoverablePanicsUnwindCachedRootFramesAndStillAllowDetach() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <setjmp.h>
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                for (int index = 0; index < 64; index++) {
+                    void* current = javan_thread_current();
+                    void** roots[] = {
+                        (void**) &current
+                    };
+                    jmp_buf target;
+                    javan_panic_set_target(&target);
+                    if (setjmp(target) != 0) {
+                        javan_clear_error();
+                        continue;
+                    }
+                    javan_root_frame_push(roots, 1);
+                    javan_panic("recoverable cached root frame probe");
+                }
+                printf("before=%d:%lu:%d\\n",
+                    javan_heap_root_frame_depth(),
+                    javan_heap_registered_thread_roots(),
+                    javan_heap_current_thread_root_present());
+                javan_thread_detach_current();
+                javan_gc_collect();
+                printf("after=%d:%lu:%d:%lu\\n",
+                    javan_heap_root_frame_depth(),
+                    javan_heap_registered_thread_roots(),
+                    javan_heap_current_thread_root_present(),
+                    javan_heap_live_allocations());
+                (void) javan_thread_current();
+                printf("reboot=%d:%lu:%d\\n",
+                    javan_heap_root_frame_depth(),
+                    javan_heap_registered_thread_roots(),
+                    javan_heap_current_thread_root_present());
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            before=0:1:1
+            after=0:0:0:0
+            reboot=0:1:1
+            """
+        );
     }
 
     @Test
@@ -4186,6 +4493,31 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void writeIncludesSocketOptionRuntimeStateAndHelpers() throws Exception {
+        final Path runtime = new RuntimeFiles().write(tempDir);
+
+        assertThat(Files.readString(runtime)).contains(
+            "int tcp_no_delay;",
+            "int keep_alive;",
+            "int reuse_address;",
+            "static int javan_socket_getsockopt_flag(int fd, int level, int option_name, const char* message)",
+            "static void javan_socket_setsockopt_flag(int fd, int level, int option_name, int enabled, const char* message)",
+            "socket->tcp_no_delay = tcp_no_delay;",
+            "socket->keep_alive = keep_alive;",
+            "socket->reuse_address = javan_socket_getsockopt_flag(fd, SOL_SOCKET, SO_REUSEADDR, \"server socket SO_REUSEADDR lookup failed\");",
+            "int javan_socket_get_tcp_no_delay(void* value)",
+            "void javan_socket_set_tcp_no_delay(void* value, int enabled)",
+            "int javan_socket_get_keep_alive(void* value)",
+            "void javan_socket_set_keep_alive(void* value, int enabled)",
+            "int javan_server_socket_get_reuse_address(void* value)",
+            "void javan_server_socket_set_reuse_address(void* value, int enabled)",
+            "(socket->tcp_no_delay != 0 && socket->tcp_no_delay != 1)",
+            "(socket->keep_alive != 0 && socket->keep_alive != 1)",
+            "(socket->reuse_address != 0 && socket->reuse_address != 1)"
+        );
+    }
+
+    @Test
     void writeEmitsHttpPostHeaderAndByteArrayHelpers() throws Exception {
         final Path runtime = new RuntimeFiles().write(tempDir);
 
@@ -4993,6 +5325,111 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void runtimeRecoverablePanicScopeRestoresOuterRootFrameSnapshot() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <setjmp.h>
+            #include <stdio.h>
+
+            void* javan_generated_object_get_class(void* value) {
+                (void) value;
+                return 0;
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* outer_root = NULL;
+                void** roots[] = { &outer_root };
+                javan_root_frame_push(roots, 1);
+                JavanPanicScope scope;
+                jmp_buf target;
+                javan_panic_scope_push(&scope, &target);
+                if (setjmp(target) != 0) {
+                    printf("%d,%d\\n", javan_heap_root_frame_depth(), javan_heap_frame_root_count());
+                    return 0;
+                }
+                void* inner_root = NULL;
+                void** inner_roots[] = { &inner_root, &outer_root };
+                javan_root_frame_push(inner_roots, 2);
+                javan_panic("recover");
+                return 2;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("1,1\n");
+    }
+
+    @Test
+    void runtimeRecoverablePanicScopeRestoresOuterSourceContextAndTarget() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <setjmp.h>
+            #include <stdio.h>
+
+            void* javan_generated_object_get_class(void* value) {
+                (void) value;
+                return 0;
+            }
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                jmp_buf outer;
+                javan_panic_set_target(&outer);
+                if (setjmp(outer) != 0) {
+                    printf("%s\\n", javan_last_error());
+                    return 0;
+                }
+                JavanSourceContext outer_context;
+                javan_source_enter(
+                    &outer_context,
+                    "JAVAN-RUNTIME-PANIC",
+                    "outer failure",
+                    "com.acme.Main",
+                    "main()V",
+                    "Main.java",
+                    11,
+                    4,
+                    "",
+                    "why",
+                    "fix"
+                );
+                JavanPanicScope scope;
+                jmp_buf inner;
+                javan_panic_scope_push(&scope, &inner);
+                if (setjmp(inner) != 0) {
+                    javan_panic("after recover");
+                    return 3;
+                }
+                JavanSourceContext inner_context;
+                javan_source_enter(
+                    &inner_context,
+                    "JAVAN-RUNTIME-PANIC",
+                    "inner failure",
+                    "com.acme.Helper",
+                    "run()V",
+                    "Helper.java",
+                    21,
+                    8,
+                    "",
+                    "why",
+                    "fix"
+                );
+                javan_panic("inner panic");
+                return 2;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).contains("outer failure", "com.acme.Main.main()V(Main.java:11)", "detail:after recover");
+        assertThat(stdout).doesNotContain("Helper.java");
+    }
+
+    @Test
     void runtimePanicAndSourceContextStateStayThreadLocalAcrossHostThreads() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
@@ -5148,6 +5585,497 @@ final class RuntimeFilesTest {
         );
 
         assertThat(stdout).isEqualTo("32:7:11\n");
+    }
+
+    @Test
+    void runtimeObjectArrayGetClassPreservesExactBinaryName() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* array = javan_object_array_new(1, "[Ljava.lang.String;");
+                void* klass = javan_object_get_class(array);
+                printf("%s\\n", (char*) javan_runtime_class_get_name(klass));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("[Ljava.lang.String;\n");
+    }
+
+    @Test
+    void runtimeObjectArrayCopyPreservesExactBinaryName() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* source = javan_object_array_new(2, "[Ljava.lang.String;");
+                void* copy = javan_arrays_copy_of_object(source, 4);
+                void* klass = javan_object_get_class(copy);
+                printf("%s\\n", (char*) javan_runtime_class_get_name(klass));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("[Ljava.lang.String;\n");
+    }
+
+    @Test
+    void runtimeAsciiStringHashCodeMatchesJavaValue() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                printf("%d\\n", javan_string_hash_code("javan"));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("100899468\n");
+    }
+
+    @Test
+    void runtimeSupplementaryUtf8StringHashCodeMatchesJavaUtf16Semantics() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                const char* value = "x" "\\xF0\\x9F\\x99\\x82" "y";
+                printf("%d\\n", javan_string_hash_code(value));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("58536956\n");
+    }
+
+    @Test
+    void runtimeClassDescriptorStringConvertsObjectArrayNameToDescriptor() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* klass = javan_runtime_class_literal("[Ljava.lang.String;", 0, 0, 1, 0);
+                printf("%s\\n", (char*) javan_class_descriptor_string(klass));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("[Ljava/lang/String;\n");
+    }
+
+    @Test
+    void runtimePrimitiveArrayClassComponentTypeReturnsPrimitiveName() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* array = javan_int_array_new(1);
+                void* klass = javan_object_get_class(array);
+                void* component = javan_class_component_type(klass);
+                printf("%s\\n", (char*) javan_runtime_class_get_name(component));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("int\n");
+    }
+
+    @Test
+    void runtimeClassGetComponentTypeMatchesComponentTypeSemantics() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* klass = javan_runtime_class_literal("[Ljava.lang.String;", 0, 0, 1, 0);
+                void* component = javan_class_component_type(klass);
+                printf("%s\\n", (char*) javan_runtime_class_get_name(component));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("java.lang.String\n");
+    }
+
+    @Test
+    void runtimeReferenceClassArrayTypeReturnsReferenceArrayName() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* klass = javan_runtime_class_literal("java.lang.String", -2001, 0, 0, 0);
+                void* array_type = javan_class_array_type(klass);
+                printf("%s\\n", (char*) javan_runtime_class_get_name(array_type));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("[Ljava.lang.String;\n");
+    }
+
+    @Test
+    void runtimePrimitiveClassArrayTypeReturnsPrimitiveArrayName() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* klass = javan_runtime_class_literal("int", -2011, 0, 0, 0);
+                void* array_type = javan_class_array_type(klass);
+                printf("%s\\n", (char*) javan_runtime_class_get_name(array_type));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("[I\n");
+    }
+
+    @Test
+    void runtimePrimitiveClassIsPrimitiveReturnsTrue() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* klass = javan_runtime_class_literal("int", -2011, 0, 0, 0);
+                printf("%d\\n", javan_class_is_primitive(klass));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("1\n");
+    }
+
+    @Test
+    void runtimeReferenceClassIsPrimitiveReturnsFalse() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* klass = javan_runtime_class_literal("java.lang.String", -2001, 0, 0, 0);
+                printf("%d\\n", javan_class_is_primitive(klass));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("0\n");
+    }
+
+    @Test
+    void runtimeVoidPrimitiveClassGetNameReturnsVoid() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* klass = javan_runtime_class_literal("void", -2015, 0, 0, 0);
+                printf("%s\\n", (char*) javan_runtime_class_get_name(klass));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("void\n");
+    }
+
+    @Test
+    void runtimeReferenceArrayTypeNameReturnsDisplayName() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* klass = javan_runtime_class_literal("[Ljava.lang.String;", 0, 0, 1, 0);
+                printf("%s\\n", (char*) javan_class_type_name(klass));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("java.lang.String[]\n");
+    }
+
+    @Test
+    void runtimeReferenceClassSimpleNameReturnsLeafTypeName() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* klass = javan_runtime_class_literal("java.lang.String", -2001, 0, 0, 0);
+                printf("%s\\n", (char*) javan_class_simple_name(klass));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("String\n");
+    }
+
+    @Test
+    void runtimeReferenceArraySimpleNameReturnsDisplayName() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* klass = javan_runtime_class_literal("[Ljava.util.Map$Entry;", 0, 0, 1, 0);
+                printf("%s\\n", (char*) javan_class_simple_name(klass));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("Entry[]\n");
+    }
+
+    @Test
+    void runtimePrimitiveNestedArraySimpleNameReturnsDisplayName() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* klass = javan_runtime_class_literal("[[I", 0, 0, 1, 0);
+                printf("%s\\n", (char*) javan_class_simple_name(klass));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("int[][]\n");
+    }
+
+    @Test
+    void runtimeVoidSimpleNameReturnsVoid() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* klass = javan_runtime_class_literal("void", -2015, 0, 0, 0);
+                printf("%s\\n", (char*) javan_class_simple_name(klass));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("void\n");
+    }
+
+    @Test
+    void runtimePrimitiveNestedArrayTypeNameReturnsDisplayName() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* klass = javan_runtime_class_literal("[[I", 0, 0, 1, 0);
+                printf("%s\\n", (char*) javan_class_type_name(klass));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("int[][]\n");
+    }
+
+    @Test
+    void runtimeReferenceArrayPackageNameUsesElementPackage() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* klass = javan_runtime_class_literal("[Ljava.util.Map$Entry;", 0, 0, 1, 0);
+                printf("%s\\n", (char*) javan_class_package_name(klass));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("java.util\n");
+    }
+
+    @Test
+    void runtimePrimitivePackageNameIsJavaLang() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* klass = javan_runtime_class_literal("int", -2011, 0, 0, 0);
+                printf("%s\\n", (char*) javan_class_package_name(klass));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("java.lang\n");
+    }
+
+    @Test
+    void runtimeVoidPackageNameIsJavaLang() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* klass = javan_runtime_class_literal("void", -2015, 0, 0, 0);
+                printf("%s\\n", (char*) javan_class_package_name(klass));
+                return 0;
+            }
+            """,
+            "128"
+        );
+
+        assertThat(stdout).isEqualTo("java.lang\n");
+    }
+
+    @Test
+    void runtimeArrayAssignableFromUsesComponentTypes() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* object_array = NULL;
+                void* string_array = NULL;
+                void* int_array = NULL;
+                void** roots[] = {
+                    (void**) &object_array,
+                    (void**) &string_array,
+                    (void**) &int_array
+                };
+                javan_root_frame_push(roots, 3);
+                object_array = javan_runtime_class_literal("[Ljava.lang.Object;", 0, 0, 1, 0);
+                string_array = javan_runtime_class_literal("[Ljava.lang.String;", 0, 0, 1, 0);
+                int_array = javan_runtime_class_literal("[I", 0, 0, 1, 0);
+                printf("%d:%d:%d\\n",
+                    javan_class_is_assignable_from(object_array, string_array),
+                    javan_class_is_assignable_from(string_array, object_array),
+                    javan_class_is_assignable_from(object_array, int_array));
+                javan_root_frame_pop(roots);
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("1:0:0\n");
+    }
+
+    @Test
+    void runtimeObjectClassIsNotAssignableFromPrimitiveClass() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                void* object_class = NULL;
+                void* int_class = NULL;
+                void** roots[] = {
+                    (void**) &object_class,
+                    (void**) &int_class
+                };
+                javan_root_frame_push(roots, 2);
+                object_class = javan_runtime_class_literal("java.lang.Object", -2002, 0, 0, 0);
+                int_class = javan_runtime_class_literal("int", -2011, 0, 0, 0);
+                printf("%d\\n", javan_class_is_assignable_from(object_class, int_class));
+                javan_root_frame_pop(roots);
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("0\n");
     }
 
     @Test

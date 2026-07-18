@@ -1,11 +1,14 @@
 package javan.classfile;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Execution;
 
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 
+@Execution(CONCURRENT)
 final class ConstantPoolTest {
     @Test
     void stringSupportsUtf8AndStringEntries() {
@@ -46,7 +49,55 @@ final class ConstantPoolTest {
         });
 
         assertThat(pool.dynamicRef(1, List.of(new BootstrapMethod(5, List.of(13, 14, 15, 16, 17, 18)))))
-            .contains(new DynamicRef("dyn", "()V", "bootstrap/Owner", "bootstrap", "()V", List.of("hello", "()V", "7", "9", "1.5", "2.5")));
+            .hasValueSatisfying(dynamicRef -> {
+                assertThat(dynamicRef.name()).isEqualTo("dyn");
+                assertThat(dynamicRef.descriptor()).isEqualTo("()V");
+                assertThat(dynamicRef.bootstrapOwner()).isEqualTo("bootstrap/Owner");
+                assertThat(dynamicRef.bootstrapName()).isEqualTo("bootstrap");
+                assertThat(dynamicRef.bootstrapDescriptor()).isEqualTo("()V");
+                assertThat(dynamicRef.bootstrapArguments()).containsExactly("hello", "()V", "7", "9", "1.5", "2.5");
+                assertThat(dynamicRef.bootstrapArgumentDetails()).containsExactly(
+                    BootstrapArgument.string("hello"),
+                    BootstrapArgument.methodType("()V"),
+                    BootstrapArgument.raw(BootstrapArgument.Kind.INT, "7"),
+                    BootstrapArgument.raw(BootstrapArgument.Kind.LONG, "9"),
+                    BootstrapArgument.raw(BootstrapArgument.Kind.FLOAT, "1.5"),
+                    BootstrapArgument.raw(BootstrapArgument.Kind.DOUBLE, "2.5")
+                );
+            });
+    }
+
+    @Test
+    void dynamicRefPreservesMethodHandleBootstrapArguments() {
+        final ConstantPool pool = new ConstantPool(new Object[]{
+            null,
+            new ConstantPool.DynamicEntry(18, 0, 2),
+            new ConstantPool.NameAndTypeEntry(3, 4),
+            new ConstantPool.Utf8Entry("dyn"),
+            new ConstantPool.Utf8Entry("()V"),
+            new ConstantPool.MethodHandleEntry(6, 6),
+            new ConstantPool.RefEntry(10, 7, 8),
+            new ConstantPool.ClassEntry(9),
+            new ConstantPool.NameAndTypeEntry(10, 11),
+            new ConstantPool.Utf8Entry("bootstrap/Owner"),
+            new ConstantPool.Utf8Entry("bootstrap"),
+            new ConstantPool.Utf8Entry("()V"),
+            new ConstantPool.MethodHandleEntry(9, 13),
+            new ConstantPool.RefEntry(11, 14, 15),
+            new ConstantPool.ClassEntry(16),
+            new ConstantPool.NameAndTypeEntry(17, 18),
+            new ConstantPool.Utf8Entry("java/util/Map"),
+            new ConstantPool.Utf8Entry("get"),
+            new ConstantPool.Utf8Entry("(Ljava/lang/Object;)Ljava/lang/Object;")
+        });
+
+        assertThat(pool.dynamicRef(1, List.of(new BootstrapMethod(5, List.of(12)))))
+            .hasValueSatisfying(dynamicRef -> {
+                assertThat(dynamicRef.bootstrapArguments()).containsExactly("java/util/Map.get(Ljava/lang/Object;)Ljava/lang/Object;");
+                assertThat(dynamicRef.bootstrapArgumentDetails()).containsExactly(
+                    BootstrapArgument.methodHandle(9, new MethodRef("java/util/Map", "get", "(Ljava/lang/Object;)Ljava/lang/Object;"))
+                );
+            });
     }
 
     @Test

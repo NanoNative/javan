@@ -7,6 +7,7 @@ import javan.analysis.ReachabilityAnalyzer;
 import javan.build.BindingLanguage;
 import javan.build.BuildKind;
 import javan.build.LibraryFormat;
+import javan.classfile.BootstrapArgument;
 import javan.classfile.ClassFile;
 import javan.classfile.CodeAttribute;
 import javan.classfile.CodeException;
@@ -22,6 +23,7 @@ import javan.codegen.BytecodeToIR;
 import javan.codegen.MethodDescriptor;
 import javan.codegen.NativeLinker;
 import javan.compat.BytecodeSupport;
+import javan.compat.ExactMethodSupport;
 import javan.compat.JdkCallSupport;
 import javan.compat.NetworkApiSupport;
 import javan.ir.IrClass;
@@ -348,11 +350,31 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void bytecodeSupportClassificationMatchesPublishedOpcodeTables() {
+        final List<Integer> supported = BytecodeSupport.nativeSupportedOpcodes();
+        final List<Integer> known = BytecodeSupport.knownOpcodes();
+
+        for (int opcode = 0; opcode <= 201; opcode++) {
+            final BytecodeSupport.Status expected = supported.contains(opcode)
+                ? BytecodeSupport.Status.NATIVE_SUPPORTED
+                : known.contains(opcode)
+                    ? BytecodeSupport.Status.RECOGNIZED_REJECTED
+                    : BytecodeSupport.Status.UNKNOWN_FATAL;
+            assertThat(BytecodeSupport.classify(opcode))
+                .as("opcode %s", opcode)
+                .isEqualTo(expected);
+        }
+    }
+
+    @Test
     void forbiddenRulesRejectDynamicApis() {
         final ForbiddenApiRules rules = new ForbiddenApiRules();
 
         assertThat(rules.forbiddenReason(new MethodRef("java/lang/Class", "forName", "(Ljava/lang/String;)Ljava/lang/Class;"))).isPresent();
         assertThat(rules.forbiddenReason(new MethodRef("java/lang/ClassLoader", "loadClass", "(Ljava/lang/String;)Ljava/lang/Class;"))).isPresent();
+        assertThat(rules.forbiddenReason(new MethodRef("java/lang/ClassLoader", "getSystemClassLoader", "()Ljava/lang/ClassLoader;"))).isEmpty();
+        assertThat(rules.forbiddenReason(new MethodRef("java/lang/ClassLoader", "getSystemResourceAsStream", "(Ljava/lang/String;)Ljava/io/InputStream;"))).isEmpty();
+        assertThat(rules.forbiddenReason(new MethodRef("java/lang/ClassLoader", "getResourceAsStream", "(Ljava/lang/String;)Ljava/io/InputStream;"))).isEmpty();
         assertThat(rules.forbiddenReason(new MethodRef("java/lang/ClassLoader$NativeLibrary", "load", "()V"))).isPresent();
         assertThat(rules.forbiddenReason(new MethodRef("java/lang/reflect/Proxy", "newProxyInstance", "()Ljava/lang/Object;"))).isPresent();
         assertThat(rules.forbiddenReason(new MethodRef("java/lang/reflect/Method", "invoke", "()V"))).isPresent();
@@ -451,17 +473,13 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void staticVerifierRejectsReachableSocketCallWithNetworkDiagnostic() {
+    void staticVerifierAcceptsReachableSocketLifecycleCall() {
         final List<Diagnostic> diagnostics = verifyInstruction(
             instruction(0, 183, "invokespecial", new MethodRef("java/net/Socket", "<init>", "()V")),
             true
         );
 
-        assertThat(diagnostics).hasSize(1);
-        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN061");
-        assertThat(diagnostics.getFirst().message()).isEqualTo("unsupported reachable network API");
-        assertThat(diagnostics.getFirst().subject()).isEqualTo("java/net/Socket.<init>()V");
-        assertThat(diagnostics.getFirst().reason()).contains("network/socket");
+        assertThat(diagnostics).isEmpty();
     }
 
     @Test
@@ -524,8 +542,73 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void jdkCallSupportRejectsInetAddressGetByNameCall() {
-        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/InetAddress", "getByName", "(Ljava/lang/String;)Ljava/net/InetAddress;"))).isFalse();
+    void jdkCallSupportAcceptsInetAddressGetByNameCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/InetAddress", "getByName", "(Ljava/lang/String;)Ljava/net/InetAddress;"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsInetAddressGetAllByNameCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/InetAddress", "getAllByName", "(Ljava/lang/String;)[Ljava/net/InetAddress;"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsSocketGetSoTimeoutCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/Socket", "getSoTimeout", "()I"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsSocketSetSoTimeoutCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/Socket", "setSoTimeout", "(I)V"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsSocketGetReuseAddressCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/Socket", "getReuseAddress", "()Z"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsSocketSetReuseAddressCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/Socket", "setReuseAddress", "(Z)V"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsSocketGetReceiveBufferSizeCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/Socket", "getReceiveBufferSize", "()I"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsSocketSetReceiveBufferSizeCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/Socket", "setReceiveBufferSize", "(I)V"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsSocketGetSendBufferSizeCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/Socket", "getSendBufferSize", "()I"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsSocketSetSendBufferSizeCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/Socket", "setSendBufferSize", "(I)V"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsServerSocketGetSoTimeoutCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/ServerSocket", "getSoTimeout", "()I"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsServerSocketGetReceiveBufferSizeCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/ServerSocket", "getReceiveBufferSize", "()I"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsServerSocketSetReceiveBufferSizeCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/ServerSocket", "setReceiveBufferSize", "(I)V"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsServerSocketSetSoTimeoutCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/net/ServerSocket", "setSoTimeout", "(I)V"))).isTrue();
     }
 
     @Test
@@ -536,6 +619,43 @@ final class CoreBehaviorTest {
     @Test
     void jdkCallSupportAcceptsSocketInputStreamReadCall() {
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/io/InputStream", "read", "()I"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsClassGetResourceAsStreamCall() {
+        final MethodRef method = new MethodRef("java/lang/Class", "getResourceAsStream", "(Ljava/lang/String;)Ljava/io/InputStream;");
+
+        assertThat(JdkCallSupport.isSupported(method)).isTrue();
+        assertThat(JdkCallSupport.runtimeModules(method)).containsExactly("resources");
+    }
+
+    @Test
+    void jdkCallSupportAcceptsInputStreamReadAllBytesCall() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/io/InputStream", "readAllBytes", "()[B"))).isTrue();
+    }
+
+    @Test
+    void jdkCallSupportAcceptsClassLoaderGetSystemResourceAsStreamCall() {
+        final MethodRef method = new MethodRef("java/lang/ClassLoader", "getSystemResourceAsStream", "(Ljava/lang/String;)Ljava/io/InputStream;");
+
+        assertThat(JdkCallSupport.isSupported(method)).isTrue();
+        assertThat(JdkCallSupport.runtimeModules(method)).containsExactly("resources");
+    }
+
+    @Test
+    void jdkCallSupportAcceptsClassLoaderGetSystemClassLoaderCall() {
+        final MethodRef method = new MethodRef("java/lang/ClassLoader", "getSystemClassLoader", "()Ljava/lang/ClassLoader;");
+
+        assertThat(JdkCallSupport.isSupported(method)).isTrue();
+        assertThat(JdkCallSupport.runtimeModules(method)).containsExactly("resources");
+    }
+
+    @Test
+    void jdkCallSupportAcceptsClassLoaderInstanceResourceStreamCall() {
+        final MethodRef method = new MethodRef("java/lang/ClassLoader", "getResourceAsStream", "(Ljava/lang/String;)Ljava/io/InputStream;");
+
+        assertThat(JdkCallSupport.isSupported(method)).isTrue();
+        assertThat(JdkCallSupport.runtimeModules(method)).containsExactly("resources");
     }
 
     @Test
@@ -583,17 +703,143 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void staticVerifierRejectsReachableInetAddressGetByNameCallWithNetworkDiagnostic() {
+    void staticVerifierAcceptsReachableInetAddressGetByNameCall() {
         final List<Diagnostic> diagnostics = verifyInstruction(
             instruction(0, 184, "invokestatic", new MethodRef("java/net/InetAddress", "getByName", "(Ljava/lang/String;)Ljava/net/InetAddress;")),
             true
         );
 
-        assertThat(diagnostics).hasSize(1);
-        assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN061");
-        assertThat(diagnostics.getFirst().message()).isEqualTo("unsupported reachable network API");
-        assertThat(diagnostics.getFirst().subject()).isEqualTo("java/net/InetAddress.getByName(Ljava/lang/String;)Ljava/net/InetAddress;");
-        assertThat(diagnostics.getFirst().reason()).contains("network/socket");
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableInetAddressGetAllByNameCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 184, "invokestatic", new MethodRef("java/net/InetAddress", "getAllByName", "(Ljava/lang/String;)[Ljava/net/InetAddress;")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableSocketGetSoTimeoutCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 182, "invokevirtual", new MethodRef("java/net/Socket", "getSoTimeout", "()I")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableSocketSetSoTimeoutCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 182, "invokevirtual", new MethodRef("java/net/Socket", "setSoTimeout", "(I)V")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableSocketGetReuseAddressCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 182, "invokevirtual", new MethodRef("java/net/Socket", "getReuseAddress", "()Z")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableSocketSetReuseAddressCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 182, "invokevirtual", new MethodRef("java/net/Socket", "setReuseAddress", "(Z)V")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableSocketGetReceiveBufferSizeCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 182, "invokevirtual", new MethodRef("java/net/Socket", "getReceiveBufferSize", "()I")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableSocketSetReceiveBufferSizeCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 182, "invokevirtual", new MethodRef("java/net/Socket", "setReceiveBufferSize", "(I)V")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableSocketGetSendBufferSizeCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 182, "invokevirtual", new MethodRef("java/net/Socket", "getSendBufferSize", "()I")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableSocketSetSendBufferSizeCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 182, "invokevirtual", new MethodRef("java/net/Socket", "setSendBufferSize", "(I)V")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableServerSocketGetSoTimeoutCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 182, "invokevirtual", new MethodRef("java/net/ServerSocket", "getSoTimeout", "()I")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableServerSocketGetReceiveBufferSizeCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 182, "invokevirtual", new MethodRef("java/net/ServerSocket", "getReceiveBufferSize", "()I")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableServerSocketSetReceiveBufferSizeCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 182, "invokevirtual", new MethodRef("java/net/ServerSocket", "setReceiveBufferSize", "(I)V")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableServerSocketSetSoTimeoutCall() {
+        final List<Diagnostic> diagnostics = verifyInstruction(
+            instruction(0, 182, "invokevirtual", new MethodRef("java/net/ServerSocket", "setSoTimeout", "(I)V")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
     }
 
     @Test
@@ -772,8 +1018,44 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void jdkCallSupportClassifiesNamedThreadConstructorRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new MethodRef("java/lang/Thread", "<init>", "(Ljava/lang/String;)V")))
+            .containsExactly("threads");
+    }
+
+    @Test
+    void jdkCallSupportClassifiesRunnableNamedThreadConstructorRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new MethodRef("java/lang/Thread", "<init>", "(Ljava/lang/Runnable;Ljava/lang/String;)V")))
+            .containsExactly("threads");
+    }
+
+    @Test
+    void jdkCallSupportClassifiesThreadGetIdRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new MethodRef("java/lang/Thread", "getId", "()J")))
+            .containsExactly("threads");
+    }
+
+    @Test
+    void jdkCallSupportClassifiesThreadThreadIdRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new MethodRef("java/lang/Thread", "threadId", "()J")))
+            .containsExactly("threads");
+    }
+
+    @Test
     void jdkCallSupportClassifiesThreadSleepRuntimeModule() {
         assertThat(JdkCallSupport.runtimeModules(new MethodRef("java/lang/Thread", "sleep", "(J)V")))
+            .containsExactly("threads");
+    }
+
+    @Test
+    void jdkCallSupportClassifiesThreadSleepDurationRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new MethodRef("java/lang/Thread", "sleep", "(Ljava/time/Duration;)V")))
+            .containsExactly("threads");
+    }
+
+    @Test
+    void jdkCallSupportClassifiesThreadJoinDurationRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new MethodRef("java/lang/Thread", "join", "(Ljava/time/Duration;)Z")))
             .containsExactly("threads");
     }
 
@@ -852,8 +1134,13 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void jdkCallSupportAcceptsCollectionIsEmpty() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/util/Collection", "isEmpty", "()Z"))).isTrue();
+    }
+
+    @Test
     void jdkCallSupportRejectsUnknownIteratorCall() {
-        assertThat(JdkCallSupport.isSupported(new MethodRef("java/util/Iterator", "remove", "()V"))).isFalse();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/util/Iterator", "forEachRemaining", "(Ljava/util/function/BiConsumer;)V"))).isFalse();
     }
 
     @Test
@@ -862,13 +1149,13 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void jdkCallSupportRejectsUnknownMapCall() {
-        assertThat(JdkCallSupport.isSupported(new MethodRef("java/util/Map", "entrySet", "()Ljava/util/Set;"))).isFalse();
+    void jdkCallSupportAcceptsMapClear() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/util/Map", "clear", "()V"))).isTrue();
     }
 
     @Test
-    void jdkCallSupportRejectsUnknownHashMapCall() {
-        assertThat(JdkCallSupport.isSupported(new MethodRef("java/util/HashMap", "clear", "()V"))).isFalse();
+    void jdkCallSupportAcceptsHashMapClear() {
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/util/HashMap", "clear", "()V"))).isTrue();
     }
 
     @Test
@@ -905,8 +1192,14 @@ final class CoreBehaviorTest {
     void jdkCallSupportAcceptsCurrentThreadInterruptStateCalls() {
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "<init>", "()V"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "<init>", "(Ljava/lang/Runnable;)V"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "<init>", "(Ljava/lang/String;)V"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "<init>", "(Ljava/lang/Runnable;Ljava/lang/String;)V"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "currentThread", "()Ljava/lang/Thread;"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "getId", "()J"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "threadId", "()J"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "sleep", "(J)V"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "sleep", "(Ljava/time/Duration;)V"))).isTrue();
+        assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "join", "(Ljava/time/Duration;)Z"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "interrupted", "()Z"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "interrupt", "()V"))).isTrue();
         assertThat(JdkCallSupport.isSupported(new MethodRef("java/lang/Thread", "isInterrupted", "()Z"))).isTrue();
@@ -954,6 +1247,224 @@ final class CoreBehaviorTest {
 
         assertThat(diagnostics).hasSize(1);
         assertThat(diagnostics.getFirst().code()).isEqualTo("JAVAN131");
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableExactCatchNullEnumLookupMethod() {
+        final MethodInfo method = exactCatchNullEnumLookupMethod();
+        final ClassFile enumLookupSupport = classWithMethods("com/acme/EnumLookupSupport", "java/lang/Object", 0, List.of(), method);
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(enumLookupSupport.name(), enumLookupSupport),
+            List.of(new EntryPoint("com/acme/EnumLookupSupport", "enumOf", "(Ljava/lang/Object;Ljava/lang/Class;)Ljava/lang/Enum;"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableExactCatchNullFallibleApplyMethod() {
+        final MethodInfo method = exactCatchNullFallibleApplyMethod();
+        final ClassFile functionOrNull = classWithMethods(
+            "com/acme/FallibleFunction",
+            "java/lang/Object",
+            0x0200,
+            List.of(),
+            method
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(functionOrNull.name(), functionOrNull),
+            List.of(new EntryPoint("com/acme/FallibleFunction", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableTypedExactCatchNullFallibleApplyMethod() {
+        final MethodInfo method = exactCatchNullFallibleApplyMethod(
+            "com/acme/ThrowingMapper",
+            "(Ljava/lang/String;)Ljava/lang/String;"
+        );
+        final ClassFile functionOrNull = classWithMethods(
+            "com/acme/ThrowingMapper",
+            "java/lang/Object",
+            0x0200,
+            List.of(),
+            method
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(functionOrNull.name(), functionOrNull),
+            List.of(new EntryPoint("com/acme/ThrowingMapper", "apply", "(Ljava/lang/String;)Ljava/lang/String;"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void exactMethodSupportDetectsTemporalOfLoopFallbackShape() {
+        final MethodInfo method = exactTemporalOfLoopFallbackMethod();
+        final ClassFile register = classWithMethods(
+            "com/acme/TemporalSupport",
+            "java/lang/Object",
+            0,
+            List.of(),
+            method
+        );
+
+        assertThat(ExactMethodSupport.isExactTemporalOfLoopFallbackMethod(register, method)).isTrue();
+    }
+
+    @Test
+    void exactMethodSupportDetectsTemporalStringBridgeShape() {
+        final MethodInfo method = exactTemporalStringBridgeMethod();
+        final ClassFile register = classWithMethods(
+            "com/acme/TemporalSupport",
+            "java/lang/Object",
+            0,
+            List.of(),
+            method
+        );
+
+        assertThat(ExactMethodSupport.isExactTemporalStringBridgeMethod(register, method)).isTrue();
+        assertThat(ExactMethodSupport.exactTemporalStringBridgeTargetInternalName(register, method))
+            .contains("java/sql/Timestamp");
+    }
+
+    @Test
+    void exactMethodSupportDetectsCalendarOfEpochMillisShape() {
+        final MethodInfo method = exactCalendarOfEpochMillisMethod();
+        final ClassFile register = classWithMethods(
+            "com/acme/TemporalSupport",
+            "java/lang/Object",
+            0,
+            List.of(),
+            method
+        );
+
+        assertThat(ExactMethodSupport.isExactCalendarOfEpochMillisMethod(register, method)).isTrue();
+    }
+
+    @Test
+    void exactMethodSupportDetectsCalendarOfDateShape() {
+        final MethodInfo method = exactCalendarOfDateMethod();
+        final ClassFile register = classWithMethods(
+            "com/acme/TemporalSupport",
+            "java/lang/Object",
+            0,
+            List.of(),
+            method
+        );
+
+        assertThat(ExactMethodSupport.isExactCalendarOfDateMethod(register, method)).isTrue();
+    }
+
+    @Test
+    void exactMethodSupportDetectsCalendarOfLocalTimeShape() {
+        final MethodInfo method = exactCalendarOfLocalTimeMethod();
+        final ClassFile register = classWithMethods(
+            "com/acme/TemporalSupport",
+            "java/lang/Object",
+            0,
+            List.of(),
+            method
+        );
+
+        assertThat(ExactMethodSupport.isExactCalendarOfLocalTimeMethod(register, method)).isTrue();
+    }
+
+    @Test
+    void exactMethodSupportDetectsThrowableStringOfShape() {
+        final MethodInfo method = exactThrowableStringOfMethod();
+        final ClassFile register = classWithMethods(
+            "com/acme/TemporalSupport",
+            "java/lang/Object",
+            0,
+            List.of(),
+            method
+        );
+
+        assertThat(ExactMethodSupport.isExactThrowableStringOfMethod(register, method)).isTrue();
+    }
+
+    @Test
+    void exactMethodSupportDetectsUnsupportedTemporalConversionLambdaShape() {
+        final MethodInfo method = exactUnsupportedTemporalConversionLambdaMethod();
+        final ClassFile register = classWithMethods(
+            "com/acme/TemporalSupport",
+            "java/lang/Object",
+            0,
+            List.of(),
+            method
+        );
+
+        assertThat(ExactMethodSupport.isExactUnsupportedTemporalConversionLambdaMethod(register, method)).isTrue();
+    }
+
+    @Test
+    void exactMethodSupportDetectsUnsupportedTemporalSqlDateValueOfLambdaShape() {
+        final MethodInfo method = exactUnsupportedTemporalSqlDateValueOfLambdaMethod();
+        final ClassFile register = classWithMethods(
+            "com/acme/TemporalSupport",
+            "java/lang/Object",
+            0,
+            List.of(),
+            method
+        );
+
+        assertThat(ExactMethodSupport.isExactUnsupportedTemporalConversionLambdaMethod(register, method)).isTrue();
+    }
+
+    @Test
+    void exactMethodSupportDetectsUnsupportedTemporalSqlTimestampFromLongLambdaShape() {
+        final MethodInfo method = exactUnsupportedTemporalSqlTimestampFromLongLambdaMethod();
+        final ClassFile register = classWithMethods(
+            "com/acme/TemporalSupport",
+            "java/lang/Object",
+            0,
+            List.of(),
+            method
+        );
+
+        assertThat(ExactMethodSupport.isExactUnsupportedTemporalConversionLambdaMethod(register, method)).isTrue();
+    }
+
+    @Test
+    void exactMethodSupportDetectsZonedDateTimeEpochMillisBoxingLambdaShape() {
+        final MethodInfo method = exactTemporalEpochMillisBoxingLambdaMethod(
+            "lambda$static$200",
+            "java/time/ZonedDateTime",
+            "toInstant"
+        );
+        final ClassFile owner = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            method
+        );
+
+        assertThat(ExactMethodSupport.isExactUnsupportedTemporalConversionLambdaMethod(owner, method)).isTrue();
+    }
+
+    @Test
+    void exactMethodSupportDetectsOffsetDateTimeEpochMillisBoxingLambdaShape() {
+        final MethodInfo method = exactTemporalEpochMillisBoxingLambdaMethod(
+            "lambda$static$201",
+            "java/time/OffsetDateTime",
+            "toInstant"
+        );
+        final ClassFile owner = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            method
+        );
+
+        assertThat(ExactMethodSupport.isExactUnsupportedTemporalConversionLambdaMethod(owner, method)).isTrue();
     }
 
     @Test
@@ -1092,6 +1603,27 @@ final class CoreBehaviorTest {
     @Test
     void staticVerifierAcceptsBooleanWrapperInstanceofTarget() {
         final List<Diagnostic> diagnostics = verifyInstanceOf(Map.of(), "java/lang/Boolean", true);
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsCollectionInstanceofTarget() {
+        final List<Diagnostic> diagnostics = verifyInstanceOf(Map.of(), "java/util/Collection", true);
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsMapInstanceofTarget() {
+        final List<Diagnostic> diagnostics = verifyInstanceOf(Map.of(), "java/util/Map", true);
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsMapEntryInstanceofTarget() {
+        final List<Diagnostic> diagnostics = verifyInstanceOf(Map.of(), "java/util/Map$Entry", true);
 
         assertThat(diagnostics).isEmpty();
     }
@@ -1239,6 +1771,720 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void reachabilityAcceptsOptionalOrElseGetDirectSupplierLambda() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of("com/acme/Main", classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                methodInfo(
+                    "supply",
+                    "()Ljava/lang/Object;",
+                    instruction(0, 184, "invokestatic", new MethodRef("java/util/Optional", "empty", "()Ljava/util/Optional;")),
+                    invokeDynamicInstruction(1, new DynamicRef(
+                        "get",
+                        "()Ljava/util/function/Supplier;",
+                        "java/lang/invoke/LambdaMetafactory",
+                        "metafactory",
+                        "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                            + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                            + "Ljava/lang/invoke/CallSite;",
+                        List.of(
+                            "()Ljava/lang/Object;",
+                            "invokestatic com/acme/Main.lambda$supply$0:()Ljava/lang/Object;",
+                            "()Ljava/lang/Object;"
+                        ),
+                        List.of(
+                            BootstrapArgument.methodType("()Ljava/lang/Object;"),
+                            BootstrapArgument.methodHandle(
+                                6,
+                                new MethodRef("com/acme/Main", "lambda$supply$0", "()Ljava/lang/Object;")
+                            ),
+                            BootstrapArgument.methodType("()Ljava/lang/Object;")
+                        )
+                    )),
+                    instruction(2, 182, "invokevirtual", new MethodRef(
+                        "java/util/Optional",
+                        "orElseGet",
+                        "(Ljava/util/function/Supplier;)Ljava/lang/Object;"
+                    )),
+                    instruction(3, 176, "areturn")
+                ),
+                methodInfo(
+                    "lambda$supply$0",
+                    "()Ljava/lang/Object;",
+                    instruction(0, 1, "aconst_null"),
+                    instruction(1, 176, "areturn")
+                )
+            )),
+            List.of(new EntryPoint("com/acme/Main", "supply", "()Ljava/lang/Object;"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+    }
+
+    @Test
+    void reachabilityAcceptsOptionalIfPresentMaterializedConsumerLambda() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of("com/acme/Main", classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                methodInfo(
+                    "consume",
+                    "(Ljava/util/Optional;)V",
+                    instruction(0, 42, "aload_0"),
+                    invokeDynamicInstruction(1, new DynamicRef(
+                        "accept",
+                        "()Ljava/util/function/Consumer;",
+                        "java/lang/invoke/LambdaMetafactory",
+                        "metafactory",
+                        "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                            + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                            + "Ljava/lang/invoke/CallSite;",
+                        List.of(
+                            "(Ljava/lang/Object;)V",
+                            "invokestatic com/acme/Main.lambda$consume$0:(Ljava/lang/Object;)V",
+                            "(Ljava/lang/Object;)V"
+                        ),
+                        List.of(
+                            BootstrapArgument.methodType("(Ljava/lang/Object;)V"),
+                            BootstrapArgument.methodHandle(
+                                6,
+                                new MethodRef("com/acme/Main", "lambda$consume$0", "(Ljava/lang/Object;)V")
+                            ),
+                            BootstrapArgument.methodType("(Ljava/lang/Object;)V")
+                        )
+                    )),
+                    instruction(2, 182, "invokevirtual", new MethodRef(
+                        "java/util/Optional",
+                        "ifPresent",
+                        "(Ljava/util/function/Consumer;)V"
+                    )),
+                    instruction(3, 177, "return")
+                ),
+                methodInfo(
+                    "lambda$consume$0",
+                    "(Ljava/lang/Object;)V",
+                    instruction(0, 177, "return")
+                )
+            )),
+            List.of(new EntryPoint("com/acme/Main", "consume", "(Ljava/util/Optional;)V"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+    }
+
+    @Test
+    void reachabilityAcceptsObjectsRequireNonNullElseGetDirectSupplierLambda() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of("com/acme/Main", classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                methodInfo(
+                    "supply",
+                    "(Ljava/lang/Object;)Ljava/lang/Object;",
+                    instruction(0, 42, "aload_0"),
+                    invokeDynamicInstruction(1, new DynamicRef(
+                        "get",
+                        "()Ljava/util/function/Supplier;",
+                        "java/lang/invoke/LambdaMetafactory",
+                        "metafactory",
+                        "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                            + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                            + "Ljava/lang/invoke/CallSite;",
+                        List.of(
+                            "()Ljava/lang/Object;",
+                            "invokestatic com/acme/Main.lambda$supplyElse$0:()Ljava/lang/Object;",
+                            "()Ljava/lang/Object;"
+                        ),
+                        List.of(
+                            BootstrapArgument.methodType("()Ljava/lang/Object;"),
+                            BootstrapArgument.methodHandle(
+                                6,
+                                new MethodRef("com/acme/Main", "lambda$supplyElse$0", "()Ljava/lang/Object;")
+                            ),
+                            BootstrapArgument.methodType("()Ljava/lang/Object;")
+                        )
+                    )),
+                    instruction(2, 184, "invokestatic", new MethodRef(
+                        "java/util/Objects",
+                        "requireNonNullElseGet",
+                        "(Ljava/lang/Object;Ljava/util/function/Supplier;)Ljava/lang/Object;"
+                    )),
+                    instruction(3, 176, "areturn")
+                ),
+                methodInfo(
+                    "lambda$supplyElse$0",
+                    "()Ljava/lang/Object;",
+                    instruction(0, 1, "aconst_null"),
+                    instruction(1, 176, "areturn")
+                )
+            )),
+            List.of(new EntryPoint("com/acme/Main", "supply", "(Ljava/lang/Object;)Ljava/lang/Object;"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+    }
+
+    @Test
+    void reachabilityAcceptsFunctionApplyDirectConcreteImplementation() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo(
+                        "apply",
+                        "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;",
+                        instruction(0, 43, "aload_1"),
+                        instruction(1, 42, "aload_0"),
+                        instruction(2, 185, "invokeinterface", new MethodRef(
+                            "java/util/function/Function",
+                            "apply",
+                            "(Ljava/lang/Object;)Ljava/lang/Object;"
+                        )),
+                        instruction(7, 176, "areturn")
+                    )
+                ),
+                "com/acme/Loader", classWithMethods(
+                    "com/acme/Loader",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/util/function/Function"),
+                    methodInfo(
+                        "apply",
+                        "(Ljava/lang/Object;)Ljava/lang/Object;",
+                        instruction(0, 42, "aload_0"),
+                        instruction(1, 176, "areturn")
+                    )
+                )
+            ),
+            List.of(new EntryPoint("com/acme/Main", "apply", "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+    }
+
+    @Test
+    void reachabilityAcceptsFunctionApplyDirectLambda() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of("com/acme/Main", classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                methodInfo(
+                    "apply",
+                    "(Ljava/lang/Object;)Ljava/lang/Object;",
+                    invokeDynamicInstruction(0, new DynamicRef(
+                        "apply",
+                        "()Ljava/util/function/Function;",
+                        "java/lang/invoke/LambdaMetafactory",
+                        "metafactory",
+                        "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                            + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                            + "Ljava/lang/invoke/CallSite;",
+                        List.of(
+                            "(Ljava/lang/Object;)Ljava/lang/Object;",
+                            "invokestatic com/acme/Main.lambda$apply$0:(Ljava/lang/Object;)Ljava/lang/Object;",
+                            "(Ljava/lang/Object;)Ljava/lang/Object;"
+                        ),
+                        List.of(
+                            BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;"),
+                            BootstrapArgument.methodHandle(
+                                6,
+                                new MethodRef("com/acme/Main", "lambda$apply$0", "(Ljava/lang/Object;)Ljava/lang/Object;")
+                            ),
+                            BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;")
+                        )
+                    )),
+                    instruction(1, 42, "aload_0"),
+                    instruction(2, 185, "invokeinterface", new MethodRef(
+                        "java/util/function/Function",
+                        "apply",
+                        "(Ljava/lang/Object;)Ljava/lang/Object;"
+                    )),
+                    instruction(7, 176, "areturn")
+                ),
+                methodInfo(
+                    "lambda$apply$0",
+                    "(Ljava/lang/Object;)Ljava/lang/Object;",
+                    instruction(0, 42, "aload_0"),
+                    instruction(1, 176, "areturn")
+                )
+            )),
+            List.of(new EntryPoint("com/acme/Main", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+    }
+
+    @Test
+    void reachabilityAcceptsOptionalFlatMapDirectConcreteImplementation() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo(
+                        "flatMapValue",
+                        "(Ljava/util/Optional;Ljava/util/function/Function;)Ljava/util/Optional;",
+                        instruction(0, 42, "aload_0"),
+                        instruction(1, 43, "aload_1"),
+                        instruction(2, 182, "invokevirtual", new MethodRef(
+                            "java/util/Optional",
+                            "flatMap",
+                            "(Ljava/util/function/Function;)Ljava/util/Optional;"
+                        )),
+                        instruction(5, 176, "areturn")
+                    )
+                ),
+                "com/acme/Loader", classWithMethods(
+                    "com/acme/Loader",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/util/function/Function"),
+                    methodInfo(
+                        "apply",
+                        "(Ljava/lang/Object;)Ljava/lang/Object;",
+                        instruction(0, 42, "aload_0"),
+                        instruction(1, 176, "areturn")
+                    )
+                )
+            ),
+            List.of(new EntryPoint("com/acme/Main", "flatMapValue", "(Ljava/util/Optional;Ljava/util/function/Function;)Ljava/util/Optional;"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+    }
+
+    @Test
+    void reachabilityAcceptsOptionalOrDirectConcreteImplementation() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo(
+                        "orValue",
+                        "(Ljava/util/Optional;Ljava/util/function/Supplier;)Ljava/util/Optional;",
+                        instruction(0, 42, "aload_0"),
+                        instruction(1, 43, "aload_1"),
+                        instruction(2, 182, "invokevirtual", new MethodRef(
+                            "java/util/Optional",
+                            "or",
+                            "(Ljava/util/function/Supplier;)Ljava/util/Optional;"
+                        )),
+                        instruction(5, 176, "areturn")
+                    )
+                ),
+                "com/acme/FallbackSupplier", classWithMethods(
+                    "com/acme/FallbackSupplier",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/util/function/Supplier"),
+                    methodInfo(
+                        "get",
+                        "()Ljava/lang/Object;",
+                        instruction(0, 1, "aconst_null"),
+                        instruction(1, 176, "areturn")
+                    )
+                )
+            ),
+            List.of(new EntryPoint("com/acme/Main", "orValue", "(Ljava/util/Optional;Ljava/util/function/Supplier;)Ljava/util/Optional;"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+    }
+
+    @Test
+    void reachabilityAcceptsSupplierGetDirectConcreteImplementation() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo(
+                        "supply",
+                        "(Ljava/util/function/Supplier;)Ljava/lang/Object;",
+                        instruction(0, 42, "aload_0"),
+                        instruction(1, 185, "invokeinterface", new MethodRef(
+                            "java/util/function/Supplier",
+                            "get",
+                            "()Ljava/lang/Object;"
+                        )),
+                        instruction(6, 176, "areturn")
+                    )
+                ),
+                "com/acme/FallbackSupplier", classWithMethods(
+                    "com/acme/FallbackSupplier",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/util/function/Supplier"),
+                    methodInfo(
+                        "get",
+                        "()Ljava/lang/Object;",
+                        instruction(0, 1, "aconst_null"),
+                        instruction(1, 176, "areturn")
+                    )
+                )
+            ),
+            List.of(new EntryPoint("com/acme/Main", "supply", "(Ljava/util/function/Supplier;)Ljava/lang/Object;"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+    }
+
+    @Test
+    void reachabilityAcceptsSupplierGetDirectLambda() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of("com/acme/Main", classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                methodInfo(
+                    "supply",
+                    "()Ljava/lang/Object;",
+                    invokeDynamicInstruction(0, new DynamicRef(
+                        "get",
+                        "()Ljava/util/function/Supplier;",
+                        "java/lang/invoke/LambdaMetafactory",
+                        "metafactory",
+                        "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                            + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                            + "Ljava/lang/invoke/CallSite;",
+                        List.of(
+                            "()Ljava/lang/Object;",
+                            "invokestatic com/acme/Main.lambda$get$0:()Ljava/lang/Object;",
+                            "()Ljava/lang/Object;"
+                        ),
+                        List.of(
+                            BootstrapArgument.methodType("()Ljava/lang/Object;"),
+                            BootstrapArgument.methodHandle(
+                                6,
+                                new MethodRef("com/acme/Main", "lambda$get$0", "()Ljava/lang/Object;")
+                            ),
+                            BootstrapArgument.methodType("()Ljava/lang/Object;")
+                        )
+                    )),
+                    instruction(1, 185, "invokeinterface", new MethodRef(
+                        "java/util/function/Supplier",
+                        "get",
+                        "()Ljava/lang/Object;"
+                    )),
+                    instruction(6, 176, "areturn")
+                ),
+                methodInfo(
+                    "lambda$get$0",
+                    "()Ljava/lang/Object;",
+                    instruction(0, 1, "aconst_null"),
+                    instruction(1, 176, "areturn")
+                )
+            )),
+            List.of(new EntryPoint("com/acme/Main", "supply", "()Ljava/lang/Object;"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+    }
+
+    @Test
+    void reachabilityAcceptsPredicateTestDirectConcreteImplementation() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo(
+                        "test",
+                        "(Ljava/lang/Object;Ljava/util/function/Predicate;)Z",
+                        instruction(0, 43, "aload_1"),
+                        instruction(1, 42, "aload_0"),
+                        instruction(2, 185, "invokeinterface", new MethodRef(
+                            "java/util/function/Predicate",
+                            "test",
+                            "(Ljava/lang/Object;)Z"
+                        )),
+                        instruction(7, 172, "ireturn")
+                    )
+                ),
+                "com/acme/Matcher", classWithMethods(
+                    "com/acme/Matcher",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/util/function/Predicate"),
+                    methodInfo(
+                        "test",
+                        "(Ljava/lang/Object;)Z",
+                        instruction(0, 4, "iconst_1"),
+                        instruction(1, 172, "ireturn")
+                    )
+                )
+            ),
+            List.of(new EntryPoint("com/acme/Main", "test", "(Ljava/lang/Object;Ljava/util/function/Predicate;)Z"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+    }
+
+    @Test
+    void reachabilityAcceptsPredicateTestDirectLambda() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of("com/acme/Main", classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                methodInfo(
+                    "test",
+                    "(Ljava/lang/Object;)Z",
+                    invokeDynamicInstruction(0, new DynamicRef(
+                        "test",
+                        "()Ljava/util/function/Predicate;",
+                        "java/lang/invoke/LambdaMetafactory",
+                        "metafactory",
+                        "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                            + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                            + "Ljava/lang/invoke/CallSite;",
+                        List.of(
+                            "(Ljava/lang/Object;)Z",
+                            "invokestatic com/acme/Main.lambda$test$0:(Ljava/lang/Object;)Z",
+                            "(Ljava/lang/Object;)Z"
+                        ),
+                        List.of(
+                            BootstrapArgument.methodType("(Ljava/lang/Object;)Z"),
+                            BootstrapArgument.methodHandle(
+                                6,
+                                new MethodRef("com/acme/Main", "lambda$test$0", "(Ljava/lang/Object;)Z")
+                            ),
+                            BootstrapArgument.methodType("(Ljava/lang/Object;)Z")
+                        )
+                    )),
+                    instruction(1, 42, "aload_0"),
+                    instruction(2, 185, "invokeinterface", new MethodRef(
+                        "java/util/function/Predicate",
+                        "test",
+                        "(Ljava/lang/Object;)Z"
+                    )),
+                    instruction(7, 172, "ireturn")
+                ),
+                methodInfo(
+                    "lambda$test$0",
+                    "(Ljava/lang/Object;)Z",
+                    instruction(0, 4, "iconst_1"),
+                    instruction(1, 172, "ireturn")
+                )
+            )),
+            List.of(new EntryPoint("com/acme/Main", "test", "(Ljava/lang/Object;)Z"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+    }
+
+    @Test
+    void reachabilityAcceptsConsumerAcceptDirectConcreteImplementation() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo(
+                        "consume",
+                        "(Ljava/lang/Object;Ljava/util/function/Consumer;)V",
+                        instruction(0, 43, "aload_1"),
+                        instruction(1, 42, "aload_0"),
+                        instruction(2, 185, "invokeinterface", new MethodRef(
+                            "java/util/function/Consumer",
+                            "accept",
+                            "(Ljava/lang/Object;)V"
+                        )),
+                        instruction(7, 177, "return")
+                    )
+                ),
+                "com/acme/Printer", classWithMethods(
+                    "com/acme/Printer",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/util/function/Consumer"),
+                    methodInfo(
+                        "accept",
+                        "(Ljava/lang/Object;)V",
+                        instruction(0, 177, "return")
+                    )
+                )
+            ),
+            List.of(new EntryPoint("com/acme/Main", "consume", "(Ljava/lang/Object;Ljava/util/function/Consumer;)V"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+    }
+
+    @Test
+    void reachabilityAcceptsConsumerAcceptDirectLambda() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of("com/acme/Main", classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                methodInfo(
+                    "consume",
+                    "(Ljava/lang/Object;)V",
+                    invokeDynamicInstruction(0, new DynamicRef(
+                        "accept",
+                        "()Ljava/util/function/Consumer;",
+                        "java/lang/invoke/LambdaMetafactory",
+                        "metafactory",
+                        "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                            + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                            + "Ljava/lang/invoke/CallSite;",
+                        List.of(
+                            "(Ljava/lang/Object;)V",
+                            "invokestatic com/acme/Main.lambda$consume$0:(Ljava/lang/Object;)V",
+                            "(Ljava/lang/Object;)V"
+                        ),
+                        List.of(
+                            BootstrapArgument.methodType("(Ljava/lang/Object;)V"),
+                            BootstrapArgument.methodHandle(
+                                6,
+                                new MethodRef("com/acme/Main", "lambda$consume$0", "(Ljava/lang/Object;)V")
+                            ),
+                            BootstrapArgument.methodType("(Ljava/lang/Object;)V")
+                        )
+                    )),
+                    instruction(1, 42, "aload_0"),
+                    instruction(2, 185, "invokeinterface", new MethodRef(
+                        "java/util/function/Consumer",
+                        "accept",
+                        "(Ljava/lang/Object;)V"
+                    )),
+                    instruction(7, 177, "return")
+                ),
+                methodInfo(
+                    "lambda$consume$0",
+                    "(Ljava/lang/Object;)V",
+                    instruction(0, 177, "return")
+                )
+            )),
+            List.of(new EntryPoint("com/acme/Main", "consume", "(Ljava/lang/Object;)V"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+    }
+
+    @Test
+    void reachabilityAcceptsBiConsumerAcceptDirectConcreteImplementation() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo(
+                        "consume",
+                        "(Ljava/lang/Object;Ljava/lang/Object;Ljava/util/function/BiConsumer;)V",
+                        instruction(0, 44, "aload_2"),
+                        instruction(1, 42, "aload_0"),
+                        instruction(2, 43, "aload_1"),
+                        instruction(3, 185, "invokeinterface", new MethodRef(
+                            "java/util/function/BiConsumer",
+                            "accept",
+                            "(Ljava/lang/Object;Ljava/lang/Object;)V"
+                        )),
+                        instruction(8, 177, "return")
+                    )
+                ),
+                "com/acme/Printer", classWithMethods(
+                    "com/acme/Printer",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/util/function/BiConsumer"),
+                    methodInfo(
+                        "accept",
+                        "(Ljava/lang/Object;Ljava/lang/Object;)V",
+                        instruction(0, 177, "return")
+                    )
+                )
+            ),
+            List.of(new EntryPoint("com/acme/Main", "consume", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/util/function/BiConsumer;)V"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+    }
+
+    @Test
+    void reachabilityAcceptsBiConsumerAcceptDirectLambda() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of("com/acme/Main", classWithMethods(
+                "com/acme/Main",
+                "java/lang/Object",
+                0,
+                List.of(),
+                methodInfo(
+                    "consume",
+                    "(Ljava/lang/Object;Ljava/lang/Object;)V",
+                    invokeDynamicInstruction(0, new DynamicRef(
+                        "accept",
+                        "()Ljava/util/function/BiConsumer;",
+                        "java/lang/invoke/LambdaMetafactory",
+                        "metafactory",
+                        "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                            + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                            + "Ljava/lang/invoke/CallSite;",
+                        List.of(
+                            "(Ljava/lang/Object;Ljava/lang/Object;)V",
+                            "invokestatic com/acme/Main.lambda$consume$0:(Ljava/lang/Object;Ljava/lang/Object;)V",
+                            "(Ljava/lang/Object;Ljava/lang/Object;)V"
+                        ),
+                        List.of(
+                            BootstrapArgument.methodType("(Ljava/lang/Object;Ljava/lang/Object;)V"),
+                            BootstrapArgument.methodHandle(
+                                6,
+                                new MethodRef("com/acme/Main", "lambda$consume$0", "(Ljava/lang/Object;Ljava/lang/Object;)V")
+                            ),
+                            BootstrapArgument.methodType("(Ljava/lang/Object;Ljava/lang/Object;)V")
+                        )
+                    )),
+                    instruction(1, 42, "aload_0"),
+                    instruction(2, 43, "aload_1"),
+                    instruction(3, 185, "invokeinterface", new MethodRef(
+                        "java/util/function/BiConsumer",
+                        "accept",
+                        "(Ljava/lang/Object;Ljava/lang/Object;)V"
+                    )),
+                    instruction(8, 177, "return")
+                ),
+                methodInfo(
+                    "lambda$consume$0",
+                    "(Ljava/lang/Object;Ljava/lang/Object;)V",
+                    instruction(0, 177, "return")
+                )
+            )),
+            List.of(new EntryPoint("com/acme/Main", "consume", "(Ljava/lang/Object;Ljava/lang/Object;)V"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+    }
+
+    @Test
     void reachabilityResolvesSpecialNonConstructorCall() {
         final CallGraph graph = new ReachabilityAnalyzer().analyze(
             Map.of(
@@ -1350,7 +2596,7 @@ final class CoreBehaviorTest {
                     "java/lang/Object",
                     0x0200,
                     List.of(),
-                    methodInfo("handle", "()V")
+                    new MethodInfo(0x0401, "handle", "()V", Optional.empty())
                 ),
                 "com/acme/HandlerImpl", classWithMethods(
                     "com/acme/HandlerImpl",
@@ -2717,6 +3963,127 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void reachabilityTracksThreadOfVirtualStartViaInheritanceStaticBuilderHelper() {
+        final EntryPoint main = new EntryPoint("com/acme/Main", "main", "()V");
+        final EntryPoint helper = new EntryPoint("com/acme/Main", "builder", "(Z)Ljava/lang/Thread$Builder$OfVirtual;");
+        final EntryPoint run = new EntryPoint("com/acme/Task", "run", "()V");
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo(
+                        "main",
+                        "()V",
+                        instruction(0, 3, "iconst_0"),
+                        instruction(1, 184, "invokestatic", new MethodRef("com/acme/Main", "builder", "(Z)Ljava/lang/Thread$Builder$OfVirtual;")),
+                        classInstruction(2, 187, "new", "com/acme/Task"),
+                        instruction(3, 89, "dup"),
+                        instruction(4, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        instruction(5, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "start", "(Ljava/lang/Runnable;)Ljava/lang/Thread;")),
+                        instruction(6, 75, "astore_0"),
+                        instruction(7, 42, "aload_0"),
+                        instruction(8, 182, "invokevirtual", new MethodRef("java/lang/Thread", "join", "()V")),
+                        instruction(9, 177, "return")
+                    ),
+                    new MethodInfo(
+                        0x0008,
+                        "builder",
+                        "(Z)Ljava/lang/Thread$Builder$OfVirtual;",
+                        Optional.of(new CodeAttribute(
+                            2,
+                            1,
+                            new byte[0],
+                            0,
+                            List.of(
+                                instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;")),
+                                instruction(1, 26, "iload_0"),
+                                instruction(2, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "inheritInheritableThreadLocals", "(Z)Ljava/lang/Thread$Builder$OfVirtual;")),
+                                instruction(3, 176, "areturn")
+                            )
+                        ))
+                    )
+                ),
+                "com/acme/Task", classWithMethods(
+                    "com/acme/Task",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/lang/Runnable"),
+                    methodInfo("<init>", "()V"),
+                    methodInfo("run", "()V")
+                )
+            ),
+            List.of(main)
+        );
+
+        assertThat(graph.reachableMethods()).contains(helper);
+        assertThat(graph.callEdges()).contains(new CallEdge(main, run, CallEdge.Kind.THREAD_START_TASK));
+    }
+
+    @Test
+    void reachabilityTracksThreadOfVirtualFactoryViaInheritanceStaticHelper() {
+        final EntryPoint main = new EntryPoint("com/acme/Main", "main", "()V");
+        final EntryPoint helper = new EntryPoint("com/acme/Main", "factory", "(Z)Ljava/util/concurrent/ThreadFactory;");
+        final EntryPoint run = new EntryPoint("com/acme/Task", "run", "()V");
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo(
+                        "main",
+                        "()V",
+                        instruction(0, 3, "iconst_0"),
+                        instruction(1, 184, "invokestatic", new MethodRef("com/acme/Main", "factory", "(Z)Ljava/util/concurrent/ThreadFactory;")),
+                        classInstruction(2, 187, "new", "com/acme/Task"),
+                        instruction(3, 89, "dup"),
+                        instruction(4, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        instruction(5, 185, "invokeinterface", new MethodRef("java/util/concurrent/ThreadFactory", "newThread", "(Ljava/lang/Runnable;)Ljava/lang/Thread;")),
+                        instruction(6, 75, "astore_0"),
+                        instruction(7, 42, "aload_0"),
+                        instruction(8, 182, "invokevirtual", new MethodRef("java/lang/Thread", "start", "()V")),
+                        instruction(9, 177, "return")
+                    ),
+                    new MethodInfo(
+                        0x0008,
+                        "factory",
+                        "(Z)Ljava/util/concurrent/ThreadFactory;",
+                        Optional.of(new CodeAttribute(
+                            2,
+                            1,
+                            new byte[0],
+                            0,
+                            List.of(
+                                instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;")),
+                                instruction(1, 26, "iload_0"),
+                                instruction(2, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "inheritInheritableThreadLocals", "(Z)Ljava/lang/Thread$Builder$OfVirtual;")),
+                                instruction(3, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "factory", "()Ljava/util/concurrent/ThreadFactory;")),
+                                instruction(4, 176, "areturn")
+                            )
+                        ))
+                    )
+                ),
+                "com/acme/Task", classWithMethods(
+                    "com/acme/Task",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/lang/Runnable"),
+                    methodInfo("<init>", "()V"),
+                    methodInfo("run", "()V")
+                )
+            ),
+            List.of(main)
+        );
+
+        assertThat(graph.reachableMethods()).contains(helper);
+        assertThat(graph.callEdges()).contains(new CallEdge(main, run, CallEdge.Kind.THREAD_START_TASK));
+    }
+
+    @Test
     void reachabilityFallsBackToRunnableTargetsForThreadOfVirtualStartWithRunnableParameterAlias() {
         final EntryPoint main = new EntryPoint("com/acme/Main", "main", "(Ljava/lang/Runnable;)V");
         final EntryPoint run = new EntryPoint("com/acme/Task", "run", "()V");
@@ -3172,6 +4539,53 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void reachabilityKeepsOnlyConstructedRunnableTargetsForNamedThreadStart() {
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(
+                "com/acme/Main", classWithMethods(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    methodInfo(
+                        "main",
+                        "([Ljava/lang/String;)V",
+                        classInstruction(0, 187, "new", "java/lang/Thread"),
+                        instruction(1, 89, "dup"),
+                        classInstruction(2, 187, "new", "com/acme/Task"),
+                        instruction(3, 89, "dup"),
+                        instruction(4, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        classInstruction(5, 18, "ldc", "worker"),
+                        instruction(6, 183, "invokespecial", new MethodRef("java/lang/Thread", "<init>", "(Ljava/lang/Runnable;Ljava/lang/String;)V")),
+                        instruction(7, 182, "invokevirtual", new MethodRef("java/lang/Thread", "start", "()V")),
+                        instruction(8, 177, "return")
+                    )
+                ),
+                "com/acme/Task", classWithMethods(
+                    "com/acme/Task",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/lang/Runnable"),
+                    methodInfo("<init>", "()V"),
+                    methodInfo("run", "()V")
+                ),
+                "com/acme/OtherTask", classWithMethods(
+                    "com/acme/OtherTask",
+                    "java/lang/Object",
+                    0,
+                    List.of("java/lang/Runnable"),
+                    methodInfo("run", "()V")
+                )
+            ),
+            List.of(new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V"))
+        );
+
+        assertThat(graph.diagnostics()).isEmpty();
+        assertThat(graph.reachableMethods()).contains(new EntryPoint("com/acme/Task", "run", "()V"));
+        assertThat(graph.reachableMethods()).doesNotContain(new EntryPoint("com/acme/OtherTask", "run", "()V"));
+    }
+
+    @Test
     void reachabilityFallsBackToAllRunnableTargetsWhenThreadRunnableTargetIsUnknown() {
         final CallGraph graph = new ReachabilityAnalyzer().analyze(
             Map.of(
@@ -3412,7 +4826,7 @@ final class CoreBehaviorTest {
             "java/lang/Object",
             0,
             List.of(),
-            hostOnlyInputStreamReadMethod("(Ljava/io/InputStream;Ljava/nio/file/Path;)Ljavan/classfile/ClassFile;")
+            hostOnlyUnsupportedInputStreamMethod("(Ljava/io/InputStream;Ljava/nio/file/Path;)Ljavan/classfile/ClassFile;")
         );
 
         final List<Diagnostic> diagnostics = new StaticVerifier().verify(Map.of(reader.name(), reader), List.of());
@@ -3427,7 +4841,7 @@ final class CoreBehaviorTest {
             "java/lang/Object",
             0,
             List.of(),
-            hostOnlyInputStreamReadMethod("(Ljava/io/InputStream;Ljava/nio/file/Path;)Ljavan/compat/ClassMetadata;")
+            hostOnlyUnsupportedInputStreamMethod("(Ljava/io/InputStream;Ljava/nio/file/Path;)Ljavan/compat/ClassMetadata;")
         );
 
         final List<Diagnostic> diagnostics = new StaticVerifier().verify(Map.of(reader.name(), reader), List.of());
@@ -3443,7 +4857,7 @@ final class CoreBehaviorTest {
             "java/lang/Object",
             0,
             List.of(),
-            hostOnlyInputStreamReadMethod(descriptor)
+            hostOnlyUnsupportedInputStreamMethod(descriptor)
         );
 
         final List<Diagnostic> diagnostics = new StaticVerifier().verify(
@@ -3900,6 +5314,45 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void staticVerifierWarnsAboutReachableThreadJoinDurationBlockingWait() {
+        final String descriptor = "(Ljava/lang/Thread;Ljava/time/Duration;)V";
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "joinWorker",
+                descriptor,
+                Optional.of(new CodeAttribute(
+                    2,
+                    2,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 42, "aload_0"),
+                        instruction(1, 43, "aload_1"),
+                        instruction(2, 182, "invokevirtual", new MethodRef("java/lang/Thread", "join", "(Ljava/time/Duration;)Z")),
+                        instruction(3, 87, "pop"),
+                        instruction(4, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main),
+            List.of(new EntryPoint(main.name(), "joinWorker", descriptor))
+        );
+
+        assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
+            assertThat(diagnostic.code()).isEqualTo("JAVAN178");
+            assertThat(diagnostic.subject()).isEqualTo("Thread.join(Duration)");
+        });
+    }
+
+    @Test
     void staticVerifierAcceptsBranchExclusiveThreadStartOnSameLocal() {
         final String descriptor = "(Ljava/lang/Thread;)V";
         final ClassFile main = classWithMethods(
@@ -4075,7 +5528,20 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void staticVerifierRejectsReachableJavacRecordObjectMethods() {
+    void staticVerifierAcceptsReachableJavacRecordEqualsMethodForObjectFields() {
+        final List<Diagnostic> diagnostics = verifyRecordObjectMethod(
+            "java/lang/Record",
+            "equals",
+            "(Ljava/lang/Object;)Z",
+            List.of(new javan.classfile.FieldInfo(0, "value", "Ljava/lang/String;")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierRejectsReachableJavacRecordObjectToStringMethod() {
         final List<Diagnostic> diagnostics = verifyRecordObjectMethod("java/lang/Record", "toString", "()Ljava/lang/String;", true);
 
         assertThat(diagnostics).hasSize(1);
@@ -4658,7 +6124,7 @@ final class CoreBehaviorTest {
     }
 
     @Test
-    void staticVerifierWarnsAboutUnreachableInheritableThreadLocalConstructor() {
+    void staticVerifierAcceptsUnreachableInheritableThreadLocalConstructor() {
         final ClassFile main = classWithMethods(
             "com/acme/Main",
             "java/lang/Object",
@@ -4686,10 +6152,7 @@ final class CoreBehaviorTest {
 
         final List<Diagnostic> diagnostics = new StaticVerifier().verify(Map.of(main.name(), main), List.of());
 
-        assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
-            assertThat(diagnostic.code()).isEqualTo("JAVAN177");
-            assertThat(diagnostic.subject()).isEqualTo("InheritableThreadLocal.<init>()");
-        });
+        assertThat(diagnostics).isEmpty();
     }
 
     @Test
@@ -4926,6 +6389,356 @@ final class CoreBehaviorTest {
         );
 
         assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableThreadOfVirtualStartViaInheritanceStaticBuilderHelper() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            methodInfo(
+                "main",
+                "()V",
+                instruction(0, 3, "iconst_0"),
+                instruction(1, 184, "invokestatic", new MethodRef("com/acme/Main", "builder", "(Z)Ljava/lang/Thread$Builder$OfVirtual;")),
+                classInstruction(2, 187, "new", "com/acme/Task"),
+                instruction(3, 89, "dup"),
+                instruction(4, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                instruction(5, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "start", "(Ljava/lang/Runnable;)Ljava/lang/Thread;")),
+                instruction(6, 87, "pop"),
+                instruction(7, 177, "return")
+            ),
+            new MethodInfo(
+                0x0008,
+                "builder",
+                "(Z)Ljava/lang/Thread$Builder$OfVirtual;",
+                Optional.of(new CodeAttribute(
+                    2,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instruction(1, 26, "iload_0"),
+                        instruction(2, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "inheritInheritableThreadLocals", "(Z)Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instruction(3, 176, "areturn")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", "()V"), new EntryPoint(main.name(), "builder", "(Z)Ljava/lang/Thread$Builder$OfVirtual;"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableThreadOfVirtualStartViaBipushInheritanceStaticBuilderHelper() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            methodInfo(
+                "main",
+                "()V",
+                instruction(0, 4, "iconst_1"),
+                instruction(1, 184, "invokestatic", new MethodRef("com/acme/Main", "builder", "(Z)Ljava/lang/Thread$Builder$OfVirtual;")),
+                classInstruction(2, 187, "new", "com/acme/Task"),
+                instruction(3, 89, "dup"),
+                instruction(4, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                instruction(5, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "start", "(Ljava/lang/Runnable;)Ljava/lang/Thread;")),
+                instruction(6, 87, "pop"),
+                instruction(7, 177, "return")
+            ),
+            new MethodInfo(
+                0x0008,
+                "builder",
+                "(Z)Ljava/lang/Thread$Builder$OfVirtual;",
+                Optional.of(new CodeAttribute(
+                    2,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instructionOperands(1, 16, "bipush", 1),
+                        instruction(2, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "inheritInheritableThreadLocals", "(Z)Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instruction(3, 176, "areturn")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", "()V"), new EntryPoint(main.name(), "builder", "(Z)Ljava/lang/Thread$Builder$OfVirtual;"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableThreadOfVirtualFactoryViaInheritanceStaticHelper() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            methodInfo(
+                "main",
+                "()V",
+                instruction(0, 3, "iconst_0"),
+                instruction(1, 184, "invokestatic", new MethodRef("com/acme/Main", "factory", "(Z)Ljava/util/concurrent/ThreadFactory;")),
+                classInstruction(2, 187, "new", "com/acme/Task"),
+                instruction(3, 89, "dup"),
+                instruction(4, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                instruction(5, 185, "invokeinterface", new MethodRef("java/util/concurrent/ThreadFactory", "newThread", "(Ljava/lang/Runnable;)Ljava/lang/Thread;")),
+                instruction(6, 87, "pop"),
+                instruction(7, 177, "return")
+            ),
+            new MethodInfo(
+                0x0008,
+                "factory",
+                "(Z)Ljava/util/concurrent/ThreadFactory;",
+                Optional.of(new CodeAttribute(
+                    2,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instruction(1, 26, "iload_0"),
+                        instruction(2, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "inheritInheritableThreadLocals", "(Z)Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instruction(3, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "factory", "()Ljava/util/concurrent/ThreadFactory;")),
+                        instruction(4, 176, "areturn")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(
+                new EntryPoint(main.name(), "main", "()V"),
+                new EntryPoint(main.name(), "factory", "(Z)Ljava/util/concurrent/ThreadFactory;")
+            )
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierRejectsReachableThreadOfVirtualStartViaIntParameterizedInheritanceHelper() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            methodInfo(
+                "main",
+                "()V",
+                instruction(0, 3, "iconst_0"),
+                instruction(1, 184, "invokestatic", new MethodRef("com/acme/Main", "builder", "(I)Ljava/lang/Thread$Builder$OfVirtual;")),
+                classInstruction(2, 187, "new", "com/acme/Task"),
+                instruction(3, 89, "dup"),
+                instruction(4, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                instruction(5, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "start", "(Ljava/lang/Runnable;)Ljava/lang/Thread;")),
+                instruction(6, 87, "pop"),
+                instruction(7, 177, "return")
+            ),
+            new MethodInfo(
+                0x0008,
+                "builder",
+                "(I)Ljava/lang/Thread$Builder$OfVirtual;",
+                Optional.of(new CodeAttribute(
+                    2,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instruction(1, 26, "iload_0"),
+                        instruction(2, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "inheritInheritableThreadLocals", "(Z)Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instruction(3, 176, "areturn")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", "()V"), new EntryPoint(main.name(), "builder", "(I)Ljava/lang/Thread$Builder$OfVirtual;"))
+        );
+
+        assertThat(diagnostics)
+            .extracting(Diagnostic::code, Diagnostic::subject)
+            .containsExactlyInAnyOrder(
+                tuple("JAVAN077", "Thread.ofVirtual()"),
+                tuple("JAVAN077", "Thread.Builder.OfVirtual.inheritInheritableThreadLocals(boolean)"),
+                tuple("JAVAN077", "Thread.Builder.OfVirtual.start(Runnable)")
+            );
+    }
+
+    @Test
+    void staticVerifierRejectsReachableThreadOfVirtualStartViaNonBooleanLdcInheritanceHelper() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            methodInfo(
+                "main",
+                "()V",
+                instruction(0, 3, "iconst_0"),
+                instruction(1, 184, "invokestatic", new MethodRef("com/acme/Main", "builder", "(Z)Ljava/lang/Thread$Builder$OfVirtual;")),
+                classInstruction(2, 187, "new", "com/acme/Task"),
+                instruction(3, 89, "dup"),
+                instruction(4, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                instruction(5, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "start", "(Ljava/lang/Runnable;)Ljava/lang/Thread;")),
+                instruction(6, 87, "pop"),
+                instruction(7, 177, "return")
+            ),
+            new MethodInfo(
+                0x0008,
+                "builder",
+                "(Z)Ljava/lang/Thread$Builder$OfVirtual;",
+                Optional.of(new CodeAttribute(
+                    2,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;")),
+                        intInstruction(1, 18, "ldc", 2),
+                        instruction(2, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "inheritInheritableThreadLocals", "(Z)Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instruction(3, 176, "areturn")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", "()V"), new EntryPoint(main.name(), "builder", "(Z)Ljava/lang/Thread$Builder$OfVirtual;"))
+        );
+
+        assertThat(diagnostics)
+            .extracting(Diagnostic::code, Diagnostic::subject)
+            .containsExactlyInAnyOrder(
+                tuple("JAVAN077", "Thread.ofVirtual()"),
+                tuple("JAVAN077", "Thread.Builder.OfVirtual.inheritInheritableThreadLocals(boolean)"),
+                tuple("JAVAN077", "Thread.Builder.OfVirtual.start(Runnable)")
+            );
+    }
+
+    @Test
+    void staticVerifierRejectsReachableThreadOfVirtualFactoryViaIntParameterizedInheritanceHelper() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            methodInfo(
+                "main",
+                "()V",
+                instruction(0, 3, "iconst_0"),
+                instruction(1, 184, "invokestatic", new MethodRef("com/acme/Main", "factory", "(I)Ljava/util/concurrent/ThreadFactory;")),
+                classInstruction(2, 187, "new", "com/acme/Task"),
+                instruction(3, 89, "dup"),
+                instruction(4, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                instruction(5, 185, "invokeinterface", new MethodRef("java/util/concurrent/ThreadFactory", "newThread", "(Ljava/lang/Runnable;)Ljava/lang/Thread;")),
+                instruction(6, 87, "pop"),
+                instruction(7, 177, "return")
+            ),
+            new MethodInfo(
+                0x0008,
+                "factory",
+                "(I)Ljava/util/concurrent/ThreadFactory;",
+                Optional.of(new CodeAttribute(
+                    2,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instruction(1, 26, "iload_0"),
+                        instruction(2, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "inheritInheritableThreadLocals", "(Z)Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instruction(3, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "factory", "()Ljava/util/concurrent/ThreadFactory;")),
+                        instruction(4, 176, "areturn")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(
+                new EntryPoint(main.name(), "main", "()V"),
+                new EntryPoint(main.name(), "factory", "(I)Ljava/util/concurrent/ThreadFactory;")
+            )
+        );
+
+        assertThat(diagnostics)
+            .extracting(Diagnostic::code, Diagnostic::subject)
+            .containsExactlyInAnyOrder(
+                tuple("JAVAN077", "Thread.ofVirtual()"),
+                tuple("JAVAN077", "Thread.Builder.OfVirtual.inheritInheritableThreadLocals(boolean)"),
+                tuple("JAVAN077", "Thread.Builder.OfVirtual.factory()")
+            );
     }
 
     @Test
@@ -6131,6 +7944,98 @@ final class CoreBehaviorTest {
         assertThat(diagnostics)
             .extracting(Diagnostic::code, Diagnostic::subject)
             .containsExactly(tuple("JAVAN077", "Thread.Builder.factory()"));
+    }
+
+    @Test
+    void staticVerifierRejectsReachableGenericThreadBuilderInheritInheritableThreadLocalsParameter() {
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "(Ljava/lang/Thread$Builder$OfVirtual;)V",
+                Optional.of(new CodeAttribute(
+                    2,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 42, "aload_0"),
+                        instruction(1, 3, "iconst_0"),
+                        instruction(2, 185, "invokeinterface", new MethodRef(
+                            "java/lang/Thread$Builder$OfVirtual",
+                            "inheritInheritableThreadLocals",
+                            "(Z)Ljava/lang/Thread$Builder$OfVirtual;"
+                        )),
+                        instruction(3, 87, "pop"),
+                        instruction(4, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main),
+            List.of(new EntryPoint(main.name(), "main", "(Ljava/lang/Thread$Builder$OfVirtual;)V"))
+        );
+
+        assertThat(diagnostics)
+            .extracting(Diagnostic::code, Diagnostic::subject)
+            .containsExactly(tuple("JAVAN077", "Thread.Builder.OfVirtual.inheritInheritableThreadLocals(boolean)"));
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableThreadOfVirtualBuilderDisableInheritanceStart() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    2,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instruction(1, 3, "iconst_0"),
+                        instruction(2, 185, "invokeinterface", new MethodRef(
+                            "java/lang/Thread$Builder$OfVirtual",
+                            "inheritInheritableThreadLocals",
+                            "(Z)Ljava/lang/Thread$Builder$OfVirtual;"
+                        )),
+                        classInstruction(3, 187, "new", "com/acme/Task"),
+                        instruction(4, 89, "dup"),
+                        instruction(5, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        instruction(6, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "start", "(Ljava/lang/Runnable;)Ljava/lang/Thread;")),
+                        instruction(7, 87, "pop"),
+                        instruction(8, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).isEmpty();
     }
 
     @Test
@@ -7359,6 +9264,396 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void reachabilityTracksVirtualThreadExecutorSubmitTask() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    3,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/util/concurrent/Executors", "newVirtualThreadPerTaskExecutor", "()Ljava/util/concurrent/ExecutorService;")),
+                        instruction(1, 75, "astore_0"),
+                        instruction(2, 42, "aload_0"),
+                        classInstruction(3, 187, "new", "com/acme/Task"),
+                        instruction(4, 89, "dup"),
+                        instruction(5, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        instruction(6, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "submit", "(Ljava/lang/Runnable;)Ljava/util/concurrent/Future;")),
+                        instruction(7, 87, "pop"),
+                        instruction(8, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(graph.reachableMethods()).contains(new EntryPoint(task.name(), "run", "()V"));
+        assertThat(graph.callEdges()).contains(new CallEdge(
+            new EntryPoint(main.name(), "main", "()V"),
+            new EntryPoint(task.name(), "run", "()V"),
+            CallEdge.Kind.THREAD_START_TASK
+        ));
+    }
+
+    @Test
+    void reachabilityTracksScheduledThreadPoolExecutorScheduleTask() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    5,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        classInstruction(0, 187, "new", "java/util/concurrent/ScheduledThreadPoolExecutor"),
+                        instruction(1, 89, "dup"),
+                        instruction(2, 4, "iconst_1"),
+                        instruction(3, 183, "invokespecial", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+                        instruction(4, 75, "astore_0"),
+                        instruction(5, 42, "aload_0"),
+                        classInstruction(6, 187, "new", "com/acme/Task"),
+                        instruction(7, 89, "dup"),
+                        instruction(8, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        instruction(9, 9, "lconst_0"),
+                        instruction(10, 178, "getstatic", new FieldRef("java/util/concurrent/TimeUnit", "MILLISECONDS", "Ljava/util/concurrent/TimeUnit;")),
+                        instruction(11, 182, "invokevirtual", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "schedule", "(Ljava/lang/Runnable;JLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;")),
+                        instruction(12, 87, "pop"),
+                        instruction(13, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(graph.reachableMethods()).contains(new EntryPoint(task.name(), "run", "()V"));
+        assertThat(graph.callEdges()).contains(new CallEdge(
+            new EntryPoint(main.name(), "main", "()V"),
+            new EntryPoint(task.name(), "run", "()V"),
+            CallEdge.Kind.THREAD_START_TASK
+        ));
+    }
+
+    @Test
+    void reachabilityTracksInheritedScheduledThreadPoolExecutorScheduleOnApplicationSubclass() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile scheduler = classWithMethods(
+            "com/acme/Scheduler",
+            "java/util/concurrent/ScheduledThreadPoolExecutor",
+            0,
+            List.of(),
+            new MethodInfo(
+                0,
+                "<init>",
+                "(I)V",
+                Optional.of(new CodeAttribute(
+                    2,
+                    2,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 42, "aload_0"),
+                        instruction(1, 27, "iload_1"),
+                        instruction(2, 183, "invokespecial", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+                        instruction(3, 177, "return")
+                    )
+                ))
+            )
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    5,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        classInstruction(0, 187, "new", "com/acme/Scheduler"),
+                        instruction(1, 89, "dup"),
+                        instruction(2, 4, "iconst_1"),
+                        instruction(3, 183, "invokespecial", new MethodRef("com/acme/Scheduler", "<init>", "(I)V")),
+                        instruction(4, 75, "astore_0"),
+                        instruction(5, 42, "aload_0"),
+                        classInstruction(6, 187, "new", "com/acme/Task"),
+                        instruction(7, 89, "dup"),
+                        instruction(8, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        instruction(9, 9, "lconst_0"),
+                        instruction(10, 178, "getstatic", new FieldRef("java/util/concurrent/TimeUnit", "MILLISECONDS", "Ljava/util/concurrent/TimeUnit;")),
+                        instruction(11, 182, "invokevirtual", new MethodRef("com/acme/Scheduler", "schedule", "(Ljava/lang/Runnable;JLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;")),
+                        instruction(12, 87, "pop"),
+                        instruction(13, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(main.name(), main, scheduler.name(), scheduler, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(graph.reachableMethods()).contains(new EntryPoint(task.name(), "run", "()V"));
+        assertThat(graph.callEdges()).contains(new CallEdge(
+            new EntryPoint(main.name(), "main", "()V"),
+            new EntryPoint(task.name(), "run", "()V"),
+            CallEdge.Kind.THREAD_START_TASK
+        ));
+    }
+
+    @Test
+    void reachabilityTracksInheritedScheduledThreadPoolExecutorScheduleAtFixedRateOnApplicationSubclass() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile scheduler = classWithMethods(
+            "com/acme/Scheduler",
+            "java/util/concurrent/ScheduledThreadPoolExecutor",
+            0,
+            List.of(),
+            new MethodInfo(
+                0,
+                "<init>",
+                "(I)V",
+                Optional.of(new CodeAttribute(
+                    2,
+                    2,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 42, "aload_0"),
+                        instruction(1, 27, "iload_1"),
+                        instruction(2, 183, "invokespecial", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+                        instruction(3, 177, "return")
+                    )
+                ))
+            )
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    8,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        classInstruction(0, 187, "new", "com/acme/Scheduler"),
+                        instruction(1, 89, "dup"),
+                        instruction(2, 4, "iconst_1"),
+                        instruction(3, 183, "invokespecial", new MethodRef("com/acme/Scheduler", "<init>", "(I)V")),
+                        instruction(4, 75, "astore_0"),
+                        instruction(5, 42, "aload_0"),
+                        classInstruction(6, 187, "new", "com/acme/Task"),
+                        instruction(7, 89, "dup"),
+                        instruction(8, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        instruction(9, 9, "lconst_0"),
+                        instruction(10, 10, "lconst_1"),
+                        instruction(11, 178, "getstatic", new FieldRef("java/util/concurrent/TimeUnit", "MILLISECONDS", "Ljava/util/concurrent/TimeUnit;")),
+                        instruction(12, 182, "invokevirtual", new MethodRef("com/acme/Scheduler", "scheduleAtFixedRate", "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;")),
+                        instruction(13, 87, "pop"),
+                        instruction(14, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(main.name(), main, scheduler.name(), scheduler, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(graph.reachableMethods()).contains(new EntryPoint(task.name(), "run", "()V"));
+        assertThat(graph.callEdges()).contains(new CallEdge(
+            new EntryPoint(main.name(), "main", "()V"),
+            new EntryPoint(task.name(), "run", "()V"),
+            CallEdge.Kind.THREAD_START_TASK
+        ));
+    }
+
+    @Test
+    void reachabilityTracksScheduledExecutorServiceScheduleAtFixedRateTask() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    8,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        classInstruction(0, 187, "new", "java/util/concurrent/ScheduledThreadPoolExecutor"),
+                        instruction(1, 89, "dup"),
+                        instruction(2, 4, "iconst_1"),
+                        instruction(3, 183, "invokespecial", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+                        instruction(4, 75, "astore_0"),
+                        instruction(5, 42, "aload_0"),
+                        instruction(6, 76, "astore_1"),
+                        instruction(7, 43, "aload_1"),
+                        classInstruction(8, 187, "new", "com/acme/Task"),
+                        instruction(9, 89, "dup"),
+                        instruction(10, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        instruction(11, 9, "lconst_0"),
+                        instruction(12, 10, "lconst_1"),
+                        instruction(13, 178, "getstatic", new FieldRef("java/util/concurrent/TimeUnit", "SECONDS", "Ljava/util/concurrent/TimeUnit;")),
+                        instruction(14, 185, "invokeinterface", new MethodRef("java/util/concurrent/ScheduledExecutorService", "scheduleAtFixedRate", "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;")),
+                        instruction(15, 87, "pop"),
+                        instruction(16, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(graph.reachableMethods()).contains(new EntryPoint(task.name(), "run", "()V"));
+        assertThat(graph.callEdges()).contains(new CallEdge(
+            new EntryPoint(main.name(), "main", "()V"),
+            new EntryPoint(task.name(), "run", "()V"),
+            CallEdge.Kind.THREAD_START_TASK
+        ));
+    }
+
+    @Test
+    void reachabilityTracksScheduledExecutorServiceScheduleWithFixedDelayTask() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    8,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        classInstruction(0, 187, "new", "java/util/concurrent/ScheduledThreadPoolExecutor"),
+                        instruction(1, 89, "dup"),
+                        instruction(2, 4, "iconst_1"),
+                        instruction(3, 183, "invokespecial", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+                        instruction(4, 75, "astore_0"),
+                        instruction(5, 42, "aload_0"),
+                        instruction(6, 76, "astore_1"),
+                        instruction(7, 43, "aload_1"),
+                        classInstruction(8, 187, "new", "com/acme/Task"),
+                        instruction(9, 89, "dup"),
+                        instruction(10, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        instruction(11, 9, "lconst_0"),
+                        instruction(12, 10, "lconst_1"),
+                        instruction(13, 178, "getstatic", new FieldRef("java/util/concurrent/TimeUnit", "SECONDS", "Ljava/util/concurrent/TimeUnit;")),
+                        instruction(14, 185, "invokeinterface", new MethodRef("java/util/concurrent/ScheduledExecutorService", "scheduleWithFixedDelay", "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;")),
+                        instruction(15, 87, "pop"),
+                        instruction(16, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(graph.reachableMethods()).contains(new EntryPoint(task.name(), "run", "()V"));
+        assertThat(graph.callEdges()).contains(new CallEdge(
+            new EntryPoint(main.name(), "main", "()V"),
+            new EntryPoint(task.name(), "run", "()V"),
+            CallEdge.Kind.THREAD_START_TASK
+        ));
+    }
+
+    @Test
     void staticVerifierAcceptsReachableVirtualThreadExecutorExecute() {
         final ClassFile task = classWithMethods(
             "com/acme/Task",
@@ -7437,6 +9732,845 @@ final class CoreBehaviorTest {
         );
 
         assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableVirtualThreadExecutorSubmit() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    3,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/util/concurrent/Executors", "newVirtualThreadPerTaskExecutor", "()Ljava/util/concurrent/ExecutorService;")),
+                        instruction(1, 75, "astore_0"),
+                        instruction(2, 42, "aload_0"),
+                        classInstruction(3, 187, "new", "com/acme/Task"),
+                        instruction(4, 89, "dup"),
+                        instruction(5, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        instruction(6, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "submit", "(Ljava/lang/Runnable;)Ljava/util/concurrent/Future;")),
+                        instruction(7, 87, "pop"),
+                        instruction(8, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableFutureCancel() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    4,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/util/concurrent/Executors", "newVirtualThreadPerTaskExecutor", "()Ljava/util/concurrent/ExecutorService;")),
+                        instruction(1, 75, "astore_0"),
+                        instruction(2, 42, "aload_0"),
+                        classInstruction(3, 187, "new", "com/acme/Task"),
+                        instruction(4, 89, "dup"),
+                        instruction(5, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        instruction(6, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "submit", "(Ljava/lang/Runnable;)Ljava/util/concurrent/Future;")),
+                        instruction(7, 76, "astore_1"),
+                        instruction(8, 43, "aload_1"),
+                        instruction(9, 4, "iconst_1"),
+                        instruction(10, 185, "invokeinterface", new MethodRef("java/util/concurrent/Future", "cancel", "(Z)Z")),
+                        instruction(11, 87, "pop"),
+                        instruction(12, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableScheduledThreadPoolExecutorSchedule() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    5,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        classInstruction(0, 187, "new", "java/util/concurrent/ScheduledThreadPoolExecutor"),
+                        instruction(1, 89, "dup"),
+                        instruction(2, 4, "iconst_1"),
+                        instruction(3, 183, "invokespecial", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+                        instruction(4, 75, "astore_0"),
+                        instruction(5, 42, "aload_0"),
+                        classInstruction(6, 187, "new", "com/acme/Task"),
+                        instruction(7, 89, "dup"),
+                        instruction(8, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        instruction(9, 9, "lconst_0"),
+                        instruction(10, 178, "getstatic", new FieldRef("java/util/concurrent/TimeUnit", "MILLISECONDS", "Ljava/util/concurrent/TimeUnit;")),
+                        instruction(11, 182, "invokevirtual", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "schedule", "(Ljava/lang/Runnable;JLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;")),
+                        instruction(12, 87, "pop"),
+                        instruction(13, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableScheduledThreadPoolExecutorShutdownViaExecutorServiceAlias() {
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    2,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        classInstruction(0, 187, "new", "java/util/concurrent/ScheduledThreadPoolExecutor"),
+                        instruction(1, 89, "dup"),
+                        instruction(2, 4, "iconst_1"),
+                        instruction(3, 183, "invokespecial", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+                        instruction(4, 75, "astore_0"),
+                        instruction(5, 42, "aload_0"),
+                        instruction(6, 76, "astore_1"),
+                        instruction(7, 43, "aload_1"),
+                        instruction(8, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "shutdown", "()V")),
+                        instruction(9, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableScheduledThreadPoolExecutorAwaitTerminationViaExecutorServiceAlias() {
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    4,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        classInstruction(0, 187, "new", "java/util/concurrent/ScheduledThreadPoolExecutor"),
+                        instruction(1, 89, "dup"),
+                        instruction(2, 4, "iconst_1"),
+                        instruction(3, 183, "invokespecial", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+                        instruction(4, 75, "astore_0"),
+                        instruction(5, 42, "aload_0"),
+                        instruction(6, 76, "astore_1"),
+                        instruction(7, 43, "aload_1"),
+                        instruction(8, 10, "lconst_1"),
+                        instruction(9, 178, "getstatic", new FieldRef("java/util/concurrent/TimeUnit", "SECONDS", "Ljava/util/concurrent/TimeUnit;")),
+                        instruction(10, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "awaitTermination", "(JLjava/util/concurrent/TimeUnit;)Z")),
+                        instruction(11, 87, "pop"),
+                        instruction(12, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableScheduledThreadPoolExecutorShutdownNowViaExecutorServiceAlias() {
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    2,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        classInstruction(0, 187, "new", "java/util/concurrent/ScheduledThreadPoolExecutor"),
+                        instruction(1, 89, "dup"),
+                        instruction(2, 4, "iconst_1"),
+                        instruction(3, 183, "invokespecial", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+                        instruction(4, 75, "astore_0"),
+                        instruction(5, 42, "aload_0"),
+                        instruction(6, 76, "astore_1"),
+                        instruction(7, 43, "aload_1"),
+                        instruction(8, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "shutdownNow", "()Ljava/util/List;")),
+                        instruction(9, 87, "pop"),
+                        instruction(10, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableScheduledFutureStateQueriesFromSchedule() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    6,
+                    2,
+                    new byte[0],
+                    0,
+                    List.of(
+                        classInstruction(0, 187, "new", "java/util/concurrent/ScheduledThreadPoolExecutor"),
+                        instruction(1, 89, "dup"),
+                        instruction(2, 4, "iconst_1"),
+                        instruction(3, 183, "invokespecial", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+                        instruction(4, 75, "astore_0"),
+                        instruction(5, 42, "aload_0"),
+                        classInstruction(6, 187, "new", "com/acme/Task"),
+                        instruction(7, 89, "dup"),
+                        instruction(8, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        instruction(9, 9, "lconst_0"),
+                        instruction(10, 178, "getstatic", new FieldRef("java/util/concurrent/TimeUnit", "SECONDS", "Ljava/util/concurrent/TimeUnit;")),
+                        instruction(11, 182, "invokevirtual", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "schedule", "(Ljava/lang/Runnable;JLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;")),
+                        instruction(12, 76, "astore_1"),
+                        instruction(13, 43, "aload_1"),
+                        instruction(14, 185, "invokeinterface", new MethodRef("java/util/concurrent/Future", "isDone", "()Z")),
+                        instruction(15, 87, "pop"),
+                        instruction(16, 43, "aload_1"),
+                        instruction(17, 185, "invokeinterface", new MethodRef("java/util/concurrent/Future", "isCancelled", "()Z")),
+                        instruction(18, 87, "pop"),
+                        instruction(19, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableScheduledFutureCancelFromFixedRateSchedule() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    8,
+                    2,
+                    new byte[0],
+                    0,
+                    List.of(
+                        classInstruction(0, 187, "new", "java/util/concurrent/ScheduledThreadPoolExecutor"),
+                        instruction(1, 89, "dup"),
+                        instruction(2, 4, "iconst_1"),
+                        instruction(3, 183, "invokespecial", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+                        instruction(4, 75, "astore_0"),
+                        instruction(5, 42, "aload_0"),
+                        classInstruction(6, 187, "new", "com/acme/Task"),
+                        instruction(7, 89, "dup"),
+                        instruction(8, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        instruction(9, 9, "lconst_0"),
+                        instruction(10, 10, "lconst_1"),
+                        instruction(11, 178, "getstatic", new FieldRef("java/util/concurrent/TimeUnit", "SECONDS", "Ljava/util/concurrent/TimeUnit;")),
+                        instruction(12, 182, "invokevirtual", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "scheduleAtFixedRate", "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;")),
+                        instruction(13, 76, "astore_1"),
+                        instruction(14, 43, "aload_1"),
+                        instruction(15, 4, "iconst_1"),
+                        instruction(16, 185, "invokeinterface", new MethodRef("java/util/concurrent/Future", "cancel", "(Z)Z")),
+                        instruction(17, 87, "pop"),
+                        instruction(18, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableScheduledFutureStateQueriesFromScheduledExecutorServiceAlias() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    6,
+                    2,
+                    new byte[0],
+                    0,
+                    List.of(
+                        classInstruction(0, 187, "new", "java/util/concurrent/ScheduledThreadPoolExecutor"),
+                        instruction(1, 89, "dup"),
+                        instruction(2, 4, "iconst_1"),
+                        instruction(3, 183, "invokespecial", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+                        instruction(4, 75, "astore_0"),
+                        instruction(5, 42, "aload_0"),
+                        instruction(6, 76, "astore_1"),
+                        instruction(7, 43, "aload_1"),
+                        classInstruction(8, 187, "new", "com/acme/Task"),
+                        instruction(9, 89, "dup"),
+                        instruction(10, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        instruction(11, 9, "lconst_0"),
+                        instruction(12, 178, "getstatic", new FieldRef("java/util/concurrent/TimeUnit", "SECONDS", "Ljava/util/concurrent/TimeUnit;")),
+                        instruction(13, 185, "invokeinterface", new MethodRef("java/util/concurrent/ScheduledExecutorService", "schedule", "(Ljava/lang/Runnable;JLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;")),
+                        instruction(14, 77, "astore_2"),
+                        instruction(15, 44, "aload_2"),
+                        instruction(16, 185, "invokeinterface", new MethodRef("java/util/concurrent/Future", "isDone", "()Z")),
+                        instruction(17, 87, "pop"),
+                        instruction(18, 44, "aload_2"),
+                        instruction(19, 185, "invokeinterface", new MethodRef("java/util/concurrent/Future", "isCancelled", "()Z")),
+                        instruction(20, 87, "pop"),
+                        instruction(21, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableScheduledFutureCancelFromScheduledExecutorServiceFixedDelayAlias() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    8,
+                    3,
+                    new byte[0],
+                    0,
+                    List.of(
+                        classInstruction(0, 187, "new", "java/util/concurrent/ScheduledThreadPoolExecutor"),
+                        instruction(1, 89, "dup"),
+                        instruction(2, 4, "iconst_1"),
+                        instruction(3, 183, "invokespecial", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+                        instruction(4, 75, "astore_0"),
+                        instruction(5, 42, "aload_0"),
+                        instruction(6, 76, "astore_1"),
+                        instruction(7, 43, "aload_1"),
+                        classInstruction(8, 187, "new", "com/acme/Task"),
+                        instruction(9, 89, "dup"),
+                        instruction(10, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        instruction(11, 9, "lconst_0"),
+                        instruction(12, 10, "lconst_1"),
+                        instruction(13, 178, "getstatic", new FieldRef("java/util/concurrent/TimeUnit", "SECONDS", "Ljava/util/concurrent/TimeUnit;")),
+                        instruction(14, 185, "invokeinterface", new MethodRef("java/util/concurrent/ScheduledExecutorService", "scheduleWithFixedDelay", "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;")),
+                        instruction(15, 77, "astore_2"),
+                        instruction(16, 44, "aload_2"),
+                        instruction(17, 4, "iconst_1"),
+                        instruction(18, 185, "invokeinterface", new MethodRef("java/util/concurrent/Future", "cancel", "(Z)Z")),
+                        instruction(19, 87, "pop"),
+                        instruction(20, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableInheritedScheduledThreadPoolExecutorShutdownViaExecutorServiceAlias() {
+        final ClassFile scheduler = classWithMethods(
+            "com/acme/Scheduler",
+            "java/util/concurrent/ScheduledThreadPoolExecutor",
+            0,
+            List.of(),
+            new MethodInfo(
+                0,
+                "<init>",
+                "(I)V",
+                Optional.of(new CodeAttribute(
+                    2,
+                    2,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 42, "aload_0"),
+                        instruction(1, 27, "iload_1"),
+                        instruction(2, 183, "invokespecial", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+                        instruction(3, 177, "return")
+                    )
+                ))
+            )
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    2,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        classInstruction(0, 187, "new", "com/acme/Scheduler"),
+                        instruction(1, 89, "dup"),
+                        instruction(2, 4, "iconst_1"),
+                        instruction(3, 183, "invokespecial", new MethodRef("com/acme/Scheduler", "<init>", "(I)V")),
+                        instruction(4, 75, "astore_0"),
+                        instruction(5, 42, "aload_0"),
+                        instruction(6, 76, "astore_1"),
+                        instruction(7, 43, "aload_1"),
+                        instruction(8, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "shutdown", "()V")),
+                        instruction(9, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main, scheduler.name(), scheduler),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableInheritedScheduledThreadPoolExecutorAwaitTerminationViaExecutorServiceAlias() {
+        final ClassFile scheduler = classWithMethods(
+            "com/acme/Scheduler",
+            "java/util/concurrent/ScheduledThreadPoolExecutor",
+            0,
+            List.of(),
+            new MethodInfo(
+                0,
+                "<init>",
+                "(I)V",
+                Optional.of(new CodeAttribute(
+                    2,
+                    2,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 42, "aload_0"),
+                        instruction(1, 27, "iload_1"),
+                        instruction(2, 183, "invokespecial", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+                        instruction(3, 177, "return")
+                    )
+                ))
+            )
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    4,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        classInstruction(0, 187, "new", "com/acme/Scheduler"),
+                        instruction(1, 89, "dup"),
+                        instruction(2, 4, "iconst_1"),
+                        instruction(3, 183, "invokespecial", new MethodRef("com/acme/Scheduler", "<init>", "(I)V")),
+                        instruction(4, 75, "astore_0"),
+                        instruction(5, 42, "aload_0"),
+                        instruction(6, 76, "astore_1"),
+                        instruction(7, 43, "aload_1"),
+                        instruction(8, 10, "lconst_1"),
+                        instruction(9, 178, "getstatic", new FieldRef("java/util/concurrent/TimeUnit", "SECONDS", "Ljava/util/concurrent/TimeUnit;")),
+                        instruction(10, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "awaitTermination", "(JLjava/util/concurrent/TimeUnit;)Z")),
+                        instruction(11, 87, "pop"),
+                        instruction(12, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main, scheduler.name(), scheduler),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableInheritedScheduledThreadPoolExecutorShutdownNowViaExecutorServiceAlias() {
+        final ClassFile scheduler = classWithMethods(
+            "com/acme/Scheduler",
+            "java/util/concurrent/ScheduledThreadPoolExecutor",
+            0,
+            List.of(),
+            new MethodInfo(
+                0,
+                "<init>",
+                "(I)V",
+                Optional.of(new CodeAttribute(
+                    2,
+                    2,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 42, "aload_0"),
+                        instruction(1, 27, "iload_1"),
+                        instruction(2, 183, "invokespecial", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+                        instruction(3, 177, "return")
+                    )
+                ))
+            )
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    2,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        classInstruction(0, 187, "new", "com/acme/Scheduler"),
+                        instruction(1, 89, "dup"),
+                        instruction(2, 4, "iconst_1"),
+                        instruction(3, 183, "invokespecial", new MethodRef("com/acme/Scheduler", "<init>", "(I)V")),
+                        instruction(4, 75, "astore_0"),
+                        instruction(5, 42, "aload_0"),
+                        instruction(6, 76, "astore_1"),
+                        instruction(7, 43, "aload_1"),
+                        instruction(8, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "shutdownNow", "()Ljava/util/List;")),
+                        instruction(9, 87, "pop"),
+                        instruction(10, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main, scheduler.name(), scheduler),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableVirtualThreadFactoryStaticField() {
+        final ClassFile main = new ClassFile(
+            69,
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            List.of(new FieldInfo(0x0008, "FACTORY", "Ljava/util/concurrent/ThreadFactory;")),
+            List.of(
+                new MethodInfo(
+                    0x0008,
+                    "main",
+                    "()V",
+                    Optional.of(new CodeAttribute(
+                        2,
+                        1,
+                        new byte[0],
+                        0,
+                        List.of(
+                            instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;")),
+                            instruction(1, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "factory", "()Ljava/util/concurrent/ThreadFactory;")),
+                            instruction(2, 179, "putstatic", new FieldRef("com/acme/Main", "FACTORY", "Ljava/util/concurrent/ThreadFactory;")),
+                            instruction(3, 178, "getstatic", new FieldRef("com/acme/Main", "FACTORY", "Ljava/util/concurrent/ThreadFactory;")),
+                            instruction(4, 185, "invokeinterface", new MethodRef("java/util/concurrent/ThreadFactory", "toString", "()Ljava/lang/String;")),
+                            instruction(5, 87, "pop"),
+                            instruction(6, 177, "return")
+                        )
+                    ))
+                )
+            ),
+            Path.of("Main.class"),
+            true
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    void staticVerifierAcceptsReachableVirtualThreadExecutorStaticField() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile main = new ClassFile(
+            69,
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            List.of(new FieldInfo(0x0008, "EXECUTOR", "Ljava/util/concurrent/ExecutorService;")),
+            List.of(
+                new MethodInfo(
+                    0x0008,
+                    "main",
+                    "()V",
+                    Optional.of(new CodeAttribute(
+                        4,
+                        1,
+                        new byte[0],
+                        0,
+                        List.of(
+                            instruction(0, 184, "invokestatic", new MethodRef("java/util/concurrent/Executors", "newVirtualThreadPerTaskExecutor", "()Ljava/util/concurrent/ExecutorService;")),
+                            instruction(1, 179, "putstatic", new FieldRef("com/acme/Main", "EXECUTOR", "Ljava/util/concurrent/ExecutorService;")),
+                            instruction(2, 178, "getstatic", new FieldRef("com/acme/Main", "EXECUTOR", "Ljava/util/concurrent/ExecutorService;")),
+                            classInstruction(3, 187, "new", "com/acme/Task"),
+                            instruction(4, 89, "dup"),
+                            instruction(5, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                            instruction(6, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "execute", "(Ljava/lang/Runnable;)V")),
+                            instruction(7, 178, "getstatic", new FieldRef("com/acme/Main", "EXECUTOR", "Ljava/util/concurrent/ExecutorService;")),
+                            instruction(8, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "close", "()V")),
+                            instruction(9, 177, "return")
+                        )
+                    ))
+                )
+            ),
+            Path.of("Main.class"),
+            true
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierRejectsReachableVirtualThreadExecutorStaticFieldWithoutMatchingPutStatic() {
+        final ClassFile main = new ClassFile(
+            69,
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            List.of(new FieldInfo(0x0008, "EXECUTOR", "Ljava/util/concurrent/ExecutorService;")),
+            List.of(
+                new MethodInfo(
+                    0x0008,
+                    "main",
+                    "()V",
+                    Optional.of(new CodeAttribute(
+                        1,
+                        1,
+                        new byte[0],
+                        0,
+                        List.of(
+                            instruction(0, 178, "getstatic", new FieldRef("com/acme/Main", "EXECUTOR", "Ljava/util/concurrent/ExecutorService;")),
+                            instruction(1, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "close", "()V")),
+                            instruction(2, 177, "return")
+                        )
+                    ))
+                )
+            ),
+            Path.of("Main.class"),
+            true
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
+            assertThat(diagnostic.code()).isEqualTo("JAVAN077");
+            assertThat(diagnostic.subject()).isEqualTo("ExecutorService.close()");
+        });
     }
 
     @Test
@@ -7962,6 +11096,137 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void staticVerifierAcceptsReachableVirtualThreadExecutorAwaitTermination() {
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    4,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/util/concurrent/Executors", "newVirtualThreadPerTaskExecutor", "()Ljava/util/concurrent/ExecutorService;")),
+                        instruction(1, 75, "astore_0"),
+                        instruction(2, 42, "aload_0"),
+                        instruction(3, 10, "lconst_1"),
+                        instruction(4, 178, "getstatic", new FieldRef("java/util/concurrent/TimeUnit", "SECONDS", "Ljava/util/concurrent/TimeUnit;")),
+                        instruction(5, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "awaitTermination", "(JLjava/util/concurrent/TimeUnit;)Z")),
+                        instruction(6, 87, "pop"),
+                        instruction(7, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableVirtualThreadExecutorShutdownNow() {
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    2,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/util/concurrent/Executors", "newVirtualThreadPerTaskExecutor", "()Ljava/util/concurrent/ExecutorService;")),
+                        instruction(1, 75, "astore_0"),
+                        instruction(2, 42, "aload_0"),
+                        instruction(3, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "shutdownNow", "()Ljava/util/List;")),
+                        instruction(4, 87, "pop"),
+                        instruction(5, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableVirtualThreadFutureStateQueries() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    4,
+                    2,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/util/concurrent/Executors", "newVirtualThreadPerTaskExecutor", "()Ljava/util/concurrent/ExecutorService;")),
+                        instruction(1, 75, "astore_0"),
+                        instruction(2, 42, "aload_0"),
+                        classInstruction(3, 187, "new", "com/acme/Task"),
+                        instruction(4, 89, "dup"),
+                        instruction(5, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        instruction(6, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "submit", "(Ljava/lang/Runnable;)Ljava/util/concurrent/Future;")),
+                        instruction(7, 76, "astore_1"),
+                        instruction(8, 43, "aload_1"),
+                        instruction(9, 185, "invokeinterface", new MethodRef("java/util/concurrent/Future", "isDone", "()Z")),
+                        instruction(10, 87, "pop"),
+                        instruction(11, 43, "aload_1"),
+                        instruction(12, 4, "iconst_1"),
+                        instruction(13, 185, "invokeinterface", new MethodRef("java/util/concurrent/Future", "cancel", "(Z)Z")),
+                        instruction(14, 87, "pop"),
+                        instruction(15, 43, "aload_1"),
+                        instruction(16, 185, "invokeinterface", new MethodRef("java/util/concurrent/Future", "isCancelled", "()Z")),
+                        instruction(17, 87, "pop"),
+                        instruction(18, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
     void staticVerifierRejectsMalformedVirtualThreadBuilderToStringDescriptor() {
         final ClassFile main = classWithMethods(
             "com/acme/Main",
@@ -8161,6 +11426,111 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void reachabilityConservativelyTracksScheduledExecutorServiceScheduleTaskForUnknownReceiver() {
+        final ClassFile task = classWithMethods(
+            "com/acme/Task",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final String descriptor = "(Ljava/util/concurrent/ScheduledExecutorService;)V";
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                descriptor,
+                Optional.of(new CodeAttribute(
+                    5,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 42, "aload_0"),
+                        classInstruction(1, 187, "new", "com/acme/Task"),
+                        instruction(2, 89, "dup"),
+                        instruction(3, 183, "invokespecial", new MethodRef("com/acme/Task", "<init>", "()V")),
+                        instruction(4, 9, "lconst_0"),
+                        instruction(5, 178, "getstatic", new FieldRef("java/util/concurrent/TimeUnit", "SECONDS", "Ljava/util/concurrent/TimeUnit;")),
+                        instruction(6, 185, "invokeinterface", new MethodRef("java/util/concurrent/ScheduledExecutorService", "schedule", "(Ljava/lang/Runnable;JLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;")),
+                        instruction(7, 87, "pop"),
+                        instruction(8, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(main.name(), main, task.name(), task),
+            List.of(new EntryPoint(main.name(), "main", descriptor))
+        );
+
+        assertThat(graph.reachableMethods()).contains(new EntryPoint(task.name(), "run", "()V"));
+    }
+
+    @Test
+    void reachabilityFallsBackToAllRunnableTargetsWhenScheduledRunnableCannotBeInferred() {
+        final ClassFile taskA = classWithMethods(
+            "com/acme/TaskA",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final ClassFile taskB = classWithMethods(
+            "com/acme/TaskB",
+            "java/lang/Object",
+            0,
+            List.of("java/lang/Runnable"),
+            methodInfo("<init>", "()V"),
+            methodInfo("run", "()V")
+        );
+        final String descriptor = "(Ljava/util/concurrent/ScheduledExecutorService;Ljava/lang/Runnable;)V";
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                descriptor,
+                Optional.of(new CodeAttribute(
+                    5,
+                    2,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 42, "aload_0"),
+                        instruction(1, 43, "aload_1"),
+                        instruction(2, 9, "lconst_0"),
+                        instruction(3, 178, "getstatic", new FieldRef("java/util/concurrent/TimeUnit", "SECONDS", "Ljava/util/concurrent/TimeUnit;")),
+                        instruction(4, 185, "invokeinterface", new MethodRef("java/util/concurrent/ScheduledExecutorService", "schedule", "(Ljava/lang/Runnable;JLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;")),
+                        instruction(5, 87, "pop"),
+                        instruction(6, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(
+            Map.of(main.name(), main, taskA.name(), taskA, taskB.name(), taskB),
+            List.of(new EntryPoint(main.name(), "main", descriptor))
+        );
+
+        assertThat(graph.reachableMethods()).contains(
+            new EntryPoint(taskA.name(), "run", "()V"),
+            new EntryPoint(taskB.name(), "run", "()V")
+        );
+    }
+
+    @Test
     void staticVerifierRejectsReachableExecutorExecuteWithUnknownReceiver() {
         final String descriptor = "(Ljava/util/concurrent/ExecutorService;)V";
         final ClassFile main = classWithMethods(
@@ -8284,6 +11654,48 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void staticVerifierRejectsReachableScheduledThreadPoolExecutorShutdownAliasWithoutSupportedConstruction() {
+        final ClassFile main = classWithMethods(
+            "com/acme/Main",
+            "java/lang/Object",
+            0,
+            List.of(),
+            new MethodInfo(
+                0x0008,
+                "main",
+                "()V",
+                Optional.of(new CodeAttribute(
+                    2,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        classInstruction(0, 187, "new", "java/util/concurrent/ScheduledThreadPoolExecutor"),
+                        instruction(1, 4, "iconst_1"),
+                        instruction(2, 183, "invokespecial", new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "<init>", "(I)V")),
+                        instruction(3, 75, "astore_0"),
+                        instruction(4, 42, "aload_0"),
+                        instruction(5, 76, "astore_1"),
+                        instruction(6, 43, "aload_1"),
+                        instruction(7, 185, "invokeinterface", new MethodRef("java/util/concurrent/ExecutorService", "shutdown", "()V")),
+                        instruction(8, 177, "return")
+                    )
+                ))
+            )
+        );
+
+        final List<Diagnostic> diagnostics = new StaticVerifier().verify(
+            Map.of(main.name(), main),
+            List.of(new EntryPoint(main.name(), "main", "()V"))
+        );
+
+        assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
+            assertThat(diagnostic.code()).isEqualTo("JAVAN077");
+            assertThat(diagnostic.subject()).isEqualTo("ExecutorService.shutdown()");
+        });
+    }
+
+    @Test
     void staticVerifierRejectsReachableExecutorsFactoryAsConcurrencyRuntimeApi() {
         final ClassFile main = classWithMethods(
             "com/acme/Main",
@@ -8371,6 +11783,24 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void staticVerifierAcceptsSynchronizedMonitorHandlerShape() {
+        final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
+            instruction(0, 42, "aload_0"),
+            instruction(1, 194, "monitorenter"),
+            instruction(2, 42, "aload_0"),
+            instruction(3, 195, "monitorexit"),
+            instruction(4, 177, "return"),
+            instruction(5, 76, "astore_1"),
+            instruction(6, 43, "aload_1"),
+            instruction(7, 195, "monitorexit"),
+            instruction(8, 43, "aload_1"),
+            instruction(9, 191, "athrow")
+        ), new CodeException(0, 4, 5, Optional.empty()));
+
+        assertThat(diagnostics).extracting(Diagnostic::code).containsExactly("JAVAN076");
+    }
+
+    @Test
     void staticVerifierRejectsInterruptedHandlerWithUnsupportedPrintlnDescriptor() {
         final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
             instruction(0, 20, "ldc2_w"),
@@ -8446,7 +11876,7 @@ final class CoreBehaviorTest {
     void staticVerifierRejectsInterruptedHandlerWithWrongJoinDescriptor() {
         final List<Diagnostic> diagnostics = verifyExceptionTable(List.of(
             instruction(0, 42, "aload_0"),
-            instruction(1, 182, "invokevirtual", new MethodRef("java/lang/Thread", "join", "(J)V")),
+            instruction(1, 182, "invokevirtual", new MethodRef("java/lang/Thread", "join", "(I)V")),
             instruction(2, 75, "astore_0")
         ), new CodeException(0, 2, 2, Optional.of("java/lang/InterruptedException")));
 
@@ -8886,6 +12316,16 @@ final class CoreBehaviorTest {
         final String descriptor,
         final boolean reachable
     ) {
+        return verifyRecordObjectMethod(superName, methodName, descriptor, List.of(), reachable);
+    }
+
+    private static List<Diagnostic> verifyRecordObjectMethod(
+        final String superName,
+        final String methodName,
+        final String descriptor,
+        final List<javan.classfile.FieldInfo> fields,
+        final boolean reachable
+    ) {
         return verifyRecordObjectMethod(superName, methodName, descriptor, Optional.of(new DynamicRef(
             methodName,
             descriptor,
@@ -8893,7 +12333,7 @@ final class CoreBehaviorTest {
             "bootstrap",
             "()V",
             List.of("field")
-        )), reachable);
+        )), fields, reachable);
     }
 
     private static List<Diagnostic> verifyRecordObjectMethod(
@@ -8901,6 +12341,17 @@ final class CoreBehaviorTest {
         final String methodName,
         final String descriptor,
         final Optional<DynamicRef> dynamicRef,
+        final boolean reachable
+    ) {
+        return verifyRecordObjectMethod(superName, methodName, descriptor, dynamicRef, List.of(), reachable);
+    }
+
+    private static List<Diagnostic> verifyRecordObjectMethod(
+        final String superName,
+        final String methodName,
+        final String descriptor,
+        final Optional<DynamicRef> dynamicRef,
+        final List<javan.classfile.FieldInfo> fields,
         final boolean reachable
     ) {
         final MethodInfo method = methodInfo(methodName, descriptor, new Instruction(
@@ -8916,7 +12367,17 @@ final class CoreBehaviorTest {
             Optional.empty(),
             dynamicRef
         ));
-        final ClassFile classFile = classWithMethods("com/acme/Message", superName, 0, List.of(), method);
+        final ClassFile classFile = new ClassFile(
+            69,
+            "com/acme/Message",
+            superName,
+            0,
+            List.of(),
+            List.copyOf(fields),
+            List.of(method),
+            Path.of("com/acme/Message.class"),
+            true
+        );
         final List<EntryPoint> reachableMethods;
         if (reachable) {
             reachableMethods = List.of(new EntryPoint(classFile.name(), methodName, descriptor));
@@ -9117,7 +12578,7 @@ final class CoreBehaviorTest {
             Optional.empty(),
             Optional.empty(),
             Optional.empty(),
-            Optional.empty(),
+            normalizedIntValue(opcode, new byte[0]),
             Optional.empty(),
             Optional.empty()
         );
@@ -9137,7 +12598,7 @@ final class CoreBehaviorTest {
             Optional.empty(),
             Optional.empty(),
             Optional.empty(),
-            Optional.empty(),
+            normalizedIntValue(opcode, bytes),
             Optional.empty(),
             Optional.empty()
         );
@@ -9157,6 +12618,42 @@ final class CoreBehaviorTest {
             Optional.empty(),
             Optional.empty()
         );
+    }
+
+    private static Instruction intInstruction(final int offset, final int opcode, final String mnemonic, final int value) {
+        return new Instruction(
+            offset,
+            opcode,
+            mnemonic,
+            new byte[0],
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(value),
+            Optional.empty(),
+            Optional.empty()
+        );
+    }
+
+    private static Optional<Integer> normalizedIntValue(final int opcode, final byte[] operands) {
+        return switch (opcode) {
+            case 2 -> Optional.of(-1);
+            case 3 -> Optional.of(0);
+            case 4 -> Optional.of(1);
+            case 5 -> Optional.of(2);
+            case 6 -> Optional.of(3);
+            case 7 -> Optional.of(4);
+            case 8 -> Optional.of(5);
+            case 16 -> operands.length == 1 ? Optional.of((int) operands[0]) : Optional.empty();
+            case 17 -> operands.length == 2 ? Optional.of(signedShort(operands[0], operands[1])) : Optional.empty();
+            default -> Optional.empty();
+        };
+    }
+
+    private static int signedShort(final byte high, final byte low) {
+        final int unsigned = ((high & 0xFF) << 8) | (low & 0xFF);
+        return unsigned > Short.MAX_VALUE ? unsigned - 0x1_0000 : unsigned;
     }
 
     private static Instruction instruction(final int offset, final int opcode, final String mnemonic, final FieldRef fieldRef) {
@@ -9326,6 +12823,427 @@ final class CoreBehaviorTest {
         );
     }
 
+    private static MethodInfo exactCatchNullEnumLookupMethod() {
+        return new MethodInfo(
+            0x0008,
+            "enumOf",
+            "(Ljava/lang/Object;Ljava/lang/Class;)Ljava/lang/Enum;",
+            Optional.of(new CodeAttribute(
+                2,
+                4,
+                new byte[0],
+                3,
+                List.of(
+                    new CodeException(0, 36, 48, Optional.of("java/lang/IllegalArgumentException")),
+                    new CodeException(37, 38, 48, Optional.of("java/lang/IllegalArgumentException")),
+                    new CodeException(39, 47, 48, Optional.of("java/lang/IllegalArgumentException"))
+                ),
+                List.of(
+                    instruction(0, 42, "aload_0"),
+                    classInstruction(1, 193, "instanceof", "java/lang/Number"),
+                    instruction(4, 153, "ifeq"),
+                    instruction(7, 42, "aload_0"),
+                    classInstruction(8, 192, "checkcast", "java/lang/Number"),
+                    instruction(11, 182, "invokevirtual", new MethodRef("java/lang/Number", "intValue", "()I")),
+                    instruction(14, 61, "istore_2"),
+                    instruction(15, 43, "aload_1"),
+                    instruction(16, 182, "invokevirtual", new MethodRef("java/lang/Class", "getEnumConstants", "()[Ljava/lang/Object;")),
+                    classInstruction(19, 192, "checkcast", "[Ljava/lang/Enum;"),
+                    instruction(22, 78, "astore_3"),
+                    instruction(23, 28, "iload_2"),
+                    instruction(24, 155, "iflt"),
+                    instruction(27, 28, "iload_2"),
+                    instruction(28, 45, "aload_3"),
+                    instruction(29, 190, "arraylength"),
+                    instruction(30, 162, "if_icmpge"),
+                    instruction(33, 45, "aload_3"),
+                    instruction(34, 28, "iload_2"),
+                    instruction(35, 50, "aaload"),
+                    instruction(36, 176, "areturn"),
+                    instruction(37, 1, "aconst_null"),
+                    instruction(38, 176, "areturn"),
+                    instruction(39, 43, "aload_1"),
+                    instruction(40, 42, "aload_0"),
+                    instruction(41, 184, "invokestatic", new MethodRef("java/lang/String", "valueOf", "(Ljava/lang/Object;)Ljava/lang/String;")),
+                    instruction(44, 184, "invokestatic", new MethodRef("java/lang/Enum", "valueOf", "(Ljava/lang/Class;Ljava/lang/String;)Ljava/lang/Enum;")),
+                    instruction(47, 176, "areturn"),
+                    instruction(48, 77, "astore_2"),
+                    instruction(49, 1, "aconst_null"),
+                    instruction(50, 176, "areturn")
+                )
+            ))
+        );
+    }
+
+    private static MethodInfo exactCatchNullFallibleApplyMethod() {
+        return exactCatchNullFallibleApplyMethod(
+            "com/acme/FallibleFunction",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
+        );
+    }
+
+    private static MethodInfo exactCatchNullFallibleApplyMethod(
+        final String owner,
+        final String descriptor
+    ) {
+        return new MethodInfo(
+            0,
+            "apply",
+            descriptor,
+            Optional.of(new CodeAttribute(
+                2,
+                3,
+                new byte[0],
+                1,
+                List.of(new CodeException(0, 7, 8, Optional.of("java/lang/Exception"))),
+                List.of(
+                    instruction(0, 42, "aload_0"),
+                    instruction(1, 43, "aload_1"),
+                    instruction(2, 185, "invokeinterface", new MethodRef(owner, "applyWithException", descriptor)),
+                    instruction(7, 176, "areturn"),
+                    instruction(8, 77, "astore_2"),
+                    instruction(9, 1, "aconst_null"),
+                    instruction(10, 176, "areturn")
+                )
+            ))
+        );
+    }
+
+    private static MethodInfo exactTemporalOfLoopFallbackMethod() {
+        return new MethodInfo(
+            0x0008,
+            "temporalOf",
+            "(Ljava/lang/Class;Ljava/lang/String;Ljava/util/function/Function;)Ljava/lang/Object;",
+            Optional.of(new CodeAttribute(
+                3,
+                8,
+                new byte[0],
+                2,
+                List.of(
+                    new CodeException(24, 36, 37, Optional.of("java/time/format/DateTimeParseException")),
+                    new CodeException(39, 53, 54, Optional.of("java/lang/Exception"))
+                ),
+                List.of(
+                    fieldInstruction(0, 178, "getstatic", new FieldRef("com/acme/TemporalSupport", "DATE_TIME_FORMATTERS", "[Ljava/time/format/DateTimeFormatter;")),
+                    instruction(3, 78, "astore_3"),
+                    instruction(4, 45, "aload_3"),
+                    instruction(5, 190, "arraylength"),
+                    instruction(6, 54, "istore"),
+                    instruction(8, 3, "iconst_0"),
+                    instruction(9, 54, "istore"),
+                    instruction(11, 21, "iload"),
+                    instruction(13, 21, "iload"),
+                    instruction(15, 162, "if_icmpge"),
+                    instruction(18, 45, "aload_3"),
+                    instruction(19, 21, "iload"),
+                    instruction(21, 50, "aaload"),
+                    instruction(22, 58, "astore"),
+                    instruction(24, 44, "aload_2"),
+                    instruction(25, 25, "aload"),
+                    instruction(27, 43, "aload_1"),
+                    instruction(28, 182, "invokevirtual", new MethodRef("java/time/format/DateTimeFormatter", "parse", "(Ljava/lang/CharSequence;)Ljava/time/temporal/TemporalAccessor;")),
+                    instruction(31, 185, "invokeinterface", new MethodRef("java/util/function/Function", "apply", "(Ljava/lang/Object;)Ljava/lang/Object;")),
+                    instruction(36, 176, "areturn"),
+                    instruction(37, 58, "astore"),
+                    instruction(39, 43, "aload_1"),
+                    instruction(40, 184, "invokestatic", new MethodRef("java/lang/Long", "parseLong", "(Ljava/lang/String;)J")),
+                    instruction(43, 184, "invokestatic", new MethodRef("com/acme/TemporalSupport", "toTimestampMs", "(J)J")),
+                    instruction(46, 184, "invokestatic", new MethodRef("java/lang/Long", "valueOf", "(J)Ljava/lang/Long;")),
+                    instruction(49, 42, "aload_0"),
+                    instruction(50, 184, "invokestatic", new MethodRef("com/acme/ValueCoercionSupport", "convertObj", "(Ljava/lang/Object;Ljava/lang/Class;)Ljava/lang/Object;")),
+                    instruction(53, 176, "areturn"),
+                    instruction(54, 58, "astore"),
+                    instruction(56, 132, "iinc"),
+                    instruction(59, 167, "goto"),
+                    instruction(62, 1, "aconst_null"),
+                    instruction(63, 176, "areturn")
+                )
+            ))
+        );
+    }
+
+    private static MethodInfo exactTemporalStringBridgeMethod() {
+        return new MethodInfo(
+            0x0008,
+            "lambda$static$134",
+            "(Ljava/lang/String;)Ljava/sql/Timestamp;",
+            Optional.of(new CodeAttribute(
+                2,
+                1,
+                new byte[0],
+                0,
+                List.of(
+                    classInstruction(0, 18, "ldc", "java/sql/Timestamp"),
+                    instruction(2, 42, "aload_0"),
+                    invokeDynamicInstruction(3, new DynamicRef(
+                        "apply",
+                        "()Ljava/util/function/Function;",
+                        "java/lang/invoke/LambdaMetafactory",
+                        "metafactory",
+                        "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                            + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                            + "Ljava/lang/invoke/CallSite;",
+                        List.of(
+                            "(Ljava/lang/Object;)Ljava/lang/Object;",
+                            "invokestatic com/acme/TemporalSupport.lambda$null$133:(Ljava/time/temporal/TemporalAccessor;)Ljava/sql/Timestamp;",
+                            "(Ljava/time/temporal/TemporalAccessor;)Ljava/sql/Timestamp;"
+                        ),
+                        List.of(
+                            BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;"),
+                            BootstrapArgument.methodHandle(
+                                6,
+                                new MethodRef(
+                                    "com/acme/TemporalSupport",
+                                    "lambda$null$133",
+                                    "(Ljava/time/temporal/TemporalAccessor;)Ljava/sql/Timestamp;"
+                                )
+                            ),
+                            BootstrapArgument.methodType("(Ljava/time/temporal/TemporalAccessor;)Ljava/sql/Timestamp;")
+                        )
+                    )),
+                    instruction(8, 184, "invokestatic", new MethodRef(
+                        "com/acme/TemporalSupport",
+                        "temporalOf",
+                        "(Ljava/lang/Class;Ljava/lang/String;Ljava/util/function/Function;)Ljava/lang/Object;"
+                    )),
+                    classInstruction(11, 192, "checkcast", "java/sql/Timestamp"),
+                    instruction(14, 176, "areturn")
+                )
+            ))
+        );
+    }
+
+    private static MethodInfo exactCalendarOfEpochMillisMethod() {
+        return new MethodInfo(
+            0x0008,
+            "calendarOf",
+            "(J)Ljava/util/Calendar;",
+            Optional.of(new CodeAttribute(
+                3,
+                3,
+                new byte[0],
+                0,
+                List.of(
+                    instruction(0, 184, "invokestatic", new MethodRef("java/util/Calendar", "getInstance", "()Ljava/util/Calendar;")),
+                    instruction(3, 77, "astore_2"),
+                    instruction(4, 44, "aload_2"),
+                    instruction(5, 30, "lload_0"),
+                    instruction(6, 182, "invokevirtual", new MethodRef("java/util/Calendar", "setTimeInMillis", "(J)V")),
+                    instruction(9, 44, "aload_2"),
+                    instruction(10, 176, "areturn")
+                )
+            ))
+        );
+    }
+
+    private static MethodInfo exactCalendarOfDateMethod() {
+        return new MethodInfo(
+            0x0008,
+            "calendarOf",
+            "(Ljava/util/Date;)Ljava/util/Calendar;",
+            Optional.of(new CodeAttribute(
+                2,
+                2,
+                new byte[0],
+                0,
+                List.of(
+                    instruction(0, 184, "invokestatic", new MethodRef("java/util/Calendar", "getInstance", "()Ljava/util/Calendar;")),
+                    instruction(3, 76, "astore_1"),
+                    instruction(4, 184, "invokestatic", new MethodRef("java/util/Calendar", "getInstance", "()Ljava/util/Calendar;")),
+                    instruction(7, 42, "aload_0"),
+                    instruction(8, 182, "invokevirtual", new MethodRef("java/util/Calendar", "setTime", "(Ljava/util/Date;)V")),
+                    instruction(11, 43, "aload_1"),
+                    instruction(12, 176, "areturn")
+                )
+            ))
+        );
+    }
+
+    private static MethodInfo exactCalendarOfLocalTimeMethod() {
+        return new MethodInfo(
+            0x0008,
+            "calendarOf",
+            "(Ljava/time/LocalTime;)Ljava/util/Calendar;",
+            Optional.of(new CodeAttribute(
+                3,
+                2,
+                new byte[0],
+                0,
+                List.of(
+                    instruction(0, 184, "invokestatic", new MethodRef("java/util/Calendar", "getInstance", "()Ljava/util/Calendar;")),
+                    instruction(3, 76, "astore_1"),
+                    instruction(4, 43, "aload_1"),
+                    instruction(5, 16, "bipush"),
+                    instruction(7, 42, "aload_0"),
+                    instruction(8, 182, "invokevirtual", new MethodRef("java/time/LocalTime", "getHour", "()I")),
+                    instruction(11, 182, "invokevirtual", new MethodRef("java/util/Calendar", "set", "(II)V")),
+                    instruction(14, 43, "aload_1"),
+                    instruction(15, 16, "bipush"),
+                    instruction(17, 42, "aload_0"),
+                    instruction(18, 182, "invokevirtual", new MethodRef("java/time/LocalTime", "getMinute", "()I")),
+                    instruction(21, 182, "invokevirtual", new MethodRef("java/util/Calendar", "set", "(II)V")),
+                    instruction(24, 43, "aload_1"),
+                    instruction(25, 16, "bipush"),
+                    instruction(27, 42, "aload_0"),
+                    instruction(28, 182, "invokevirtual", new MethodRef("java/time/LocalTime", "getSecond", "()I")),
+                    instruction(31, 182, "invokevirtual", new MethodRef("java/util/Calendar", "set", "(II)V")),
+                    instruction(34, 43, "aload_1"),
+                    instruction(35, 16, "bipush"),
+                    instruction(37, 42, "aload_0"),
+                    instruction(38, 182, "invokevirtual", new MethodRef("java/time/LocalTime", "getNano", "()I")),
+                    instruction(41, 18, "ldc"),
+                    instruction(43, 108, "idiv"),
+                    instruction(44, 182, "invokevirtual", new MethodRef("java/util/Calendar", "set", "(II)V")),
+                    instruction(47, 43, "aload_1"),
+                    instruction(48, 176, "areturn")
+                )
+            ))
+        );
+    }
+
+    private static MethodInfo exactThrowableStringOfMethod() {
+        return new MethodInfo(
+            0x0008,
+            "stringOf",
+            "(Ljava/lang/Throwable;)Ljava/lang/String;",
+            Optional.of(new CodeAttribute(
+                3,
+                3,
+                new byte[0],
+                0,
+                List.of(
+                    classInstruction(0, 187, "new", "java/lang/StringBuilder"),
+                    instruction(3, 89, "dup"),
+                    instruction(4, 183, "invokespecial", new MethodRef("java/lang/StringBuilder", "<init>", "()V")),
+                    instruction(7, 76, "astore_1"),
+                    instruction(8, 43, "aload_1"),
+                    instruction(9, 42, "aload_0"),
+                    instruction(10, 182, "invokevirtual", new MethodRef("java/lang/StringBuilder", "append", "(Ljava/lang/Object;)Ljava/lang/StringBuilder;")),
+                    fieldInstruction(13, 178, "getstatic", new FieldRef("com/acme/TemporalSupport", "LINE_SEPARATOR", "Ljava/lang/String;")),
+                    instruction(16, 182, "invokevirtual", new MethodRef("java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;")),
+                    instruction(19, 87, "pop"),
+                    instruction(20, 43, "aload_1"),
+                    instruction(21, 42, "aload_0"),
+                    instruction(22, 3, "iconst_0"),
+                    instruction(23, 184, "invokestatic", new MethodRef("com/acme/TemporalSupport", "extractCause", "(Ljava/lang/StringBuilder;Ljava/lang/Throwable;Z)V")),
+                    instruction(26, 42, "aload_0"),
+                    instruction(27, 182, "invokevirtual", new MethodRef("java/lang/Throwable", "getCause", "()Ljava/lang/Throwable;")),
+                    instruction(30, 77, "astore_2"),
+                    instruction(31, 44, "aload_2"),
+                    instruction(32, 198, "ifnull"),
+                    instruction(35, 43, "aload_1"),
+                    instruction(36, 18, "ldc"),
+                    instruction(38, 182, "invokevirtual", new MethodRef("java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;")),
+                    instruction(41, 44, "aload_2"),
+                    instruction(42, 182, "invokevirtual", new MethodRef("java/lang/StringBuilder", "append", "(Ljava/lang/Object;)Ljava/lang/StringBuilder;")),
+                    fieldInstruction(45, 178, "getstatic", new FieldRef("com/acme/TemporalSupport", "LINE_SEPARATOR", "Ljava/lang/String;")),
+                    instruction(48, 182, "invokevirtual", new MethodRef("java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;")),
+                    instruction(51, 87, "pop"),
+                    instruction(52, 43, "aload_1"),
+                    instruction(53, 44, "aload_2"),
+                    instruction(54, 3, "iconst_0"),
+                    instruction(55, 184, "invokestatic", new MethodRef("com/acme/TemporalSupport", "extractCause", "(Ljava/lang/StringBuilder;Ljava/lang/Throwable;Z)V")),
+                    instruction(58, 44, "aload_2"),
+                    instruction(59, 182, "invokevirtual", new MethodRef("java/lang/Throwable", "getCause", "()Ljava/lang/Throwable;")),
+                    instruction(62, 77, "astore_2"),
+                    instruction(63, 167, "goto"),
+                    instruction(66, 43, "aload_1"),
+                    instruction(67, 182, "invokevirtual", new MethodRef("java/lang/StringBuilder", "toString", "()Ljava/lang/String;")),
+                    instruction(70, 176, "areturn")
+                )
+            ))
+        );
+    }
+
+    private static MethodInfo exactUnsupportedTemporalConversionLambdaMethod() {
+        return new MethodInfo(
+            0x0008,
+            "lambda$static$117",
+            "(Ljava/sql/Timestamp;)Ljava/util/Date;",
+            Optional.of(new CodeAttribute(
+                4,
+                1,
+                new byte[0],
+                0,
+                List.of(
+                    classInstruction(0, 187, "new", "java/util/Date"),
+                    instruction(3, 89, "dup"),
+                    instruction(4, 42, "aload_0"),
+                    instruction(5, 182, "invokevirtual", new MethodRef("java/sql/Timestamp", "getTime", "()J")),
+                    instruction(8, 183, "invokespecial", new MethodRef("java/util/Date", "<init>", "(J)V")),
+                    instruction(11, 176, "areturn")
+                )
+            ))
+        );
+    }
+
+    private static MethodInfo exactUnsupportedTemporalSqlDateValueOfLambdaMethod() {
+        return new MethodInfo(
+            0x0008,
+            "lambda$static$79",
+            "(Ljava/time/LocalTime;)Ljava/sql/Date;",
+            Optional.of(new CodeAttribute(
+                1,
+                1,
+                new byte[0],
+                0,
+                List.of(
+                    fieldInstruction(0, 178, "getstatic", new FieldRef("java/time/LocalDate", "MIN", "Ljava/time/LocalDate;")),
+                    instruction(3, 184, "invokestatic", new MethodRef("java/sql/Date", "valueOf", "(Ljava/time/LocalDate;)Ljava/sql/Date;")),
+                    instruction(6, 176, "areturn")
+                )
+            ))
+        );
+    }
+
+    private static MethodInfo exactUnsupportedTemporalSqlTimestampFromLongLambdaMethod() {
+        return new MethodInfo(
+            0x0008,
+            "lambda$static$30",
+            "(Ljava/lang/Long;)Ljava/sql/Timestamp;",
+            Optional.of(new CodeAttribute(
+                4,
+                1,
+                new byte[0],
+                0,
+                List.of(
+                    classInstruction(0, 187, "new", "java/sql/Timestamp"),
+                    instruction(3, 89, "dup"),
+                    instruction(4, 42, "aload_0"),
+                    instruction(5, 182, "invokevirtual", new MethodRef("java/lang/Long", "longValue", "()J")),
+                    instruction(8, 184, "invokestatic", new MethodRef("com/acme/TemporalSupport", "toTimestampMs", "(J)J")),
+                    instruction(11, 183, "invokespecial", new MethodRef("java/sql/Timestamp", "<init>", "(J)V")),
+                    instruction(14, 176, "areturn")
+                )
+            ))
+        );
+    }
+
+    private static MethodInfo exactTemporalEpochMillisBoxingLambdaMethod(
+        final String methodName,
+        final String temporalOwner,
+        final String temporalMethod
+    ) {
+        return new MethodInfo(
+            0x0008,
+            methodName,
+            "(L" + temporalOwner + ";)Ljava/lang/Long;",
+            Optional.of(new CodeAttribute(
+                3,
+                1,
+                new byte[0],
+                0,
+                List.of(
+                    instruction(0, 42, "aload_0"),
+                    instruction(1, 182, "invokevirtual", new MethodRef(temporalOwner, temporalMethod, "()Ljava/time/Instant;")),
+                    instruction(4, 182, "invokevirtual", new MethodRef("java/time/Instant", "toEpochMilli", "()J")),
+                    instruction(7, 184, "invokestatic", new MethodRef("java/lang/Long", "valueOf", "(J)Ljava/lang/Long;")),
+                    instruction(10, 176, "areturn")
+                )
+            ))
+        );
+    }
+
     private static MethodInfo processRunnerRunFallbackMethod() {
         return new MethodInfo(
             0,
@@ -9352,7 +13270,39 @@ final class CoreBehaviorTest {
         );
     }
 
-    private static MethodInfo hostOnlyInputStreamReadMethod(final String descriptor) {
+    private static Instruction fieldInstruction(final int offset, final int opcode, final String mnemonic, final FieldRef fieldRef) {
+        return new Instruction(
+            offset,
+            opcode,
+            mnemonic,
+            new byte[0],
+            Optional.empty(),
+            Optional.of(fieldRef),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty()
+        );
+    }
+
+    private static Instruction invokeDynamicInstruction(final int offset, final DynamicRef dynamicRef) {
+        return new Instruction(
+            offset,
+            186,
+            "invokedynamic",
+            new byte[0],
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(dynamicRef)
+        );
+    }
+
+    private static MethodInfo hostOnlyUnsupportedInputStreamMethod(final String descriptor) {
         return new MethodInfo(
             0,
             "read",
@@ -9364,8 +13314,9 @@ final class CoreBehaviorTest {
                 0,
                 List.of(
                     instruction(0, 42, "aload_0"),
-                    instruction(1, 182, "invokevirtual", new MethodRef("java/io/InputStream", "readAllBytes", "()[B")),
-                    instruction(2, 176, "areturn")
+                    instruction(1, 4, "iconst_1"),
+                    instruction(2, 182, "invokevirtual", new MethodRef("java/io/InputStream", "readNBytes", "(I)[B")),
+                    instruction(3, 176, "areturn")
                 )
             ))
         );
@@ -9559,7 +13510,7 @@ final class CoreBehaviorTest {
             "javan_gc_safe_point();"
         );
         assertThat(generated).doesNotContain("&javan_static_com_acme_State_field_count");
-        assertThat(generated.indexOf("javan_register_generated_roots();")).isLessThan(generated.indexOf("return 0;"));
+        assertThat(generated.indexOf("javan_register_generated_roots();")).isLessThan(generated.lastIndexOf("return 0;"));
     }
 
     @Test
@@ -9596,7 +13547,7 @@ final class CoreBehaviorTest {
             "(unsigned long) offsetof(struct javan_class_com_acme_Node, field_child),",
             "(unsigned long) offsetof(struct javan_class_com_acme_Node, field_items)",
             "static JavanTypeDescriptor javan_type_descriptors[] = {",
-            "{1, \"com/acme/Node\", 2, javan_type_fields_com_acme_Node}",
+            "{1, \"com.acme.Node\", 0, 2, javan_type_fields_com_acme_Node}",
             "javan_register_type_descriptors(javan_type_descriptors, 1);",
             "javan_register_generated_type_descriptors();",
             "javan_gc_safe_point();"

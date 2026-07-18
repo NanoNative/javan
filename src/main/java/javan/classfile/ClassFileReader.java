@@ -295,7 +295,8 @@ public final class ClassFileReader {
                 longValue(opcode, operands, constantPool),
                 floatValue(opcode, operands, constantPool),
                 doubleValue(opcode, operands, constantPool),
-                dynamicRef(opcode, operands, constantPool, bootstrapMethods)
+                dynamicRef(opcode, operands, constantPool, bootstrapMethods),
+                constantPoolTag(opcode, operands, constantPool)
             ));
             offset += length;
         }
@@ -329,6 +330,12 @@ public final class ClassFileReader {
     }
 
     private static Optional<String> className(final int opcode, final byte[] operands, final ConstantPool constantPool) {
+        if (opcode == 18) {
+            return constantPool.classLiteralName(unsigned(operands[0]));
+        }
+        if (opcode == 19) {
+            return constantPool.classLiteralName(index16(operands, 0));
+        }
         if (opcode == 187 || opcode == 189 || opcode == 192 || opcode == 193) {
             return Optional.of(constantPool.className(index16(operands, 0)));
         }
@@ -346,6 +353,10 @@ public final class ClassFileReader {
     }
 
     private static Optional<Integer> intValue(final int opcode, final byte[] operands, final ConstantPool constantPool) {
+        final Optional<Integer> smallInteger = smallIntegerLiteral(opcode, operands);
+        if (smallInteger.isPresent()) {
+            return smallInteger;
+        }
         if (opcode == 18) {
             return constantPool.intValue(unsigned(operands[0]));
         }
@@ -355,7 +366,53 @@ public final class ClassFileReader {
         return Optional.empty();
     }
 
+    private static Optional<Integer> smallIntegerLiteral(final int opcode, final byte[] operands) {
+        if (opcode == 2) {
+            return Optional.of(-1);
+        }
+        if (opcode == 3) {
+            return Optional.of(0);
+        }
+        if (opcode == 4) {
+            return Optional.of(1);
+        }
+        if (opcode == 5) {
+            return Optional.of(2);
+        }
+        if (opcode == 6) {
+            return Optional.of(3);
+        }
+        if (opcode == 7) {
+            return Optional.of(4);
+        }
+        if (opcode == 8) {
+            return Optional.of(5);
+        }
+        if (opcode == 16) {
+            if (operands.length != 1) {
+                return Optional.empty();
+            }
+            return Optional.of((int) operands[0]);
+        }
+        if (opcode == 17) {
+            if (operands.length != 2) {
+                return Optional.empty();
+            }
+            return Optional.of(signedShort(operands[0], operands[1]));
+        }
+        return Optional.empty();
+    }
+
+    private static int signedShort(final byte high, final byte low) {
+        final int unsigned = ((high & 0xFF) << 8) | (low & 0xFF);
+        return unsigned > Short.MAX_VALUE ? unsigned - 0x1_0000 : unsigned;
+    }
+
     private static Optional<Long> longValue(final int opcode, final byte[] operands, final ConstantPool constantPool) {
+        final Optional<Long> smallLong = smallLongLiteral(opcode);
+        if (smallLong.isPresent()) {
+            return smallLong;
+        }
         if (opcode == 20) {
             return constantPool.longValue(index16(operands, 0));
         }
@@ -363,6 +420,10 @@ public final class ClassFileReader {
     }
 
     private static Optional<Float> floatValue(final int opcode, final byte[] operands, final ConstantPool constantPool) {
+        final Optional<Float> smallFloat = smallFloatLiteral(opcode);
+        if (smallFloat.isPresent()) {
+            return smallFloat;
+        }
         if (opcode == 18) {
             return constantPool.floatValue(unsigned(operands[0]));
         }
@@ -373,8 +434,55 @@ public final class ClassFileReader {
     }
 
     private static Optional<Double> doubleValue(final int opcode, final byte[] operands, final ConstantPool constantPool) {
+        final Optional<Double> smallDouble = smallDoubleLiteral(opcode);
+        if (smallDouble.isPresent()) {
+            return smallDouble;
+        }
         if (opcode == 20) {
             return constantPool.doubleValue(index16(operands, 0));
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<Integer> constantPoolTag(final int opcode, final byte[] operands, final ConstantPool constantPool) {
+        if (opcode == 18) {
+            return constantPool.entryTag(unsigned(operands[0]));
+        }
+        if (opcode == 19 || opcode == 20) {
+            return constantPool.entryTag(index16(operands, 0));
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<Long> smallLongLiteral(final int opcode) {
+        if (opcode == 9) {
+            return Optional.of(0L);
+        }
+        if (opcode == 10) {
+            return Optional.of(1L);
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<Float> smallFloatLiteral(final int opcode) {
+        if (opcode == 11) {
+            return Optional.of(0.0f);
+        }
+        if (opcode == 12) {
+            return Optional.of(1.0f);
+        }
+        if (opcode == 13) {
+            return Optional.of(2.0f);
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<Double> smallDoubleLiteral(final int opcode) {
+        if (opcode == 14) {
+            return Optional.of(0.0d);
+        }
+        if (opcode == 15) {
+            return Optional.of(1.0d);
         }
         return Optional.empty();
     }

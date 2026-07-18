@@ -37,6 +37,16 @@ final class ClassOutputDiscoveryTest {
     }
 
     @Test
+    void ignoresEmbeddedTestResourceProjectOutputsWhenScanningParentProject() throws Exception {
+        writeClassFile(tempDir.resolve("target/classes/com/acme/Main.class"));
+        writeClassFile(tempDir.resolve("src/test/resources/projects/probe/.javan/classes/com/acme/Shadow.class"));
+
+        final List<Path> discovered = ClassOutputDiscovery.discover(tempDir);
+
+        assertThat(discovered).containsExactly(tempDir.resolve("target/classes").toAbsolutePath().normalize());
+    }
+
+    @Test
     void projectDetectorResolvesRelativeClassesAgainstCwd() throws Exception {
         final Path project = tempDir.resolve("project");
         final Path classes = tempDir.resolve("classes/com/acme");

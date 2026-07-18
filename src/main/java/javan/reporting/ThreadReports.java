@@ -247,8 +247,8 @@ public final class ThreadReports {
         result.append("  \"concurrencyRuntimeMethods\": ").append(summary.concurrencyRuntimeMethods()).append(",\n");
         result.append("  \"unknownBlockingMethods\": ").append(summary.unknownBlockingMethods()).append(",\n");
         result.append("  \"unsupportedThreadTaskMethods\": ").append(summary.unsupportedThreadTaskMethods()).append(",\n");
-        result.append("  \"sleepWaits\": ").append(subjectCount(items, "Thread.sleep(long)")).append(",\n");
-        result.append("  \"joinWaits\": ").append(subjectCount(items, "Thread.join()")).append(",\n");
+        result.append("  \"sleepWaits\": ").append(waitSubjectCount(items, true)).append(",\n");
+        result.append("  \"joinWaits\": ").append(waitSubjectCount(items, false)).append(",\n");
         result.append("  \"blockingTaskMethods\": ").append(summary.blockingTaskMethods()).append(",\n");
         result.append("  \"cpuBoundTaskMethods\": ").append(summary.cpuBoundTaskMethods()).append(",\n");
         result.append("  \"tinyCpuTaskMethods\": ").append(summary.tinyCpuTaskMethods()).append(",\n");
@@ -353,8 +353,8 @@ public final class ThreadReports {
         result.append("- concurrencyRuntimeMethods: `").append(summary.concurrencyRuntimeMethods()).append("`\n");
         result.append("- unknownBlockingMethods: `").append(summary.unknownBlockingMethods()).append("`\n");
         result.append("- unsupportedThreadTaskMethods: `").append(summary.unsupportedThreadTaskMethods()).append("`\n");
-        result.append("- sleepWaits: `").append(subjectCount(items, "Thread.sleep(long)")).append("`\n");
-        result.append("- joinWaits: `").append(subjectCount(items, "Thread.join()")).append("`\n");
+        result.append("- sleepWaits: `").append(waitSubjectCount(items, true)).append("`\n");
+        result.append("- joinWaits: `").append(waitSubjectCount(items, false)).append("`\n");
         result.append("- blockingTaskMethods: `").append(summary.blockingTaskMethods()).append("`\n");
         result.append("- cpuBoundTaskMethods: `").append(summary.cpuBoundTaskMethods()).append("`\n");
         result.append("- tinyCpuTaskMethods: `").append(summary.tinyCpuTaskMethods()).append("`\n");
@@ -489,6 +489,28 @@ public final class ThreadReports {
             }
         }
         return result;
+    }
+
+    private static long waitSubjectCount(final List<DiagnosticItem> items, final boolean sleep) {
+        long result = 0L;
+        for (final DiagnosticItem item : items) {
+            final String subject = item.diagnostic().subject();
+            if (sleep ? isSleepWaitSubject(subject) : isJoinWaitSubject(subject)) {
+                result++;
+            }
+        }
+        return result;
+    }
+
+    private static boolean isSleepWaitSubject(final String subject) {
+        return "Thread.sleep(long)".equals(subject) || "Thread.sleep(long,int)".equals(subject);
+    }
+
+    private static boolean isJoinWaitSubject(final String subject) {
+        return "Thread.join()".equals(subject)
+            || "Thread.join(long)".equals(subject)
+            || "Thread.join(long,int)".equals(subject)
+            || "Thread.join(Duration)".equals(subject);
     }
 
     private static List<MethodActivity> diagnosticOnlyMethods(final List<Diagnostic> diagnostics) {
@@ -837,8 +859,8 @@ public final class ThreadReports {
      * @param blockingWaits reachable explicit blocking wait count in this method
      * @param synchronizationRisks reachable synchronization diagnostic count in this method
      * @param concurrencyRuntimeRisks reachable concurrency-runtime diagnostic count in this method
-     * @param sleepWaits reachable {@code Thread.sleep(long)} count in this method
-     * @param joinWaits reachable {@code Thread.join()} count in this method
+     * @param sleepWaits reachable {@code Thread.sleep(...)} count in this method
+     * @param joinWaits reachable {@code Thread.join(...)} count in this method
      * @param estimatedInstructions conservative bytecode instruction count
      * @param allocationSites conservative allocation-site count
      * @param ioCallSites conservative direct I/O call-site count
@@ -877,11 +899,11 @@ public final class ThreadReports {
                     .refreshClassification();
             }
             if ("JAVAN178".equals(code)) {
-                if ("Thread.sleep(long)".equals(subject)) {
+                if (isSleepWaitSubject(subject)) {
                     return new MethodActivity(className, methodName, threadStartSites, lifecycleRisks, blockingWaits + 1L, synchronizationRisks, concurrencyRuntimeRisks, sleepWaits + 1L, joinWaits, estimatedInstructions, allocationSites, ioCallSites, hasLoop, classification)
                         .refreshClassification();
                 }
-                if ("Thread.join()".equals(subject)) {
+                if (isJoinWaitSubject(subject)) {
                     return new MethodActivity(className, methodName, threadStartSites, lifecycleRisks, blockingWaits + 1L, synchronizationRisks, concurrencyRuntimeRisks, sleepWaits, joinWaits + 1L, estimatedInstructions, allocationSites, ioCallSites, hasLoop, classification)
                         .refreshClassification();
                 }

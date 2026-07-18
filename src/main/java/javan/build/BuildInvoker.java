@@ -4,6 +4,7 @@ import javan.cli.Options;
 import javan.detect.BuildTool;
 import javan.detect.InputKind;
 import javan.detect.ProjectLayout;
+import javan.toolchain.CurrentJdkTools;
 import javan.util.Files2;
 import javan.util.ProcessRunner;
 import javan.util.Strings2;
@@ -115,7 +116,7 @@ public final class BuildInvoker {
         Files.createDirectories(classes);
         if (!sources.isEmpty()) {
             final List<String> command = new ArrayList<>();
-            command.add("javac");
+            command.add(CurrentJdkTools.javac());
             command.add("-d");
             command.add(classes.toString());
             if (!layout.classpathEntries().isEmpty()) {

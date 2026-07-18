@@ -178,6 +178,35 @@ final class ProjectReportsTest {
     }
 
     @Test
+    void writeDiagnosticsPromotesVirtualThreadProfilingSupportWhenRuntimeProfilingIsReady() throws Exception {
+        final ProjectLayout layout = layout(List.of());
+        Files.createDirectories(layout.outputDirectory().resolve("reports"));
+        Files.writeString(layout.outputDirectory().resolve("reports/runtime-profiling.json"), """
+            {
+              "status": "ready",
+              "requested": true,
+              "enabled": true,
+              "collectionState": "linked-not-run"
+            }
+            """);
+
+        new ProjectReports().writeDiagnostics(layout, List.of());
+
+        assertThat(Files.readString(layout.outputDirectory().resolve("reports/virtual-threads.json")))
+            .contains(
+                "\"profilingSupported\": true",
+                "\"profilingCollected\": false",
+                "\"reachableApiScan\": \"not-collected\""
+            );
+        assertThat(Files.readString(layout.outputDirectory().resolve("reports/virtual-threads.md")))
+            .contains(
+                "- profilingSupported: `true`",
+                "- profilingCollected: `false`",
+                "Virtual-thread profiling hooks are linked through runtime-profiling.*, but the current run has not collected counters yet."
+            );
+    }
+
+    @Test
     void writeDiagnosticsSeparatesMultipleDiagnostics() throws Exception {
         final ProjectLayout layout = layout(List.of());
 

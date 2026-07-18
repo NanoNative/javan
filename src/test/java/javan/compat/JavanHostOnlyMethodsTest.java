@@ -2,11 +2,14 @@ package javan.compat;
 
 import javan.classfile.MethodInfo;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Execution;
 
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 
+@Execution(CONCURRENT)
 final class JavanHostOnlyMethodsTest {
     @Test
     void isHostOnlyMethodAcceptsInternalInputStreamClassFileReader() {

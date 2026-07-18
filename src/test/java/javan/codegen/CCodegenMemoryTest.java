@@ -854,12 +854,12 @@ final class CCodegenMemoryTest {
 
         assertThat(generated).contains(
             "javan_root_frame_push(javan_expr_roots, 2);",
-            "javan_expr_tmp_0 = javan_object_array_new(1);",
+            "javan_expr_tmp_0 = javan_object_array_new(1, \"[Ljava.lang.Object;\");",
             "javan_expr_tmp_1 = make_symbol();",
             "javan_object_array_set(javan_expr_tmp_0, 0, javan_expr_tmp_1);",
             "javan_root_frame_pop(javan_expr_roots);"
         );
-        assertThat(generated.indexOf("javan_expr_tmp_0 = javan_object_array_new(1);"))
+        assertThat(generated.indexOf("javan_expr_tmp_0 = javan_object_array_new(1, \"[Ljava.lang.Object;\");"))
             .isLessThan(generated.indexOf("javan_expr_tmp_1 = make_symbol();"));
         assertThat(generated.indexOf("javan_expr_tmp_1 = make_symbol();"))
             .isLessThan(generated.indexOf("javan_object_array_set(javan_expr_tmp_0, 0, javan_expr_tmp_1);"));
@@ -1047,7 +1047,7 @@ final class CCodegenMemoryTest {
             "javan_panic((const char*) javan_expr_tmp_0);",
             "javan_panic((const char*) (node != ((void*) 0)));",
             "javan_expr_tmp_0 = javan_new_com_acme_Node();",
-            "javan_expr_tmp_0 = javan_object_array_new(1);",
+            "javan_expr_tmp_0 = javan_object_array_new(1, \"[Ljava.lang.Object;\");",
             "javan_expr_tmp_0 = javan_object_array_get(node, 0);",
             "javan_expr_tmp_0 = ((struct javan_class_com_acme_Node*) node)->field_next;",
             "javan_expr_tmp_0 = javan_static_com_acme_Node_field_next;",

@@ -133,6 +133,81 @@ final class VirtualThreadInvokePatternsTest {
         assertThat(VirtualThreadInvokePatterns.isExecutorServiceClose(
             new MethodRef("java/util/concurrent/ExecutorService", "close", "()V")
         )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isExecutorServiceSubmit(
+            new MethodRef("java/util/concurrent/ExecutorService", "submit", "(Ljava/lang/Runnable;)Ljava/util/concurrent/Future;")
+        )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isExecutorServiceAwaitTermination(
+            new MethodRef("java/util/concurrent/ExecutorService", "awaitTermination", "(JLjava/util/concurrent/TimeUnit;)Z")
+        )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isExecutorServiceShutdownNow(
+            new MethodRef("java/util/concurrent/ExecutorService", "shutdownNow", "()Ljava/util/List;")
+        )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorAwaitTermination(
+            new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "awaitTermination", "(JLjava/util/concurrent/TimeUnit;)Z")
+        )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorShutdownNow(
+            new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "shutdownNow", "()Ljava/util/List;")
+        )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isFutureCancel(
+            new MethodRef("java/util/concurrent/Future", "cancel", "(Z)Z")
+        )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isFutureIsDone(
+            new MethodRef("java/util/concurrent/Future", "isDone", "()Z")
+        )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isFutureIsCancelled(
+            new MethodRef("java/util/concurrent/Future", "isCancelled", "()Z")
+        )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorSchedule(
+            new MethodRef(
+                "java/util/concurrent/ScheduledThreadPoolExecutor",
+                "schedule",
+                "(Ljava/lang/Runnable;JLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"
+            )
+        )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorScheduleAtFixedRate(
+            new MethodRef(
+                "java/util/concurrent/ScheduledThreadPoolExecutor",
+                "scheduleAtFixedRate",
+                "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"
+            )
+        )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorScheduleWithFixedDelay(
+            new MethodRef(
+                "java/util/concurrent/ScheduledThreadPoolExecutor",
+                "scheduleWithFixedDelay",
+                "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"
+            )
+        )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isScheduledExecutorServiceSchedule(
+            new MethodRef(
+                "java/util/concurrent/ScheduledExecutorService",
+                "schedule",
+                "(Ljava/lang/Runnable;JLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"
+            )
+        )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isScheduledExecutorServiceScheduleAtFixedRate(
+            new MethodRef(
+                "java/util/concurrent/ScheduledExecutorService",
+                "scheduleAtFixedRate",
+                "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"
+            )
+        )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isScheduledExecutorServiceScheduleWithFixedDelay(
+            new MethodRef(
+                "java/util/concurrent/ScheduledExecutorService",
+                "scheduleWithFixedDelay",
+                "(Ljava/lang/Runnable;JJLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"
+            )
+        )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isScheduledExecutorServiceShutdown(
+            new MethodRef("java/util/concurrent/ScheduledExecutorService", "shutdown", "()V")
+        )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isScheduledExecutorServiceAwaitTermination(
+            new MethodRef("java/util/concurrent/ScheduledExecutorService", "awaitTermination", "(JLjava/util/concurrent/TimeUnit;)Z")
+        )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isScheduledExecutorServiceShutdownNow(
+            new MethodRef("java/util/concurrent/ScheduledExecutorService", "shutdownNow", "()Ljava/util/List;")
+        )).isTrue();
         assertThat(VirtualThreadInvokePatterns.isExecutorServiceClose(
             new MethodRef("java/util/concurrent/ExecutorService", "shutdown", "()V")
         )).isFalse();
@@ -189,6 +264,61 @@ final class VirtualThreadInvokePatternsTest {
         assertThat(VirtualThreadInvokePatterns.isExecutorServiceShutdown(
             new MethodRef("java/util/concurrent/ExecutorService", "shutdown", "(J)V")
         )).isFalse();
+        assertThat(VirtualThreadInvokePatterns.isExecutorServiceSubmit(
+            new MethodRef("java/util/concurrent/ExecutorService", "submit", "()Ljava/util/concurrent/Future;")
+        )).isFalse();
+        assertThat(VirtualThreadInvokePatterns.isExecutorServiceAwaitTermination(
+            new MethodRef("java/util/concurrent/ExecutorService", "awaitTermination", "()Z")
+        )).isFalse();
+        assertThat(VirtualThreadInvokePatterns.isExecutorServiceShutdownNow(
+            new MethodRef("java/util/concurrent/ExecutorService", "shutdownNow", "()V")
+        )).isFalse();
+        assertThat(VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorAwaitTermination(
+            new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "awaitTermination", "()Z")
+        )).isFalse();
+        assertThat(VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorShutdownNow(
+            new MethodRef("java/util/concurrent/ScheduledThreadPoolExecutor", "shutdownNow", "()V")
+        )).isFalse();
+        assertThat(VirtualThreadInvokePatterns.isFutureCancel(
+            new MethodRef("java/util/concurrent/Future", "cancel", "()Z")
+        )).isFalse();
+        assertThat(VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorSchedule(
+            new MethodRef(
+                "java/util/concurrent/ScheduledThreadPoolExecutor",
+                "schedule",
+                "(Ljava/lang/Runnable;Ljava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"
+            )
+        )).isFalse();
+        assertThat(VirtualThreadInvokePatterns.isScheduledThreadPoolExecutorScheduleAtFixedRate(
+            new MethodRef(
+                "java/util/concurrent/ScheduledThreadPoolExecutor",
+                "scheduleAtFixedRate",
+                "(Ljava/lang/Runnable;JLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"
+            )
+        )).isFalse();
+        assertThat(VirtualThreadInvokePatterns.isScheduledExecutorServiceSchedule(
+            new MethodRef(
+                "java/util/concurrent/ScheduledExecutorService",
+                "schedule",
+                "(Ljava/lang/Runnable;Ljava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"
+            )
+        )).isFalse();
+        assertThat(VirtualThreadInvokePatterns.isScheduledExecutorServiceScheduleAtFixedRate(
+            new MethodRef(
+                "java/util/concurrent/ScheduledExecutorService",
+                "scheduleAtFixedRate",
+                "(Ljava/lang/Runnable;JLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/ScheduledFuture;"
+            )
+        )).isFalse();
+        assertThat(VirtualThreadInvokePatterns.isScheduledExecutorServiceShutdown(
+            new MethodRef("java/util/concurrent/ScheduledExecutorService", "shutdown", "(J)V")
+        )).isFalse();
+        assertThat(VirtualThreadInvokePatterns.isScheduledExecutorServiceAwaitTermination(
+            new MethodRef("java/util/concurrent/ScheduledExecutorService", "awaitTermination", "()Z")
+        )).isFalse();
+        assertThat(VirtualThreadInvokePatterns.isScheduledExecutorServiceShutdownNow(
+            new MethodRef("java/util/concurrent/ScheduledExecutorService", "shutdownNow", "()V")
+        )).isFalse();
     }
 
     @Test
@@ -219,6 +349,12 @@ final class VirtualThreadInvokePatternsTest {
         )).isFalse();
         assertThat(VirtualThreadInvokePatterns.isExecutorServiceClose(
             new MethodRef("java/util/concurrent/ExecutorService", "close", "(I)V")
+        )).isFalse();
+        assertThat(VirtualThreadInvokePatterns.isExecutorServiceSubmit(
+            new MethodRef("java/lang/Object", "submit", "(Ljava/lang/Runnable;)Ljava/util/concurrent/Future;")
+        )).isFalse();
+        assertThat(VirtualThreadInvokePatterns.isFutureCancel(
+            new MethodRef("java/lang/Object", "cancel", "(Z)Z")
         )).isFalse();
     }
 
@@ -374,6 +510,130 @@ final class VirtualThreadInvokePatternsTest {
     }
 
     @Test
+    void detectsSupportedStaticBuilderWrapperMethodWithInheritanceToggle() {
+        final ClassFile owner = classFile(
+            "com/acme/Main",
+            new MethodInfo(
+                0x0008,
+                "builder",
+                "()Ljava/lang/Thread$Builder$OfVirtual;",
+                Optional.of(new CodeAttribute(
+                    2,
+                    0,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instruction(1, 3, "iconst_0"),
+                        instruction(2, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "inheritInheritableThreadLocals", "(Z)Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instruction(3, 176, "areturn")
+                    )
+                ))
+            )
+        );
+
+        assertThat(VirtualThreadInvokePatterns.isSupportedBuilderWrapperMethod(
+            Map.of(owner.name(), owner),
+            owner,
+            owner.method("builder", "()Ljava/lang/Thread$Builder$OfVirtual;").orElseThrow()
+        )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isSupportedBuilderWrapperCall(
+            Map.of(owner.name(), owner),
+            new MethodRef(owner.name(), "builder", "()Ljava/lang/Thread$Builder$OfVirtual;")
+        )).isTrue();
+    }
+
+    @Test
+    void detectsSupportedStaticBuilderWrapperMethodWithBipushInheritanceToggle() {
+        final ClassFile owner = classFile(
+            "com/acme/Main",
+            new MethodInfo(
+                0x0008,
+                "builder",
+                "()Ljava/lang/Thread$Builder$OfVirtual;",
+                Optional.of(new CodeAttribute(
+                    2,
+                    0,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instructionOperands(1, 16, "bipush", 1),
+                        instruction(2, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "inheritInheritableThreadLocals", "(Z)Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instruction(3, 176, "areturn")
+                    )
+                ))
+            )
+        );
+
+        assertThat(VirtualThreadInvokePatterns.isSupportedBuilderWrapperMethod(
+            Map.of(owner.name(), owner),
+            owner,
+            owner.method("builder", "()Ljava/lang/Thread$Builder$OfVirtual;").orElseThrow()
+        )).isTrue();
+    }
+
+    @Test
+    void detectsSupportedStaticBuilderWrapperMethodWithSipushInheritanceToggle() {
+        final ClassFile owner = classFile(
+            "com/acme/Main",
+            new MethodInfo(
+                0x0008,
+                "builder",
+                "()Ljava/lang/Thread$Builder$OfVirtual;",
+                Optional.of(new CodeAttribute(
+                    2,
+                    0,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instructionOperands(1, 17, "sipush", 0, 0),
+                        instruction(2, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "inheritInheritableThreadLocals", "(Z)Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instruction(3, 176, "areturn")
+                    )
+                ))
+            )
+        );
+
+        assertThat(VirtualThreadInvokePatterns.isSupportedBuilderWrapperMethod(
+            Map.of(owner.name(), owner),
+            owner,
+            owner.method("builder", "()Ljava/lang/Thread$Builder$OfVirtual;").orElseThrow()
+        )).isTrue();
+    }
+
+    @Test
+    void detectsSupportedStaticBuilderWrapperMethodWithLdcInheritanceToggle() {
+        final ClassFile owner = classFile(
+            "com/acme/Main",
+            new MethodInfo(
+                0x0008,
+                "builder",
+                "()Ljava/lang/Thread$Builder$OfVirtual;",
+                Optional.of(new CodeAttribute(
+                    2,
+                    0,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;")),
+                        intInstruction(1, 18, "ldc", 1),
+                        instruction(2, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "inheritInheritableThreadLocals", "(Z)Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instruction(3, 176, "areturn")
+                    )
+                ))
+            )
+        );
+
+        assertThat(VirtualThreadInvokePatterns.isSupportedBuilderWrapperMethod(
+            Map.of(owner.name(), owner),
+            owner,
+            owner.method("builder", "()Ljava/lang/Thread$Builder$OfVirtual;").orElseThrow()
+        )).isTrue();
+    }
+
+    @Test
     void detectsSupportedStaticFactoryWrapperMethodWithParameterPassThrough() {
         final ClassFile owner = classFile(
             "com/acme/Main",
@@ -407,6 +667,200 @@ final class VirtualThreadInvokePatternsTest {
             Map.of(owner.name(), owner),
             new MethodRef(owner.name(), "factory", "(Ljava/lang/String;J)Ljava/util/concurrent/ThreadFactory;")
         )).isTrue();
+    }
+
+    @Test
+    void detectsSupportedStaticFactoryWrapperMethodWithInheritanceParameterPassThrough() {
+        final ClassFile owner = classFile(
+            "com/acme/Main",
+            new MethodInfo(
+                0x0008,
+                "factory",
+                "(Z)Ljava/util/concurrent/ThreadFactory;",
+                Optional.of(new CodeAttribute(
+                    2,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instruction(1, 26, "iload_0"),
+                        instruction(2, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "inheritInheritableThreadLocals", "(Z)Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instruction(3, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "factory", "()Ljava/util/concurrent/ThreadFactory;")),
+                        instruction(4, 176, "areturn")
+                    )
+                ))
+            )
+        );
+
+        assertThat(VirtualThreadInvokePatterns.isSupportedFactoryWrapperMethod(
+            Map.of(owner.name(), owner),
+            owner,
+            owner.method("factory", "(Z)Ljava/util/concurrent/ThreadFactory;").orElseThrow()
+        )).isTrue();
+        assertThat(VirtualThreadInvokePatterns.isSupportedFactoryWrapperCall(
+            Map.of(owner.name(), owner),
+            new MethodRef(owner.name(), "factory", "(Z)Ljava/util/concurrent/ThreadFactory;")
+        )).isTrue();
+    }
+
+    @Test
+    void rejectsStaticBuilderWrapperMethodWithIntParameterForInheritancePassThrough() {
+        final ClassFile owner = classFile(
+            "com/acme/Main",
+            new MethodInfo(
+                0x0008,
+                "builder",
+                "(I)Ljava/lang/Thread$Builder$OfVirtual;",
+                Optional.of(new CodeAttribute(
+                    2,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instruction(1, 26, "iload_0"),
+                        instruction(2, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "inheritInheritableThreadLocals", "(Z)Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instruction(3, 176, "areturn")
+                    )
+                ))
+            )
+        );
+
+        assertThat(VirtualThreadInvokePatterns.isSupportedBuilderWrapperMethod(
+            Map.of(owner.name(), owner),
+            owner,
+            owner.method("builder", "(I)Ljava/lang/Thread$Builder$OfVirtual;").orElseThrow()
+        )).isFalse();
+        assertThat(VirtualThreadInvokePatterns.isSupportedBuilderWrapperCall(
+            Map.of(owner.name(), owner),
+            new MethodRef(owner.name(), "builder", "(I)Ljava/lang/Thread$Builder$OfVirtual;")
+        )).isFalse();
+    }
+
+    @Test
+    void rejectsStaticFactoryWrapperMethodWithIntParameterForInheritancePassThrough() {
+        final ClassFile owner = classFile(
+            "com/acme/Main",
+            new MethodInfo(
+                0x0008,
+                "factory",
+                "(I)Ljava/util/concurrent/ThreadFactory;",
+                Optional.of(new CodeAttribute(
+                    2,
+                    1,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instruction(1, 26, "iload_0"),
+                        instruction(2, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "inheritInheritableThreadLocals", "(Z)Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instruction(3, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "factory", "()Ljava/util/concurrent/ThreadFactory;")),
+                        instruction(4, 176, "areturn")
+                    )
+                ))
+            )
+        );
+
+        assertThat(VirtualThreadInvokePatterns.isSupportedFactoryWrapperMethod(
+            Map.of(owner.name(), owner),
+            owner,
+            owner.method("factory", "(I)Ljava/util/concurrent/ThreadFactory;").orElseThrow()
+        )).isFalse();
+        assertThat(VirtualThreadInvokePatterns.isSupportedFactoryWrapperCall(
+            Map.of(owner.name(), owner),
+            new MethodRef(owner.name(), "factory", "(I)Ljava/util/concurrent/ThreadFactory;")
+        )).isFalse();
+    }
+
+    @Test
+    void rejectsStaticBuilderWrapperMethodWithNonBooleanBipushInheritanceToggle() {
+        final ClassFile owner = classFile(
+            "com/acme/Main",
+            new MethodInfo(
+                0x0008,
+                "builder",
+                "()Ljava/lang/Thread$Builder$OfVirtual;",
+                Optional.of(new CodeAttribute(
+                    2,
+                    0,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instructionOperands(1, 16, "bipush", 2),
+                        instruction(2, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "inheritInheritableThreadLocals", "(Z)Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instruction(3, 176, "areturn")
+                    )
+                ))
+            )
+        );
+
+        assertThat(VirtualThreadInvokePatterns.isSupportedBuilderWrapperMethod(
+            Map.of(owner.name(), owner),
+            owner,
+            owner.method("builder", "()Ljava/lang/Thread$Builder$OfVirtual;").orElseThrow()
+        )).isFalse();
+    }
+
+    @Test
+    void rejectsStaticBuilderWrapperMethodWithNonBooleanSipushInheritanceToggle() {
+        final ClassFile owner = classFile(
+            "com/acme/Main",
+            new MethodInfo(
+                0x0008,
+                "builder",
+                "()Ljava/lang/Thread$Builder$OfVirtual;",
+                Optional.of(new CodeAttribute(
+                    2,
+                    0,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instructionOperands(1, 17, "sipush", 0, 2),
+                        instruction(2, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "inheritInheritableThreadLocals", "(Z)Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instruction(3, 176, "areturn")
+                    )
+                ))
+            )
+        );
+
+        assertThat(VirtualThreadInvokePatterns.isSupportedBuilderWrapperMethod(
+            Map.of(owner.name(), owner),
+            owner,
+            owner.method("builder", "()Ljava/lang/Thread$Builder$OfVirtual;").orElseThrow()
+        )).isFalse();
+    }
+
+    @Test
+    void rejectsStaticBuilderWrapperMethodWithNonBooleanLdcInheritanceToggle() {
+        final ClassFile owner = classFile(
+            "com/acme/Main",
+            new MethodInfo(
+                0x0008,
+                "builder",
+                "()Ljava/lang/Thread$Builder$OfVirtual;",
+                Optional.of(new CodeAttribute(
+                    2,
+                    0,
+                    new byte[0],
+                    0,
+                    List.of(
+                        instruction(0, 184, "invokestatic", new MethodRef("java/lang/Thread", "ofVirtual", "()Ljava/lang/Thread$Builder$OfVirtual;")),
+                        intInstruction(1, 18, "ldc", 2),
+                        instruction(2, 185, "invokeinterface", new MethodRef("java/lang/Thread$Builder$OfVirtual", "inheritInheritableThreadLocals", "(Z)Ljava/lang/Thread$Builder$OfVirtual;")),
+                        instruction(3, 176, "areturn")
+                    )
+                ))
+            )
+        );
+
+        assertThat(VirtualThreadInvokePatterns.isSupportedBuilderWrapperMethod(
+            Map.of(owner.name(), owner),
+            owner,
+            owner.method("builder", "()Ljava/lang/Thread$Builder$OfVirtual;").orElseThrow()
+        )).isFalse();
     }
 
     @Test
@@ -1208,11 +1662,35 @@ final class VirtualThreadInvokePatternsTest {
     }
 
     private static Instruction instruction(final int offset, final int opcode, final String mnemonic) {
-        return new Instruction(offset, opcode, mnemonic, new byte[0], Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+        return new Instruction(
+            offset,
+            opcode,
+            mnemonic,
+            new byte[0],
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            normalizedIntValue(opcode, new byte[0]),
+            Optional.empty(),
+            Optional.empty()
+        );
     }
 
     private static Instruction instruction(final int offset, final int opcode, final String mnemonic, final MethodRef methodRef) {
-        return new Instruction(offset, opcode, mnemonic, new byte[0], Optional.of(methodRef), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+        return new Instruction(
+            offset,
+            opcode,
+            mnemonic,
+            new byte[0],
+            Optional.of(methodRef),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            normalizedIntValue(opcode, new byte[0]),
+            Optional.empty(),
+            Optional.empty()
+        );
     }
 
     private static Instruction classInstruction(final int offset, final int opcode, final String mnemonic, final String className) {
@@ -1224,11 +1702,47 @@ final class VirtualThreadInvokePatternsTest {
         for (int index = 0; index < operands.length; index++) {
             bytes[index] = (byte) operands[index];
         }
-        return new Instruction(offset, opcode, mnemonic, bytes, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+        return new Instruction(
+            offset,
+            opcode,
+            mnemonic,
+            bytes,
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            normalizedIntValue(opcode, bytes),
+            Optional.empty(),
+            Optional.empty()
+        );
     }
 
     private static Instruction stringInstruction(final int offset, final String value) {
         return new Instruction(offset, 18, "ldc", new byte[0], Optional.empty(), Optional.empty(), Optional.empty(), Optional.of(value), Optional.empty(), Optional.empty(), Optional.empty());
+    }
+
+    private static Instruction intInstruction(final int offset, final int opcode, final String mnemonic, final int value) {
+        return new Instruction(offset, opcode, mnemonic, new byte[0], Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.of(value), Optional.empty(), Optional.empty());
+    }
+
+    private static Optional<Integer> normalizedIntValue(final int opcode, final byte[] operands) {
+        return switch (opcode) {
+            case 2 -> Optional.of(-1);
+            case 3 -> Optional.of(0);
+            case 4 -> Optional.of(1);
+            case 5 -> Optional.of(2);
+            case 6 -> Optional.of(3);
+            case 7 -> Optional.of(4);
+            case 8 -> Optional.of(5);
+            case 16 -> operands.length == 1 ? Optional.of((int) operands[0]) : Optional.empty();
+            case 17 -> operands.length == 2 ? Optional.of(signedShort(operands[0], operands[1])) : Optional.empty();
+            default -> Optional.empty();
+        };
+    }
+
+    private static int signedShort(final byte high, final byte low) {
+        final int unsigned = ((high & 0xFF) << 8) | (low & 0xFF);
+        return unsigned > Short.MAX_VALUE ? unsigned - 0x1_0000 : unsigned;
     }
 
     private static Instruction longInstruction(final int offset, final int opcode, final String mnemonic) {

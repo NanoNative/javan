@@ -145,6 +145,17 @@ final class ToolchainFoundationTest {
     }
 
     @Test
+    void registryIgnoresNonDirectoryChildrenAndInstallsWithoutMetadata() throws Exception {
+        final Path toolchains = tempDir.resolve("toolchains");
+        Files.createDirectories(toolchains.resolve("temurin-25"));
+        Files.writeString(toolchains.resolve("README.txt"), "note");
+
+        final List<ToolchainMetadata> installed = new ToolchainRegistry(tempDir).installed();
+
+        assertThat(installed).isEmpty();
+    }
+
+    @Test
     void listRendererSortsToolchainsById() {
         final ToolchainMetadata beta = metadata("beta", "25");
         final ToolchainMetadata alpha = metadata("alpha", "21");
@@ -208,6 +219,34 @@ final class ToolchainFoundationTest {
         assertThatThrownBy(() -> new ToolchainListRenderer().render(null))
             .isInstanceOf(NullPointerException.class)
             .hasMessage("toolchains");
+    }
+
+    @Test
+    void registrySortsMatchingIdsByVersionBeforeHome() throws Exception {
+        final Path older = tempDir.resolve("toolchains/temurin-21");
+        final Path newer = tempDir.resolve("toolchains/temurin-25");
+        Files.createDirectories(older);
+        Files.createDirectories(newer);
+        Files.writeString(older.resolve("toolchain.toml"), """
+            id = "temurin"
+            kind = "jdk"
+            version = "21"
+            home = "."
+            """);
+        Files.writeString(newer.resolve("toolchain.toml"), """
+            id = "temurin"
+            kind = "jdk"
+            version = "25"
+            home = "."
+            """);
+
+        final List<ToolchainMetadata> installed = new ToolchainRegistry(tempDir).installed();
+
+        assertThat(installed).extracting(ToolchainMetadata::id, ToolchainMetadata::version)
+            .containsExactly(
+                tuple("temurin", "21"),
+                tuple("temurin", "25")
+            );
     }
 
     @Test

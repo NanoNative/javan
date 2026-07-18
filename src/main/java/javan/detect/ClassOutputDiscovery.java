@@ -26,7 +26,7 @@ public final class ClassOutputDiscovery {
     public static List<Path> discover(final Path root) throws IOException {
         final List<Path> result = new ArrayList<>();
         final Path normalized = root.toAbsolutePath().normalize();
-        collectProjectOutputs(normalized, result);
+        collectProjectOutputs(normalized, normalized, result);
         return result;
     }
 
@@ -40,19 +40,34 @@ public final class ClassOutputDiscovery {
         addIfClassFolder(result, root.resolve(".javan/classes").normalize());
     }
 
-    private static void collectProjectOutputs(final Path current, final List<Path> result) throws IOException {
+    private static void collectProjectOutputs(final Path scanRoot, final Path current, final List<Path> result) throws IOException {
         if (!Files.isDirectory(current)) {
             return;
         }
-        if (ignoredDirectory(current)) {
+        if (ignoredDirectory(current) || ignoredEmbeddedTestResources(scanRoot, current)) {
             return;
         }
         addCommon(current, result);
         final DirectoryStream<Path> children = Files.newDirectoryStream(current);
         for (final Path child : children) {
-            collectProjectOutputs(child.toAbsolutePath().normalize(), result);
+            collectProjectOutputs(scanRoot, child.toAbsolutePath().normalize(), result);
         }
         children.close();
+    }
+
+    private static boolean ignoredEmbeddedTestResources(final Path scanRoot, final Path current) {
+        if (scanRoot.equals(current)) {
+            return false;
+        }
+        final Path relative = scanRoot.relativize(current);
+        for (int index = 0; index + 2 < relative.getNameCount(); index++) {
+            if ("src".equals(relative.getName(index).toString())
+                && "test".equals(relative.getName(index + 1).toString())
+                && "resources".equals(relative.getName(index + 2).toString())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void addIfClassFolder(final List<Path> result, final Path candidate) throws IOException {

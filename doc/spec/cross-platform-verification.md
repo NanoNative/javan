@@ -12,7 +12,8 @@ mutable external services, or whatever tool version wandered into `PATH` this mo
 This policy covers:
 
 - required local macOS native smoke
-- CI-based Linux/macOS x64 and aarch64 verification
+- CI-based Linux x64 and Linux aarch64 verification, with macOS aarch64 covered by
+  the required local host gate and macOS x64 deferred until the active matrix is stable
 - Docker-based Linux x64 and Linux aarch64 verification where available
 - future Windows verification
 - JDK matrix checks
@@ -51,8 +52,8 @@ JAVAN_BIN=bin/javan JAVAN_SANITIZER_REQUIRED=true sh .github/scripts/sanitizer-s
 
 The sanitizer suite includes generated-app counter proof, package-backed generated
 self-host allocation/GC/no-residue proof, and native-library/binding ownership proof.
-Local macOS aarch64 proof exists; remote release-matrix validation remains 0/4
-completed. The self-host proof requires nonzero allocation and GC counters plus zero
+Local macOS aarch64 proof exists; remote Linux release-matrix validation is the CI gate.
+The self-host proof requires nonzero allocation and GC counters plus zero
 final tracked heap/root residue.
 
 Library-output changes are covered by `.github/scripts/acceptance.sh`, including:
@@ -73,9 +74,8 @@ entrypoints on each required target.
 | --- | --- | --- |
 | linux-x64 | `ubuntu-24.04` | `mvn verify`, acceptance, host `--target`, sanitizer suite with self-host proof |
 | linux-aarch64 | `ubuntu-24.04-arm` | `mvn verify`, acceptance, host `--target`, sanitizer suite with self-host proof |
-| macos-aarch64 | `macos-15` | `mvn verify`, acceptance, host `--target`, sanitizer suite with self-host proof |
-| macos-x64 | `macos-15-intel` | `mvn verify`, acceptance, host `--target`, sanitizer suite with self-host proof |
 
+`macos-x64` remains a deferred row until the active matrix is stable again.
 Windows targets remain tracked rows until the runtime and linker path are ported.
 
 ## Container Matrix

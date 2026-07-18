@@ -121,7 +121,7 @@ final class JavanLockWriterTest {
             true,
             "com.acme.app",
             "25",
-            List.of(new JavanDependency("main", "org.nanonative:nano 2026.1", "coordinate", Optional.empty(), 3)),
+            List.of(new JavanDependency("main", "com.example:native-lib 2026.1", "coordinate", Optional.empty(), 3)),
             List.of()
         );
 

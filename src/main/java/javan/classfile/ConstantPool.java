@@ -39,6 +39,20 @@ public final class ConstantPool {
     }
 
     /**
+     * Resolves a class literal entry.
+     *
+     * @param index constant pool index
+     * @return class internal name when the index points at a class literal
+     */
+    public Optional<String> classLiteralName(final int index) {
+        final Object entry = entries[index];
+        if (entry instanceof ClassEntry) {
+            return Optional.of(className(index));
+        }
+        return Optional.empty();
+    }
+
+    /**
      * Resolves a string literal.
      *
      * @param index constant pool index
@@ -112,6 +126,44 @@ public final class ConstantPool {
     }
 
     /**
+     * Resolves the raw constant-pool tag at the given index.
+     *
+     * @param index constant pool index
+     * @return constant-pool tag when the entry exists
+     */
+    public Optional<Integer> entryTag(final int index) {
+        final Object entry = entries[index];
+        if (entry instanceof Utf8Entry) {
+            return Optional.of(1);
+        }
+        if (entry instanceof RawEntry rawEntry) {
+            return Optional.of(rawEntry.tag());
+        }
+        if (entry instanceof ClassEntry) {
+            return Optional.of(7);
+        }
+        if (entry instanceof StringEntry) {
+            return Optional.of(8);
+        }
+        if (entry instanceof RefEntry refEntry) {
+            return Optional.of(refEntry.tag());
+        }
+        if (entry instanceof NameAndTypeEntry) {
+            return Optional.of(12);
+        }
+        if (entry instanceof MethodHandleEntry) {
+            return Optional.of(15);
+        }
+        if (entry instanceof MethodTypeEntry) {
+            return Optional.of(16);
+        }
+        if (entry instanceof DynamicEntry dynamicEntry) {
+            return Optional.of(dynamicEntry.tag());
+        }
+        return Optional.empty();
+    }
+
+    /**
      * Resolves a method reference.
      *
      * @param index constant pool index
@@ -145,18 +197,24 @@ public final class ConstantPool {
             return Optional.empty();
         }
         final MethodRef bootstrap = methodRef(handle.referenceIndex());
+        final List<BootstrapArgument> bootstrapArgumentDetails = bootstrapArgumentDetails(bootstrapMethod.argumentIndexes());
+        final java.util.ArrayList<String> bootstrapArguments = new java.util.ArrayList<>();
+        for (final BootstrapArgument bootstrapArgument : bootstrapArgumentDetails) {
+            bootstrapArguments.add(bootstrapArgument.text());
+        }
         return Optional.of(new DynamicRef(
             utf8(nameAndType.nameIndex()),
             utf8(nameAndType.descriptorIndex()),
             bootstrap.owner(),
             bootstrap.name(),
             bootstrap.descriptor(),
-            bootstrapArguments(bootstrapMethod.argumentIndexes())
+            List.copyOf(bootstrapArguments),
+            bootstrapArgumentDetails
         ));
     }
 
-    private List<String> bootstrapArguments(final List<Integer> argumentIndexes) {
-        final java.util.ArrayList<String> result = new java.util.ArrayList<>();
+    private List<BootstrapArgument> bootstrapArgumentDetails(final List<Integer> argumentIndexes) {
+        final java.util.ArrayList<BootstrapArgument> result = new java.util.ArrayList<>();
         for (final Integer argumentIndex : argumentIndexes) {
             result.add(bootstrapArgument(argumentIndex.intValue()));
         }
@@ -254,36 +312,39 @@ public final class ConstantPool {
     public record RawEntry(int tag, Object value) {
     }
 
-    private String bootstrapArgument(final int index) {
+    private BootstrapArgument bootstrapArgument(final int index) {
         final Object entry = entries[index];
         if (entry instanceof StringEntry stringEntry) {
-            return utf8(stringEntry.stringIndex());
+            return BootstrapArgument.string(utf8(stringEntry.stringIndex()));
         }
         if (entry instanceof Utf8Entry utf8Entry) {
-            return utf8Entry.value();
+            return BootstrapArgument.utf8(utf8Entry.value());
         }
         if (entry instanceof MethodTypeEntry methodType) {
-            return utf8(methodType.descriptorIndex());
+            return BootstrapArgument.methodType(utf8(methodType.descriptorIndex()));
+        }
+        if (entry instanceof MethodHandleEntry handle) {
+            return BootstrapArgument.methodHandle(handle.referenceKind(), methodRef(handle.referenceIndex()));
         }
         if (entry instanceof RawEntry rawEntry) {
-            return rawValueString(rawEntry.value());
+            return rawBootstrapArgument(rawEntry.value());
         }
-        return "";
+        return BootstrapArgument.unknown("");
     }
 
-    private static String rawValueString(final Object value) {
+    private static BootstrapArgument rawBootstrapArgument(final Object value) {
         if (value instanceof Integer integer) {
-            return Integer.toString(integer.intValue());
+            return BootstrapArgument.raw(BootstrapArgument.Kind.INT, Integer.toString(integer.intValue()));
         }
         if (value instanceof Long longValue) {
-            return Long.toString(longValue.longValue());
+            return BootstrapArgument.raw(BootstrapArgument.Kind.LONG, Long.toString(longValue.longValue()));
         }
         if (value instanceof Float floatValue) {
-            return Float.toString(floatValue.floatValue());
+            return BootstrapArgument.raw(BootstrapArgument.Kind.FLOAT, Float.toString(floatValue.floatValue()));
         }
         if (value instanceof Double doubleValue) {
-            return Double.toString(doubleValue.doubleValue());
+            return BootstrapArgument.raw(BootstrapArgument.Kind.DOUBLE, Double.toString(doubleValue.doubleValue()));
         }
-        return "";
+        return BootstrapArgument.unknown("");
     }
 }

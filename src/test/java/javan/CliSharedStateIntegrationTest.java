@@ -4,6 +4,10 @@ import javan.cli.Cli;
 import javan.util.Files2;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ResourceAccessMode;
+import org.junit.jupiter.api.parallel.ResourceLock;
+import org.junit.jupiter.api.parallel.Resources;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -20,7 +24,11 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
+import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 
+@Execution(SAME_THREAD)
+@ResourceLock("native-cli-heavy")
+@ResourceLock(value = Resources.SYSTEM_PROPERTIES, mode = ResourceAccessMode.READ_WRITE)
 final class CliSharedStateIntegrationTest {
     @TempDir
     private Path tempDir;
@@ -62,7 +70,7 @@ final class CliSharedStateIntegrationTest {
         assertThat(classes.resolve("javan/Main.class")).exists();
 
         final ProcessResult run = processSlow(root, List.of(
-            "java",
+            CliTestHarness.currentJavaCommand(),
             "-cp",
             classes.toString(),
             "javan.Main",
@@ -204,8 +212,8 @@ final class CliSharedStateIntegrationTest {
         Files.createDirectories(sourceFile.getParent());
         Files.createDirectories(classes);
         Files.writeString(sourceFile, source, StandardCharsets.UTF_8);
-        assertThat(process(root, List.of("javac", "-d", classes.toString(), sourceFile.toString())).exitCode()).isZero();
-        assertThat(process(root, List.of("jar", "--create", "--file", jar.toString(), "-C", classes.toString(), ".")).exitCode()).isZero();
+        assertThat(process(root, List.of(CliTestHarness.currentJavacCommand(), "-d", classes.toString(), sourceFile.toString())).exitCode()).isZero();
+        assertThat(process(root, List.of(CliTestHarness.currentJarCommand(), "--create", "--file", jar.toString(), "-C", classes.toString(), ".")).exitCode()).isZero();
         return jar;
     }
 

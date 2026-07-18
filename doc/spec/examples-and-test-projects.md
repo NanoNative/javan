@@ -38,11 +38,55 @@ Current public showcase:
 
 Optional real-project probes:
 
-- `src/test/resources/projects/real-probes/typemap-pair`: optional real dependency probe against TypeMap.
-- `src/test/resources/projects/real-probes/nano-metric`: optional real dependency probe against Nano's `MetricUpdate`
-  record.
-- `src/test/resources/projects/real-probes/nano-duration`: optional Nano duration example slice using
-  `NanoUtils.formatDuration(long)` without `DevConsoleService`.
+- `src/test/resources/external-probes/*`: external compatibility smoke against selected
+  reproducible external artifacts. Probe identity, coordinates, expected stdout, and the required
+  mapping back to a compiler-owned generic regression all live in per-probe metadata and in the
+  dedicated ledger at `doc/status/real-project-readiness.md`.
+- `src/test/resources/external-artifacts/*`: bundled source for the reproducible external artifact
+  jars used by the external smoke gate. These jars keep CI deterministic; evolving real example
+  repositories stay outside the compiler-owned regression line.
+
+The current pinned set is acceptance evidence only. Upstream artifact names and package structure
+must stay out of the compiler-owned support line, which has to remain generic enough that those
+probes can change without renaming Javan tests, support rows, or verifier rules.
+
+The same rule applies to the current probe labels themselves. Directory names like
+`artifact-*` are disposable smoke handles, not compiler/runtime feature names, and must not leak
+into support matrices, JDK accounting, or compiler-owned regression names.
+
+Each probe owns its own `probe.properties`, `expected.stdout`, and `build-example.sh`.
+The acceptance harness only iterates probe directories; it does not hardcode library-specific
+support claims into the compiler-owned test line.
+
+When a probe corresponds to an evolving public repository, that upstream identity must stay in
+probe metadata only. Use metadata fields such as `identityAliases` and `identityPackages` there,
+and keep compiler-owned tests, support ledgers, reports, and product code free of those names.
+
+The current probe set may change over time. Adding or removing a probe must not require product
+code changes unless the underlying generic Java/runtime gap is real and independently reproduced in
+the compiler-owned test line. Upstream identities belong only in probe metadata and the tiny probe
+sources that import those external classes; acceptance harness code, compiler-owned tests, support
+ledgers, workflow scripts, and public examples must stay project-neutral.
+
+Boundary:
+
+- probe names may stay only in probe metadata and the tiny probe source files that import upstream classes
+- probe names must stay out of support rows, JDK coverage ledgers, compiler-owned regression tests, docs, workflow scripts, and public examples
+- probe names must stay out of the public `example/` showcase and all non-probe test resources
+- upstream probe changes are allowed; Javan support claims must still be expressed in generic JDK/runtime terms
+
+These are not core compiler/runtime support tests. They are allowed to prove "Javan can compile
+this pinned real artifact today", but they are not allowed to define "Javan supports this JDK
+feature" or teach Javan any project-specific semantics. Core support tests must stay compiler-owned,
+deterministic, and independent of external project semantics. When a real probe finds a bug, the fix must land with a synthetic
+compiler-owned regression test that proves the underlying JDK/runtime shape without depending on
+any external project identity. External probes are allowed to answer only one question: "does
+Javan compile this pinned real artifact today?" They are not allowed to answer "is this Java
+feature supported?"
+
+Javan must not learn probe-specific semantics from these projects. If an upstream real probe
+changes, the probe metadata and smoke assets may change, but the durable compiler/runtime
+regression must still be expressed in generic JDK/runtime terms inside the core test line.
 
 ## Test Projects
 
@@ -76,7 +120,7 @@ when they are release-quality samples:
 - CLI app with resources and argument parsing.
 - Multi-class service-style app with interfaces and substitutions.
 - Native library with C, Rust, Go, and Python consumers.
-- Dependency-backed TypeMap scenario.
-- Dependency-backed Nano scenario.
+- Dependency-backed external library scenario.
+- Dependency-backed external service scenario.
 - Self-host bootstrap is covered by release tooling; future complex examples should
   focus on larger public apps and dependency-backed scenarios.

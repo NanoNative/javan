@@ -1,11 +1,18 @@
 package javan;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ResourceAccessMode;
+import org.junit.jupiter.api.parallel.ResourceLock;
+import org.junit.jupiter.api.parallel.Resources;
 
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 
+@Execution(SAME_THREAD)
+@ResourceLock(value = Resources.SYSTEM_PROPERTIES, mode = ResourceAccessMode.READ_WRITE)
 final class CliTestHarnessTest {
 
     @Test
@@ -62,6 +69,36 @@ final class CliTestHarnessTest {
             restoreProperty("javan.childJacocoArgLine", originalAgent);
             restoreProperty("javan.childJacocoDir", originalDirectory);
         }
+    }
+
+    @Test
+    void currentJdkToolCommandsResolveFromJavaHomeBin() {
+        final String suffix = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win")
+            ? ".exe"
+            : "";
+        final String bin = java.nio.file.Path.of(System.getProperty("java.home")).resolve("bin").toString();
+
+        assertThat(CliTestHarness.currentJavaCommand()).isEqualTo(java.nio.file.Path.of(bin).resolve("java" + suffix).toString());
+        assertThat(CliTestHarness.currentJavacCommand()).isEqualTo(java.nio.file.Path.of(bin).resolve("javac" + suffix).toString());
+        assertThat(CliTestHarness.currentJarCommand()).isEqualTo(java.nio.file.Path.of(bin).resolve("jar" + suffix).toString());
+    }
+
+    @Test
+    void childCoveragePropertiesArePresentWhenJacocoAgentIsAttached() {
+        final boolean jacocoAttached = java.lang.management.ManagementFactory.getRuntimeMXBean()
+            .getInputArguments()
+            .stream()
+            .anyMatch(argument -> argument.startsWith("-javaagent:") && argument.contains("org.jacoco.agent"));
+        if (!jacocoAttached) {
+            return;
+        }
+
+        assertThat(System.getProperty("javan.childJacocoArgLine", ""))
+            .contains("-javaagent:")
+            .contains("org.jacoco.agent")
+            .contains("destfile=");
+        assertThat(System.getProperty("javan.childJacocoDir", ""))
+            .isNotBlank();
     }
 
     private static void restoreProperty(final String key, final String value) {

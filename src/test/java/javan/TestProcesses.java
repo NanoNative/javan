@@ -4,8 +4,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
-import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -43,7 +44,7 @@ public final class TestProcesses {
         final Map<String, String> environment
     ) {
         try {
-            final ProcessBuilder builder = new ProcessBuilder(command).directory(cwd.toFile());
+            final ProcessBuilder builder = new ProcessBuilder(portableCommand(command)).directory(cwd.toFile());
             builder.environment().putAll(environment);
             final Process process = builder.start();
             final StreamCollector stdout = new StreamCollector(process.getInputStream());
@@ -54,6 +55,22 @@ public final class TestProcesses {
         } catch (final IOException exception) {
             throw new UncheckedIOException(exception);
         }
+    }
+
+    private static List<String> portableCommand(final List<String> command) {
+        if (command.isEmpty()) {
+            return command;
+        }
+        if (!"sh".equals(command.getFirst())) {
+            return command;
+        }
+        final Path shell = Path.of("/bin/sh");
+        if (!Files.isExecutable(shell)) {
+            return command;
+        }
+        final ArrayList<String> normalized = new ArrayList<>(command);
+        normalized.set(0, shell.toString());
+        return List.copyOf(normalized);
     }
 
     public record Result(int exitCode, String stdout, String stderr) {

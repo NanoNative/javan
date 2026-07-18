@@ -24,7 +24,7 @@ repository.
 - Run GitHub Actions on the actual remote.
 - Confirm Linux release archive from CI.
 - Confirm GHCR image publish from CI.
-- Decide whether TypeMap and Nano compatibility probes should be pinned for remote CI or
+- Decide whether the named external compatibility probes should be pinned for remote CI or
   remain local-optional.
 - Decide whether Windows is a supported release target for this version or explicitly
   mark it unsupported in the release notes.

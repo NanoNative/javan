@@ -47,15 +47,15 @@ final class JavanModuleParserTest {
     @Test
     void parseKeepsCoordinateDependenciesUnsupportedButVisible() {
         final JavanModule module = new JavanModuleParser().parse(tempDir, """
-            require org.nanonative:nano 2026.1
-            require test berlin.yuna:type-map 2026.2
+            require com.example:native-lib 2026.1
+            require test com.example:test-lib 2026.2
             """);
 
         assertThat(module.warnings()).isEmpty();
         assertThat(module.dependencies()).hasSize(2);
         assertThat(module.dependencies().get(0).kind()).isEqualTo("coordinate");
         assertThat(module.dependencies().get(0).scope()).isEqualTo("main");
-        assertThat(module.dependencies().get(0).notation()).isEqualTo("org.nanonative:nano 2026.1");
+        assertThat(module.dependencies().get(0).notation()).isEqualTo("com.example:native-lib 2026.1");
         assertThat(module.dependencies().get(1).scope()).isEqualTo("test");
     }
 

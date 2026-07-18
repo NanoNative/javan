@@ -283,6 +283,7 @@ final class BytecodeToIRControlFlowSupport {
         final Map<Integer, IrExpression> locals,
         final Map<Integer, StackKind> objectLocalKinds,
         final Map<Integer, String> objectLocalThrowableTypes,
+        final Map<Integer, DynamicLambda> objectLocalLambdas,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
         final List<Integer> skippedOffsets,
@@ -303,6 +304,7 @@ final class BytecodeToIRControlFlowSupport {
             locals,
             objectLocalKinds,
             objectLocalThrowableTypes,
+            objectLocalLambdas,
             localDeclarations,
             dispatches,
             skippedOffsets,
@@ -346,6 +348,7 @@ final class BytecodeToIRControlFlowSupport {
             locals,
             objectLocalKinds,
             objectLocalThrowableTypes,
+            objectLocalLambdas,
             workingDeclarations,
             dispatches
         );
@@ -360,6 +363,7 @@ final class BytecodeToIRControlFlowSupport {
             locals,
             objectLocalKinds,
             objectLocalThrowableTypes,
+            objectLocalLambdas,
             workingDeclarations,
             dispatches
         );
@@ -408,6 +412,7 @@ final class BytecodeToIRControlFlowSupport {
         final Map<Integer, IrExpression> locals,
         final Map<Integer, StackKind> objectLocalKinds,
         final Map<Integer, String> objectLocalThrowableTypes,
+        final Map<Integer, DynamicLambda> objectLocalLambdas,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
         final List<Integer> skippedOffsets,
@@ -449,6 +454,7 @@ final class BytecodeToIRControlFlowSupport {
         final Map<Integer, IrExpression> workingLocals = copyExpressionLocals(locals);
         final Map<Integer, StackKind> workingObjectLocalKinds = copyObjectLocalKinds(objectLocalKinds);
         final Map<Integer, String> workingObjectLocalThrowableTypes = copyObjectLocalThrowableTypes(objectLocalThrowableTypes);
+        final Map<Integer, DynamicLambda> workingObjectLocalLambdas = copyObjectLocalLambdas(objectLocalLambdas);
         final List<IrInstruction> mergedInstructions = new ArrayList<>();
         final List<StackValue> workingStack = new ArrayList<>(stack);
         List<StackValue> prefix = List.of();
@@ -476,8 +482,11 @@ final class BytecodeToIRControlFlowSupport {
                     workingLocals,
                     workingObjectLocalKinds,
                     workingObjectLocalThrowableTypes,
+                    workingObjectLocalLambdas,
                     workingDeclarations,
                     dispatches,
+                    Map.of(),
+                    Map.of(),
                     SourceLineIndex.empty()
                 );
             }
@@ -500,6 +509,7 @@ final class BytecodeToIRControlFlowSupport {
             locals,
             objectLocalKinds,
             objectLocalThrowableTypes,
+            objectLocalLambdas,
             workingDeclarations,
             dispatches
         );
@@ -547,6 +557,7 @@ final class BytecodeToIRControlFlowSupport {
         final Map<Integer, IrExpression> locals,
         final Map<Integer, StackKind> objectLocalKinds,
         final Map<Integer, String> objectLocalThrowableTypes,
+        final Map<Integer, DynamicLambda> objectLocalLambdas,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches
     ) {
@@ -555,6 +566,7 @@ final class BytecodeToIRControlFlowSupport {
         final Map<Integer, IrExpression> blockLocals = copyExpressionLocals(locals);
         final Map<Integer, StackKind> blockObjectLocalKinds = copyObjectLocalKinds(objectLocalKinds);
         final Map<Integer, String> blockObjectLocalThrowableTypes = copyObjectLocalThrowableTypes(objectLocalThrowableTypes);
+        final Map<Integer, DynamicLambda> blockObjectLocalLambdas = copyObjectLocalLambdas(objectLocalLambdas);
         for (int index = startIndex; index < endIndex; index++) {
             final Instruction blockInstruction = bytecode.get(index);
             if (isControlTransfer(blockInstruction.opcode())) {
@@ -571,8 +583,11 @@ final class BytecodeToIRControlFlowSupport {
                 blockLocals,
                 blockObjectLocalKinds,
                 blockObjectLocalThrowableTypes,
+                blockObjectLocalLambdas,
                 localDeclarations,
                 dispatches,
+                Map.of(),
+                Map.of(),
                 SourceLineIndex.empty()
             );
         }
@@ -600,6 +615,7 @@ final class BytecodeToIRControlFlowSupport {
         final Map<Integer, IrExpression> locals,
         final Map<Integer, StackKind> objectLocalKinds,
         final Map<Integer, String> objectLocalThrowableTypes,
+        final Map<Integer, DynamicLambda> objectLocalLambdas,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
         final List<Integer> skippedOffsets,
@@ -680,6 +696,7 @@ final class BytecodeToIRControlFlowSupport {
                 locals,
                 objectLocalKinds,
                 objectLocalThrowableTypes,
+                objectLocalLambdas,
                 workingDeclarations,
                 dispatches
             );
@@ -882,6 +899,9 @@ final class BytecodeToIRControlFlowSupport {
         }
         return result;
     }
+    static Map<Integer, DynamicLambda> copyObjectLocalLambdas(final Map<Integer, DynamicLambda> source) {
+        return new HashMap<>(source);
+    }
     static Map<Integer, IrLocal> copyLocalDeclarations(final Map<Integer, IrLocal> source) {
         final Map<Integer, IrLocal> result = new LinkedHashMap<>();
         int index = 0;
@@ -988,8 +1008,17 @@ final class BytecodeToIRControlFlowSupport {
         if (kind == StackKind.VIRTUAL_THREAD_EXECUTOR) {
             return StackValue.virtualThreadExecutor(expression);
         }
+        if (kind == StackKind.THREAD_FUTURE) {
+            return StackValue.threadFuture(expression);
+        }
+        if (kind == StackKind.SCHEDULED_THREAD_POOL_EXECUTOR) {
+            return StackValue.scheduledThreadPoolExecutor(expression);
+        }
         if (kind == StackKind.SOCKET_INPUT_STREAM) {
             return StackValue.socketInputStream(expression);
+        }
+        if (kind == StackKind.RESOURCE_INPUT_STREAM) {
+            return StackValue.resourceInputStream(expression);
         }
         if (kind == StackKind.SOCKET_OUTPUT_STREAM) {
             return StackValue.socketOutputStream(expression);
@@ -1001,9 +1030,12 @@ final class BytecodeToIRControlFlowSupport {
             || kind == StackKind.VIRTUAL_THREAD_BUILDER
             || kind == StackKind.VIRTUAL_THREAD_FACTORY
             || kind == StackKind.VIRTUAL_THREAD_EXECUTOR
+            || kind == StackKind.THREAD_FUTURE
+            || kind == StackKind.SCHEDULED_THREAD_POOL_EXECUTOR
             || kind == StackKind.PRINT_STREAM
             || kind == StackKind.ERROR_PRINT_STREAM
             || kind == StackKind.SOCKET_INPUT_STREAM
+            || kind == StackKind.RESOURCE_INPUT_STREAM
             || kind == StackKind.SOCKET_OUTPUT_STREAM;
     }
     static void tableSwitch(

@@ -1,6 +1,7 @@
 package javan;
 
 import javan.cli.Cli;
+import javan.toolchain.CurrentJdkTools;
 import org.opentest4j.AssertionFailedError;
 
 import java.io.ByteArrayOutputStream;
@@ -92,6 +93,18 @@ final class CliTestHarness {
         } catch (final RuntimeException exception) {
             return false;
         }
+    }
+
+    static String currentJavaCommand() {
+        return CurrentJdkTools.java();
+    }
+
+    static String currentJavacCommand() {
+        return CurrentJdkTools.javac();
+    }
+
+    static String currentJarCommand() {
+        return CurrentJdkTools.jar();
     }
 
     static List<String> childCoverageCommandForTesting(final List<String> command) {

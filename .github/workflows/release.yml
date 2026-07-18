@@ -26,12 +26,12 @@ on:
         default: false
         type: boolean
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && format('manual-{0}', github.run_id) || github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: write
-
-concurrency:
-  group: release-${{ github.ref_name || github.run_id }}
-  cancel-in-progress: false
 
 jobs:
   plan:
@@ -105,7 +105,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Set up JDK
         uses: actions/setup-java@v5
@@ -129,7 +129,17 @@ jobs:
           rustc --version
 
       - name: Install Linux native toolchain
-        run: sudo apt-get update && sudo apt-get install -y build-essential
+        run: |
+          for attempt in 1 2 3; do
+            if sudo apt-get -o Acquire::ForceIPv4=true update \
+              && sudo apt-get -o Acquire::ForceIPv4=true install -y --fix-missing build-essential; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            sleep 15
+          done
 
       - name: Set release version
         shell: sh
@@ -157,7 +167,7 @@ jobs:
         run: JAVAN_VERSION='${{ needs.plan.outputs.version }}' JAVAN_PACKAGE_TARGET='${{ matrix.package-target }}' sh .github/scripts/verify-release.sh
 
       - name: Upload package
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: javan-${{ matrix.package-target }}
           retention-days: 1
@@ -178,12 +188,10 @@ jobs:
         include:
           - os: macos-15
             package-target: macos-aarch64
-          - os: macos-15-intel
-            package-target: macos-x64
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Set up JDK
         uses: actions/setup-java@v5
@@ -232,7 +240,7 @@ jobs:
         run: JAVAN_VERSION='${{ needs.plan.outputs.version }}' JAVAN_PACKAGE_TARGET='${{ matrix.package-target }}' sh .github/scripts/verify-release.sh
 
       - name: Upload package
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: javan-${{ matrix.package-target }}
           retention-days: 1
@@ -261,16 +269,30 @@ jobs:
           fi
 
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           token: ${{ secrets.BOT_TOKEN }}
 
       - name: Download packages
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           path: dist/release
           merge-multiple: true
+
+      - name: Generate Homebrew formula
+        shell: sh
+        env:
+          RELEASE_VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          .github/scripts/generate-homebrew-formula.sh "$RELEASE_VERSION" "${GITHUB_REPOSITORY}"
+
+      - name: Verify Homebrew formula
+        shell: sh
+        env:
+          RELEASE_VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          .github/scripts/verify-homebrew-formula.sh dist/release/javan.rb "$RELEASE_VERSION" "${GITHUB_REPOSITORY}"
 
       - name: Prepare release metadata
         shell: sh

@@ -12,10 +12,12 @@ import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
 import javan.compat.JdkCallSupport;
 import javan.compat.JavanNativeSubstitutions;
+import javan.compat.ExactMethodSupport;
 import javan.ir.IrClass;
 import javan.ir.IrDispatch;
 import javan.ir.IrDispatchTarget;
 import javan.ir.IrFunction;
+import javan.ir.IrMaterializedLambdaTarget;
 import javan.ir.IrExpression;
 import javan.ir.IrField;
 import javan.ir.IrInstruction;
@@ -44,6 +46,24 @@ public final class BytecodeToIR {
     static final int TYPE_JAVA_LANG_FLOAT = -1003;
     static final int TYPE_JAVA_LANG_DOUBLE = -1004;
     static final int TYPE_JAVA_LANG_BOOLEAN = -1005;
+    static final int TYPE_JAVA_LANG_BYTE = -1015;
+    static final int TYPE_JAVA_LANG_SHORT = -1016;
+    static final int TYPE_JAVA_LANG_CHARACTER = -1014;
+    static final int CLASS_EXACT_STRING = -2001;
+    static final int CLASS_EXACT_OBJECT = -2002;
+    static final int CLASS_EXACT_CLASS = -2003;
+    static final int CLASS_EXACT_CLASS_LOADER = -2004;
+    static final int CLASS_EXACT_ARRAY_LIST = -2005;
+    static final int CLASS_EXACT_HASH_MAP = -2006;
+    static final int CLASS_EXACT_PRIMITIVE_BOOLEAN = -2007;
+    static final int CLASS_EXACT_PRIMITIVE_BYTE = -2008;
+    static final int CLASS_EXACT_PRIMITIVE_SHORT = -2009;
+    static final int CLASS_EXACT_PRIMITIVE_CHAR = -2010;
+    static final int CLASS_EXACT_PRIMITIVE_INT = -2011;
+    static final int CLASS_EXACT_PRIMITIVE_LONG = -2012;
+    static final int CLASS_EXACT_PRIMITIVE_FLOAT = -2013;
+    static final int CLASS_EXACT_PRIMITIVE_DOUBLE = -2014;
+    static final int CLASS_EXACT_PRIMITIVE_VOID = -2015;
 
     /**
      * Lowers reachable methods to IR.
@@ -72,6 +92,12 @@ public final class BytecodeToIR {
         final List<IrFunction> functions = new ArrayList<>();
         final Map<String, IrDispatch> dispatches = new LinkedHashMap<>();
         final List<EntryPoint> reachableMethods = BytecodeToIRMetadataSupport.sortedEntryPoints(callGraph.reachableMethods());
+        final List<IrMaterializedLambdaTarget> materializedLambdaTargets =
+            BytecodeToIRInvokeSupport.functionOrNullTargets(classes, reachableMethods);
+        final Map<String, Integer> functionOrNullTargetIds =
+            BytecodeToIRInvokeSupport.functionOrNullTargetIds(classes, reachableMethods);
+        final Map<MethodRef, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods =
+            BytecodeToIRInvokeSupport.materializedLambdaMethods(classes, reachableMethods);
         final List<EntryPoint> runnableThreadTargets = BytecodeToIRInvokeSupport.runnableThreadTargets(classes, reachableMethods);
         if (!runnableThreadTargets.isEmpty()) {
             final MethodRef runnableRun = BytecodeToIRInvokeSupport.runnableRunMethodRef();
@@ -86,26 +112,62 @@ public final class BytecodeToIR {
             );
         }
         for (final EntryPoint reachable : reachableMethods) {
-            functions.add(lowerFunction(classes, reachable, dispatches, sourceLines));
+            functions.add(lowerFunction(classes, reachable, dispatches, functionOrNullTargetIds, materializedLambdaMethods, sourceLines));
         }
-        return new IrProgram(BytecodeToIRMetadataSupport.lowerClasses(classes), List.copyOf(functions), List.copyOf(dispatches.values()), symbol(callGraph.entryPoint()));
+        return new IrProgram(
+            BytecodeToIRMetadataSupport.lowerClasses(classes),
+            List.copyOf(functions),
+            List.copyOf(dispatches.values()),
+            symbol(callGraph.entryPoint()),
+            List.copyOf(materializedLambdaTargets)
+        );
     }
 
     static IrFunction lowerFunction(
         final Map<String, ClassFile> classes,
         final EntryPoint entryPoint,
         final Map<String, IrDispatch> dispatches,
+        final Map<String, Integer> functionOrNullTargetIds,
+        final Map<MethodRef, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final SourceLineIndex sourceLines
     ) {
         final ClassFile classFile = classes.get(entryPoint.className());
         final MethodInfo method = classFile.method(entryPoint.methodName(), entryPoint.descriptor()).orElseThrow();
         final MethodDescriptor descriptor = MethodDescriptor.parse(method.descriptor());
         final List<IrParameter> parameters = BytecodeToIRMetadataSupport.parameters(method, descriptor);
+        if (ExactMethodSupport.isExactCatchNullEnumLookupMethod(classFile, method)) {
+            return lowerExactCatchNullEnumLookupFunction(entryPoint, descriptor, parameters);
+        }
+        if (ExactMethodSupport.isExactCatchNullFunctionOrNullApplyMethod(classFile, method)) {
+            return lowerExactCatchNullFunctionOrNullApplyFunction(entryPoint, descriptor, parameters);
+        }
+        if (ExactMethodSupport.isExactTemporalOfLoopFallbackMethod(classFile, method)) {
+            return lowerExactTemporalOfFunction(entryPoint, descriptor, parameters);
+        }
+        if (ExactMethodSupport.isExactTemporalStringBridgeMethod(classFile, method)) {
+            return lowerExactTemporalStringBridgeFunction(classFile, method, entryPoint, descriptor, parameters);
+        }
+        if (ExactMethodSupport.isExactCalendarOfEpochMillisMethod(classFile, method)) {
+            return lowerExactCalendarOfEpochMillisFunction(entryPoint, descriptor, parameters);
+        }
+        if (ExactMethodSupport.isExactCalendarOfDateMethod(classFile, method)) {
+            return lowerExactCalendarOfDateFunction(entryPoint, descriptor, parameters);
+        }
+        if (ExactMethodSupport.isExactCalendarOfLocalTimeMethod(classFile, method)) {
+            return lowerExactCalendarOfLocalTimeFunction(entryPoint, descriptor, parameters);
+        }
+        if (ExactMethodSupport.isExactThrowableStringOfMethod(classFile, method)) {
+            return lowerExactThrowableStringOfFunction(entryPoint, descriptor, parameters);
+        }
+        if (ExactMethodSupport.isExactUnsupportedTemporalConversionLambdaMethod(classFile, method)) {
+            return lowerExactUnsupportedTemporalConversionLambdaFunction(entryPoint, descriptor, parameters);
+        }
         final List<IrInstruction> instructions = new ArrayList<>();
         final List<StackValue> stack = new ArrayList<>();
         final Map<Integer, IrExpression> locals = new HashMap<>();
         final Map<Integer, StackKind> objectLocalKinds = new HashMap<>();
         final Map<Integer, String> objectLocalThrowableTypes = new HashMap<>();
+        final Map<Integer, DynamicLambda> objectLocalLambdas = new HashMap<>();
         final Map<Integer, IrLocal> localDeclarations = new LinkedHashMap<>();
         final Map<Integer, StackValue> pendingExceptionHandlerStacks = new HashMap<>();
         final CodeAttribute code = method.code().orElseThrow();
@@ -152,6 +214,7 @@ public final class BytecodeToIR {
                 locals,
                 objectLocalKinds,
                 objectLocalThrowableTypes,
+                objectLocalLambdas,
                 localDeclarations,
                 dispatches,
                 skippedOffsets,
@@ -171,6 +234,7 @@ public final class BytecodeToIR {
                 locals,
                 objectLocalKinds,
                 objectLocalThrowableTypes,
+                objectLocalLambdas,
                 localDeclarations,
                 dispatches,
                 skippedOffsets,
@@ -190,8 +254,11 @@ public final class BytecodeToIR {
                 locals,
                 objectLocalKinds,
                 objectLocalThrowableTypes,
+                objectLocalLambdas,
                 localDeclarations,
                 dispatches,
+                functionOrNullTargetIds,
+                materializedLambdaMethods,
                 sourceLines
             );
             BytecodeToIRControlFlowSupport.annotateNewInstructions(instructions, instructionStart, sourceLocation);
@@ -205,6 +272,205 @@ public final class BytecodeToIR {
             parameters,
             List.copyOf(localDeclarations.values()),
             List.copyOf(instructions)
+        );
+    }
+
+    private static IrFunction lowerExactCatchNullEnumLookupFunction(
+        final EntryPoint entryPoint,
+        final MethodDescriptor descriptor,
+        final List<IrParameter> parameters
+    ) {
+        return new IrFunction(
+            entryPoint.className(),
+            entryPoint.methodName(),
+            entryPoint.descriptor(),
+            symbol(entryPoint),
+            descriptor.returnType(),
+            parameters,
+            List.of(),
+            List.of(IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_exact_enum_lookup",
+                List.of(
+                    IrExpression.objectLocal(parameters.get(0).name()),
+                    IrExpression.objectLocal(parameters.get(1).name())
+                )
+            )))
+        );
+    }
+
+    private static IrFunction lowerExactCatchNullFunctionOrNullApplyFunction(
+        final EntryPoint entryPoint,
+        final MethodDescriptor descriptor,
+        final List<IrParameter> parameters
+    ) {
+        return new IrFunction(
+            entryPoint.className(),
+            entryPoint.methodName(),
+            entryPoint.descriptor(),
+            symbol(entryPoint),
+            descriptor.returnType(),
+            parameters,
+            List.of(),
+            List.of(IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_exact_catch_null_apply",
+                List.of(
+                    IrExpression.objectLocal(parameters.get(0).name()),
+                    IrExpression.objectLocal(parameters.get(1).name())
+                )
+            )))
+        );
+    }
+
+    private static IrFunction lowerExactTemporalOfFunction(
+        final EntryPoint entryPoint,
+        final MethodDescriptor descriptor,
+        final List<IrParameter> parameters
+    ) {
+        return new IrFunction(
+            entryPoint.className(),
+            entryPoint.methodName(),
+            entryPoint.descriptor(),
+            symbol(entryPoint),
+            descriptor.returnType(),
+            parameters,
+            List.of(),
+            List.of(IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_exact_temporal_of_unsupported",
+                List.of(
+                    IrExpression.objectLocal(parameters.get(0).name()),
+                    IrExpression.objectLocal(parameters.get(1).name()),
+                    IrExpression.objectLocal(parameters.get(2).name())
+                )
+            )))
+        );
+    }
+
+    private static IrFunction lowerExactTemporalStringBridgeFunction(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final EntryPoint entryPoint,
+        final MethodDescriptor descriptor,
+        final List<IrParameter> parameters
+    ) {
+        final Optional<String> targetOwner = ExactMethodSupport.exactTemporalStringBridgeTargetInternalName(classFile, method);
+        if (targetOwner.isEmpty()) {
+            throw new IllegalArgumentException("exact temporal string bridge target is missing");
+        }
+        return new IrFunction(
+            entryPoint.className(),
+            entryPoint.methodName(),
+            entryPoint.descriptor(),
+            symbol(entryPoint),
+            descriptor.returnType(),
+            parameters,
+            List.of(),
+            List.of(IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_exact_temporal_string_bridge_unsupported",
+                List.of(
+                    IrExpression.objectLocal(parameters.getFirst().name()),
+                    IrExpression.stringLiteral(targetOwner.orElseThrow().replace('/', '.'))
+                )
+            )))
+        );
+    }
+
+    private static IrFunction lowerExactCalendarOfEpochMillisFunction(
+        final EntryPoint entryPoint,
+        final MethodDescriptor descriptor,
+        final List<IrParameter> parameters
+    ) {
+        return new IrFunction(
+            entryPoint.className(),
+            entryPoint.methodName(),
+            entryPoint.descriptor(),
+            symbol(entryPoint),
+            descriptor.returnType(),
+            parameters,
+            List.of(),
+            List.of(IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_exact_calendar_of_millis_unsupported",
+                List.of(IrExpression.longLocal(parameters.getFirst().name()))
+            )))
+        );
+    }
+
+    private static IrFunction lowerExactCalendarOfDateFunction(
+        final EntryPoint entryPoint,
+        final MethodDescriptor descriptor,
+        final List<IrParameter> parameters
+    ) {
+        return new IrFunction(
+            entryPoint.className(),
+            entryPoint.methodName(),
+            entryPoint.descriptor(),
+            symbol(entryPoint),
+            descriptor.returnType(),
+            parameters,
+            List.of(),
+            List.of(IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_exact_calendar_of_date_unsupported",
+                List.of(IrExpression.objectLocal(parameters.getFirst().name()))
+            )))
+        );
+    }
+
+    private static IrFunction lowerExactCalendarOfLocalTimeFunction(
+        final EntryPoint entryPoint,
+        final MethodDescriptor descriptor,
+        final List<IrParameter> parameters
+    ) {
+        return new IrFunction(
+            entryPoint.className(),
+            entryPoint.methodName(),
+            entryPoint.descriptor(),
+            symbol(entryPoint),
+            descriptor.returnType(),
+            parameters,
+            List.of(),
+            List.of(IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_exact_calendar_of_local_time_unsupported",
+                List.of(IrExpression.objectLocal(parameters.getFirst().name()))
+            )))
+        );
+    }
+
+    private static IrFunction lowerExactThrowableStringOfFunction(
+        final EntryPoint entryPoint,
+        final MethodDescriptor descriptor,
+        final List<IrParameter> parameters
+    ) {
+        return new IrFunction(
+            entryPoint.className(),
+            entryPoint.methodName(),
+            entryPoint.descriptor(),
+            symbol(entryPoint),
+            descriptor.returnType(),
+            parameters,
+            List.of(),
+            List.of(IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_exact_throwable_string_of_unsupported",
+                List.of(IrExpression.objectLocal(parameters.getFirst().name()))
+            )))
+        );
+    }
+
+    private static IrFunction lowerExactUnsupportedTemporalConversionLambdaFunction(
+        final EntryPoint entryPoint,
+        final MethodDescriptor descriptor,
+        final List<IrParameter> parameters
+    ) {
+        return new IrFunction(
+            entryPoint.className(),
+            entryPoint.methodName(),
+            entryPoint.descriptor(),
+            symbol(entryPoint),
+            descriptor.returnType(),
+            parameters,
+            List.of(),
+            List.of(IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_temporal_conversion_lambda_unsupported",
+                List.of(IrExpression.stringLiteral(entryPoint.display()))
+            )))
         );
     }
 
@@ -228,8 +494,11 @@ public final class BytecodeToIR {
         final Map<Integer, IrExpression> locals,
         final Map<Integer, StackKind> objectLocalKinds,
         final Map<Integer, String> objectLocalThrowableTypes,
+        final Map<Integer, DynamicLambda> objectLocalLambdas,
         final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
+        final Map<String, Integer> functionOrNullTargetIds,
+        final Map<MethodRef, BytecodeToIRInvokeSupport.MaterializedLambdaDispatchKind> materializedLambdaMethods,
         final SourceLineIndex sourceLines
     ) {
         switch (instruction.opcode()) {
@@ -264,26 +533,20 @@ public final class BytecodeToIR {
             case 6:
             case 7:
             case 8:
-                stack.add(StackValue.intExpression(IrExpression.intLiteral(instruction.opcode() - 3)));
+                BytecodeToIRInvokeSupport.pushConstant(classes, classFile, method, instruction, stack);
                 break;
             case 9:
             case 10:
-                stack.add(StackValue.longExpression(IrExpression.longLiteral(instruction.opcode() - 9L)));
-                break;
             case 11:
             case 12:
             case 13:
-                stack.add(StackValue.floatExpression(IrExpression.floatLiteral(instruction.opcode() - 11.0f)));
-                break;
             case 14:
             case 15:
-                stack.add(StackValue.doubleExpression(IrExpression.doubleLiteral(instruction.opcode() - 14.0)));
+                BytecodeToIRInvokeSupport.pushConstant(classes, classFile, method, instruction, stack);
                 break;
             case 16:
-                stack.add(StackValue.intExpression(IrExpression.intLiteral(signedByte(instruction.operands()[0]))));
-                break;
             case 17:
-                stack.add(StackValue.intExpression(IrExpression.intLiteral(signedShort(instruction.operands()))));
+                BytecodeToIRInvokeSupport.pushConstant(classes, classFile, method, instruction, stack);
                 break;
             case 21:
                 stack.add(StackValue.intExpression(local(classFile, method, locals, unsigned(instruction.operands()[0]), IrType.INT)));
@@ -322,13 +585,13 @@ public final class BytecodeToIR {
                 stack.add(StackValue.doubleExpression(local(classFile, method, locals, instruction.opcode() - 38, IrType.DOUBLE)));
                 break;
             case 25:
-                stack.add(localObjectValue(classFile, method, locals, objectLocalKinds, objectLocalThrowableTypes, unsigned(instruction.operands()[0])));
+                stack.add(localObjectValue(classFile, method, locals, objectLocalKinds, objectLocalThrowableTypes, objectLocalLambdas, unsigned(instruction.operands()[0])));
                 break;
             case 42:
             case 43:
             case 44:
             case 45:
-                stack.add(localObjectValue(classFile, method, locals, objectLocalKinds, objectLocalThrowableTypes, instruction.opcode() - 42));
+                stack.add(localObjectValue(classFile, method, locals, objectLocalKinds, objectLocalThrowableTypes, objectLocalLambdas, instruction.opcode() - 42));
                 break;
             case 46:
                 loadIntArray(classFile, method, stack);
@@ -391,13 +654,13 @@ public final class BytecodeToIR {
                 storeDouble(classFile, method, instructions, stack, locals, localDeclarations, instruction.opcode() - 71);
                 break;
             case 58:
-                storeObject(classFile, method, instruction, instructions, stack, locals, objectLocalKinds, objectLocalThrowableTypes, localDeclarations, unsigned(instruction.operands()[0]));
+                storeObject(classFile, method, instruction, instructions, stack, locals, objectLocalKinds, objectLocalThrowableTypes, objectLocalLambdas, localDeclarations, unsigned(instruction.operands()[0]));
                 break;
             case 75:
             case 76:
             case 77:
             case 78:
-                storeObject(classFile, method, instruction, instructions, stack, locals, objectLocalKinds, objectLocalThrowableTypes, localDeclarations, instruction.opcode() - 75);
+                storeObject(classFile, method, instruction, instructions, stack, locals, objectLocalKinds, objectLocalThrowableTypes, objectLocalLambdas, localDeclarations, instruction.opcode() - 75);
                 break;
             case 79:
                 storeIntArray(classFile, method, instructions, stack);
@@ -608,7 +871,7 @@ public final class BytecodeToIR {
             case 18:
             case 19:
             case 20:
-                BytecodeToIRInvokeSupport.pushConstant(classFile, method, instruction, stack);
+                BytecodeToIRInvokeSupport.pushConstant(classes, classFile, method, instruction, stack);
                 break;
             case 180:
                 BytecodeToIRInvokeSupport.pushInstanceField(classFile, method, instruction, stack);
@@ -627,6 +890,7 @@ public final class BytecodeToIR {
                     localDeclarations,
                     pendingExceptionHandlerStacks,
                     dispatches,
+                    materializedLambdaMethods,
                     sourceLines
                 );
                 break;
@@ -642,15 +906,27 @@ public final class BytecodeToIR {
                     instructions,
                     stack,
                     localDeclarations,
+                    dispatches,
+                    materializedLambdaMethods,
                     pendingExceptionHandlerStacks,
                     sourceLines
                 );
                 break;
             case 185:
-                BytecodeToIRInvokeSupport.lowerInterfaceCall(classes, classFile, method, instruction, instructions, stack, localDeclarations, dispatches);
+                BytecodeToIRInvokeSupport.lowerInterfaceCall(
+                    classes,
+                    classFile,
+                    method,
+                    instruction,
+                    instructions,
+                    stack,
+                    localDeclarations,
+                    dispatches,
+                    materializedLambdaMethods
+                );
                 break;
             case 186:
-                BytecodeToIRInvokeSupport.lowerDynamicCall(classFile, method, instruction, stack);
+                BytecodeToIRInvokeSupport.lowerDynamicCall(classes, classFile, method, instruction, stack, functionOrNullTargetIds);
                 break;
             case 187:
                 BytecodeToIRInvokeSupport.newObject(classes, classFile, method, instruction, instructions, stack, localDeclarations);
@@ -659,7 +935,7 @@ public final class BytecodeToIR {
                 newPrimitiveArray(classFile, method, instruction, instructions, stack, localDeclarations);
                 break;
             case 189:
-                newObjectArray(classFile, method, instructions, stack, localDeclarations);
+                newObjectArray(classFile, method, instruction, instructions, stack, localDeclarations);
                 break;
             case 190:
                 arrayLength(classFile, method, stack);
@@ -977,13 +1253,51 @@ public final class BytecodeToIR {
         final Map<Integer, IrLocal> localDeclarations,
         final int slot
     ) {
+        storeObject(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            locals,
+            objectLocalKinds,
+            objectLocalThrowableTypes,
+            new HashMap<>(),
+            localDeclarations,
+            slot
+        );
+    }
+
+    static void storeObject(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrExpression> locals,
+        final Map<Integer, StackKind> objectLocalKinds,
+        final Map<Integer, String> objectLocalThrowableTypes,
+        final Map<Integer, DynamicLambda> objectLocalLambdas,
+        final Map<Integer, IrLocal> localDeclarations,
+        final int slot
+    ) {
         if (stack.isEmpty()) {
             if (isSyntheticSwitchMapInitializer(classFile, method) && isEnumSwitchMapHandlerInstruction(instruction.opcode())) {
                 return;
             }
             throw invalidStack(classFile, method, instruction, "object store requires a value on the bytecode stack");
         }
+        final StackValue top = stack.getLast();
+        if (top.dynamicLambda().isPresent()) {
+            stack.removeLast();
+            objectLocalLambdas.put(slot, top.dynamicLambda().orElseThrow());
+            objectLocalKinds.put(slot, top.kind());
+            objectLocalThrowableTypes.remove(slot);
+            locals.remove(slot);
+            return;
+        }
         final StackValue value = popObjectValue(classFile, method, instruction, stack);
+        objectLocalLambdas.remove(slot);
         final IrExpression target = localOrCreate(locals, localDeclarations, slot, IrType.OBJECT);
         instructions.add(IrInstruction.assignObject(target.value(), stackValueExpression(value)));
         updateObjectLocalKind(objectLocalKinds, slot, value.kind());
@@ -997,16 +1311,29 @@ public final class BytecodeToIR {
     static void newObjectArray(
         final ClassFile classFile,
         final MethodInfo method,
+        final Instruction instruction,
         final List<IrInstruction> instructions,
         final List<StackValue> stack,
         final Map<Integer, IrLocal> localDeclarations
     ) {
         final IrExpression length = popInt(classFile, method, stack);
+        final String componentJvmName = instruction.className().orElseThrow();
         final String localName = "object" + localDeclarations.size();
         localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, localName));
         final IrExpression local = IrExpression.objectLocal(localName);
-        instructions.add(IrInstruction.assignObject(localName, IrExpression.objectArrayAllocation(length)));
+        instructions.add(IrInstruction.assignObject(
+            localName,
+            IrExpression.objectArrayAllocation(length, objectArrayBinaryName(componentJvmName))
+        ));
         stack.add(StackValue.objectExpression(local));
+    }
+
+    private static String objectArrayBinaryName(final String componentJvmName) {
+        final String componentBinaryName = BytecodeToIRInvokeSupport.binaryClassName(componentJvmName);
+        if (componentJvmName.startsWith("[")) {
+            return "[" + componentBinaryName;
+        }
+        return "[L" + componentBinaryName + ";";
     }
 
     static void newPrimitiveArray(
@@ -1475,6 +1802,40 @@ public final class BytecodeToIR {
         final Map<Integer, String> objectLocalThrowableTypes,
         final int slot
     ) {
+        return localObjectValue(
+            classFile,
+            method,
+            locals,
+            objectLocalKinds,
+            objectLocalThrowableTypes,
+            new HashMap<>(),
+            slot
+        );
+    }
+
+    static StackValue localObjectValue(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Map<Integer, IrExpression> locals,
+        final Map<Integer, StackKind> objectLocalKinds,
+        final Map<Integer, String> objectLocalThrowableTypes,
+        final Map<Integer, DynamicLambda> objectLocalLambdas,
+        final int slot
+    ) {
+        final DynamicLambda lambda = objectLocalLambdas.get(slot);
+        if (lambda != null) {
+            final StackKind kind = objectLocalKinds.getOrDefault(slot, StackKind.OBJECT);
+            if (kind == StackKind.LAMBDA_FUNCTION) {
+                return StackValue.lambdaFunction(lambda);
+            }
+            if (kind == StackKind.LAMBDA_PREDICATE) {
+                return StackValue.lambdaPredicate(lambda);
+            }
+            if (kind == StackKind.LAMBDA_SUPPLIER) {
+                return StackValue.lambdaSupplier(lambda);
+            }
+            throw new IllegalStateException("Unsupported lambda local kind: " + kind);
+        }
         final IrExpression expression = local(classFile, method, locals, slot, IrType.OBJECT);
         final StackKind kind = objectLocalKinds.getOrDefault(slot, StackKind.OBJECT);
         if (kind == StackKind.OBJECT) {
@@ -1511,10 +1872,13 @@ public final class BytecodeToIR {
         final StackKind kind
     ) {
         if (kind == StackKind.SOCKET_INPUT_STREAM
+            || kind == StackKind.RESOURCE_INPUT_STREAM
             || kind == StackKind.SOCKET_OUTPUT_STREAM
             || kind == StackKind.VIRTUAL_THREAD_BUILDER
             || kind == StackKind.VIRTUAL_THREAD_FACTORY
-            || kind == StackKind.VIRTUAL_THREAD_EXECUTOR) {
+            || kind == StackKind.VIRTUAL_THREAD_EXECUTOR
+            || kind == StackKind.THREAD_FUTURE
+            || kind == StackKind.SCHEDULED_THREAD_POOL_EXECUTOR) {
             objectLocalKinds.put(slot, kind);
             return;
         }
@@ -1907,6 +2271,70 @@ public final class BytecodeToIR {
         ));
     }
 
+    static DiagnosticException unsupportedLiteralConstant(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction
+    ) {
+        return new DiagnosticException(Diagnostic.error(
+            "JAVAN040",
+            "literal bytecode is missing decoded constant metadata",
+            classFile.name(),
+            method.name() + method.descriptor(),
+            instructionSubject(instruction),
+            "This instruction should already carry a decoded constant value before native lowering starts. The classfile is malformed or the decoder does not understand this literal shape yet.",
+            "Use a valid classfile for this target JDK version, or keep this code on the JVM until Javan decodes this literal form."
+        ));
+    }
+
+    static DiagnosticException unsupportedDynamicConstant(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction
+    ) {
+        return new DiagnosticException(Diagnostic.error(
+            "JAVAN040",
+            "constant dynamic literal is not implemented by native code generation",
+            classFile.name(),
+            method.name() + method.descriptor(),
+            instructionSubject(instruction),
+            "This literal comes from a CONSTANT_Dynamic constant-pool entry. Javan does not yet evaluate or substitute dynamic constants safely during native lowering.",
+            "Keep this code on the JVM for now, or rewrite the reachable constant to a plain string/class/int/float/long/double literal."
+        ));
+    }
+
+    static DiagnosticException unsupportedMethodTypeLiteral(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction
+    ) {
+        return new DiagnosticException(Diagnostic.error(
+            "JAVAN040",
+            "method type literals are not implemented by native code generation",
+            classFile.name(),
+            method.name() + method.descriptor(),
+            instructionSubject(instruction),
+            "This literal comes from a CONSTANT_MethodType constant-pool entry. Javan does not yet model java.lang.invoke.MethodType objects in the native runtime.",
+            "Keep this code on the JVM for now, or remove the reachable MethodType literal from the native closed world."
+        ));
+    }
+
+    static DiagnosticException unsupportedMethodHandleLiteral(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction
+    ) {
+        return new DiagnosticException(Diagnostic.error(
+            "JAVAN040",
+            "method handle literals are not implemented by native code generation",
+            classFile.name(),
+            method.name() + method.descriptor(),
+            instructionSubject(instruction),
+            "This literal comes from a CONSTANT_MethodHandle constant-pool entry. Javan does not yet model java.lang.invoke.MethodHandle objects in the native runtime.",
+            "Keep this code on the JVM for now, or remove the reachable MethodHandle literal from the native closed world."
+        ));
+    }
+
     static DiagnosticException invalidStack(
         final ClassFile classFile,
         final MethodInfo method,
@@ -1988,7 +2416,10 @@ public final class BytecodeToIR {
         if (isStandardCopyReplaceExisting(fieldRef)) {
             return true;
         }
-        return isLinkOptionNoFollowLinks(fieldRef);
+        if (isLinkOptionNoFollowLinks(fieldRef)) {
+            return true;
+        }
+        return isTimeUnitConstant(fieldRef);
     }
 
     static boolean isStandardCopyReplaceExisting(final FieldRef fieldRef) {
@@ -2009,6 +2440,13 @@ public final class BytecodeToIR {
             return false;
         }
         return "Ljava/nio/file/LinkOption;".equals(fieldRef.descriptor());
+    }
+
+    static boolean isTimeUnitConstant(final FieldRef fieldRef) {
+        if (!"java/util/concurrent/TimeUnit".equals(fieldRef.owner())) {
+            return false;
+        }
+        return "Ljava/util/concurrent/TimeUnit;".equals(fieldRef.descriptor());
     }
 
     static boolean isEnumIntrinsic(final Map<String, ClassFile> classes, final MethodRef methodRef) {
@@ -2243,7 +2681,26 @@ public final class BytecodeToIR {
         if ("java/lang/Boolean".equals(target)) {
             return Optional.of(TYPE_JAVA_LANG_BOOLEAN);
         }
+        if ("java/lang/Byte".equals(target)) {
+            return Optional.of(TYPE_JAVA_LANG_BYTE);
+        }
+        if ("java/lang/Short".equals(target)) {
+            return Optional.of(TYPE_JAVA_LANG_SHORT);
+        }
+        if ("java/lang/Character".equals(target)) {
+            return Optional.of(TYPE_JAVA_LANG_CHARACTER);
+        }
         return Optional.empty();
+    }
+
+    static int exactTypeId(final Map<String, ClassFile> classes, final String target) {
+        final List<ClassFile> sorted = BytecodeToIRMetadataSupport.sortedClasses(classes);
+        for (int index = 0; index < sorted.size(); index++) {
+            if (sorted.get(index).name().equals(target)) {
+                return index + 1;
+            }
+        }
+        throw new IllegalArgumentException("Unknown class type id: " + target);
     }
 
     static boolean isSubtypeOf(final Map<String, ClassFile> classes, final String candidate, final String expectedSuper) {
@@ -2269,8 +2726,8 @@ public final class BytecodeToIR {
             classFile.name(),
             method.name() + method.descriptor(),
             instruction.mnemonic() + " " + target,
-            "The native runtime only has deterministic type metadata for application classes and supported boxed primitive wrappers.",
-            "Keep instanceof targets to application classes/interfaces, Object, or supported wrappers until this runtime model expands."
+            "The native runtime only has deterministic instanceof support for application classes, supported boxed primitive wrappers, primitive arrays, Object[], and the built-in Collection/Map runtime objects.",
+            "Keep instanceof targets to application classes/interfaces, Object, supported wrappers, primitive arrays, Object[], or the currently admitted Collection/Map runtime targets."
         ));
     }
 
@@ -2411,9 +2868,15 @@ public final class BytecodeToIR {
         VIRTUAL_THREAD_BUILDER,
         VIRTUAL_THREAD_FACTORY,
         VIRTUAL_THREAD_EXECUTOR,
+        THREAD_FUTURE,
+        SCHEDULED_THREAD_POOL_EXECUTOR,
+        LAMBDA_FUNCTION,
+        LAMBDA_PREDICATE,
+        LAMBDA_SUPPLIER,
         PRINT_STREAM,
         ERROR_PRINT_STREAM,
         SOCKET_INPUT_STREAM,
+        RESOURCE_INPUT_STREAM,
         SOCKET_OUTPUT_STREAM,
         INT,
         LONG,
@@ -2425,61 +2888,105 @@ public final class BytecodeToIR {
     record BlockResult(List<IrInstruction> instructions, List<StackValue> stack) {
     }
 
-    record StackValue(StackKind kind, Optional<String> throwableType, Optional<IrExpression> expression) {
+    record DynamicLambda(
+        String interfaceOwner,
+        String interfaceMethodName,
+        String implementationOwner,
+        String implementationName,
+        String implementationDescriptor,
+        int implementationReferenceKind,
+        String instantiatedMethodDescriptor,
+        List<IrExpression> captures
+    ) {
+        MethodRef implementationMethodRef() {
+            return new MethodRef(implementationOwner, implementationName, implementationDescriptor);
+        }
+    }
+
+    record StackValue(
+        StackKind kind,
+        Optional<String> throwableType,
+        Optional<IrExpression> expression,
+        Optional<DynamicLambda> dynamicLambda
+    ) {
         static StackValue virtualThreadBuilder() {
-            return new StackValue(StackKind.VIRTUAL_THREAD_BUILDER, Optional.empty(), Optional.of(IrExpression.objectNull()));
+            return new StackValue(StackKind.VIRTUAL_THREAD_BUILDER, Optional.empty(), Optional.of(IrExpression.objectNull()), Optional.empty());
         }
 
         static StackValue virtualThreadBuilder(final IrExpression expression) {
-            return new StackValue(StackKind.VIRTUAL_THREAD_BUILDER, Optional.empty(), Optional.of(expression));
+            return new StackValue(StackKind.VIRTUAL_THREAD_BUILDER, Optional.empty(), Optional.of(expression), Optional.empty());
         }
 
         static StackValue virtualThreadFactory(final IrExpression expression) {
-            return new StackValue(StackKind.VIRTUAL_THREAD_FACTORY, Optional.empty(), Optional.of(expression));
+            return new StackValue(StackKind.VIRTUAL_THREAD_FACTORY, Optional.empty(), Optional.of(expression), Optional.empty());
         }
 
         static StackValue virtualThreadExecutor(final IrExpression expression) {
-            return new StackValue(StackKind.VIRTUAL_THREAD_EXECUTOR, Optional.empty(), Optional.of(expression));
+            return new StackValue(StackKind.VIRTUAL_THREAD_EXECUTOR, Optional.empty(), Optional.of(expression), Optional.empty());
+        }
+
+        static StackValue threadFuture(final IrExpression expression) {
+            return new StackValue(StackKind.THREAD_FUTURE, Optional.empty(), Optional.of(expression), Optional.empty());
+        }
+
+        static StackValue scheduledThreadPoolExecutor(final IrExpression expression) {
+            return new StackValue(StackKind.SCHEDULED_THREAD_POOL_EXECUTOR, Optional.empty(), Optional.of(expression), Optional.empty());
+        }
+
+        static StackValue lambdaFunction(final DynamicLambda dynamicLambda) {
+            return new StackValue(StackKind.LAMBDA_FUNCTION, Optional.empty(), Optional.empty(), Optional.of(dynamicLambda));
+        }
+
+        static StackValue lambdaPredicate(final DynamicLambda dynamicLambda) {
+            return new StackValue(StackKind.LAMBDA_PREDICATE, Optional.empty(), Optional.empty(), Optional.of(dynamicLambda));
+        }
+
+        static StackValue lambdaSupplier(final DynamicLambda dynamicLambda) {
+            return new StackValue(StackKind.LAMBDA_SUPPLIER, Optional.empty(), Optional.empty(), Optional.of(dynamicLambda));
         }
 
         static StackValue printStream() {
-            return new StackValue(StackKind.PRINT_STREAM, Optional.empty(), Optional.empty());
+            return new StackValue(StackKind.PRINT_STREAM, Optional.empty(), Optional.empty(), Optional.empty());
         }
 
         static StackValue errorPrintStream() {
-            return new StackValue(StackKind.ERROR_PRINT_STREAM, Optional.empty(), Optional.empty());
+            return new StackValue(StackKind.ERROR_PRINT_STREAM, Optional.empty(), Optional.empty(), Optional.empty());
         }
 
         static StackValue socketInputStream(final IrExpression expression) {
-            return new StackValue(StackKind.SOCKET_INPUT_STREAM, Optional.empty(), Optional.of(expression));
+            return new StackValue(StackKind.SOCKET_INPUT_STREAM, Optional.empty(), Optional.of(expression), Optional.empty());
+        }
+
+        static StackValue resourceInputStream(final IrExpression expression) {
+            return new StackValue(StackKind.RESOURCE_INPUT_STREAM, Optional.empty(), Optional.of(expression), Optional.empty());
         }
 
         static StackValue socketOutputStream(final IrExpression expression) {
-            return new StackValue(StackKind.SOCKET_OUTPUT_STREAM, Optional.empty(), Optional.of(expression));
+            return new StackValue(StackKind.SOCKET_OUTPUT_STREAM, Optional.empty(), Optional.of(expression), Optional.empty());
         }
 
         static StackValue intExpression(final IrExpression expression) {
-            return new StackValue(StackKind.INT, Optional.empty(), Optional.of(expression));
+            return new StackValue(StackKind.INT, Optional.empty(), Optional.of(expression), Optional.empty());
         }
 
         static StackValue longExpression(final IrExpression expression) {
-            return new StackValue(StackKind.LONG, Optional.empty(), Optional.of(expression));
+            return new StackValue(StackKind.LONG, Optional.empty(), Optional.of(expression), Optional.empty());
         }
 
         static StackValue floatExpression(final IrExpression expression) {
-            return new StackValue(StackKind.FLOAT, Optional.empty(), Optional.of(expression));
+            return new StackValue(StackKind.FLOAT, Optional.empty(), Optional.of(expression), Optional.empty());
         }
 
         static StackValue doubleExpression(final IrExpression expression) {
-            return new StackValue(StackKind.DOUBLE, Optional.empty(), Optional.of(expression));
+            return new StackValue(StackKind.DOUBLE, Optional.empty(), Optional.of(expression), Optional.empty());
         }
 
         static StackValue objectExpression(final IrExpression expression) {
-            return new StackValue(StackKind.OBJECT, Optional.empty(), Optional.of(expression));
+            return new StackValue(StackKind.OBJECT, Optional.empty(), Optional.of(expression), Optional.empty());
         }
 
         static StackValue platformThrowable(final String throwableType, final IrExpression message) {
-            return new StackValue(StackKind.OBJECT, Optional.of(throwableType), Optional.of(message));
+            return new StackValue(StackKind.OBJECT, Optional.of(throwableType), Optional.of(message), Optional.empty());
         }
     }
 }

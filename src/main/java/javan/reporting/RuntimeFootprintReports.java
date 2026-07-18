@@ -19,7 +19,7 @@ public final class RuntimeFootprintReports {
         new MatrixTarget("linux-x64", "ubuntu-24.04", "required-ci", "host-native Linux x64 app/library acceptance"),
         new MatrixTarget("linux-aarch64", "ubuntu-24.04-arm", "required-ci", "host-native Linux arm64 app/library acceptance"),
         new MatrixTarget("macos-aarch64", "macos-15", "required-ci", "host-native macOS arm64 app/library acceptance"),
-        new MatrixTarget("macos-x64", "macos-15-intel", "required-ci", "host-native macOS x64 app/library acceptance"),
+        new MatrixTarget("macos-x64", "macos-15-intel", "deferred-ci", "macOS x64 workflow row is intentionally disabled until the slower lane is re-enabled"),
         new MatrixTarget("windows-x64", "windows-2025", "planned-runtime-port", "Windows linker/runtime support is not implemented"),
         new MatrixTarget("windows-aarch64", "windows-11-arm", "planned-runtime-port", "Windows arm64 linker/runtime support is not implemented")
     );
@@ -125,7 +125,7 @@ public final class RuntimeFootprintReports {
                 "release flag is accepted; size/speed specialization remains conservative"),
             new Footprint("debug-symbols", false, false, "not-requested", "native debug symbol policy is not implemented"),
             new Footprint("live-profiling", false, false, "not-linked", "profiling hooks are not linked by default"),
-            new Footprint("sanitizer-instrumented", false, false, "external-smoke", "sanitizer smoke uses .github/scripts/sanitizer-smoke.sh")
+            new Footprint("sanitizer-instrumented", false, false, "external-probe", "sanitizer smoke uses .github/scripts/sanitizer-smoke.sh")
         );
     }
 

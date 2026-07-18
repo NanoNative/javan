@@ -11,13 +11,13 @@ on:
         required: true
         type: string
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && format('manual-{0}', github.run_id) || github.event.release.tag_name || github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
   packages: write
-
-concurrency:
-  group: container-images-${{ github.event.release.tag_name || inputs.tag }}
-  cancel-in-progress: false
 
 jobs:
   publish:
@@ -65,7 +65,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Checkout release source
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: ${{ steps.plan.outputs.tag }}
 

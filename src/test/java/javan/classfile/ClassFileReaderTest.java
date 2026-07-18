@@ -139,6 +139,9 @@ final class ClassFileReaderTest {
             .contains(9L);
         assertThat(instructions.stream().filter(instruction -> instruction.doubleValue().isPresent()).findFirst().orElseThrow().doubleValue())
             .contains(2.5d);
+        assertThat(instructions.stream().filter(instruction -> instruction.mnemonic().equals("ldc") && instruction.className().isPresent()))
+            .singleElement()
+            .satisfies(instruction -> assertThat(instruction.className()).contains("java/lang/String"));
         assertThat(instructions.stream().filter(instruction -> instruction.className().isPresent()).map(instruction -> instruction.className().orElseThrow()))
             .containsOnly("java/lang/String");
         assertThat(instructions.stream().filter(instruction -> instruction.dynamicRef().isPresent()).findFirst().orElseThrow().dynamicRef())
@@ -150,7 +153,355 @@ final class ClassFileReaderTest {
                 assertThat(dynamicRef.bootstrapName()).isEqualTo("bootstrap");
                 assertThat(dynamicRef.bootstrapDescriptor()).isEqualTo("()V");
                 assertThat(dynamicRef.bootstrapArguments()).containsExactly("hello", "I", "7", "1.5", "9", "2.5");
+                assertThat(dynamicRef.bootstrapArgumentDetails()).extracting(BootstrapArgument::text)
+                    .containsExactly("hello", "I", "7", "1.5", "9", "2.5");
             });
+    }
+
+    @Test
+    void readerPreservesConstantDynamicTagForLdc() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(classfileWithConstantDynamicLiteral(new byte[]{18, 15, (byte) 177}, "Ljava/lang/String;"), SOURCE);
+
+        final Instruction instruction = classFile.method("demo", "()V").orElseThrow().code().orElseThrow().instructions().getFirst();
+
+        assertThat(instruction.mnemonic()).isEqualTo("ldc");
+        assertThat(instruction.constantPoolTag()).contains(17);
+        assertThat(instruction.className()).isEmpty();
+        assertThat(instruction.stringValue()).isEmpty();
+        assertThat(instruction.intValue()).isEmpty();
+        assertThat(instruction.floatValue()).isEmpty();
+        assertThat(instruction.dynamicRef()).isEmpty();
+    }
+
+    @Test
+    void readerPreservesConstantDynamicTagForLdcw() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(classfileWithConstantDynamicLiteral(new byte[]{19, 0, 15, (byte) 177}, "Ljava/lang/String;"), SOURCE);
+
+        final Instruction instruction = classFile.method("demo", "()V").orElseThrow().code().orElseThrow().instructions().getFirst();
+
+        assertThat(instruction.mnemonic()).isEqualTo("ldc_w");
+        assertThat(instruction.constantPoolTag()).contains(17);
+        assertThat(instruction.className()).isEmpty();
+        assertThat(instruction.stringValue()).isEmpty();
+        assertThat(instruction.intValue()).isEmpty();
+        assertThat(instruction.floatValue()).isEmpty();
+        assertThat(instruction.dynamicRef()).isEmpty();
+    }
+
+    @Test
+    void readerPreservesConstantDynamicTagForLdc2w() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(classfileWithConstantDynamicLiteral(new byte[]{20, 0, 15, (byte) 177}, "J"), SOURCE);
+
+        final Instruction instruction = classFile.method("demo", "()V").orElseThrow().code().orElseThrow().instructions().getFirst();
+
+        assertThat(instruction.mnemonic()).isEqualTo("ldc2_w");
+        assertThat(instruction.constantPoolTag()).contains(17);
+        assertThat(instruction.longValue()).isEmpty();
+        assertThat(instruction.doubleValue()).isEmpty();
+        assertThat(instruction.dynamicRef()).isEmpty();
+    }
+
+    @Test
+    void readerPreservesMethodTypeTagForLdc() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(classfileWithMethodTypeLiteral(new byte[]{18, 6, (byte) 177}, "()Ljava/lang/String;"), SOURCE);
+
+        final Instruction instruction = classFile.method("demo", "()V").orElseThrow().code().orElseThrow().instructions().getFirst();
+
+        assertThat(instruction.mnemonic()).isEqualTo("ldc");
+        assertThat(instruction.constantPoolTag()).contains(16);
+        assertThat(instruction.className()).isEmpty();
+        assertThat(instruction.stringValue()).isEmpty();
+        assertThat(instruction.intValue()).isEmpty();
+        assertThat(instruction.floatValue()).isEmpty();
+        assertThat(instruction.dynamicRef()).isEmpty();
+    }
+
+    @Test
+    void readerPreservesMethodTypeTagForLdcw() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(classfileWithMethodTypeLiteral(new byte[]{19, 0, 6, (byte) 177}, "()Ljava/lang/String;"), SOURCE);
+
+        final Instruction instruction = classFile.method("demo", "()V").orElseThrow().code().orElseThrow().instructions().getFirst();
+
+        assertThat(instruction.mnemonic()).isEqualTo("ldc_w");
+        assertThat(instruction.constantPoolTag()).contains(16);
+        assertThat(instruction.className()).isEmpty();
+        assertThat(instruction.stringValue()).isEmpty();
+        assertThat(instruction.intValue()).isEmpty();
+        assertThat(instruction.floatValue()).isEmpty();
+        assertThat(instruction.dynamicRef()).isEmpty();
+    }
+
+    @Test
+    void readerPreservesMethodHandleTagForLdc() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(classfileWithMethodHandleLiteral(new byte[]{18, 14, (byte) 177}), SOURCE);
+
+        final Instruction instruction = classFile.method("demo", "()V").orElseThrow().code().orElseThrow().instructions().getFirst();
+
+        assertThat(instruction.mnemonic()).isEqualTo("ldc");
+        assertThat(instruction.constantPoolTag()).contains(15);
+        assertThat(instruction.className()).isEmpty();
+        assertThat(instruction.stringValue()).isEmpty();
+        assertThat(instruction.intValue()).isEmpty();
+        assertThat(instruction.floatValue()).isEmpty();
+        assertThat(instruction.dynamicRef()).isEmpty();
+    }
+
+    @Test
+    void readerPreservesMethodHandleTagForLdcw() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(classfileWithMethodHandleLiteral(new byte[]{19, 0, 14, (byte) 177}), SOURCE);
+
+        final Instruction instruction = classFile.method("demo", "()V").orElseThrow().code().orElseThrow().instructions().getFirst();
+
+        assertThat(instruction.mnemonic()).isEqualTo("ldc_w");
+        assertThat(instruction.constantPoolTag()).contains(15);
+        assertThat(instruction.className()).isEmpty();
+        assertThat(instruction.stringValue()).isEmpty();
+        assertThat(instruction.intValue()).isEmpty();
+        assertThat(instruction.floatValue()).isEmpty();
+        assertThat(instruction.dynamicRef()).isEmpty();
+    }
+
+    @Test
+    void readerDecodesStringLiteral() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(classfileWithStringLiteral(new byte[]{18, 6, (byte) 177}, "hello"), SOURCE);
+
+        final Instruction instruction = classFile.method("demo", "()V").orElseThrow().code().orElseThrow().instructions().getFirst();
+
+        assertThat(instruction.mnemonic()).isEqualTo("ldc");
+        assertThat(instruction.constantPoolTag()).contains(8);
+        assertThat(instruction.stringValue()).contains("hello");
+        assertThat(instruction.className()).isEmpty();
+    }
+
+    @Test
+    void readerDecodesIntLiteral() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(classfileWithIntLiteral(new byte[]{18, 5, (byte) 177}, 7), SOURCE);
+
+        final Instruction instruction = classFile.method("demo", "()V").orElseThrow().code().orElseThrow().instructions().getFirst();
+
+        assertThat(instruction.mnemonic()).isEqualTo("ldc");
+        assertThat(instruction.constantPoolTag()).contains(3);
+        assertThat(instruction.intValue()).contains(7);
+        assertThat(instruction.stringValue()).isEmpty();
+    }
+
+    @Test
+    void readerDecodesFloatLiteral() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(classfileWithFloatLiteral(new byte[]{18, 5, (byte) 177}, 1.5f), SOURCE);
+
+        final Instruction instruction = classFile.method("demo", "()V").orElseThrow().code().orElseThrow().instructions().getFirst();
+
+        assertThat(instruction.mnemonic()).isEqualTo("ldc");
+        assertThat(instruction.constantPoolTag()).contains(4);
+        assertThat(instruction.floatValue()).contains(1.5f);
+        assertThat(instruction.intValue()).isEmpty();
+    }
+
+    @Test
+    void readerDecodesClassLiteral() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(classfileWithClassLiteral(new byte[]{18, 6, (byte) 177}, "java/lang/String"), SOURCE);
+
+        final Instruction instruction = classFile.method("demo", "()V").orElseThrow().code().orElseThrow().instructions().getFirst();
+
+        assertThat(instruction.mnemonic()).isEqualTo("ldc");
+        assertThat(instruction.constantPoolTag()).contains(7);
+        assertThat(instruction.className()).contains("java/lang/String");
+        assertThat(instruction.stringValue()).isEmpty();
+    }
+
+    @Test
+    void readerDecodesWideStringLiteral() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(classfileWithWideStringLiteral(new byte[]{19, 0, 6, (byte) 177}, "hello"), SOURCE);
+
+        final Instruction instruction = classFile.method("demo", "()V").orElseThrow().code().orElseThrow().instructions().getFirst();
+
+        assertThat(instruction.mnemonic()).isEqualTo("ldc_w");
+        assertThat(instruction.constantPoolTag()).contains(8);
+        assertThat(instruction.stringValue()).contains("hello");
+        assertThat(instruction.className()).isEmpty();
+    }
+
+    @Test
+    void readerDecodesWideIntLiteral() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(classfileWithWideIntLiteral(new byte[]{19, 0, 5, (byte) 177}, 7), SOURCE);
+
+        final Instruction instruction = classFile.method("demo", "()V").orElseThrow().code().orElseThrow().instructions().getFirst();
+
+        assertThat(instruction.mnemonic()).isEqualTo("ldc_w");
+        assertThat(instruction.constantPoolTag()).contains(3);
+        assertThat(instruction.intValue()).contains(7);
+        assertThat(instruction.stringValue()).isEmpty();
+    }
+
+    @Test
+    void readerDecodesWideFloatLiteral() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(classfileWithWideFloatLiteral(new byte[]{19, 0, 5, (byte) 177}, 1.5f), SOURCE);
+
+        final Instruction instruction = classFile.method("demo", "()V").orElseThrow().code().orElseThrow().instructions().getFirst();
+
+        assertThat(instruction.mnemonic()).isEqualTo("ldc_w");
+        assertThat(instruction.constantPoolTag()).contains(4);
+        assertThat(instruction.floatValue()).contains(1.5f);
+        assertThat(instruction.intValue()).isEmpty();
+    }
+
+    @Test
+    void readerDecodesWideClassLiteral() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(classfileWithWideClassLiteral(new byte[]{19, 0, 6, (byte) 177}, "java/lang/String"), SOURCE);
+
+        final Instruction instruction = classFile.method("demo", "()V").orElseThrow().code().orElseThrow().instructions().getFirst();
+
+        assertThat(instruction.mnemonic()).isEqualTo("ldc_w");
+        assertThat(instruction.constantPoolTag()).contains(7);
+        assertThat(instruction.className()).contains("java/lang/String");
+        assertThat(instruction.stringValue()).isEmpty();
+    }
+
+    @Test
+    void readerDecodesWideLongLiteral() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(classfileWithWideLongLiteral(new byte[]{20, 0, 5, (byte) 177}, 9L), SOURCE);
+
+        final Instruction instruction = classFile.method("demo", "()V").orElseThrow().code().orElseThrow().instructions().getFirst();
+
+        assertThat(instruction.mnemonic()).isEqualTo("ldc2_w");
+        assertThat(instruction.constantPoolTag()).contains(5);
+        assertThat(instruction.longValue()).contains(9L);
+        assertThat(instruction.doubleValue()).isEmpty();
+    }
+
+    @Test
+    void readerDecodesWideDoubleLiteral() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(classfileWithWideDoubleLiteral(new byte[]{20, 0, 5, (byte) 177}, 2.5d), SOURCE);
+
+        final Instruction instruction = classFile.method("demo", "()V").orElseThrow().code().orElseThrow().instructions().getFirst();
+
+        assertThat(instruction.mnemonic()).isEqualTo("ldc2_w");
+        assertThat(instruction.constantPoolTag()).contains(6);
+        assertThat(instruction.doubleValue()).contains(2.5d);
+        assertThat(instruction.longValue()).isEmpty();
+    }
+
+    @Test
+    void readerNormalizesSmallIntegerLiteralInstructions() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(
+            minimalClassfile(
+                "ints/Literals",
+                new byte[]{
+                    2, // iconst_m1
+                    3, // iconst_0
+                    4, // iconst_1
+                    5, // iconst_2
+                    6, // iconst_3
+                    7, // iconst_4
+                    8, // iconst_5
+                    16, (byte) 0xFF, // bipush -1
+                    16, 1, // bipush 1
+                    17, (byte) 0xFF, (byte) 0xFE, // sipush -2
+                    17, 0, 2, // sipush 2
+                    (byte) 177 // return
+                }
+            ),
+            SOURCE
+        );
+
+        final List<Integer> literalValues = classFile.method("<init>", "()V")
+            .orElseThrow()
+            .code()
+            .orElseThrow()
+            .instructions()
+            .stream()
+            .filter(instruction -> instruction.intValue().isPresent())
+            .map(instruction -> instruction.intValue().orElseThrow())
+            .toList();
+
+        assertThat(literalValues).containsExactly(-1, 0, 1, 2, 3, 4, 5, -1, 1, -2, 2);
+    }
+
+    @Test
+    void readerNormalizesBipushSignedBoundaryLiterals() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(
+            minimalClassfile(
+                "ints/BipushBoundaries",
+                new byte[]{
+                    16, (byte) 0x80,
+                    16, (byte) 0x7F,
+                    (byte) 177
+                }
+            ),
+            SOURCE
+        );
+
+        final List<Integer> literalValues = classFile.method("<init>", "()V")
+            .orElseThrow()
+            .code()
+            .orElseThrow()
+            .instructions()
+            .stream()
+            .filter(instruction -> instruction.intValue().isPresent())
+            .map(instruction -> instruction.intValue().orElseThrow())
+            .toList();
+
+        assertThat(literalValues).containsExactly(-128, 127);
+    }
+
+    @Test
+    void readerNormalizesSipushSignedBoundaryLiterals() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(
+            minimalClassfile(
+                "ints/SipushBoundaries",
+                new byte[]{
+                    17, (byte) 0x80, (byte) 0x00,
+                    17, (byte) 0x7F, (byte) 0xFF,
+                    (byte) 177
+                }
+            ),
+            SOURCE
+        );
+
+        final List<Integer> literalValues = classFile.method("<init>", "()V")
+            .orElseThrow()
+            .code()
+            .orElseThrow()
+            .instructions()
+            .stream()
+            .filter(instruction -> instruction.intValue().isPresent())
+            .map(instruction -> instruction.intValue().orElseThrow())
+            .toList();
+
+        assertThat(literalValues).containsExactly(-32768, 32767);
+    }
+
+    @Test
+    void readerNormalizesWideSmallLiteralInstructions() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(
+            minimalClassfile(
+                "wide/Literals",
+                new byte[]{
+                    9,  // lconst_0
+                    10, // lconst_1
+                    11, // fconst_0
+                    12, // fconst_1
+                    13, // fconst_2
+                    14, // dconst_0
+                    15, // dconst_1
+                    (byte) 177
+                }
+            ),
+            SOURCE
+        );
+
+        final List<Instruction> instructions = classFile.method("<init>", "()V")
+            .orElseThrow()
+            .code()
+            .orElseThrow()
+            .instructions();
+
+        assertThat(instructions.stream().filter(instruction -> instruction.longValue().isPresent()).map(instruction -> instruction.longValue().orElseThrow()).toList())
+            .containsExactly(0L, 1L);
+        assertThat(instructions.stream().filter(instruction -> instruction.floatValue().isPresent()).map(instruction -> instruction.floatValue().orElseThrow()).toList())
+            .containsExactly(0.0f, 1.0f, 2.0f);
+        assertThat(instructions.stream().filter(instruction -> instruction.doubleValue().isPresent()).map(instruction -> instruction.doubleValue().orElseThrow()).toList())
+            .containsExactly(0.0d, 1.0d);
     }
 
     private static void assertConstructorMetadata(final MemberMetadata constructor) {
@@ -258,6 +609,7 @@ final class ClassFileReaderTest {
             18, 5,
             18, 6,
             18, 7,
+            18, 13,
             20, 0, 8,
             20, 0, 10,
             (byte) 187, 0, 13,
@@ -332,6 +684,503 @@ final class ClassFileReaderTest {
             .toByteArray();
     }
 
+    private static byte[] classfileWithConstantDynamicLiteral(final byte[] code, final String dynamicDescriptor) {
+        return new Bytes()
+            .u4(0xCAFEBABEL)
+            .u2(0)
+            .u2(65)
+            .u2(20)
+            .utf8("sample/CondyDemo")
+            .classInfo(1)
+            .utf8("java/lang/Object")
+            .classInfo(3)
+            .utf8("dyn")
+            .utf8(dynamicDescriptor)
+            .nameAndType(5, 6)
+            .utf8("bootstrap/Owner")
+            .classInfo(8)
+            .utf8("bootstrap")
+            .utf8("()V")
+            .nameAndType(10, 11)
+            .methodRef(9, 12)
+            .methodHandle(6, 13)
+            .dynamicEntry(17, 0, 7)
+            .utf8("demo")
+            .utf8("()V")
+            .utf8("Code")
+            .utf8("BootstrapMethods")
+            .u2(0x0021)
+            .u2(2)
+            .u2(4)
+            .u2(0)
+            .u2(0)
+            .u2(1)
+            .u2(0x0009)
+            .u2(16)
+            .u2(17)
+            .u2(1)
+            .u2(18)
+            .u4(12L + code.length)
+            .u2(2)
+            .u2(1)
+            .u4(code.length)
+            .bytes(code)
+            .u2(0)
+            .u2(0)
+            .u2(1)
+            .u2(19)
+            .u4(6)
+            .u2(1)
+            .u2(14)
+            .u2(0)
+            .toByteArray();
+    }
+
+    private static byte[] classfileWithMethodTypeLiteral(final byte[] code, final String methodTypeDescriptor) {
+        return new Bytes()
+            .u4(0xCAFEBABEL)
+            .u2(0)
+            .u2(65)
+            .u2(12)
+            .utf8("sample/MethodTypeDemo")
+            .classInfo(1)
+            .utf8("java/lang/Object")
+            .classInfo(3)
+            .utf8(methodTypeDescriptor)
+            .methodType(5)
+            .utf8("demo")
+            .utf8("()V")
+            .utf8("Code")
+            .nameAndType(7, 8)
+            .methodRef(4, 10)
+            .u2(0x0021)
+            .u2(2)
+            .u2(4)
+            .u2(0)
+            .u2(0)
+            .u2(1)
+            .u2(0x0009)
+            .u2(7)
+            .u2(8)
+            .u2(1)
+            .u2(9)
+            .u4(12L + code.length)
+            .u2(2)
+            .u2(1)
+            .u4(code.length)
+            .bytes(code)
+            .u2(0)
+            .u2(0)
+            .u2(0)
+            .toByteArray();
+    }
+
+    private static byte[] classfileWithMethodHandleLiteral(final byte[] code) {
+        return new Bytes()
+            .u4(0xCAFEBABEL)
+            .u2(0)
+            .u2(65)
+            .u2(15)
+            .utf8("sample/MethodHandleDemo")
+            .classInfo(1)
+            .utf8("java/lang/Object")
+            .classInfo(3)
+            .utf8("demo")
+            .utf8("()V")
+            .utf8("Code")
+            .utf8("java/util/Map")
+            .classInfo(8)
+            .utf8("get")
+            .utf8("(Ljava/lang/Object;)Ljava/lang/Object;")
+            .nameAndType(10, 11)
+            .u1(11).u2(9).u2(12)
+            .methodHandle(9, 13)
+            .u2(0x0021)
+            .u2(2)
+            .u2(4)
+            .u2(0)
+            .u2(0)
+            .u2(1)
+            .u2(0x0009)
+            .u2(5)
+            .u2(6)
+            .u2(1)
+            .u2(7)
+            .u4(12L + code.length)
+            .u2(2)
+            .u2(1)
+            .u4(code.length)
+            .bytes(code)
+            .u2(0)
+            .u2(0)
+            .u2(0)
+            .toByteArray();
+    }
+
+    private static byte[] classfileWithStringLiteral(final byte[] code, final String value) {
+        return new Bytes()
+            .u4(0xCAFEBABEL)
+            .u2(0)
+            .u2(65)
+            .u2(10)
+            .utf8("sample/StringDemo")
+            .classInfo(1)
+            .utf8("java/lang/Object")
+            .classInfo(3)
+            .utf8(value)
+            .stringInfo(5)
+            .utf8("demo")
+            .utf8("()V")
+            .utf8("Code")
+            .u2(0x0021)
+            .u2(2)
+            .u2(4)
+            .u2(0)
+            .u2(0)
+            .u2(1)
+            .u2(0x0009)
+            .u2(7)
+            .u2(8)
+            .u2(1)
+            .u2(9)
+            .u4(12L + code.length)
+            .u2(2)
+            .u2(1)
+            .u4(code.length)
+            .bytes(code)
+            .u2(0)
+            .u2(0)
+            .u2(0)
+            .toByteArray();
+    }
+
+    private static byte[] classfileWithIntLiteral(final byte[] code, final int value) {
+        return new Bytes()
+            .u4(0xCAFEBABEL)
+            .u2(0)
+            .u2(65)
+            .u2(9)
+            .utf8("sample/IntDemo")
+            .classInfo(1)
+            .utf8("java/lang/Object")
+            .classInfo(3)
+            .rawInteger(value)
+            .utf8("demo")
+            .utf8("()V")
+            .utf8("Code")
+            .u2(0x0021)
+            .u2(2)
+            .u2(4)
+            .u2(0)
+            .u2(0)
+            .u2(1)
+            .u2(0x0009)
+            .u2(6)
+            .u2(7)
+            .u2(1)
+            .u2(8)
+            .u4(12L + code.length)
+            .u2(2)
+            .u2(1)
+            .u4(code.length)
+            .bytes(code)
+            .u2(0)
+            .u2(0)
+            .u2(0)
+            .toByteArray();
+    }
+
+    private static byte[] classfileWithFloatLiteral(final byte[] code, final float value) {
+        return new Bytes()
+            .u4(0xCAFEBABEL)
+            .u2(0)
+            .u2(65)
+            .u2(9)
+            .utf8("sample/FloatDemo")
+            .classInfo(1)
+            .utf8("java/lang/Object")
+            .classInfo(3)
+            .rawFloat(value)
+            .utf8("demo")
+            .utf8("()V")
+            .utf8("Code")
+            .u2(0x0021)
+            .u2(2)
+            .u2(4)
+            .u2(0)
+            .u2(0)
+            .u2(1)
+            .u2(0x0009)
+            .u2(6)
+            .u2(7)
+            .u2(1)
+            .u2(8)
+            .u4(12L + code.length)
+            .u2(2)
+            .u2(1)
+            .u4(code.length)
+            .bytes(code)
+            .u2(0)
+            .u2(0)
+            .u2(0)
+            .toByteArray();
+    }
+
+    private static byte[] classfileWithClassLiteral(final byte[] code, final String className) {
+        return new Bytes()
+            .u4(0xCAFEBABEL)
+            .u2(0)
+            .u2(65)
+            .u2(10)
+            .utf8("sample/ClassDemo")
+            .classInfo(1)
+            .utf8("java/lang/Object")
+            .classInfo(3)
+            .utf8(className)
+            .classInfo(5)
+            .utf8("demo")
+            .utf8("()V")
+            .utf8("Code")
+            .u2(0x0021)
+            .u2(2)
+            .u2(4)
+            .u2(0)
+            .u2(0)
+            .u2(1)
+            .u2(0x0009)
+            .u2(7)
+            .u2(8)
+            .u2(1)
+            .u2(9)
+            .u4(12L + code.length)
+            .u2(2)
+            .u2(1)
+            .u4(code.length)
+            .bytes(code)
+            .u2(0)
+            .u2(0)
+            .u2(0)
+            .toByteArray();
+    }
+
+    private static byte[] classfileWithWideStringLiteral(final byte[] code, final String value) {
+        return new Bytes()
+            .u4(0xCAFEBABEL)
+            .u2(0)
+            .u2(65)
+            .u2(10)
+            .utf8("sample/WideStringDemo")
+            .classInfo(1)
+            .utf8("java/lang/Object")
+            .classInfo(3)
+            .utf8(value)
+            .stringInfo(5)
+            .utf8("demo")
+            .utf8("()V")
+            .utf8("Code")
+            .u2(0x0021)
+            .u2(2)
+            .u2(4)
+            .u2(0)
+            .u2(0)
+            .u2(1)
+            .u2(0x0009)
+            .u2(7)
+            .u2(8)
+            .u2(1)
+            .u2(9)
+            .u4(12L + code.length)
+            .u2(2)
+            .u2(1)
+            .u4(code.length)
+            .bytes(code)
+            .u2(0)
+            .u2(0)
+            .u2(0)
+            .toByteArray();
+    }
+
+    private static byte[] classfileWithWideIntLiteral(final byte[] code, final int value) {
+        return new Bytes()
+            .u4(0xCAFEBABEL)
+            .u2(0)
+            .u2(65)
+            .u2(9)
+            .utf8("sample/WideIntDemo")
+            .classInfo(1)
+            .utf8("java/lang/Object")
+            .classInfo(3)
+            .rawInteger(value)
+            .utf8("demo")
+            .utf8("()V")
+            .utf8("Code")
+            .u2(0x0021)
+            .u2(2)
+            .u2(4)
+            .u2(0)
+            .u2(0)
+            .u2(1)
+            .u2(0x0009)
+            .u2(6)
+            .u2(7)
+            .u2(1)
+            .u2(8)
+            .u4(12L + code.length)
+            .u2(2)
+            .u2(1)
+            .u4(code.length)
+            .bytes(code)
+            .u2(0)
+            .u2(0)
+            .u2(0)
+            .toByteArray();
+    }
+
+    private static byte[] classfileWithWideFloatLiteral(final byte[] code, final float value) {
+        return new Bytes()
+            .u4(0xCAFEBABEL)
+            .u2(0)
+            .u2(65)
+            .u2(9)
+            .utf8("sample/WideFloatDemo")
+            .classInfo(1)
+            .utf8("java/lang/Object")
+            .classInfo(3)
+            .rawFloat(value)
+            .utf8("demo")
+            .utf8("()V")
+            .utf8("Code")
+            .u2(0x0021)
+            .u2(2)
+            .u2(4)
+            .u2(0)
+            .u2(0)
+            .u2(1)
+            .u2(0x0009)
+            .u2(6)
+            .u2(7)
+            .u2(1)
+            .u2(8)
+            .u4(12L + code.length)
+            .u2(2)
+            .u2(1)
+            .u4(code.length)
+            .bytes(code)
+            .u2(0)
+            .u2(0)
+            .u2(0)
+            .toByteArray();
+    }
+
+    private static byte[] classfileWithWideClassLiteral(final byte[] code, final String className) {
+        return new Bytes()
+            .u4(0xCAFEBABEL)
+            .u2(0)
+            .u2(65)
+            .u2(10)
+            .utf8("sample/WideClassDemo")
+            .classInfo(1)
+            .utf8("java/lang/Object")
+            .classInfo(3)
+            .utf8(className)
+            .classInfo(5)
+            .utf8("demo")
+            .utf8("()V")
+            .utf8("Code")
+            .u2(0x0021)
+            .u2(2)
+            .u2(4)
+            .u2(0)
+            .u2(0)
+            .u2(1)
+            .u2(0x0009)
+            .u2(7)
+            .u2(8)
+            .u2(1)
+            .u2(9)
+            .u4(12L + code.length)
+            .u2(2)
+            .u2(1)
+            .u4(code.length)
+            .bytes(code)
+            .u2(0)
+            .u2(0)
+            .u2(0)
+            .toByteArray();
+    }
+
+    private static byte[] classfileWithWideLongLiteral(final byte[] code, final long value) {
+        return new Bytes()
+            .u4(0xCAFEBABEL)
+            .u2(0)
+            .u2(65)
+            .u2(10)
+            .utf8("sample/WideLongDemo")
+            .classInfo(1)
+            .utf8("java/lang/Object")
+            .classInfo(3)
+            .rawLong(value)
+            .utf8("demo")
+            .utf8("()V")
+            .utf8("Code")
+            .u2(0x0021)
+            .u2(2)
+            .u2(4)
+            .u2(0)
+            .u2(0)
+            .u2(1)
+            .u2(0x0009)
+            .u2(7)
+            .u2(8)
+            .u2(1)
+            .u2(9)
+            .u4(12L + code.length)
+            .u2(4)
+            .u2(1)
+            .u4(code.length)
+            .bytes(code)
+            .u2(0)
+            .u2(0)
+            .u2(0)
+            .toByteArray();
+    }
+
+    private static byte[] classfileWithWideDoubleLiteral(final byte[] code, final double value) {
+        return new Bytes()
+            .u4(0xCAFEBABEL)
+            .u2(0)
+            .u2(65)
+            .u2(10)
+            .utf8("sample/WideDoubleDemo")
+            .classInfo(1)
+            .utf8("java/lang/Object")
+            .classInfo(3)
+            .rawDouble(value)
+            .utf8("demo")
+            .utf8("()V")
+            .utf8("Code")
+            .u2(0x0021)
+            .u2(2)
+            .u2(4)
+            .u2(0)
+            .u2(0)
+            .u2(1)
+            .u2(0x0009)
+            .u2(7)
+            .u2(8)
+            .u2(1)
+            .u2(9)
+            .u4(12L + code.length)
+            .u2(4)
+            .u2(1)
+            .u4(code.length)
+            .bytes(code)
+            .u2(0)
+            .u2(0)
+            .u2(0)
+            .toByteArray();
+    }
+
     private static byte[] constructorCode() {
         return new byte[]{
             42,
@@ -368,6 +1217,10 @@ final class ClassFileReaderTest {
             return u1(7).u2(nameIndex);
         }
 
+        private Bytes stringInfo(final int stringIndex) {
+            return u1(8).u2(stringIndex);
+        }
+
         private Bytes nameAndType(final int nameIndex, final int descriptorIndex) {
             return u1(12).u2(nameIndex).u2(descriptorIndex);
         }
@@ -378,6 +1231,10 @@ final class ClassFileReaderTest {
 
         private Bytes methodHandle(final int referenceKind, final int referenceIndex) {
             return u1(15).u1(referenceKind).u2(referenceIndex);
+        }
+
+        private Bytes methodType(final int descriptorIndex) {
+            return u1(16).u2(descriptorIndex);
         }
 
         private Bytes dynamicEntry(final int tag, final int bootstrapIndex, final int nameAndTypeIndex) {
