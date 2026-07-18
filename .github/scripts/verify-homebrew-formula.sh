@@ -42,17 +42,13 @@ checksum_for() {
 
 linux_x64_archive=javan-$VERSION-linux-x64.tar.gz
 linux_aarch64_archive=javan-$VERSION-linux-aarch64.tar.gz
-macos_aarch64_archive=javan-$VERSION-macos-aarch64.tar.gz
-
 assert_contains "class Javan < Formula"
 assert_contains "homepage \"https://github.com/$REPOSITORY\""
 assert_contains "version \"$VERSION\""
 assert_contains "url \"https://github.com/$REPOSITORY/releases/download/$TAG/$linux_x64_archive\""
 assert_contains "url \"https://github.com/$REPOSITORY/releases/download/$TAG/$linux_aarch64_archive\""
-assert_contains "url \"https://github.com/$REPOSITORY/releases/download/$TAG/$macos_aarch64_archive\""
 assert_contains "sha256 \"$(checksum_for "$linux_x64_archive")\""
 assert_contains "sha256 \"$(checksum_for "$linux_aarch64_archive")\""
-assert_contains "sha256 \"$(checksum_for "$macos_aarch64_archive")\""
 assert_contains "bin.install \"bin/javan\""
 assert_contains "prefix.install \"README.md\""
 assert_contains "prefix.install \"VERSION\""

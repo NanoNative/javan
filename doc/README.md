@@ -15,6 +15,8 @@ Core entrypoints:
   signal status snapshot
 - [status/roadmap-progress.md](status/roadmap-progress.md): implementation progress by
   roadmap item, coverage snapshot, and honest target view
+- [status/release-plan.md](status/release-plan.md): shipping gates and slice-selection
+  contract for the first boring native release
 - [status/support-matrix.md](status/support-matrix.md): named support ledger used for
   release accounting
 - [status/jdk-compatibility.md](status/jdk-compatibility.md): latest deterministic JDK

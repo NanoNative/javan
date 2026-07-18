@@ -179,7 +179,7 @@ jobs:
   build-macos:
     name: package (${{ matrix.package-target }})
     needs: plan
-    if: needs.plan.outputs.release == 'true'
+    if: false
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     strategy:
@@ -254,7 +254,6 @@ jobs:
     needs:
       - plan
       - build-linux
-      - build-macos
     if: needs.plan.outputs.release == 'true' && needs.plan.outputs.dry_run != 'true'
     runs-on: ubuntu-24.04
     steps:
@@ -338,7 +337,7 @@ jobs:
                 print ""
                 print "## [" version "] - " release_date
                 print ""
-                print "- Release Linux/macOS Javan binary archives."
+                print "- Release Linux Javan binary archives."
                 print "- Enable replayable container image publication from release assets."
                 done = 1
                 next

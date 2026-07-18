@@ -44,11 +44,8 @@ checksum_for() {
 
 linux_x64_archive=javan-$VERSION-linux-x64.tar.gz
 linux_aarch64_archive=javan-$VERSION-linux-aarch64.tar.gz
-macos_aarch64_archive=javan-$VERSION-macos-aarch64.tar.gz
-
 linux_x64_sha=$(checksum_for "$linux_x64_archive")
 linux_aarch64_sha=$(checksum_for "$linux_aarch64_archive")
-macos_aarch64_sha=$(checksum_for "$macos_aarch64_archive")
 
 mkdir -p "$(dirname "$OUTPUT")"
 
@@ -57,13 +54,6 @@ class Javan < Formula
   desc "Native-first Java toolchain"
   homepage "https://github.com/$REPOSITORY"
   version "$VERSION"
-
-  on_macos do
-    if Hardware::CPU.arm?
-      url "https://github.com/$REPOSITORY/releases/download/$TAG/$macos_aarch64_archive"
-      sha256 "$macos_aarch64_sha"
-    end
-  end
 
   on_linux do
     if Hardware::CPU.arm?

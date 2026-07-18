@@ -53,10 +53,11 @@ Required release package targets:
 | --- | --- |
 | `linux-x64` | `ubuntu-24.04` |
 | `linux-aarch64` | `ubuntu-24.04-arm` |
-| `macos-aarch64` | `macos-15` |
+macOS aarch64 is verified by the required local host gate and is not published by the
+first Linux-only release matrix.
 
-Windows is tracked but not in the first release gate. It still needs a native linker path,
-`.exe` package verification, and CI coverage before it is claimed.
+Windows is tracked but not in the first release package gate. It still needs a native
+linker path, `.exe` package verification, and CI coverage before it is claimed.
 
 The release matrix is configured so every CI row runs the Maven suite, public acceptance
 suite, sanitizer suite, host-target native build check, and self-host package smoke. The
