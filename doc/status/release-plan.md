@@ -30,6 +30,8 @@ If they disagree, repair the disagreement before widening implementation.
 - Generated apps, native libraries, and bindings must finish sanitizer and ownership
   probes with zero final live heap/root residue.
 - External projects are compatibility probes only and do not define compiler support rows.
+- Pushes to `main` run the Linux package workflow as a dry run; publication remains an
+  explicit manual dispatch requiring `BOT_TOKEN`.
 
 ## Current scoreboard
 

@@ -59,6 +59,7 @@ jobs:
             dry_run="$INPUT_DRY_RUN"
           elif [ "$INPUT_RELEASE_ENABLED" = "true" ]; then
             release=true
+            dry_run="$INPUT_DRY_RUN"
           fi
 
           tag=""
@@ -140,79 +141,6 @@ jobs:
             fi
             sleep 15
           done
-
-      - name: Set release version
-        shell: sh
-        env:
-          RELEASE_VERSION: ${{ needs.plan.outputs.version }}
-        run: |
-          awk -v version="$RELEASE_VERSION" '
-            !done && /<version>[^<]+<\/version>/ {
-              sub(/<version>[^<]+<\/version>/, "<version>" version "</version>")
-              done = 1
-            }
-            { print }
-          ' pom.xml > pom.xml.tmp
-          mv pom.xml.tmp pom.xml
-          awk -v version="$RELEASE_VERSION" '
-            /private static final String VERSION = "/ {
-              print "    private static final String VERSION = \"" version "\";"
-              next
-            }
-            { print }
-          ' src/main/java/javan/cli/Version.java > Version.java.tmp
-          mv Version.java.tmp src/main/java/javan/cli/Version.java
-
-      - name: Build and verify native package
-        run: JAVAN_VERSION='${{ needs.plan.outputs.version }}' JAVAN_PACKAGE_TARGET='${{ matrix.package-target }}' sh .github/scripts/verify-release.sh
-
-      - name: Upload package
-        uses: actions/upload-artifact@v6
-        with:
-          name: javan-${{ matrix.package-target }}
-          retention-days: 1
-          path: |
-            dist/release/javan-*-${{ matrix.package-target }}.tar.gz
-            dist/release/javan-*-${{ matrix.package-target }}.tar.gz.sha256
-          if-no-files-found: error
-
-  build-macos:
-    name: package (${{ matrix.package-target }})
-    needs: plan
-    if: false
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-15
-            package-target: macos-aarch64
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Set up JDK
-        uses: actions/setup-java@v5
-        with:
-          java-version: '25'
-          distribution: temurin
-          cache: maven
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: '1.26.4'
-          cache: false
-
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@1.96.0
-
-      - name: Verify binding toolchains
-        run: |
-          go version
-          rustc --version
 
       - name: Set release version
         shell: sh

@@ -31,9 +31,12 @@ The workflow owns versioning. No manual `pom.xml` version bump is required.
 
 | Trigger | Behavior |
 | --- | --- |
-| push to `main` | computes today's `vYYYY.M.D`, updates `pom.xml` and `CHANGELOG.md`, tags, and publishes |
+| push to `main` | computes today's `vYYYY.M.D` and builds/verifies Linux packages as a dry run; it does not tag or publish |
 | manual dispatch | uses the provided `tag`, or today's `vYYYY.M.D` when empty |
 | manual dispatch with `dry_run=true` | builds and verifies packages without committing, tagging, or publishing |
+
+The `main` push path is deliberately a dry run because it has no release-writing token.
+Actual publication is an explicit non-dry manual dispatch after the release rehearsal passes.
 
 Release tags must match `vYYYY.M.D`, for example `v2026.6.14`.
 

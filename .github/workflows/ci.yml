@@ -471,4 +471,5 @@ jobs:
     uses: ./.github/workflows/release.yml
     with:
       release_enabled: true
+      dry_run: true
     secrets: inherit
