@@ -1018,6 +1018,17 @@ final class BytecodeToIRInvokeSupport {
             return true;
         }
         if ("com/sun/net/httpserver/Headers".equals(methodRef.owner())
+            && "get".equals(methodRef.name())
+            && "(Ljava/lang/Object;)Ljava/util/List;".equals(methodRef.descriptor())) {
+            final IrExpression name = popObject(classFile, method, instruction, stack);
+            final IrExpression receiver = popObject(classFile, method, instruction, stack);
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_http_headers_get",
+                List.of(receiver, name)
+            )));
+            return true;
+        }
+        if ("com/sun/net/httpserver/Headers".equals(methodRef.owner())
             && "set".equals(methodRef.name())
             && "(Ljava/lang/String;Ljava/lang/String;)V".equals(methodRef.descriptor())) {
             final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()), instruction);
@@ -1026,6 +1037,17 @@ final class BytecodeToIRInvokeSupport {
             callArguments.add(receiver);
             callArguments.addAll(arguments);
             instructions.add(IrInstruction.callStaticVoid("javan_http_headers_set", callArguments));
+            return true;
+        }
+        if ("com/sun/net/httpserver/Headers".equals(methodRef.owner())
+            && "add".equals(methodRef.name())
+            && "(Ljava/lang/String;Ljava/lang/String;)V".equals(methodRef.descriptor())) {
+            final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()), instruction);
+            final IrExpression receiver = popObject(classFile, method, instruction, stack);
+            final List<IrExpression> callArguments = new ArrayList<>();
+            callArguments.add(receiver);
+            callArguments.addAll(arguments);
+            instructions.add(IrInstruction.callStaticVoid("javan_http_headers_add", callArguments));
             return true;
         }
         if ("java/net/http/HttpClient".equals(methodRef.owner())

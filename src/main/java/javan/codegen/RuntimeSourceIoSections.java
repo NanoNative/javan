@@ -868,6 +868,34 @@ final class RuntimeSourceIoSections {
             return NULL;
         }
 
+        void* javan_http_headers_get(void* value, void* name_value) {
+            javan_object_list* headers = javan_list_checked(value);
+            if (name_value == NULL) {
+                return NULL;
+            }
+            void* result_root = NULL;
+            void* name_root = name_value;
+            void* headers_root = (void*) headers;
+            void** roots[] = {
+                (void**) &headers_root,
+                (void**) &name_root,
+                (void**) &result_root
+            };
+            javan_root_frame_push(roots, 3);
+            headers = (javan_object_list*) headers_root;
+            result_root = (void*) javan_list_new_with_capacity(0, 0);
+            for (int index = 0; index + 1 < headers->length; index += 2) {
+                if (javan_http_header_name_equals((const char*) headers->values[index], (const char*) name_root)) {
+                    javan_list_append_raw((javan_object_list*) result_root, headers->values[index + 1]);
+                }
+            }
+            if (((javan_object_list*) result_root)->length == 0) {
+                result_root = NULL;
+            }
+            javan_root_frame_pop(roots);
+            return result_root;
+        }
+
         void javan_http_headers_set(void* value, void* name_value, void* header_value) {
             javan_object_list* headers = javan_list_checked(value);
             javan_http_header_text_checked((const char*) name_value, "null http header name");
@@ -891,6 +919,24 @@ final class RuntimeSourceIoSections {
             }
             javan_list_append_raw(headers, name_root);
             javan_list_append_raw(headers, header_root);
+            javan_root_frame_pop(roots);
+        }
+
+        void javan_http_headers_add(void* value, void* name_value, void* header_value) {
+            javan_object_list* headers = javan_list_checked(value);
+            javan_http_header_text_checked((const char*) name_value, "null http header name");
+            javan_http_header_text_checked((const char*) header_value, "null http header value");
+            void* headers_root = (void*) headers;
+            void* name_root = name_value;
+            void* header_root = header_value;
+            void** roots[] = {
+                (void**) &headers_root,
+                (void**) &name_root,
+                (void**) &header_root
+            };
+            javan_root_frame_push(roots, 3);
+            javan_list_append_raw((javan_object_list*) headers_root, name_root);
+            javan_list_append_raw((javan_object_list*) headers_root, header_root);
             javan_root_frame_pop(roots);
         }
 

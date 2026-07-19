@@ -3520,6 +3520,7 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
             import java.net.http.HttpClient;
             import java.net.http.HttpRequest;
             import java.net.http.HttpResponse;
+            import java.util.List;
 
             public final class Main {
                 private Main() {
@@ -3532,7 +3533,11 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                             && "/hello".equals(exchange.getRequestURI().getPath())
                             && "mode=full".equals(exchange.getRequestURI().getQuery())
                             && "full".equals(exchange.getRequestHeaders().getFirst("x-mode"));
-                        final byte[] body = post ? new byte[] {'p', 'o', 's', 't'} : new byte[] {'b', 'a', 'd'};
+                        final List<String> modes = exchange.getRequestHeaders().get("X-Mode");
+                        final boolean multiValue = modes.size() == 2
+                            && "full".equals(modes.get(0))
+                            && "second".equals(modes.get(1));
+                        final byte[] body = post && multiValue ? new byte[] {'p', 'o', 's', 't'} : new byte[] {'b', 'a', 'd'};
                         exchange.sendResponseHeaders(post ? 200 : 500, body.length);
                         exchange.getResponseBody().write(body);
                         exchange.close();
@@ -3542,6 +3547,7 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                         HttpRequest.newBuilder(URI.create("http://127.0.0.1:%d/hello?mode=full"))
                             .POST(HttpRequest.BodyPublishers.ofString(""))
                             .header("X-Mode", "full")
+                            .header("X-Mode", "second")
                             .build(),
                         HttpResponse.BodyHandlers.ofString()
                     );
@@ -3581,7 +3587,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                 public static void main(final String[] args) throws Exception {
                     final HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", %d), 0);
                     server.createContext("/hello", exchange -> {
-                        exchange.getResponseHeaders().set("X-mode", "strict");
+                        exchange.getResponseHeaders().add("X-mode", "strict");
+                        exchange.getResponseHeaders().add("X-mode", "relaxed");
                         final byte[] body = new byte[] {'o', 'k'};
                         exchange.sendResponseHeaders(200, body.length);
                         exchange.getResponseBody().write(body);
@@ -3609,7 +3616,10 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                     client.close();
                     server.stop(0);
                     final byte[] expectedHeader = new byte[] {'X', '-', 'm', 'o', 'd', 'e', ':', ' ', 's', 't', 'r', 'i', 'c', 't'};
-                    System.out.println(contains(response, length, expectedHeader) && contains(response, length, new byte[] {'o', 'k'}));
+                    final byte[] secondHeader = new byte[] {'X', '-', 'm', 'o', 'd', 'e', ':', ' ', 'r', 'e', 'l', 'a', 'x', 'e', 'd'};
+                    System.out.println(contains(response, length, expectedHeader)
+                        && contains(response, length, secondHeader)
+                        && contains(response, length, new byte[] {'o', 'k'}));
                 }
 
                 private static boolean contains(final byte[] value, final int length, final byte[] needle) {
