@@ -37,8 +37,8 @@ If they disagree, repair the disagreement before widening implementation.
 
 | Measure | Current value |
 | --- | ---: |
-| Release milestones fully closed | 4 / 10 = 40.0% |
-| Release milestones left to close | 6 / 10 = 60.0% |
+| Release milestones fully closed | 5 / 10 = 50.0% |
+| Release milestones left to close | 5 / 10 = 50.0% |
 | Remote Linux package rows proven | 2 / 2 = 100.0% |
 | Required local macOS package gate | proven locally |
 | Roadmap rows fully done | 4 / 38 = 10.5% |
@@ -77,6 +77,11 @@ R6 is closed: the package-backed native-library acceptance path verified C ABI v
 `JavanResult` and result cleanup, structured last-error ownership, retained
 `String`/`byte[]` ownership, and generated C/Rust/Go/Python binding smoke. The
 generated ABI artifacts and C caller completed without failure signatures.
+
+R7 is closed: the package-backed external-probe acceptance path passed all five
+project-neutral probes with required dependencies present and exact expected output.
+The remote packaging/probes lane and external-probe isolation tests also remain
+green; probe identities stay outside compiler-owned support claims.
 
 ## Slice rules
 
