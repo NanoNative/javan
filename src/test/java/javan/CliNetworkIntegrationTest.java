@@ -3631,9 +3631,17 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                             && exchange.getResponseHeaders().containsValue(java.util.List.of("added"));
                         final boolean valueExpected = exchange.getResponseHeaders().containsValue(java.util.List.of("strict"))
                             && !exchange.getResponseHeaders().containsValue(java.util.List.of("relaxed"));
+                        final java.util.Set<String> keys = exchange.getResponseHeaders().keySet();
+                        final java.util.Collection<java.util.List<String>> values = exchange.getResponseHeaders().values();
+                        final boolean viewsExpected = keys.size() == 2
+                            && keys.contains("X-mode")
+                            && keys.contains("X-extra")
+                            && values.size() == 2
+                            && values.contains(java.util.List.of("strict"))
+                            && values.contains(java.util.List.of("added"));
                         exchange.getResponseHeaders().add("X-endpoint", exchangeAddressesExpected ? "yes" : "no");
                         exchange.getResponseHeaders().add("X-mode", removedExpected && cleared && putExpected
-                            && putAllExpected && valueExpected ? "strict" : "bad");
+                            && putAllExpected && valueExpected && viewsExpected ? "strict" : "bad");
                         final byte[] body = exchange.getResponseCode() == 200
                             ? new byte[] {'o', 'k'}
                             : new byte[] {'b', 'a'};

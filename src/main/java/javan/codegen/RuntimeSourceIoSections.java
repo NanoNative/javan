@@ -1283,6 +1283,59 @@ final class RuntimeSourceIoSections {
             return result_root;
         }
 
+        void* javan_http_headers_key_set(void* value) {
+            javan_object_list* headers = javan_list_checked(value);
+            void* headers_root = (void*) headers;
+            void* result_root = NULL;
+            void** roots[] = {
+                (void**) &headers_root,
+                (void**) &result_root
+            };
+            javan_root_frame_push(roots, 2);
+            headers = (javan_object_list*) headers_root;
+            result_root = javan_hashset_new();
+            for (int index = 0; index + 1 < headers->length; index += 2) {
+                javan_set_add(result_root, headers->values[index]);
+            }
+            javan_root_frame_pop(roots);
+            return result_root;
+        }
+
+        void* javan_http_headers_values(void* value) {
+            javan_object_list* headers = javan_list_checked(value);
+            void* headers_root = (void*) headers;
+            void* result_root = NULL;
+            void* values_root = NULL;
+            void** roots[] = {
+                (void**) &headers_root,
+                (void**) &result_root,
+                (void**) &values_root
+            };
+            javan_root_frame_push(roots, 3);
+            headers = (javan_object_list*) headers_root;
+            result_root = (void*) javan_list_new_with_capacity(0, 1);
+            for (int index = 0; index + 1 < headers->length; index += 2) {
+                int seen = 0;
+                for (int prior = 0; prior < index; prior += 2) {
+                    if (javan_http_header_name_equals(
+                        (const char*) headers->values[prior],
+                        (const char*) headers->values[index]
+                    ) != 0) {
+                        seen = 1;
+                        break;
+                    }
+                }
+                if (seen != 0) {
+                    continue;
+                }
+                values_root = javan_http_headers_get((void*) headers, headers->values[index]);
+                javan_list_append_raw((javan_object_list*) result_root, values_root);
+                values_root = NULL;
+            }
+            javan_root_frame_pop(roots);
+            return result_root;
+        }
+
         int javan_http_headers_contains_key(void* value, void* name_value) {
             javan_object_list* headers = javan_list_checked(value);
             if (name_value == NULL) {
