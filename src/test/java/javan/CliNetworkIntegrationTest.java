@@ -3616,9 +3616,17 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                             && secondPut.size() == 2
                             && "strict".equals(secondPut.get(0))
                             && "relaxed".equals(secondPut.get(1));
+                        final java.util.Map<String, java.util.List<String>> additions = new java.util.LinkedHashMap<>();
+                        additions.put("X-mode", new java.util.ArrayList<String>(java.util.List.of("strict")));
+                        additions.put("X-extra", new java.util.ArrayList<String>(java.util.List.of("added")));
+                        exchange.getResponseHeaders().putAll(additions);
+                        final boolean putAllExpected = exchange.getResponseHeaders().size() == 2
+                            && exchange.getResponseHeaders().containsKey("x-extra")
+                            && exchange.getResponseHeaders().containsValue(java.util.List.of("added"));
                         final boolean valueExpected = exchange.getResponseHeaders().containsValue(java.util.List.of("strict"))
                             && !exchange.getResponseHeaders().containsValue(java.util.List.of("relaxed"));
-                        exchange.getResponseHeaders().add("X-mode", removedExpected && cleared && putExpected && valueExpected ? "strict" : "bad");
+                        exchange.getResponseHeaders().add("X-mode", removedExpected && cleared && putExpected
+                            && putAllExpected && valueExpected ? "strict" : "bad");
                         final byte[] body = new byte[] {'o', 'k'};
                         exchange.sendResponseHeaders(200, body.length);
                         exchange.getResponseBody().write(body);
@@ -3647,9 +3655,11 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                     server.stop(0);
                     final byte[] expectedHeader = new byte[] {'X', '-', 'm', 'o', 'd', 'e', ':', ' ', 's', 't', 'r', 'i', 'c', 't'};
                     final byte[] secondHeader = new byte[] {'X', '-', 'm', 'o', 'd', 'e', ':', ' ', 'r', 'e', 'l', 'a', 'x', 'e', 'd'};
+                    final byte[] extraHeader = new byte[] {'X', '-', 'e', 'x', 't', 'r', 'a', ':', ' ', 'a', 'd', 'd', 'e', 'd'};
                     final byte[] staleHeader = new byte[] {'X', '-', 'o', 'l', 'd', ':', ' ', 's', 't', 'a', 'l', 'e'};
                     System.out.println(contains(response, length, expectedHeader)
                         && !contains(response, length, secondHeader)
+                        && contains(response, length, extraHeader)
                         && !contains(response, length, staleHeader)
                         && contains(response, length, new byte[] {'o', 'k'}));
                 }
