@@ -37,8 +37,8 @@ If they disagree, repair the disagreement before widening implementation.
 
 | Measure | Current value |
 | --- | ---: |
-| Release milestones fully closed | 3 / 10 = 30.0% |
-| Release milestones left to close | 7 / 10 = 70.0% |
+| Release milestones fully closed | 4 / 10 = 40.0% |
+| Release milestones left to close | 6 / 10 = 60.0% |
 | Remote Linux package rows proven | 2 / 2 = 100.0% |
 | Required local macOS package gate | proven locally |
 | Roadmap rows fully done | 4 / 38 = 10.5% |
@@ -72,6 +72,11 @@ R5 is closed: the full local macOS sanitizer suite passed generated-app, root/GC
 native-library, and allocation-pressure probes. Native-library ownership proof
 passed for Python, Rust, and Go bindings with zero final live heap/root residue and
 no failure signatures.
+
+R6 is closed: the package-backed native-library acceptance path verified C ABI v2,
+`JavanResult` and result cleanup, structured last-error ownership, retained
+`String`/`byte[]` ownership, and generated C/Rust/Go/Python binding smoke. The
+generated ABI artifacts and C caller completed without failure signatures.
 
 ## Slice rules
 
