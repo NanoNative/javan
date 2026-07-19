@@ -1179,6 +1179,20 @@ final class RuntimeSourceIoSections {
             return result_root;
         }
 
+        int javan_http_headers_contains_key(void* value, void* name_value) {
+            javan_object_list* headers = javan_list_checked(value);
+            if (name_value == NULL) {
+                return 0;
+            }
+            const char* name = (const char*) name_value;
+            for (int index = 0; index + 1 < headers->length; index += 2) {
+                if (javan_http_header_name_equals((const char*) headers->values[index], name)) {
+                    return 1;
+                }
+            }
+            return 0;
+        }
+
         void javan_http_headers_set(void* value, void* name_value, void* header_value) {
             javan_object_list* headers = javan_list_checked(value);
             javan_http_header_text_checked((const char*) name_value, "null http header name");

@@ -3535,7 +3535,9 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                             && "/hello%%20world".equals(exchange.getRequestURI().getRawPath())
                             && "mode=full value".equals(exchange.getRequestURI().getQuery())
                             && "mode=full%%20value".equals(exchange.getRequestURI().getRawQuery())
-                            && "full".equals(exchange.getRequestHeaders().getFirst("x-mode"));
+                            && "full".equals(exchange.getRequestHeaders().getFirst("x-mode"))
+                            && exchange.getRequestHeaders().containsKey("x-mode")
+                            && !exchange.getRequestHeaders().containsKey("missing");
                         final List<String> modes = exchange.getRequestHeaders().get("X-Mode");
                         final boolean multiValue = modes.size() == 2
                             && "full".equals(modes.get(0))
