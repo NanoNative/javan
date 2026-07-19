@@ -6240,6 +6240,12 @@ final class RuntimeSourceMemorySections {
                 }
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_MAP) {
                 javan_gc_mark_runtime_map((javan_object_map*) value);
+            } else if (runtime_kind == JAVAN_RUNTIME_KIND_MAP_ENTRY) {
+                javan_map_entry_state* entry = (javan_map_entry_state*) value;
+                if (entry != NULL && entry->magic == JAVAN_MAP_ENTRY_MAGIC) {
+                    javan_gc_mark_value(entry->key);
+                    javan_gc_mark_value(entry->value);
+                }
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_OPTIONAL) {
                 javan_optional* optional = (javan_optional*) value;
                 if (optional != NULL && optional->magic == JAVAN_OPTIONAL_MAGIC && optional->present != 0) {

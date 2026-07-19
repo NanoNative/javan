@@ -1123,6 +1123,15 @@ final class BytecodeToIRInvokeSupport {
             return true;
         }
         if ("com/sun/net/httpserver/Headers".equals(methodRef.owner())
+            && "entrySet".equals(methodRef.name())
+            && "()Ljava/util/Set;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_http_headers_entry_set",
+                List.of(popObject(classFile, method, instruction, stack))
+            )));
+            return true;
+        }
+        if ("com/sun/net/httpserver/Headers".equals(methodRef.owner())
             && "remove".equals(methodRef.name())
             && ("(Ljava/lang/Object;)Ljava/util/List;".equals(methodRef.descriptor())
                 || "(Ljava/lang/Object;)Ljava/lang/Object;".equals(methodRef.descriptor()))) {

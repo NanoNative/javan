@@ -3639,9 +3639,25 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                             && values.size() == 2
                             && values.contains(java.util.List.of("strict"))
                             && values.contains(java.util.List.of("added"));
+                        final java.util.Set<java.util.Map.Entry<String, java.util.List<String>>> entries = exchange.getResponseHeaders().entrySet();
+                        boolean entriesExpected = entries.size() == 2;
+                        for (final java.util.Map.Entry<String, java.util.List<String>> entry : entries) {
+                            final java.util.List<String> entryValues = entry.getValue();
+                            final boolean valueShape = entryValues.size() == 1
+                                && ("strict".equals(entryValues.get(0)) || "added".equals(entryValues.get(0)));
+                            entriesExpected = entriesExpected
+                                && ("X-mode".equals(entry.getKey()) || "X-extra".equals(entry.getKey()))
+                                && valueShape;
+                        }
+                        final boolean responseHeaderOk = removedExpected
+                            && cleared
+                            && putExpected
+                            && putAllExpected
+                            && valueExpected
+                            && viewsExpected
+                            && entriesExpected;
                         exchange.getResponseHeaders().add("X-endpoint", exchangeAddressesExpected ? "yes" : "no");
-                        exchange.getResponseHeaders().add("X-mode", removedExpected && cleared && putExpected
-                            && putAllExpected && valueExpected && viewsExpected ? "strict" : "bad");
+                        exchange.getResponseHeaders().add("X-mode", responseHeaderOk ? "strict" : "bad");
                         final byte[] body = exchange.getResponseCode() == 200
                             ? new byte[] {'o', 'k'}
                             : new byte[] {'b', 'a'};
