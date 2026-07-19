@@ -616,7 +616,7 @@ final class RuntimeSourceIoSections {
             return left[0] == '\\0' && right[0] == '\\0';
         }
 
-        static void javan_http_server_read_request(int fd, char* method_out, unsigned long method_capacity, char* target_out, unsigned long target_capacity, int* content_length_out, void** request_headers_out) {
+        static int javan_http_server_read_request(int fd, char* method_out, unsigned long method_capacity, char* target_out, unsigned long target_capacity, int* content_length_out, void** request_headers_out) {
             char request[8193];
             unsigned long length = 0;
             void* headers_root = javan_list_new_with_capacity(0, 0);
@@ -670,7 +670,8 @@ final class RuntimeSourceIoSections {
                 }
                 char* colon = strchr(header_cursor, ':');
                 if (colon == NULL || colon == header_cursor) {
-                    javan_panic("http header name is missing");
+                    javan_root_frame_pop(roots);
+                    return 0;
                 }
                 name_root = javan_http_copy_range(header_cursor, (unsigned long) (colon - header_cursor));
                 char* value_cursor = colon + 1;
@@ -684,22 +685,34 @@ final class RuntimeSourceIoSections {
                 value_root = javan_http_copy_range(value_cursor, (unsigned long) (value_end - value_cursor));
                 javan_list_append_raw((javan_object_list*) headers_root, name_root);
                 javan_list_append_raw((javan_object_list*) headers_root, value_root);
+                if (javan_http_header_name_equals((const char*) name_root, "Transfer-Encoding")
+                    && !javan_http_header_name_equals((const char*) value_root, "identity")) {
+                    javan_root_frame_pop(roots);
+                    return 0;
+                }
                 if (javan_http_header_name_equals((const char*) name_root, "Content-Length")) {
                     value_cursor = (char*) value_root;
                     char* value_limit = value_cursor + strlen(value_cursor);
                     if (value_cursor == value_limit) {
-                        javan_panic("http content length is missing");
+                        javan_root_frame_pop(roots);
+                        return 0;
                     }
                     long long parsed = 0;
                     while (value_cursor < value_limit) {
                         if (value_cursor[0] < '0' || value_cursor[0] > '9') {
-                            javan_panic("http content length is invalid");
+                            javan_root_frame_pop(roots);
+                            return 0;
                         }
                         parsed = parsed * 10 + (value_cursor[0] - '0');
                         if (parsed > 2147483647LL) {
-                            javan_panic("http content length is too large");
+                            javan_root_frame_pop(roots);
+                            return 0;
                         }
                         value_cursor++;
+                    }
+                    if (content_length >= 0 && content_length != (int) parsed) {
+                        javan_root_frame_pop(roots);
+                        return 0;
                     }
                     content_length = (int) parsed;
                 }
@@ -708,6 +721,7 @@ final class RuntimeSourceIoSections {
             *content_length_out = content_length;
             *request_headers_out = headers_root;
             javan_root_frame_pop(roots);
+            return 1;
         }
 
         static void* javan_http_exchange_new(void* socket_value, const char* method_text, const char* request_target, int content_length, void* request_headers_value) {
@@ -976,7 +990,14 @@ final class RuntimeSourceIoSections {
                 exchange_root = NULL;
                 handler_root = NULL;
                 content_length = -1;
-                javan_http_server_read_request(((javan_socket*) socket_root)->fd, request_method, sizeof(request_method), request_target, sizeof(request_target), &content_length, &request_headers);
+                if (!javan_http_server_read_request(((javan_socket*) socket_root)->fd, request_method, sizeof(request_method), request_target, sizeof(request_target), &content_length, &request_headers)) {
+                    const char* response = "HTTP/1.1 400 Bad Request\\r\\nContent-Length: 0\\r\\nConnection: close\\r\\n\\r\\n";
+                    javan_http_send_all(((javan_socket*) socket_root)->fd, response, strlen(response));
+                    javan_socket_close(socket_root);
+                    socket_root = NULL;
+                    request_headers = NULL;
+                    continue;
+                }
                 if ((socket_root = javan_http_validate_request_target(socket_root, request_target)) == NULL) {
                     socket_root = NULL;
                     request_headers = NULL;
