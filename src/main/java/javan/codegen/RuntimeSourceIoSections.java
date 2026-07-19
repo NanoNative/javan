@@ -807,6 +807,11 @@ final class RuntimeSourceIoSections {
             return server_root;
         }
 
+        void* javan_http_server_get_address(void* value) {
+            javan_http_server_value* server = javan_http_server_checked(value);
+            return javan_server_socket_get_local_socket_address(server->server_socket);
+        }
+
         static int javan_http_context_matches(const char* context, const char* target) {
             unsigned long context_length = strlen(context);
             if (context_length == 1UL && context[0] == '/') {

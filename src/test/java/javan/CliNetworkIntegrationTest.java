@@ -3591,6 +3591,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
                 public static void main(final String[] args) throws Exception {
                     final HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", %d), 0);
+                    final boolean serverAddressExpected = server.getAddress().getPort() == %d
+                        && server.getAddress().getAddress() != null;
                     server.createContext("/hello", exchange -> {
                         exchange.getResponseHeaders().add("X-mode", "strict");
                         exchange.getResponseHeaders().add("X-mode", "relaxed");
@@ -3657,7 +3659,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                     final byte[] secondHeader = new byte[] {'X', '-', 'm', 'o', 'd', 'e', ':', ' ', 'r', 'e', 'l', 'a', 'x', 'e', 'd'};
                     final byte[] extraHeader = new byte[] {'X', '-', 'e', 'x', 't', 'r', 'a', ':', ' ', 'a', 'd', 'd', 'e', 'd'};
                     final byte[] staleHeader = new byte[] {'X', '-', 'o', 'l', 'd', ':', ' ', 's', 't', 'a', 'l', 'e'};
-                    System.out.println(contains(response, length, expectedHeader)
+                    System.out.println(serverAddressExpected
+                        && contains(response, length, expectedHeader)
                         && !contains(response, length, secondHeader)
                         && contains(response, length, extraHeader)
                         && !contains(response, length, staleHeader)
@@ -3680,7 +3683,7 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                     return false;
                 }
             }
-            """.formatted(port, port));
+            """.formatted(port, port, port));
 
         final String jvmOutput = runJvm(project, "com.acme.Main");
         final CliRun run = run(tempDir, "build", project.toString());

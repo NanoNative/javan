@@ -901,6 +901,14 @@ final class BytecodeToIRInvokeSupport {
         final Map<Integer, IrLocal> localDeclarations
     ) {
         if ("com/sun/net/httpserver/HttpServer".equals(methodRef.owner())) {
+            if ("getAddress".equals(methodRef.name())
+                && "()Ljava/net/InetSocketAddress;".equals(methodRef.descriptor())) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                    "javan_http_server_get_address",
+                    List.of(popObject(classFile, method, instruction, stack))
+                )));
+                return true;
+            }
             if ("createContext".equals(methodRef.name())
                 && "(Ljava/lang/String;Lcom/sun/net/httpserver/HttpHandler;)Lcom/sun/net/httpserver/HttpContext;".equals(methodRef.descriptor())) {
                 final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()), instruction);
