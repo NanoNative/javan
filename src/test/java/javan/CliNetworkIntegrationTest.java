@@ -3531,7 +3531,9 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                     server.createContext("/hello", exchange -> {
                         final boolean post = "POST".equals(exchange.getRequestMethod())
                             && "/hello".equals(exchange.getRequestURI().getPath())
+                            && "/hello".equals(exchange.getRequestURI().getRawPath())
                             && "mode=full".equals(exchange.getRequestURI().getQuery())
+                            && "mode=full".equals(exchange.getRequestURI().getRawQuery())
                             && "full".equals(exchange.getRequestHeaders().getFirst("x-mode"));
                         final List<String> modes = exchange.getRequestHeaders().get("X-Mode");
                         final boolean multiValue = modes.size() == 2

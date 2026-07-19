@@ -1006,6 +1006,24 @@ final class BytecodeToIRInvokeSupport {
             )));
             return true;
         }
+        if ("java/net/URI".equals(methodRef.owner())
+            && "getRawPath".equals(methodRef.name())
+            && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_uri_get_raw_path",
+                List.of(popObject(classFile, method, instruction, stack))
+            )));
+            return true;
+        }
+        if ("java/net/URI".equals(methodRef.owner())
+            && "getRawQuery".equals(methodRef.name())
+            && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_uri_get_raw_query",
+                List.of(popObject(classFile, method, instruction, stack))
+            )));
+            return true;
+        }
         if ("com/sun/net/httpserver/Headers".equals(methodRef.owner())
             && "getFirst".equals(methodRef.name())
             && "(Ljava/lang/String;)Ljava/lang/String;".equals(methodRef.descriptor())) {

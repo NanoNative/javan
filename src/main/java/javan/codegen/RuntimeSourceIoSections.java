@@ -350,6 +350,14 @@ final class RuntimeSourceIoSections {
             return javan_http_copy_range(query, (unsigned long) (end - query));
         }
 
+        void* javan_uri_get_raw_path(void* value) {
+            return javan_uri_get_path(value);
+        }
+
+        void* javan_uri_get_raw_query(void* value) {
+            return javan_uri_get_query(value);
+        }
+
         void* javan_http_client_new(void) {
             javan_http_client_value* client = (javan_http_client_value*) javan_alloc(sizeof(javan_http_client_value));
             client->magic = JAVAN_HTTP_CLIENT_MAGIC;
