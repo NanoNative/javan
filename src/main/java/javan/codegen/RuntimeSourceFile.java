@@ -15,6 +15,7 @@ final class RuntimeSourceFile {
         .append(RuntimeSourceMemorySections.arrays())
         .append(RuntimeSourceMemorySections.collections())
         .append(RuntimeSourcePlatformSection.tail())
+        .append(RuntimeSourcePlatformSection.protocol())
         .append(RuntimeSourceIoSections.http())
         .append(RuntimeSourceIoSections.files())
         .toString();

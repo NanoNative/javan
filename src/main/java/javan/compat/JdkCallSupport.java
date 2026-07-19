@@ -835,6 +835,7 @@ public final class JdkCallSupport {
         runtime("HttpExchange.getRemoteAddress", "com/sun/net/httpserver/HttpExchange", "getRemoteAddress", "()Ljava/net/InetSocketAddress;"),
         runtime("HttpExchange.getLocalAddress", "com/sun/net/httpserver/HttpExchange", "getLocalAddress", "()Ljava/net/InetSocketAddress;"),
         runtime("HttpExchange.getResponseCode", "com/sun/net/httpserver/HttpExchange", "getResponseCode", "()I"),
+        runtime("HttpExchange.getProtocol", "com/sun/net/httpserver/HttpExchange", "getProtocol", "()Ljava/lang/String;"),
         runtime("HttpExchange.getRequestHeaders", "com/sun/net/httpserver/HttpExchange", "getRequestHeaders", "()Lcom/sun/net/httpserver/Headers;"),
         runtime("Headers.getFirst", "com/sun/net/httpserver/Headers", "getFirst", "(Ljava/lang/String;)Ljava/lang/String;"),
         runtime("Headers.get", "com/sun/net/httpserver/Headers", "get", "(Ljava/lang/Object;)Ljava/util/List;"),

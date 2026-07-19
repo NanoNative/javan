@@ -2838,6 +2838,20 @@ final class RuntimeSourcePlatformSection {
             }
             socket->closed = 1;
         }
+
+        """;
+
+    private static final String SOURCE_HTTP_PROTOCOL = """
+        void* javan_http_exchange_protocol(void* value) {
+            if (value == NULL) {
+                javan_panic("null http exchange");
+            }
+            javan_http_exchange_value* exchange = (javan_http_exchange_value*) value;
+            if (exchange->magic != JAVAN_HTTP_EXCHANGE_MAGIC || exchange->socket == NULL) {
+                javan_panic("unsupported http exchange object");
+            }
+            return javan_string_copy("HTTP/1.1");
+        }
         """;
 
     private RuntimeSourcePlatformSection() {
@@ -2845,5 +2859,9 @@ final class RuntimeSourcePlatformSection {
 
     static String tail() {
         return SOURCE_TAIL_A.concat(SOURCE_TAIL_B);
+    }
+
+    static String protocol() {
+        return SOURCE_HTTP_PROTOCOL;
     }
 }

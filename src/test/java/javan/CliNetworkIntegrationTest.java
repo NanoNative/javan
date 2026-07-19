@@ -3596,7 +3596,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                     server.createContext("/hello", exchange -> {
                         final boolean exchangeAddressesExpected = exchange.getLocalAddress().getPort() == %d
                             && exchange.getRemoteAddress().getPort() > 0
-                            && exchange.getRemoteAddress().getAddress() != null;
+                            && exchange.getRemoteAddress().getAddress() != null
+                            && "HTTP/1.1".equals(exchange.getProtocol());
                         exchange.getResponseHeaders().add("X-mode", "strict");
                         exchange.getResponseHeaders().add("X-mode", "relaxed");
                         final boolean populated = exchange.getResponseHeaders().size() == 1
