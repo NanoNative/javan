@@ -3594,6 +3594,9 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                     final boolean serverAddressExpected = server.getAddress().getPort() == %d
                         && server.getAddress().getAddress() != null;
                     server.createContext("/hello", exchange -> {
+                        final boolean exchangeAddressesExpected = exchange.getLocalAddress().getPort() == %d
+                            && exchange.getRemoteAddress().getPort() > 0
+                            && exchange.getRemoteAddress().getAddress() != null;
                         exchange.getResponseHeaders().add("X-mode", "strict");
                         exchange.getResponseHeaders().add("X-mode", "relaxed");
                         final boolean populated = exchange.getResponseHeaders().size() == 1
@@ -3627,6 +3630,7 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                             && exchange.getResponseHeaders().containsValue(java.util.List.of("added"));
                         final boolean valueExpected = exchange.getResponseHeaders().containsValue(java.util.List.of("strict"))
                             && !exchange.getResponseHeaders().containsValue(java.util.List.of("relaxed"));
+                        exchange.getResponseHeaders().add("X-endpoint", exchangeAddressesExpected ? "yes" : "no");
                         exchange.getResponseHeaders().add("X-mode", removedExpected && cleared && putExpected
                             && putAllExpected && valueExpected ? "strict" : "bad");
                         final byte[] body = new byte[] {'o', 'k'};
@@ -3656,10 +3660,12 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                     client.close();
                     server.stop(0);
                     final byte[] expectedHeader = new byte[] {'X', '-', 'm', 'o', 'd', 'e', ':', ' ', 's', 't', 'r', 'i', 'c', 't'};
+                    final byte[] endpointHeader = new byte[] {'X', '-', 'e', 'n', 'd', 'p', 'o', 'i', 'n', 't', ':', ' ', 'y', 'e', 's'};
                     final byte[] secondHeader = new byte[] {'X', '-', 'm', 'o', 'd', 'e', ':', ' ', 'r', 'e', 'l', 'a', 'x', 'e', 'd'};
                     final byte[] extraHeader = new byte[] {'X', '-', 'e', 'x', 't', 'r', 'a', ':', ' ', 'a', 'd', 'd', 'e', 'd'};
                     final byte[] staleHeader = new byte[] {'X', '-', 'o', 'l', 'd', ':', ' ', 's', 't', 'a', 'l', 'e'};
                     System.out.println(serverAddressExpected
+                        && contains(response, length, endpointHeader)
                         && contains(response, length, expectedHeader)
                         && !contains(response, length, secondHeader)
                         && contains(response, length, extraHeader)
@@ -3683,7 +3689,7 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                     return false;
                 }
             }
-            """.formatted(port, port, port));
+            """.formatted(port, port, port, port));
 
         final String jvmOutput = runJvm(project, "com.acme.Main");
         final CliRun run = run(tempDir, "build", project.toString());

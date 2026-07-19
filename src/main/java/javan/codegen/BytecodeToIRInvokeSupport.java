@@ -935,6 +935,22 @@ final class BytecodeToIRInvokeSupport {
             return false;
         }
         if ("com/sun/net/httpserver/HttpExchange".equals(methodRef.owner())) {
+            if ("getRemoteAddress".equals(methodRef.name())
+                && "()Ljava/net/InetSocketAddress;".equals(methodRef.descriptor())) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                    "javan_http_exchange_remote_address",
+                    List.of(popObject(classFile, method, instruction, stack))
+                )));
+                return true;
+            }
+            if ("getLocalAddress".equals(methodRef.name())
+                && "()Ljava/net/InetSocketAddress;".equals(methodRef.descriptor())) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                    "javan_http_exchange_local_address",
+                    List.of(popObject(classFile, method, instruction, stack))
+                )));
+                return true;
+            }
             if ("getRequestURI".equals(methodRef.name()) && "()Ljava/net/URI;".equals(methodRef.descriptor())) {
                 stack.add(StackValue.objectExpression(IrExpression.objectCall(
                     "javan_http_exchange_request_uri",

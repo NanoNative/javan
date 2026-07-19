@@ -486,6 +486,8 @@ final class RuntimeHeaderFile {
         void javan_http_server_stop(void* server, int delay_seconds);
         void* javan_http_exchange_request_method(void* exchange);
         void* javan_http_exchange_request_uri(void* exchange);
+        void* javan_http_exchange_remote_address(void* exchange);
+        void* javan_http_exchange_local_address(void* exchange);
         void* javan_http_exchange_request_headers(void* exchange);
         void* javan_http_headers_get_first(void* headers, void* name);
         void* javan_http_headers_get(void* headers, void* name);
