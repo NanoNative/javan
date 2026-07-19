@@ -3594,6 +3594,11 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                     server.createContext("/hello", exchange -> {
                         exchange.getResponseHeaders().add("X-mode", "strict");
                         exchange.getResponseHeaders().add("X-mode", "relaxed");
+                        final java.util.List<String> removed = (java.util.List<String>) exchange.getResponseHeaders().remove("X-mode");
+                        final boolean removedExpected = removed.size() == 2
+                            && "strict".equals(removed.get(0))
+                            && "relaxed".equals(removed.get(1));
+                        exchange.getResponseHeaders().add("X-mode", removedExpected ? "strict" : "bad");
                         final byte[] body = new byte[] {'o', 'k'};
                         exchange.sendResponseHeaders(200, body.length);
                         exchange.getResponseBody().write(body);
@@ -3623,7 +3628,7 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                     final byte[] expectedHeader = new byte[] {'X', '-', 'm', 'o', 'd', 'e', ':', ' ', 's', 't', 'r', 'i', 'c', 't'};
                     final byte[] secondHeader = new byte[] {'X', '-', 'm', 'o', 'd', 'e', ':', ' ', 'r', 'e', 'l', 'a', 'x', 'e', 'd'};
                     System.out.println(contains(response, length, expectedHeader)
-                        && contains(response, length, secondHeader)
+                        && !contains(response, length, secondHeader)
                         && contains(response, length, new byte[] {'o', 'k'}));
                 }
 

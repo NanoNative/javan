@@ -1058,6 +1058,18 @@ final class BytecodeToIRInvokeSupport {
             return true;
         }
         if ("com/sun/net/httpserver/Headers".equals(methodRef.owner())
+            && "remove".equals(methodRef.name())
+            && ("(Ljava/lang/Object;)Ljava/util/List;".equals(methodRef.descriptor())
+                || "(Ljava/lang/Object;)Ljava/lang/Object;".equals(methodRef.descriptor()))) {
+            final IrExpression name = popObject(classFile, method, instruction, stack);
+            final IrExpression receiver = popObject(classFile, method, instruction, stack);
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_http_headers_remove",
+                List.of(receiver, name)
+            )));
+            return true;
+        }
+        if ("com/sun/net/httpserver/Headers".equals(methodRef.owner())
             && "set".equals(methodRef.name())
             && "(Ljava/lang/String;Ljava/lang/String;)V".equals(methodRef.descriptor())) {
             final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()), instruction);

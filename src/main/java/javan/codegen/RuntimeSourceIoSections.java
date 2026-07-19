@@ -1193,6 +1193,47 @@ final class RuntimeSourceIoSections {
             return 0;
         }
 
+        void* javan_http_headers_remove(void* value, void* name_value) {
+            javan_object_list* headers = javan_list_checked(value);
+            javan_list_mutable_checked(headers);
+            if (name_value == NULL) {
+                return NULL;
+            }
+            void* headers_root = (void*) headers;
+            void* name_root = name_value;
+            void* result_root = NULL;
+            void** roots[] = {
+                (void**) &headers_root,
+                (void**) &name_root,
+                (void**) &result_root
+            };
+            javan_root_frame_push(roots, 3);
+            headers = (javan_object_list*) headers_root;
+            result_root = (void*) javan_list_new_with_capacity(0, 0);
+            int index = 0;
+            while (index + 1 < headers->length) {
+                if (javan_http_header_name_equals((const char*) headers->values[index], (const char*) name_root) == 0) {
+                    index += 2;
+                    continue;
+                }
+                javan_list_append_raw((javan_object_list*) result_root, headers->values[index + 1]);
+                if (index + 2 < headers->length) {
+                    memmove(
+                        headers->values + index,
+                        headers->values + index + 2,
+                        (unsigned long) (headers->length - index - 2) * sizeof(void*)
+                    );
+                }
+                headers->length -= 2;
+                headers->values[headers->length] = NULL;
+                headers->values[headers->length + 1] = NULL;
+                headers->mod_count++;
+            }
+            void* result = ((javan_object_list*) result_root)->length == 0 ? NULL : result_root;
+            javan_root_frame_pop(roots);
+            return result;
+        }
+
         void javan_http_headers_set(void* value, void* name_value, void* header_value) {
             javan_object_list* headers = javan_list_checked(value);
             javan_http_header_text_checked((const char*) name_value, "null http header name");
