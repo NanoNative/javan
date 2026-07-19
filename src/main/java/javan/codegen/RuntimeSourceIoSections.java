@@ -1283,6 +1283,9 @@ final class RuntimeSourceIoSections {
             return result_root;
         }
 
+        void* javan_http_headers_remove(void* value, void* name_value);
+        int javan_http_headers_size(void* value);
+
         void* javan_http_headers_key_set(void* value) {
             javan_object_list* headers = javan_list_checked(value);
             void* headers_root = (void*) headers;
@@ -1293,12 +1296,59 @@ final class RuntimeSourceIoSections {
             };
             javan_root_frame_push(roots, 2);
             headers = (javan_object_list*) headers_root;
-            result_root = javan_hashset_new();
-            for (int index = 0; index + 1 < headers->length; index += 2) {
-                javan_set_add(result_root, headers->values[index]);
-            }
+            result_root = (void*) javan_list_new_view(headers, 0, JAVAN_LIST_VIEW_SET | JAVAN_LIST_VIEW_HTTP_HEADERS_KEYS);
             javan_root_frame_pop(roots);
             return result_root;
+        }
+
+        static int javan_http_headers_view_length(javan_object_list* view) {
+            return javan_http_headers_size((void*) view->backing);
+        }
+
+        static void* javan_http_headers_view_get(javan_object_list* view, int index) {
+            javan_object_list* headers = view->backing;
+            int current = 0;
+            for (int cursor = 0; cursor + 1 < headers->length; cursor += 2) {
+                int seen = 0;
+                for (int prior = 0; prior < cursor; prior += 2) {
+                    if (javan_http_header_name_equals(
+                        (const char*) headers->values[prior],
+                        (const char*) headers->values[cursor]
+                    ) != 0) {
+                        seen = 1;
+                        break;
+                    }
+                }
+                if (seen == 0) {
+                    if (current == index) {
+                        return headers->values[cursor];
+                    }
+                    current++;
+                }
+            }
+            javan_panic("http header view index out of bounds");
+            return NULL;
+        }
+
+        static int javan_http_headers_view_remove(javan_object_list* view, void* element) {
+            if (element == NULL) {
+                return 0;
+            }
+            javan_object_list* headers = view->backing;
+            for (int cursor = 0; cursor + 1 < headers->length; cursor += 2) {
+                if (javan_http_header_name_equals((const char*) headers->values[cursor], (const char*) element) != 0) {
+                    javan_http_headers_remove((void*) headers, element);
+                    return 1;
+                }
+            }
+            return 0;
+        }
+
+        static void javan_http_headers_view_clear(javan_object_list* view) {
+            javan_object_list* headers = view->backing;
+            while (javan_http_headers_size((void*) headers) > 0) {
+                javan_http_headers_remove((void*) headers, headers->values[0]);
+            }
         }
 
         void* javan_http_headers_entry_set(void* value) {

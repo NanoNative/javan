@@ -75,6 +75,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA_OBJECT 36
         #define JAVAN_LIST_VIEW_UNMODIFIABLE 1
         #define JAVAN_LIST_VIEW_SET 2
+        #define JAVAN_LIST_VIEW_HTTP_HEADERS_KEYS 4
         #define JAVAN_MAP_VIEW_UNMODIFIABLE 1
         #define JAVAN_BUILTIN_INSTANCEOF_COLLECTION 1
         #define JAVAN_BUILTIN_INSTANCEOF_MAP 2
@@ -100,6 +101,11 @@ final class RuntimeSourceMemorySections {
             struct javan_object_list* backing;
             void** values;
         } javan_object_list;
+
+        static int javan_http_headers_view_length(javan_object_list* view);
+        static void* javan_http_headers_view_get(javan_object_list* view, int index);
+        static int javan_http_headers_view_remove(javan_object_list* view, void* element);
+        static void javan_http_headers_view_clear(javan_object_list* view);
 
         typedef struct {
             int magic;
@@ -7685,6 +7691,9 @@ final class RuntimeSourceMemorySections {
         }
 
         static int javan_list_logical_length(javan_object_list* list) {
+            if ((list->view_flags & JAVAN_LIST_VIEW_HTTP_HEADERS_KEYS) != 0) {
+                return javan_http_headers_view_length(list);
+            }
             if (list->backing != NULL) {
                 return javan_list_logical_length(list->backing);
             }
@@ -7712,6 +7721,9 @@ final class RuntimeSourceMemorySections {
         }
 
         static void* javan_list_get_unchecked(javan_object_list* list, int index) {
+            if ((list->view_flags & JAVAN_LIST_VIEW_HTTP_HEADERS_KEYS) != 0) {
+                return javan_http_headers_view_get(list, index);
+            }
             if (list->backing != NULL) {
                 return javan_list_get_unchecked(list->backing, index);
             }
@@ -8070,6 +8082,9 @@ final class RuntimeSourceMemorySections {
         int javan_list_remove(void* value, void* element) {
             javan_object_list* list = javan_list_checked(value);
             javan_list_mutable_checked(list);
+            if ((list->view_flags & JAVAN_LIST_VIEW_HTTP_HEADERS_KEYS) != 0) {
+                return javan_http_headers_view_remove(list, element);
+            }
             int length = javan_list_logical_length(list);
             for (int index = 0; index < length; index++) {
                 if (javan_object_equals(javan_list_get_unchecked(list, index), element) == 0) {
@@ -8178,6 +8193,10 @@ final class RuntimeSourceMemorySections {
         void javan_list_clear(void* value) {
             javan_object_list* list = javan_list_checked(value);
             javan_list_mutable_checked(list);
+            if ((list->view_flags & JAVAN_LIST_VIEW_HTTP_HEADERS_KEYS) != 0) {
+                javan_http_headers_view_clear(list);
+                return;
+            }
             int length = javan_list_logical_length(list);
             if (length == 0) {
                 return;

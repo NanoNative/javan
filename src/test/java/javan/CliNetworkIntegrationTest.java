@@ -3639,6 +3639,10 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                             && values.size() == 2
                             && values.contains(java.util.List.of("strict"))
                             && values.contains(java.util.List.of("added"));
+                        exchange.getResponseHeaders().add("X-remove", "temporary");
+                        final java.util.Set<String> liveKeys = exchange.getResponseHeaders().keySet();
+                        final boolean liveViewExpected = liveKeys.remove("x-remove")
+                            && !exchange.getResponseHeaders().containsKey("X-remove");
                         final java.util.Set<java.util.Map.Entry<String, java.util.List<String>>> entries = exchange.getResponseHeaders().entrySet();
                         boolean entriesExpected = entries.size() == 2;
                         for (final java.util.Map.Entry<String, java.util.List<String>> entry : entries) {
@@ -3655,6 +3659,7 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                             && putAllExpected
                             && valueExpected
                             && viewsExpected
+                            && liveViewExpected
                             && entriesExpected;
                         exchange.getResponseHeaders().add("X-endpoint", exchangeAddressesExpected ? "yes" : "no");
                         exchange.getResponseHeaders().add("X-mode", responseHeaderOk ? "strict" : "bad");
