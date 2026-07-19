@@ -490,6 +490,7 @@ final class RuntimeHeaderFile {
         void* javan_http_headers_get(void* headers, void* name);
         int javan_http_headers_contains_key(void* headers, void* name);
         void* javan_http_headers_remove(void* headers, void* name);
+        void javan_http_headers_clear(void* headers);
         void* javan_http_exchange_response_headers(void* exchange);
         void javan_http_headers_set(void* headers, void* name, void* header_value);
         void javan_http_headers_add(void* headers, void* name, void* header_value);

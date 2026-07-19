@@ -1234,6 +1234,10 @@ final class RuntimeSourceIoSections {
             return result;
         }
 
+        void javan_http_headers_clear(void* value) {
+            javan_list_clear(javan_list_checked(value));
+        }
+
         void javan_http_headers_set(void* value, void* name_value, void* header_value) {
             javan_object_list* headers = javan_list_checked(value);
             javan_http_header_text_checked((const char*) name_value, "null http header name");

@@ -1070,6 +1070,15 @@ final class BytecodeToIRInvokeSupport {
             return true;
         }
         if ("com/sun/net/httpserver/Headers".equals(methodRef.owner())
+            && "clear".equals(methodRef.name())
+            && "()V".equals(methodRef.descriptor())) {
+            instructions.add(IrInstruction.callStaticVoid(
+                "javan_http_headers_clear",
+                List.of(popObject(classFile, method, instruction, stack))
+            ));
+            return true;
+        }
+        if ("com/sun/net/httpserver/Headers".equals(methodRef.owner())
             && "set".equals(methodRef.name())
             && "(Ljava/lang/String;Ljava/lang/String;)V".equals(methodRef.descriptor())) {
             final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()), instruction);

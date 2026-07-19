@@ -3598,6 +3598,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                         final boolean removedExpected = removed.size() == 2
                             && "strict".equals(removed.get(0))
                             && "relaxed".equals(removed.get(1));
+                        exchange.getResponseHeaders().add("X-old", "stale");
+                        exchange.getResponseHeaders().clear();
                         exchange.getResponseHeaders().add("X-mode", removedExpected ? "strict" : "bad");
                         final byte[] body = new byte[] {'o', 'k'};
                         exchange.sendResponseHeaders(200, body.length);
@@ -3627,8 +3629,10 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                     server.stop(0);
                     final byte[] expectedHeader = new byte[] {'X', '-', 'm', 'o', 'd', 'e', ':', ' ', 's', 't', 'r', 'i', 'c', 't'};
                     final byte[] secondHeader = new byte[] {'X', '-', 'm', 'o', 'd', 'e', ':', ' ', 'r', 'e', 'l', 'a', 'x', 'e', 'd'};
+                    final byte[] staleHeader = new byte[] {'X', '-', 'o', 'l', 'd', ':', ' ', 's', 't', 'a', 'l', 'e'};
                     System.out.println(contains(response, length, expectedHeader)
                         && !contains(response, length, secondHeader)
+                        && !contains(response, length, staleHeader)
                         && contains(response, length, new byte[] {'o', 'k'}));
                 }
 

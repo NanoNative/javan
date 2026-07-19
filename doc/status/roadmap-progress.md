@@ -42,7 +42,8 @@ Status words are exact. No colors, no mood lighting.
 | Native network rejection probes | 3 CLI probes | Unsupported socket/server-side HTTP shapes still fail clearly with runtime-module reports. |
 
 M334 adds `Headers.containsKey(Object)` presence checks to the verified HTTP header surface;
-the native network positive count is now 59 runtime rows.
+M335 adds covariant `Headers.remove(Object)` and M336 adds `Headers.clear()`; the native
+network positive count is now 60 runtime rows.
 
 Release accounting rule: a JDK or feature area is not "done" until
 `supported + explicitly rejected + dismissed = total known variants`, with `unknown = 0`.
@@ -53,8 +54,8 @@ Release accounting rule: a JDK or feature area is not "done" until
 | --- | ---: | ---: | ---: | --- |
 | Scenario rows fully passing | 300 | 300 | 100.0% | Named deterministic compiler-owned support scenarios implemented and tested. |
 | Scenario rows implemented or scoped | 300 | 300 | 100.0% | Rows with working behavior or an explicit scoped subset. |
-| Roadmap rows fully done | 23 | 38 | 60.5% | Big product rows release-gated for their stated scope. |
-| Roadmap rows with implementation evidence | 27 | 38 | 71.1% | Rows marked `Done`, `Partial`, `In progress`, or `Blocked`. |
+| Roadmap rows fully done | 24 | 38 | 63.2% | Big product rows release-gated for their stated scope. |
+| Roadmap rows with implementation evidence | 28 | 38 | 73.7% | Rows marked `Done`, `Partial`, `In progress`, or `Blocked`. |
 | Remote release rows proven | 2 | 2 | 100.0% | Configured Linux x64 and Linux aarch64 package rows passed on remote CI; macOS aarch64 is local-only. |
 
 ## Active JDK Surface
@@ -80,6 +81,7 @@ movement is tracked separately in `doc/status/real-project-readiness.md`.
 
 | Milestone | Status | Verified result |
 | --- | --- | --- |
+| M336: HttpExchange header clear parity | Done locally | Added exact `Headers.clear()` support over the managed response-header list. Failing-first public parity captured the unsupported network diagnostic; the response-header clear/wire test, full focused HTTP parity, and clean compile pass, and packaged macOS self-host/sanitizer smoke remains the package gate. Remaining mutable `Map` operations, malformed URI escape policy, custom executors, and TLS remain open. |
 | M335: HttpExchange header removal parity | Done locally | Added exact covariant `Headers.remove(Object)` support over the canonical case-insensitive header representation, returning ordered removed values and deleting all matching entries before later response emission. Failing-first public parity captured the unsupported network diagnostic; the response-header removal/wire test, full focused HTTP parity, and clean compile pass, and packaged macOS self-host/sanitizer smoke remains the package gate. Full mutable `Map` semantics, malformed URI escape policy, custom executors, and TLS remain open. |
 | M334: HttpExchange header presence parity | Done locally | Added exact `Headers.containsKey(Object)` support over the canonical case-insensitive request-header representation. Failing-first public parity captured the missing native lowering/declaration; the request-header presence test now matches JVM behavior for present and absent keys, full focused HTTP parity and clean compile pass, and packaged macOS self-host/sanitizer smoke remains the package gate. Full mutable `Map` semantics, malformed URI escape policy, custom executors, and TLS remain open. |
 | M333: URI decoded path/query parity | Done locally | Added percent-decoding for supported non-null `%XX` bytes in `URI.getPath()` and `URI.getQuery()` while preserving encoded wire values through `getRawPath()` and `getRawQuery()`. Failing-first public HTTP parity captured the encoded-path/query mismatch (`500/bad` versus JVM `200/post`); the decoded/raw request-target test, full focused HTTP suite, clean compile, and packaged macOS self-host/sanitizer smoke all pass. Broader URI normalization and malformed/null-escape policy remain open. |
