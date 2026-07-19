@@ -3594,13 +3594,17 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                     server.createContext("/hello", exchange -> {
                         exchange.getResponseHeaders().add("X-mode", "strict");
                         exchange.getResponseHeaders().add("X-mode", "relaxed");
+                        final boolean populated = exchange.getResponseHeaders().size() == 1
+                            && !exchange.getResponseHeaders().isEmpty();
                         final java.util.List<String> removed = (java.util.List<String>) exchange.getResponseHeaders().remove("X-mode");
-                        final boolean removedExpected = removed.size() == 2
+                        final boolean removedExpected = populated && removed.size() == 2
                             && "strict".equals(removed.get(0))
                             && "relaxed".equals(removed.get(1));
                         exchange.getResponseHeaders().add("X-old", "stale");
                         exchange.getResponseHeaders().clear();
-                        exchange.getResponseHeaders().add("X-mode", removedExpected ? "strict" : "bad");
+                        final boolean cleared = exchange.getResponseHeaders().size() == 0
+                            && exchange.getResponseHeaders().isEmpty();
+                        exchange.getResponseHeaders().add("X-mode", removedExpected && cleared ? "strict" : "bad");
                         final byte[] body = new byte[] {'o', 'k'};
                         exchange.sendResponseHeaders(200, body.length);
                         exchange.getResponseBody().write(body);

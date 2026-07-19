@@ -1238,6 +1238,31 @@ final class RuntimeSourceIoSections {
             javan_list_clear(javan_list_checked(value));
         }
 
+        int javan_http_headers_size(void* value) {
+            javan_object_list* headers = javan_list_checked(value);
+            int count = 0;
+            for (int index = 0; index + 1 < headers->length; index += 2) {
+                int seen = 0;
+                for (int prior = 0; prior < index; prior += 2) {
+                    if (javan_http_header_name_equals(
+                        (const char*) headers->values[prior],
+                        (const char*) headers->values[index]
+                    ) != 0) {
+                        seen = 1;
+                        break;
+                    }
+                }
+                if (seen == 0) {
+                    count++;
+                }
+            }
+            return count;
+        }
+
+        int javan_http_headers_is_empty(void* value) {
+            return javan_http_headers_size(value) == 0;
+        }
+
         void javan_http_headers_set(void* value, void* name_value, void* header_value) {
             javan_object_list* headers = javan_list_checked(value);
             javan_http_header_text_checked((const char*) name_value, "null http header name");

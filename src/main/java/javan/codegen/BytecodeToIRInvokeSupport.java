@@ -1079,6 +1079,24 @@ final class BytecodeToIRInvokeSupport {
             return true;
         }
         if ("com/sun/net/httpserver/Headers".equals(methodRef.owner())
+            && "size".equals(methodRef.name())
+            && "()I".equals(methodRef.descriptor())) {
+            stack.add(StackValue.intExpression(IrExpression.intCall(
+                "javan_http_headers_size",
+                List.of(popObject(classFile, method, instruction, stack))
+            )));
+            return true;
+        }
+        if ("com/sun/net/httpserver/Headers".equals(methodRef.owner())
+            && "isEmpty".equals(methodRef.name())
+            && "()Z".equals(methodRef.descriptor())) {
+            stack.add(StackValue.intExpression(IrExpression.intCall(
+                "javan_http_headers_is_empty",
+                List.of(popObject(classFile, method, instruction, stack))
+            )));
+            return true;
+        }
+        if ("com/sun/net/httpserver/Headers".equals(methodRef.owner())
             && "set".equals(methodRef.name())
             && "(Ljava/lang/String;Ljava/lang/String;)V".equals(methodRef.descriptor())) {
             final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()), instruction);
