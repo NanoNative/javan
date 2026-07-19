@@ -1954,7 +1954,7 @@ final class RuntimeSourcePlatformSection {
             javan_root_frame_push(javan_socket_input_stream_roots, 2);
             stream = (javan_socket_input_stream_value*) stream_root;
             stream->magic = JAVAN_SOCKET_INPUT_STREAM_MAGIC;
-            stream->reserved0 = 0;
+            stream->reserved0 = -1;
             stream->reserved1 = 0;
             stream->reserved2 = 0;
             stream->socket = (javan_socket*) socket_root;
@@ -2417,6 +2417,9 @@ final class RuntimeSourcePlatformSection {
             if (result == 0) {
                 return -1;
             }
+            if (stream->reserved0 >= 0) {
+                stream->reserved0 -= (int) result;
+            }
             return byte;
         #endif
         }
@@ -2448,7 +2451,14 @@ final class RuntimeSourcePlatformSection {
                 javan_panic("socket input is shutdown");
             }
             javan_socket_wait_readable(socket->fd, socket->so_timeout, "socket read timed out", "socket read wait failed");
-            ssize_t result = recv(socket->fd, bytes->values + offset, (size_t) length, 0);
+            int requested = length;
+            if (stream->reserved0 >= 0 && stream->reserved0 < requested) {
+                requested = stream->reserved0;
+            }
+            if (requested == 0) {
+                return -1;
+            }
+            ssize_t result = recv(socket->fd, bytes->values + offset, (size_t) requested, 0);
             if (result < 0) {
                 if (errno == EAGAIN || errno == EWOULDBLOCK) {
                     javan_panic("socket read timed out");
@@ -2457,6 +2467,9 @@ final class RuntimeSourcePlatformSection {
             }
             if (result == 0) {
                 return -1;
+            }
+            if (stream->reserved0 >= 0) {
+                stream->reserved0 -= (int) result;
             }
             return (int) result;
         #endif

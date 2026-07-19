@@ -1075,6 +1075,11 @@ final class BytecodeToIRInvokeSupport {
                         List.of(receiver.expression().orElseThrow(), arguments.get(0), arguments.get(1), arguments.get(2)));
                     return true;
                 }
+                if ("readAllBytes".equals(methodRef.name()) && "()[B".equals(methodRef.descriptor())) {
+                    pushObjectCall(instructions, stack, localDeclarations, "javan_socket_input_stream_read_all_bytes",
+                        List.of(receiver.expression().orElseThrow()));
+                    return true;
+                }
                 if ("close".equals(methodRef.name()) && "()V".equals(methodRef.descriptor())) {
                     instructions.add(IrInstruction.callStaticVoid("javan_socket_input_stream_close", List.of(receiver.expression().orElseThrow())));
                     return true;

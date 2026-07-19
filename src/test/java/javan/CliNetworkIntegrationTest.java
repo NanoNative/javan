@@ -3578,8 +3578,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                 public static void main(final String[] args) throws Exception {
                     final HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", %d), 0);
                     server.createContext("/hello", exchange -> {
-                        final int first = exchange.getRequestBody().read();
-                        final boolean accepted = first == 'x';
+                        final byte[] requestBody = exchange.getRequestBody().readAllBytes();
+                        final boolean accepted = requestBody.length == 1 && requestBody[0] == 'x';
                         final byte[] body = accepted ? new byte[] {'o', 'k'} : new byte[] {'b', 'a', 'd'};
                         exchange.sendResponseHeaders(accepted ? 200 : 400, body.length);
                         exchange.getResponseBody().write(body);

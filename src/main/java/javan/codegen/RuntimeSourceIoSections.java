@@ -2,6 +2,41 @@ package javan.codegen;
 
 final class RuntimeSourceIoSections {
     private static final String SOURCE_HTTP = """
+        static void* javan_socket_input_stream_with_limit(void* socket_value, int content_length) {
+            if (content_length < 0) {
+                javan_panic("invalid socket input content length");
+            }
+            javan_socket_input_stream_value* stream = (javan_socket_input_stream_value*) javan_socket_stream_new(socket_value, 0);
+            stream->reserved0 = content_length;
+            return stream;
+        }
+
+        void* javan_socket_input_stream_read_all_bytes(void* value) {
+            void* stream_root = value;
+            void* result = NULL;
+            void** roots[] = {
+                (void**) &stream_root,
+                (void**) &result
+            };
+            javan_root_frame_push(roots, 2);
+            javan_socket_input_stream_value* stream = javan_socket_input_stream_checked(stream_root);
+            if (stream->reserved0 < 0) {
+                javan_panic("socket input readAllBytes requires content length");
+            }
+            int length = stream->reserved0;
+            result = javan_byte_array_new(length);
+            int offset = 0;
+            while (offset < length) {
+                int count = javan_socket_input_stream_read_bytes_range(stream_root, result, offset, length - offset);
+                if (count <= 0) {
+                    javan_panic("socket input ended before content length");
+                }
+                offset += count;
+            }
+            javan_root_frame_pop(roots);
+            return result;
+        }
+
         static char* javan_http_copy_range(const char* value, unsigned long length) {
             char* result = javan_string_alloc(length + 1UL);
             if (length > 0) {
@@ -421,7 +456,7 @@ final class RuntimeSourceIoSections {
             }
         }
 
-        static void javan_http_server_read_request(int fd, char* method_out, unsigned long method_capacity, char* target_out, unsigned long target_capacity) {
+        static void javan_http_server_read_request(int fd, char* method_out, unsigned long method_capacity, char* target_out, unsigned long target_capacity, int* content_length_out) {
             char request[8193];
             unsigned long length = 0;
             while (length < 8192UL) {
@@ -457,9 +492,40 @@ final class RuntimeSourceIoSections {
             method_out[method_length] = '\\0';
             memcpy(target_out, method_end + 1, target_length);
             target_out[target_length] = '\\0';
+            int content_length = -1;
+            char* header_cursor = line_end + 2;
+            while (header_cursor[0] != '\\0') {
+                char* header_end = strstr(header_cursor, "\\r\\n");
+                if (header_end == NULL || header_end == header_cursor) {
+                    break;
+                }
+                if (strncmp(header_cursor, "Content-Length:", 15) == 0) {
+                    char* value_cursor = header_cursor + 15;
+                    while (value_cursor < header_end && value_cursor[0] == ' ') {
+                        value_cursor++;
+                    }
+                    if (value_cursor == header_end) {
+                        javan_panic("http content length is missing");
+                    }
+                    long long parsed = 0;
+                    while (value_cursor < header_end) {
+                        if (value_cursor[0] < '0' || value_cursor[0] > '9') {
+                            javan_panic("http content length is invalid");
+                        }
+                        parsed = parsed * 10 + (value_cursor[0] - '0');
+                        if (parsed > 2147483647LL) {
+                            javan_panic("http content length is too large");
+                        }
+                        value_cursor++;
+                    }
+                    content_length = (int) parsed;
+                }
+                header_cursor = header_end + 2;
+            }
+            *content_length_out = content_length;
         }
 
-        static void* javan_http_exchange_new(void* socket_value, const char* method_text, const char* request_target) {
+        static void* javan_http_exchange_new(void* socket_value, const char* method_text, const char* request_target, int content_length) {
             void* socket_root = socket_value;
             void* request_method = NULL;
             void* request_uri = NULL;
@@ -475,7 +541,9 @@ final class RuntimeSourceIoSections {
             javan_root_frame_push(roots, 5);
             request_method = javan_string_copy(method_text);
             request_uri = javan_string_copy(request_target);
-            request_body = javan_socket_input_stream(socket_root);
+            request_body = content_length < 0
+                ? javan_socket_input_stream(socket_root)
+                : javan_socket_input_stream_with_limit(socket_root, content_length);
             response_body = javan_socket_output_stream(socket_root);
             javan_http_exchange_value* exchange = (javan_http_exchange_value*) javan_alloc(sizeof(javan_http_exchange_value));
             exchange->magic = JAVAN_HTTP_EXCHANGE_MAGIC;
@@ -535,6 +603,7 @@ final class RuntimeSourceIoSections {
             void* exchange_root = NULL;
             char request_method[16];
             char request_target[2048];
+            int content_length = -1;
             void** roots[] = {
                 (void**) &server_root,
                 (void**) &socket_root,
@@ -544,8 +613,8 @@ final class RuntimeSourceIoSections {
             javan_root_frame_push(roots, 3);
             javan_http_server_value* server = javan_http_server_checked(server_root);
             socket_root = javan_server_socket_accept(server->server_socket);
-            javan_http_server_read_request(((javan_socket*) socket_root)->fd, request_method, sizeof(request_method), request_target, sizeof(request_target));
-            exchange_root = javan_http_exchange_new(socket_root, request_method, request_target);
+            javan_http_server_read_request(((javan_socket*) socket_root)->fd, request_method, sizeof(request_method), request_target, sizeof(request_target), &content_length);
+            exchange_root = javan_http_exchange_new(socket_root, request_method, request_target, content_length);
             javan_materialized_lambda_apply_void(server->handler, exchange_root);
             javan_http_exchange_close(exchange_root);
             server->completed = 1;
