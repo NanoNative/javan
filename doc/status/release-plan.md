@@ -1,6 +1,6 @@
 # Javan Release Plan
 
-Last updated: 2026-07-18
+Last updated: 2026-07-19
 
 This is the shipping view for the first boring native release. It chooses release gates
 over callable-counting progress and records the evidence required before publication.
@@ -37,8 +37,8 @@ If they disagree, repair the disagreement before widening implementation.
 
 | Measure | Current value |
 | --- | ---: |
-| Release milestones fully closed | 0 / 10 = 0.0% |
-| Release milestones left to close | 10 / 10 = 100.0% |
+| Release milestones fully closed | 1 / 10 = 10.0% |
+| Release milestones left to close | 9 / 10 = 90.0% |
 | Remote Linux package rows proven | 2 / 2 = 100.0% |
 | Required local macOS package gate | proven locally |
 | Roadmap rows fully done | 4 / 38 = 10.5% |
@@ -58,6 +58,10 @@ If they disagree, repair the disagreement before widening implementation.
 | R8 | Release metadata and installability | Versioning, checksums, Linux formula, and extracted-package checks pass. |
 | R9 | Container publication | Released Linux assets drive reproducible image verification. |
 | R10 | Release rehearsal | A dry run completes all required gates without publishing side effects. |
+
+R3 is closed: remote run `29663790338` passed Linux x64, Linux aarch64, and both
+Windows runtime lanes; the required local macOS aarch64 package gate and archive
+checksum also passed. macOS publication remains outside the first-release contract.
 
 ## Slice rules
 
