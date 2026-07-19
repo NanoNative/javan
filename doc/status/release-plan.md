@@ -37,8 +37,8 @@ If they disagree, repair the disagreement before widening implementation.
 
 | Measure | Current value |
 | --- | ---: |
-| Release milestones fully closed | 2 / 10 = 20.0% |
-| Release milestones left to close | 8 / 10 = 80.0% |
+| Release milestones fully closed | 3 / 10 = 30.0% |
+| Release milestones left to close | 7 / 10 = 70.0% |
 | Remote Linux package rows proven | 2 / 2 = 100.0% |
 | Required local macOS package gate | proven locally |
 | Roadmap rows fully done | 4 / 38 = 10.5% |
@@ -67,6 +67,11 @@ R4 is closed: the local macOS package smoke used packaged `bin/javan` to rebuild
 Javan into a JAR and native binary, started the rebuilt binary with the package
 version, and passed the package-backed self-host sanitizer with zero final heap/root
 residue. The macOS leak-detection fallback also passed.
+
+R5 is closed: the full local macOS sanitizer suite passed generated-app, root/GC,
+native-library, and allocation-pressure probes. Native-library ownership proof
+passed for Python, Rust, and Go bindings with zero final live heap/root residue and
+no failure signatures.
 
 ## Slice rules
 
