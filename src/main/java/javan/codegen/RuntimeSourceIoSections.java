@@ -945,6 +945,9 @@ final class RuntimeSourceIoSections {
         #endif
         }
 
+        """;
+
+    private static final String SOURCE_HTTP_B = """
         static void javan_http_server_run(void* server_value) {
             void* server_root = server_value;
             void* socket_root = NULL;
@@ -974,6 +977,11 @@ final class RuntimeSourceIoSections {
                 handler_root = NULL;
                 content_length = -1;
                 javan_http_server_read_request(((javan_socket*) socket_root)->fd, request_method, sizeof(request_method), request_target, sizeof(request_target), &content_length, &request_headers);
+                if ((socket_root = javan_http_validate_request_target(socket_root, request_target)) == NULL) {
+                    socket_root = NULL;
+                    request_headers = NULL;
+                    continue;
+                }
                 handler_root = javan_http_server_find_handler(server, request_target);
                 if (handler_root == NULL) {
                     const char* response = "HTTP/1.1 404 Not Found\\r\\nContent-Length: 0\\r\\nConnection: close\\r\\n\\r\\n";
@@ -2333,7 +2341,7 @@ final class RuntimeSourceIoSections {
     }
 
     static String http() {
-        return SOURCE_HTTP;
+        return SOURCE_HTTP.concat(SOURCE_HTTP_B);
     }
 
     static String files() {

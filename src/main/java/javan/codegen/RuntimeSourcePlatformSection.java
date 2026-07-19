@@ -2854,6 +2854,48 @@ final class RuntimeSourcePlatformSection {
         }
         """;
 
+    private static final String SOURCE_HTTP_URI_POLICY = """
+        static int javan_http_uri_hex_value(char value) {
+            if (value >= '0' && value <= '9') {
+                return value - '0';
+            }
+            if (value >= 'a' && value <= 'f') {
+                return value - 'a' + 10;
+            }
+            if (value >= 'A' && value <= 'F') {
+                return value - 'A' + 10;
+            }
+            return -1;
+        }
+
+        void* javan_http_validate_request_target(void* socket_value, const char* value) {
+            unsigned long length = strlen(value);
+            for (unsigned long index = 0; index < length; index++) {
+                if (value[index] != '%') {
+                    continue;
+                }
+                if (index + 2UL >= length
+                    || javan_http_uri_hex_value(value[index + 1UL]) < 0
+                    || javan_http_uri_hex_value(value[index + 2UL]) < 0) {
+                    javan_socket* socket = javan_socket_checked(socket_value);
+                    const char* response = "HTTP/1.1 400 Bad Request\\r\\nContent-Length: 0\\r\\nConnection: close\\r\\n\\r\\n";
+                    unsigned long offset = 0;
+                    while (offset < strlen(response)) {
+                        ssize_t sent = send(socket->fd, response + offset, strlen(response) - offset, 0);
+                        if (sent <= 0) {
+                            break;
+                        }
+                        offset += (unsigned long) sent;
+                    }
+                    javan_socket_close(socket_value);
+                    return NULL;
+                }
+                index += 2UL;
+            }
+            return socket_value;
+        }
+        """;
+
     private RuntimeSourcePlatformSection() {
     }
 
@@ -2863,5 +2905,9 @@ final class RuntimeSourcePlatformSection {
 
     static String protocol() {
         return SOURCE_HTTP_PROTOCOL;
+    }
+
+    static String uriPolicy() {
+        return SOURCE_HTTP_URI_POLICY;
     }
 }

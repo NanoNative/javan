@@ -3704,6 +3704,62 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void httpServerRejectsMalformedRequestTargetEscapes() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("http-server-malformed-request-target");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import com.sun.net.httpserver.HttpServer;
+            import java.io.InputStream;
+            import java.io.OutputStream;
+            import java.net.InetSocketAddress;
+            import java.net.Socket;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", %d), 0);
+                    server.createContext("/", exchange -> {
+                        final byte[] body = new byte[] {'b', 'a', 'd'};
+                        exchange.sendResponseHeaders(200, body.length);
+                        exchange.getResponseBody().write(body);
+                        exchange.close();
+                    });
+                    server.start();
+                    final Socket client = new Socket("127.0.0.1", %d);
+                    final OutputStream output = client.getOutputStream();
+                    output.write(new byte[] {
+                        'G', 'E', 'T', ' ', '/', 'h', 'e', 'l', 'l', 'o', '%%', '2', ' ', 'H', 'T', 'T', 'P', '/', '1', '.', '1', '\\r', '\\n',
+                        'H', 'o', 's', 't', ':', ' ', 'x', '\\r', '\\n',
+                        'C', 'o', 'n', 'n', 'e', 'c', 't', 'i', 'o', 'n', ':', ' ', 'c', 'l', 'o', 's', 'e', '\\r', '\\n', '\\r', '\\n'
+                    });
+                    output.flush();
+                    final InputStream input = client.getInputStream();
+                    final byte[] response = new byte[128];
+                    final int length = input.read(response);
+                    client.close();
+                    server.stop(0);
+                    System.out.println(length >= 12
+                        && response[9] == '4'
+                        && response[10] == '0'
+                        && response[11] == '0');
+                }
+            }
+            """.formatted(port, port));
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeProcess = process(project, List.of(project.resolve(".javan/bin/http-server-malformed-request-target").toString()));
+        assertThat(nativeProcess.stderr()).isEmpty();
+        assertThat(nativeProcess.stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void httpServerUnmatchedContextBuildsAndMatchesJvmOutput() throws Exception {
         final int port = freeTcpPort();
         final Path project = project("http-server-unmatched-context");
