@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintStream;
 import java.io.UncheckedIOException;
+import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -3803,6 +3804,119 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
         final ProcessResult nativeProcess = process(project, List.of(project.resolve(".javan/bin/http-server-sequential-service").toString()));
         assertThat(nativeProcess.stderr()).isEmpty();
         assertThat(nativeProcess.stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void httpServerDispatchesConcurrentRequestsBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("http-server-concurrent-requests");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import com.sun.net.httpserver.HttpServer;
+            import java.net.InetSocketAddress;
+            import java.util.concurrent.atomic.AtomicInteger;
+
+            public final class Main {
+                private static final AtomicInteger ARRIVED = new AtomicInteger();
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", %d), 0);
+                    server.createContext("/hello", exchange -> {
+                        ARRIVED.incrementAndGet();
+                        final long deadline = System.nanoTime() + 2_000_000_000L;
+                        while (ARRIVED.get() < 2 && System.nanoTime() < deadline) {
+                            try {
+                                Thread.sleep(5L);
+                            } catch (InterruptedException interrupted) {
+                                Thread.currentThread().interrupt();
+                            }
+                        }
+                        final byte[] body = ARRIVED.get() == 2
+                            ? new byte[] {'c', 'o', 'n', 'c', 'u', 'r', 'r', 'e', 'n', 't'}
+                            : new byte[] {'s', 'e', 'r', 'i', 'a', 'l'};
+                        exchange.sendResponseHeaders(200, body.length);
+                        exchange.getResponseBody().write(body);
+                        exchange.close();
+                    });
+                    server.start();
+                    final long deadline = System.nanoTime() + 5_000_000_000L;
+                    while (ARRIVED.get() < 2 && System.nanoTime() < deadline) {
+                        try {
+                            Thread.sleep(5L);
+                        } catch (InterruptedException interrupted) {
+                            Thread.currentThread().interrupt();
+                        }
+                    }
+                    System.out.println(ARRIVED.get());
+                    server.stop(0);
+                }
+            }
+            """.formatted(port));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final TestProcesses.Result nativeProcess = runConcurrentHttpServer(
+            project,
+            List.of(project.resolve(".javan/bin/http-server-concurrent-requests").toString()),
+            port
+        );
+        assertThat(nativeProcess.exitCode()).isZero();
+        assertThat(nativeProcess.stderr()).isEmpty();
+        assertThat(nativeProcess.stdout()).isEqualTo("2\n");
+    }
+
+    private static TestProcesses.Result runConcurrentHttpServer(
+        final Path project,
+        final List<String> command,
+        final int port
+    ) {
+        try (TestProcesses.RunningProcess running = TestProcesses.start(
+            project,
+            command,
+            Map.of("JAVAN_GC_STRESS", "1", "JAVAN_GC_SAFEPOINT_INTERVAL", "1")
+        )) {
+            try {
+                final CompletableFuture<String> first = CompletableFuture.supplyAsync(() -> sendConcurrentHttpRequest(port));
+                final CompletableFuture<String> second = CompletableFuture.supplyAsync(() -> sendConcurrentHttpRequest(port));
+                final String firstResponse = first.join();
+                final String secondResponse = second.join();
+                assertThat(firstResponse).contains("concurrent");
+                assertThat(secondResponse).contains("concurrent");
+                return running.await(Duration.ofSeconds(10));
+            } catch (RuntimeException failure) {
+                final TestProcesses.Result result = running.await(Duration.ofSeconds(2));
+                throw new AssertionError("concurrent HTTP process failed: " + result.stderr(), failure);
+            }
+        }
+    }
+
+    private static String sendConcurrentHttpRequest(final int port) {
+        IOException last = null;
+        for (int attempt = 0; attempt < 200; attempt++) {
+            try (java.net.Socket socket = new java.net.Socket()) {
+                socket.connect(new InetSocketAddress("127.0.0.1", port), 100);
+                socket.getOutputStream().write(
+                    "GET /hello HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"
+                        .getBytes(StandardCharsets.UTF_8)
+                );
+                socket.getOutputStream().flush();
+                return readStream(socket.getInputStream());
+            } catch (IOException exception) {
+                last = exception;
+                try {
+                    Thread.sleep(10L);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("Interrupted while connecting concurrent HTTP client", interrupted);
+                }
+            }
+        }
+        throw new IllegalStateException("Timed out connecting concurrent HTTP client", last);
     }
 
     @Test

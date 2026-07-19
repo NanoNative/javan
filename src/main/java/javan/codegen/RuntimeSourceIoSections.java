@@ -707,23 +707,28 @@ final class RuntimeSourceIoSections {
             void* address_root = address;
             void* socket_root = NULL;
             void* contexts_root = NULL;
+            void* active_requests_root = NULL;
             void** roots[] = {
                 (void**) &address_root,
                 (void**) &socket_root,
-                (void**) &contexts_root
+                (void**) &contexts_root,
+                (void**) &active_requests_root
             };
-            javan_root_frame_push(roots, 3);
+            javan_root_frame_push(roots, 4);
             javan_objects_require_non_null_msg(address_root, "null http server bind address");
             socket_root = javan_server_socket_new();
             javan_server_socket_bind_socket_address_backlog(socket_root, address_root, backlog);
             contexts_root = (void*) javan_list_new_with_capacity(0, 0);
+            active_requests_root = (void*) javan_list_new_with_capacity(0, 0);
             javan_http_server_value* server = (javan_http_server_value*) javan_alloc(sizeof(javan_http_server_value));
             server->magic = JAVAN_HTTP_SERVER_MAGIC;
             server->started = 0;
             server->stopped = 0;
             server->completed = 0;
+            server->active_request_count = 0;
             server->server_socket = socket_root;
             server->contexts = (javan_object_list*) contexts_root;
+            server->active_requests = (javan_object_list*) active_requests_root;
             server->native_handle = NULL;
             javan_update_runtime_allocation_kind((void*) server, JAVAN_RUNTIME_KIND_HTTP_SERVER);
             javan_root_frame_pop(roots);
@@ -781,6 +786,111 @@ final class RuntimeSourceIoSections {
             return best_handler;
         }
 
+        typedef struct {
+            void* server;
+            void* handler;
+            void* exchange;
+        } javan_http_request_task;
+
+        static void javan_http_server_request_run(void* argument) {
+            javan_http_request_task* task = (javan_http_request_task*) argument;
+            void* server_root = task->server;
+            void* handler_root = task->handler;
+            void* exchange_root = task->exchange;
+            void** roots[] = {
+                (void**) &server_root,
+                (void**) &handler_root,
+                (void**) &exchange_root
+            };
+            (void) javan_thread_current();
+            javan_root_frame_push(roots, 3);
+            javan_materialized_lambda_apply_void(handler_root, exchange_root);
+            javan_http_exchange_close(exchange_root);
+            javan_http_server_value* server = javan_http_server_checked(server_root);
+            javan_runtime_lock_enter();
+            (void) javan_list_remove(server->active_requests, handler_root);
+            (void) javan_list_remove(server->active_requests, exchange_root);
+            if (server->active_request_count <= 0) {
+                javan_runtime_lock_leave();
+                javan_panic("http server active request underflow");
+            }
+            server->active_request_count--;
+            javan_runtime_lock_leave();
+            javan_root_frame_pop(roots);
+            javan_thread_leave_live_root(javan_current_thread_value);
+            javan_current_thread_value = NULL;
+            free(task);
+        }
+
+        #if defined(_WIN32)
+        static unsigned __stdcall javan_http_request_host_start(void* argument) {
+            javan_http_server_request_run(argument);
+            return 0U;
+        }
+        #else
+        static void* javan_http_request_host_start(void* argument) {
+            javan_http_server_request_run(argument);
+            return NULL;
+        }
+        #endif
+
+        static int javan_http_server_start_request(void* server_root, void* handler_root, void* exchange_root) {
+        #if defined(_WIN32)
+            (void) server_root;
+            (void) handler_root;
+            (void) exchange_root;
+            javan_socket_runtime_unsupported();
+            return -1;
+        #else
+            javan_http_server_value* server = javan_http_server_checked(server_root);
+            javan_http_request_task* task = (javan_http_request_task*) malloc(sizeof(javan_http_request_task));
+            if (task == NULL) {
+                javan_panic("http server request task allocation failed");
+            }
+            task->server = server_root;
+            task->handler = handler_root;
+            task->exchange = exchange_root;
+            javan_runtime_lock_enter();
+            javan_list_append_raw(server->active_requests, handler_root);
+            javan_list_append_raw(server->active_requests, exchange_root);
+            server->active_request_count++;
+            javan_runtime_lock_leave();
+            pthread_attr_t attributes;
+            if (pthread_attr_init(&attributes) != 0) {
+                javan_runtime_lock_enter();
+                (void) javan_list_remove(server->active_requests, handler_root);
+                (void) javan_list_remove(server->active_requests, exchange_root);
+                server->active_request_count--;
+                javan_runtime_lock_leave();
+                free(task);
+                javan_panic("http server request thread setup failed");
+            }
+            if (pthread_attr_setdetachstate(&attributes, PTHREAD_CREATE_DETACHED) != 0) {
+                pthread_attr_destroy(&attributes);
+                javan_runtime_lock_enter();
+                (void) javan_list_remove(server->active_requests, handler_root);
+                (void) javan_list_remove(server->active_requests, exchange_root);
+                server->active_request_count--;
+                javan_runtime_lock_leave();
+                free(task);
+                javan_panic("http server request thread setup failed");
+            }
+            pthread_t native_thread;
+            if (pthread_create(&native_thread, &attributes, javan_http_request_host_start, task) != 0) {
+                pthread_attr_destroy(&attributes);
+                javan_runtime_lock_enter();
+                (void) javan_list_remove(server->active_requests, handler_root);
+                (void) javan_list_remove(server->active_requests, exchange_root);
+                server->active_request_count--;
+                javan_runtime_lock_leave();
+                free(task);
+                javan_panic("http server request thread create failed");
+            }
+            pthread_attr_destroy(&attributes);
+            return 0;
+        #endif
+        }
+
         static void javan_http_server_run(void* server_value) {
             void* server_root = server_value;
             void* socket_root = NULL;
@@ -820,14 +930,15 @@ final class RuntimeSourceIoSections {
                     continue;
                 }
                 exchange_root = javan_http_exchange_new(socket_root, request_method, request_target, content_length, request_headers);
-                javan_materialized_lambda_apply_void(handler_root, exchange_root);
-                javan_http_exchange_close(exchange_root);
+                javan_http_server_start_request(server_root, handler_root, exchange_root);
                 exchange_root = NULL;
                 socket_root = NULL;
                 request_headers = NULL;
                 handler_root = NULL;
             }
+            javan_runtime_lock_enter();
             server->completed = 1;
+            javan_runtime_lock_leave();
             javan_root_frame_pop(roots);
             javan_thread_detach_current();
         }
@@ -883,9 +994,19 @@ final class RuntimeSourceIoSections {
         void javan_http_server_stop(void* value, int delay_seconds) {
             (void) delay_seconds;
             javan_http_server_value* server = javan_http_server_checked(value);
+            javan_runtime_lock_enter();
             server->stopped = 1;
+            javan_runtime_lock_leave();
             javan_server_socket_close(server->server_socket);
-            while (server->started != 0 && server->completed == 0) {
+            while (1) {
+                javan_runtime_lock_enter();
+                int complete = server->started != 0
+                    && server->completed != 0
+                    && server->active_request_count == 0;
+                javan_runtime_lock_leave();
+                if (complete != 0) {
+                    break;
+                }
                 javan_sleep_micros(1000UL);
             }
         }

@@ -72,6 +72,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_RUNTIME_KIND_RESOURCE_INPUT_STREAM 33
         #define JAVAN_RUNTIME_KIND_HTTP_SERVER 34
         #define JAVAN_RUNTIME_KIND_HTTP_EXCHANGE 35
+        #define JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA_OBJECT 36
         #define JAVAN_LIST_VIEW_UNMODIFIABLE 1
         #define JAVAN_LIST_VIEW_SET 2
         #define JAVAN_MAP_VIEW_UNMODIFIABLE 1
@@ -387,8 +388,10 @@ final class RuntimeSourceMemorySections {
             int started;
             int stopped;
             int completed;
+            int active_request_count;
             void* server_socket;
             javan_object_list* contexts;
+            javan_object_list* active_requests;
             void* native_handle;
         } javan_http_server_value;
 
@@ -1379,7 +1382,8 @@ final class RuntimeSourceMemorySections {
                 || runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_BOOLEAN
                 || runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_INTEGER
                 || runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_REFERENCE
-                || runtime_kind == JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA;
+                || runtime_kind == JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA
+                || runtime_kind == JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA_OBJECT;
             javan_heap_maybe_validate();
             javan_runtime_lock_leave();
         }
@@ -1653,6 +1657,13 @@ final class RuntimeSourceMemorySections {
                     javan_panic("invalid materialized lambda metadata");
                 }
                 javan_validate_owned_runtime_buffer_reference((void*) state->captures);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA_OBJECT) {
+                struct javan_object_header* header = (struct javan_object_header*) node->value;
+                if (header->_javan_runtime_state == NULL
+                    || header->_javan_runtime_kind != JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA) {
+                    javan_panic("invalid materialized lambda object metadata");
+                }
+                javan_validate_runtime_managed_reference(header->_javan_runtime_state);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_MAP_ENTRY) {
                 javan_map_entry_state* state = (javan_map_entry_state*) node->value;
                 if (state->magic != JAVAN_MAP_ENTRY_MAGIC) {
@@ -1820,12 +1831,15 @@ final class RuntimeSourceMemorySections {
                     || (server->started != 0 && server->started != 1)
                     || (server->stopped != 0 && server->stopped != 1)
                     || (server->completed != 0 && server->completed != 1)
+                    || server->active_request_count < 0
                     || server->server_socket == NULL
-                    || server->contexts == NULL) {
+                    || server->contexts == NULL
+                    || server->active_requests == NULL) {
                     javan_panic("invalid runtime http server metadata");
                 }
                 javan_validate_runtime_managed_reference(server->server_socket);
                 javan_validate_runtime_managed_reference((void*) server->contexts);
+                javan_validate_runtime_managed_reference((void*) server->active_requests);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_HTTP_EXCHANGE) {
                 javan_http_exchange_value* exchange = (javan_http_exchange_value*) node->value;
                 if (exchange->magic != JAVAN_HTTP_EXCHANGE_MAGIC
@@ -1991,7 +2005,8 @@ final class RuntimeSourceMemorySections {
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_ATOMIC_INTEGER
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_ATOMIC_BOOLEAN
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_ATOMIC_REFERENCE
-                    && node->runtime_kind != JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA) {
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA_OBJECT) {
                     javan_panic("invalid runtime allocation kind");
                 }
                 javan_validate_runtime_container_references(node);
@@ -6214,6 +6229,11 @@ final class RuntimeSourceMemorySections {
                         javan_gc_mark_value(state->captures[index]);
                     }
                 }
+            } else if (runtime_kind == JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA_OBJECT) {
+                struct javan_object_header* header = (struct javan_object_header*) value;
+                if (header != NULL && header->_javan_runtime_kind == JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA) {
+                    javan_gc_mark_value(header->_javan_runtime_state);
+                }
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_STRING_BUILDER) {
                 javan_string_builder* builder = (javan_string_builder*) value;
                 if (builder != NULL && builder->magic == JAVAN_STRING_BUILDER_MAGIC) {
@@ -6322,6 +6342,7 @@ final class RuntimeSourceMemorySections {
                 if (server != NULL && server->magic == JAVAN_HTTP_SERVER_MAGIC) {
                     javan_gc_mark_value(server->server_socket);
                     javan_gc_mark_value((void*) server->contexts);
+                    javan_gc_mark_value((void*) server->active_requests);
                 }
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_HTTP_EXCHANGE) {
                 javan_http_exchange_value* exchange = (javan_http_exchange_value*) value;
@@ -6355,8 +6376,8 @@ final class RuntimeSourceMemorySections {
             node->mark = 1;
             if (node->kind == JAVAN_HEAP_KIND_OBJECT) {
                 javan_gc_mark_object_fields(value, node->type_id);
-                if (node->type_id > 0) {
-                    struct javan_object_header* header = (struct javan_object_header*) value;
+                struct javan_object_header* header = (struct javan_object_header*) value;
+                if (node->type_id > 0 || header->_javan_runtime_kind == JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA) {
                     javan_gc_mark_value(header->_javan_runtime_state);
                 }
                 if (node->type_id == JAVAN_TYPE_JAVA_LANG_THREAD) {
@@ -10188,6 +10209,7 @@ final class RuntimeSourceMemorySections {
             header->_javan_runtime_state = state_value;
             header->_javan_runtime_kind = JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA;
             header->_javan_runtime_reserved = 0;
+            javan_update_runtime_allocation_kind(object_value, JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA_OBJECT);
             javan_root_frame_pop(roots);
             return object_value;
         }
