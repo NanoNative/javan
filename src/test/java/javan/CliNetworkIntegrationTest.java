@@ -3753,6 +3753,57 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void httpServerServesSequentialRequestsUntilStopBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("http-server-sequential-service");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import com.sun.net.httpserver.HttpServer;
+            import java.net.InetSocketAddress;
+            import java.net.URI;
+            import java.net.http.HttpClient;
+            import java.net.http.HttpRequest;
+            import java.net.http.HttpResponse;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", %d), 0);
+                    server.createContext("/hello", exchange -> {
+                        final byte[] body = new byte[] {'o', 'k'};
+                        exchange.sendResponseHeaders(200, body.length);
+                        exchange.getResponseBody().write(body);
+                        exchange.close();
+                    });
+                    server.start();
+                    final HttpClient client = HttpClient.newHttpClient();
+                    final HttpRequest request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:%d/hello"))
+                        .GET()
+                        .build();
+                    final HttpResponse<String> first = client.send(request, HttpResponse.BodyHandlers.ofString());
+                    final HttpResponse<String> second = client.send(request, HttpResponse.BodyHandlers.ofString());
+                    System.out.println(first.statusCode());
+                    System.out.println(first.body());
+                    System.out.println(second.statusCode());
+                    System.out.println(second.body());
+                    server.stop(0);
+                }
+            }
+            """.formatted(port, port));
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeProcess = process(project, List.of(project.resolve(".javan/bin/http-server-sequential-service").toString()));
+        assertThat(nativeProcess.stderr()).isEmpty();
+        assertThat(nativeProcess.stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void httpServerRequestBodyBuildsAndMatchesJvmOutput() throws Exception {
         final int port = freeTcpPort();
         final Path project = project("http-server-request-body");

@@ -2,6 +2,46 @@ package javan.codegen;
 
 final class RuntimeSourceIoSections {
     private static final String SOURCE_HTTP = """
+        void* javan_server_socket_accept_http(void* value) {
+        #if defined(_WIN32)
+            (void) value;
+            javan_socket_runtime_unsupported();
+            return NULL;
+        #else
+            javan_server_socket* server = javan_server_socket_checked(value);
+            if (server->closed != 0) {
+                return NULL;
+            }
+            if (server->fd < 0 || server->bound == 0) {
+                javan_panic("server socket is not bound");
+            }
+            fd_set read_set;
+            FD_ZERO(&read_set);
+            FD_SET(server->fd, &read_set);
+            struct timeval timeout;
+            timeout.tv_sec = 0;
+            timeout.tv_usec = 100000;
+            int ready = select(server->fd + 1, &read_set, NULL, NULL, &timeout);
+            if (ready == 0) {
+                return NULL;
+            }
+            if (ready < 0) {
+                if (errno == EINTR || server->closed != 0 || errno == EBADF) {
+                    return NULL;
+                }
+                javan_panic("server socket accept wait failed");
+            }
+            int accepted = accept(server->fd, NULL, NULL);
+            if (accepted < 0) {
+                if (server->closed != 0 || errno == EBADF || errno == EINVAL) {
+                    return NULL;
+                }
+                javan_panic("server socket accept failed");
+            }
+            return javan_socket_wrap_connected_fd(accepted);
+        #endif
+        }
+
         static void* javan_socket_input_stream_with_limit(void* socket_value, int content_length) {
             if (content_length < 0) {
                 javan_panic("invalid socket input content length");
@@ -752,21 +792,33 @@ final class RuntimeSourceIoSections {
             (void) javan_thread_current();
             javan_root_frame_push(roots, 5);
             javan_http_server_value* server = javan_http_server_checked(server_root);
-            socket_root = javan_server_socket_accept(server->server_socket);
-            javan_http_server_read_request(((javan_socket*) socket_root)->fd, request_method, sizeof(request_method), request_target, sizeof(request_target), &content_length, &request_headers);
-            handler_root = javan_http_server_find_handler(server, request_target);
-            if (handler_root == NULL) {
-                const char* response = "HTTP/1.1 404 Not Found\\r\\nContent-Length: 0\\r\\nConnection: close\\r\\n\\r\\n";
-                javan_http_send_all(((javan_socket*) socket_root)->fd, response, strlen(response));
-                javan_socket_close(socket_root);
-                server->completed = 1;
-                javan_root_frame_pop(roots);
-                javan_thread_detach_current();
-                return;
+            while (server->stopped == 0) {
+                socket_root = javan_server_socket_accept_http(server->server_socket);
+                if (socket_root == NULL) {
+                    continue;
+                }
+                request_headers = NULL;
+                exchange_root = NULL;
+                handler_root = NULL;
+                content_length = -1;
+                javan_http_server_read_request(((javan_socket*) socket_root)->fd, request_method, sizeof(request_method), request_target, sizeof(request_target), &content_length, &request_headers);
+                handler_root = javan_http_server_find_handler(server, request_target);
+                if (handler_root == NULL) {
+                    const char* response = "HTTP/1.1 404 Not Found\\r\\nContent-Length: 0\\r\\nConnection: close\\r\\n\\r\\n";
+                    javan_http_send_all(((javan_socket*) socket_root)->fd, response, strlen(response));
+                    javan_socket_close(socket_root);
+                    socket_root = NULL;
+                    request_headers = NULL;
+                    continue;
+                }
+                exchange_root = javan_http_exchange_new(socket_root, request_method, request_target, content_length, request_headers);
+                javan_materialized_lambda_apply_void(handler_root, exchange_root);
+                javan_http_exchange_close(exchange_root);
+                exchange_root = NULL;
+                socket_root = NULL;
+                request_headers = NULL;
+                handler_root = NULL;
             }
-            exchange_root = javan_http_exchange_new(socket_root, request_method, request_target, content_length, request_headers);
-            javan_materialized_lambda_apply_void(handler_root, exchange_root);
-            javan_http_exchange_close(exchange_root);
             server->completed = 1;
             javan_root_frame_pop(roots);
             javan_thread_detach_current();
