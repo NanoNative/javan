@@ -640,6 +640,10 @@ final class RuntimeSourceIoSections {
             return javan_http_exchange_checked(value)->request_method;
         }
 
+        void* javan_http_exchange_request_body(void* value) {
+            return javan_http_exchange_checked(value)->request_body;
+        }
+
         void* javan_http_exchange_response_body(void* value) {
             return javan_http_exchange_checked(value)->response_body;
         }
