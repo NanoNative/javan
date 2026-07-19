@@ -927,6 +927,13 @@ final class BytecodeToIRInvokeSupport {
             return false;
         }
         if ("com/sun/net/httpserver/HttpExchange".equals(methodRef.owner())) {
+            if ("getRequestMethod".equals(methodRef.name()) && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                    "javan_http_exchange_request_method",
+                    List.of(popObject(classFile, method, instruction, stack))
+                )));
+                return true;
+            }
             if ("sendResponseHeaders".equals(methodRef.name()) && "(IJ)V".equals(methodRef.descriptor())) {
                 final IrExpression length = popLong(classFile, method, stack);
                 final IrExpression status = popInt(classFile, method, stack);
