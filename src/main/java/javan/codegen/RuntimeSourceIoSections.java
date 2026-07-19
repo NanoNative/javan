@@ -692,6 +692,20 @@ final class RuntimeSourceIoSections {
             return server_value;
         }
 
+        static int javan_http_context_matches(const char* context, const char* target) {
+            unsigned long context_length = strlen(context);
+            if (context_length == 1UL && context[0] == '/') {
+                return target[0] == '/';
+            }
+            if (strncmp(target, context, context_length) != 0) {
+                return 0;
+            }
+            return context[context_length - 1UL] == '/'
+                || target[context_length] == '\\0'
+                || target[context_length] == '?'
+                || target[context_length] == '/';
+        }
+
         static void javan_http_server_run(void* server_value) {
             void* server_root = server_value;
             void* socket_root = NULL;
@@ -711,6 +725,15 @@ final class RuntimeSourceIoSections {
             javan_http_server_value* server = javan_http_server_checked(server_root);
             socket_root = javan_server_socket_accept(server->server_socket);
             javan_http_server_read_request(((javan_socket*) socket_root)->fd, request_method, sizeof(request_method), request_target, sizeof(request_target), &content_length, &request_headers);
+            if (!javan_http_context_matches((const char*) server->context_path, request_target)) {
+                const char* response = "HTTP/1.1 404 Not Found\\r\\nContent-Length: 0\\r\\nConnection: close\\r\\n\\r\\n";
+                javan_http_send_all(((javan_socket*) socket_root)->fd, response, strlen(response));
+                javan_socket_close(socket_root);
+                server->completed = 1;
+                javan_root_frame_pop(roots);
+                javan_thread_detach_current();
+                return;
+            }
             exchange_root = javan_http_exchange_new(socket_root, request_method, request_target, content_length, request_headers);
             javan_materialized_lambda_apply_void(server->handler, exchange_root);
             javan_http_exchange_close(exchange_root);

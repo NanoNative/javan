@@ -3650,6 +3650,54 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void httpServerUnmatchedContextBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("http-server-unmatched-context");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import com.sun.net.httpserver.HttpServer;
+            import java.net.InetSocketAddress;
+            import java.net.URI;
+            import java.net.http.HttpClient;
+            import java.net.http.HttpRequest;
+            import java.net.http.HttpResponse;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", %d), 0);
+                    server.createContext("/hello", exchange -> {
+                        final byte[] body = new byte[] {'m', 'a', 't', 'c', 'h'};
+                        exchange.sendResponseHeaders(200, body.length);
+                        exchange.getResponseBody().write(body);
+                        exchange.close();
+                    });
+                    server.start();
+                    final HttpResponse<String> response = HttpClient.newHttpClient().send(
+                        HttpRequest.newBuilder(URI.create("http://127.0.0.1:%d/wrong"))
+                            .GET()
+                            .build(),
+                        HttpResponse.BodyHandlers.ofString()
+                    );
+                    System.out.println(response.statusCode());
+                    server.stop(0);
+                }
+            }
+            """.formatted(port, port));
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeProcess = process(project, List.of(project.resolve(".javan/bin/http-server-unmatched-context").toString()));
+        assertThat(nativeProcess.stderr()).isEmpty();
+        assertThat(nativeProcess.stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void httpServerRequestBodyBuildsAndMatchesJvmOutput() throws Exception {
         final int port = freeTcpPort();
         final Path project = project("http-server-request-body");
