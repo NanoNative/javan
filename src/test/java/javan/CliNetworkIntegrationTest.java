@@ -3529,12 +3529,12 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
 
                 public static void main(final String[] args) throws Exception {
                     final HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", %d), 0);
-                    server.createContext("/hello", exchange -> {
+                    server.createContext("/", exchange -> {
                         final boolean post = "POST".equals(exchange.getRequestMethod())
-                            && "/hello".equals(exchange.getRequestURI().getPath())
-                            && "/hello".equals(exchange.getRequestURI().getRawPath())
-                            && "mode=full".equals(exchange.getRequestURI().getQuery())
-                            && "mode=full".equals(exchange.getRequestURI().getRawQuery())
+                            && "/hello world".equals(exchange.getRequestURI().getPath())
+                            && "/hello%%20world".equals(exchange.getRequestURI().getRawPath())
+                            && "mode=full value".equals(exchange.getRequestURI().getQuery())
+                            && "mode=full%%20value".equals(exchange.getRequestURI().getRawQuery())
                             && "full".equals(exchange.getRequestHeaders().getFirst("x-mode"));
                         final List<String> modes = exchange.getRequestHeaders().get("X-Mode");
                         final boolean multiValue = modes.size() == 2
@@ -3547,7 +3547,7 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                     });
                     server.start();
                     final HttpResponse<String> response = HttpClient.newHttpClient().send(
-                        HttpRequest.newBuilder(URI.create("http://127.0.0.1:%d/hello?mode=full"))
+                        HttpRequest.newBuilder(URI.create("http://127.0.0.1:%d/hello%%20world?mode=full%%20value"))
                             .POST(HttpRequest.BodyPublishers.ofString(""))
                             .header("X-Mode", "full")
                             .header("X-Mode", "second")

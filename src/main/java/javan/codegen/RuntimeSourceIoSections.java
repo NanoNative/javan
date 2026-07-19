@@ -86,6 +86,42 @@ final class RuntimeSourceIoSections {
             return result;
         }
 
+        static int javan_http_hex_value(char value) {
+            if (value >= '0' && value <= '9') {
+                return value - '0';
+            }
+            if (value >= 'a' && value <= 'f') {
+                return value - 'a' + 10;
+            }
+            if (value >= 'A' && value <= 'F') {
+                return value - 'A' + 10;
+            }
+            return -1;
+        }
+
+        static char* javan_http_decode_range(const char* value, unsigned long length) {
+            char* result = javan_string_alloc(length + 1UL);
+            unsigned long output_length = 0;
+            for (unsigned long index = 0; index < length; index++) {
+                if (value[index] == '%' && index + 2UL < length) {
+                    int high = javan_http_hex_value(value[index + 1UL]);
+                    int low = javan_http_hex_value(value[index + 2UL]);
+                    if (high >= 0 && low >= 0) {
+                        int decoded = (high << 4) | low;
+                        if (decoded == 0) {
+                            javan_panic("unsupported null uri escape");
+                        }
+                        result[output_length++] = (char) decoded;
+                        index += 2UL;
+                        continue;
+                    }
+                }
+                result[output_length++] = value[index];
+            }
+            result[output_length] = '\\0';
+            return result;
+        }
+
         static javan_uri_value* javan_uri_checked(void* value) {
             if (value == NULL) {
                 javan_panic("null uri");
@@ -333,9 +369,9 @@ final class RuntimeSourceIoSections {
             javan_uri_value* uri = javan_uri_checked(value);
             const char* query = strchr(uri->target, '?');
             if (query == NULL) {
-                return uri->target;
+                return javan_http_decode_range(uri->target, strlen(uri->target));
             }
-            return javan_http_copy_range(uri->target, (unsigned long) (query - uri->target));
+            return javan_http_decode_range(uri->target, (unsigned long) (query - uri->target));
         }
 
         void* javan_uri_get_query(void* value) {
@@ -347,15 +383,28 @@ final class RuntimeSourceIoSections {
             query++;
             const char* fragment = strchr(query, '#');
             const char* end = fragment == NULL ? query + strlen(query) : fragment;
-            return javan_http_copy_range(query, (unsigned long) (end - query));
+            return javan_http_decode_range(query, (unsigned long) (end - query));
         }
 
         void* javan_uri_get_raw_path(void* value) {
-            return javan_uri_get_path(value);
+            javan_uri_value* uri = javan_uri_checked(value);
+            const char* query = strchr(uri->target, '?');
+            unsigned long length = query == NULL
+                ? strlen(uri->target)
+                : (unsigned long) (query - uri->target);
+            return javan_http_copy_range(uri->target, length);
         }
 
         void* javan_uri_get_raw_query(void* value) {
-            return javan_uri_get_query(value);
+            javan_uri_value* uri = javan_uri_checked(value);
+            const char* query = strchr(uri->target, '?');
+            if (query == NULL) {
+                return NULL;
+            }
+            query++;
+            const char* fragment = strchr(query, '#');
+            const char* end = fragment == NULL ? query + strlen(query) : fragment;
+            return javan_http_copy_range(query, (unsigned long) (end - query));
         }
 
         void* javan_http_client_new(void) {
