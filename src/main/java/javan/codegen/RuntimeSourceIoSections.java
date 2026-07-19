@@ -1142,6 +1142,10 @@ final class RuntimeSourceIoSections {
             return javan_socket_get_local_socket_address(javan_http_exchange_checked(value)->socket);
         }
 
+        int javan_http_exchange_response_code(void* value) {
+            return javan_http_exchange_checked(value)->response_code;
+        }
+
         void* javan_http_exchange_request_headers(void* value) {
             return (void*) javan_http_exchange_checked(value)->request_headers;
         }

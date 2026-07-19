@@ -3633,7 +3633,9 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                         exchange.getResponseHeaders().add("X-endpoint", exchangeAddressesExpected ? "yes" : "no");
                         exchange.getResponseHeaders().add("X-mode", removedExpected && cleared && putExpected
                             && putAllExpected && valueExpected ? "strict" : "bad");
-                        final byte[] body = new byte[] {'o', 'k'};
+                        final byte[] body = exchange.getResponseCode() == 200
+                            ? new byte[] {'o', 'k'}
+                            : new byte[] {'b', 'a'};
                         exchange.sendResponseHeaders(200, body.length);
                         exchange.getResponseBody().write(body);
                         exchange.close();

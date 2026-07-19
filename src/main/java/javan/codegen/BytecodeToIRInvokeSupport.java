@@ -951,6 +951,14 @@ final class BytecodeToIRInvokeSupport {
                 )));
                 return true;
             }
+            if ("getResponseCode".equals(methodRef.name())
+                && "()I".equals(methodRef.descriptor())) {
+                stack.add(StackValue.intExpression(IrExpression.intCall(
+                    "javan_http_exchange_response_code",
+                    List.of(popObject(classFile, method, instruction, stack))
+                )));
+                return true;
+            }
             if ("getRequestURI".equals(methodRef.name()) && "()Ljava/net/URI;".equals(methodRef.descriptor())) {
                 stack.add(StackValue.objectExpression(IrExpression.objectCall(
                     "javan_http_exchange_request_uri",
