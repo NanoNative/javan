@@ -934,6 +934,13 @@ final class BytecodeToIRInvokeSupport {
                 )));
                 return true;
             }
+            if ("getRequestHeaders".equals(methodRef.name()) && "()Lcom/sun/net/httpserver/Headers;".equals(methodRef.descriptor())) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                    "javan_http_exchange_request_headers",
+                    List.of(popObject(classFile, method, instruction, stack))
+                )));
+                return true;
+            }
             if ("getRequestMethod".equals(methodRef.name()) && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
                 stack.add(StackValue.objectExpression(IrExpression.objectCall(
                     "javan_http_exchange_request_method",
@@ -989,6 +996,17 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.objectExpression(IrExpression.objectCall(
                 "javan_uri_get_query",
                 List.of(popObject(classFile, method, instruction, stack))
+            )));
+            return true;
+        }
+        if ("com/sun/net/httpserver/Headers".equals(methodRef.owner())
+            && "getFirst".equals(methodRef.name())
+            && "(Ljava/lang/String;)Ljava/lang/String;".equals(methodRef.descriptor())) {
+            final IrExpression name = popObject(classFile, method, instruction, stack);
+            final IrExpression receiver = popObject(classFile, method, instruction, stack);
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_http_headers_get_first",
+                List.of(receiver, name)
             )));
             return true;
         }

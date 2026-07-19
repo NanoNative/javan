@@ -401,6 +401,7 @@ final class RuntimeSourceMemorySections {
             void* socket;
             void* request_method;
             void* request_uri;
+            javan_object_list* request_headers;
             void* request_body;
             void* response_body;
         } javan_http_exchange_value;
@@ -1835,6 +1836,7 @@ final class RuntimeSourceMemorySections {
                     || exchange->socket == NULL
                     || exchange->request_method == NULL
                     || exchange->request_uri == NULL
+                    || exchange->request_headers == NULL
                     || exchange->request_body == NULL
                     || exchange->response_body == NULL
                     || (exchange->response_headers_sent != 0 && exchange->response_headers_sent != 1)
@@ -1844,6 +1846,7 @@ final class RuntimeSourceMemorySections {
                 javan_validate_runtime_managed_reference(exchange->socket);
                 javan_validate_runtime_managed_reference(exchange->request_method);
                 javan_validate_runtime_managed_reference(exchange->request_uri);
+                javan_validate_runtime_managed_reference((void*) exchange->request_headers);
                 javan_validate_runtime_managed_reference(exchange->request_body);
                 javan_validate_runtime_managed_reference(exchange->response_body);
             }
@@ -6329,6 +6332,7 @@ final class RuntimeSourceMemorySections {
                     javan_gc_mark_value(exchange->socket);
                     javan_gc_mark_value(exchange->request_method);
                     javan_gc_mark_value(exchange->request_uri);
+                    javan_gc_mark_value((void*) exchange->request_headers);
                     javan_gc_mark_value(exchange->request_body);
                     javan_gc_mark_value(exchange->response_body);
                 }

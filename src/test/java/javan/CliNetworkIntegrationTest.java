@@ -3530,7 +3530,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                     server.createContext("/hello", exchange -> {
                         final boolean post = "POST".equals(exchange.getRequestMethod())
                             && "/hello".equals(exchange.getRequestURI().getPath())
-                            && "mode=full".equals(exchange.getRequestURI().getQuery());
+                            && "mode=full".equals(exchange.getRequestURI().getQuery())
+                            && "full".equals(exchange.getRequestHeaders().getFirst("x-mode"));
                         final byte[] body = post ? new byte[] {'p', 'o', 's', 't'} : new byte[] {'b', 'a', 'd'};
                         exchange.sendResponseHeaders(post ? 200 : 500, body.length);
                         exchange.getResponseBody().write(body);
@@ -3540,6 +3541,7 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                     final HttpResponse<String> response = HttpClient.newHttpClient().send(
                         HttpRequest.newBuilder(URI.create("http://127.0.0.1:%d/hello?mode=full"))
                             .POST(HttpRequest.BodyPublishers.ofString(""))
+                            .header("X-Mode", "full")
                             .build(),
                         HttpResponse.BodyHandlers.ofString()
                     );
