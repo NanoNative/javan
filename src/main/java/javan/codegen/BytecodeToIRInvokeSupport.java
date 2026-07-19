@@ -926,6 +926,13 @@ final class BytecodeToIRInvokeSupport {
                 ));
                 return true;
             }
+            if ("setExecutor".equals(methodRef.name())
+                && "(Ljava/util/concurrent/Executor;)V".equals(methodRef.descriptor())) {
+                final IrExpression executor = popObject(classFile, method, instruction, stack);
+                final IrExpression receiver = popObject(classFile, method, instruction, stack);
+                instructions.add(IrInstruction.callStaticVoid("javan_http_server_set_executor", List.of(receiver, executor)));
+                return true;
+            }
             if ("stop".equals(methodRef.name()) && "(I)V".equals(methodRef.descriptor())) {
                 final IrExpression delay = popInt(classFile, method, stack);
                 final IrExpression receiver = popObject(classFile, method, instruction, stack);

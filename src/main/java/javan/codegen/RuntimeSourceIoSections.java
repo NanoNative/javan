@@ -793,6 +793,7 @@ final class RuntimeSourceIoSections {
             server->contexts = (javan_object_list*) contexts_root;
             server->active_requests = (javan_object_list*) active_requests_root;
             server->native_handle = NULL;
+            server->executor = NULL;
             javan_update_runtime_allocation_kind((void*) server, JAVAN_RUNTIME_KIND_HTTP_SERVER);
             javan_root_frame_pop(roots);
             return (void*) server;
@@ -824,6 +825,26 @@ final class RuntimeSourceIoSections {
         void* javan_http_server_get_address(void* value) {
             javan_http_server_value* server = javan_http_server_checked(value);
             return javan_server_socket_get_local_socket_address(server->server_socket);
+        }
+
+        void javan_http_server_set_executor(void* server_value, void* executor_value) {
+            void* server_root = server_value;
+            void* executor_root = executor_value;
+            void** roots[] = {
+                (void**) &server_root,
+                (void**) &executor_root
+            };
+            javan_root_frame_push(roots, 2);
+            javan_http_server_value* server = javan_http_server_checked(server_root);
+            if (server->started != 0) {
+                javan_root_frame_pop(roots);
+                javan_panic("cannot set http executor after server start");
+            }
+            if (executor_root != NULL) {
+                javan_virtual_thread_executor_checked(executor_root);
+            }
+            server->executor = executor_root;
+            javan_root_frame_pop(roots);
         }
 
         static int javan_http_context_matches(const char* context, const char* target) {
@@ -860,11 +881,7 @@ final class RuntimeSourceIoSections {
             void* exchange;
         } javan_http_request_task;
 
-        static void javan_http_server_request_run(void* argument) {
-            javan_http_request_task* task = (javan_http_request_task*) argument;
-            void* server_root = task->server;
-            void* handler_root = task->handler;
-            void* exchange_root = task->exchange;
+        static void javan_http_server_request_run_values(void* server_root, void* handler_root, void* exchange_root, int managed_thread) {
             void** roots[] = {
                 (void**) &server_root,
                 (void**) &handler_root,
@@ -885,8 +902,19 @@ final class RuntimeSourceIoSections {
             server->active_request_count--;
             javan_runtime_lock_leave();
             javan_root_frame_pop(roots);
-            javan_thread_leave_live_root(javan_current_thread_value);
-            javan_current_thread_value = NULL;
+            if (managed_thread == 0) {
+                javan_thread_leave_live_root(javan_current_thread_value);
+                javan_current_thread_value = NULL;
+            }
+        }
+
+        static void javan_http_server_request_run_managed(void* server, void* handler, void* exchange) {
+            javan_http_server_request_run_values(server, handler, exchange, 1);
+        }
+
+        static void javan_http_server_request_run(void* argument) {
+            javan_http_request_task* task = (javan_http_request_task*) argument;
+            javan_http_server_request_run_values(task->server, task->handler, task->exchange, 0);
             free(task);
         }
 
@@ -903,6 +931,37 @@ final class RuntimeSourceIoSections {
         #endif
 
         static int javan_http_server_start_request(void* server_root, void* handler_root, void* exchange_root) {
+            javan_http_server_value* server = javan_http_server_checked(server_root);
+            if (server->executor != NULL) {
+                void* executor_root = server->executor;
+                void* handler_task_root = handler_root;
+                void* exchange_task_root = exchange_root;
+                void* thread_value = NULL;
+                void** roots[] = {
+                    (void**) &server_root,
+                    (void**) &executor_root,
+                    (void**) &handler_task_root,
+                    (void**) &exchange_task_root,
+                    (void**) &thread_value
+                };
+                javan_root_frame_push(roots, 5);
+                javan_virtual_thread_executor_state* executor = javan_virtual_thread_executor_checked(executor_root);
+                if (executor->closed != 0) {
+                    javan_root_frame_pop(roots);
+                    javan_panic("virtual thread executor is closed");
+                }
+                javan_runtime_lock_enter();
+                javan_list_append_raw(server->active_requests, handler_task_root);
+                javan_list_append_raw(server->active_requests, exchange_task_root);
+                server->active_request_count++;
+                javan_runtime_lock_leave();
+                thread_value = javan_virtual_thread_factory_new_thread(executor->factory, NULL);
+                javan_thread_set_http_request(thread_value, server_root, handler_task_root, exchange_task_root);
+                javan_thread_start(thread_value);
+                javan_list_append_raw(executor->threads, thread_value);
+                javan_root_frame_pop(roots);
+                return 0;
+            }
         #if defined(_WIN32)
             (void) server_root;
             (void) handler_root;
@@ -910,7 +969,6 @@ final class RuntimeSourceIoSections {
             javan_socket_runtime_unsupported();
             return -1;
         #else
-            javan_http_server_value* server = javan_http_server_checked(server_root);
             javan_http_request_task* task = (javan_http_request_task*) malloc(sizeof(javan_http_request_task));
             if (task == NULL) {
                 javan_panic("http server request task allocation failed");

@@ -393,6 +393,7 @@ final class RuntimeSourceMemorySections {
             javan_object_list* contexts;
             javan_object_list* active_requests;
             void* native_handle;
+            void* executor;
         } javan_http_server_value;
 
         typedef struct {
@@ -1840,6 +1841,9 @@ final class RuntimeSourceMemorySections {
                 javan_validate_runtime_managed_reference(server->server_socket);
                 javan_validate_runtime_managed_reference((void*) server->contexts);
                 javan_validate_runtime_managed_reference((void*) server->active_requests);
+                if (server->executor != NULL) {
+                    javan_validate_runtime_managed_reference(server->executor);
+                }
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_HTTP_EXCHANGE) {
                 javan_http_exchange_value* exchange = (javan_http_exchange_value*) node->value;
                 if (exchange->magic != JAVAN_HTTP_EXCHANGE_MAGIC
@@ -2837,6 +2841,9 @@ final class RuntimeSourceMemorySections {
             void* target;
             void* scheduled_executor;
             void* thread_locals;
+            void* http_server;
+            void* http_handler;
+            void* http_exchange;
         } javan_thread;
 
         static long long javan_platform_thread_name_counter_value = 0;
@@ -4461,6 +4468,9 @@ final class RuntimeSourceMemorySections {
             object->target = NULL;
             object->scheduled_executor = NULL;
             object->thread_locals = NULL;
+            object->http_server = NULL;
+            object->http_handler = NULL;
+            object->http_exchange = NULL;
             if (javan_current_thread_value != NULL) {
                 object->priority = ((javan_thread*) javan_current_thread_value)->priority;
             }
@@ -5146,6 +5156,13 @@ final class RuntimeSourceMemorySections {
             javan_require_thread(value)->target = target;
         }
 
+        void javan_thread_set_http_request(void* value, void* server, void* handler, void* exchange) {
+            javan_thread* thread = javan_require_thread(value);
+            thread->http_server = server;
+            thread->http_handler = handler;
+            thread->http_exchange = exchange;
+        }
+
         static javan_thread_local* javan_require_thread_local(void* value) {
             if (value == NULL) {
                 javan_panic("null ThreadLocal");
@@ -5366,12 +5383,19 @@ final class RuntimeSourceMemorySections {
             }
         }
 
+        static void javan_http_server_request_run_managed(void* server, void* handler, void* exchange);
+
         static void javan_thread_run_registered_target(void* value) {
             javan_thread* thread = javan_require_thread(value);
             void* target = thread->target;
             void** javan_thread_start_roots[] = { &value, &target };
             javan_root_frame_push(javan_thread_start_roots, 2);
-            if (thread->schedule_mode == 0) {
+            if (thread->http_server != NULL) {
+                javan_http_server_request_run_managed(thread->http_server, thread->http_handler, thread->http_exchange);
+                thread->http_server = NULL;
+                thread->http_handler = NULL;
+                thread->http_exchange = NULL;
+            } else if (thread->schedule_mode == 0) {
                 if (thread->future_cancelled == 0 && target != NULL) {
                     javan_thread_run_target(target);
                 }
@@ -6343,6 +6367,7 @@ final class RuntimeSourceMemorySections {
                     javan_gc_mark_value(server->server_socket);
                     javan_gc_mark_value((void*) server->contexts);
                     javan_gc_mark_value((void*) server->active_requests);
+                    javan_gc_mark_value(server->executor);
                 }
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_HTTP_EXCHANGE) {
                 javan_http_exchange_value* exchange = (javan_http_exchange_value*) value;
@@ -6385,6 +6410,9 @@ final class RuntimeSourceMemorySections {
                     javan_gc_mark_value(((javan_thread*) value)->target);
                     javan_gc_mark_value(((javan_thread*) value)->scheduled_executor);
                     javan_gc_mark_value(((javan_thread*) value)->thread_locals);
+                    javan_gc_mark_value(((javan_thread*) value)->http_server);
+                    javan_gc_mark_value(((javan_thread*) value)->http_handler);
+                    javan_gc_mark_value(((javan_thread*) value)->http_exchange);
                 }
                 return;
             }
