@@ -37,8 +37,8 @@ If they disagree, repair the disagreement before widening implementation.
 
 | Measure | Current value |
 | --- | ---: |
-| Release milestones fully closed | 8 / 10 = 80.0% |
-| Release milestones left to close | 2 / 10 = 20.0% |
+| Release milestones fully closed | 10 / 10 = 100.0% |
+| Release milestones left to close | 0 / 10 = 0.0% |
 | Remote Linux package rows proven | 2 / 2 = 100.0% |
 | Required local macOS package gate | proven locally |
 | Roadmap rows fully done | 4 / 38 = 10.5% |
@@ -96,6 +96,16 @@ R10 is closed: the exact local macOS release rehearsal completed with exit code 
 including Maven/native tests, 117 acceptance checks, package checksum and extraction,
 self-host rebuild, and the full sanitizer suite. No release publication side effect
 occurred; the publication workflows remain disabled.
+
+R1 is closed: the first-release contract is frozen and consistent across the release,
+support, and native-ABI source documents, including Linux-only publication, local
+macOS host coverage, Windows smoke-only scope, explicit rejection policy, and deferred
+macOS publication.
+
+R2 is closed: the exact rehearsal and green remote matrix verified the CI/package
+workflow surface, package smoke, platform lanes, parallel-test policy, and coverage
+configuration. Workflow enablement remains intentionally disabled for this release
+review state.
 
 ## Slice rules
 
