@@ -1312,6 +1312,57 @@ final class RuntimeSourceIoSections {
             return previous;
         }
 
+        int javan_http_headers_contains_value(void* value, void* candidate_value) {
+            javan_object_list* headers = javan_list_checked(value);
+            javan_object_list* candidate = javan_list_checked(candidate_value);
+            int candidate_length = candidate->length;
+            for (int index = 0; index + 1 < headers->length; index += 2) {
+                int duplicate_key = 0;
+                for (int prior = 0; prior < index; prior += 2) {
+                    if (javan_http_header_name_equals(
+                        (const char*) headers->values[prior],
+                        (const char*) headers->values[index]
+                    ) != 0) {
+                        duplicate_key = 1;
+                        break;
+                    }
+                }
+                if (duplicate_key != 0) {
+                    continue;
+                }
+                int value_count = 0;
+                for (int probe = index; probe + 1 < headers->length; probe += 2) {
+                    if (javan_http_header_name_equals(
+                        (const char*) headers->values[probe],
+                        (const char*) headers->values[index]
+                    ) != 0) {
+                        value_count++;
+                    }
+                }
+                if (value_count != candidate_length) {
+                    continue;
+                }
+                int candidate_index = 0;
+                int matches = 1;
+                for (int probe = index; probe + 1 < headers->length; probe += 2) {
+                    if (javan_http_header_name_equals(
+                        (const char*) headers->values[probe],
+                        (const char*) headers->values[index]
+                    ) != 0) {
+                        if (javan_object_equals(headers->values[probe + 1], candidate->values[candidate_index]) == 0) {
+                            matches = 0;
+                            break;
+                        }
+                        candidate_index++;
+                    }
+                }
+                if (matches != 0) {
+                    return 1;
+                }
+            }
+            return 0;
+        }
+
         void javan_http_headers_set(void* value, void* name_value, void* header_value) {
             javan_object_list* headers = javan_list_checked(value);
             javan_http_header_text_checked((const char*) name_value, "null http header name");
