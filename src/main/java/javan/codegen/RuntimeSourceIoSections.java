@@ -658,22 +658,24 @@ final class RuntimeSourceIoSections {
         void* javan_http_server_create(void* address, int backlog) {
             void* address_root = address;
             void* socket_root = NULL;
+            void* contexts_root = NULL;
             void** roots[] = {
                 (void**) &address_root,
-                (void**) &socket_root
+                (void**) &socket_root,
+                (void**) &contexts_root
             };
-            javan_root_frame_push(roots, 2);
+            javan_root_frame_push(roots, 3);
             javan_objects_require_non_null_msg(address_root, "null http server bind address");
             socket_root = javan_server_socket_new();
             javan_server_socket_bind_socket_address_backlog(socket_root, address_root, backlog);
+            contexts_root = (void*) javan_list_new_with_capacity(0, 0);
             javan_http_server_value* server = (javan_http_server_value*) javan_alloc(sizeof(javan_http_server_value));
             server->magic = JAVAN_HTTP_SERVER_MAGIC;
             server->started = 0;
             server->stopped = 0;
             server->completed = 0;
             server->server_socket = socket_root;
-            server->context_path = NULL;
-            server->handler = NULL;
+            server->contexts = (javan_object_list*) contexts_root;
             server->native_handle = NULL;
             javan_update_runtime_allocation_kind((void*) server, JAVAN_RUNTIME_KIND_HTTP_SERVER);
             javan_root_frame_pop(roots);
@@ -681,15 +683,26 @@ final class RuntimeSourceIoSections {
         }
 
         void* javan_http_server_create_context(void* server_value, void* path_value, void* handler_value) {
-            javan_http_server_value* server = javan_http_server_checked(server_value);
+            void* server_root = server_value;
+            void* path_root = path_value;
+            void* handler_root = handler_value;
+            void** roots[] = {
+                (void**) &server_root,
+                (void**) &path_root,
+                (void**) &handler_root
+            };
+            javan_root_frame_push(roots, 3);
+            javan_http_server_value* server = javan_http_server_checked(server_root);
             javan_objects_require_non_null_msg(path_value, "null http context path");
             javan_objects_require_non_null_msg(handler_value, "null http handler");
             if (server->started != 0) {
+                javan_root_frame_pop(roots);
                 javan_panic("cannot create http context after server start");
             }
-            server->context_path = path_value;
-            server->handler = handler_value;
-            return server_value;
+            javan_list_append_raw(server->contexts, path_root);
+            javan_list_append_raw(server->contexts, handler_root);
+            javan_root_frame_pop(roots);
+            return server_root;
         }
 
         static int javan_http_context_matches(const char* context, const char* target) {
@@ -706,11 +719,26 @@ final class RuntimeSourceIoSections {
                 || target[context_length] == '/';
         }
 
+        static void* javan_http_server_find_handler(javan_http_server_value* server, const char* target) {
+            void* best_handler = NULL;
+            unsigned long best_length = 0;
+            for (int index = 0; index + 1 < server->contexts->length; index += 2) {
+                const char* context = (const char*) server->contexts->values[index];
+                unsigned long context_length = strlen(context);
+                if (javan_http_context_matches(context, target) && context_length >= best_length) {
+                    best_length = context_length;
+                    best_handler = server->contexts->values[index + 1];
+                }
+            }
+            return best_handler;
+        }
+
         static void javan_http_server_run(void* server_value) {
             void* server_root = server_value;
             void* socket_root = NULL;
             void* exchange_root = NULL;
             void* request_headers = NULL;
+            void* handler_root = NULL;
             char request_method[16];
             char request_target[2048];
             int content_length = -1;
@@ -718,14 +746,16 @@ final class RuntimeSourceIoSections {
                 (void**) &server_root,
                 (void**) &socket_root,
                 (void**) &exchange_root,
-                (void**) &request_headers
+                (void**) &request_headers,
+                (void**) &handler_root
             };
             (void) javan_thread_current();
-            javan_root_frame_push(roots, 4);
+            javan_root_frame_push(roots, 5);
             javan_http_server_value* server = javan_http_server_checked(server_root);
             socket_root = javan_server_socket_accept(server->server_socket);
             javan_http_server_read_request(((javan_socket*) socket_root)->fd, request_method, sizeof(request_method), request_target, sizeof(request_target), &content_length, &request_headers);
-            if (!javan_http_context_matches((const char*) server->context_path, request_target)) {
+            handler_root = javan_http_server_find_handler(server, request_target);
+            if (handler_root == NULL) {
                 const char* response = "HTTP/1.1 404 Not Found\\r\\nContent-Length: 0\\r\\nConnection: close\\r\\n\\r\\n";
                 javan_http_send_all(((javan_socket*) socket_root)->fd, response, strlen(response));
                 javan_socket_close(socket_root);
@@ -735,7 +765,7 @@ final class RuntimeSourceIoSections {
                 return;
             }
             exchange_root = javan_http_exchange_new(socket_root, request_method, request_target, content_length, request_headers);
-            javan_materialized_lambda_apply_void(server->handler, exchange_root);
+            javan_materialized_lambda_apply_void(handler_root, exchange_root);
             javan_http_exchange_close(exchange_root);
             server->completed = 1;
             javan_root_frame_pop(roots);
@@ -756,8 +786,8 @@ final class RuntimeSourceIoSections {
 
         void javan_http_server_start(void* value) {
             javan_http_server_value* server = javan_http_server_checked(value);
-            if (server->context_path == NULL || server->handler == NULL) {
-                javan_panic("http server requires one context and handler");
+            if (server->contexts == NULL || server->contexts->length == 0) {
+                javan_panic("http server requires one context");
             }
             if (server->started != 0) {
                 javan_panic("http server already started");

@@ -388,8 +388,7 @@ final class RuntimeSourceMemorySections {
             int stopped;
             int completed;
             void* server_socket;
-            void* context_path;
-            void* handler;
+            javan_object_list* contexts;
             void* native_handle;
         } javan_http_server_value;
 
@@ -1821,16 +1820,12 @@ final class RuntimeSourceMemorySections {
                     || (server->started != 0 && server->started != 1)
                     || (server->stopped != 0 && server->stopped != 1)
                     || (server->completed != 0 && server->completed != 1)
-                    || server->server_socket == NULL) {
+                    || server->server_socket == NULL
+                    || server->contexts == NULL) {
                     javan_panic("invalid runtime http server metadata");
                 }
                 javan_validate_runtime_managed_reference(server->server_socket);
-                if (server->context_path != NULL) {
-                    javan_validate_runtime_managed_reference(server->context_path);
-                }
-                if (server->handler != NULL) {
-                    javan_validate_runtime_managed_reference(server->handler);
-                }
+                javan_validate_runtime_managed_reference((void*) server->contexts);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_HTTP_EXCHANGE) {
                 javan_http_exchange_value* exchange = (javan_http_exchange_value*) node->value;
                 if (exchange->magic != JAVAN_HTTP_EXCHANGE_MAGIC
@@ -6326,8 +6321,7 @@ final class RuntimeSourceMemorySections {
                 javan_http_server_value* server = (javan_http_server_value*) value;
                 if (server != NULL && server->magic == JAVAN_HTTP_SERVER_MAGIC) {
                     javan_gc_mark_value(server->server_socket);
-                    javan_gc_mark_value(server->context_path);
-                    javan_gc_mark_value(server->handler);
+                    javan_gc_mark_value((void*) server->contexts);
                 }
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_HTTP_EXCHANGE) {
                 javan_http_exchange_value* exchange = (javan_http_exchange_value*) value;
