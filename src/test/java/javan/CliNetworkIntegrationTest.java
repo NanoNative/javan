@@ -3604,7 +3604,19 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                         exchange.getResponseHeaders().clear();
                         final boolean cleared = exchange.getResponseHeaders().size() == 0
                             && exchange.getResponseHeaders().isEmpty();
-                        exchange.getResponseHeaders().add("X-mode", removedExpected && cleared ? "strict" : "bad");
+                        final java.util.List<String> firstPut = (java.util.List<String>) exchange.getResponseHeaders().put(
+                            "X-mode",
+                            new java.util.ArrayList<String>(java.util.List.of("strict", "relaxed"))
+                        );
+                        final java.util.List<String> secondPut = (java.util.List<String>) exchange.getResponseHeaders().put(
+                            "X-mode",
+                            new java.util.ArrayList<String>(java.util.List.of("strict"))
+                        );
+                        final boolean putExpected = firstPut == null
+                            && secondPut.size() == 2
+                            && "strict".equals(secondPut.get(0))
+                            && "relaxed".equals(secondPut.get(1));
+                        exchange.getResponseHeaders().add("X-mode", removedExpected && cleared && putExpected ? "strict" : "bad");
                         final byte[] body = new byte[] {'o', 'k'};
                         exchange.sendResponseHeaders(200, body.length);
                         exchange.getResponseBody().write(body);
