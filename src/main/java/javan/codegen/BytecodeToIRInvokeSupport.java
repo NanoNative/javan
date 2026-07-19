@@ -927,6 +927,13 @@ final class BytecodeToIRInvokeSupport {
             return false;
         }
         if ("com/sun/net/httpserver/HttpExchange".equals(methodRef.owner())) {
+            if ("getRequestURI".equals(methodRef.name()) && "()Ljava/net/URI;".equals(methodRef.descriptor())) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                    "javan_http_exchange_request_uri",
+                    List.of(popObject(classFile, method, instruction, stack))
+                )));
+                return true;
+            }
             if ("getRequestMethod".equals(methodRef.name()) && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
                 stack.add(StackValue.objectExpression(IrExpression.objectCall(
                     "javan_http_exchange_request_method",
@@ -966,6 +973,15 @@ final class BytecodeToIRInvokeSupport {
                 return true;
             }
             return false;
+        }
+        if ("java/net/URI".equals(methodRef.owner())
+            && "getPath".equals(methodRef.name())
+            && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_uri_get_path",
+                List.of(popObject(classFile, method, instruction, stack))
+            )));
+            return true;
         }
         if ("java/net/http/HttpClient".equals(methodRef.owner())
             && "send".equals(methodRef.name())

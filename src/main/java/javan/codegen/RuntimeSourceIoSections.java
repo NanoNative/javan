@@ -260,6 +260,44 @@ final class RuntimeSourceIoSections {
             return uri;
         }
 
+        static void* javan_uri_from_request_target(const char* request_target) {
+            void* scheme = NULL;
+            void* host = NULL;
+            void* target = NULL;
+            void* uri_root = NULL;
+            void** roots[] = {
+                (void**) &scheme,
+                (void**) &host,
+                (void**) &target,
+                (void**) &uri_root
+            };
+            javan_root_frame_push(roots, 4);
+            scheme = javan_string_copy("");
+            host = javan_string_copy("");
+            target = javan_string_copy(request_target);
+            uri_root = javan_alloc(sizeof(javan_uri_value));
+            javan_uri_value* uri = (javan_uri_value*) uri_root;
+            uri->magic = JAVAN_URI_MAGIC;
+            uri->port = 80;
+            uri->reserved0 = 0;
+            uri->reserved1 = 0;
+            uri->scheme = (char*) scheme;
+            uri->host = (char*) host;
+            uri->target = (char*) target;
+            javan_update_runtime_allocation_kind(uri_root, JAVAN_RUNTIME_KIND_URI);
+            javan_root_frame_pop(roots);
+            return uri_root;
+        }
+
+        void* javan_uri_get_path(void* value) {
+            javan_uri_value* uri = javan_uri_checked(value);
+            const char* query = strchr(uri->target, '?');
+            if (query == NULL) {
+                return uri->target;
+            }
+            return javan_http_copy_range(uri->target, (unsigned long) (query - uri->target));
+        }
+
         void* javan_http_client_new(void) {
             javan_http_client_value* client = (javan_http_client_value*) javan_alloc(sizeof(javan_http_client_value));
             client->magic = JAVAN_HTTP_CLIENT_MAGIC;
@@ -540,7 +578,7 @@ final class RuntimeSourceIoSections {
             };
             javan_root_frame_push(roots, 5);
             request_method = javan_string_copy(method_text);
-            request_uri = javan_string_copy(request_target);
+            request_uri = javan_uri_from_request_target(request_target);
             request_body = content_length < 0
                 ? javan_socket_input_stream(socket_root)
                 : javan_socket_input_stream_with_limit(socket_root, content_length);
@@ -707,6 +745,10 @@ final class RuntimeSourceIoSections {
 
         void* javan_http_exchange_request_method(void* value) {
             return javan_http_exchange_checked(value)->request_method;
+        }
+
+        void* javan_http_exchange_request_uri(void* value) {
+            return javan_http_exchange_checked(value)->request_uri;
         }
 
         void* javan_http_exchange_request_body(void* value) {
