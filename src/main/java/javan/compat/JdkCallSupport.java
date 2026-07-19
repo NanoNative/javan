@@ -831,6 +831,8 @@ public final class JdkCallSupport {
         runtime("HttpExchange.getRequestURI", "com/sun/net/httpserver/HttpExchange", "getRequestURI", "()Ljava/net/URI;"),
         runtime("HttpExchange.getRequestHeaders", "com/sun/net/httpserver/HttpExchange", "getRequestHeaders", "()Lcom/sun/net/httpserver/Headers;"),
         runtime("Headers.getFirst", "com/sun/net/httpserver/Headers", "getFirst", "(Ljava/lang/String;)Ljava/lang/String;"),
+        runtime("HttpExchange.getResponseHeaders", "com/sun/net/httpserver/HttpExchange", "getResponseHeaders", "()Lcom/sun/net/httpserver/Headers;"),
+        runtime("Headers.set", "com/sun/net/httpserver/Headers", "set", "(Ljava/lang/String;Ljava/lang/String;)V"),
         runtime("HttpExchange.getRequestBody", "com/sun/net/httpserver/HttpExchange", "getRequestBody", "()Ljava/io/InputStream;"),
         runtime("HttpExchange.getResponseBody", "com/sun/net/httpserver/HttpExchange", "getResponseBody", "()Ljava/io/OutputStream;"),
         runtime("HttpExchange.close", "com/sun/net/httpserver/HttpExchange", "close", "()V"),

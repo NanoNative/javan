@@ -484,6 +484,8 @@ final class RuntimeHeaderFile {
         void* javan_http_exchange_request_uri(void* exchange);
         void* javan_http_exchange_request_headers(void* exchange);
         void* javan_http_headers_get_first(void* headers, void* name);
+        void* javan_http_exchange_response_headers(void* exchange);
+        void javan_http_headers_set(void* headers, void* name, void* header_value);
         void* javan_http_exchange_request_body(void* exchange);
         void javan_http_exchange_send_response_headers(void* exchange, int status_code, long long length);
         void* javan_http_exchange_response_body(void* exchange);

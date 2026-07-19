@@ -941,6 +941,13 @@ final class BytecodeToIRInvokeSupport {
                 )));
                 return true;
             }
+            if ("getResponseHeaders".equals(methodRef.name()) && "()Lcom/sun/net/httpserver/Headers;".equals(methodRef.descriptor())) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                    "javan_http_exchange_response_headers",
+                    List.of(popObject(classFile, method, instruction, stack))
+                )));
+                return true;
+            }
             if ("getRequestMethod".equals(methodRef.name()) && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
                 stack.add(StackValue.objectExpression(IrExpression.objectCall(
                     "javan_http_exchange_request_method",
@@ -1008,6 +1015,17 @@ final class BytecodeToIRInvokeSupport {
                 "javan_http_headers_get_first",
                 List.of(receiver, name)
             )));
+            return true;
+        }
+        if ("com/sun/net/httpserver/Headers".equals(methodRef.owner())
+            && "set".equals(methodRef.name())
+            && "(Ljava/lang/String;Ljava/lang/String;)V".equals(methodRef.descriptor())) {
+            final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()), instruction);
+            final IrExpression receiver = popObject(classFile, method, instruction, stack);
+            final List<IrExpression> callArguments = new ArrayList<>();
+            callArguments.add(receiver);
+            callArguments.addAll(arguments);
+            instructions.add(IrInstruction.callStaticVoid("javan_http_headers_set", callArguments));
             return true;
         }
         if ("java/net/http/HttpClient".equals(methodRef.owner())

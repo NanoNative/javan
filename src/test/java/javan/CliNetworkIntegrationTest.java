@@ -3562,6 +3562,84 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void httpServerResponseHeadersBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("http-server-response-headers");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import com.sun.net.httpserver.HttpServer;
+            import java.io.InputStream;
+            import java.io.OutputStream;
+            import java.net.InetSocketAddress;
+            import java.net.Socket;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", %d), 0);
+                    server.createContext("/hello", exchange -> {
+                        exchange.getResponseHeaders().set("X-mode", "strict");
+                        final byte[] body = new byte[] {'o', 'k'};
+                        exchange.sendResponseHeaders(200, body.length);
+                        exchange.getResponseBody().write(body);
+                        exchange.close();
+                    });
+                    server.start();
+                    final Socket client = new Socket("127.0.0.1", %d);
+                    final OutputStream output = client.getOutputStream();
+                    output.write(new byte[] {
+                        'G', 'E', 'T', ' ', '/', 'h', 'e', 'l', 'l', 'o', ' ', 'H', 'T', 'T', 'P', '/', '1', '.', '1', '\\r', '\\n',
+                        'H', 'o', 's', 't', ':', ' ', '1', '\\r', '\\n',
+                        'C', 'o', 'n', 'n', 'e', 'c', 't', 'i', 'o', 'n', ':', ' ', 'c', 'l', 'o', 's', 'e', '\\r', '\\n', '\\r', '\\n'
+                    });
+                    output.flush();
+                    final InputStream input = client.getInputStream();
+                    final byte[] response = new byte[1024];
+                    int length = 0;
+                    while (length < response.length) {
+                        final int read = input.read(response, length, response.length - length);
+                        if (read < 0) {
+                            break;
+                        }
+                        length += read;
+                    }
+                    client.close();
+                    server.stop(0);
+                    final byte[] expectedHeader = new byte[] {'X', '-', 'm', 'o', 'd', 'e', ':', ' ', 's', 't', 'r', 'i', 'c', 't'};
+                    System.out.println(contains(response, length, expectedHeader) && contains(response, length, new byte[] {'o', 'k'}));
+                }
+
+                private static boolean contains(final byte[] value, final int length, final byte[] needle) {
+                    for (int start = 0; start + needle.length <= length; start++) {
+                        boolean match = true;
+                        for (int index = 0; index < needle.length; index++) {
+                            if (value[start + index] != needle[index]) {
+                                match = false;
+                                break;
+                            }
+                        }
+                        if (match) {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+            }
+            """.formatted(port, port));
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeProcess = process(project, List.of(project.resolve(".javan/bin/http-server-response-headers").toString()));
+        assertThat(nativeProcess.stderr()).isEmpty();
+        assertThat(nativeProcess.stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void httpServerRequestBodyBuildsAndMatchesJvmOutput() throws Exception {
         final int port = freeTcpPort();
         final Path project = project("http-server-request-body");

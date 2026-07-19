@@ -403,6 +403,7 @@ final class RuntimeSourceMemorySections {
             void* request_uri;
             javan_object_list* request_headers;
             void* request_body;
+            javan_object_list* response_headers;
             void* response_body;
         } javan_http_exchange_value;
 
@@ -1838,6 +1839,7 @@ final class RuntimeSourceMemorySections {
                     || exchange->request_uri == NULL
                     || exchange->request_headers == NULL
                     || exchange->request_body == NULL
+                    || exchange->response_headers == NULL
                     || exchange->response_body == NULL
                     || (exchange->response_headers_sent != 0 && exchange->response_headers_sent != 1)
                     || (exchange->closed != 0 && exchange->closed != 1)) {
@@ -1848,6 +1850,7 @@ final class RuntimeSourceMemorySections {
                 javan_validate_runtime_managed_reference(exchange->request_uri);
                 javan_validate_runtime_managed_reference((void*) exchange->request_headers);
                 javan_validate_runtime_managed_reference(exchange->request_body);
+                javan_validate_runtime_managed_reference((void*) exchange->response_headers);
                 javan_validate_runtime_managed_reference(exchange->response_body);
             }
         }
@@ -6334,6 +6337,7 @@ final class RuntimeSourceMemorySections {
                     javan_gc_mark_value(exchange->request_uri);
                     javan_gc_mark_value((void*) exchange->request_headers);
                     javan_gc_mark_value(exchange->request_body);
+                    javan_gc_mark_value((void*) exchange->response_headers);
                     javan_gc_mark_value(exchange->response_body);
                 }
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_PROCESS_RESULT) {

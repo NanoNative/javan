@@ -619,6 +619,7 @@ final class RuntimeSourceIoSections {
             void* request_uri = NULL;
             void* request_headers = request_headers_value;
             void* request_body = NULL;
+            void* response_headers = NULL;
             void* response_body = NULL;
             void** roots[] = {
                 (void**) &socket_root,
@@ -626,11 +627,13 @@ final class RuntimeSourceIoSections {
                 (void**) &request_uri,
                 (void**) &request_headers,
                 (void**) &request_body,
+                (void**) &response_headers,
                 (void**) &response_body
             };
-            javan_root_frame_push(roots, 5);
+            javan_root_frame_push(roots, 7);
             request_method = javan_string_copy(method_text);
             request_uri = javan_uri_from_request_target(request_target);
+            response_headers = javan_list_new_with_capacity(0, 0);
             request_body = content_length < 0
                 ? javan_socket_input_stream(socket_root)
                 : javan_socket_input_stream_with_limit(socket_root, content_length);
@@ -645,6 +648,7 @@ final class RuntimeSourceIoSections {
             exchange->request_uri = request_uri;
             exchange->request_headers = (javan_object_list*) request_headers;
             exchange->request_body = request_body;
+            exchange->response_headers = (javan_object_list*) response_headers;
             exchange->response_body = response_body;
             javan_update_runtime_allocation_kind((void*) exchange, JAVAN_RUNTIME_KIND_HTTP_EXCHANGE);
             javan_root_frame_pop(roots);
@@ -781,19 +785,55 @@ final class RuntimeSourceIoSections {
             if (exchange->closed != 0 || exchange->response_headers_sent != 0) {
                 javan_panic("http response headers already sent");
             }
-            char header[160];
-            int written = snprintf(
-                header,
-                sizeof(header),
-                "HTTP/1.1 %d OK\\r\\nContent-Length: %lld\\r\\nConnection: close\\r\\n\\r\\n",
-                status_code,
-                length
-            );
-            if (written < 0 || (unsigned long) written >= sizeof(header)) {
+            char status_line[64];
+            int status_written = snprintf(status_line, sizeof(status_line), "HTTP/1.1 %d OK\\r\\n", status_code);
+            if (status_written < 0 || (unsigned long) status_written >= sizeof(status_line)) {
                 javan_panic("http response header too large");
             }
+            javan_object_list* response_headers = exchange->response_headers;
+            unsigned long header_size = (unsigned long) status_written
+                + strlen("Content-Length: ") + 32UL
+                + strlen("Connection: close\\r\\n") + 2UL;
+            for (int index = 0; index + 1 < response_headers->length; index += 2) {
+                const char* name = (const char*) response_headers->values[index];
+                const char* header_value = (const char*) response_headers->values[index + 1];
+                javan_http_header_text_checked(name, "null http response header name");
+                javan_http_header_text_checked(header_value, "null http response header value");
+                header_size += strlen(name) + 2UL + strlen(header_value) + 2UL;
+            }
+            char* header = (char*) malloc(header_size + 1UL);
+            if (header == NULL) {
+                javan_panic("out of memory");
+            }
+            int written = snprintf(header, header_size + 1UL, "%s", status_line);
+            if (written < 0) {
+                free(header);
+                javan_panic("http response header format failed");
+            }
+            unsigned long offset = (unsigned long) written;
+            for (int index = 0; index + 1 < response_headers->length; index += 2) {
+                written = snprintf(
+                    header + offset,
+                    header_size + 1UL - offset,
+                    "%s: %s\\r\\n",
+                    (const char*) response_headers->values[index],
+                    (const char*) response_headers->values[index + 1]
+                );
+                if (written < 0) {
+                    free(header);
+                    javan_panic("http response header format failed");
+                }
+                offset += (unsigned long) written;
+            }
+            written = snprintf(header + offset, header_size + 1UL - offset, "Content-Length: %lld\\r\\nConnection: close\\r\\n\\r\\n", length);
+            if (written < 0) {
+                free(header);
+                javan_panic("http response header format failed");
+            }
+            offset += (unsigned long) written;
             javan_socket* socket = (javan_socket*) exchange->socket;
-            javan_http_send_all(socket->fd, header, (unsigned long) written);
+            javan_http_send_all(socket->fd, header, offset);
+            free(header);
             exchange->response_code = status_code;
             exchange->response_headers_sent = 1;
         }
@@ -810,6 +850,10 @@ final class RuntimeSourceIoSections {
             return (void*) javan_http_exchange_checked(value)->request_headers;
         }
 
+        void* javan_http_exchange_response_headers(void* value) {
+            return (void*) javan_http_exchange_checked(value)->response_headers;
+        }
+
         void* javan_http_headers_get_first(void* value, void* name_value) {
             javan_object_list* headers = javan_list_checked(value);
             if (name_value == NULL) {
@@ -822,6 +866,32 @@ final class RuntimeSourceIoSections {
                 }
             }
             return NULL;
+        }
+
+        void javan_http_headers_set(void* value, void* name_value, void* header_value) {
+            javan_object_list* headers = javan_list_checked(value);
+            javan_http_header_text_checked((const char*) name_value, "null http header name");
+            javan_http_header_text_checked((const char*) header_value, "null http header value");
+            void* headers_root = (void*) headers;
+            void* name_root = name_value;
+            void* header_root = header_value;
+            void** roots[] = {
+                (void**) &headers_root,
+                (void**) &name_root,
+                (void**) &header_root
+            };
+            javan_root_frame_push(roots, 3);
+            headers = (javan_object_list*) headers_root;
+            for (int index = 0; index + 1 < headers->length; index += 2) {
+                if (javan_http_header_name_equals((const char*) headers->values[index], (const char*) name_root)) {
+                    headers->values[index + 1] = header_root;
+                    javan_root_frame_pop(roots);
+                    return;
+                }
+            }
+            javan_list_append_raw(headers, name_root);
+            javan_list_append_raw(headers, header_root);
+            javan_root_frame_pop(roots);
         }
 
         void* javan_http_exchange_request_body(void* value) {
