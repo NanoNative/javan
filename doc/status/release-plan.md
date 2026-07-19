@@ -37,8 +37,8 @@ If they disagree, repair the disagreement before widening implementation.
 
 | Measure | Current value |
 | --- | ---: |
-| Release milestones fully closed | 1 / 10 = 10.0% |
-| Release milestones left to close | 9 / 10 = 90.0% |
+| Release milestones fully closed | 2 / 10 = 20.0% |
+| Release milestones left to close | 8 / 10 = 80.0% |
 | Remote Linux package rows proven | 2 / 2 = 100.0% |
 | Required local macOS package gate | proven locally |
 | Roadmap rows fully done | 4 / 38 = 10.5% |
@@ -62,6 +62,11 @@ If they disagree, repair the disagreement before widening implementation.
 R3 is closed: remote run `29663790338` passed Linux x64, Linux aarch64, and both
 Windows runtime lanes; the required local macOS aarch64 package gate and archive
 checksum also passed. macOS publication remains outside the first-release contract.
+
+R4 is closed: the local macOS package smoke used packaged `bin/javan` to rebuild
+Javan into a JAR and native binary, started the rebuilt binary with the package
+version, and passed the package-backed self-host sanitizer with zero final heap/root
+residue. The macOS leak-detection fallback also passed.
 
 ## Slice rules
 
