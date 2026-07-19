@@ -474,6 +474,7 @@ final class RuntimeHeaderFile {
         void javan_server_socket_close(void* value);
         void* javan_uri_create(void* value);
         void* javan_uri_get_path(void* value);
+        void* javan_uri_get_query(void* value);
         void* javan_http_client_new(void);
         void* javan_http_server_create(void* address, int backlog);
         void* javan_http_server_create_context(void* server, void* path, void* handler);

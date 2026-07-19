@@ -821,6 +821,7 @@ public final class JdkCallSupport {
         runtime("ServerSocket.close", "java/net/ServerSocket", "close", "()V"),
         runtime("URI.create", "java/net/URI", "create", "(Ljava/lang/String;)Ljava/net/URI;"),
         runtime("URI.getPath", "java/net/URI", "getPath", "()Ljava/lang/String;"),
+        runtime("URI.getQuery", "java/net/URI", "getQuery", "()Ljava/lang/String;"),
         runtime("HttpServer.create", "com/sun/net/httpserver/HttpServer", "create", "(Ljava/net/InetSocketAddress;I)Lcom/sun/net/httpserver/HttpServer;"),
         runtime("HttpServer.createContext", "com/sun/net/httpserver/HttpServer", "createContext", "(Ljava/lang/String;Lcom/sun/net/httpserver/HttpHandler;)Lcom/sun/net/httpserver/HttpContext;"),
         runtime("HttpServer.start", "com/sun/net/httpserver/HttpServer", "start", "()V"),

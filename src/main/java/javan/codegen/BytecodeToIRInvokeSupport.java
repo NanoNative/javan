@@ -983,6 +983,15 @@ final class BytecodeToIRInvokeSupport {
             )));
             return true;
         }
+        if ("java/net/URI".equals(methodRef.owner())
+            && "getQuery".equals(methodRef.name())
+            && "()Ljava/lang/String;".equals(methodRef.descriptor())) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_uri_get_query",
+                List.of(popObject(classFile, method, instruction, stack))
+            )));
+            return true;
+        }
         if ("java/net/http/HttpClient".equals(methodRef.owner())
             && "send".equals(methodRef.name())
             && "(Ljava/net/http/HttpRequest;Ljava/net/http/HttpResponse$BodyHandler;)Ljava/net/http/HttpResponse;".equals(methodRef.descriptor())) {

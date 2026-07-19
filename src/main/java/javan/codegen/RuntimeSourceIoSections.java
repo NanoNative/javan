@@ -298,6 +298,18 @@ final class RuntimeSourceIoSections {
             return javan_http_copy_range(uri->target, (unsigned long) (query - uri->target));
         }
 
+        void* javan_uri_get_query(void* value) {
+            javan_uri_value* uri = javan_uri_checked(value);
+            const char* query = strchr(uri->target, '?');
+            if (query == NULL) {
+                return NULL;
+            }
+            query++;
+            const char* fragment = strchr(query, '#');
+            const char* end = fragment == NULL ? query + strlen(query) : fragment;
+            return javan_http_copy_range(query, (unsigned long) (end - query));
+        }
+
         void* javan_http_client_new(void) {
             javan_http_client_value* client = (javan_http_client_value*) javan_alloc(sizeof(javan_http_client_value));
             client->magic = JAVAN_HTTP_CLIENT_MAGIC;
