@@ -473,6 +473,13 @@ final class RuntimeHeaderFile {
         void javan_server_socket_close(void* value);
         void* javan_uri_create(void* value);
         void* javan_http_client_new(void);
+        void* javan_http_server_create(void* address, int backlog);
+        void* javan_http_server_create_context(void* server, void* path, void* handler);
+        void javan_http_server_start(void* server);
+        void javan_http_server_stop(void* server, int delay_seconds);
+        void javan_http_exchange_send_response_headers(void* exchange, int status_code, long long length);
+        void* javan_http_exchange_response_body(void* exchange);
+        void javan_http_exchange_close(void* exchange);
         void* javan_http_request_builder_new(void* uri);
         void* javan_http_request_builder_get(void* value);
         void* javan_http_request_builder_header(void* value, void* name, void* header_value);
@@ -486,6 +493,7 @@ final class RuntimeHeaderFile {
         void* javan_http_client_send(void* client, void* request, void* body_handler);
         int javan_http_response_status_code(void* response);
         void* javan_http_response_body(void* response);
+        void javan_materialized_lambda_apply_void(void* self, void* arg);
         void* javan_optional_empty(void);
         void* javan_optional_of(void* value);
         void* javan_optional_of_nullable(void* value);

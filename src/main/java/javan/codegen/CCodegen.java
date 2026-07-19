@@ -92,11 +92,11 @@ public final class CCodegen {
             c.append(";").append(System.lineSeparator());
         }
         c.append("void javan_thread_run_target(void* target);").append(System.lineSeparator());
+        c.append("void ").append(MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
         if (!program.materializedLambdaTargets().isEmpty()) {
             c.append("static void* ").append(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
             c.append("static void* ").append(MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL).append("(void* self, void* first_arg, void* second_arg);").append(System.lineSeparator());
             c.append("static int ").append(MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
-            c.append("static void ").append(MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
             c.append("static void ").append(MATERIALIZED_LAMBDA_VOID2_APPLY_SYMBOL).append("(void* self, void* first_arg, void* second_arg);").append(System.lineSeparator());
         }
         c.append(System.lineSeparator());
@@ -169,11 +169,11 @@ public final class CCodegen {
             c.append(";").append(System.lineSeparator());
         }
         c.append("void javan_thread_run_target(void* target);").append(System.lineSeparator());
+        c.append("void ").append(MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
         if (!program.materializedLambdaTargets().isEmpty()) {
             c.append("static void* ").append(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
             c.append("static void* ").append(MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL).append("(void* self, void* first_arg, void* second_arg);").append(System.lineSeparator());
             c.append("static int ").append(MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
-            c.append("static void ").append(MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
             c.append("static void ").append(MATERIALIZED_LAMBDA_VOID2_APPLY_SYMBOL).append("(void* self, void* first_arg, void* second_arg);").append(System.lineSeparator());
         }
         c.append(System.lineSeparator());
@@ -753,9 +753,6 @@ public final class CCodegen {
     }
 
     private static void emitMaterializedLambdaHelpers(final IrProgram program, final StringBuilder c) {
-        if (program.materializedLambdaTargets().isEmpty()) {
-            return;
-        }
         c.append("static void* ").append(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL).append("(void* self, void* arg) {")
             .append(System.lineSeparator());
         c.append("    switch (javan_materialized_lambda_target_id(self)) {").append(System.lineSeparator());
@@ -813,7 +810,7 @@ public final class CCodegen {
         c.append("    return 0;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
 
-        c.append("static void ").append(MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL).append("(void* self, void* arg) {")
+        c.append("void ").append(MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL).append("(void* self, void* arg) {")
             .append(System.lineSeparator());
         c.append("    switch (javan_materialized_lambda_target_id(self)) {").append(System.lineSeparator());
         for (final IrMaterializedLambdaTarget target : program.materializedLambdaTargets()) {
