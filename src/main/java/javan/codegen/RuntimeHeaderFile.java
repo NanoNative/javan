@@ -496,6 +496,7 @@ final class RuntimeHeaderFile {
         void* javan_http_exchange_request_headers(void* exchange);
         void* javan_http_headers_get_first(void* headers, void* name);
         void* javan_http_headers_get(void* headers, void* name);
+        void* javan_http_headers_get_or_default(void* headers, void* name, void* default_value);
         void* javan_http_headers_key_set(void* headers);
         void* javan_http_headers_entry_set(void* headers);
         void* javan_http_headers_values(void* headers);

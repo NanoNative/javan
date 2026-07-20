@@ -3791,6 +3791,18 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                                 new java.util.ArrayList<String>(java.util.List.of("keep"))
                             )
                             && !exchange.getResponseHeaders().containsKey("X-Conditional");
+                        final java.util.List<String> presentDefault = (java.util.List<String>) exchange.getResponseHeaders().getOrDefault(
+                            "x-mode",
+                            new java.util.ArrayList<String>(java.util.List.of("fallback"))
+                        );
+                        final java.util.List<String> missingDefault = (java.util.List<String>) exchange.getResponseHeaders().getOrDefault(
+                            "X-missing",
+                            new java.util.ArrayList<String>(java.util.List.of("fallback"))
+                        );
+                        final boolean getOrDefaultExpected = presentDefault.size() == 1
+                            && "strict".equals(presentDefault.get(0))
+                            && missingDefault.size() == 1
+                            && "fallback".equals(missingDefault.get(0));
                         final boolean responseHeaderOk = removedExpected
                             && cleared
                             && putExpected
@@ -3805,7 +3817,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                             && liveEntryCleared
                             && entriesExpected
                             && putIfAbsentExpected
-                            && conditionalRemoveExpected;
+                            && conditionalRemoveExpected
+                            && getOrDefaultExpected;
                         exchange.getResponseHeaders().add("X-endpoint", exchangeAddressesExpected ? "yes" : "no");
                         exchange.getResponseHeaders().add("X-mode", responseHeaderOk ? "strict" : "bad");
                         final byte[] body = exchange.getResponseCode() == 200

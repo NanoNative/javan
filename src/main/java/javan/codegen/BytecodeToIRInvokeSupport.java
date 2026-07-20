@@ -1101,6 +1101,17 @@ final class BytecodeToIRInvokeSupport {
             return true;
         }
         if ("com/sun/net/httpserver/Headers".equals(methodRef.owner())
+            && "getOrDefault".equals(methodRef.name())
+            && "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(methodRef.descriptor())) {
+            final List<IrExpression> arguments = popArguments(classFile, method, stack, MethodDescriptor.parse(methodRef.descriptor()), instruction);
+            final IrExpression receiver = popObject(classFile, method, instruction, stack);
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                "javan_http_headers_get_or_default",
+                List.of(receiver, arguments.get(0), arguments.get(1))
+            )));
+            return true;
+        }
+        if ("com/sun/net/httpserver/Headers".equals(methodRef.owner())
             && "containsKey".equals(methodRef.name())
             && "(Ljava/lang/Object;)Z".equals(methodRef.descriptor())) {
             final IrExpression name = popObject(classFile, method, instruction, stack);

@@ -1525,6 +1525,11 @@ final class RuntimeSourceIoSections {
             return result_root;
         }
 
+        void* javan_http_headers_get_or_default(void* value, void* name_value, void* default_value) {
+            void* existing_root = javan_http_headers_get(value, name_value);
+            return existing_root == NULL ? default_value : existing_root;
+        }
+
         void* javan_http_headers_remove(void* value, void* name_value);
         int javan_http_headers_size(void* value);
         void* javan_http_headers_put(void* value, void* name_value, void* values_value);
