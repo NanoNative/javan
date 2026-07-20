@@ -76,6 +76,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_LIST_VIEW_UNMODIFIABLE 1
         #define JAVAN_LIST_VIEW_SET 2
         #define JAVAN_LIST_VIEW_HTTP_HEADERS_KEYS 4
+        #define JAVAN_LIST_VIEW_HTTP_HEADERS_VALUES 8
         #define JAVAN_MAP_VIEW_UNMODIFIABLE 1
         #define JAVAN_BUILTIN_INSTANCEOF_COLLECTION 1
         #define JAVAN_BUILTIN_INSTANCEOF_MAP 2
