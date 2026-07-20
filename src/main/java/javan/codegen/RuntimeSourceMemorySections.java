@@ -106,6 +106,7 @@ final class RuntimeSourceMemorySections {
 
         static int javan_http_headers_view_length(javan_object_list* view);
         static void* javan_http_headers_view_get(javan_object_list* view, int index);
+        static int javan_http_headers_view_contains(javan_object_list* view, void* element);
         static int javan_http_headers_view_remove(javan_object_list* view, void* element);
         static void javan_http_headers_view_clear(javan_object_list* view);
         static void* javan_http_headers_entry_set_value(void* owner, void* key, void* value);
@@ -8054,6 +8055,9 @@ final class RuntimeSourceMemorySections {
 
         int javan_list_contains(void* value, void* element) {
             javan_object_list* list = javan_list_checked(value);
+            if ((list->view_flags & (JAVAN_LIST_VIEW_HTTP_HEADERS_KEYS | JAVAN_LIST_VIEW_HTTP_HEADERS_VALUES | JAVAN_LIST_VIEW_HTTP_HEADERS_ENTRIES)) != 0) {
+                return javan_http_headers_view_contains(list, element);
+            }
             int length = javan_list_logical_length(list);
             for (int index = 0; index < length; index++) {
                 if (javan_object_equals(javan_list_get_unchecked(list, index), element) != 0) {

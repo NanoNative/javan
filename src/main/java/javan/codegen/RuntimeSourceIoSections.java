@@ -1351,6 +1351,38 @@ final class RuntimeSourceIoSections {
             return NULL;
         }
 
+        static int javan_http_headers_view_contains(javan_object_list* view, void* element) {
+            if (element == NULL) {
+                return 0;
+            }
+            int length = javan_http_headers_view_length(view);
+            for (int index = 0; index < length; index++) {
+                void* candidate = javan_http_headers_view_get(view, index);
+                if ((view->view_flags & JAVAN_LIST_VIEW_HTTP_HEADERS_ENTRIES) != 0) {
+                    javan_map_entry_state* left = javan_map_entry_checked(candidate);
+                    javan_map_entry_state* right = javan_map_entry_checked(element);
+                    javan_object_list* left_values = javan_list_checked(left->value);
+                    javan_object_list* right_values = javan_list_checked(right->value);
+                    if (javan_http_header_name_equals((const char*) left->key, (const char*) right->key)
+                        && left_values->length == right_values->length) {
+                        int matches = 1;
+                        for (int value_index = 0; value_index < left_values->length; value_index++) {
+                            if (javan_object_equals(left_values->values[value_index], right_values->values[value_index]) == 0) {
+                                matches = 0;
+                                break;
+                            }
+                        }
+                        if (matches != 0) {
+                            return 1;
+                        }
+                    }
+                } else if (javan_object_equals(candidate, element) != 0) {
+                    return 1;
+                }
+            }
+            return 0;
+        }
+
         static int javan_http_headers_view_remove(javan_object_list* view, void* element) {
             if (element == NULL) {
                 return 0;

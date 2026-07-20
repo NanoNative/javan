@@ -3662,6 +3662,7 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                                 modeEntry = entry;
                             }
                         }
+                        final boolean liveEntryContainsExpected = modeEntry != null && entries.contains(modeEntry);
                         final java.util.List<String> previousEntryValue = modeEntry == null
                             ? null
                             : modeEntry.setValue(new java.util.ArrayList<String>(java.util.List.of("updated")));
@@ -3700,6 +3701,7 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                             && viewsExpected
                             && liveValuesExpected
                             && liveViewExpected
+                            && liveEntryContainsExpected
                             && liveEntryValueExpected
                             && liveEntryRemoveExpected
                             && liveEntryCleared
