@@ -2055,6 +2055,143 @@ final class RuntimeSourceIoSections {
             return 0;
         }
 
+        static char* javan_http_decode_response_body(const char* response, unsigned long response_length, const char* body_start, unsigned long* body_length_out) {
+            unsigned long body_offset = (unsigned long) (body_start - response);
+            int chunked = 0;
+            long long content_length = -1;
+            const char* cursor = response;
+            while (cursor < body_start) {
+                const char* line_end = strstr(cursor, "\\r\\n");
+                if (line_end == NULL || line_end > body_start) {
+                    javan_panic("invalid http response header");
+                }
+                if (cursor == response) {
+                    cursor = line_end + 2;
+                    continue;
+                }
+                if (line_end == cursor) {
+                    cursor = line_end + 2;
+                    break;
+                }
+                const char* colon = strchr(cursor, ':');
+                if (colon == NULL || colon >= line_end) {
+                    javan_panic("invalid http response header");
+                }
+                unsigned long name_length = (unsigned long) (colon - cursor);
+                char name[64];
+                if (name_length == 0 || name_length >= sizeof(name)) {
+                    javan_panic("invalid http response header");
+                }
+                memcpy(name, cursor, name_length);
+                name[name_length] = '\\0';
+                const char* value = colon + 1;
+                while (value < line_end && (value[0] == ' ' || value[0] == '\\t')) {
+                    value++;
+                }
+                unsigned long value_length = (unsigned long) (line_end - value);
+                if (javan_http_header_name_equals(name, "Transfer-Encoding")) {
+                    if (value_length == 7 && strncasecmp(value, "chunked", 7) == 0) {
+                        chunked = 1;
+                    } else if (value_length != 8 || strncasecmp(value, "identity", 8) != 0) {
+                        javan_panic("unsupported http response transfer encoding");
+                    }
+                } else if (javan_http_header_name_equals(name, "Content-Length")) {
+                    char length_text[32];
+                    if (value_length == 0 || value_length >= sizeof(length_text)) {
+                        javan_panic("invalid http response content length");
+                    }
+                    memcpy(length_text, value, value_length);
+                    length_text[value_length] = '\\0';
+                    char* end = NULL;
+                    long long parsed = strtoll(length_text, &end, 10);
+                    if (end == length_text || end[0] != '\\0' || parsed < 0) {
+                        javan_panic("invalid http response content length");
+                    }
+                    if (content_length >= 0 && content_length != parsed) {
+                        javan_panic("conflicting http response content length");
+                    }
+                    content_length = parsed;
+                }
+                cursor = line_end + 2;
+            }
+            if (!chunked) {
+                unsigned long available = response_length - body_offset;
+                unsigned long length = content_length < 0 ? available : (unsigned long) content_length;
+                if (length > available || length > 16777216UL) {
+                    javan_panic("http response body too large or truncated");
+                }
+                char* body = (char*) malloc(length + 1UL);
+                if (body == NULL) {
+                    javan_panic("out of memory");
+                }
+                memcpy(body, body_start, length);
+                body[length] = '\\0';
+                *body_length_out = length;
+                return body;
+            }
+            unsigned long capacity = 1024;
+            unsigned long length = 0;
+            char* body = (char*) malloc(capacity + 1UL);
+            if (body == NULL) {
+                javan_panic("out of memory");
+            }
+            cursor = body_start;
+            while (1) {
+                const char* line_end = strstr(cursor, "\\r\\n");
+                if (line_end == NULL || line_end >= response + response_length) {
+                    free(body);
+                    javan_panic("truncated http response chunk");
+                }
+                char size_text[32];
+                unsigned long size_length = (unsigned long) (line_end - cursor);
+                const char* extension = memchr(cursor, ';', size_length);
+                if (extension != NULL) {
+                    size_length = (unsigned long) (extension - cursor);
+                }
+                if (size_length == 0 || size_length >= sizeof(size_text)) {
+                    free(body);
+                    javan_panic("invalid http response chunk size");
+                }
+                memcpy(size_text, cursor, size_length);
+                size_text[size_length] = '\\0';
+                char* end = NULL;
+                unsigned long chunk_size = strtoul(size_text, &end, 16);
+                if (end == size_text || end[0] != '\\0' || chunk_size > 16777216UL) {
+                    free(body);
+                    javan_panic("invalid http response chunk size");
+                }
+                cursor = line_end + 2;
+                if (chunk_size == 0) {
+                    break;
+                }
+                if ((unsigned long) (response + response_length - cursor) < chunk_size + 2UL
+                    || length > 16777216UL - chunk_size) {
+                    free(body);
+                    javan_panic("truncated http response chunk");
+                }
+                while (length + chunk_size > capacity) {
+                    capacity *= 2UL;
+                    char* next = (char*) realloc(body, capacity + 1UL);
+                    if (next == NULL) {
+                        free(body);
+                        javan_panic("out of memory");
+                    }
+                    body = next;
+                }
+                memcpy(body + length, cursor, chunk_size);
+                length += chunk_size;
+                cursor += chunk_size;
+                if (cursor[0] != '\\r' || cursor[1] != '\\n') {
+                    free(body);
+                    javan_panic("invalid http response chunk terminator");
+                }
+                cursor += 2;
+            }
+            body[length] = '\\0';
+            *body_length_out = length;
+            return body;
+        }
+
         static unsigned long javan_http_body_publisher_length(javan_http_body_publisher_value* publisher) {
             if (publisher == NULL) {
                 return 0;
@@ -2203,13 +2340,15 @@ final class RuntimeSourceIoSections {
             javan_socket_native_close(fd);
             const char* body_start = NULL;
             int status_code = javan_http_parse_status_code(response, response_length, &body_start);
-            unsigned long response_body_length = response_length - (unsigned long) (body_start - response);
+            unsigned long response_body_length = 0;
+            char* response_body = javan_http_decode_response_body(response, response_length, body_start, &response_body_length);
             void* body = NULL;
             if (body_handler->kind == JAVAN_HTTP_BODY_KIND_STRING) {
-                body = (void*) javan_http_copy_range(body_start, response_body_length);
+                body = (void*) javan_http_copy_range(response_body, response_body_length);
             } else {
-                body = javan_byte_array_from((const signed char*) body_start, (int) response_body_length);
+                body = javan_byte_array_from((const signed char*) response_body, (int) response_body_length);
             }
+            free(response_body);
             free(response);
             javan_http_response_value* http_response = (javan_http_response_value*) javan_alloc(sizeof(javan_http_response_value));
             void* response_root = (void*) http_response;

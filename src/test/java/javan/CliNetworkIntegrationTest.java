@@ -3319,6 +3319,76 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void httpClientChunkedResponseBuildsAndMatchesJvmOutput() throws Exception {
+        try (java.net.ServerSocket server = new java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
+                try {
+                    for (int connection = 0; connection < 2; connection++) {
+                        try (java.net.Socket socket = server.accept()) {
+                            final InputStream input = socket.getInputStream();
+                            int matched = 0;
+                            while (matched < 4) {
+                                final int next = input.read();
+                                if (next < 0) {
+                                    break;
+                                }
+                                final int expected = matched == 0 || matched == 2 ? '\r' : '\n';
+                                matched = next == expected
+                                    ? matched + 1
+                                    : (next == '\r' ? 1 : 0);
+                            }
+                            socket.getOutputStream().write(new byte[] {
+                                'H', 'T', 'T', 'P', '/', '1', '.', '1', ' ', '2', '0', '0', ' ', 'O', 'K', '\r', '\n',
+                                'T', 'r', 'a', 'n', 's', 'f', 'e', 'r', '-', 'E', 'n', 'c', 'o', 'd', 'i', 'n', 'g', ':', ' ', 'c', 'h', 'u', 'n', 'k', 'e', 'd', '\r', '\n',
+                                'C', 'o', 'n', 'n', 'e', 'c', 't', 'i', 'o', 'n', ':', ' ', 'c', 'l', 'o', 's', 'e', '\r', '\n', '\r', '\n',
+                                '7', '\r', '\n', 'c', 'h', 'u', 'n', 'k', 'e', 'd', '\r', '\n', '0', '\r', '\n', '\r', '\n'
+                            });
+                            socket.getOutputStream().flush();
+                        }
+                    }
+                } catch (final Exception exception) {
+                    throw new IllegalStateException(exception);
+                }
+            });
+            final int port = server.getLocalPort();
+            final Path project = project("http-client-chunked-response");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.net.URI;
+                import java.net.http.HttpClient;
+                import java.net.http.HttpRequest;
+                import java.net.http.HttpResponse;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final HttpRequest request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:%d/chunked")).GET().build();
+                        final HttpResponse<String> response = HttpClient.newHttpClient().send(
+                            request,
+                            HttpResponse.BodyHandlers.ofString()
+                        );
+                        System.out.println(response.statusCode());
+                        System.out.println(response.body());
+                    }
+                }
+                """.formatted(port));
+
+            final String jvmOutput = runJvm(project, "com.acme.Main");
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            final ProcessResult nativeResult = process(project, List.of(project.resolve(".javan/bin/http-client-chunked-response").toString()));
+            assertThat(nativeResult.exitCode()).as(nativeResult.stderr()).isZero();
+            assertThat(nativeResult.stdout())
+                .isEqualTo(jvmOutput);
+            accepted.join();
+        }
+    }
+
+    @Test
     void httpClientPostStringAndReadByteArrayBuildsAndMatchesJvmOutput() throws Exception {
         final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
             new java.net.InetSocketAddress("127.0.0.1", 0),
