@@ -4532,7 +4532,7 @@ final class RuntimeFilesTest {
             "javan_http_body_publisher_length",
             "javan_http_body_publisher_bytes",
             "Content-Length: %lu\\r\\n",
-            "javan_byte_array_from((const signed char*) body_start, (int) response_body_length);"
+            "javan_byte_array_from((const signed char*) response_body, (int) response_body_length);"
         );
     }
 

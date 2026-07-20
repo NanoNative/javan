@@ -1083,8 +1083,8 @@ final class CliRuntimeFeatureIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void checkRejectsReachableExternalHttpServerDependencyAndReportsHttpRuntimeModules() throws Exception {
-        final Path project = project("unsupported-external-http-server-dependency");
+    void checkAcceptsReachableHttpServerDependencyWrapperAndReportsHttpRuntimeModules() throws Exception {
+        final Path project = project("http-server-dependency-wrapper");
         writeJava(project, "com.acme.Main", """
             package com.acme;
 
@@ -1112,14 +1112,8 @@ final class CliRuntimeFeatureIntegrationTest extends CliIntegrationSupport {
 
         final CliRun run = run(tempDir, "check", project.toString());
 
-        assertThat(run.exitCode()).isEqualTo(2);
-        assertThat(run.stderr()).contains(
-            "error[JAVAN061]",
-            "com/thirdparty/http/HttpServer",
-            "create()Lcom/sun/net/httpserver/HttpServer;",
-            "com/sun/net/httpserver/HttpServer.create",
-            "network/http"
-        );
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stderr()).isEmpty();
         assertThat(Files.readString(project.resolve(".javan/reports/runtime-features.json"))).contains(
             "\"reachableRuntimeModules\": [\"core\", \"http\", \"network\"]",
             "\"status\": \"pass\""

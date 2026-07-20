@@ -2,6 +2,15 @@ package javan.codegen;
 
 final class RuntimeSourceIoSections {
     private static final String SOURCE_HTTP = """
+        #if defined(__GNUC__) || defined(__clang__)
+        __attribute__((weak))
+        #endif
+        void javan_materialized_lambda_apply_void(void* self, void* arg) {
+            (void) self;
+            (void) arg;
+            javan_panic("materialized lambda dispatch is unavailable in a runtime-only probe");
+        }
+
         void* javan_server_socket_accept_http(void* value) {
         #if defined(_WIN32)
             (void) value;
@@ -161,7 +170,7 @@ final class RuntimeSourceIoSections {
         static int javan_socket_input_stream_read_wire_byte(javan_socket* socket) {
             javan_socket_wait_readable(socket->fd, socket->so_timeout, "socket read timed out", "socket read wait failed");
             unsigned char byte = 0;
-            ssize_t result = recv(socket->fd, &byte, 1, 0);
+            ssize_t result = recv(socket->fd, (char*) &byte, 1, 0);
             if (result < 0) {
                 if (errno == EAGAIN || errno == EWOULDBLOCK) {
                     javan_panic("socket read timed out");
@@ -250,7 +259,7 @@ final class RuntimeSourceIoSections {
             return 1;
         }
 
-        int javan_socket_input_stream_read_chunked_bytes(void* stream_value, unsigned char* destination, int length) {
+        int javan_socket_input_stream_read_chunked_bytes(void* stream_value, signed char* destination, int length) {
             javan_socket_input_stream_value* stream = javan_socket_input_stream_checked(stream_value);
             if (length <= 0) {
                 return 0;
@@ -266,7 +275,7 @@ final class RuntimeSourceIoSections {
             javan_socket* socket = javan_socket_open_checked((void*) stream->socket);
             int requested = stream->reserved1 < length ? stream->reserved1 : length;
             javan_socket_wait_readable(socket->fd, socket->so_timeout, "socket read timed out", "socket read wait failed");
-            ssize_t result = recv(socket->fd, destination, (size_t) requested, 0);
+            ssize_t result = recv(socket->fd, (char*) destination, (size_t) requested, 0);
             if (result < 0) {
                 if (errno == EAGAIN || errno == EWOULDBLOCK) {
                     javan_panic("socket read timed out");
