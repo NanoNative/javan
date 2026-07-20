@@ -3634,7 +3634,7 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                         final java.util.Set<String> keys = exchange.getResponseHeaders().keySet();
                         final java.util.Collection<java.util.List<String>> values = exchange.getResponseHeaders().values();
                         final boolean viewsExpected = keys.size() == 2
-                            && keys.contains("X-mode")
+                            && keys.contains("x-mode")
                             && keys.contains("X-extra")
                             && values.size() == 2
                             && values.contains(java.util.List.of("strict"))

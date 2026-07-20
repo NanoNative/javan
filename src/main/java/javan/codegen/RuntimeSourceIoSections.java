@@ -1376,8 +1376,26 @@ final class RuntimeSourceIoSections {
                             return 1;
                         }
                     }
-                } else if (javan_object_equals(candidate, element) != 0) {
-                    return 1;
+                } else if ((view->view_flags & JAVAN_LIST_VIEW_HTTP_HEADERS_KEYS) != 0) {
+                    if (javan_http_header_name_equals((const char*) candidate, (const char*) element) != 0) {
+                        return 1;
+                    }
+                } else {
+                    javan_object_list* left_values = javan_list_checked(candidate);
+                    javan_object_list* right_values = javan_list_checked(element);
+                    if (left_values->length != right_values->length) {
+                        continue;
+                    }
+                    int matches = 1;
+                    for (int value_index = 0; value_index < left_values->length; value_index++) {
+                        if (javan_object_equals(left_values->values[value_index], right_values->values[value_index]) == 0) {
+                            matches = 0;
+                            break;
+                        }
+                    }
+                    if (matches != 0) {
+                        return 1;
+                    }
                 }
             }
             return 0;
