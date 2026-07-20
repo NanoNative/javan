@@ -1407,6 +1407,10 @@ final class BytecodeToIRInvokeSupport {
                 }
             }
             if (receiver.kind() == StackKind.RESOURCE_INPUT_STREAM) {
+                if ("available".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
+                    stack.add(StackValue.intExpression(IrExpression.intCall("javan_resource_input_stream_available", List.of(receiver.expression().orElseThrow()))));
+                    return true;
+                }
                 if ("read".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
                     stack.add(StackValue.intExpression(IrExpression.intCall("javan_resource_input_stream_read", List.of(receiver.expression().orElseThrow()))));
                     return true;

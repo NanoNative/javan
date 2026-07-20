@@ -234,6 +234,11 @@ final class RuntimeSourceResourceSection {
                 return result;
             }
 
+            int javan_resource_input_stream_available(void* value) {
+                javan_resource_input_stream_value* stream = javan_resource_input_stream_checked(value);
+                return stream->length - stream->position;
+            }
+
             void javan_resource_input_stream_close(void* value) {
                 (void) value;
             }
