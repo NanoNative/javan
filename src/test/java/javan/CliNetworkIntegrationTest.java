@@ -3679,6 +3679,19 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                             "X-mode",
                             new java.util.ArrayList<String>(java.util.List.of("strict"))
                         );
+                        exchange.getResponseHeaders().add("X-entry-clear", "temporary");
+                        final boolean liveEntryClearExpected = entries.size() == 3;
+                        entries.clear();
+                        final boolean liveEntryCleared = liveEntryClearExpected
+                            && exchange.getResponseHeaders().isEmpty();
+                        exchange.getResponseHeaders().put(
+                            "X-mode",
+                            new java.util.ArrayList<String>(java.util.List.of("strict"))
+                        );
+                        exchange.getResponseHeaders().put(
+                            "X-extra",
+                            new java.util.ArrayList<String>(java.util.List.of("added"))
+                        );
                         final boolean responseHeaderOk = removedExpected
                             && cleared
                             && putExpected
@@ -3689,6 +3702,7 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                             && liveViewExpected
                             && liveEntryValueExpected
                             && liveEntryRemoveExpected
+                            && liveEntryCleared
                             && entriesExpected;
                         exchange.getResponseHeaders().add("X-endpoint", exchangeAddressesExpected ? "yes" : "no");
                         exchange.getResponseHeaders().add("X-mode", responseHeaderOk ? "strict" : "bad");
