@@ -4629,6 +4629,20 @@ final class BytecodeToIRInvokeSupport {
             );
             return true;
         }
+        if (isSupportedHeadersComputeOwner(methodRef)) {
+            lowerHeadersComputeCall(
+                classes,
+                classFile,
+                method,
+                instruction,
+                dispatches,
+                materializedLambdaMethods,
+                instructions,
+                stack,
+                localDeclarations
+            );
+            return true;
+        }
         if ((!isJdkCollectionOwner(methodRef.owner()) && !"java/lang/CharSequence".equals(methodRef.owner()))
             || !JdkCallSupport.isSupported(methodRef)) {
             return false;
@@ -4732,6 +4746,12 @@ final class BytecodeToIRInvokeSupport {
             && "(Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;".equals(methodRef.descriptor());
     }
 
+    private static boolean isSupportedHeadersComputeOwner(final MethodRef methodRef) {
+        return "com/sun/net/httpserver/Headers".equals(methodRef.owner())
+            && "compute".equals(methodRef.name())
+            && "(Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;".equals(methodRef.descriptor());
+    }
+
     private static void lowerHeadersComputeIfAbsentLambdaCall(
         final ClassFile classFile,
         final MethodInfo method,
@@ -4831,6 +4851,66 @@ final class BytecodeToIRInvokeSupport {
         instructions.add(IrInstruction.label(removeLabel));
         instructions.add(IrInstruction.callStaticVoid("javan_http_headers_remove", List.of(receiver, key)));
         instructions.add(IrInstruction.assignObject(resultLocal, IrExpression.objectNull()));
+        instructions.add(IrInstruction.label(endLabel));
+        stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
+    }
+
+    private static void lowerHeadersComputeCall(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final Map<String, IrDispatch> dispatches,
+        final Map<MethodRef, MaterializedLambdaDispatchKind> materializedLambdaMethods,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations
+    ) {
+        final IrExpression biFunction = popObject(classFile, method, instruction, stack);
+        final IrExpression key = popObject(classFile, method, instruction, stack);
+        final IrExpression receiver = popObject(classFile, method, instruction, stack);
+        final String existingLocal = newObjectLocal(localDeclarations);
+        final String hasKeyLocal = newIntLocal(localDeclarations);
+        final String resultLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(existingLocal, IrExpression.objectCall("javan_http_headers_get", List.of(receiver, key))));
+        instructions.add(IrInstruction.assignInt(hasKeyLocal, IrExpression.intCall("javan_http_headers_contains_key", List.of(receiver, key))));
+        final String computedLocal = newObjectLocal(localDeclarations);
+        lowerBiFunctionApplyCall(
+            classes,
+            classFile,
+            method,
+            instruction,
+            instructions,
+            dispatches,
+            materializedLambdaMethods,
+            biFunction,
+            key,
+            IrExpression.objectLocal(existingLocal),
+            computedLocal
+        );
+        final String storeLabel = "label_http_headers_compute_store_" + instruction.offset() + "_" + localDeclarations.size();
+        final String removeLabel = "label_http_headers_compute_remove_" + instruction.offset() + "_" + localDeclarations.size();
+        final String endLabel = "label_http_headers_compute_end_" + instruction.offset() + "_" + localDeclarations.size();
+        instructions.add(IrInstruction.branchIf(
+            storeLabel,
+            IrExpression.objectComparison("!=", IrExpression.objectLocal(computedLocal), IrExpression.objectNull())
+        ));
+        instructions.add(IrInstruction.assignObject(resultLocal, IrExpression.objectNull()));
+        instructions.add(IrInstruction.branchIf(
+            removeLabel,
+            IrExpression.objectComparison("!=", IrExpression.objectLocal(existingLocal), IrExpression.objectNull())
+        ));
+        instructions.add(IrInstruction.branchIf(
+            removeLabel,
+            IrExpression.intComparison("!=", IrExpression.intLocal(hasKeyLocal), IrExpression.intLiteral(0))
+        ));
+        instructions.add(IrInstruction.jump(endLabel));
+        instructions.add(IrInstruction.label(storeLabel));
+        instructions.add(IrInstruction.callStaticVoid("javan_http_headers_put", List.of(receiver, key, IrExpression.objectLocal(computedLocal))));
+        instructions.add(IrInstruction.assignObject(resultLocal, IrExpression.objectLocal(computedLocal)));
+        instructions.add(IrInstruction.jump(endLabel));
+        instructions.add(IrInstruction.label(removeLabel));
+        instructions.add(IrInstruction.callStaticVoid("javan_http_headers_remove", List.of(receiver, key)));
         instructions.add(IrInstruction.label(endLabel));
         stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
     }

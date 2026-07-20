@@ -3858,6 +3858,20 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                             && "computed-present".equals(computedPresentValue.get(0))
                             && computedMissingValue == null
                             && !exchange.getResponseHeaders().containsKey("X-missing");
+                        final java.util.List<String> computedValue = (java.util.List<String>) exchange.getResponseHeaders().compute(
+                            "x-mode",
+                            (key, value) -> new java.util.ArrayList<String>(java.util.List.of("computed-value"))
+                        );
+                        final java.util.List<String> computedMissing = (java.util.List<String>) exchange.getResponseHeaders().compute(
+                            "X-computed-missing",
+                            (key, value) -> new java.util.ArrayList<String>(java.util.List.of("computed-missing"))
+                        );
+                        final boolean computeExpected = computedValue != null
+                            && computedValue.size() == 1
+                            && "computed-value".equals(computedValue.get(0))
+                            && computedMissing != null
+                            && "computed-missing".equals(computedMissing.get(0));
+                        exchange.getResponseHeaders().remove("X-computed-missing");
                         final boolean responseHeaderOk = removedExpected
                             && cleared
                             && putExpected
@@ -3877,7 +3891,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                             && replaceExpected
                             && conditionalReplaceExpected
                             && computeIfAbsentExpected
-                            && computeIfPresentExpected;
+                            && computeIfPresentExpected
+                            && computeExpected;
                         exchange.getResponseHeaders().add("X-endpoint", exchangeAddressesExpected ? "yes" : "no");
                         exchange.getResponseHeaders().add("X-mode", responseHeaderOk ? "strict" : "bad");
                         final byte[] body = exchange.getResponseCode() == 200
