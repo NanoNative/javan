@@ -822,6 +822,38 @@ final class RuntimeSourceIoSections {
             return server_root;
         }
 
+        void javan_http_server_remove_context(void* server_value, void* path_value) {
+            void* server_root = server_value;
+            void* path_root = path_value;
+            void** roots[] = {
+                (void**) &server_root,
+                (void**) &path_root
+            };
+            javan_root_frame_push(roots, 2);
+            javan_http_server_value* server = javan_http_server_checked(server_root);
+            javan_objects_require_non_null_msg(path_root, "null http context path");
+            if (server->started != 0) {
+                javan_root_frame_pop(roots);
+                javan_panic("cannot remove http context after server start");
+            }
+            for (int index = 0; index + 1 < server->contexts->length; index += 2) {
+                if (javan_object_equals(server->contexts->values[index], path_root) != 0) {
+                    memmove(
+                        server->contexts->values + index,
+                        server->contexts->values + index + 2,
+                        (unsigned long) (server->contexts->length - index - 2) * sizeof(void*)
+                    );
+                    server->contexts->length -= 2;
+                    server->contexts->values[server->contexts->length] = NULL;
+                    server->contexts->values[server->contexts->length + 1] = NULL;
+                    javan_root_frame_pop(roots);
+                    return;
+                }
+            }
+            javan_root_frame_pop(roots);
+            javan_panic("http context not found");
+        }
+
         void* javan_http_server_get_address(void* value) {
             javan_http_server_value* server = javan_http_server_checked(value);
             return javan_server_socket_get_local_socket_address(server->server_socket);
@@ -1063,7 +1095,7 @@ final class RuntimeSourceIoSections {
                 }
                 handler_root = javan_http_server_find_handler(server, request_target);
                 if (handler_root == NULL) {
-                    const char* response = "HTTP/1.1 404 Not Found\\r\\nContent-Length: 0\\r\\nConnection: close\\r\\n\\r\\n";
+                    const char* response = "HTTP/1.1 404 Not Found\\r\\nContent-Length: 50\\r\\nConnection: close\\r\\n\\r\\n<h1>404 Not Found</h1>No context found for request";
                     javan_http_send_all(((javan_socket*) socket_root)->fd, response, strlen(response));
                     javan_socket_close(socket_root);
                     socket_root = NULL;

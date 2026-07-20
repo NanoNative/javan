@@ -919,6 +919,13 @@ final class BytecodeToIRInvokeSupport {
                 pushObjectCall(instructions, stack, localDeclarations, "javan_http_server_create_context", callArguments);
                 return true;
             }
+            if ("removeContext".equals(methodRef.name())
+                && "(Ljava/lang/String;)V".equals(methodRef.descriptor())) {
+                final IrExpression path = popObject(classFile, method, instruction, stack);
+                final IrExpression receiver = popObject(classFile, method, instruction, stack);
+                instructions.add(IrInstruction.callStaticVoid("javan_http_server_remove_context", List.of(receiver, path)));
+                return true;
+            }
             if ("start".equals(methodRef.name()) && "()V".equals(methodRef.descriptor())) {
                 instructions.add(IrInstruction.callStaticVoid(
                     "javan_http_server_start",

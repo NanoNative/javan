@@ -4024,19 +4024,28 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                         exchange.getResponseBody().write(body);
                         exchange.close();
                     });
+                    server.removeContext("/api");
                     server.start();
+                    final HttpResponse<String> removedResponse = HttpClient.newHttpClient().send(
+                        HttpRequest.newBuilder(URI.create("http://127.0.0.1:%d/api"))
+                            .GET()
+                            .build(),
+                        HttpResponse.BodyHandlers.ofString()
+                    );
                     final HttpResponse<String> response = HttpClient.newHttpClient().send(
                         HttpRequest.newBuilder(URI.create("http://127.0.0.1:%d/hello"))
                             .GET()
                             .build(),
                         HttpResponse.BodyHandlers.ofString()
                     );
+                    System.out.println(removedResponse.statusCode());
+                    System.out.println(removedResponse.body());
                     System.out.println(response.statusCode());
                     System.out.println(response.body());
                     server.stop(0);
                 }
             }
-            """.formatted(port, port));
+            """.formatted(port, port, port));
 
         final String jvmOutput = runJvm(project, "com.acme.Main");
         final CliRun run = run(tempDir, "build", project.toString());

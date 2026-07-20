@@ -41,7 +41,7 @@ If they disagree, repair the disagreement before widening implementation.
 | Release milestones left to close | 0 / 10 = 0.0% |
 | Remote Linux package rows proven | 2 / 2 = 100.0% |
 | Required local macOS package gate | proven locally |
-| Roadmap rows fully done | 28 / 38 = 73.7% |
+| Roadmap rows fully done | 29 / 38 = 76.3% |
 | Named support scenarios | 300 / 300 = 100.0% |
 
 ## Milestones
