@@ -140,7 +140,7 @@ final class RuntimeSourceResourceSection {
                 stream->magic = JAVAN_RESOURCE_INPUT_STREAM_MAGIC;
                 stream->position = 0;
                 stream->length = resource->length;
-                stream->reserved0 = 0;
+                stream->reserved0 = -1;
                 stream->bytes = bytes_root;
                 javan_update_runtime_allocation_kind(stream_root, JAVAN_RUNTIME_KIND_RESOURCE_INPUT_STREAM);
                 javan_root_frame_pop(roots);
@@ -290,6 +290,25 @@ final class RuntimeSourceResourceSection {
                 long long skipped = requested < remaining ? requested : remaining;
                 stream->position += (int) skipped;
                 return skipped;
+            }
+
+            int javan_resource_input_stream_mark_supported(void* value) {
+                javan_resource_input_stream_checked(value);
+                return 1;
+            }
+
+            void javan_resource_input_stream_mark(void* value, int limit) {
+                (void) limit;
+                javan_resource_input_stream_value* stream = javan_resource_input_stream_checked(value);
+                stream->reserved0 = stream->position;
+            }
+
+            void javan_resource_input_stream_reset(void* value) {
+                javan_resource_input_stream_value* stream = javan_resource_input_stream_checked(value);
+                if (stream->reserved0 < 0) {
+                    javan_panic("resource input stream has no mark");
+                }
+                stream->position = stream->reserved0;
             }
 
             void javan_resource_input_stream_close(void* value) {

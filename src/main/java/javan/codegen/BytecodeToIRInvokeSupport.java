@@ -1432,6 +1432,18 @@ final class BytecodeToIRInvokeSupport {
                     )));
                     return true;
                 }
+                if ("markSupported".equals(methodRef.name()) && "()Z".equals(methodRef.descriptor())) {
+                    stack.add(StackValue.intExpression(IrExpression.intCall("javan_resource_input_stream_mark_supported", List.of(receiver.expression().orElseThrow()))));
+                    return true;
+                }
+                if ("mark".equals(methodRef.name()) && "(I)V".equals(methodRef.descriptor())) {
+                    instructions.add(IrInstruction.callStaticVoid("javan_resource_input_stream_mark", List.of(receiver.expression().orElseThrow(), arguments.getFirst())));
+                    return true;
+                }
+                if ("reset".equals(methodRef.name()) && "()V".equals(methodRef.descriptor())) {
+                    instructions.add(IrInstruction.callStaticVoid("javan_resource_input_stream_reset", List.of(receiver.expression().orElseThrow())));
+                    return true;
+                }
                 if ("read".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
                     stack.add(StackValue.intExpression(IrExpression.intCall("javan_resource_input_stream_read", List.of(receiver.expression().orElseThrow()))));
                     return true;

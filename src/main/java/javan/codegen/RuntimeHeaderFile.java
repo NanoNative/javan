@@ -448,6 +448,9 @@ final class RuntimeHeaderFile {
         int javan_resource_input_stream_read_n_bytes_into(void* value, void* bytes, int offset, int length);
         int javan_resource_input_stream_available(void* value);
         long long javan_resource_input_stream_skip(void* value, long long requested);
+        int javan_resource_input_stream_mark_supported(void* value);
+        void javan_resource_input_stream_mark(void* value, int limit);
+        void javan_resource_input_stream_reset(void* value);
         void javan_socket_shutdown_input(void* value);
         void javan_socket_input_stream_close(void* value);
         void javan_resource_input_stream_close(void* value);

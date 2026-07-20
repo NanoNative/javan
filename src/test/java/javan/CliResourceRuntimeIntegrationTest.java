@@ -185,12 +185,17 @@ final class CliResourceRuntimeIntegrationTest extends CliIntegrationSupport {
                     System.out.println(stream.available());
                     System.out.println(stream.skip(1));
                     System.out.println(stream.available());
+                    System.out.println(stream.markSupported());
+                    stream.mark(8);
                     final byte[] prefix = stream.readNBytes(1);
+                    stream.reset();
+                    final byte[] resetPrefix = stream.readNBytes(1);
                     final byte[] target = new byte[4];
                     final int count = stream.readNBytes(target, 1, 3);
                     System.out.println(loader != null);
                     System.out.println(prefix.length);
                     System.out.println(prefix[0]);
+                    System.out.println(resetPrefix[0]);
                     System.out.println(count);
                     System.out.println(target[1]);
                     System.out.println(stream.readNBytes(1).length);
@@ -205,7 +210,7 @@ final class CliResourceRuntimeIntegrationTest extends CliIntegrationSupport {
 
         assertThat(run.exitCode()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/resource-loader-instance").toString())).stdout()).isEqualTo(jvmOutput);
-        assertThat(jvmOutput).isEqualTo("3\n1\n2\ntrue\n1\n101\n1\n121\n0\n");
+        assertThat(jvmOutput).isEqualTo("3\n1\n2\ntrue\ntrue\n1\n101\n101\n1\n121\n0\n");
     }
 
     @Test
