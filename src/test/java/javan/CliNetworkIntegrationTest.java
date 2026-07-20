@@ -3763,6 +3763,20 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                             "X-extra",
                             new java.util.ArrayList<String>(java.util.List.of("added"))
                         );
+                        final java.util.List<String> absentPut = (java.util.List<String>) exchange.getResponseHeaders().putIfAbsent(
+                            "X-put-if-absent",
+                            new java.util.ArrayList<String>(java.util.List.of("first"))
+                        );
+                        final java.util.List<String> presentPut = (java.util.List<String>) exchange.getResponseHeaders().putIfAbsent(
+                            "x-mode",
+                            new java.util.ArrayList<String>(java.util.List.of("replacement"))
+                        );
+                        final boolean putIfAbsentExpected = absentPut == null
+                            && presentPut != null
+                            && presentPut.size() == 1
+                            && "strict".equals(presentPut.get(0))
+                            && "first".equals(exchange.getResponseHeaders().getFirst("X-put-if-absent"));
+                        exchange.getResponseHeaders().remove("X-put-if-absent");
                         final boolean responseHeaderOk = removedExpected
                             && cleared
                             && putExpected
@@ -3775,7 +3789,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                             && liveEntryValueExpected
                             && liveEntryRemoveExpected
                             && liveEntryCleared
-                            && entriesExpected;
+                            && entriesExpected
+                            && putIfAbsentExpected;
                         exchange.getResponseHeaders().add("X-endpoint", exchangeAddressesExpected ? "yes" : "no");
                         exchange.getResponseHeaders().add("X-mode", responseHeaderOk ? "strict" : "bad");
                         final byte[] body = exchange.getResponseCode() == 200
