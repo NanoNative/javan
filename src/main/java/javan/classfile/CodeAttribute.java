@@ -70,12 +70,23 @@ public record CodeAttribute(
      * @return matching line when a LineNumberTable exists
      */
     public Optional<Integer> lineForOffset(final int bytecodeOffset) {
-        Optional<Integer> result = Optional.empty();
+        final int line = lineNumberForOffset(bytecodeOffset);
+        return line < 0 ? Optional.empty() : Optional.of(line);
+    }
+
+    /**
+     * Returns the source line active at a bytecode offset without allocating an optional.
+     *
+     * @param bytecodeOffset bytecode offset
+     * @return matching line, or {@code -1} when no line metadata exists
+     */
+    public int lineNumberForOffset(final int bytecodeOffset) {
+        int result = -1;
         for (final LineNumberEntry entry : lineNumbers) {
             if (entry.startPc() > bytecodeOffset) {
                 break;
             }
-            result = Optional.of(entry.line());
+            result = entry.line();
         }
         return result;
     }

@@ -86,7 +86,10 @@ final class BytecodeToIRControlFlowSupport {
         final Optional<CodeAttribute> code = method.code();
         Optional<Integer> lineNumber = Optional.empty();
         if (code.isPresent()) {
-            lineNumber = code.orElseThrow().lineForOffset(instruction.offset());
+            final int line = code.orElseThrow().lineNumberForOffset(instruction.offset());
+            if (line >= 0) {
+                lineNumber = Optional.of(line);
+            }
         }
         final Optional<String> sourceFile = sourceFile(classFile);
         return new IrSourceLocation(

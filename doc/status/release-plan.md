@@ -66,7 +66,11 @@ checksum also passed. macOS publication remains outside the first-release contra
 R4 is closed: the local macOS package smoke used packaged `bin/javan` to rebuild
 Javan into a JAR and native binary, started the rebuilt binary with the package
 version, and passed the package-backed self-host sanitizer with zero final heap/root
-residue. The macOS leak-detection fallback also passed.
+residue. The macOS leak-detection fallback also passed. The current branch additionally
+revalidated the native bootstrap -> rebuilt -> verified self-host chain through
+`JAVAN_BUILD_REUSE_TARGET=true sh scripts/build.sh target/.javan/bin/javan-optimized-selfhost`;
+the verified binary completed its `--version` smoke after the metadata-sort and source-line
+lowering optimizations.
 
 R5 is closed: the full local macOS sanitizer suite passed generated-app, root/GC,
 native-library, and allocation-pressure probes. Native-library ownership proof

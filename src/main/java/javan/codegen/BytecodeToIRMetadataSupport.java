@@ -34,25 +34,70 @@ final class BytecodeToIRMetadataSupport {
         return List.copyOf(result);
     }
     static List<EntryPoint> sortedEntryPoints(final List<EntryPoint> entries) {
-        final List<EntryPoint> result = new ArrayList<>();
+        final List<EntryPoint> result = new ArrayList<>(entries);
+        final List<String> symbols = new ArrayList<>();
         for (final EntryPoint entry : entries) {
-            int index = 0;
-            final String value = symbol(entry);
-            while (index < result.size() && Strings2.compareAscii(symbol(result.get(index)), value) <= 0) {
-                index++;
+            symbols.add(symbol(entry));
+        }
+        int width = 1;
+        while (width < result.size()) {
+            int left = 0;
+            while (left < result.size()) {
+                final int middle = Math.min(left + width, result.size());
+                final int right = Math.min(left + (width * 2), result.size());
+                final List<EntryPoint> mergedEntries = new ArrayList<>();
+                final List<String> mergedSymbols = new ArrayList<>();
+                int first = left;
+                int second = middle;
+                while (first < middle || second < right) {
+                    if (second >= right
+                        || (first < middle && Strings2.compareAscii(symbols.get(first), symbols.get(second)) <= 0)) {
+                        mergedEntries.add(result.get(first));
+                        mergedSymbols.add(symbols.get(first));
+                        first++;
+                    } else {
+                        mergedEntries.add(result.get(second));
+                        mergedSymbols.add(symbols.get(second));
+                        second++;
+                    }
+                }
+                for (int index = 0; index < mergedEntries.size(); index++) {
+                    result.set(left + index, mergedEntries.get(index));
+                    symbols.set(left + index, mergedSymbols.get(index));
+                }
+                left += width * 2;
             }
-            result.add(index, entry);
+            width *= 2;
         }
         return List.copyOf(result);
     }
     static List<ClassFile> sortedClasses(final Map<String, ClassFile> classes) {
-        final List<ClassFile> result = new ArrayList<>();
-        for (final ClassFile classFile : classes.values()) {
-            int index = 0;
-            while (index < result.size() && Strings2.compareAscii(result.get(index).name(), classFile.name()) <= 0) {
-                index++;
+        final List<ClassFile> result = new ArrayList<>(classes.values());
+        int width = 1;
+        while (width < result.size()) {
+            int left = 0;
+            while (left < result.size()) {
+                final int middle = Math.min(left + width, result.size());
+                final int right = Math.min(left + (width * 2), result.size());
+                final List<ClassFile> merged = new ArrayList<>();
+                int first = left;
+                int second = middle;
+                while (first < middle || second < right) {
+                    if (second >= right
+                        || (first < middle && Strings2.compareAscii(result.get(first).name(), result.get(second).name()) <= 0)) {
+                        merged.add(result.get(first));
+                        first++;
+                    } else {
+                        merged.add(result.get(second));
+                        second++;
+                    }
+                }
+                for (int index = 0; index < merged.size(); index++) {
+                    result.set(left + index, merged.get(index));
+                }
+                left += width * 2;
             }
-            result.add(index, classFile);
+            width *= 2;
         }
         return List.copyOf(result);
     }
