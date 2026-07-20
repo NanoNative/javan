@@ -4610,6 +4610,11 @@ final class BytecodeToIRInvokeSupport {
         final List<StackValue> stack,
         final Map<Integer, IrLocal> localDeclarations
     ) {
+        if (isSupportedHeadersComputeIfAbsentOwner(methodRef)
+            && hasTopStackKind(stack, StackKind.LAMBDA_FUNCTION)) {
+            lowerHeadersComputeIfAbsentLambdaCall(classFile, method, instruction, instructions, stack, localDeclarations);
+            return true;
+        }
         if ((!isJdkCollectionOwner(methodRef.owner()) && !"java/lang/CharSequence".equals(methodRef.owner()))
             || !JdkCallSupport.isSupported(methodRef)) {
             return false;
@@ -4699,6 +4704,57 @@ final class BytecodeToIRInvokeSupport {
             || "java/util/HashMap".equals(methodRef.owner())
             || "java/util/LinkedHashMap".equals(methodRef.owner())
             || "java/util/TreeMap".equals(methodRef.owner());
+    }
+
+    private static boolean isSupportedHeadersComputeIfAbsentOwner(final MethodRef methodRef) {
+        return "com/sun/net/httpserver/Headers".equals(methodRef.owner())
+            && "computeIfAbsent".equals(methodRef.name())
+            && "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;".equals(methodRef.descriptor());
+    }
+
+    private static void lowerHeadersComputeIfAbsentLambdaCall(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations
+    ) {
+        final DynamicLambda lambda = popDynamicLambda(classFile, method, instruction, stack, StackKind.LAMBDA_FUNCTION, "function lambda");
+        final IrExpression key = popObject(classFile, method, instruction, stack);
+        final IrExpression receiver = popObject(classFile, method, instruction, stack);
+        final String existingLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(
+            existingLocal,
+            IrExpression.objectCall("javan_http_headers_get", List.of(receiver, key))
+        ));
+        final String presentLabel = "label_http_headers_compute_if_absent_present_" + instruction.offset() + "_" + localDeclarations.size();
+        final String endLabel = "label_http_headers_compute_if_absent_end_" + instruction.offset() + "_" + localDeclarations.size();
+        final String resultLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.branchIf(
+            presentLabel,
+            IrExpression.objectComparison("!=", IrExpression.objectLocal(existingLocal), IrExpression.objectNull())
+        ));
+        final String computedLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(computedLocal, invokeFunctionLambdaExpression(lambda, key)));
+        final String storeLabel = "label_http_headers_compute_if_absent_store_" + instruction.offset() + "_" + localDeclarations.size();
+        instructions.add(IrInstruction.branchIf(
+            storeLabel,
+            IrExpression.objectComparison("!=", IrExpression.objectLocal(computedLocal), IrExpression.objectNull())
+        ));
+        instructions.add(IrInstruction.assignObject(resultLocal, IrExpression.objectLocal(computedLocal)));
+        instructions.add(IrInstruction.jump(endLabel));
+        instructions.add(IrInstruction.label(storeLabel));
+        instructions.add(IrInstruction.callStaticVoid(
+            "javan_http_headers_put",
+            List.of(receiver, key, IrExpression.objectLocal(computedLocal))
+        ));
+        instructions.add(IrInstruction.assignObject(resultLocal, IrExpression.objectLocal(computedLocal)));
+        instructions.add(IrInstruction.jump(endLabel));
+        instructions.add(IrInstruction.label(presentLabel));
+        instructions.add(IrInstruction.assignObject(resultLocal, IrExpression.objectLocal(existingLocal)));
+        instructions.add(IrInstruction.label(endLabel));
+        stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
     }
 
     static boolean lowerJdkCollectionConstructorCall(
