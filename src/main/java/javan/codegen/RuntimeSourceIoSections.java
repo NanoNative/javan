@@ -2705,6 +2705,15 @@ final class RuntimeSourceIoSections {
             return result_root;
         }
 
+        int javan_http_headers_remove_entry(void* value, void* name_value, void* expected_values) {
+            void* existing_values = javan_http_headers_get(value, name_value);
+            if (existing_values == NULL || javan_object_equals(existing_values, expected_values) == 0) {
+                return 0;
+            }
+            javan_http_headers_remove(value, name_value);
+            return 1;
+        }
+
         static javan_optional* javan_optional_checked(void* value) {
             if (value == NULL) {
                 javan_panic("null optional");

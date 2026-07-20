@@ -502,6 +502,7 @@ final class RuntimeHeaderFile {
         void* javan_map_entry_set_value(void* entry, void* value);
         int javan_http_headers_contains_key(void* headers, void* name);
         void* javan_http_headers_remove(void* headers, void* name);
+        int javan_http_headers_remove_entry(void* headers, void* name, void* expected_values);
         void javan_http_headers_clear(void* headers);
         int javan_http_headers_size(void* headers);
         int javan_http_headers_is_empty(void* headers);

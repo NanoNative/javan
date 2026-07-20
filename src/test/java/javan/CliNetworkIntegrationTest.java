@@ -3777,6 +3777,20 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                             && "strict".equals(presentPut.get(0))
                             && "first".equals(exchange.getResponseHeaders().getFirst("X-put-if-absent"));
                         exchange.getResponseHeaders().remove("X-put-if-absent");
+                        exchange.getResponseHeaders().put(
+                            "X-conditional",
+                            new java.util.ArrayList<String>(java.util.List.of("keep"))
+                        );
+                        final boolean conditionalRemoveExpected = exchange.getResponseHeaders().remove(
+                            "x-conditional",
+                            new java.util.ArrayList<String>(java.util.List.of("wrong"))
+                        ) == false
+                            && exchange.getResponseHeaders().containsKey("X-Conditional")
+                            && exchange.getResponseHeaders().remove(
+                                "x-conditional",
+                                new java.util.ArrayList<String>(java.util.List.of("keep"))
+                            )
+                            && !exchange.getResponseHeaders().containsKey("X-Conditional");
                         final boolean responseHeaderOk = removedExpected
                             && cleared
                             && putExpected
@@ -3790,7 +3804,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                             && liveEntryRemoveExpected
                             && liveEntryCleared
                             && entriesExpected
-                            && putIfAbsentExpected;
+                            && putIfAbsentExpected
+                            && conditionalRemoveExpected;
                         exchange.getResponseHeaders().add("X-endpoint", exchangeAddressesExpected ? "yes" : "no");
                         exchange.getResponseHeaders().add("X-mode", responseHeaderOk ? "strict" : "bad");
                         final byte[] body = exchange.getResponseCode() == 200
