@@ -13308,15 +13308,15 @@ final class CoreBehaviorTest {
             "read",
             descriptor,
             Optional.of(new CodeAttribute(
-                2,
+                3,
                 3,
                 new byte[0],
                 0,
                 List.of(
                     instruction(0, 42, "aload_0"),
-                    instruction(1, 4, "iconst_1"),
-                    instruction(2, 182, "invokevirtual", new MethodRef("java/io/InputStream", "readNBytes", "(I)[B")),
-                    instruction(3, 176, "areturn")
+                    instruction(1, 9, "lconst_1"),
+                    instruction(2, 182, "invokevirtual", new MethodRef("java/io/InputStream", "skipNBytes", "(J)V")),
+                    instruction(5, 177, "return")
                 )
             ))
         );
