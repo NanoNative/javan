@@ -2386,6 +2386,9 @@ final class RuntimeSourcePlatformSection {
             return NULL;
         }
 
+        """;
+
+    private static final String SOURCE_TAIL_C = """
         void* javan_socket_input_stream(void* value) {
             return javan_socket_stream_new(value, 0);
         }
@@ -2404,6 +2407,11 @@ final class RuntimeSourcePlatformSection {
             javan_socket* socket = javan_socket_open_checked((void*) stream->socket);
             if (socket->input_shutdown != 0) {
                 javan_panic("socket input is shutdown");
+            }
+            if (stream->reserved0 == -2) {
+                unsigned char byte = 0;
+                int count = javan_socket_input_stream_read_chunked_bytes(stream, &byte, 1);
+                return count < 0 ? -1 : (int) byte;
             }
             javan_socket_wait_readable(socket->fd, socket->so_timeout, "socket read timed out", "socket read wait failed");
             unsigned char byte = 0;
@@ -2449,6 +2457,9 @@ final class RuntimeSourcePlatformSection {
             javan_socket* socket = javan_socket_open_checked((void*) stream->socket);
             if (socket->input_shutdown != 0) {
                 javan_panic("socket input is shutdown");
+            }
+            if (stream->reserved0 == -2) {
+                return javan_socket_input_stream_read_chunked_bytes(stream, bytes->values + offset, length);
             }
             javan_socket_wait_readable(socket->fd, socket->so_timeout, "socket read timed out", "socket read wait failed");
             int requested = length;
@@ -2900,7 +2911,7 @@ final class RuntimeSourcePlatformSection {
     }
 
     static String tail() {
-        return SOURCE_TAIL_A.concat(SOURCE_TAIL_B);
+        return SOURCE_TAIL_A.concat(SOURCE_TAIL_B).concat(SOURCE_TAIL_C);
     }
 
     static String protocol() {

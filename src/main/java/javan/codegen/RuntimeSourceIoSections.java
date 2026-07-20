@@ -51,6 +51,14 @@ final class RuntimeSourceIoSections {
             return stream;
         }
 
+        static void* javan_socket_input_stream_chunked(void* socket_value) {
+            javan_socket_input_stream_value* stream = (javan_socket_input_stream_value*) javan_socket_stream_new(socket_value, 0);
+            stream->reserved0 = -2;
+            stream->reserved1 = 0;
+            stream->reserved2 = 1;
+            return stream;
+        }
+
         void* javan_socket_input_stream_read_all_bytes(void* value) {
             void* stream_root = value;
             void* result = NULL;
@@ -60,6 +68,57 @@ final class RuntimeSourceIoSections {
             };
             javan_root_frame_push(roots, 2);
             javan_socket_input_stream_value* stream = javan_socket_input_stream_checked(stream_root);
+            if (stream->reserved0 == -2) {
+                void* chunk_buffer_root = NULL;
+                void* result_root = NULL;
+                void** chunk_roots[] = {
+                    (void**) &stream_root,
+                    (void**) &chunk_buffer_root,
+                    (void**) &result_root
+                };
+                javan_root_frame_push(chunk_roots, 3);
+                chunk_buffer_root = javan_byte_array_new(4096);
+                unsigned char* collected = (unsigned char*) malloc(4096UL);
+                if (collected == NULL) {
+                    javan_root_frame_pop(chunk_roots);
+                    javan_panic("out of memory");
+                }
+                int collected_length = 0;
+                while (1) {
+                    int count = javan_socket_input_stream_read_bytes_range(stream_root, chunk_buffer_root, 0, 4096);
+                    if (count < 0) {
+                        break;
+                    }
+                    if (count == 0) {
+                        free(collected);
+                        javan_root_frame_pop(chunk_roots);
+                        javan_panic("chunked socket read made no progress");
+                    }
+                    if (collected_length > 16777216 - count) {
+                        free(collected);
+                        javan_root_frame_pop(chunk_roots);
+                        javan_panic("chunked request body too large");
+                    }
+                    int required = collected_length + count;
+                    if (required > 4096 && (required & (required - 1)) == 0) {
+                        unsigned char* expanded = (unsigned char*) realloc(collected, (unsigned long) required * 2UL);
+                        if (expanded == NULL) {
+                            free(collected);
+                            javan_root_frame_pop(chunk_roots);
+                            javan_panic("out of memory");
+                        }
+                        collected = expanded;
+                    }
+                    memcpy(collected + collected_length, ((javan_byte_array*) chunk_buffer_root)->values, (unsigned long) count);
+                    collected_length += count;
+                }
+                result_root = javan_byte_array_new(collected_length);
+                memcpy(((javan_byte_array*) result_root)->values, collected, (unsigned long) collected_length);
+                free(collected);
+                javan_root_frame_pop(chunk_roots);
+                javan_root_frame_pop(roots);
+                return result_root;
+            }
             if (stream->reserved0 < 0) {
                 javan_panic("socket input readAllBytes requires content length");
             }
@@ -97,6 +156,131 @@ final class RuntimeSourceIoSections {
                 return value - 'A' + 10;
             }
             return -1;
+        }
+
+        static int javan_socket_input_stream_read_wire_byte(javan_socket* socket) {
+            javan_socket_wait_readable(socket->fd, socket->so_timeout, "socket read timed out", "socket read wait failed");
+            unsigned char byte = 0;
+            ssize_t result = recv(socket->fd, &byte, 1, 0);
+            if (result < 0) {
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    javan_panic("socket read timed out");
+                }
+                javan_panic("socket read failed");
+            }
+            return result == 0 ? -1 : (int) byte;
+        }
+
+        static int javan_socket_input_stream_prepare_chunk(javan_socket_input_stream_value* stream) {
+            if (stream->reserved2 == 3) {
+                return 0;
+            }
+            javan_socket* socket = javan_socket_open_checked((void*) stream->socket);
+            if (stream->reserved2 == 2) {
+                if (javan_socket_input_stream_read_wire_byte(socket) != '\\r'
+                    || javan_socket_input_stream_read_wire_byte(socket) != '\\n') {
+                    javan_panic("malformed chunk terminator");
+                }
+                stream->reserved2 = 1;
+            }
+            char line[64];
+            int length = 0;
+            while (length < 63) {
+                int byte = javan_socket_input_stream_read_wire_byte(socket);
+                if (byte < 0) {
+                    javan_panic("truncated chunk size");
+                }
+                line[length++] = (char) byte;
+                if (length >= 2 && line[length - 2] == '\\r' && line[length - 1] == '\\n') {
+                    break;
+                }
+            }
+            if (length < 2 || line[length - 2] != '\\r' || line[length - 1] != '\\n') {
+                javan_panic("chunk size line too large");
+            }
+            unsigned long chunk_size = 0;
+            int digits = 0;
+            for (int index = 0; index < length - 2; index++) {
+                if (line[index] == ';') {
+                    break;
+                }
+                int digit = javan_http_hex_value(line[index]);
+                if (digit < 0) {
+                    javan_panic("malformed chunk size");
+                }
+                if (chunk_size > 16777216UL / 16UL) {
+                    javan_panic("chunked request body too large");
+                }
+                chunk_size = chunk_size * 16UL + (unsigned long) digit;
+                if (chunk_size > 16777216UL) {
+                    javan_panic("chunked request body too large");
+                }
+                digits++;
+            }
+            if (digits == 0) {
+                javan_panic("empty chunk size");
+            }
+            if (chunk_size == 0UL) {
+                while (1) {
+                    int trailer_length = 0;
+                    int previous = 0;
+                    while (trailer_length < 63) {
+                        int byte = javan_socket_input_stream_read_wire_byte(socket);
+                        if (byte < 0) {
+                            javan_panic("truncated chunk trailer");
+                        }
+                        trailer_length++;
+                        if (previous == '\\r' && byte == '\\n') {
+                            break;
+                        }
+                        previous = byte;
+                    }
+                    if (trailer_length == 2) {
+                        break;
+                    }
+                    if (trailer_length >= 63) {
+                        javan_panic("chunk trailer too large");
+                    }
+                }
+                stream->reserved2 = 3;
+                return 0;
+            }
+            stream->reserved1 = (int) chunk_size;
+            stream->reserved2 = 4;
+            return 1;
+        }
+
+        int javan_socket_input_stream_read_chunked_bytes(void* stream_value, unsigned char* destination, int length) {
+            javan_socket_input_stream_value* stream = javan_socket_input_stream_checked(stream_value);
+            if (length <= 0) {
+                return 0;
+            }
+            if (stream->reserved2 == 3) {
+                return -1;
+            }
+            if (stream->reserved2 != 4 || stream->reserved1 == 0) {
+                if (javan_socket_input_stream_prepare_chunk(stream) == 0) {
+                    return -1;
+                }
+            }
+            javan_socket* socket = javan_socket_open_checked((void*) stream->socket);
+            int requested = stream->reserved1 < length ? stream->reserved1 : length;
+            javan_socket_wait_readable(socket->fd, socket->so_timeout, "socket read timed out", "socket read wait failed");
+            ssize_t result = recv(socket->fd, destination, (size_t) requested, 0);
+            if (result < 0) {
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    javan_panic("socket read timed out");
+                }
+                javan_panic("socket read failed");
+            }
+            if (result == 0) {
+                javan_panic("socket ended inside chunk");
+            }
+            stream->reserved1 -= (int) result;
+            if (stream->reserved1 == 0) {
+                stream->reserved2 = 2;
+            }
+            return (int) result;
         }
 
         static char* javan_http_decode_range(const char* value, unsigned long length) {
@@ -662,6 +846,7 @@ final class RuntimeSourceIoSections {
             memcpy(target_out, method_end + 1, target_length);
             target_out[target_length] = '\\0';
             int content_length = -1;
+            int transfer_encoding = 0;
             char* header_cursor = line_end + 2;
             while (header_cursor[0] != '\\0') {
                 char* header_end = strstr(header_cursor, "\\r\\n");
@@ -685,10 +870,17 @@ final class RuntimeSourceIoSections {
                 value_root = javan_http_copy_range(value_cursor, (unsigned long) (value_end - value_cursor));
                 javan_list_append_raw((javan_object_list*) headers_root, name_root);
                 javan_list_append_raw((javan_object_list*) headers_root, value_root);
-                if (javan_http_header_name_equals((const char*) name_root, "Transfer-Encoding")
-                    && !javan_http_header_name_equals((const char*) value_root, "identity")) {
-                    javan_root_frame_pop(roots);
-                    return 0;
+                if (javan_http_header_name_equals((const char*) name_root, "Transfer-Encoding")) {
+                    int next_transfer_encoding = javan_http_header_name_equals((const char*) value_root, "identity")
+                        ? 1
+                        : (javan_http_header_name_equals((const char*) value_root, "chunked") ? 2 : 0);
+                    if (next_transfer_encoding == 0
+                        || (transfer_encoding != 0 && transfer_encoding != next_transfer_encoding)
+                        || (transfer_encoding == 2 && next_transfer_encoding == 2)) {
+                        javan_root_frame_pop(roots);
+                        return 0;
+                    }
+                    transfer_encoding = next_transfer_encoding;
                 }
                 if (javan_http_header_name_equals((const char*) name_root, "Content-Length")) {
                     value_cursor = (char*) value_root;
@@ -718,6 +910,13 @@ final class RuntimeSourceIoSections {
                 }
                 header_cursor = header_end + 2;
             }
+            if (transfer_encoding == 2) {
+                if (content_length >= 0) {
+                    javan_root_frame_pop(roots);
+                    return 0;
+                }
+                content_length = -2;
+            }
             *content_length_out = content_length;
             *request_headers_out = headers_root;
             javan_root_frame_pop(roots);
@@ -745,9 +944,11 @@ final class RuntimeSourceIoSections {
             request_method = javan_string_copy(method_text);
             request_uri = javan_uri_from_request_target(request_target);
             response_headers = javan_list_new_with_capacity(0, 0);
-            request_body = content_length < 0
-                ? javan_socket_input_stream(socket_root)
-                : javan_socket_input_stream_with_limit(socket_root, content_length);
+            request_body = content_length == -2
+                ? javan_socket_input_stream_chunked(socket_root)
+                : (content_length < 0
+                    ? javan_socket_input_stream(socket_root)
+                    : javan_socket_input_stream_with_limit(socket_root, content_length));
             response_body = javan_socket_output_stream(socket_root);
             javan_http_exchange_value* exchange = (javan_http_exchange_value*) javan_alloc(sizeof(javan_http_exchange_value));
             exchange->magic = JAVAN_HTTP_EXCHANGE_MAGIC;
