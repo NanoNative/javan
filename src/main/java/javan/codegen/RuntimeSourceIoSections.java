@@ -1889,6 +1889,15 @@ final class RuntimeSourceIoSections {
             return existing_root;
         }
 
+        int javan_http_headers_replace_entry(void* value, void* name_value, void* expected_values, void* values_value) {
+            void* existing_root = javan_http_headers_get(value, name_value);
+            if (existing_root == NULL || javan_object_equals(existing_root, expected_values) == 0) {
+                return 0;
+            }
+            javan_http_headers_put(value, name_value, values_value);
+            return 1;
+        }
+
         int javan_http_headers_contains_value(void* value, void* candidate_value) {
             javan_object_list* headers = javan_list_checked(value);
             javan_object_list* candidate = javan_list_checked(candidate_value);
