@@ -880,6 +880,7 @@ public final class JdkCallSupport {
         runtime("HttpResponse.body", "java/net/http/HttpResponse", "body", "()Ljava/lang/Object;"),
         runtime("InputStream.read", "java/io/InputStream", "read", "()I", "([B)I", "([BII)I"),
         runtime("InputStream.readAllBytes", "java/io/InputStream", "readAllBytes", "()[B"),
+        runtime("InputStream.readNBytes", "java/io/InputStream", "readNBytes", "(I)[B", "([BII)I"),
         runtime("InputStream.available", "java/io/InputStream", "available", "()I"),
         runtime("InputStream.skip", "java/io/InputStream", "skip", "(J)J"),
         runtime("InputStream.close", "java/io/InputStream", "close", "()V"),

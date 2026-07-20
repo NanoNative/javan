@@ -234,6 +234,48 @@ final class RuntimeSourceResourceSection {
                 return result;
             }
 
+            void* javan_resource_input_stream_read_n_bytes(void* value, int length) {
+                if (length < 0) {
+                    javan_panic("negative resource read length");
+                }
+                void* stream_root = value;
+                void* result = NULL;
+                void** roots[] = {
+                    (void**) &stream_root,
+                    (void**) &result
+                };
+                javan_root_frame_push(roots, 2);
+                javan_resource_input_stream_value* stream = javan_resource_input_stream_checked(stream_root);
+                int remaining = stream->length - stream->position;
+                int count = remaining < length ? remaining : length;
+                result = javan_arrays_copy_of_range_byte(stream->bytes, stream->position, stream->position + count);
+                stream = javan_resource_input_stream_checked(stream_root);
+                stream->position += count;
+                javan_root_frame_pop(roots);
+                return result;
+            }
+
+            int javan_resource_input_stream_read_n_bytes_into(void* value, void* bytes_value, int offset, int length) {
+                if (length < 0) {
+                    javan_panic("negative resource read length");
+                }
+                javan_byte_array* bytes = (javan_byte_array*) javan_array_checked(bytes_value);
+                javan_array_kind_checked((javan_array_header*) bytes, JAVAN_ARRAY_KIND_BYTE);
+                javan_array_range_checked((javan_array_header*) bytes, offset, length);
+                if (length == 0) {
+                    return 0;
+                }
+                javan_resource_input_stream_value* stream = javan_resource_input_stream_checked(value);
+                if (stream->position >= stream->length) {
+                    return 0;
+                }
+                int remaining = stream->length - stream->position;
+                int count = remaining < length ? remaining : length;
+                memcpy(bytes->values + offset, ((javan_byte_array*) stream->bytes)->values + stream->position, (unsigned long) count);
+                stream->position += count;
+                return count;
+            }
+
             int javan_resource_input_stream_available(void* value) {
                 javan_resource_input_stream_value* stream = javan_resource_input_stream_checked(value);
                 return stream->length - stream->position;

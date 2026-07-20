@@ -1418,6 +1418,20 @@ final class BytecodeToIRInvokeSupport {
                     )));
                     return true;
                 }
+                if ("readNBytes".equals(methodRef.name()) && "(I)[B".equals(methodRef.descriptor())) {
+                    stack.add(StackValue.objectExpression(IrExpression.objectCall(
+                        "javan_resource_input_stream_read_n_bytes",
+                        List.of(receiver.expression().orElseThrow(), arguments.getFirst())
+                    )));
+                    return true;
+                }
+                if ("readNBytes".equals(methodRef.name()) && "([BII)I".equals(methodRef.descriptor())) {
+                    stack.add(StackValue.intExpression(IrExpression.intCall(
+                        "javan_resource_input_stream_read_n_bytes_into",
+                        List.of(receiver.expression().orElseThrow(), arguments.get(0), arguments.get(1), arguments.get(2))
+                    )));
+                    return true;
+                }
                 if ("read".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
                     stack.add(StackValue.intExpression(IrExpression.intCall("javan_resource_input_stream_read", List.of(receiver.expression().orElseThrow()))));
                     return true;
