@@ -856,6 +856,7 @@ public final class JdkCallSupport {
         runtime("Headers.replace", "com/sun/net/httpserver/Headers", "replace", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Headers.replace", "com/sun/net/httpserver/Headers", "replace", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Z"),
         runtime("Headers.computeIfAbsent", "com/sun/net/httpserver/Headers", "computeIfAbsent", "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;"),
+        runtime("Headers.computeIfPresent", "com/sun/net/httpserver/Headers", "computeIfPresent", "(Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;"),
         runtime("Headers.putIfAbsent", "com/sun/net/httpserver/Headers", "putIfAbsent", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Headers.putAll", "com/sun/net/httpserver/Headers", "putAll", "(Ljava/util/Map;)V"),
         runtime("Headers.containsValue", "com/sun/net/httpserver/Headers", "containsValue", "(Ljava/lang/Object;)Z"),
