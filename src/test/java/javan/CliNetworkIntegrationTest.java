@@ -3875,7 +3875,7 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                         final java.util.List<String> mergedPresent = (java.util.List<String>) exchange.getResponseHeaders().merge(
                             "X-mode",
                             new java.util.ArrayList<String>(java.util.List.of("incoming")),
-                            (key, value) -> new java.util.ArrayList<String>(java.util.List.of("merged-present"))
+                            (key, value) -> new java.util.ArrayList<String>(java.util.List.of(value.get(0), "merged-present"))
                         );
                         final java.util.List<String> mergedAbsent = (java.util.List<String>) exchange.getResponseHeaders().merge(
                             "X-merged-missing",
@@ -3883,7 +3883,9 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                             (key, value) -> new java.util.ArrayList<String>(java.util.List.of("unexpected"))
                         );
                         final boolean mergeExpected = mergedPresent != null
-                            && "merged-present".equals(mergedPresent.get(0))
+                            && mergedPresent.size() == 2
+                            && "computed-value".equals(mergedPresent.get(0))
+                            && "merged-present".equals(mergedPresent.get(1))
                             && mergedAbsent != null
                             && "incoming".equals(mergedAbsent.get(0));
                         exchange.getResponseHeaders().remove("X-merged-missing");

@@ -4955,6 +4955,18 @@ final class BytecodeToIRInvokeSupport {
         final String resultLocal = newObjectLocal(localDeclarations);
         instructions.add(IrInstruction.assignObject(existingLocal, IrExpression.objectCall("javan_http_headers_get", List.of(receiver, key))));
         instructions.add(IrInstruction.assignInt(hasKeyLocal, IrExpression.intCall("javan_http_headers_contains_key", List.of(receiver, key))));
+        final String presentLabel = "label_http_headers_merge_present_" + instruction.offset() + "_" + localDeclarations.size();
+        final String applyLabel = "label_http_headers_merge_apply_" + instruction.offset() + "_" + localDeclarations.size();
+        final String mergeArgumentLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.branchIf(
+            presentLabel,
+            IrExpression.intComparison("!=", IrExpression.intLocal(hasKeyLocal), IrExpression.intLiteral(0))
+        ));
+        instructions.add(IrInstruction.assignObject(mergeArgumentLocal, value));
+        instructions.add(IrInstruction.jump(applyLabel));
+        instructions.add(IrInstruction.label(presentLabel));
+        instructions.add(IrInstruction.assignObject(mergeArgumentLocal, IrExpression.objectLocal(existingLocal)));
+        instructions.add(IrInstruction.label(applyLabel));
         final String computedLocal = newObjectLocal(localDeclarations);
         lowerBiFunctionApplyCall(
             classes,
@@ -4966,7 +4978,7 @@ final class BytecodeToIRInvokeSupport {
             materializedLambdaMethods,
             biFunction,
             key,
-            value,
+            IrExpression.objectLocal(mergeArgumentLocal),
             computedLocal
         );
         final String storeLabel = "label_http_headers_merge_store_" + instruction.offset() + "_" + localDeclarations.size();
