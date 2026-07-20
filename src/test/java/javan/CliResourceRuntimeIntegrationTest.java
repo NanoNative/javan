@@ -68,6 +68,7 @@ final class CliResourceRuntimeIntegrationTest extends CliIntegrationSupport {
                     System.out.println(bytes.length);
                     System.out.println(bytes[0]);
                     System.out.println(bytes[1]);
+                    System.out.println(bytes[2]);
                     stream.close();
                 }
             }
