@@ -1285,6 +1285,7 @@ final class RuntimeSourceIoSections {
 
         void* javan_http_headers_remove(void* value, void* name_value);
         int javan_http_headers_size(void* value);
+        void* javan_http_headers_put(void* value, void* name_value, void* values_value);
 
         void* javan_http_headers_key_set(void* value) {
             javan_object_list* headers = javan_list_checked(value);
@@ -1324,6 +1325,23 @@ final class RuntimeSourceIoSections {
                         if ((view->view_flags & JAVAN_LIST_VIEW_HTTP_HEADERS_VALUES) != 0) {
                             return javan_http_headers_get((void*) headers, headers->values[cursor]);
                         }
+                        if ((view->view_flags & JAVAN_LIST_VIEW_HTTP_HEADERS_ENTRIES) != 0) {
+                            void* value_root = NULL;
+                            void* entry_root = NULL;
+                            void* headers_root = (void*) headers;
+                            void** roots[] = {
+                                (void**) &headers_root,
+                                (void**) &value_root,
+                                (void**) &entry_root
+                            };
+                            javan_root_frame_push(roots, 3);
+                            headers = (javan_object_list*) headers_root;
+                            value_root = javan_http_headers_get((void*) headers, headers->values[cursor]);
+                            entry_root = javan_map_entry_new(headers->values[cursor], value_root);
+                            javan_map_entry_attach_owner(entry_root, (void*) headers);
+                            javan_root_frame_pop(roots);
+                            return entry_root;
+                        }
                         return headers->values[cursor];
                     }
                     current++;
@@ -1340,7 +1358,22 @@ final class RuntimeSourceIoSections {
             javan_object_list* headers = view->backing;
             for (int cursor = 0; cursor + 1 < headers->length; cursor += 2) {
                 int matches = 0;
-                if ((view->view_flags & JAVAN_LIST_VIEW_HTTP_HEADERS_VALUES) != 0) {
+                if ((view->view_flags & JAVAN_LIST_VIEW_HTTP_HEADERS_ENTRIES) != 0) {
+                    void* candidate_key = javan_map_entry_get_key(element);
+                    void* candidate_value_root = javan_map_entry_get_value(element);
+                    javan_object_list* candidate_value = javan_list_checked(candidate_value_root);
+                    void* actual_root = javan_http_headers_get((void*) headers, headers->values[cursor]);
+                    javan_object_list* actual = javan_list_checked(actual_root);
+                    matches = javan_http_header_name_equals(
+                        (const char*) headers->values[cursor],
+                        (const char*) candidate_key
+                    ) != 0 && actual->length == candidate_value->length;
+                    for (int index = 0; matches != 0 && index < actual->length; index++) {
+                        if (javan_object_equals(actual->values[index], candidate_value->values[index]) == 0) {
+                            matches = 0;
+                        }
+                    }
+                } else if ((view->view_flags & JAVAN_LIST_VIEW_HTTP_HEADERS_VALUES) != 0) {
                     javan_object_list* candidate = javan_list_checked(element);
                     void* actual_root = javan_http_headers_get((void*) headers, headers->values[cursor]);
                     javan_object_list* actual = javan_list_checked(actual_root);
@@ -1354,7 +1387,7 @@ final class RuntimeSourceIoSections {
                     matches = javan_http_header_name_equals((const char*) headers->values[cursor], (const char*) element);
                 }
                 if (matches != 0) {
-                    if ((view->view_flags & JAVAN_LIST_VIEW_HTTP_HEADERS_VALUES) != 0) {
+                    if ((view->view_flags & (JAVAN_LIST_VIEW_HTTP_HEADERS_VALUES | JAVAN_LIST_VIEW_HTTP_HEADERS_ENTRIES)) != 0) {
                         javan_http_headers_remove((void*) headers, headers->values[cursor]);
                     } else {
                         javan_http_headers_remove((void*) headers, element);
@@ -1376,39 +1409,21 @@ final class RuntimeSourceIoSections {
             javan_object_list* headers = javan_list_checked(value);
             void* headers_root = (void*) headers;
             void* result_root = NULL;
-            void* values_root = NULL;
-            void* entry_root = NULL;
             void** roots[] = {
                 (void**) &headers_root,
-                (void**) &result_root,
-                (void**) &values_root,
-                (void**) &entry_root
+                (void**) &result_root
             };
-            javan_root_frame_push(roots, 4);
+            javan_root_frame_push(roots, 2);
             headers = (javan_object_list*) headers_root;
-            result_root = (void*) javan_list_new_with_capacity(0, 1);
-            for (int index = 0; index + 1 < headers->length; index += 2) {
-                int seen = 0;
-                for (int prior = 0; prior < index; prior += 2) {
-                    if (javan_http_header_name_equals(
-                        (const char*) headers->values[prior],
-                        (const char*) headers->values[index]
-                    ) != 0) {
-                        seen = 1;
-                        break;
-                    }
-                }
-                if (seen != 0) {
-                    continue;
-                }
-                values_root = javan_http_headers_get((void*) headers, headers->values[index]);
-                entry_root = javan_map_entry_new(headers->values[index], values_root);
-                javan_list_append_raw((javan_object_list*) result_root, entry_root);
-                values_root = NULL;
-                entry_root = NULL;
-            }
+            result_root = (void*) javan_list_new_view(headers, 0, JAVAN_LIST_VIEW_SET | JAVAN_LIST_VIEW_HTTP_HEADERS_ENTRIES);
             javan_root_frame_pop(roots);
             return result_root;
+        }
+
+        static void* javan_http_headers_entry_set_value(void* owner, void* key, void* value) {
+            javan_list_checked(owner);
+            javan_list_checked(value);
+            return javan_http_headers_put(owner, key, value);
         }
 
         void* javan_http_headers_values(void* value) {

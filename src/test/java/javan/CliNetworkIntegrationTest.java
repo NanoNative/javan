@@ -3656,6 +3656,29 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                                 && ("X-mode".equals(entry.getKey()) || "X-extra".equals(entry.getKey()))
                                 && valueShape;
                         }
+                        java.util.Map.Entry<String, java.util.List<String>> modeEntry = null;
+                        for (final java.util.Map.Entry<String, java.util.List<String>> entry : entries) {
+                            if ("X-mode".equals(entry.getKey())) {
+                                modeEntry = entry;
+                            }
+                        }
+                        final java.util.List<String> previousEntryValue = modeEntry == null
+                            ? null
+                            : modeEntry.setValue(new java.util.ArrayList<String>(java.util.List.of("updated")));
+                        final boolean liveEntryValueExpected = previousEntryValue != null
+                            && previousEntryValue.size() == 1
+                            && "strict".equals(previousEntryValue.get(0))
+                            && "updated".equals(exchange.getResponseHeaders().getFirst("X-mode"));
+                        if (modeEntry != null) {
+                            modeEntry.setValue(new java.util.ArrayList<String>(java.util.List.of("strict")));
+                        }
+                        final boolean liveEntryRemoveExpected = modeEntry != null
+                            && entries.remove(modeEntry)
+                            && !exchange.getResponseHeaders().containsKey("X-mode");
+                        exchange.getResponseHeaders().put(
+                            "X-mode",
+                            new java.util.ArrayList<String>(java.util.List.of("strict"))
+                        );
                         final boolean responseHeaderOk = removedExpected
                             && cleared
                             && putExpected
@@ -3664,6 +3687,8 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
                             && viewsExpected
                             && liveValuesExpected
                             && liveViewExpected
+                            && liveEntryValueExpected
+                            && liveEntryRemoveExpected
                             && entriesExpected;
                         exchange.getResponseHeaders().add("X-endpoint", exchangeAddressesExpected ? "yes" : "no");
                         exchange.getResponseHeaders().add("X-mode", responseHeaderOk ? "strict" : "bad");

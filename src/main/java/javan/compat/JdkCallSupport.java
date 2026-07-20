@@ -593,6 +593,7 @@ public final class JdkCallSupport {
         runtime("ListIterator.add", "java/util/ListIterator", "add", "(Ljava/lang/Object;)V"),
         runtime("Map.Entry.getKey", "java/util/Map$Entry", "getKey", "()Ljava/lang/Object;"),
         runtime("Map.Entry.getValue", "java/util/Map$Entry", "getValue", "()Ljava/lang/Object;"),
+        runtime("Map.Entry.setValue", "java/util/Map$Entry", "setValue", "(Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("HashMap.<init>", "java/util/HashMap", "<init>", "()V"),
         runtime("HashMap.<init>", "java/util/HashMap", "<init>", "(I)V"),
         runtime("HashMap.<init>", "java/util/HashMap", "<init>", "(IF)V"),

@@ -77,6 +77,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_LIST_VIEW_SET 2
         #define JAVAN_LIST_VIEW_HTTP_HEADERS_KEYS 4
         #define JAVAN_LIST_VIEW_HTTP_HEADERS_VALUES 8
+        #define JAVAN_LIST_VIEW_HTTP_HEADERS_ENTRIES 16
         #define JAVAN_MAP_VIEW_UNMODIFIABLE 1
         #define JAVAN_BUILTIN_INSTANCEOF_COLLECTION 1
         #define JAVAN_BUILTIN_INSTANCEOF_MAP 2
@@ -107,6 +108,7 @@ final class RuntimeSourceMemorySections {
         static void* javan_http_headers_view_get(javan_object_list* view, int index);
         static int javan_http_headers_view_remove(javan_object_list* view, void* element);
         static void javan_http_headers_view_clear(javan_object_list* view);
+        static void* javan_http_headers_entry_set_value(void* owner, void* key, void* value);
 
         typedef struct {
             int magic;
@@ -251,6 +253,7 @@ final class RuntimeSourceMemorySections {
             int reserved2;
             void* key;
             void* value;
+            void* owner;
         } javan_map_entry_state;
 
         typedef struct {
@@ -6252,6 +6255,7 @@ final class RuntimeSourceMemorySections {
                 if (entry != NULL && entry->magic == JAVAN_MAP_ENTRY_MAGIC) {
                     javan_gc_mark_value(entry->key);
                     javan_gc_mark_value(entry->value);
+                    javan_gc_mark_value(entry->owner);
                 }
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_OPTIONAL) {
                 javan_optional* optional = (javan_optional*) value;
@@ -7692,7 +7696,7 @@ final class RuntimeSourceMemorySections {
         }
 
         static int javan_list_logical_length(javan_object_list* list) {
-            if ((list->view_flags & JAVAN_LIST_VIEW_HTTP_HEADERS_KEYS) != 0) {
+            if ((list->view_flags & (JAVAN_LIST_VIEW_HTTP_HEADERS_KEYS | JAVAN_LIST_VIEW_HTTP_HEADERS_VALUES | JAVAN_LIST_VIEW_HTTP_HEADERS_ENTRIES)) != 0) {
                 return javan_http_headers_view_length(list);
             }
             if (list->backing != NULL) {
@@ -7722,7 +7726,7 @@ final class RuntimeSourceMemorySections {
         }
 
         static void* javan_list_get_unchecked(javan_object_list* list, int index) {
-            if ((list->view_flags & JAVAN_LIST_VIEW_HTTP_HEADERS_KEYS) != 0) {
+            if ((list->view_flags & (JAVAN_LIST_VIEW_HTTP_HEADERS_KEYS | JAVAN_LIST_VIEW_HTTP_HEADERS_VALUES | JAVAN_LIST_VIEW_HTTP_HEADERS_ENTRIES)) != 0) {
                 return javan_http_headers_view_get(list, index);
             }
             if (list->backing != NULL) {
@@ -8083,7 +8087,7 @@ final class RuntimeSourceMemorySections {
         int javan_list_remove(void* value, void* element) {
             javan_object_list* list = javan_list_checked(value);
             javan_list_mutable_checked(list);
-            if ((list->view_flags & JAVAN_LIST_VIEW_HTTP_HEADERS_KEYS) != 0) {
+            if ((list->view_flags & (JAVAN_LIST_VIEW_HTTP_HEADERS_KEYS | JAVAN_LIST_VIEW_HTTP_HEADERS_VALUES | JAVAN_LIST_VIEW_HTTP_HEADERS_ENTRIES)) != 0) {
                 return javan_http_headers_view_remove(list, element);
             }
             int length = javan_list_logical_length(list);
@@ -8194,7 +8198,7 @@ final class RuntimeSourceMemorySections {
         void javan_list_clear(void* value) {
             javan_object_list* list = javan_list_checked(value);
             javan_list_mutable_checked(list);
-            if ((list->view_flags & JAVAN_LIST_VIEW_HTTP_HEADERS_KEYS) != 0) {
+            if ((list->view_flags & (JAVAN_LIST_VIEW_HTTP_HEADERS_KEYS | JAVAN_LIST_VIEW_HTTP_HEADERS_VALUES | JAVAN_LIST_VIEW_HTTP_HEADERS_ENTRIES)) != 0) {
                 javan_http_headers_view_clear(list);
                 return;
             }
@@ -9212,6 +9216,7 @@ final class RuntimeSourceMemorySections {
             entry->reserved2 = 0;
             entry->key = key;
             entry->value = value;
+            entry->owner = NULL;
             javan_update_runtime_allocation_kind(entry_value, JAVAN_RUNTIME_KIND_MAP_ENTRY);
             return entry_value;
         }
@@ -9232,6 +9237,23 @@ final class RuntimeSourceMemorySections {
             entry_value = javan_map_entry_alloc(key_root, value_root);
             javan_root_frame_pop(roots);
             return entry_value;
+        }
+
+        void javan_map_entry_attach_owner(void* value, void* owner) {
+            javan_map_entry_checked(value)->owner = owner;
+        }
+
+        void* javan_map_entry_set_value(void* value, void* new_value) {
+            javan_map_entry_state* entry = javan_map_entry_checked(value);
+            if (new_value == NULL) {
+                javan_panic("null Map.Entry value");
+            }
+            if (entry->owner == NULL) {
+                javan_panic("immutable Map.Entry");
+            }
+            void* previous = javan_http_headers_entry_set_value(entry->owner, entry->key, new_value);
+            entry->value = new_value;
+            return previous;
         }
 
         void* javan_map_empty(void) {
