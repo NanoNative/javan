@@ -239,6 +239,17 @@ final class RuntimeSourceResourceSection {
                 return stream->length - stream->position;
             }
 
+            long long javan_resource_input_stream_skip(void* value, long long requested) {
+                javan_resource_input_stream_value* stream = javan_resource_input_stream_checked(value);
+                if (requested <= 0 || stream->position >= stream->length) {
+                    return 0;
+                }
+                long long remaining = (long long) stream->length - stream->position;
+                long long skipped = requested < remaining ? requested : remaining;
+                stream->position += (int) skipped;
+                return skipped;
+            }
+
             void javan_resource_input_stream_close(void* value) {
                 (void) value;
             }

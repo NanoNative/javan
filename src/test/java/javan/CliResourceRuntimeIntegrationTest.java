@@ -68,7 +68,6 @@ final class CliResourceRuntimeIntegrationTest extends CliIntegrationSupport {
                     System.out.println(bytes.length);
                     System.out.println(bytes[0]);
                     System.out.println(bytes[1]);
-                    System.out.println(bytes[2]);
                     stream.close();
                 }
             }
@@ -183,12 +182,13 @@ final class CliResourceRuntimeIntegrationTest extends CliIntegrationSupport {
                     final ClassLoader loader = ClassLoader.getSystemClassLoader();
                     final InputStream stream = loader.getResourceAsStream("assets/banner.txt");
                     System.out.println(stream.available());
+                    System.out.println(stream.skip(1));
+                    System.out.println(stream.available());
                     final byte[] bytes = stream.readAllBytes();
                     System.out.println(loader != null);
                     System.out.println(bytes.length);
                     System.out.println(bytes[0]);
                     System.out.println(bytes[1]);
-                    System.out.println(bytes[2]);
                     stream.close();
                 }
             }
@@ -200,7 +200,7 @@ final class CliResourceRuntimeIntegrationTest extends CliIntegrationSupport {
 
         assertThat(run.exitCode()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/resource-loader-instance").toString())).stdout()).isEqualTo(jvmOutput);
-        assertThat(jvmOutput).isEqualTo("3\ntrue\n3\n104\n101\n121\n");
+        assertThat(jvmOutput).isEqualTo("3\n1\n2\ntrue\n2\n101\n121\n");
     }
 
     @Test

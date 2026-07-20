@@ -1411,6 +1411,13 @@ final class BytecodeToIRInvokeSupport {
                     stack.add(StackValue.intExpression(IrExpression.intCall("javan_resource_input_stream_available", List.of(receiver.expression().orElseThrow()))));
                     return true;
                 }
+                if ("skip".equals(methodRef.name()) && "(J)J".equals(methodRef.descriptor())) {
+                    stack.add(StackValue.longExpression(IrExpression.longCall(
+                        "javan_resource_input_stream_skip",
+                        List.of(receiver.expression().orElseThrow(), arguments.getFirst())
+                    )));
+                    return true;
+                }
                 if ("read".equals(methodRef.name()) && "()I".equals(methodRef.descriptor())) {
                     stack.add(StackValue.intExpression(IrExpression.intCall("javan_resource_input_stream_read", List.of(receiver.expression().orElseThrow()))));
                     return true;
