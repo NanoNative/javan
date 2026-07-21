@@ -13,6 +13,9 @@ Core entrypoints:
 
 - [README.md](../README.md): public front door, quick start, supported outputs, and high
   signal status snapshot
+- [spec/javan-concepts.md](spec/javan-concepts.md): plain-language explanation of the
+  compilation pipeline, Javan IR, native outputs, Java/JDK requirements, and safe beginner
+  contribution work
 - [status/roadmap-progress.md](status/roadmap-progress.md): implementation progress by
   roadmap item, coverage snapshot, and honest target view
 - [status/release-plan.md](status/release-plan.md): shipping gates and slice-selection

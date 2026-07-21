@@ -6,6 +6,23 @@ Minimal native-first Java toolchain.
 subset to C, and links host-native executables or native libraries without changing
 normal Java source.
 
+## In Plain Language
+
+Javan is an additional compiler after `javac`, Maven, or Gradle have produced `.class`
+files. Its IR is an internal compiler model, not a native image or a runnable file.
+
+```text
+.class files -> Javan IR -> generated C plus runtime -> native executable or library
+```
+
+A Javan-built native application and the packaged `javan` CLI do not need a JVM to run.
+A JDK is needed only when Javan must compile Java source through `javac`, Maven, or Gradle.
+Javan supports a deliberately checked subset of Java; unsupported reachable code fails
+before native code generation.
+
+See [doc/spec/javan-concepts.md](doc/spec/javan-concepts.md) for the plain-language model,
+current boundaries, and safe first-contribution tasks.
+
 ## Status
 
 | Question | Current answer |
