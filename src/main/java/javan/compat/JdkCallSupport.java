@@ -628,8 +628,11 @@ public final class JdkCallSupport {
         runtime("ConcurrentHashMap.get", "java/util/concurrent/ConcurrentHashMap", "get", "(Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Map.getOrDefault", "java/util/Map", "getOrDefault", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("SequencedMap.put", "java/util/SequencedMap", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("SequencedMap.isEmpty", "java/util/SequencedMap", "isEmpty", "()Z"),
         runtime("SequencedMap.firstEntry", "java/util/SequencedMap", "firstEntry", "()Ljava/util/Map$Entry;"),
         runtime("SequencedMap.lastEntry", "java/util/SequencedMap", "lastEntry", "()Ljava/util/Map$Entry;"),
+        runtime("SequencedMap.pollFirstEntry", "java/util/SequencedMap", "pollFirstEntry", "()Ljava/util/Map$Entry;"),
+        runtime("SequencedMap.pollLastEntry", "java/util/SequencedMap", "pollLastEntry", "()Ljava/util/Map$Entry;"),
         runtime("Map.put", "java/util/Map", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Map.putIfAbsent", "java/util/Map", "putIfAbsent", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Map.replace", "java/util/Map", "replace", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
@@ -995,9 +998,14 @@ public final class JdkCallSupport {
             return isSupportedMapCall(methodRef.name(), methodRef.descriptor());
         }
         if ("java/util/SequencedMap".equals(methodRef.owner())) {
-            return "put".equals(methodRef.name())
-                && "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(methodRef.descriptor())
-                || ("firstEntry".equals(methodRef.name()) || "lastEntry".equals(methodRef.name()))
+            if ("put".equals(methodRef.name())) {
+                return "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(methodRef.descriptor());
+            }
+            if ("isEmpty".equals(methodRef.name())) {
+                return "()Z".equals(methodRef.descriptor());
+            }
+            return ("firstEntry".equals(methodRef.name()) || "lastEntry".equals(methodRef.name())
+                || "pollFirstEntry".equals(methodRef.name()) || "pollLastEntry".equals(methodRef.name()))
                 && "()Ljava/util/Map$Entry;".equals(methodRef.descriptor());
         }
         if ("java/util/HashMap".equals(methodRef.owner())) {

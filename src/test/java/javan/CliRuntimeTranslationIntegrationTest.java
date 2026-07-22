@@ -1026,6 +1026,11 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
                     final Map.Entry<String, Integer> last = values.lastEntry();
                     System.out.println(first.getKey() + ":" + first.getValue());
                     System.out.println(last.getKey() + ":" + last.getValue());
+                    final Map.Entry<String, Integer> polledFirst = values.pollFirstEntry();
+                    final Map.Entry<String, Integer> polledLast = values.pollLastEntry();
+                    System.out.println(polledFirst.getKey() + ":" + polledFirst.getValue());
+                    System.out.println(polledLast.getKey() + ":" + polledLast.getValue());
+                    System.out.println(values.isEmpty());
                     final SequencedMap<String, Integer> empty = new LinkedHashMap<>();
                     System.out.println(empty.firstEntry() == null);
                     System.out.println(empty.lastEntry() == null);
@@ -1039,7 +1044,7 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/sequenced-map-entry-endpoints").toString())).stdout())
             .isEqualTo(jvmOutput);
-        assertThat(jvmOutput).isEqualTo("alpha:1\nbeta:2\ntrue\ntrue\n");
+        assertThat(jvmOutput).isEqualTo("alpha:1\nbeta:2\nalpha:1\nbeta:2\ntrue\ntrue\ntrue\n");
     }
 
     @Test

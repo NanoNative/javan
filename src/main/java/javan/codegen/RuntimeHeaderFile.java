@@ -343,6 +343,8 @@ final class RuntimeHeaderFile {
         void* javan_map_entry_new(void* key, void* value);
         void* javan_map_first_entry(void* map);
         void* javan_map_last_entry(void* map);
+        void* javan_map_poll_first_entry(void* map);
+        void* javan_map_poll_last_entry(void* map);
         void* javan_map_singleton(void* key, void* value);
         void* javan_map_pair(void* first_key, void* first_value, void* second_key, void* second_value);
         void* javan_map_triple(void* first_key, void* first_value, void* second_key, void* second_value, void* third_key, void* third_value);

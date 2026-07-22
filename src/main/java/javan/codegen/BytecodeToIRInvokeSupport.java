@@ -6138,6 +6138,14 @@ final class BytecodeToIRInvokeSupport {
                 pushObjectCall(instructions, stack, localDeclarations, "javan_map_last_entry", List.of(receiver));
                 return true;
             }
+            if ("pollFirstEntry()Ljava/util/Map$Entry;".equals(signature)) {
+                pushObjectCall(instructions, stack, localDeclarations, "javan_map_poll_first_entry", List.of(receiver));
+                return true;
+            }
+            if ("pollLastEntry()Ljava/util/Map$Entry;".equals(signature)) {
+                pushObjectCall(instructions, stack, localDeclarations, "javan_map_poll_last_entry", List.of(receiver));
+                return true;
+            }
         }
         if ("java/util/Map$Entry".equals(methodRef.owner())) {
             if ("getKey()Ljava/lang/Object;".equals(signature)) {
