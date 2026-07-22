@@ -271,6 +271,7 @@ final class RuntimeHeaderFile {
         int javan_list_contains_all(void* list, void* other);
         void javan_list_clear(void* list);
         void* javan_list_get(void* list, int index);
+        void* javan_list_reversed(void* list);
         void* javan_list_get_first(void* list);
         void* javan_list_get_last(void* list);
         void* javan_list_iterator(void* list);

@@ -895,6 +895,38 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void listReversedReadViewBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("list-reversed-read-view");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<String> values = new ArrayList<>(List.of("alpha", "beta", "gamma"));
+                    final List<String> reversed = values.reversed();
+                    System.out.println(reversed.size());
+                    System.out.println(reversed.getFirst());
+                    System.out.println(reversed.getLast());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/list-reversed-read-view").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("3\ngamma\nalpha\n");
+    }
+
+    @Test
     void listRemoveAllBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("list-remove-all");
         writeJava(project, "com.acme.Main", """

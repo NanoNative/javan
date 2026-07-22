@@ -78,6 +78,7 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_LIST_VIEW_HTTP_HEADERS_KEYS 4
         #define JAVAN_LIST_VIEW_HTTP_HEADERS_VALUES 8
         #define JAVAN_LIST_VIEW_HTTP_HEADERS_ENTRIES 16
+        #define JAVAN_LIST_VIEW_REVERSED 32
         #define JAVAN_MAP_VIEW_UNMODIFIABLE 1
         #define JAVAN_BUILTIN_INSTANCEOF_COLLECTION 1
         #define JAVAN_BUILTIN_INSTANCEOF_MAP 2
@@ -7727,6 +7728,10 @@ final class RuntimeSourceMemorySections {
         }
 
         static void* javan_list_get_unchecked(javan_object_list* list, int index) {
+            if ((list->view_flags & JAVAN_LIST_VIEW_REVERSED) != 0) {
+                int length = javan_list_logical_length(list->backing);
+                return javan_list_get_unchecked(list->backing, length - 1 - index);
+            }
             if ((list->view_flags & (JAVAN_LIST_VIEW_HTTP_HEADERS_KEYS | JAVAN_LIST_VIEW_HTTP_HEADERS_VALUES | JAVAN_LIST_VIEW_HTTP_HEADERS_ENTRIES)) != 0) {
                 return javan_http_headers_view_get(list, index);
             }
@@ -8219,6 +8224,14 @@ final class RuntimeSourceMemorySections {
             javan_object_list* list = javan_list_checked(value);
             javan_list_bounds_checked(list, index);
             return javan_list_get_unchecked(list, index);
+        }
+
+        void* javan_list_reversed(void* value) {
+            javan_object_list* list = javan_list_checked(value);
+            if ((list->view_flags & JAVAN_LIST_VIEW_REVERSED) != 0 && list->backing != NULL) {
+                return list->backing;
+            }
+            return javan_list_new_view(list, 1, JAVAN_LIST_VIEW_REVERSED);
         }
 
         void* javan_list_get_first(void* value) {

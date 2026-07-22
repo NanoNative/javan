@@ -5568,6 +5568,10 @@ final class BytecodeToIRInvokeSupport {
                 pushObjectCall(instructions, stack, localDeclarations, "javan_list_get", List.of(receiver, arguments.getFirst()));
                 return true;
             }
+            if ("reversed()Ljava/util/List;".equals(signature)) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_reversed", List.of(receiver))));
+                return true;
+            }
             if ("getFirst()Ljava/lang/Object;".equals(signature)) {
                 pushObjectCall(instructions, stack, localDeclarations, "javan_list_get_first", List.of(receiver));
                 return true;

@@ -540,6 +540,7 @@ public final class JdkCallSupport {
         runtime("Set.iterator", "java/util/Set", "iterator", "()Ljava/util/Iterator;"),
         runtime("Set.toArray", "java/util/Set", "toArray", "()[Ljava/lang/Object;"),
         runtime("List.get", "java/util/List", "get", "(I)Ljava/lang/Object;"),
+        runtime("List.reversed", "java/util/List", "reversed", "()Ljava/util/List;"),
         runtime("List.getFirst", "java/util/List", "getFirst", "()Ljava/lang/Object;"),
         runtime("List.getLast", "java/util/List", "getLast", "()Ljava/lang/Object;"),
         runtime("List.remove", "java/util/List", "remove", "(I)Ljava/lang/Object;"),
