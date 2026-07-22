@@ -682,6 +682,59 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void staticLibraryExportedDoubleMethodBuildsWithoutMainAndRunsFromC() throws Exception {
+        final Path project = project("library-double");
+        writeJava(project, "com.acme.Numbers", """
+            package com.acme;
+
+            public final class Numbers {
+                private Numbers() {
+                }
+
+                public static double scale(final double value) {
+                    return value * 1.5d;
+                }
+            }
+            """);
+
+        final CliRun run = run(
+            tempDir,
+            "build",
+            project.toString(),
+            "--kind",
+            "staticlib",
+            "--export",
+            "com.acme.Numbers.scale(double):double"
+        );
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Path library = project.resolve(".javan/dist/liblibrary-double.a");
+        final Path header = project.resolve(".javan/dist/bindings/c/library-double.h");
+        assertThat(library).exists();
+        assertThat(Files.readString(header)).contains(
+            "double javan_export_com_acme_Numbers_scale_double(double arg0);",
+            "JavanResult javan_try_com_acme_Numbers_scale_double(double arg0, double* out);"
+        );
+        final Path caller = writeC(project, "call_double.c", """
+            #include <stdio.h>
+            #include ".javan/dist/bindings/c/library-double.h"
+
+            int main(void) {
+                printf("%.2f\\n", javan_export_com_acme_Numbers_scale_double(2.0));
+                double result_value = 0.0;
+                JavanResult result = javan_try_com_acme_Numbers_scale_double(2.0, &result_value);
+                printf("try:%d:%.2f\\n", result.ok, result_value);
+                javan_result_free(&result);
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-double");
+        assertThat(process(project, List.of("cc", caller.toString(), library.toString(), "-o", binary.toString())).exitCode())
+            .isZero();
+        assertThat(process(project, List.of(binary.toString())).stdout()).isEqualTo("3.00\ntry:1:3.00\n");
+    }
+
+    @Test
     void libraryAliasBuildsStaticSharedAndLanguageFolders() throws Exception {
         final Path project = project("library-friendly");
         writeJava(project, "com.acme.Math", """
