@@ -260,6 +260,7 @@ references.
 
 Generated outputs include:
 
+- `.javan/dist/library-manifest.json`
 - `.javan/dist/lib<name>.a`
 - `.javan/dist/lib<name>.so`
 - `.javan/dist/lib<name>.dylib`
@@ -295,6 +296,13 @@ Library builds report:
 - `exceptionMapping`
 - `threadRuntimeRules`
 - `generatedAbiTests`
+
+Library builds also write `.javan/dist/library-manifest.json`. The manifest is a
+deterministic consumer-facing index with `schemaVersion`, `abiVersion`, relative
+artifact paths, relative binding paths, exported JVM method descriptors, and linked
+runtime module names. It describes the current C ABI package; it does not claim richer
+object types, cross-target artifacts, or language-package metadata beyond the generated
+binding paths.
 
 These fields appear in:
 

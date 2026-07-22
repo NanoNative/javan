@@ -515,6 +515,15 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         assertThat(project.resolve(".javan/dist/bindings/rust/lib.rs")).exists();
         assertThat(project.resolve(".javan/dist/bindings/go/library_add.go")).exists();
         assertThat(project.resolve(".javan/dist/bindings/python/library_add.py")).exists();
+        final Path manifest = project.resolve(".javan/dist/library-manifest.json");
+        assertThat(manifest).exists();
+        assertThat(Files.readString(manifest)).contains(
+            "\"schemaVersion\": 1",
+            "\"abiVersion\": 2",
+            "dist/liblibrary-add.a",
+            "dist/bindings/c/library-add.h",
+            "com/acme/Math.add(II)I"
+        );
         assertThat(project.resolve(".javan/reports/library-build.json")).exists();
         assertThat(Files.readString(header)).contains(
             "#define JAVAN_ABI_VERSION 2",
