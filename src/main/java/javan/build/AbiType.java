@@ -10,7 +10,8 @@ public enum AbiType {
     FLOAT,
     DOUBLE,
     STRING,
-    BYTE_ARRAY;
+    BYTE_ARRAY,
+    OBJECT;
 
     /**
      * Returns the C type used in generated headers.
@@ -38,6 +39,9 @@ public enum AbiType {
         }
         if (this == BYTE_ARRAY) {
             return "JavanByteArray";
+        }
+        if (this == OBJECT) {
+            return "JavanObjectHandle*";
         }
         throw new IllegalStateException("Unsupported ABI type");
     }
@@ -77,6 +81,9 @@ public enum AbiType {
         }
         if (this == BYTE_ARRAY) {
             return "bytes";
+        }
+        if (this == OBJECT) {
+            return "object";
         }
         throw new IllegalStateException("Unsupported ABI type");
     }

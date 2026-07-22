@@ -59,6 +59,7 @@ public final class LibraryBuildReports {
             + "  \"abiVersion\": " + ABI_VERSION + ",\n"
             + "  \"stringOwnership\": \"input-copied-gc-managed-utf8-output-javan-owned-free-with-javan_free\",\n"
             + "  \"byteArrayOwnership\": \"input-copied-gc-managed-output-javan-owned-data-free-with-javan_free\",\n"
+            + "  \"objectHandleOwnership\": \"opaque-refcounted-gc-rooted-c-handle-release-with-javan_object_handle_release\",\n"
             + "  \"errorResultAbi\": \"" + ERROR_RESULT_ABI + "\",\n"
             + "  \"exceptionMapping\": \"caught-runtime-panic-to-last-error-limited-same-method-catch\",\n"
             + "  \"threadRuntimeRules\": \"parallel-host-thread-bootstrap-current-thread-interrupt-isalive-sleep-start-join-runnable-target-plus-startvirtualthread-builderstart-builderunstarted-factory-executor-threadlocal-park-parknanos-parkuntil-unpark-and-isvirtual-no-virtual-scheduler\",\n"

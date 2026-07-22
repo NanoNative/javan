@@ -1,8 +1,9 @@
 # Native ABI Contract
 
-Status: implemented C ABI v2 baseline for primitive, `String`, `byte[]`, and `void`
-exports. ABI v1 direct export symbols remain available for compatibility, and ABI v2
-adds C `javan_try_*` result wrappers with owned diagnostic fields.
+Status: implemented C ABI v2 baseline for primitive, `String`, `byte[]`, `void`, and
+opaque GC-rooted object-handle exports. ABI v1 direct export symbols remain available
+for compatibility, and ABI v2 adds C `javan_try_*` result wrappers with owned diagnostic
+fields.
 
 ## Scope
 
@@ -43,8 +44,10 @@ Current supported export types:
 - `String`
 - `byte[]`
 - `void`
+- opaque `java.lang.Object` handles (C bindings only)
 
-Unsupported export signatures fail before native code generation.
+Unsupported export signatures and non-C binding requests for object handles fail before
+native code generation.
 
 Export declarations:
 
@@ -71,6 +74,7 @@ Generated C headers define:
 #define JAVAN_ABI_RUNTIME_DIAGNOSTICS 1
 #define JAVAN_ABI_STRUCTURED_ERROR 1
 #define JAVAN_ABI_RESULT_WRAPPERS 1
+#define JAVAN_ABI_OBJECT_HANDLES 1
 ```
 
 Rules:
@@ -169,6 +173,14 @@ Current ABI v2 behavior:
 - `JavanResult` diagnostics survive `javan_clear_error()` and later export attempts until
   `javan_result_free` is called
 - result diagnostic fields are not Java heap objects and are not scanned by the Java GC
+- object handles are opaque `JavanObjectHandle*` values backed by a native reference-counted
+  registry; each live handle is marked as a Java GC root
+- a returned object handle owns one reference; callers must retain copied references and
+  release every reference with `javan_object_handle_release`
+- handle values are valid only for the library lifetime and invalid handles fail through
+  the library error boundary
+- object handles are currently exposed through generated C headers only; Rust, Go, and
+  Python generation rejects exports containing object parameters or results explicitly
 - Rust, Go, and Python generated bindings expose direct ABI v1 calls, borrowed last-error
   helpers, and result-level wrappers over `javan_try_*`
 - result-level language wrappers copy diagnostics into language-owned error values before

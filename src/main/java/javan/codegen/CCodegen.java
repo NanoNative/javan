@@ -1015,6 +1015,14 @@ public final class CCodegen {
             emitExportWrapperCleanup(objectArguments, c);
             c.append("    javan_panic_clear_target(&javan_export_panic_target);").append(System.lineSeparator());
             c.append("    return javan_export_result;").append(System.lineSeparator());
+        } else if (returnType == AbiType.OBJECT) {
+            c.append("    void* javan_export_object_result = ").append(call).append(";").append(System.lineSeparator());
+            emitExportWrapperReturnRootFramePush(c);
+            c.append("    JavanObjectHandle* javan_export_result = javan_object_handle_new(javan_export_object_result);").append(System.lineSeparator());
+            emitExportWrapperReturnRootFramePop(c);
+            emitExportWrapperCleanup(objectArguments, c);
+            c.append("    javan_panic_clear_target(&javan_export_panic_target);").append(System.lineSeparator());
+            c.append("    return javan_export_result;").append(System.lineSeparator());
         } else {
             c.append("    ").append(returnType.cReturnName()).append(" javan_export_result = ").append(call).append(";").append(System.lineSeparator());
             emitExportWrapperCleanup(objectArguments, c);
@@ -1034,6 +1042,8 @@ public final class CCodegen {
             c.append("        javan_export_error_result.data = NULL;").append(System.lineSeparator());
             c.append("        javan_export_error_result.length = 0;").append(System.lineSeparator());
             c.append("        return javan_export_error_result;").append(System.lineSeparator());
+        } else if (type == AbiType.OBJECT) {
+            c.append("        return NULL;").append(System.lineSeparator());
         } else if (type == AbiType.LONG) {
             c.append("        return 0LL;").append(System.lineSeparator());
         } else if (type == AbiType.FLOAT) {
@@ -1100,6 +1110,8 @@ public final class CCodegen {
         } else if (type == AbiType.BYTE_ARRAY) {
             c.append("    out->data = NULL;").append(System.lineSeparator());
             c.append("    out->length = 0;").append(System.lineSeparator());
+        } else if (type == AbiType.OBJECT) {
+            c.append("    *out = NULL;").append(System.lineSeparator());
         } else if (type == AbiType.LONG) {
             c.append("    *out = 0LL;").append(System.lineSeparator());
         } else if (type == AbiType.FLOAT) {
@@ -1216,6 +1228,8 @@ public final class CCodegen {
                 arguments.append("arg").append(index).append("_string");
             } else if (type == AbiType.BYTE_ARRAY) {
                 arguments.append("arg").append(index).append("_array");
+            } else if (type == AbiType.OBJECT) {
+                arguments.append("javan_object_handle_value(arg").append(index).append(")");
             } else {
                 arguments.append("arg").append(index);
             }

@@ -514,6 +514,12 @@ final class RuntimeSourceMemorySections {
             struct javan_root_frame* next;
         } javan_root_frame;
 
+        struct javan_object_handle {
+            void* value;
+            unsigned long references;
+            struct javan_object_handle* next;
+        };
+
         #define JAVAN_ROOT_FRAME_CACHE_LIMIT 32
 
         typedef void (*javan_native_resource_cleanup)(void* value);
@@ -535,6 +541,7 @@ final class RuntimeSourceMemorySections {
         } javan_allocation_registry;
 
         static javan_allocation_node* javan_allocations = NULL;
+        static JavanObjectHandle* javan_object_handles = NULL;
         static void* javan_allocation_cache_values[JAVAN_ALLOCATION_CACHE_SIZE];
         static javan_allocation_node* javan_allocation_cache_nodes[JAVAN_ALLOCATION_CACHE_SIZE];
         static javan_allocation_registry javan_allocation_index = { NULL, NULL, 0, 0 };
@@ -729,6 +736,8 @@ final class RuntimeSourceMemorySections {
 
         static void javan_heap_maybe_validate(void);
         static void javan_object_registry_cleanup(void);
+        static void javan_object_handle_cleanup_all(void);
+        static void javan_gc_mark_object_handles(void);
         static int javan_registered_type_id(void* value);
         static JavanTypeDescriptor* javan_type_descriptor_for(int type_id);
         static int javan_probably_string_key(void* value);
@@ -937,6 +946,7 @@ final class RuntimeSourceMemorySections {
             javan_root_frame_cleanup();
             javan_root_frame_cache_cleanup();
             javan_thread_root_cleanup();
+            javan_object_handle_cleanup_all();
             javan_object_registry_cleanup();
             for (int index = 0; index < JAVAN_ALLOCATION_CACHE_SIZE; index++) {
                 javan_allocation_cache_values[index] = NULL;
@@ -6451,6 +6461,7 @@ final class RuntimeSourceMemorySections {
                     javan_gc_mark_value(*slot);
                 }
             }
+            javan_gc_mark_object_handles();
         }
 
         static void javan_gc_mark_thread_roots(void) {
@@ -10961,6 +10972,100 @@ final class RuntimeSourceMemorySections {
         }
         """;
 
+    private static final String SOURCE_C_ABI_OBJECT_HANDLES = """
+        static JavanObjectHandle* javan_object_handle_checked(JavanObjectHandle* handle) {
+            if (handle == NULL) {
+                return NULL;
+            }
+            JavanObjectHandle* current = javan_object_handles;
+            while (current != NULL) {
+                if (current == handle) {
+                    return handle;
+                }
+                current = current->next;
+            }
+            javan_panic("invalid Javan object handle");
+            return NULL;
+        }
+
+        JavanObjectHandle* javan_object_handle_new(void* value) {
+            if (value == NULL) {
+                return NULL;
+            }
+            JavanObjectHandle* handle = (JavanObjectHandle*) calloc(1, sizeof(JavanObjectHandle));
+            if (handle == NULL) {
+                javan_panic("out of memory creating Javan object handle");
+            }
+            handle->value = value;
+            handle->references = 1;
+            javan_runtime_lock_enter();
+            handle->next = javan_object_handles;
+            javan_object_handles = handle;
+            javan_runtime_lock_leave();
+            return handle;
+        }
+
+        void* javan_object_handle_value(JavanObjectHandle* handle) {
+            if (handle == NULL) {
+                return NULL;
+            }
+            javan_runtime_lock_enter();
+            void* value = javan_object_handle_checked(handle)->value;
+            javan_runtime_lock_leave();
+            return value;
+        }
+
+        void javan_object_handle_retain(JavanObjectHandle* handle) {
+            if (handle == NULL) {
+                return;
+            }
+            javan_runtime_lock_enter();
+            JavanObjectHandle* checked = javan_object_handle_checked(handle);
+            if (checked->references == 0) {
+                javan_panic("Javan object handle reference underflow");
+            }
+            checked->references++;
+            javan_runtime_lock_leave();
+        }
+
+        void javan_object_handle_release(JavanObjectHandle* handle) {
+            if (handle == NULL) {
+                return;
+            }
+            javan_runtime_lock_enter();
+            JavanObjectHandle* checked = javan_object_handle_checked(handle);
+            if (checked->references == 0) {
+                javan_panic("Javan object handle reference underflow");
+            }
+            checked->references--;
+            if (checked->references == 0) {
+                JavanObjectHandle** cursor = &javan_object_handles;
+                while (*cursor != checked) {
+                    cursor = &(*cursor)->next;
+                }
+                *cursor = checked->next;
+                free(checked);
+            }
+            javan_runtime_lock_leave();
+        }
+
+        static void javan_object_handle_cleanup_all(void) {
+            JavanObjectHandle* current = javan_object_handles;
+            javan_object_handles = NULL;
+            while (current != NULL) {
+                JavanObjectHandle* next = current->next;
+                free(current);
+                current = next;
+            }
+        }
+
+        static void javan_gc_mark_object_handles(void) {
+            for (JavanObjectHandle* current = javan_object_handles; current != NULL; current = current->next) {
+                javan_gc_mark_value(current->value);
+            }
+        }
+        """;
+
     private RuntimeSourceMemorySections() {
     }
 
@@ -10991,6 +11096,7 @@ final class RuntimeSourceMemorySections {
         String result = SOURCE_COLLECTIONS_HEAD;
         result = result + SOURCE_COLLECTIONS_TAIL;
         result = result + SOURCE_COLLECTIONS_SEQUENCED_MAP;
+        result = result + SOURCE_C_ABI_OBJECT_HANDLES;
         return result;
     }
 }
