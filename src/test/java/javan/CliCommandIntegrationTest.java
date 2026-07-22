@@ -80,6 +80,60 @@ final class CliCommandIntegrationTest {
     }
 
     @Test
+    void inspectFromNestedProjectDirectoryUsesProjectRoot() throws Exception {
+        final Path project = project("nested-project-root");
+        Files.writeString(project.resolve("pom.xml"), """
+            <project>
+              <modelVersion>4.0.0</modelVersion>
+              <groupId>com.acme</groupId>
+              <artifactId>nested-root</artifactId>
+              <version>1.0</version>
+            </project>
+            """);
+        final Path nested = project.resolve("src/main/java/com/acme");
+        Files.createDirectories(nested);
+
+        final CliRun run = run(nested, "inspect");
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stdout()).contains(
+            "Project: MAVEN",
+            "Root:    " + project.toAbsolutePath().normalize()
+        );
+        assertThat(run.stderr()).isEmpty();
+    }
+
+    @Test
+    void runFromNestedProjectDirectoryBuildsAndExecutesNativeApp() throws Exception {
+        final Path project = project("nested-project-run");
+        final Path source = project.resolve("src/main/java/com/acme/Main.java");
+        Files.createDirectories(source.getParent());
+        Files.writeString(source, """
+            package com.acme;
+            public final class Main {
+                private Main() {
+                }
+                public static void main(final String[] args) {
+                    System.out.println("nested-native");
+                }
+            }
+            """);
+        final Path classes = project.resolve(".javan/classes");
+        Files.createDirectories(classes);
+        assertThat(process(project, List.of(
+            CliTestHarness.currentJavacCommand(),
+            "-d", classes.toString(),
+            source.toString()
+        )).exitCode()).isZero();
+
+        final CliRun run = run(source.getParent(), "run", "--main", "com.acme.Main");
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(run.stdout()).contains("nested-native");
+        assertThat(run.stderr()).isEmpty();
+    }
+
+    @Test
     void javacVersionDelegatesToJavac() {
         final ProcessResult javac = process(tempDir, List.of(CliTestHarness.currentJavacCommand(), "-version"));
 

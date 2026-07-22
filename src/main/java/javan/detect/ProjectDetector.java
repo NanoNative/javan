@@ -26,7 +26,7 @@ public final class ProjectDetector {
      * @throws IOException when filesystem inspection fails
      */
     public ProjectLayout detect(final Path cwd, final Options options) throws IOException {
-        final Path input = options.target().orElse(cwd).toAbsolutePath().normalize();
+        final Path input = options.target().orElseGet(() -> defaultInput(cwd)).toAbsolutePath().normalize();
         final InputKind inputKind = inputKind(input);
         final Path root = root(input, inputKind);
         final BuildTool buildTool = buildTool(root, inputKind);
@@ -52,6 +52,27 @@ public final class ProjectDetector {
             Strings2.executableName(outputName),
             List.copyOf(warnings)
         );
+    }
+
+    private static Path defaultInput(final Path cwd) {
+        final Path normalized = cwd.toAbsolutePath().normalize();
+        Path current = normalized;
+        while (current != null) {
+            if (hasProjectMarker(current)) {
+                return current;
+            }
+            current = current.getParent();
+        }
+        return normalized;
+    }
+
+    private static boolean hasProjectMarker(final Path directory) {
+        return Files.exists(directory.resolve("pom.xml"))
+            || Files.exists(directory.resolve("build.gradle"))
+            || Files.exists(directory.resolve("build.gradle.kts"))
+            || Files.exists(directory.resolve("settings.gradle"))
+            || Files.exists(directory.resolve("settings.gradle.kts"))
+            || Files.isDirectory(directory.resolve("src"));
     }
 
     private static String selectedOutputName(
