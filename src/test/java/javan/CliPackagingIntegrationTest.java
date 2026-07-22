@@ -1342,6 +1342,65 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void sharedLibraryRustBindingCallsTryWrapper() throws Exception {
+        Assumptions.assumeTrue(commandAvailable("rustc"));
+        final Path project = project("library-rust-binding");
+        writeJava(project, "com.acme.Math", """
+            package com.acme;
+
+            public final class Math {
+                private Math() {
+                }
+
+                public static int add(final int left, final int right) {
+                    return left + right;
+                }
+            }
+            """);
+
+        final CliRun run = run(
+            tempDir,
+            "build",
+            project.toString(),
+            "--kind",
+            "sharedlib",
+            "--bindings",
+            "rust",
+            "--export",
+            "com.acme.Math.add"
+        );
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Path library = project.resolve(".javan/dist/" + sharedLibraryName("library-rust-binding"));
+        final Path rust = project.resolve(".javan/dist/bindings/rust/lib.rs");
+        assertThat(library).exists();
+        assertThat(rust).exists();
+        Files.writeString(rust, """
+            #[cfg(test)]
+            mod generated_binding_test {
+                #[test]
+                fn try_wrapper_returns_expected_value() {
+                    let value = unsafe { super::try_javan_export_com_acme_Math_add_int_int(2, 5) }
+                        .expect("native result");
+                    assert_eq!(value, 7);
+                }
+            }
+            """, java.nio.file.StandardOpenOption.APPEND);
+        final Path binary = project.resolve("rust-binding-test");
+        assertThat(processSlow(project, List.of(
+            "rustc",
+            "--edition=2021",
+            "--test",
+            rust.toString(),
+            "-L",
+            "native=" + project.resolve(".javan/dist"),
+            "-o",
+            binary.toString()
+        )).exitCode()).isZero();
+        assertThat(processSlow(project, List.of(binary.toString())).exitCode()).isZero();
+    }
+
+    @Test
     void unsupportedExportSignatureFailsClearly() throws Exception {
         final Path project = project("library-bad-export");
         writeJava(project, "com.acme.Bad", """
