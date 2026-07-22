@@ -140,7 +140,10 @@ public final class ExportResolver {
         if (declaration.contains("(")) {
             final ParsedDeclaration parsed = ParsedDeclaration.parse(declaration);
             final ClassFile classFile = classFile(classes, parsed.owner());
-            final MethodInfo method = classFile.method(parsed.methodName(), parsed.descriptor()).orElse(null);
+            MethodInfo method = classFile.method(parsed.methodName(), parsed.descriptor()).orElse(null);
+            if (method == null && !parsed.descriptor().equals(parsed.abiDescriptor())) {
+                method = classFile.method(parsed.methodName(), parsed.abiDescriptor()).orElse(null);
+            }
             if (method == null) {
                 throw new IllegalArgumentException("Export method not found: " + declaration);
             }
@@ -228,7 +231,14 @@ public final class ExportResolver {
         );
     }
 
-    private record ParsedDeclaration(String owner, String methodName, String descriptor, List<AbiType> parameterTypes, AbiType returnType) {
+    private record ParsedDeclaration(
+        String owner,
+        String methodName,
+        String descriptor,
+        String abiDescriptor,
+        List<AbiType> parameterTypes,
+        AbiType returnType
+    ) {
         static ParsedDeclaration parse(final String declaration) {
             final int open = declaration.indexOf('(');
             final int close = declaration.indexOf(')', open);
@@ -242,9 +252,18 @@ public final class ExportResolver {
             }
             final String owner = Strings2.replaceChar(declaration.substring(0, dot), '.', '/');
             final String methodName = declaration.substring(dot + 1, open);
-            final List<AbiType> parameters = parseTypes(declaration.substring(open + 1, close));
-            final AbiType returnType = parseType(Strings2.trimAscii(declaration.substring(colon + 1)), true);
-            return new ParsedDeclaration(owner, methodName, ExportResolver.descriptor(parameters, returnType), parameters, returnType);
+            final String parameterText = declaration.substring(open + 1, close);
+            final String returnText = Strings2.trimAscii(declaration.substring(colon + 1));
+            final List<AbiType> parameters = parseTypes(parameterText);
+            final AbiType returnType = parseType(returnText, true);
+            return new ParsedDeclaration(
+                owner,
+                methodName,
+                ExportResolver.descriptor(parameterText, returnText),
+                ExportResolver.abiDescriptor(parameters, returnType),
+                parameters,
+                returnType
+            );
         }
     }
 
@@ -355,18 +374,31 @@ public final class ExportResolver {
         throw new IllegalArgumentException("Unsupported export parameter type: " + value);
     }
 
-    private static String descriptor(final List<AbiType> parameters, final AbiType returnType) {
+    private static String descriptor(final String parameterText, final String returnText) {
         final StringBuilder result = new StringBuilder();
         result.append('(');
-        for (final AbiType parameter : parameters) {
-            result.append(descriptor(parameter));
+        if (!Strings2.isBlank(parameterText)) {
+            int start = 0;
+            for (int index = 0; index <= parameterText.length(); index++) {
+                if (index == parameterText.length() || parameterText.charAt(index) == ',') {
+                    result.append(descriptor(Strings2.trimAscii(parameterText.substring(start, index)), false));
+                    start = index + 1;
+                }
+            }
         }
-        result.append(')');
-        result.append(descriptor(returnType));
+        result.append(')').append(descriptor(returnText, true));
         return result.toString();
     }
 
-    private static String descriptor(final AbiType type) {
+    private static String abiDescriptor(final List<AbiType> parameters, final AbiType returnType) {
+        final StringBuilder result = new StringBuilder("(");
+        for (final AbiType parameter : parameters) {
+            result.append(abiDescriptor(parameter));
+        }
+        return result.append(')').append(abiDescriptor(returnType)).toString();
+    }
+
+    private static String abiDescriptor(final AbiType type) {
         if (type == AbiType.VOID) {
             return "V";
         }
@@ -389,5 +421,36 @@ public final class ExportResolver {
             return "[B";
         }
         throw new IllegalArgumentException("Unsupported ABI type: " + type.name());
+    }
+
+    private static String descriptor(final String type, final boolean returnPosition) {
+        if ("void".equals(type)) {
+            if (returnPosition) {
+                return "V";
+            }
+        } else if ("byte".equals(type)) {
+            return "B";
+        } else if ("char".equals(type)) {
+            return "C";
+        } else if ("short".equals(type)) {
+            return "S";
+        } else if ("int".equals(type)) {
+            return "I";
+        } else if ("boolean".equals(type)) {
+            return "Z";
+        } else if ("long".equals(type)) {
+            return "J";
+        } else if ("float".equals(type)) {
+            return "F";
+        } else if ("double".equals(type)) {
+            return "D";
+        } else if ("String".equals(type) || "java.lang.String".equals(type)) {
+            return "Ljava/lang/String;";
+        } else if ("byte[]".equals(type)) {
+            return "[B";
+        } else {
+            throw new IllegalArgumentException("Unsupported export type: " + type);
+        }
+        throw new IllegalArgumentException("Unsupported export parameter type: " + type);
     }
 }

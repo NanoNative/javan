@@ -629,6 +629,59 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void staticLibraryExportedBooleanMethodBuildsWithoutMainAndRunsFromC() throws Exception {
+        final Path project = project("library-boolean");
+        writeJava(project, "com.acme.Flags", """
+            package com.acme;
+
+            public final class Flags {
+                private Flags() {
+                }
+
+                public static boolean identity(final boolean value) {
+                    return value;
+                }
+            }
+            """);
+
+        final CliRun run = run(
+            tempDir,
+            "build",
+            project.toString(),
+            "--kind",
+            "staticlib",
+            "--export",
+            "com.acme.Flags.identity(boolean):boolean"
+        );
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Path library = project.resolve(".javan/dist/liblibrary-boolean.a");
+        final Path header = project.resolve(".javan/dist/bindings/c/library-boolean.h");
+        assertThat(library).exists();
+        assertThat(Files.readString(header)).contains(
+            "int javan_export_com_acme_Flags_identity_int(int arg0);",
+            "JavanResult javan_try_com_acme_Flags_identity_int(int arg0, int* out);"
+        );
+        final Path caller = writeC(project, "call_boolean.c", """
+            #include <stdio.h>
+            #include ".javan/dist/bindings/c/library-boolean.h"
+
+            int main(void) {
+                printf("%d:%d\\n", javan_export_com_acme_Flags_identity_int(0), javan_export_com_acme_Flags_identity_int(1));
+                int result_value = 0;
+                JavanResult result = javan_try_com_acme_Flags_identity_int(1, &result_value);
+                printf("try:%d:%d\\n", result.ok, result_value);
+                javan_result_free(&result);
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-boolean");
+        assertThat(process(project, List.of("cc", caller.toString(), library.toString(), "-o", binary.toString())).exitCode())
+            .isZero();
+        assertThat(process(project, List.of(binary.toString())).stdout()).isEqualTo("0:1\ntry:1:1\n");
+    }
+
+    @Test
     void staticLibraryExportedFloatMethodBuildsWithoutMainAndRunsFromC() throws Exception {
         final Path project = project("library-float");
         writeJava(project, "com.acme.Numbers", """
