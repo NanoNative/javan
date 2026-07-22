@@ -1292,6 +1292,56 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void sharedLibraryGoBindingCallsTryWrapper() throws Exception {
+        Assumptions.assumeTrue(commandAvailable("go"));
+        final Path project = project("library-go-binding");
+        writeJava(project, "com.acme.Math", """
+            package com.acme;
+
+            public final class Math {
+                private Math() {
+                }
+
+                public static int add(final int left, final int right) {
+                    return left + right;
+                }
+            }
+            """);
+
+        final CliRun run = run(
+            tempDir,
+            "build",
+            project.toString(),
+            "--kind",
+            "sharedlib",
+            "--bindings",
+            "go",
+            "--export",
+            "com.acme.Math.add"
+        );
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Path library = project.resolve(".javan/dist/" + sharedLibraryName("library-go-binding"));
+        final Path goDirectory = project.resolve(".javan/dist/bindings/go");
+        assertThat(library).exists();
+        assertThat(goDirectory.resolve("library_go_binding.go")).exists();
+        Files.writeString(goDirectory.resolve("library_go_binding_test.go"), """
+            package library_go_binding
+
+            import "testing"
+
+            func TestTryWrapper(t *testing.T) {
+                value, err := TryJavanExportComAcmeMathAddIntInt(2, 5)
+                if err != nil || value != 7 {
+                    t.Fatalf("unexpected result: value=%d err=%v", value, err)
+                }
+            }
+            """);
+        assertThat(processSlow(project, List.of("sh", "-c", "cd '" + goDirectory + "' && GO111MODULE=off CGO_ENABLED=1 go test")).exitCode())
+            .isZero();
+    }
+
+    @Test
     void unsupportedExportSignatureFailsClearly() throws Exception {
         final Path project = project("library-bad-export");
         writeJava(project, "com.acme.Bad", """
