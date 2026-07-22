@@ -6130,6 +6130,14 @@ final class BytecodeToIRInvokeSupport {
                 stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_map_values", List.of(receiver))));
                 return true;
             }
+            if ("firstEntry()Ljava/util/Map$Entry;".equals(signature)) {
+                pushObjectCall(instructions, stack, localDeclarations, "javan_map_first_entry", List.of(receiver));
+                return true;
+            }
+            if ("lastEntry()Ljava/util/Map$Entry;".equals(signature)) {
+                pushObjectCall(instructions, stack, localDeclarations, "javan_map_last_entry", List.of(receiver));
+                return true;
+            }
         }
         if ("java/util/Map$Entry".equals(methodRef.owner())) {
             if ("getKey()Ljava/lang/Object;".equals(signature)) {
@@ -7054,6 +7062,9 @@ final class BytecodeToIRInvokeSupport {
     }
     static boolean isJdkMapOwner(final String owner) {
         if ("java/util/Map".equals(owner)) {
+            return true;
+        }
+        if ("java/util/SequencedMap".equals(owner)) {
             return true;
         }
         return isJdkMapClass(owner);

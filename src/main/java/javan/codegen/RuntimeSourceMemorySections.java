@@ -9307,6 +9307,25 @@ final class RuntimeSourceMemorySections {
             return entry_value;
         }
 
+        void* javan_map_first_entry(void* value) {
+            javan_object_map* map = javan_map_checked(value);
+            int length = javan_map_logical_length(map);
+            if (length == 0) {
+                return NULL;
+            }
+            return javan_map_entry_new(javan_map_key_unchecked(map, 0), javan_map_value_unchecked(map, 0));
+        }
+
+        void* javan_map_last_entry(void* value) {
+            javan_object_map* map = javan_map_checked(value);
+            int length = javan_map_logical_length(map);
+            if (length == 0) {
+                return NULL;
+            }
+            int index = length - 1;
+            return javan_map_entry_new(javan_map_key_unchecked(map, index), javan_map_value_unchecked(map, index));
+        }
+
         void javan_map_entry_attach_owner(void* value, void* owner) {
             javan_map_entry_checked(value)->owner = owner;
         }

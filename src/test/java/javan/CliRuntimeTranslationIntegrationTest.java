@@ -1005,6 +1005,44 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void sequencedMapEntryEndpointsBuildAndMatchJvmOutput() throws Exception {
+        final Path project = project("sequenced-map-entry-endpoints");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.LinkedHashMap;
+            import java.util.Map;
+            import java.util.SequencedMap;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final SequencedMap<String, Integer> values = new LinkedHashMap<>();
+                    values.put("alpha", 1);
+                    values.put("beta", 2);
+                    final Map.Entry<String, Integer> first = values.firstEntry();
+                    final Map.Entry<String, Integer> last = values.lastEntry();
+                    System.out.println(first.getKey() + ":" + first.getValue());
+                    System.out.println(last.getKey() + ":" + last.getValue());
+                    final SequencedMap<String, Integer> empty = new LinkedHashMap<>();
+                    System.out.println(empty.firstEntry() == null);
+                    System.out.println(empty.lastEntry() == null);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/sequenced-map-entry-endpoints").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("alpha:1\nbeta:2\ntrue\ntrue\n");
+    }
+
+    @Test
     void floatingPointConversionsBuildAndMatchJvmOutput() throws Exception {
         final Path project = project("floating-point-conversions");
         writeJava(project, "com.acme.Main", """
