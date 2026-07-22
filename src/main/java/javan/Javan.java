@@ -237,7 +237,7 @@ public final class Javan {
             settings.optimize(), settings.debug(), settings.containment()
         );
         runtimeContractReports.write(
-            check.layout().outputDirectory(), "app", List.of(binary), List.of(), settings.containment()
+            check.layout().outputDirectory(), "app", List.of(binary), List.of(), settings.containment(), settings.debug()
         );
         runtimeFootprintReports.write(
             check.layout().outputDirectory(),
@@ -280,7 +280,10 @@ public final class Javan {
             artifacts
         );
         libraryBuildReports.write(check.layout().outputDirectory(), check.classes(), check.callGraph(), check.exports(), artifacts, bindings);
-        runtimeContractReports.write(check.layout().outputDirectory(), "library", artifacts, exportedSymbols(check.exports()));
+        runtimeContractReports.write(
+            check.layout().outputDirectory(), "library", artifacts, exportedSymbols(check.exports()),
+            settings.containment(), settings.debug()
+        );
         runtimeFootprintReports.write(
             check.layout().outputDirectory(),
             "library",

@@ -107,7 +107,31 @@ public final class RuntimeContractReports {
         final List<String> abiSymbols,
         final String containment
     ) throws IOException, InterruptedException {
-        final List<ArtifactReport> artifactReports = inspectArtifacts(artifacts, containment);
+        return write(outputDirectory, artifactKind, artifacts, abiSymbols, containment, false);
+    }
+
+    /**
+     * Writes runtime reports with native containment and debug-symbol settings.
+     *
+     * @param outputDirectory javan output directory
+     * @param artifactKind artifact kind
+     * @param artifacts generated native artifacts
+     * @param abiSymbols exported ABI symbols
+     * @param containment linkage containment posture
+     * @param debug whether native debug symbols were requested
+     * @return written report paths and inspected artifacts
+     * @throws IOException when reports cannot be written
+     * @throws InterruptedException when interrupted while inspecting binaries
+     */
+    public Report write(
+        final Path outputDirectory,
+        final String artifactKind,
+        final List<Path> artifacts,
+        final List<String> abiSymbols,
+        final String containment,
+        final boolean debug
+    ) throws IOException, InterruptedException {
+        final List<ArtifactReport> artifactReports = inspectArtifacts(artifacts, containment, debug);
         final Path reportsDirectory = outputDirectory.resolve("reports");
         final Path jsonPath = reportsDirectory.resolve("runtime.json");
         final Path markdownPath = reportsDirectory.resolve("runtime.md");
@@ -118,21 +142,23 @@ public final class RuntimeContractReports {
         return new Report(jsonPath, markdownPath, artifactReports);
     }
 
-    private List<ArtifactReport> inspectArtifacts(final List<Path> artifacts, final String containment)
+    private List<ArtifactReport> inspectArtifacts(
+        final List<Path> artifacts, final String containment, final boolean debug
+    )
         throws IOException, InterruptedException {
         final List<ArtifactReport> result = new ArrayList<>();
         for (final Path artifact : artifacts) {
-            result.add(inspectArtifact(artifact, containment));
+            result.add(inspectArtifact(artifact, containment, debug));
         }
         return List.copyOf(result);
     }
 
-    private ArtifactReport inspectArtifact(final Path artifact, final String containment)
+    private ArtifactReport inspectArtifact(final Path artifact, final String containment, final boolean debug)
         throws IOException, InterruptedException {
         final long bytes = Files.isRegularFile(artifact) ? Files.size(artifact) : 0L;
         final String linkage = linkage(artifact, containment);
         final List<String> libraries = systemLibraries(artifact, linkage);
-        final String debugInfo = debugInfo(artifact);
+        final String debugInfo = debugInfo(artifact, debug);
         final String symbolTable = symbolTable(artifact);
         return new ArtifactReport(artifact, bytes, linkage, libraries, debugInfo, symbolTable);
     }
@@ -208,11 +234,11 @@ public final class RuntimeContractReports {
         return List.copyOf(libraries);
     }
 
-    private String debugInfo(final Path artifact) {
+    private static String debugInfo(final Path artifact, final boolean debug) {
         if (!Files.isRegularFile(artifact)) {
             return "unknown";
         }
-        return "not-requested";
+        return debug ? "requested-native-symbols" : "not-requested";
     }
 
     private String symbolTable(final Path artifact) throws IOException, InterruptedException {

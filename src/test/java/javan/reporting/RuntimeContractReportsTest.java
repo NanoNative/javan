@@ -43,7 +43,7 @@ final class RuntimeContractReportsTest {
             "\"linkage\": \"static-archive\"",
             "\"systemLibraries\": []",
             "\"abiSymbols\": [\"javan_export_com_acme_Math_add_int_int\"]",
-            "\"nativeSubstitutions\": [\"javan/util/ProcessRunner.run(Ljava/nio/file/Path;Ljava/util/List;)Ljavan/util/ProcessRunner$Result; -> javan_process_run\"]",
+            "\"nativeSubstitutions\": [\"javan/util/ProcessRunner.run(Ljava/nio/file/Path;Ljava/util/List;)Ljavan/util/ProcessRunner$Result; -> javan_process_run\", \"javan/util/ProcessRunner.runAttached(Ljava/nio/file/Path;Ljava/util/List;Ljava/io/PrintStream;Ljava/io/PrintStream;)Ljavan/util/ProcessRunner$Result; -> javan_process_run + captured stream forwarding\"]",
             "\"nativeSubstitutionFallbackPolicy\": \"exact-owned-fallback-body-ignored-only-when-unreachable\"",
             "\"debugInfo\": \"not-requested\"",
             "\"memoryModel\": \"tracked-c-heap-safe-point-partial-gc\"",
@@ -95,7 +95,7 @@ final class RuntimeContractReportsTest {
         assertThat(markdown).contains(
             "Runtime Contract",
             "ABI symbols: `javan_export_com_acme_Math_add_int_int`",
-            "native substitutions: `javan/util/ProcessRunner.run(Ljava/nio/file/Path;Ljava/util/List;)Ljavan/util/ProcessRunner$Result; -> javan_process_run`",
+            "native substitutions: `javan/util/ProcessRunner.run(Ljava/nio/file/Path;Ljava/util/List;)Ljavan/util/ProcessRunner$Result; -> javan_process_run, javan/util/ProcessRunner.runAttached(Ljava/nio/file/Path;Ljava/util/List;Ljava/io/PrintStream;Ljava/io/PrintStream;)Ljavan/util/ProcessRunner$Result; -> javan_process_run + captured stream forwarding`",
             "native substitution fallback policy: `exact-owned-fallback-body-ignored-only-when-unreachable`",
             "memory model: `tracked-c-heap-safe-point-partial-gc`",
             "Java allocation ownership: `javan-owned-generated-objects-object-arrays-primitive-arrays-boxed-primitive-wrappers-runtime-strings-runtime-containers-and-owned-container-storage-gc-eligible`",
@@ -175,6 +175,25 @@ final class RuntimeContractReportsTest {
 
         assertThat(Files.readString(report.jsonPath())).contains("\"linkage\": \"static-executable\"");
         assertThat(report.artifacts().getFirst().systemLibraries()).isEmpty();
+    }
+
+    @Test
+    void writeReportsRequestedNativeDebugSymbols() throws Exception {
+        final Path binary = tempDir.resolve(".javan/bin/debug-app");
+        Files.createDirectories(binary.getParent());
+        Files.writeString(binary, "debug executable placeholder\n");
+
+        final RuntimeContractReports.Report report = new RuntimeContractReports().write(
+            tempDir.resolve(".javan"),
+            "app",
+            List.of(binary),
+            List.of(),
+            "system-linked",
+            true
+        );
+
+        assertThat(report.artifacts().getFirst().debugInfo()).isEqualTo("requested-native-symbols");
+        assertThat(Files.readString(report.jsonPath())).contains("\"debugInfo\": \"requested-native-symbols\"");
     }
 
     @Test
