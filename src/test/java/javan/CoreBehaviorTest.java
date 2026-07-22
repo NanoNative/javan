@@ -13341,6 +13341,24 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void processRunnerForwardsAttachedStdoutAndStderrWhileCapturingThem() throws Exception {
+        final java.io.ByteArrayOutputStream stdout = new java.io.ByteArrayOutputStream();
+        final java.io.ByteArrayOutputStream stderr = new java.io.ByteArrayOutputStream();
+        final ProcessRunner.Result result = new ProcessRunner(Duration.ofSeconds(5)).runAttached(
+            tempDir,
+            List.of("sh", "-c", "printf attached-out; printf attached-err >&2"),
+            new java.io.PrintStream(stdout, true, java.nio.charset.StandardCharsets.UTF_8),
+            new java.io.PrintStream(stderr, true, java.nio.charset.StandardCharsets.UTF_8)
+        );
+
+        assertThat(result.exitCode()).isZero();
+        assertThat(result.stdout()).isEqualTo("attached-out");
+        assertThat(result.stderr()).isEqualTo("attached-err");
+        assertThat(stdout.toString(java.nio.charset.StandardCharsets.UTF_8)).isEqualTo("attached-out");
+        assertThat(stderr.toString(java.nio.charset.StandardCharsets.UTF_8)).isEqualTo("attached-err");
+    }
+
+    @Test
     void processRunnerCapturesLargeStderrWithoutDeadlock() throws Exception {
         final ProcessRunner.Result result = new ProcessRunner(Duration.ofSeconds(5)).run(
             tempDir,

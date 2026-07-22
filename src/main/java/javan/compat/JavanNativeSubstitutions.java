@@ -12,13 +12,21 @@ public final class JavanNativeSubstitutions {
     private static final String PROCESS_RUNNER_OWNER = "javan/util/ProcessRunner";
     private static final String PROCESS_RUNNER_RUN_DESCRIPTOR =
         "(Ljava/nio/file/Path;Ljava/util/List;)Ljavan/util/ProcessRunner$Result;";
+    private static final String PROCESS_RUNNER_RUN_ATTACHED_DESCRIPTOR =
+        "(Ljava/nio/file/Path;Ljava/util/List;Ljava/io/PrintStream;Ljava/io/PrintStream;)Ljavan/util/ProcessRunner$Result;";
     private static final MethodRef PROCESS_RUNNER_RUN = new MethodRef(
         PROCESS_RUNNER_OWNER,
         "run",
         PROCESS_RUNNER_RUN_DESCRIPTOR
     );
+    private static final MethodRef PROCESS_RUNNER_RUN_ATTACHED = new MethodRef(
+        PROCESS_RUNNER_OWNER,
+        "runAttached",
+        PROCESS_RUNNER_RUN_ATTACHED_DESCRIPTOR
+    );
     private static final List<String> REPORT_LINES = List.of(
-        PROCESS_RUNNER_RUN.display() + " -> javan_process_run"
+        PROCESS_RUNNER_RUN.display() + " -> javan_process_run",
+        PROCESS_RUNNER_RUN_ATTACHED.display() + " -> javan_process_run + captured stream forwarding"
     );
 
     private JavanNativeSubstitutions() {
@@ -31,9 +39,7 @@ public final class JavanNativeSubstitutions {
      * @return true for exact substituted calls
      */
     public static boolean isSubstitutedCall(final MethodRef methodRef) {
-        return PROCESS_RUNNER_RUN.owner().equals(methodRef.owner())
-            && PROCESS_RUNNER_RUN.name().equals(methodRef.name())
-            && PROCESS_RUNNER_RUN.descriptor().equals(methodRef.descriptor());
+        return PROCESS_RUNNER_RUN.equals(methodRef) || PROCESS_RUNNER_RUN_ATTACHED.equals(methodRef);
     }
 
     /**
@@ -59,7 +65,8 @@ public final class JavanNativeSubstitutions {
     public static boolean isSubstitutedFallbackMethod(final String owner, final MethodInfo method) {
         return PROCESS_RUNNER_RUN.owner().equals(owner)
             && PROCESS_RUNNER_RUN.name().equals(method.name())
-            && PROCESS_RUNNER_RUN.descriptor().equals(method.descriptor());
+            && (PROCESS_RUNNER_RUN.descriptor().equals(method.descriptor())
+                || PROCESS_RUNNER_RUN_ATTACHED.descriptor().equals(method.descriptor()));
     }
 
     /**

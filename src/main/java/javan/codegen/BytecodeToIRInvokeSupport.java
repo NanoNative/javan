@@ -1910,6 +1910,20 @@ final class BytecodeToIRInvokeSupport {
             result,
             IrExpression.objectCall("javan_process_result_stderr", List.of(nativeResult))
         ));
+        if ("runAttached".equals(methodRef.name())) {
+            instructions.add(IrInstruction.callStaticVoid(
+                "javan_printstream_print",
+                List.of(arguments.get(2), IrExpression.objectField(
+                    "javan/util/ProcessRunner$Result", "stdout", result
+                ))
+            ));
+            instructions.add(IrInstruction.callStaticVoid(
+                "javan_printstream_print",
+                List.of(arguments.get(3), IrExpression.objectField(
+                    "javan/util/ProcessRunner$Result", "stderr", result
+                ))
+            ));
+        }
         stack.add(StackValue.objectExpression(result));
         return true;
     }

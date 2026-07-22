@@ -345,11 +345,7 @@ public final class Javan {
         command.add(binary.toString());
         command.addAll(runtimeProfilingArguments(detected));
         command.addAll(options.passthroughArgs());
-        final ProcessRunner.Result result = processRunner.run(binary.getParent(), command);
-        out.print(result.stdout());
-        if (!Strings2.isBlank(result.stderr())) {
-            err.print(result.stderr());
-        }
+        final ProcessRunner.Result result = processRunner.runAttached(binary.getParent(), command, out, err);
         writeUnifiedReport(detected.outputDirectory());
         return RunResult.success(result.exitCode());
     }
