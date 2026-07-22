@@ -302,6 +302,10 @@ public final class Javan {
         printInt(out, "  exported methods: ", check.exports().size());
         printInt(out, "  reachable methods: ", check.callGraph().reachableMethods().size());
         printText(out, "  report: ", check.layout().outputDirectory().resolve("reports/library-build.md").toString());
+        if (options.jarAlongsideLibrary()) {
+            final Path jar = buildJar(check.layout().root(), options, out);
+            printText(out, "Jar: ", jar.toString());
+        }
         if (options.combinedLibraryBuild()) {
             return check.layout().outputDirectory().resolve("dist").resolve("lib").resolve(check.layout().outputName());
         }

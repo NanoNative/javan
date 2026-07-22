@@ -166,7 +166,7 @@ public final class Cli {
               --classes <dir>       explicit class folder
               --classpath <paths>   dependency classpath
               --output, -o <name>   output executable name
-              --jar                  build a JVM jar
+              --jar                  build a JVM jar (also beside --library artifacts)
               --library, --lib       build a native library package
               --format <formats>     static, shared, or both for library builds
               --kind <kind>          app, jar, library, staticlib, or sharedlib

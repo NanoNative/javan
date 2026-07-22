@@ -25,6 +25,7 @@ Implemented build kinds:
 - `app`
 - `jar` (JVM jar output, not library mode)
 - `library`
+- `library` + `--jar` (native library package plus JVM jar)
 - `staticlib`
 - `sharedlib`
 

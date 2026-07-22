@@ -693,6 +693,38 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void libraryAndJarBuildProduceNativeArtifactsAndJvmJar() throws Exception {
+        final Path project = project("library-with-jar");
+        writeJava(project, "com.acme.Math", """
+            package com.acme;
+
+            public final class Math {
+                private Math() {
+                }
+
+                public static int add(final int left, final int right) {
+                    return left + right;
+                }
+            }
+            """);
+
+        final CliRun run = run(
+            tempDir,
+            "build",
+            project.toString(),
+            "--library",
+            "--jar",
+            "--export",
+            "com.acme.Math.add"
+        );
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(project.resolve(".javan/dist/liblibrary-with-jar.a")).exists();
+        assertThat(project.resolve(".javan/dist/" + sharedLibraryName("library-with-jar"))).exists();
+        assertThat(project.resolve(".javan/dist/library-with-jar.jar")).exists();
+    }
+
+    @Test
     void libraryAliasStaticFormatBuildsOnlyStaticArtifact() throws Exception {
         final Path project = project("library-static-format");
         writeJava(project, "com.acme.Math", """

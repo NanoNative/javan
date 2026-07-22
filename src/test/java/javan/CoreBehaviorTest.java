@@ -133,6 +133,15 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void optionsParseLibraryJarCombination() {
+        final Options options = Options.parse(new String[]{"build", ".", "--library", "--jar"});
+
+        assertThat(options.buildKind()).isEqualTo(BuildKind.LIBRARY);
+        assertThat(options.jarAlongsideLibrary()).isTrue();
+        assertThat(options.libraryFormats()).containsExactly(LibraryFormat.STATIC, LibraryFormat.SHARED);
+    }
+
+    @Test
     void optionsParseLibAliasWithStaticFormat() {
         final Options options = Options.parse(new String[]{"build", ".", "--lib", "--format", "static"});
 
