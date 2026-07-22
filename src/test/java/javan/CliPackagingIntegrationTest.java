@@ -230,7 +230,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "\"name\": \"system-linked\"",
             "\"status\": \"verified-host\"",
             "\"name\": \"self-contained\"",
-            "\"status\": \"not-implemented\"",
+            "\"status\": \"supported-linux-windows\"",
             "\"target\": \"linux-aarch64\"",
             "\"target\": \"macos-aarch64\""
         );
@@ -253,6 +253,35 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "threadLifecycleInventory: `true`",
             "threadLifecycleInventoryScope: `heap-thread-object-thread-root-registry-started-completed-active-non-current-target-current-root-and-completed-target-release-counters`",
             "threads: `current-thread-interrupt-state-isalive-isvirtual-entry-interrupted-sleep-start-startvirtualthread-builderstart-builderunstarted-factory-executor-threadlocal-park-parknanos-parkuntil-unpark-parallel-host-thread-bootstrap-join-same-method-catch-thread-construction-duplicate-start-rejection-current-join-rejection-and-runnable-target-no-virtual-scheduler`"
+        );
+    }
+
+    @Test
+    void buildRejectsSelfContainedContainmentOnMacos() throws Exception {
+        Assumptions.assumeTrue(System.getProperty("os.name", "").toLowerCase().contains("mac"));
+        final Path project = project("self-contained-macos");
+        Files.writeString(project.resolve("javan.toml"), """
+            [runtime]
+            containment = "self-contained"
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("self-contained");
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isEqualTo(1);
+        assertThat(run.stderr()).contains(
+            "Self-contained native linking is unsupported on macOS; use system-linked containment."
         );
     }
 

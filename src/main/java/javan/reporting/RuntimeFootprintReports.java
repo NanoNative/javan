@@ -120,7 +120,7 @@ public final class RuntimeFootprintReports {
     private static List<Footprint> footprints(final boolean release) {
         return List.of(
             new Footprint("system-linked", true, true, "verified-host", "uses host C compiler and system runtime libraries"),
-            new Footprint("self-contained", false, false, "not-implemented", "static/self-contained packaging is a release gate"),
+            new Footprint("self-contained", false, false, "supported-linux-windows", "native app linking uses -static on Linux/Windows; macOS rejects this posture"),
             new Footprint("release-conservative", release, release, release ? "accepted-conservative" : "not-requested",
                 "release flag is accepted; size/speed specialization remains conservative"),
             new Footprint("debug-symbols", false, false, "not-requested", "native debug symbol policy is not implemented"),

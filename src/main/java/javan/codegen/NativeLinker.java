@@ -62,7 +62,7 @@ public final class NativeLinker {
     public Path link(
         final Path root, final Path mainC, final Path runtimeC, final Path output, final String optimize
     ) throws IOException, InterruptedException {
-        return link(root, mainC, runtimeC, output, optimize, false);
+        return link(root, mainC, runtimeC, output, optimize, false, "system-linked");
     }
 
     /**
@@ -82,6 +82,27 @@ public final class NativeLinker {
         final Path root, final Path mainC, final Path runtimeC, final Path output,
         final String optimize, final boolean debug
     ) throws IOException, InterruptedException {
+        return link(root, mainC, runtimeC, output, optimize, debug, "system-linked");
+    }
+
+    /**
+     * Links generated C sources using optimization, debug, and containment settings.
+     *
+     * @param root working directory
+     * @param mainC generated main C path
+     * @param runtimeC runtime C path
+     * @param output output binary path
+     * @param optimize optimization posture
+     * @param debug whether to retain native debug symbols
+     * @param containment linkage containment posture
+     * @return output binary path
+     * @throws IOException when linking fails or containment is unsupported on the host
+     * @throws InterruptedException when interrupted while linking
+     */
+    public Path link(
+        final Path root, final Path mainC, final Path runtimeC, final Path output,
+        final String optimize, final boolean debug, final String containment
+    ) throws IOException, InterruptedException {
         final String compiler = requiredExecutable(compilerCandidates(), "No C compiler found. Install gcc, clang, or cc.");
         Files.createDirectories(output.getParent());
         final List<String> command = new ArrayList<>();
@@ -89,6 +110,7 @@ public final class NativeLinker {
         command.addAll(threadFlags());
         command.addAll(optimizeFlags(optimize));
         command.addAll(debugFlags(debug));
+        command.addAll(containmentFlags(containment));
         command.add(mainC.toString());
         command.add(runtimeC.toString());
         command.addAll(platformLinkFlags());
@@ -298,6 +320,23 @@ public final class NativeLinker {
 
     private static List<String> debugFlags(final boolean debug) {
         return debug ? List.of("-g") : List.of();
+    }
+
+    private static List<String> containmentFlags(final String containment) throws IOException {
+        final String normalized = Strings2.replaceChar(
+            Strings2.toAsciiLowerCase(Strings2.trimAscii(containment)), '_', '-'
+        );
+        if ("system".equals(normalized) || "system-linked".equals(normalized) || "".equals(normalized)) {
+            return List.of();
+        }
+        if (!"self-contained".equals(normalized)) {
+            throw new IllegalArgumentException("Unsupported runtime containment posture: " + containment);
+        }
+        final String os = Strings2.toAsciiLowerCase(System.getProperty("os.name", ""));
+        if (os.contains("mac") || os.contains("darwin")) {
+            throw new IOException("Self-contained native linking is unsupported on macOS; use system-linked containment.");
+        }
+        return List.of("-static");
     }
 
     private static List<String> platformLinkFlags() {

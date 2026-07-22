@@ -58,7 +58,7 @@ path remains `javan build`.
 | Choice | Smaller | Faster | Good for | Cost |
 | --- | --- | --- | --- | --- |
 | `containment = "system"` | yes | neutral | Docker/base images | Requires compatible system libraries. |
-| `containment = "self-contained"` | no | neutral | Downloadable apps | Larger; static linking is platform-dependent. |
+| `containment = "self-contained"` | no | neutral | Downloadable apps | Uses `-static` on Linux/Windows; macOS rejects it explicitly. |
 | `optimize = "size"` | yes | maybe no | CLI tools, desktop apps | Fewer duplicated fast helpers and less metadata. |
 | `optimize = "speed"` | no | yes | Services, hot loops | Larger binary from helpers/specialization. |
 | `debug = false` | yes | neutral | Release builds | Less native/source mapping detail. |
@@ -112,7 +112,7 @@ Required report fields:
 ## Acceptance
 
 - System-linked build reports system libraries and passes on the host.
-- Self-contained build either succeeds or fails with a platform-specific reason.
+- Self-contained app builds use `-static` on Linux/Windows and fail with a platform-specific reason on macOS.
 - `optimize = "size"` produces an artifact no larger than balanced for the same app.
 - `optimize = "speed"` may grow binary size and reports why.
 - Disabled unused feature is omitted and reported.

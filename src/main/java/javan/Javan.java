@@ -233,7 +233,8 @@ public final class Javan {
         final Path output = check.layout().outputDirectory().resolve("bin").resolve(check.layout().outputName());
         final RuntimeFeatureSelection.Settings settings = runtimeFeatureSelection.read(check.layout().root());
         final Path binary = nativeLinker.link(
-            check.layout().root(), mainC, runtimeC, output, settings.optimize(), settings.debug()
+            check.layout().root(), mainC, runtimeC, output,
+            settings.optimize(), settings.debug(), settings.containment()
         );
         runtimeContractReports.write(check.layout().outputDirectory(), "app", List.of(binary));
         runtimeFootprintReports.write(
