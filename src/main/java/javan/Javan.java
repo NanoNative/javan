@@ -232,7 +232,9 @@ public final class Javan {
         final Path runtimeC = runtimeFiles.write(generated, resources);
         final Path output = check.layout().outputDirectory().resolve("bin").resolve(check.layout().outputName());
         final RuntimeFeatureSelection.Settings settings = runtimeFeatureSelection.read(check.layout().root());
-        final Path binary = nativeLinker.link(check.layout().root(), mainC, runtimeC, output, settings.optimize());
+        final Path binary = nativeLinker.link(
+            check.layout().root(), mainC, runtimeC, output, settings.optimize(), settings.debug()
+        );
         runtimeContractReports.write(check.layout().outputDirectory(), "app", List.of(binary));
         runtimeFootprintReports.write(
             check.layout().outputDirectory(),
@@ -263,7 +265,9 @@ public final class Javan {
         final List<Path> artifacts = new ArrayList<>();
         for (final LibraryFormat format : options.libraryFormats()) {
             final Path output = libraryArtifactPath(format, check.layout().outputDirectory(), check.layout().outputName());
-            artifacts.add(linkLibraryFormat(format, check.layout().root(), libraryC, runtimeC, output, settings.optimize()));
+            artifacts.add(linkLibraryFormat(
+                format, check.layout().root(), libraryC, runtimeC, output, settings.optimize(), settings.debug()
+            ));
         }
         final List<Path> bindings = bindingGenerator.generate(
             check.layout().outputDirectory(),
@@ -643,13 +647,14 @@ public final class Javan {
         final Path libraryC,
         final Path runtimeC,
         final Path output,
-        final String optimize
+        final String optimize,
+        final boolean debug
     ) throws IOException, InterruptedException {
         if ("STATIC".equals(Options.formatName(format))) {
-            return nativeLinker.linkStaticLibrary(root, libraryC, runtimeC, output, optimize);
+            return nativeLinker.linkStaticLibrary(root, libraryC, runtimeC, output, optimize, debug);
         }
         if ("SHARED".equals(Options.formatName(format))) {
-            return nativeLinker.linkSharedLibrary(root, libraryC, runtimeC, output, optimize);
+            return nativeLinker.linkSharedLibrary(root, libraryC, runtimeC, output, optimize, debug);
         }
         throw new IllegalStateException("Unsupported library format");
     }

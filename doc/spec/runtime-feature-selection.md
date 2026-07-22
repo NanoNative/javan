@@ -46,7 +46,8 @@ disabled = ["thread-profiling", "reflection-metadata"]
 The shorter `[runtime]` table is accepted for the same keys. `disabled` is enforced now.
 `containment`, `debug`, and `profiling` are parsed and reported; native app and library
 compilation now maps `optimize = "size"`/`"size_first"` to `-Os`, `"speed"`/`"speed_first"`
-to `-O3`, and the default `balanced` posture to `-O2`. Other backend selection remains
+to `-O3`, and the default `balanced` posture to `-O2`. `debug = true` retains native
+debug symbols with `-g`; `debug = false` omits that flag. Other backend selection remains
 a follow-up gate.
 
 CLI flags may override config for automation, but they should stay sparse. The normal

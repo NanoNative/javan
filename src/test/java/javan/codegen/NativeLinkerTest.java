@@ -211,6 +211,22 @@ final class NativeLinkerTest {
     }
 
     @Test
+    void linkUsesDebugSymbolsWhenRequested() throws Exception {
+        final RecordingProcessRunner runner = new RecordingProcessRunner(new ProcessRunner.Result(0, "", ""));
+
+        withOsName("Linux", () -> new NativeLinker(runner).link(
+            tempDir,
+            tempDir.resolve("main.c"),
+            tempDir.resolve("runtime.c"),
+            tempDir.resolve("out/app"),
+            "balanced",
+            true
+        ));
+
+        assertThat(runner.commands()).singleElement().satisfies(command -> assertThat(command).contains("-g"));
+    }
+
+    @Test
     void linkThrowsWhenCompilerReturnsFailure() {
         final RecordingProcessRunner runner = new RecordingProcessRunner(
             new ProcessRunner.Result(1, "stdout", "stderr")
