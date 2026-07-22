@@ -5621,6 +5621,36 @@ final class BytecodeToIRInvokeSupport {
                 return true;
             }
         }
+        if ("java/util/SequencedCollection".equals(methodRef.owner())) {
+            if ("reversed()Ljava/util/SequencedCollection;".equals(signature)) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_reversed", List.of(receiver))));
+                return true;
+            }
+            if ("getFirst()Ljava/lang/Object;".equals(signature)) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_get_first", List.of(receiver))));
+                return true;
+            }
+            if ("getLast()Ljava/lang/Object;".equals(signature)) {
+                stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_list_get_last", List.of(receiver))));
+                return true;
+            }
+            if ("removeFirst()Ljava/lang/Object;".equals(signature)) {
+                pushObjectCall(instructions, stack, localDeclarations, "javan_arraylist_remove_first", List.of(receiver));
+                return true;
+            }
+            if ("removeLast()Ljava/lang/Object;".equals(signature)) {
+                pushObjectCall(instructions, stack, localDeclarations, "javan_arraylist_remove_last", List.of(receiver));
+                return true;
+            }
+            if ("addFirst(Ljava/lang/Object;)V".equals(signature)) {
+                instructions.add(IrInstruction.callStaticVoid("javan_arraylist_add_first", List.of(receiver, arguments.getFirst())));
+                return true;
+            }
+            if ("addLast(Ljava/lang/Object;)V".equals(signature)) {
+                instructions.add(IrInstruction.callStaticVoid("javan_arraylist_add_last", List.of(receiver, arguments.getFirst())));
+                return true;
+            }
+        }
         if ("java/util/AbstractList".equals(methodRef.owner())) {
             if ("add(Ljava/lang/Object;)Z".equals(signature)) {
                 pushIntCall(instructions, stack, localDeclarations, "javan_collection_add", List.of(receiver, arguments.getFirst()));
@@ -6979,6 +7009,9 @@ final class BytecodeToIRInvokeSupport {
             return true;
         }
         if ("java/util/AbstractList".equals(owner)) {
+            return true;
+        }
+        if ("java/util/SequencedCollection".equals(owner)) {
             return true;
         }
         if (isJdkSetOwner(owner)) {

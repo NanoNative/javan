@@ -967,6 +967,44 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void sequencedCollectionInterfaceEndpointsBuildAndMatchJvmOutput() throws Exception {
+        final Path project = project("sequenced-collection-endpoints");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+            import java.util.SequencedCollection;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final SequencedCollection<String> values = new ArrayList<>(List.of("alpha", "beta"));
+                    System.out.println(values.getFirst());
+                    System.out.println(values.getLast());
+                    values.addFirst("first");
+                    values.addLast("last");
+                    System.out.println(values.removeFirst());
+                    System.out.println(values.removeLast());
+                    final SequencedCollection<String> reversed = values.reversed();
+                    System.out.println(reversed.getFirst());
+                    System.out.println(reversed.getLast());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/sequenced-collection-endpoints").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("alpha\nbeta\nfirst\nlast\nbeta\nalpha\n");
+    }
+
+    @Test
     void floatingPointConversionsBuildAndMatchJvmOutput() throws Exception {
         final Path project = project("floating-point-conversions");
         writeJava(project, "com.acme.Main", """
