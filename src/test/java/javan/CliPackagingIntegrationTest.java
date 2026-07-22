@@ -157,8 +157,8 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         final CliRun run = run(tempDir, "run", project.toString());
 
         assertThat(run.exitCode()).isZero();
-        assertThat(run.stdout()).contains("native-err");
-        assertThat(run.stderr()).isEmpty();
+        assertThat(run.stdout()).doesNotContain("native-err");
+        assertThat(run.stderr()).contains("native-err");
     }
 
     @Test

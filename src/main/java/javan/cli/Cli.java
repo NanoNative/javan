@@ -109,7 +109,7 @@ public final class Cli {
             return finishDiagnostics(javan.build(cwd, options, out).diagnostics(), err, 0);
         }
         if (command == Command.RUN) {
-            final Javan.RunResult result = javan.run(cwd, options, out);
+            final Javan.RunResult result = javan.run(cwd, options, out, err);
             return finishDiagnostics(result.diagnostics(), err, result.exitCode());
         }
         if (command == Command.JAVAC) {

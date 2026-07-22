@@ -110,7 +110,8 @@ public final class Javan {
      *
      * @param cwd current working directory
      * @param options parsed options
-     * @param out output stream
+     * @param out stdout stream
+     * @param err stderr stream
      * @return check result
      * @throws IOException when IO or build invocation fails
      * @throws InterruptedException when interrupted while waiting for processes
@@ -323,7 +324,8 @@ public final class Javan {
      * @throws IOException when build or execution fails
      * @throws InterruptedException when interrupted while running
      */
-    public RunResult run(final Path cwd, final Options options, final PrintStream out) throws IOException, InterruptedException {
+    public RunResult run(final Path cwd, final Options options, final PrintStream out, final PrintStream err)
+        throws IOException, InterruptedException {
         final ProjectLayout detected = projectDetector.detect(cwd, options);
         final BuildResult build = build(cwd, options, out);
         if (!build.pass()) {
@@ -337,7 +339,7 @@ public final class Javan {
         final ProcessRunner.Result result = processRunner.run(binary.getParent(), command);
         out.print(result.stdout());
         if (!Strings2.isBlank(result.stderr())) {
-            out.print(result.stderr());
+            err.print(result.stderr());
         }
         writeUnifiedReport(detected.outputDirectory());
         return RunResult.success(result.exitCode());
