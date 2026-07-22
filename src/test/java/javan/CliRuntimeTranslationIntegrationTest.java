@@ -927,6 +927,46 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void listReversedMutableViewBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("list-reversed-mutable-view");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<String> values = new ArrayList<>(List.of("alpha", "beta", "gamma"));
+                    final List<String> reversed = values.reversed();
+                    reversed.set(0, "G");
+                    reversed.add("delta");
+                    reversed.addFirst("first");
+                    reversed.add(reversed.size(), "last");
+                    reversed.remove(0);
+                    reversed.remove(reversed.size() - 1);
+                    for (int index = 0; index < reversed.size(); index++) {
+                        System.out.println(reversed.get(index));
+                    }
+                    System.out.println(values.getFirst());
+                    System.out.println(values.getLast());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/list-reversed-mutable-view").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("G\nbeta\nalpha\ndelta\ndelta\nG\n");
+    }
+
+    @Test
     void listRemoveAllBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("list-remove-all");
         writeJava(project, "com.acme.Main", """

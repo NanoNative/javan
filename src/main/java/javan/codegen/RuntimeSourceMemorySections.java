@@ -7660,11 +7660,27 @@ final class RuntimeSourceMemorySections {
             return 0;
         }
 
+        static int javan_list_logical_length(javan_object_list* list);
+
         static javan_object_list* javan_list_storage_owner(javan_object_list* list) {
             while (list->backing != NULL) {
                 list = list->backing;
             }
             return list;
+        }
+
+        static javan_object_list* javan_list_mutation_owner(javan_object_list* list) {
+            if ((list->view_flags & JAVAN_LIST_VIEW_REVERSED) != 0 && list->backing != NULL) {
+                return javan_list_mutation_owner(list->backing);
+            }
+            return list;
+        }
+
+        static int javan_list_mutation_index(javan_object_list* list, int index) {
+            if ((list->view_flags & JAVAN_LIST_VIEW_REVERSED) != 0) {
+                return javan_list_logical_length(list->backing) - 1 - index;
+            }
+            return index;
         }
 
         void* javan_list_unmodifiable(void* value) {
@@ -7745,6 +7761,9 @@ final class RuntimeSourceMemorySections {
             if (list->immutable != 0) {
                 javan_panic("unsupported operation on immutable list");
             }
+            if (list->backing != NULL) {
+                javan_list_mutable_checked(list->backing);
+            }
         }
 
         static void javan_list_bounds_checked(javan_object_list* list, int index) {
@@ -7804,8 +7823,12 @@ final class RuntimeSourceMemorySections {
         int javan_arraylist_add(void* value, void* element) {
             javan_object_list* list = javan_list_checked(value);
             javan_list_mutable_checked(list);
-            javan_list_append_raw(list, element);
-            list->mod_count++;
+            if ((list->view_flags & JAVAN_LIST_VIEW_REVERSED) != 0) {
+                javan_arraylist_add_at(list->backing, 0, element);
+            } else {
+                javan_list_append_raw(list, element);
+                list->mod_count++;
+            }
             return 1;
         }
 
@@ -7820,8 +7843,13 @@ final class RuntimeSourceMemorySections {
         void javan_arraylist_add_at(void* value, int index, void* element) {
             javan_object_list* list = javan_list_checked(value);
             javan_list_mutable_checked(list);
-            if (index < 0 || index > list->length) {
+            int length = javan_list_logical_length(list);
+            if (index < 0 || index > length) {
                 javan_panic("list index out of bounds");
+            }
+            if ((list->view_flags & JAVAN_LIST_VIEW_REVERSED) != 0) {
+                javan_arraylist_add_at(list->backing, length - index, element);
+                return;
             }
             void* element_root = element;
             void** javan_list_insert_roots[] = {
@@ -7906,6 +7934,10 @@ final class RuntimeSourceMemorySections {
         void javan_arraylist_add_first(void* value, void* element) {
             javan_object_list* list = javan_list_checked(value);
             javan_list_mutable_checked(list);
+            if ((list->view_flags & JAVAN_LIST_VIEW_REVERSED) != 0) {
+                javan_arraylist_add_last(list->backing, element);
+                return;
+            }
             void* element_root = element;
             void** javan_list_add_first_roots[] = {
                 (void**) &list,
@@ -7923,6 +7955,11 @@ final class RuntimeSourceMemorySections {
         }
 
         void javan_arraylist_add_last(void* value, void* element) {
+            javan_object_list* list = javan_list_checked(value);
+            if ((list->view_flags & JAVAN_LIST_VIEW_REVERSED) != 0) {
+                javan_arraylist_add_first(list->backing, element);
+                return;
+            }
             javan_arraylist_add(value, element);
         }
 
@@ -7930,8 +7967,10 @@ final class RuntimeSourceMemorySections {
             javan_object_list* list = javan_list_checked(value);
             javan_list_mutable_checked(list);
             javan_list_bounds_checked(list, index);
-            void* previous = list->values[index];
-            list->values[index] = element;
+            javan_object_list* owner = javan_list_mutation_owner(list);
+            int owner_index = javan_list_mutation_index(list, index);
+            void* previous = owner->values[owner_index];
+            owner->values[owner_index] = element;
             return previous;
         }
 
@@ -7939,19 +7978,24 @@ final class RuntimeSourceMemorySections {
             javan_object_list* list = javan_list_checked(value);
             javan_list_mutable_checked(list);
             javan_list_bounds_checked(list, index);
-            void* previous = list->values[index];
-            if (index + 1 < list->length) {
-                memmove(list->values + index, list->values + index + 1, (unsigned long) (list->length - index - 1) * sizeof(void*));
+            javan_object_list* owner = javan_list_mutation_owner(list);
+            int owner_index = javan_list_mutation_index(list, index);
+            void* previous = owner->values[owner_index];
+            if (owner_index + 1 < owner->length) {
+                memmove(owner->values + owner_index, owner->values + owner_index + 1, (unsigned long) (owner->length - owner_index - 1) * sizeof(void*));
             }
-            list->length--;
-            list->values[list->length] = NULL;
-            list->mod_count++;
+            owner->length--;
+            owner->values[owner->length] = NULL;
+            owner->mod_count++;
             return previous;
         }
 
         void* javan_arraylist_remove_first(void* value) {
             javan_object_list* list = javan_list_checked(value);
             javan_list_mutable_checked(list);
+            if ((list->view_flags & JAVAN_LIST_VIEW_REVERSED) != 0) {
+                return javan_arraylist_remove_last(list->backing);
+            }
             if (list->length == 0) {
                 javan_panic("list is empty");
             }
@@ -7968,6 +8012,9 @@ final class RuntimeSourceMemorySections {
         void* javan_arraylist_remove_last(void* value) {
             javan_object_list* list = javan_list_checked(value);
             javan_list_mutable_checked(list);
+            if ((list->view_flags & JAVAN_LIST_VIEW_REVERSED) != 0) {
+                return javan_arraylist_remove_first(list->backing);
+            }
             if (list->length == 0) {
                 javan_panic("list is empty");
             }
@@ -8215,6 +8262,10 @@ final class RuntimeSourceMemorySections {
             if (length == 0) {
                 return;
             }
+            if ((list->view_flags & JAVAN_LIST_VIEW_REVERSED) != 0) {
+                javan_list_clear(list->backing);
+                return;
+            }
             memset(list->values, 0, (unsigned long) length * sizeof(void*));
             list->length = 0;
             list->mod_count++;
@@ -8231,7 +8282,7 @@ final class RuntimeSourceMemorySections {
             if ((list->view_flags & JAVAN_LIST_VIEW_REVERSED) != 0 && list->backing != NULL) {
                 return list->backing;
             }
-            return javan_list_new_view(list, 1, JAVAN_LIST_VIEW_REVERSED);
+            return javan_list_new_view(list, list->immutable, JAVAN_LIST_VIEW_REVERSED);
         }
 
         void* javan_list_get_first(void* value) {
