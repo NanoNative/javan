@@ -734,6 +734,61 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void staticLibraryExportedMixedPrimitiveMethodBuildsWithoutMainAndRunsFromC() throws Exception {
+        final Path project = project("library-mixed-primitives");
+        writeJava(project, "com.acme.Numbers", """
+            package com.acme;
+
+            public final class Numbers {
+                private Numbers() {
+                }
+
+                public static double combine(final boolean enabled, final long value, final double scale) {
+                    return enabled ? value * scale : -value * scale;
+                }
+            }
+            """);
+
+        final CliRun run = run(
+            tempDir,
+            "build",
+            project.toString(),
+            "--kind",
+            "staticlib",
+            "--export",
+            "com.acme.Numbers.combine(boolean,long,double):double"
+        );
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Path library = project.resolve(".javan/dist/liblibrary-mixed-primitives.a");
+        final Path header = project.resolve(".javan/dist/bindings/c/library-mixed-primitives.h");
+        assertThat(library).exists();
+        assertThat(Files.readString(header)).contains(
+            "double javan_export_com_acme_Numbers_combine_int_long_double(int arg0, long long arg1, double arg2);",
+            "JavanResult javan_try_com_acme_Numbers_combine_int_long_double(int arg0, long long arg1, double arg2, double* out);"
+        );
+        final Path caller = writeC(project, "call_mixed_primitives.c", """
+            #include <stdio.h>
+            #include ".javan/dist/bindings/c/library-mixed-primitives.h"
+
+            int main(void) {
+                printf("%.1f:%.1f\\n",
+                    javan_export_com_acme_Numbers_combine_int_long_double(1, 7LL, 0.5),
+                    javan_export_com_acme_Numbers_combine_int_long_double(0, 7LL, 0.5));
+                double result_value = 0.0;
+                JavanResult result = javan_try_com_acme_Numbers_combine_int_long_double(1, 7LL, 0.5, &result_value);
+                printf("try:%d:%.1f\\n", result.ok, result_value);
+                javan_result_free(&result);
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-mixed-primitives");
+        assertThat(process(project, List.of("cc", caller.toString(), library.toString(), "-o", binary.toString())).exitCode())
+            .isZero();
+        assertThat(process(project, List.of(binary.toString())).stdout()).isEqualTo("3.5:-3.5\ntry:1:3.5\n");
+    }
+
+    @Test
     void staticLibraryExportedFloatMethodBuildsWithoutMainAndRunsFromC() throws Exception {
         final Path project = project("library-float");
         writeJava(project, "com.acme.Numbers", """

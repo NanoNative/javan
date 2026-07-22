@@ -818,6 +818,9 @@ public final class BytecodeToIR {
             case 119:
                 unaryDoubleNeg(classFile, method, stack);
                 break;
+            case 117:
+                unaryLongNeg(classFile, method, stack);
+                break;
             case 132:
                 incrementInt(classFile, method, instructions, locals, localDeclarations, instruction);
                 break;
@@ -832,6 +835,12 @@ public final class BytecodeToIR {
                 break;
             case 136:
                 stack.add(StackValue.intExpression(IrExpression.intCall("javan_l2i", List.of(popLong(classFile, method, stack)))));
+                break;
+            case 137:
+                stack.add(StackValue.floatExpression(IrExpression.floatCall("javan_l2f", List.of(popLong(classFile, method, stack)))));
+                break;
+            case 138:
+                stack.add(StackValue.doubleExpression(IrExpression.doubleCall("javan_l2d", List.of(popLong(classFile, method, stack)))));
                 break;
             case 145:
                 intToByte(classFile, method, stack);
@@ -1156,6 +1165,14 @@ public final class BytecodeToIR {
             "-",
             IrExpression.doubleLiteral(0.0),
             popDouble(classFile, method, stack)
+        )));
+    }
+
+    static void unaryLongNeg(final ClassFile classFile, final MethodInfo method, final List<StackValue> stack) {
+        stack.add(StackValue.longExpression(IrExpression.longBinary(
+            "-",
+            IrExpression.longLiteral(0L),
+            popLong(classFile, method, stack)
         )));
     }
 
