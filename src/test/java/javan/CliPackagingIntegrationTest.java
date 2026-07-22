@@ -682,6 +682,58 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void staticLibraryExportedVoidMethodBuildsWithoutMainAndRunsFromC() throws Exception {
+        final Path project = project("library-void");
+        writeJava(project, "com.acme.Actions", """
+            package com.acme;
+
+            public final class Actions {
+                private Actions() {
+                }
+
+                public static void ping() {
+                    System.out.print("native-void");
+                }
+            }
+            """);
+
+        final CliRun run = run(
+            tempDir,
+            "build",
+            project.toString(),
+            "--kind",
+            "staticlib",
+            "--export",
+            "com.acme.Actions.ping():void"
+        );
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Path library = project.resolve(".javan/dist/liblibrary-void.a");
+        final Path header = project.resolve(".javan/dist/bindings/c/library-void.h");
+        assertThat(library).exists();
+        assertThat(Files.readString(header)).contains(
+            "void javan_export_com_acme_Actions_ping_void(void);",
+            "JavanResult javan_try_com_acme_Actions_ping_void(void);"
+        );
+        final Path caller = writeC(project, "call_void.c", """
+            #include <stdio.h>
+            #include ".javan/dist/bindings/c/library-void.h"
+
+            int main(void) {
+                javan_export_com_acme_Actions_ping_void();
+                JavanResult result = javan_try_com_acme_Actions_ping_void();
+                printf("|try:%d\\n", result.ok);
+                javan_result_free(&result);
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-void");
+        assertThat(process(project, List.of("cc", caller.toString(), library.toString(), "-o", binary.toString())).exitCode())
+            .isZero();
+        assertThat(process(project, List.of(binary.toString())).stdout()).isEqualTo("native-voidnative-void|try:1\n");
+    }
+
+    @Test
     void staticLibraryExportedFloatMethodBuildsWithoutMainAndRunsFromC() throws Exception {
         final Path project = project("library-float");
         writeJava(project, "com.acme.Numbers", """
