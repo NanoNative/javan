@@ -945,8 +945,8 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
                     reversed.set(0, "G");
                     reversed.add("delta");
                     reversed.addFirst("first");
-                    reversed.add(reversed.size(), "last");
-                    reversed.remove(0);
+                    reversed.addLast("last");
+                    reversed.removeFirst();
                     reversed.remove(reversed.size() - 1);
                     for (int index = 0; index < reversed.size(); index++) {
                         System.out.println(reversed.get(index));

@@ -5820,12 +5820,20 @@ final class BytecodeToIRInvokeSupport {
                 instructions.add(IrInstruction.callStaticVoid("javan_arraylist_add_first", List.of(receiver, arguments.getFirst())));
                 return true;
             }
+            if ("addLast(Ljava/lang/Object;)V".equals(signature)) {
+                instructions.add(IrInstruction.callStaticVoid("javan_arraylist_add_last", List.of(receiver, arguments.getFirst())));
+                return true;
+            }
             if ("set(ILjava/lang/Object;)Ljava/lang/Object;".equals(signature)) {
                 pushObjectCall(instructions, stack, localDeclarations, "javan_arraylist_set", List.of(receiver, arguments.get(0), arguments.get(1)));
                 return true;
             }
             if ("removeLast()Ljava/lang/Object;".equals(signature)) {
                 pushObjectCall(instructions, stack, localDeclarations, "javan_arraylist_remove_last", List.of(receiver));
+                return true;
+            }
+            if ("removeFirst()Ljava/lang/Object;".equals(signature)) {
+                pushObjectCall(instructions, stack, localDeclarations, "javan_arraylist_remove_first", List.of(receiver));
                 return true;
             }
             if ("size()I".equals(signature)) {
