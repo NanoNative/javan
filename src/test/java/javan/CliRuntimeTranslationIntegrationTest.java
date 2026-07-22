@@ -1003,6 +1003,36 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void primitiveRemainderAndIntegerNegationBuildAndMatchJvmOutput() throws Exception {
+        final Path project = project("primitive-remainder-negation");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final int value = 7;
+                    final float floatValue = 7.5f;
+                    final double doubleValue = 7.5d;
+                    System.out.println(-value);
+                    System.out.println(floatValue % 2.0f);
+                    System.out.println(doubleValue % 2.0d);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/primitive-remainder-negation").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("-7\n1.5\n1.5\n");
+    }
+
+    @Test
     void listRemoveAllBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("list-remove-all");
         writeJava(project, "com.acme.Main", """

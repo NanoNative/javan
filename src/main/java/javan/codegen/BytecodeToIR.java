@@ -776,6 +776,15 @@ public final class BytecodeToIR {
             case 113:
                 binaryLong(classFile, method, stack, "%");
                 break;
+            case 114:
+                binaryFloatRem(classFile, method, stack);
+                break;
+            case 115:
+                binaryDoubleRem(classFile, method, stack);
+                break;
+            case 116:
+                unaryIntNeg(classFile, method, stack);
+                break;
             case 120:
                 shiftInt(classFile, method, stack, "javan_int_shl");
                 break;
@@ -1170,11 +1179,31 @@ public final class BytecodeToIR {
         stack.add(StackValue.doubleExpression(IrExpression.doubleBinary(operator, left, right)));
     }
 
+    static void binaryFloatRem(final ClassFile classFile, final MethodInfo method, final List<StackValue> stack) {
+        final IrExpression right = popFloat(classFile, method, stack);
+        final IrExpression left = popFloat(classFile, method, stack);
+        stack.add(StackValue.floatExpression(IrExpression.floatCall("javan_float_rem", List.of(left, right))));
+    }
+
+    static void binaryDoubleRem(final ClassFile classFile, final MethodInfo method, final List<StackValue> stack) {
+        final IrExpression right = popDouble(classFile, method, stack);
+        final IrExpression left = popDouble(classFile, method, stack);
+        stack.add(StackValue.doubleExpression(IrExpression.doubleCall("javan_double_rem", List.of(left, right))));
+    }
+
     static void unaryFloatNeg(final ClassFile classFile, final MethodInfo method, final List<StackValue> stack) {
         stack.add(StackValue.floatExpression(IrExpression.floatBinary(
             "-",
             IrExpression.floatLiteral(0.0f),
             popFloat(classFile, method, stack)
+        )));
+    }
+
+    static void unaryIntNeg(final ClassFile classFile, final MethodInfo method, final List<StackValue> stack) {
+        stack.add(StackValue.intExpression(IrExpression.intBinary(
+            "-",
+            IrExpression.intLiteral(0),
+            popInt(classFile, method, stack)
         )));
     }
 

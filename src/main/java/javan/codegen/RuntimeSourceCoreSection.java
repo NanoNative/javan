@@ -806,6 +806,14 @@ final class RuntimeSourceCoreSection {
             return (float) value;
         }
 
+        float javan_float_rem(float left, float right) {
+            return fmodf(left, right);
+        }
+
+        double javan_double_rem(double left, double right) {
+            return fmod(left, right);
+        }
+
         int javan_i2b(int value) {
             return (int) ((signed char) value);
         }
