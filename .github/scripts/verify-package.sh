@@ -25,18 +25,22 @@ else
 fi
 
 EXPECTED_ROOT=${ARCHIVE_NAME%.tar.gz}
+case "$ARCHIVE_NAME" in
+  *-windows-*) BIN_NAME=javan.exe ;;
+  *) BIN_NAME=javan ;;
+esac
 LIST=$ARCHIVE_DIR/$EXPECTED_ROOT.contents
 tar -tzf "$ARCHIVE" >"$LIST"
 if grep -E '(^/|(^|/)\.\.($|/))' "$LIST" >/dev/null 2>&1; then
   printf '%s\n' "Archive contains unsafe paths." >&2
   exit 1
 fi
-if grep -v -E "^$EXPECTED_ROOT/$|^$EXPECTED_ROOT/bin/$|^$EXPECTED_ROOT/bin/javan$|^$EXPECTED_ROOT/README.md$|^$EXPECTED_ROOT/VERSION$|^$EXPECTED_ROOT/LICENSE$" "$LIST" >/dev/null 2>&1; then
+if grep -v -E "^$EXPECTED_ROOT/$|^$EXPECTED_ROOT/bin/$|^$EXPECTED_ROOT/bin/$BIN_NAME$|^$EXPECTED_ROOT/README.md$|^$EXPECTED_ROOT/VERSION$|^$EXPECTED_ROOT/LICENSE$" "$LIST" >/dev/null 2>&1; then
   printf '%s\n' "Archive contains unexpected files." >&2
   cat "$LIST" >&2
   exit 1
 fi
-for required in "$EXPECTED_ROOT/" "$EXPECTED_ROOT/bin/" "$EXPECTED_ROOT/bin/javan" "$EXPECTED_ROOT/README.md" "$EXPECTED_ROOT/VERSION"; do
+for required in "$EXPECTED_ROOT/" "$EXPECTED_ROOT/bin/" "$EXPECTED_ROOT/bin/$BIN_NAME" "$EXPECTED_ROOT/README.md" "$EXPECTED_ROOT/VERSION"; do
   if ! grep -Fx "$required" "$LIST" >/dev/null 2>&1; then
     printf '%s\n' "Archive is missing $required." >&2
     exit 1
@@ -49,8 +53,9 @@ trap 'rm -rf "$TMP" "$LIST"' EXIT HUP INT TERM
 
 tar -xzf "$ARCHIVE" -C "$TMP"
 ROOT="$TMP/$EXPECTED_ROOT"
-if [ -z "$ROOT" ] || [ ! -x "$ROOT/bin/javan" ]; then
-  printf '%s\n' "Archive does not contain an executable bin/javan." >&2
+PACKAGE_BIN="$ROOT/bin/$BIN_NAME"
+if [ -z "$ROOT" ] || [ ! -x "$PACKAGE_BIN" ]; then
+  printf '%s\n' "Archive does not contain an executable bin/$BIN_NAME." >&2
   exit 1
 fi
 if [ ! -f "$ROOT/VERSION" ]; then
@@ -64,9 +69,9 @@ if ! printf '%s\n' "$VERSION" | grep -Eq '^[0-9]+([.][0-9]+){1,3}$'; then
   exit 1
 fi
 
-"$ROOT/bin/javan" --version | grep -F "javan $VERSION" >/dev/null
-"$ROOT/bin/javan" --help | grep -F "javan $VERSION" >/dev/null
-"$ROOT/bin/javan" --help >/dev/null
-JAVAN_BIN=$ROOT/bin/javan sh "$REPO_ROOT/.github/scripts/verify-showcase.sh" >/dev/null
+"$PACKAGE_BIN" --version | grep -F "javan $VERSION" >/dev/null
+"$PACKAGE_BIN" --help | grep -F "javan $VERSION" >/dev/null
+"$PACKAGE_BIN" --help >/dev/null
+JAVAN_BIN=$PACKAGE_BIN sh "$REPO_ROOT/.github/scripts/verify-showcase.sh" >/dev/null
 
 printf '%s\n' "Verified package $ARCHIVE"

@@ -16,7 +16,10 @@ mkdir -p "$TMP"
 trap 'rm -rf "$TMP"' EXIT HUP INT TERM
 tar -xzf "$ARCHIVE" -C "$TMP"
 PACKAGE_ROOT=$TMP/$(basename "$ARCHIVE" .tar.gz)
-PACKAGE_BIN=$PACKAGE_ROOT/bin/javan
+case "$(basename "$ARCHIVE")" in
+  *-windows-*) PACKAGE_BIN=$PACKAGE_ROOT/bin/javan.exe ;;
+  *) PACKAGE_BIN=$PACKAGE_ROOT/bin/javan ;;
+esac
 
 "$PACKAGE_BIN" doctor >/dev/null
 "$PACKAGE_BIN" --help >/dev/null

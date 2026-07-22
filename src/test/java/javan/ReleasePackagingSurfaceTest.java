@@ -251,6 +251,18 @@ final class ReleasePackagingSurfaceTest extends CliIntegrationSupport {
     }
 
     @Test
+    void releaseVerifiersSelectWindowsExecutableNameFromPackageTarget() throws Exception {
+        final String packageScript = Files.readString(Path.of(".github/scripts/verify-package.sh"));
+        final String releaseScript = Files.readString(VERIFY_RELEASE);
+
+        assertThat(packageScript)
+            .contains("*-windows-*) BIN_NAME=javan.exe")
+            .contains("PACKAGE_BIN=\"$ROOT/bin/$BIN_NAME\"");
+        assertThat(releaseScript)
+            .contains("*-windows-*) PACKAGE_BIN=$PACKAGE_ROOT/bin/javan.exe");
+    }
+
+    @Test
     void buildScriptAllowsReuseTargetWithoutPackagedJar() throws Exception {
         final String script = Files.readString(Path.of("scripts/build.sh"));
 
