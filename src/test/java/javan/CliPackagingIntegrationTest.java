@@ -1111,6 +1111,11 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
 
         assertThat(run.exitCode()).isZero();
         final Path library = project.resolve(".javan/dist/liblibrary-string.a");
+        final Path header = project.resolve(".javan/dist/bindings/c/library-string.h");
+        assertThat(Files.readString(header)).contains(
+            "char* javan_export_com_acme_Text_greet_string(const char* arg0);",
+            "JavanResult javan_try_com_acme_Text_greet_string(const char* arg0, char** out);"
+        );
         final Path caller = writeC(project, "call_string.c", """
             #include <stdio.h>
             #include ".javan/dist/bindings/c/library-string.h"
@@ -1119,12 +1124,17 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 char* value = javan_export_com_acme_Text_greet_string("Yuna");
                 puts(value);
                 javan_free(value);
+                char* try_value = NULL;
+                JavanResult result = javan_try_com_acme_Text_greet_string("Yuna", &try_value);
+                printf("try:%d:%s\\n", result.ok, try_value);
+                javan_free(try_value);
+                javan_result_free(&result);
                 return 0;
             }
             """);
         final Path binary = project.resolve("call-string");
         assertThat(process(project, List.of("cc", caller.toString(), library.toString(), "-o", binary.toString())).exitCode()).isZero();
-        assertThat(process(project, List.of(binary.toString())).stdout()).isEqualTo("Hi Yuna\n");
+        assertThat(process(project, List.of(binary.toString())).stdout()).isEqualTo("Hi Yuna\ntry:1:Hi Yuna\n");
     }
 
     @Test
@@ -1147,6 +1157,11 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
 
         assertThat(run.exitCode()).isZero();
         final Path library = project.resolve(".javan/dist/liblibrary-bytes.a");
+        final Path header = project.resolve(".javan/dist/bindings/c/library-bytes.h");
+        assertThat(Files.readString(header)).contains(
+            "JavanByteArray javan_export_com_acme_Bytes_echo_bytes(JavanByteArray arg0);",
+            "JavanResult javan_try_com_acme_Bytes_echo_bytes(JavanByteArray arg0, JavanByteArray* out);"
+        );
         final Path caller = writeC(project, "call_bytes.c", """
             #include <stdint.h>
             #include <stdio.h>
@@ -1158,12 +1173,17 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 JavanByteArray output = javan_export_com_acme_Bytes_echo_bytes(input);
                 printf("%d %d\\n", output.length, output.data[1]);
                 javan_free(output.data);
+                JavanByteArray try_output = {0};
+                JavanResult result = javan_try_com_acme_Bytes_echo_bytes(input, &try_output);
+                printf("try:%d:%d:%d\\n", result.ok, try_output.length, try_output.data[1]);
+                javan_free(try_output.data);
+                javan_result_free(&result);
                 return 0;
             }
             """);
         final Path binary = project.resolve("call-bytes");
         assertThat(process(project, List.of("cc", caller.toString(), library.toString(), "-o", binary.toString())).exitCode()).isZero();
-        assertThat(process(project, List.of(binary.toString())).stdout()).isEqualTo("3 2\n");
+        assertThat(process(project, List.of(binary.toString())).stdout()).isEqualTo("3 2\ntry:1:3:2\n");
     }
 
     @Test
