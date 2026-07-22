@@ -1,0 +1,12 @@
+plugins {
+    id 'java'
+    id 'dev.javan'
+}
+
+repositories {
+    mavenCentral()
+}
+
+tasks.named('javanCheck') {
+    dependsOn testClasses
+}
