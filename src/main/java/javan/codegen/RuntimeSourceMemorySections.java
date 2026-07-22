@@ -10525,6 +10525,134 @@ final class RuntimeSourceMemorySections {
             #endif
         }
 
+        void* javan_process_run_attached(
+            void* cwd, void* command_value, long long timeout_millis, void* stdout_stream, void* stderr_stream
+        ) {
+            #if defined(_WIN32)
+            (void) cwd;
+            (void) command_value;
+            (void) timeout_millis;
+            (void) stdout_stream;
+            (void) stderr_stream;
+            return javan_process_result_new(127, "", "attached process execution unsupported on Windows");
+            #else
+            javan_object_list* command = javan_list_checked(command_value);
+            if (command->length <= 0) {
+                return javan_process_result_new(127, "", "empty command");
+            }
+            void* cwd_root = cwd;
+            void* command_root = command_value;
+            void** roots[] = {(void**) &cwd_root, (void**) &command_root};
+            javan_root_frame_push(roots, 2);
+            char** argv = (char**) javan_alloc((unsigned long) (command->length + 1) * sizeof(char*));
+            for (int index = 0; index < command->length; index++) {
+                argv[index] = (char*) command->values[index];
+                if (argv[index] == NULL) {
+                    argv[index] = "";
+                }
+            }
+            argv[command->length] = NULL;
+            javan_root_frame_pop(roots);
+
+            int stdout_pipe[2] = {-1, -1};
+            int stderr_pipe[2] = {-1, -1};
+            if (pipe(stdout_pipe) != 0 || pipe(stderr_pipe) != 0) {
+                if (stdout_pipe[0] >= 0) { close(stdout_pipe[0]); close(stdout_pipe[1]); }
+                if (stderr_pipe[0] >= 0) { close(stderr_pipe[0]); close(stderr_pipe[1]); }
+                javan_free(argv);
+                return javan_process_result_new(127, "", "attached process pipe failed");
+            }
+            FILE* stdout_file = tmpfile();
+            FILE* stderr_file = tmpfile();
+            if (stdout_file == NULL || stderr_file == NULL) {
+                if (stdout_file != NULL) { fclose(stdout_file); }
+                if (stderr_file != NULL) { fclose(stderr_file); }
+                close(stdout_pipe[0]); close(stdout_pipe[1]);
+                close(stderr_pipe[0]); close(stderr_pipe[1]);
+                javan_free(argv);
+                return javan_process_result_new(127, "", "attached process output capture failed");
+            }
+            pid_t child = fork();
+            if (child < 0) {
+                fclose(stdout_file); fclose(stderr_file);
+                close(stdout_pipe[0]); close(stdout_pipe[1]);
+                close(stderr_pipe[0]); close(stderr_pipe[1]);
+                javan_free(argv);
+                return javan_process_result_new(127, "", "attached process fork failed");
+            }
+            if (child == 0) {
+                close(stdout_pipe[0]);
+                close(stderr_pipe[0]);
+                if (cwd != NULL && chdir((const char*) cwd) != 0) { _exit(127); }
+                dup2(stdout_pipe[1], STDOUT_FILENO);
+                dup2(stderr_pipe[1], STDERR_FILENO);
+                close(stdout_pipe[1]);
+                close(stderr_pipe[1]);
+                execvp(argv[0], argv);
+                _exit(127);
+            }
+            close(stdout_pipe[1]);
+            close(stderr_pipe[1]);
+            int stdout_flags = fcntl(stdout_pipe[0], F_GETFL, 0);
+            int stderr_flags = fcntl(stderr_pipe[0], F_GETFL, 0);
+            fcntl(stdout_pipe[0], F_SETFL, stdout_flags | O_NONBLOCK);
+            fcntl(stderr_pipe[0], F_SETFL, stderr_flags | O_NONBLOCK);
+            int stdout_open = 1;
+            int stderr_open = 1;
+            int completed = 0;
+            int status = 0;
+            long long started = javan_system_current_time_millis();
+            long long timeout = timeout_millis <= 0 ? 300000LL : timeout_millis;
+            char buffer[4096];
+            while (!completed || stdout_open || stderr_open) {
+                if (!completed) {
+                    pid_t waited = waitpid(child, &status, WNOHANG);
+                    if (waited == child || waited < 0) { completed = 1; }
+                    if (!completed && javan_system_current_time_millis() - started >= timeout) {
+                        kill(child, SIGKILL);
+                        waitpid(child, &status, 0);
+                        status = 124 << 8;
+                        completed = 1;
+                    }
+                }
+                if (stdout_open) {
+                    ssize_t count = read(stdout_pipe[0], buffer, sizeof(buffer) - 1);
+                    if (count > 0) {
+                        buffer[count] = '\\0'; fwrite(buffer, 1, (size_t) count, stdout_file); fflush(stdout_file);
+                        javan_printstream_print(stdout_stream, buffer);
+                    } else if (count == 0 || (count < 0 && errno != EAGAIN && errno != EINTR)) {
+                        close(stdout_pipe[0]); stdout_open = 0;
+                    }
+                }
+                if (stderr_open) {
+                    ssize_t count = read(stderr_pipe[0], buffer, sizeof(buffer) - 1);
+                    if (count > 0) {
+                        buffer[count] = '\\0'; fwrite(buffer, 1, (size_t) count, stderr_file); fflush(stderr_file);
+                        javan_printstream_print(stderr_stream, buffer);
+                    } else if (count == 0 || (count < 0 && errno != EAGAIN && errno != EINTR)) {
+                        close(stderr_pipe[0]); stderr_open = 0;
+                    }
+                }
+                if (!completed || stdout_open || stderr_open) { javan_sleep_micros(1000UL); }
+            }
+            char* stdout_text = javan_file_to_string(stdout_file);
+            void** stdout_root[] = {(void**) &stdout_text};
+            javan_root_frame_push(stdout_root, 1);
+            char* stderr_text = javan_file_to_string(stderr_file);
+            javan_root_frame_pop(stdout_root);
+            fclose(stdout_file);
+            fclose(stderr_file);
+            close(stdout_pipe[0]);
+            close(stderr_pipe[0]);
+            javan_free(argv);
+            int exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : 127;
+            javan_process_result* result = javan_process_result_new(exit_code, stdout_text, stderr_text);
+            javan_free(stdout_text);
+            javan_free(stderr_text);
+            return result;
+            #endif
+        }
+
         int javan_process_result_exit_code(void* value) {
             if (value == NULL) {
                 javan_panic("null process result");

@@ -364,6 +364,7 @@ final class RuntimeHeaderFile {
         int javan_path_get_name_count(void* path);
         void* javan_path_get_name(void* path, int index);
         void* javan_process_run(void* cwd, void* command, long long timeout_millis);
+        void* javan_process_run_attached(void* cwd, void* command, long long timeout_millis, void* stdout_stream, void* stderr_stream);
         int javan_process_result_exit_code(void* value);
         void* javan_process_result_stdout(void* value);
         void* javan_process_result_stderr(void* value);

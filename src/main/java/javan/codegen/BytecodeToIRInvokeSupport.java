@@ -1883,9 +1883,15 @@ final class BytecodeToIRInvokeSupport {
         final String nativeResultName = "object" + localDeclarations.size();
         localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), new IrLocal(IrType.OBJECT, nativeResultName));
         final IrExpression nativeResult = IrExpression.objectLocal(nativeResultName);
+        final List<IrExpression> nativeArguments = "runAttached".equals(methodRef.name())
+            ? List.of(workingDirectory, command, timeout, arguments.get(2), arguments.get(3))
+            : List.of(workingDirectory, command, timeout);
         instructions.add(IrInstruction.assignObject(
             nativeResultName,
-            IrExpression.objectCall("javan_process_run", List.of(workingDirectory, command, timeout))
+            IrExpression.objectCall(
+                "runAttached".equals(methodRef.name()) ? "javan_process_run_attached" : "javan_process_run",
+                nativeArguments
+            )
         ));
 
         final String resultName = "object" + localDeclarations.size();
@@ -1910,20 +1916,6 @@ final class BytecodeToIRInvokeSupport {
             result,
             IrExpression.objectCall("javan_process_result_stderr", List.of(nativeResult))
         ));
-        if ("runAttached".equals(methodRef.name())) {
-            instructions.add(IrInstruction.callStaticVoid(
-                "javan_printstream_print",
-                List.of(arguments.get(2), IrExpression.objectField(
-                    "javan/util/ProcessRunner$Result", "stdout", result
-                ))
-            ));
-            instructions.add(IrInstruction.callStaticVoid(
-                "javan_printstream_print",
-                List.of(arguments.get(3), IrExpression.objectField(
-                    "javan/util/ProcessRunner$Result", "stderr", result
-                ))
-            ));
-        }
         stack.add(StackValue.objectExpression(result));
         return true;
     }
