@@ -44,11 +44,30 @@ public final class NativeLinker {
      * @throws InterruptedException when interrupted while linking
      */
     public Path link(final Path root, final Path mainC, final Path runtimeC, final Path output) throws IOException, InterruptedException {
+        return link(root, mainC, runtimeC, output, "balanced");
+    }
+
+    /**
+     * Links generated C sources using the requested optimization posture.
+     *
+     * @param root working directory
+     * @param mainC generated main C path
+     * @param runtimeC runtime C path
+     * @param output output binary path
+     * @param optimize optimization posture
+     * @return output binary path
+     * @throws IOException when linking fails
+     * @throws InterruptedException when interrupted while linking
+     */
+    public Path link(
+        final Path root, final Path mainC, final Path runtimeC, final Path output, final String optimize
+    ) throws IOException, InterruptedException {
         final String compiler = requiredExecutable(compilerCandidates(), "No C compiler found. Install gcc, clang, or cc.");
         Files.createDirectories(output.getParent());
         final List<String> command = new ArrayList<>();
         command.add(compiler);
         command.addAll(threadFlags());
+        command.addAll(optimizeFlags(optimize));
         command.add(mainC.toString());
         command.add(runtimeC.toString());
         command.addAll(platformLinkFlags());
@@ -74,12 +93,31 @@ public final class NativeLinker {
      */
     public Path linkSharedLibrary(final Path root, final Path mainC, final Path runtimeC, final Path output)
         throws IOException, InterruptedException {
+        return linkSharedLibrary(root, mainC, runtimeC, output, "balanced");
+    }
+
+    /**
+     * Links a shared library using the requested optimization posture.
+     *
+     * @param root working directory
+     * @param mainC generated C path
+     * @param runtimeC runtime C path
+     * @param output output library path
+     * @param optimize optimization posture
+     * @return output library path
+     * @throws IOException when linking fails
+     * @throws InterruptedException when interrupted while linking
+     */
+    public Path linkSharedLibrary(
+        final Path root, final Path mainC, final Path runtimeC, final Path output, final String optimize
+    ) throws IOException, InterruptedException {
         final String compiler = requiredExecutable(compilerCandidates(), "No C compiler found. Install gcc, clang, or cc.");
         Files.createDirectories(output.getParent());
         final boolean mac = Strings2.toAsciiLowerCase(System.getProperty("os.name", "")).contains("mac");
         final List<String> command = new ArrayList<>();
         command.add(compiler);
         command.addAll(threadFlags());
+        command.addAll(optimizeFlags(optimize));
         if (mac) {
             command.add("-dynamiclib");
         } else {
@@ -111,6 +149,24 @@ public final class NativeLinker {
      */
     public Path linkStaticLibrary(final Path root, final Path mainC, final Path runtimeC, final Path output)
         throws IOException, InterruptedException {
+        return linkStaticLibrary(root, mainC, runtimeC, output, "balanced");
+    }
+
+    /**
+     * Links a static library using the requested optimization posture.
+     *
+     * @param root working directory
+     * @param mainC generated C path
+     * @param runtimeC runtime C path
+     * @param output output library path
+     * @param optimize optimization posture
+     * @return output library path
+     * @throws IOException when linking fails
+     * @throws InterruptedException when interrupted while linking
+     */
+    public Path linkStaticLibrary(
+        final Path root, final Path mainC, final Path runtimeC, final Path output, final String optimize
+    ) throws IOException, InterruptedException {
         final String compiler = requiredExecutable(compilerCandidates(), "No C compiler found. Install gcc, clang, or cc.");
         final String archiver = requiredExecutable(List.of("ar"), "No archiver found. Install ar.");
         Files.createDirectories(output.getParent());
@@ -118,8 +174,8 @@ public final class NativeLinker {
         Files.createDirectories(objects);
         final Path mainObject = objects.resolve("javan_library.o");
         final Path runtimeObject = objects.resolve("javan_runtime.o");
-        compileObject(root, compiler, mainC, mainObject);
-        compileObject(root, compiler, runtimeC, runtimeObject);
+        compileObject(root, compiler, mainC, mainObject, optimize);
+        compileObject(root, compiler, runtimeC, runtimeObject, optimize);
         final ProcessRunner.Result result = processRunner.run(root, List.of(
             archiver,
             "rcs",
@@ -133,11 +189,14 @@ public final class NativeLinker {
         return output;
     }
 
-    private void compileObject(final Path root, final String compiler, final Path source, final Path output)
+    private void compileObject(
+        final Path root, final String compiler, final Path source, final Path output, final String optimize
+    )
         throws IOException, InterruptedException {
         final List<String> command = new ArrayList<>();
         command.add(compiler);
         command.addAll(threadFlags());
+        command.addAll(optimizeFlags(optimize));
         command.add("-fPIC");
         command.add("-c");
         command.add(source.toString());
@@ -155,6 +214,22 @@ public final class NativeLinker {
             return List.of();
         }
         return List.of("-pthread");
+    }
+
+    static List<String> optimizeFlags(final String optimize) {
+        final String normalized = Strings2.replaceChar(
+            Strings2.toAsciiLowerCase(Strings2.trimAscii(optimize)), '_', '-'
+        );
+        if ("size".equals(normalized) || "size-first".equals(normalized)) {
+            return List.of("-Os");
+        }
+        if ("speed".equals(normalized) || "speed-first".equals(normalized)) {
+            return List.of("-O3");
+        }
+        if (!"balanced".equals(normalized) && !"".equals(normalized)) {
+            throw new IllegalArgumentException("Unsupported runtime optimization posture: " + optimize);
+        }
+        return List.of("-O2");
     }
 
     private static List<String> platformLinkFlags() {

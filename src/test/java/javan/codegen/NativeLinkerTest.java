@@ -194,6 +194,23 @@ final class NativeLinkerTest {
     }
 
     @Test
+    void linkUsesRequestedOptimizationPosture() throws Exception {
+        final RecordingProcessRunner runner = new RecordingProcessRunner(
+            new ProcessRunner.Result(0, "", "")
+        );
+
+        withOsName("Linux", () -> new NativeLinker(runner).link(
+            tempDir,
+            tempDir.resolve("main.c"),
+            tempDir.resolve("runtime.c"),
+            tempDir.resolve("out/app"),
+            "size-first"
+        ));
+
+        assertThat(runner.commands()).singleElement().satisfies(command -> assertThat(command).contains("-Os"));
+    }
+
+    @Test
     void linkThrowsWhenCompilerReturnsFailure() {
         final RecordingProcessRunner runner = new RecordingProcessRunner(
             new ProcessRunner.Result(1, "stdout", "stderr")

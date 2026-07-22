@@ -231,7 +231,8 @@ public final class Javan {
         final Path mainC = cCodegen.generate(program, generated);
         final Path runtimeC = runtimeFiles.write(generated, resources);
         final Path output = check.layout().outputDirectory().resolve("bin").resolve(check.layout().outputName());
-        final Path binary = nativeLinker.link(check.layout().root(), mainC, runtimeC, output);
+        final RuntimeFeatureSelection.Settings settings = runtimeFeatureSelection.read(check.layout().root());
+        final Path binary = nativeLinker.link(check.layout().root(), mainC, runtimeC, output, settings.optimize());
         runtimeContractReports.write(check.layout().outputDirectory(), "app", List.of(binary));
         runtimeFootprintReports.write(
             check.layout().outputDirectory(),
@@ -258,10 +259,11 @@ public final class Javan {
         final List<ResourceBundler.ResourceFile> resources = resourceBundler.bundle(check.layout());
         final Path libraryC = cCodegen.generateLibrary(program, generated, check.exports());
         final Path runtimeC = runtimeFiles.write(generated, resources);
+        final RuntimeFeatureSelection.Settings settings = runtimeFeatureSelection.read(check.layout().root());
         final List<Path> artifacts = new ArrayList<>();
         for (final LibraryFormat format : options.libraryFormats()) {
             final Path output = libraryArtifactPath(format, check.layout().outputDirectory(), check.layout().outputName());
-            artifacts.add(linkLibraryFormat(format, check.layout().root(), libraryC, runtimeC, output));
+            artifacts.add(linkLibraryFormat(format, check.layout().root(), libraryC, runtimeC, output, settings.optimize()));
         }
         final List<Path> bindings = bindingGenerator.generate(
             check.layout().outputDirectory(),
@@ -640,13 +642,14 @@ public final class Javan {
         final Path root,
         final Path libraryC,
         final Path runtimeC,
-        final Path output
+        final Path output,
+        final String optimize
     ) throws IOException, InterruptedException {
         if ("STATIC".equals(Options.formatName(format))) {
-            return nativeLinker.linkStaticLibrary(root, libraryC, runtimeC, output);
+            return nativeLinker.linkStaticLibrary(root, libraryC, runtimeC, output, optimize);
         }
         if ("SHARED".equals(Options.formatName(format))) {
-            return nativeLinker.linkSharedLibrary(root, libraryC, runtimeC, output);
+            return nativeLinker.linkSharedLibrary(root, libraryC, runtimeC, output, optimize);
         }
         throw new IllegalStateException("Unsupported library format");
     }
