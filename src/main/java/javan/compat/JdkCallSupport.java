@@ -628,6 +628,8 @@ public final class JdkCallSupport {
         runtime("ConcurrentHashMap.get", "java/util/concurrent/ConcurrentHashMap", "get", "(Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Map.getOrDefault", "java/util/Map", "getOrDefault", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("SequencedMap.put", "java/util/SequencedMap", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("SequencedMap.putFirst", "java/util/SequencedMap", "putFirst", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("SequencedMap.putLast", "java/util/SequencedMap", "putLast", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("SequencedMap.isEmpty", "java/util/SequencedMap", "isEmpty", "()Z"),
         runtime("SequencedMap.firstEntry", "java/util/SequencedMap", "firstEntry", "()Ljava/util/Map$Entry;"),
         runtime("SequencedMap.lastEntry", "java/util/SequencedMap", "lastEntry", "()Ljava/util/Map$Entry;"),
@@ -999,6 +1001,9 @@ public final class JdkCallSupport {
         }
         if ("java/util/SequencedMap".equals(methodRef.owner())) {
             if ("put".equals(methodRef.name())) {
+                return "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(methodRef.descriptor());
+            }
+            if ("putFirst".equals(methodRef.name()) || "putLast".equals(methodRef.name())) {
                 return "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(methodRef.descriptor());
             }
             if ("isEmpty".equals(methodRef.name())) {

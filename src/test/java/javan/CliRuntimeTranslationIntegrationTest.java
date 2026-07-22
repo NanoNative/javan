@@ -1026,6 +1026,10 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
                     final Map.Entry<String, Integer> last = values.lastEntry();
                     System.out.println(first.getKey() + ":" + first.getValue());
                     System.out.println(last.getKey() + ":" + last.getValue());
+                    values.putFirst("zero", 0);
+                    values.putLast("omega", 3);
+                    System.out.println(values.putFirst("alpha", 9));
+                    System.out.println(values.putLast("beta", 8));
                     final Map.Entry<String, Integer> polledFirst = values.pollFirstEntry();
                     final Map.Entry<String, Integer> polledLast = values.pollLastEntry();
                     System.out.println(polledFirst.getKey() + ":" + polledFirst.getValue());
@@ -1044,7 +1048,7 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/sequenced-map-entry-endpoints").toString())).stdout())
             .isEqualTo(jvmOutput);
-        assertThat(jvmOutput).isEqualTo("alpha:1\nbeta:2\nalpha:1\nbeta:2\ntrue\ntrue\ntrue\n");
+        assertThat(jvmOutput).isEqualTo("alpha:1\nbeta:2\n1\n2\nalpha:9\nbeta:8\nfalse\ntrue\ntrue\n");
     }
 
     @Test

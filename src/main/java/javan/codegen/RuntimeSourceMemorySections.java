@@ -10913,6 +10913,54 @@ final class RuntimeSourceMemorySections {
         }
         """;
 
+    private static final String SOURCE_COLLECTIONS_SEQUENCED_MAP = """
+        static void* javan_map_put_at(void* value, void* key, void* element, int index) {
+            javan_object_map* map = javan_map_checked(value);
+            javan_map_mutable_checked(map);
+            int existing = javan_map_find(map, key);
+            void* previous = NULL;
+            if (existing >= 0) {
+                previous = javan_map_remove(map, key);
+            }
+            if (index < 0 || index > map->length) {
+                javan_panic("invalid sequenced map insertion index");
+            }
+            void* key_root = key;
+            void* element_root = element;
+            void** roots[] = {
+                (void**) &map,
+                (void**) &key_root,
+                (void**) &element_root,
+                (void**) &previous
+            };
+            javan_root_frame_push(roots, 4);
+            javan_map_ensure_capacity(map, map->length + 1);
+            for (int cursor = map->length; cursor > index; cursor--) {
+                map->keys[cursor] = map->keys[cursor - 1];
+                map->values[cursor] = map->values[cursor - 1];
+            }
+            map->keys[index] = key_root;
+            map->values[index] = element_root;
+            map->length++;
+            map->mod_count++;
+            javan_root_frame_pop(roots);
+            return previous;
+        }
+
+        void* javan_map_put_first(void* value, void* key, void* element) {
+            return javan_map_put_at(value, key, element, 0);
+        }
+
+        void* javan_map_put_last(void* value, void* key, void* element) {
+            javan_object_map* map = javan_map_checked(value);
+            int index = javan_map_logical_length(map);
+            if (javan_map_find(map, key) >= 0) {
+                index--;
+            }
+            return javan_map_put_at(value, key, element, index);
+        }
+        """;
+
     private RuntimeSourceMemorySections() {
     }
 
@@ -10942,6 +10990,7 @@ final class RuntimeSourceMemorySections {
     static String collections() {
         String result = SOURCE_COLLECTIONS_HEAD;
         result = result + SOURCE_COLLECTIONS_TAIL;
+        result = result + SOURCE_COLLECTIONS_SEQUENCED_MAP;
         return result;
     }
 }
