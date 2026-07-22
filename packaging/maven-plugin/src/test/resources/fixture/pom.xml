@@ -17,8 +17,11 @@
                 <artifactId>javan-maven-plugin</artifactId>
                 <version>2026.6.14</version>
                 <executions>
-                    <execution>
+                    <execution><id>check</id>
                         <goals><goal>check</goal></goals>
+                    </execution>
+                    <execution><id>build</id><phase>package</phase>
+                        <goals><goal>build</goal></goals>
                     </execution>
                 </executions>
             </plugin>
