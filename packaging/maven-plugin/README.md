@@ -21,3 +21,6 @@ the project's `.javan` output directory.
 
 The `javan:run` goal builds and executes the native application with inherited
 standard output and error streams.
+
+The `javan:test` goal delegates project test execution to Javan’s public test
+command and fails the Maven lifecycle on a nonzero result.

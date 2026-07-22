@@ -38,6 +38,11 @@ public final class JavanPlugin implements Plugin<Project> {
             task.setWorkingDir(project.getProjectDir());
             task.commandLine(command(project, main, "run"));
         });
+        project.getTasks().register("javanTest", Exec.class, task -> {
+            task.dependsOn(main.getClassesTaskName());
+            task.setWorkingDir(project.getProjectDir());
+            task.commandLine(testCommand(project));
+        });
     }
 
     private static List<String> command(final Project project, final SourceSet main, final String operation) {
@@ -61,5 +66,14 @@ public final class JavanPlugin implements Plugin<Project> {
             command.add(String.valueOf(mainClass));
         }
         return List.copyOf(command);
+    }
+
+    private static List<String> testCommand(final Project project) {
+        final Object executable = project.findProperty("javan.executable");
+        return List.of(
+            String.valueOf(executable == null ? "javan" : executable),
+            "test",
+            project.getProjectDir().getPath()
+        );
     }
 }

@@ -26,6 +26,9 @@
                     <execution><id>run</id><phase>verify</phase>
                         <goals><goal>run</goal></goals>
                     </execution>
+                    <execution><id>test</id><phase>integration-test</phase>
+                        <goals><goal>test</goal></goals>
+                    </execution>
                 </executions>
             </plugin>
         </plugins>
