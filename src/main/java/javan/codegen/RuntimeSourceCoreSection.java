@@ -746,6 +746,66 @@ final class RuntimeSourceCoreSection {
             return (double) value;
         }
 
+        int javan_f2i(float value) {
+            if (isnan(value)) {
+                return 0;
+            }
+            if (value >= 2147483648.0f) {
+                return INT_MAX;
+            }
+            if (value <= -2147483648.0f) {
+                return INT_MIN;
+            }
+            return (int) value;
+        }
+
+        long long javan_f2l(float value) {
+            if (isnan(value)) {
+                return 0LL;
+            }
+            if ((long double) value >= 9223372036854775808.0L) {
+                return LLONG_MAX;
+            }
+            if ((long double) value <= -9223372036854775808.0L) {
+                return LLONG_MIN;
+            }
+            return (long long) value;
+        }
+
+        double javan_f2d(float value) {
+            return (double) value;
+        }
+
+        int javan_d2i(double value) {
+            if (isnan(value)) {
+                return 0;
+            }
+            if (value >= 2147483648.0) {
+                return INT_MAX;
+            }
+            if (value <= -2147483648.0) {
+                return INT_MIN;
+            }
+            return (int) value;
+        }
+
+        long long javan_d2l(double value) {
+            if (isnan(value)) {
+                return 0LL;
+            }
+            if ((long double) value >= 9223372036854775808.0L) {
+                return LLONG_MAX;
+            }
+            if ((long double) value <= -9223372036854775808.0L) {
+                return LLONG_MIN;
+            }
+            return (long long) value;
+        }
+
+        float javan_d2f(double value) {
+            return (float) value;
+        }
+
         int javan_i2b(int value) {
             return (int) ((signed char) value);
         }

@@ -967,6 +967,42 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void floatingPointConversionsBuildAndMatchJvmOutput() throws Exception {
+        final Path project = project("floating-point-conversions");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final float floatValue = 1.5f;
+                    final double doubleValue = 2.5d;
+                    final float intOverflow = 2147483648.0f;
+                    final double longOverflow = 9223372036854775808.0d;
+                    System.out.println((int) floatValue);
+                    System.out.println((long) floatValue);
+                    System.out.println((double) floatValue);
+                    System.out.println((int) doubleValue);
+                    System.out.println((long) doubleValue);
+                    System.out.println((float) doubleValue);
+                    System.out.println((int) intOverflow);
+                    System.out.println((long) longOverflow);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/floating-point-conversions").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("1\n1\n1.5\n2\n2\n2.5\n2147483647\n9223372036854775807\n");
+    }
+
+    @Test
     void listRemoveAllBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("list-remove-all");
         writeJava(project, "com.acme.Main", """

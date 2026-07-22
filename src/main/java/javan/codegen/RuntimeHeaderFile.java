@@ -88,6 +88,12 @@ final class RuntimeHeaderFile {
         int javan_l2i(long long value);
         float javan_l2f(long long value);
         double javan_l2d(long long value);
+        int javan_f2i(float value);
+        long long javan_f2l(float value);
+        double javan_f2d(float value);
+        int javan_d2i(double value);
+        long long javan_d2l(double value);
+        float javan_d2f(double value);
         int javan_i2b(int value);
         int javan_i2s(int value);
         long long javan_system_nano_time(void);
