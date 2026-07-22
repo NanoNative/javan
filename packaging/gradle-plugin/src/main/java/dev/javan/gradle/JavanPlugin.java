@@ -33,6 +33,11 @@ public final class JavanPlugin implements Plugin<Project> {
             task.setWorkingDir(project.getProjectDir());
             task.commandLine(command(project, main, "build"));
         });
+        project.getTasks().register("javanRun", Exec.class, task -> {
+            task.dependsOn(main.getClassesTaskName());
+            task.setWorkingDir(project.getProjectDir());
+            task.commandLine(command(project, main, "run"));
+        });
     }
 
     private static List<String> command(final Project project, final SourceSet main, final String operation) {

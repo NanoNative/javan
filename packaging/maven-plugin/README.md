@@ -18,3 +18,6 @@ Use `-Djavan.executable=/path/to/javan` when the binary is not on `PATH`.
 
 The `javan:build` goal uses the same inputs and produces the native artifact under
 the project's `.javan` output directory.
+
+The `javan:run` goal builds and executes the native application with inherited
+standard output and error streams.

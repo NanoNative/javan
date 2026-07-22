@@ -23,6 +23,9 @@
                     <execution><id>build</id><phase>package</phase>
                         <goals><goal>build</goal></goals>
                     </execution>
+                    <execution><id>run</id><phase>verify</phase>
+                        <goals><goal>run</goal></goals>
+                    </execution>
                 </executions>
             </plugin>
         </plugins>
