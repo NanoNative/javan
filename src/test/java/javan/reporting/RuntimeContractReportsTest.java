@@ -160,6 +160,24 @@ final class RuntimeContractReportsTest {
     }
 
     @Test
+    void writeClassifiesSelfContainedExecutableWithoutSystemLibraries() throws Exception {
+        final Path binary = tempDir.resolve(".javan/bin/app");
+        Files.createDirectories(binary.getParent());
+        Files.writeString(binary, "static executable placeholder\n");
+
+        final RuntimeContractReports.Report report = new RuntimeContractReports().write(
+            tempDir.resolve(".javan"),
+            "app",
+            List.of(binary),
+            List.of(),
+            "self-contained"
+        );
+
+        assertThat(Files.readString(report.jsonPath())).contains("\"linkage\": \"static-executable\"");
+        assertThat(report.artifacts().getFirst().systemLibraries()).isEmpty();
+    }
+
+    @Test
     void writeClassifiesSharedLibraries() throws Exception {
         final Path shared = tempDir.resolve(".javan/dist/libdemo.dylib");
         Files.createDirectories(shared.getParent());

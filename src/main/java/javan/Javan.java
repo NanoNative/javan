@@ -236,7 +236,9 @@ public final class Javan {
             check.layout().root(), mainC, runtimeC, output,
             settings.optimize(), settings.debug(), settings.containment()
         );
-        runtimeContractReports.write(check.layout().outputDirectory(), "app", List.of(binary));
+        runtimeContractReports.write(
+            check.layout().outputDirectory(), "app", List.of(binary), List.of(), settings.containment()
+        );
         runtimeFootprintReports.write(
             check.layout().outputDirectory(),
             "app",

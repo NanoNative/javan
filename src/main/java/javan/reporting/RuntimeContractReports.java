@@ -65,7 +65,7 @@ public final class RuntimeContractReports {
      */
     public Report write(final Path outputDirectory, final String artifactKind, final List<Path> artifacts)
         throws IOException, InterruptedException {
-        return write(outputDirectory, artifactKind, artifacts, List.of());
+        return write(outputDirectory, artifactKind, artifacts, List.of(), "system-linked");
     }
 
     /**
@@ -85,7 +85,29 @@ public final class RuntimeContractReports {
         final List<Path> artifacts,
         final List<String> abiSymbols
     ) throws IOException, InterruptedException {
-        final List<ArtifactReport> artifactReports = inspectArtifacts(artifacts);
+        return write(outputDirectory, artifactKind, artifacts, abiSymbols, "system-linked");
+    }
+
+    /**
+     * Writes runtime reports with the requested native containment posture.
+     *
+     * @param outputDirectory javan output directory
+     * @param artifactKind artifact kind
+     * @param artifacts generated native artifacts
+     * @param abiSymbols exported ABI symbols
+     * @param containment linkage containment posture
+     * @return written report paths and inspected artifacts
+     * @throws IOException when reports cannot be written
+     * @throws InterruptedException when interrupted while inspecting binaries
+     */
+    public Report write(
+        final Path outputDirectory,
+        final String artifactKind,
+        final List<Path> artifacts,
+        final List<String> abiSymbols,
+        final String containment
+    ) throws IOException, InterruptedException {
+        final List<ArtifactReport> artifactReports = inspectArtifacts(artifacts, containment);
         final Path reportsDirectory = outputDirectory.resolve("reports");
         final Path jsonPath = reportsDirectory.resolve("runtime.json");
         final Path markdownPath = reportsDirectory.resolve("runtime.md");
@@ -96,24 +118,26 @@ public final class RuntimeContractReports {
         return new Report(jsonPath, markdownPath, artifactReports);
     }
 
-    private List<ArtifactReport> inspectArtifacts(final List<Path> artifacts) throws IOException, InterruptedException {
+    private List<ArtifactReport> inspectArtifacts(final List<Path> artifacts, final String containment)
+        throws IOException, InterruptedException {
         final List<ArtifactReport> result = new ArrayList<>();
         for (final Path artifact : artifacts) {
-            result.add(inspectArtifact(artifact));
+            result.add(inspectArtifact(artifact, containment));
         }
         return List.copyOf(result);
     }
 
-    private ArtifactReport inspectArtifact(final Path artifact) throws IOException, InterruptedException {
+    private ArtifactReport inspectArtifact(final Path artifact, final String containment)
+        throws IOException, InterruptedException {
         final long bytes = Files.isRegularFile(artifact) ? Files.size(artifact) : 0L;
-        final String linkage = linkage(artifact);
+        final String linkage = linkage(artifact, containment);
         final List<String> libraries = systemLibraries(artifact, linkage);
         final String debugInfo = debugInfo(artifact);
         final String symbolTable = symbolTable(artifact);
         return new ArtifactReport(artifact, bytes, linkage, libraries, debugInfo, symbolTable);
     }
 
-    private static String linkage(final Path artifact) {
+    private static String linkage(final Path artifact, final String containment) {
         final String name = artifact.getFileName() == null ? "" : artifact.getFileName().toString();
         if (name.endsWith(".a")) {
             return "static-archive";
@@ -121,11 +145,11 @@ public final class RuntimeContractReports {
         if (name.endsWith(".so") || name.endsWith(".dylib") || name.endsWith(".dll")) {
             return "dynamic-library";
         }
-        return "dynamic-executable";
+        return "self-contained".equals(containment) ? "static-executable" : "dynamic-executable";
     }
 
     private List<String> systemLibraries(final Path artifact, final String linkage) throws IOException, InterruptedException {
-        if ("static-archive".equals(linkage)) {
+        if ("static-archive".equals(linkage) || "static-executable".equals(linkage)) {
             return List.of();
         }
         final String os = Strings2.toAsciiLowerCase(System.getProperty("os.name", ""));
