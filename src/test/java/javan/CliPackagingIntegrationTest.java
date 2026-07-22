@@ -1247,6 +1247,51 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void sharedLibraryPythonBindingLoadsAndCallsTryWrapper() throws Exception {
+        Assumptions.assumeTrue(commandAvailable("python3"));
+        final Path project = project("library-python-binding");
+        writeJava(project, "com.acme.Math", """
+            package com.acme;
+
+            public final class Math {
+                private Math() {
+                }
+
+                public static int add(final int left, final int right) {
+                    return left + right;
+                }
+            }
+            """);
+
+        final CliRun run = run(
+            tempDir,
+            "build",
+            project.toString(),
+            "--kind",
+            "sharedlib",
+            "--bindings",
+            "python",
+            "--export",
+            "com.acme.Math.add"
+        );
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Path library = project.resolve(".javan/dist/" + sharedLibraryName("library-python-binding"));
+        final Path binding = project.resolve(".javan/dist/bindings/python/library_python_binding.py");
+        assertThat(library).exists();
+        assertThat(binding).exists();
+        final String script = """
+            import importlib.util
+            spec = importlib.util.spec_from_file_location("binding", r"%s")
+            binding = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(binding)
+            lib = binding.load(r"%s")
+            print(binding.try_javan_export_com_acme_Math_add_int_int(lib, 2, 5))
+            """.formatted(binding, library);
+        assertThat(process(project, List.of("python3", "-c", script)).stdout()).isEqualTo("7\n");
+    }
+
+    @Test
     void unsupportedExportSignatureFailsClearly() throws Exception {
         final Path project = project("library-bad-export");
         writeJava(project, "com.acme.Bad", """
