@@ -65,6 +65,26 @@ final class JavanNativeSubstitutionsTest {
     }
 
     @Test
+    void isSubstitutedFallbackMethodAcceptsProcessRunnerRunAttached() {
+        assertThat(JavanNativeSubstitutions.isSubstitutedFallbackMethod(
+            "javan/util/ProcessRunner",
+            new MethodInfo(0, "runAttached", PROCESS_RUNNER_ATTACHED_DESCRIPTOR, Optional.empty())
+        )).isTrue();
+    }
+
+    @Test
+    void isSubstitutedFallbackMethodAcceptsRunAttachedHelpers() {
+        assertThat(JavanNativeSubstitutions.isSubstitutedFallbackMethod(
+            "javan/util/ProcessRunner",
+            new MethodInfo(0, "copy", "(Ljava/io/InputStream;Ljava/io/PrintStream;Ljava/io/ByteArrayOutputStream;)V", Optional.empty())
+        )).isTrue();
+        assertThat(JavanNativeSubstitutions.isSubstitutedFallbackMethod(
+            "javan/util/ProcessRunner",
+            new MethodInfo(0, "text", "(Ljava/io/ByteArrayOutputStream;)Ljava/lang/String;", Optional.empty())
+        )).isTrue();
+    }
+
+    @Test
     void isSubstitutedFallbackMethodRejectsDifferentOwner() {
         assertThat(JavanNativeSubstitutions.isSubstitutedFallbackMethod(
             "javan/util/OtherRunner",

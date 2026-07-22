@@ -24,6 +24,26 @@ public final class JavanNativeSubstitutions {
         "runAttached",
         PROCESS_RUNNER_RUN_ATTACHED_DESCRIPTOR
     );
+    private static final MethodRef PROCESS_RUNNER_COPY = new MethodRef(
+        PROCESS_RUNNER_OWNER,
+        "copy",
+        "(Ljava/io/InputStream;Ljava/io/PrintStream;Ljava/io/ByteArrayOutputStream;)V"
+    );
+    private static final MethodRef PROCESS_RUNNER_TEXT = new MethodRef(
+        PROCESS_RUNNER_OWNER,
+        "text",
+        "(Ljava/io/ByteArrayOutputStream;)Ljava/lang/String;"
+    );
+    private static final MethodRef PROCESS_RUNNER_STDOUT_LAMBDA = new MethodRef(
+        PROCESS_RUNNER_OWNER,
+        "lambda$runAttached$0",
+        "(Ljava/lang/Process;Ljava/io/PrintStream;Ljava/io/ByteArrayOutputStream;)V"
+    );
+    private static final MethodRef PROCESS_RUNNER_STDERR_LAMBDA = new MethodRef(
+        PROCESS_RUNNER_OWNER,
+        "lambda$runAttached$1",
+        "(Ljava/lang/Process;Ljava/io/PrintStream;Ljava/io/ByteArrayOutputStream;)V"
+    );
     private static final List<String> REPORT_LINES = List.of(
         PROCESS_RUNNER_RUN.display() + " -> javan_process_run",
         PROCESS_RUNNER_RUN_ATTACHED.display() + " -> javan_process_run + captured stream forwarding"
@@ -63,10 +83,16 @@ public final class JavanNativeSubstitutions {
      * @return true for exact substituted fallback methods
      */
     public static boolean isSubstitutedFallbackMethod(final String owner, final MethodInfo method) {
-        return PROCESS_RUNNER_RUN.owner().equals(owner)
-            && PROCESS_RUNNER_RUN.name().equals(method.name())
-            && (PROCESS_RUNNER_RUN.descriptor().equals(method.descriptor())
-                || PROCESS_RUNNER_RUN_ATTACHED.descriptor().equals(method.descriptor()));
+        if (!PROCESS_RUNNER_RUN.owner().equals(owner)) {
+            return false;
+        }
+        final MethodRef candidate = new MethodRef(owner, method.name(), method.descriptor());
+        return candidate.equals(PROCESS_RUNNER_RUN)
+            || candidate.equals(PROCESS_RUNNER_RUN_ATTACHED)
+            || candidate.equals(PROCESS_RUNNER_COPY)
+            || candidate.equals(PROCESS_RUNNER_TEXT)
+            || candidate.equals(PROCESS_RUNNER_STDOUT_LAMBDA)
+            || candidate.equals(PROCESS_RUNNER_STDERR_LAMBDA);
     }
 
     /**
