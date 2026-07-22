@@ -1,5 +1,6 @@
 package javan.build;
 
+import javan.cli.Version;
 import javan.util.Files2;
 import javan.util.Strings2;
 
@@ -726,20 +727,45 @@ public final class BindingGenerator {
         if (containsLanguage(languages, BindingLanguage.RUST)) {
             final Path rust = root.resolve("rust");
             files.add(Files2.writeString(rust.resolve("lib.rs"), rust(libraryName, exports)));
+            files.add(Files2.writeString(rust.resolve("Cargo.toml"), rustManifest(libraryName)));
             files.addAll(copyArtifacts(artifacts, rust));
         }
         if (containsLanguage(languages, BindingLanguage.GO)) {
             final Path go = root.resolve("go");
             files.add(Files2.writeString(go.resolve(libraryName + ".h"), cHeader(libraryName, exports)));
             files.add(Files2.writeString(go.resolve(safePackage(libraryName) + ".go"), goPackaged(libraryName, exports)));
+            files.add(Files2.writeString(go.resolve("go.mod"), goManifest(libraryName)));
             files.addAll(copyArtifacts(artifacts, go));
         }
         if (containsLanguage(languages, BindingLanguage.PYTHON)) {
             final Path python = root.resolve("python");
             files.add(Files2.writeString(python.resolve(safePackage(libraryName) + ".py"), python(libraryName, exports)));
+            files.add(Files2.writeString(python.resolve("pyproject.toml"), pythonManifest(libraryName)));
             files.addAll(copyArtifacts(artifacts, python));
         }
         return files;
+    }
+
+    private static String rustManifest(final String libraryName) {
+        return "[package]\n"
+            + "name = \"" + safePackage(libraryName) + "\"\n"
+            + "version = \"" + Version.number() + "\"\n"
+            + "edition = \"2021\"\n\n"
+            + "[lib]\n"
+            + "path = \"lib.rs\"\n";
+    }
+
+    private static String goManifest(final String libraryName) {
+        return "module example.com/javan/" + safePackage(libraryName) + "\n\n"
+            + "go 1.21\n";
+    }
+
+    private static String pythonManifest(final String libraryName) {
+        return "[project]\n"
+            + "name = \"" + safePackage(libraryName) + "\"\n"
+            + "version = \"" + Version.number() + "\"\n"
+            + "description = \"Generated Javan native-library ctypes binding\"\n"
+            + "requires-python = \">=3.10\"\n";
     }
 
     private static boolean containsLanguage(final List<BindingLanguage> languages, final BindingLanguage target) {

@@ -632,11 +632,14 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         assertThat(project.resolve(".javan/dist/lib/library-friendly/c/library-friendly.h")).exists();
         assertThat(project.resolve(".javan/dist/lib/library-friendly/c/liblibrary-friendly.a")).exists();
         assertThat(project.resolve(".javan/dist/lib/library-friendly/rust/lib.rs")).exists();
+        assertThat(project.resolve(".javan/dist/lib/library-friendly/rust/Cargo.toml")).exists();
         assertThat(project.resolve(".javan/dist/lib/library-friendly/rust/liblibrary-friendly.a")).exists();
         assertThat(project.resolve(".javan/dist/lib/library-friendly/go/library-friendly.h")).exists();
         assertThat(project.resolve(".javan/dist/lib/library-friendly/go/library_friendly.go")).exists();
+        assertThat(project.resolve(".javan/dist/lib/library-friendly/go/go.mod")).exists();
         assertThat(project.resolve(".javan/dist/lib/library-friendly/go/liblibrary-friendly.a")).exists();
         assertThat(project.resolve(".javan/dist/lib/library-friendly/python/library_friendly.py")).exists();
+        assertThat(project.resolve(".javan/dist/lib/library-friendly/python/pyproject.toml")).exists();
         assertThat(project.resolve(".javan/dist/lib/library-friendly/python/liblibrary-friendly.a")).exists();
         assertThat(Files.readString(project.resolve(".javan/reports/library-build.json")))
             .contains("\"artifacts\"", "liblibrary-friendly.a", sharedLibraryName("library-friendly"));

@@ -270,9 +270,9 @@ Generated outputs include:
 - `.javan/dist/bindings/go/<name>.go`
 - `.javan/dist/bindings/python/<name>.py`
 - `.javan/dist/lib/<name>/c/`
-- `.javan/dist/lib/<name>/rust/`
-- `.javan/dist/lib/<name>/go/`
-- `.javan/dist/lib/<name>/python/`
+- `.javan/dist/lib/<name>/rust/` with `Cargo.toml`
+- `.javan/dist/lib/<name>/go/` with `go.mod`
+- `.javan/dist/lib/<name>/python/` with `pyproject.toml`
 
 The preferred user-facing path is:
 
@@ -320,13 +320,15 @@ Library-build reporting also includes metrics such as:
 - runtime module families linked
 - dependency reduction
 
+Each language package folder also contains versioned package metadata for the generated
+binding and copied native artifacts: `Cargo.toml`, `go.mod`, or `pyproject.toml`.
+
 ## Open Follow-Ups
 
 Current follow-up work for library output:
 
 - annotation-based exports
 - richer ABI types for records and handles
-- Cargo, Go, and Python package manifests
 - ABI compatibility reports
 - exception-to-result mapping for library mode
 - per-export thread and reentrancy reports
