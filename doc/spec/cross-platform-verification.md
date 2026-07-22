@@ -15,7 +15,7 @@ This policy covers:
 - CI-based Linux x64 and Linux aarch64 verification, with macOS aarch64 covered by
   the required local host gate and macOS x64 deferred until the active matrix is stable
 - Docker-based Linux x64 and Linux aarch64 verification where available
-- future Windows verification
+- the current Windows runtime smoke row and its remaining expansion boundary
 - JDK matrix checks
 - negative tests
 - global `~/.javan` cache usage
@@ -74,10 +74,14 @@ entrypoints on each required target.
 | --- | --- | --- |
 | linux-x64 | `ubuntu-24.04` | `mvn verify`, acceptance, host `--target`, sanitizer suite with self-host proof |
 | linux-aarch64 | `ubuntu-24.04-arm` | `mvn verify`, acceptance, host `--target`, sanitizer suite with self-host proof |
+| windows-x64 | `windows-latest` | generated-runtime source assertions, MinGW PE cross-compile, Windows-host runtime smoke, and selected thread/GC lifecycle probes |
 
 macOS aarch64 remains a required local host gate and is not a remote release row.
 `macos-x64` remains deferred until a future release contract admits it.
-Windows targets remain tracked rows until the runtime and linker path are ported.
+Windows is not yet a package or release-publication row: POSIX process execution is an
+explicit unsupported result, and broader Windows heap/runtime, linker, and package
+coverage remain open. The Windows smoke row is evidence for the supported generated
+runtime slice only; it does not imply full Windows JDK or release parity.
 
 ## Container Matrix
 

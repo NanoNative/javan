@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>dev.javan.fixture</groupId>
+    <artifactId>maven-plugin-fixture</artifactId>
+    <version>1.0.0</version>
+    <properties>
+        <maven.compiler.release>21</maven.compiler.release>
+        <javan.main>example.Fixture</javan.main>
+    </properties>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>dev.javan</groupId>
+                <artifactId>javan-maven-plugin</artifactId>
+                <version>2026.6.14</version>
+                <executions>
+                    <execution><id>check</id>
+                        <goals><goal>check</goal></goals>
+                    </execution>
+                    <execution><id>build</id><phase>package</phase>
+                        <goals><goal>build</goal></goals>
+                    </execution>
+                    <execution><id>run</id><phase>verify</phase>
+                        <goals><goal>run</goal></goals>
+                    </execution>
+                    <execution><id>test</id><phase>integration-test</phase>
+                        <goals><goal>test</goal></goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

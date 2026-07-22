@@ -280,7 +280,24 @@ public record LambdaMetafactoryCall(
      * @return true when the current runtime can materialize the callable as a lambda object
      */
     public boolean isMaterializedVoidLambda() {
-        return isMaterializedConsumerLambda() || isMaterializedBiConsumerLambda();
+        return isMaterializedConsumerLambda()
+            || isMaterializedBiConsumerLambda()
+            || isZeroCaptureMaterializedVoidLambda();
+    }
+
+    /**
+     * Returns whether this is a zero-capture custom SAM void-return materialization.
+     *
+     * @return true when the current native profile can materialize the callable as a lambda object
+     */
+    public boolean isZeroCaptureMaterializedVoidLambda() {
+        if (isDirectlyLowerable()
+            || implementationReferenceKind != 6
+            || !capturedParameterDescriptors.isEmpty()) {
+            return false;
+        }
+        return singleObjectInput(instantiatedMethodDescriptor)
+            && "V".equals(returnDescriptor(instantiatedMethodDescriptor).orElse(""));
     }
 
     /**

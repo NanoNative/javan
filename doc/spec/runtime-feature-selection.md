@@ -44,8 +44,11 @@ disabled = ["thread-profiling", "reflection-metadata"]
 ```
 
 The shorter `[runtime]` table is accepted for the same keys. `disabled` is enforced now.
-`containment`, `optimize`, `debug`, and `profiling` are parsed and reported, but real
-backend selection remains a follow-up gate.
+`containment`, `debug`, and `profiling` are parsed and reported; native app and library
+compilation now maps `optimize = "size"`/`"size_first"` to `-Os`, `"speed"`/`"speed_first"`
+to `-O3`, and the default `balanced` posture to `-O2`. `debug = true` retains native
+debug symbols with `-g`; `debug = false` omits that flag. Other backend selection remains
+a follow-up gate.
 
 CLI flags may override config for automation, but they should stay sparse. The normal
 path remains `javan build`.
@@ -55,7 +58,7 @@ path remains `javan build`.
 | Choice | Smaller | Faster | Good for | Cost |
 | --- | --- | --- | --- | --- |
 | `containment = "system"` | yes | neutral | Docker/base images | Requires compatible system libraries. |
-| `containment = "self-contained"` | no | neutral | Downloadable apps | Larger; static linking is platform-dependent. |
+| `containment = "self-contained"` | no | neutral | Downloadable apps | Uses `-static` on Linux/Windows; macOS rejects it explicitly. |
 | `optimize = "size"` | yes | maybe no | CLI tools, desktop apps | Fewer duplicated fast helpers and less metadata. |
 | `optimize = "speed"` | no | yes | Services, hot loops | Larger binary from helpers/specialization. |
 | `debug = false` | yes | neutral | Release builds | Less native/source mapping detail. |
@@ -109,7 +112,7 @@ Required report fields:
 ## Acceptance
 
 - System-linked build reports system libraries and passes on the host.
-- Self-contained build either succeeds or fails with a platform-specific reason.
+- Self-contained app builds use `-static` on Linux/Windows and fail with a platform-specific reason on macOS.
 - `optimize = "size"` produces an artifact no larger than balanced for the same app.
 - `optimize = "speed"` may grow binary size and reports why.
 - Disabled unused feature is omitted and reported.

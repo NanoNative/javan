@@ -133,6 +133,15 @@ final class CoreBehaviorTest {
     }
 
     @Test
+    void optionsParseLibraryJarCombination() {
+        final Options options = Options.parse(new String[]{"build", ".", "--library", "--jar"});
+
+        assertThat(options.buildKind()).isEqualTo(BuildKind.LIBRARY);
+        assertThat(options.jarAlongsideLibrary()).isTrue();
+        assertThat(options.libraryFormats()).containsExactly(LibraryFormat.STATIC, LibraryFormat.SHARED);
+    }
+
+    @Test
     void optionsParseLibAliasWithStaticFormat() {
         final Options options = Options.parse(new String[]{"build", ".", "--lib", "--format", "static"});
 
@@ -13308,15 +13317,15 @@ final class CoreBehaviorTest {
             "read",
             descriptor,
             Optional.of(new CodeAttribute(
-                2,
+                3,
                 3,
                 new byte[0],
                 0,
                 List.of(
                     instruction(0, 42, "aload_0"),
-                    instruction(1, 4, "iconst_1"),
-                    instruction(2, 182, "invokevirtual", new MethodRef("java/io/InputStream", "readNBytes", "(I)[B")),
-                    instruction(3, 176, "areturn")
+                    instruction(1, 9, "lconst_1"),
+                    instruction(2, 182, "invokevirtual", new MethodRef("java/io/InputStream", "skipNBytes", "(J)V")),
+                    instruction(5, 177, "return")
                 )
             ))
         );
@@ -13338,6 +13347,24 @@ final class CoreBehaviorTest {
         assertThat(result.exitCode()).isEqualTo(7);
         assertThat(result.stdout()).isEqualTo("out\n");
         assertThat(result.stderr()).isEqualTo("err\n");
+    }
+
+    @Test
+    void processRunnerForwardsAttachedStdoutAndStderrWhileCapturingThem() throws Exception {
+        final java.io.ByteArrayOutputStream stdout = new java.io.ByteArrayOutputStream();
+        final java.io.ByteArrayOutputStream stderr = new java.io.ByteArrayOutputStream();
+        final ProcessRunner.Result result = new ProcessRunner(Duration.ofSeconds(5)).runAttached(
+            tempDir,
+            List.of("sh", "-c", "printf attached-out; printf attached-err >&2"),
+            new java.io.PrintStream(stdout, true, java.nio.charset.StandardCharsets.UTF_8),
+            new java.io.PrintStream(stderr, true, java.nio.charset.StandardCharsets.UTF_8)
+        );
+
+        assertThat(result.exitCode()).isZero();
+        assertThat(result.stdout()).isEqualTo("attached-out");
+        assertThat(result.stderr()).isEqualTo("attached-err");
+        assertThat(stdout.toString(java.nio.charset.StandardCharsets.UTF_8)).isEqualTo("attached-out");
+        assertThat(stderr.toString(java.nio.charset.StandardCharsets.UTF_8)).isEqualTo("attached-err");
     }
 
     @Test

@@ -540,13 +540,23 @@ public final class JdkCallSupport {
         runtime("Set.iterator", "java/util/Set", "iterator", "()Ljava/util/Iterator;"),
         runtime("Set.toArray", "java/util/Set", "toArray", "()[Ljava/lang/Object;"),
         runtime("List.get", "java/util/List", "get", "(I)Ljava/lang/Object;"),
+        runtime("List.reversed", "java/util/List", "reversed", "()Ljava/util/List;"),
         runtime("List.getFirst", "java/util/List", "getFirst", "()Ljava/lang/Object;"),
         runtime("List.getLast", "java/util/List", "getLast", "()Ljava/lang/Object;"),
         runtime("List.remove", "java/util/List", "remove", "(I)Ljava/lang/Object;"),
         runtime("List.removeLast", "java/util/List", "removeLast", "()Ljava/lang/Object;"),
+        runtime("List.removeFirst", "java/util/List", "removeFirst", "()Ljava/lang/Object;"),
         runtime("List.set", "java/util/List", "set", "(ILjava/lang/Object;)Ljava/lang/Object;"),
         runtime("List.addFirst", "java/util/List", "addFirst", "(Ljava/lang/Object;)V"),
+        runtime("List.addLast", "java/util/List", "addLast", "(Ljava/lang/Object;)V"),
         runtime("List.iterator", "java/util/List", "iterator", "()Ljava/util/Iterator;"),
+        runtime("SequencedCollection.reversed", "java/util/SequencedCollection", "reversed", "()Ljava/util/SequencedCollection;"),
+        runtime("SequencedCollection.getFirst", "java/util/SequencedCollection", "getFirst", "()Ljava/lang/Object;"),
+        runtime("SequencedCollection.getLast", "java/util/SequencedCollection", "getLast", "()Ljava/lang/Object;"),
+        runtime("SequencedCollection.removeFirst", "java/util/SequencedCollection", "removeFirst", "()Ljava/lang/Object;"),
+        runtime("SequencedCollection.removeLast", "java/util/SequencedCollection", "removeLast", "()Ljava/lang/Object;"),
+        runtime("SequencedCollection.addFirst", "java/util/SequencedCollection", "addFirst", "(Ljava/lang/Object;)V"),
+        runtime("SequencedCollection.addLast", "java/util/SequencedCollection", "addLast", "(Ljava/lang/Object;)V"),
         runtime("Collection.iterator", "java/util/Collection", "iterator", "()Ljava/util/Iterator;"),
         runtime("HashSet.<init>", "java/util/HashSet", "<init>", "()V", "(I)V", "(IF)V", "(Ljava/util/Collection;)V"),
         runtime("HashSet.newHashSet", "java/util/HashSet", "newHashSet", "(I)Ljava/util/HashSet;"),
@@ -593,6 +603,7 @@ public final class JdkCallSupport {
         runtime("ListIterator.add", "java/util/ListIterator", "add", "(Ljava/lang/Object;)V"),
         runtime("Map.Entry.getKey", "java/util/Map$Entry", "getKey", "()Ljava/lang/Object;"),
         runtime("Map.Entry.getValue", "java/util/Map$Entry", "getValue", "()Ljava/lang/Object;"),
+        runtime("Map.Entry.setValue", "java/util/Map$Entry", "setValue", "(Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("HashMap.<init>", "java/util/HashMap", "<init>", "()V"),
         runtime("HashMap.<init>", "java/util/HashMap", "<init>", "(I)V"),
         runtime("HashMap.<init>", "java/util/HashMap", "<init>", "(IF)V"),
@@ -616,6 +627,14 @@ public final class JdkCallSupport {
         runtime("TreeMap.get", "java/util/TreeMap", "get", "(Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("ConcurrentHashMap.get", "java/util/concurrent/ConcurrentHashMap", "get", "(Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Map.getOrDefault", "java/util/Map", "getOrDefault", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("SequencedMap.put", "java/util/SequencedMap", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("SequencedMap.putFirst", "java/util/SequencedMap", "putFirst", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("SequencedMap.putLast", "java/util/SequencedMap", "putLast", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("SequencedMap.isEmpty", "java/util/SequencedMap", "isEmpty", "()Z"),
+        runtime("SequencedMap.firstEntry", "java/util/SequencedMap", "firstEntry", "()Ljava/util/Map$Entry;"),
+        runtime("SequencedMap.lastEntry", "java/util/SequencedMap", "lastEntry", "()Ljava/util/Map$Entry;"),
+        runtime("SequencedMap.pollFirstEntry", "java/util/SequencedMap", "pollFirstEntry", "()Ljava/util/Map$Entry;"),
+        runtime("SequencedMap.pollLastEntry", "java/util/SequencedMap", "pollLastEntry", "()Ljava/util/Map$Entry;"),
         runtime("Map.put", "java/util/Map", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Map.putIfAbsent", "java/util/Map", "putIfAbsent", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Map.replace", "java/util/Map", "replace", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
@@ -820,6 +839,53 @@ public final class JdkCallSupport {
         runtime("ServerSocket.accept", "java/net/ServerSocket", "accept", "()Ljava/net/Socket;"),
         runtime("ServerSocket.close", "java/net/ServerSocket", "close", "()V"),
         runtime("URI.create", "java/net/URI", "create", "(Ljava/lang/String;)Ljava/net/URI;"),
+        runtime("URI.getPath", "java/net/URI", "getPath", "()Ljava/lang/String;"),
+        runtime("URI.getQuery", "java/net/URI", "getQuery", "()Ljava/lang/String;"),
+        runtime("URI.getRawPath", "java/net/URI", "getRawPath", "()Ljava/lang/String;"),
+        runtime("URI.getRawQuery", "java/net/URI", "getRawQuery", "()Ljava/lang/String;"),
+        runtime("HttpServer.create", "com/sun/net/httpserver/HttpServer", "create", "(Ljava/net/InetSocketAddress;I)Lcom/sun/net/httpserver/HttpServer;"),
+        runtime("HttpServer.createContext", "com/sun/net/httpserver/HttpServer", "createContext", "(Ljava/lang/String;Lcom/sun/net/httpserver/HttpHandler;)Lcom/sun/net/httpserver/HttpContext;"),
+        runtime("HttpServer.removeContext", "com/sun/net/httpserver/HttpServer", "removeContext", "(Ljava/lang/String;)V"),
+        runtime("HttpServer.getAddress", "com/sun/net/httpserver/HttpServer", "getAddress", "()Ljava/net/InetSocketAddress;"),
+        runtime("HttpServer.setExecutor", "com/sun/net/httpserver/HttpServer", "setExecutor", "(Ljava/util/concurrent/Executor;)V"),
+        runtime("HttpServer.start", "com/sun/net/httpserver/HttpServer", "start", "()V"),
+        runtime("HttpServer.stop", "com/sun/net/httpserver/HttpServer", "stop", "(I)V"),
+        runtime("HttpExchange.sendResponseHeaders", "com/sun/net/httpserver/HttpExchange", "sendResponseHeaders", "(IJ)V"),
+        runtime("HttpExchange.getRequestMethod", "com/sun/net/httpserver/HttpExchange", "getRequestMethod", "()Ljava/lang/String;"),
+        runtime("HttpExchange.getRequestURI", "com/sun/net/httpserver/HttpExchange", "getRequestURI", "()Ljava/net/URI;"),
+        runtime("HttpExchange.getRemoteAddress", "com/sun/net/httpserver/HttpExchange", "getRemoteAddress", "()Ljava/net/InetSocketAddress;"),
+        runtime("HttpExchange.getLocalAddress", "com/sun/net/httpserver/HttpExchange", "getLocalAddress", "()Ljava/net/InetSocketAddress;"),
+        runtime("HttpExchange.getResponseCode", "com/sun/net/httpserver/HttpExchange", "getResponseCode", "()I"),
+        runtime("HttpExchange.getProtocol", "com/sun/net/httpserver/HttpExchange", "getProtocol", "()Ljava/lang/String;"),
+        runtime("HttpExchange.getRequestHeaders", "com/sun/net/httpserver/HttpExchange", "getRequestHeaders", "()Lcom/sun/net/httpserver/Headers;"),
+        runtime("Headers.getFirst", "com/sun/net/httpserver/Headers", "getFirst", "(Ljava/lang/String;)Ljava/lang/String;"),
+        runtime("Headers.get", "com/sun/net/httpserver/Headers", "get", "(Ljava/lang/Object;)Ljava/util/List;"),
+        runtime("Headers.getOrDefault", "com/sun/net/httpserver/Headers", "getOrDefault", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("Headers.keySet", "com/sun/net/httpserver/Headers", "keySet", "()Ljava/util/Set;"),
+        runtime("Headers.entrySet", "com/sun/net/httpserver/Headers", "entrySet", "()Ljava/util/Set;"),
+        runtime("Headers.values", "com/sun/net/httpserver/Headers", "values", "()Ljava/util/Collection;"),
+        runtime("Headers.containsKey", "com/sun/net/httpserver/Headers", "containsKey", "(Ljava/lang/Object;)Z"),
+        runtime("Headers.remove", "com/sun/net/httpserver/Headers", "remove", "(Ljava/lang/Object;)Ljava/util/List;", "(Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("Headers.remove", "com/sun/net/httpserver/Headers", "remove", "(Ljava/lang/Object;Ljava/lang/Object;)Z"),
+        runtime("Headers.clear", "com/sun/net/httpserver/Headers", "clear", "()V"),
+        runtime("Headers.size", "com/sun/net/httpserver/Headers", "size", "()I"),
+        runtime("Headers.isEmpty", "com/sun/net/httpserver/Headers", "isEmpty", "()Z"),
+        runtime("Headers.put", "com/sun/net/httpserver/Headers", "put", "(Ljava/lang/String;Ljava/util/List;)Ljava/util/List;", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("Headers.replace", "com/sun/net/httpserver/Headers", "replace", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("Headers.replace", "com/sun/net/httpserver/Headers", "replace", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Z"),
+        runtime("Headers.computeIfAbsent", "com/sun/net/httpserver/Headers", "computeIfAbsent", "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;"),
+        runtime("Headers.computeIfPresent", "com/sun/net/httpserver/Headers", "computeIfPresent", "(Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;"),
+        runtime("Headers.compute", "com/sun/net/httpserver/Headers", "compute", "(Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;"),
+        runtime("Headers.merge", "com/sun/net/httpserver/Headers", "merge", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;"),
+        runtime("Headers.putIfAbsent", "com/sun/net/httpserver/Headers", "putIfAbsent", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
+        runtime("Headers.putAll", "com/sun/net/httpserver/Headers", "putAll", "(Ljava/util/Map;)V"),
+        runtime("Headers.containsValue", "com/sun/net/httpserver/Headers", "containsValue", "(Ljava/lang/Object;)Z"),
+        runtime("HttpExchange.getResponseHeaders", "com/sun/net/httpserver/HttpExchange", "getResponseHeaders", "()Lcom/sun/net/httpserver/Headers;"),
+        runtime("Headers.set", "com/sun/net/httpserver/Headers", "set", "(Ljava/lang/String;Ljava/lang/String;)V"),
+        runtime("Headers.add", "com/sun/net/httpserver/Headers", "add", "(Ljava/lang/String;Ljava/lang/String;)V"),
+        runtime("HttpExchange.getRequestBody", "com/sun/net/httpserver/HttpExchange", "getRequestBody", "()Ljava/io/InputStream;"),
+        runtime("HttpExchange.getResponseBody", "com/sun/net/httpserver/HttpExchange", "getResponseBody", "()Ljava/io/OutputStream;"),
+        runtime("HttpExchange.close", "com/sun/net/httpserver/HttpExchange", "close", "()V"),
         runtime("HttpClient.newHttpClient", "java/net/http/HttpClient", "newHttpClient", "()Ljava/net/http/HttpClient;"),
         runtime("HttpRequest.newBuilder", "java/net/http/HttpRequest", "newBuilder", "(Ljava/net/URI;)Ljava/net/http/HttpRequest$Builder;"),
         runtime("HttpRequest.Builder.GET", "java/net/http/HttpRequest$Builder", "GET", "()Ljava/net/http/HttpRequest$Builder;"),
@@ -836,6 +902,12 @@ public final class JdkCallSupport {
         runtime("HttpResponse.body", "java/net/http/HttpResponse", "body", "()Ljava/lang/Object;"),
         runtime("InputStream.read", "java/io/InputStream", "read", "()I", "([B)I", "([BII)I"),
         runtime("InputStream.readAllBytes", "java/io/InputStream", "readAllBytes", "()[B"),
+        runtime("InputStream.readNBytes", "java/io/InputStream", "readNBytes", "(I)[B", "([BII)I"),
+        runtime("InputStream.available", "java/io/InputStream", "available", "()I"),
+        runtime("InputStream.skip", "java/io/InputStream", "skip", "(J)J"),
+        runtime("InputStream.markSupported", "java/io/InputStream", "markSupported", "()Z"),
+        runtime("InputStream.mark", "java/io/InputStream", "mark", "(I)V"),
+        runtime("InputStream.reset", "java/io/InputStream", "reset", "()V"),
         runtime("InputStream.close", "java/io/InputStream", "close", "()V"),
         runtime("OutputStream.write", "java/io/OutputStream", "write", "(I)V", "([B)V", "([BII)V"),
         runtime("OutputStream.flush", "java/io/OutputStream", "flush", "()V"),
@@ -927,6 +999,20 @@ public final class JdkCallSupport {
         if ("java/util/Map".equals(methodRef.owner())) {
             return isSupportedMapCall(methodRef.name(), methodRef.descriptor());
         }
+        if ("java/util/SequencedMap".equals(methodRef.owner())) {
+            if ("put".equals(methodRef.name())) {
+                return "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(methodRef.descriptor());
+            }
+            if ("putFirst".equals(methodRef.name()) || "putLast".equals(methodRef.name())) {
+                return "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(methodRef.descriptor());
+            }
+            if ("isEmpty".equals(methodRef.name())) {
+                return "()Z".equals(methodRef.descriptor());
+            }
+            return ("firstEntry".equals(methodRef.name()) || "lastEntry".equals(methodRef.name())
+                || "pollFirstEntry".equals(methodRef.name()) || "pollLastEntry".equals(methodRef.name()))
+                && "()Ljava/util/Map$Entry;".equals(methodRef.descriptor());
+        }
         if ("java/util/HashMap".equals(methodRef.owner())) {
             return isSupportedHashMapCall(methodRef.name(), methodRef.descriptor());
         }
@@ -1012,10 +1098,16 @@ public final class JdkCallSupport {
         if ("removeLast".equals(name)) {
             return "()Ljava/lang/Object;".equals(descriptor);
         }
+        if ("removeFirst".equals(name)) {
+            return "()Ljava/lang/Object;".equals(descriptor);
+        }
         if ("set".equals(name)) {
             return "(ILjava/lang/Object;)Ljava/lang/Object;".equals(descriptor);
         }
         if ("addFirst".equals(name)) {
+            return "(Ljava/lang/Object;)V".equals(descriptor);
+        }
+        if ("addLast".equals(name)) {
             return "(Ljava/lang/Object;)V".equals(descriptor);
         }
         if ("toArray".equals(name)) {

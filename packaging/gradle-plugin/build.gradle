@@ -1,0 +1,26 @@
+plugins {
+    id 'java-gradle-plugin'
+    id 'maven-publish'
+}
+
+group = 'dev.javan'
+version = '2026.6.14'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+gradlePlugin {
+    plugins {
+        javan {
+            id = 'dev.javan'
+            implementationClass = 'dev.javan.gradle.JavanPlugin'
+        }
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 21
+}

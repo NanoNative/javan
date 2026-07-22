@@ -109,7 +109,7 @@ public final class Cli {
             return finishDiagnostics(javan.build(cwd, options, out).diagnostics(), err, 0);
         }
         if (command == Command.RUN) {
-            final Javan.RunResult result = javan.run(cwd, options, out);
+            final Javan.RunResult result = javan.run(cwd, options, out, err);
             return finishDiagnostics(result.diagnostics(), err, result.exitCode());
         }
         if (command == Command.JAVAC) {
@@ -166,7 +166,7 @@ public final class Cli {
               --classes <dir>       explicit class folder
               --classpath <paths>   dependency classpath
               --output, -o <name>   output executable name
-              --jar                  build a JVM jar
+              --jar                  build a JVM jar (also beside --library artifacts)
               --library, --lib       build a native library package
               --format <formats>     static, shared, or both for library builds
               --kind <kind>          app, jar, library, staticlib, or sharedlib

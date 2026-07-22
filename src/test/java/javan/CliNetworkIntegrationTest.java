@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintStream;
 import java.io.UncheckedIOException;
+import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -3318,6 +3319,76 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void httpClientChunkedResponseBuildsAndMatchesJvmOutput() throws Exception {
+        try (java.net.ServerSocket server = new java.net.ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1"))) {
+            final CompletableFuture<Void> accepted = CompletableFuture.runAsync(() -> {
+                try {
+                    for (int connection = 0; connection < 2; connection++) {
+                        try (java.net.Socket socket = server.accept()) {
+                            final InputStream input = socket.getInputStream();
+                            int matched = 0;
+                            while (matched < 4) {
+                                final int next = input.read();
+                                if (next < 0) {
+                                    break;
+                                }
+                                final int expected = matched == 0 || matched == 2 ? '\r' : '\n';
+                                matched = next == expected
+                                    ? matched + 1
+                                    : (next == '\r' ? 1 : 0);
+                            }
+                            socket.getOutputStream().write(new byte[] {
+                                'H', 'T', 'T', 'P', '/', '1', '.', '1', ' ', '2', '0', '0', ' ', 'O', 'K', '\r', '\n',
+                                'T', 'r', 'a', 'n', 's', 'f', 'e', 'r', '-', 'E', 'n', 'c', 'o', 'd', 'i', 'n', 'g', ':', ' ', 'c', 'h', 'u', 'n', 'k', 'e', 'd', '\r', '\n',
+                                'C', 'o', 'n', 'n', 'e', 'c', 't', 'i', 'o', 'n', ':', ' ', 'c', 'l', 'o', 's', 'e', '\r', '\n', '\r', '\n',
+                                '7', '\r', '\n', 'c', 'h', 'u', 'n', 'k', 'e', 'd', '\r', '\n', '0', '\r', '\n', '\r', '\n'
+                            });
+                            socket.getOutputStream().flush();
+                        }
+                    }
+                } catch (final Exception exception) {
+                    throw new IllegalStateException(exception);
+                }
+            });
+            final int port = server.getLocalPort();
+            final Path project = project("http-client-chunked-response");
+            writeJava(project, "com.acme.Main", """
+                package com.acme;
+
+                import java.net.URI;
+                import java.net.http.HttpClient;
+                import java.net.http.HttpRequest;
+                import java.net.http.HttpResponse;
+
+                public final class Main {
+                    private Main() {
+                    }
+
+                    public static void main(final String[] args) throws Exception {
+                        final HttpRequest request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:%d/chunked")).GET().build();
+                        final HttpResponse<String> response = HttpClient.newHttpClient().send(
+                            request,
+                            HttpResponse.BodyHandlers.ofString()
+                        );
+                        System.out.println(response.statusCode());
+                        System.out.println(response.body());
+                    }
+                }
+                """.formatted(port));
+
+            final String jvmOutput = runJvm(project, "com.acme.Main");
+            final CliRun run = run(tempDir, "build", project.toString());
+
+            assertThat(run.exitCode()).as(run.stderr()).isZero();
+            final ProcessResult nativeResult = process(project, List.of(project.resolve(".javan/bin/http-client-chunked-response").toString()));
+            assertThat(nativeResult.exitCode()).as(nativeResult.stderr()).isZero();
+            assertThat(nativeResult.stdout())
+                .isEqualTo(jvmOutput);
+            accepted.join();
+        }
+    }
+
+    @Test
     void httpClientPostStringAndReadByteArrayBuildsAndMatchesJvmOutput() throws Exception {
         final com.sun.net.httpserver.HttpServer server = com.sun.net.httpserver.HttpServer.create(
             new java.net.InetSocketAddress("127.0.0.1", 0),
@@ -3457,6 +3528,1015 @@ final class CliNetworkIntegrationTest extends CliIntegrationSupport {
         } finally {
             server.stop(0);
         }
+    }
+
+    @Test
+    void httpServerSingleContextBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("http-server-single-context");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import com.sun.net.httpserver.HttpExchange;
+            import com.sun.net.httpserver.HttpServer;
+            import java.net.InetSocketAddress;
+            import java.net.URI;
+            import java.net.http.HttpClient;
+            import java.net.http.HttpRequest;
+            import java.net.http.HttpResponse;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", %d), 0);
+                    server.createContext("/hello", exchange -> {
+                        final byte[] body = new byte[] {'p', 'o', 'n', 'g'};
+                        exchange.sendResponseHeaders(200, body.length);
+                        exchange.getResponseBody().write(body);
+                        exchange.close();
+                    });
+                    server.start();
+                    final HttpResponse<String> response = HttpClient.newHttpClient().send(
+                        HttpRequest.newBuilder(URI.create("http://127.0.0.1:%d/hello")).GET().build(),
+                        HttpResponse.BodyHandlers.ofString()
+                    );
+                    System.out.println(response.statusCode());
+                    System.out.println(response.body());
+                    server.stop(0);
+                }
+            }
+            """.formatted(port, port));
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeProcess = process(project, List.of(project.resolve(".javan/bin/http-server-single-context").toString()));
+        assertThat(nativeProcess.stderr()).isEmpty();
+        assertThat(nativeProcess.stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void httpServerRequestMethodBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("http-server-request-method");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import com.sun.net.httpserver.HttpServer;
+            import java.net.InetSocketAddress;
+            import java.net.URI;
+            import java.net.http.HttpClient;
+            import java.net.http.HttpRequest;
+            import java.net.http.HttpResponse;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", %d), 0);
+                    server.createContext("/", exchange -> {
+                        final boolean post = "POST".equals(exchange.getRequestMethod())
+                            && "/hello world".equals(exchange.getRequestURI().getPath())
+                            && "/hello%%20world".equals(exchange.getRequestURI().getRawPath())
+                            && "mode=full value".equals(exchange.getRequestURI().getQuery())
+                            && "mode=full%%20value".equals(exchange.getRequestURI().getRawQuery())
+                            && "full".equals(exchange.getRequestHeaders().getFirst("x-mode"))
+                            && exchange.getRequestHeaders().containsKey("x-mode")
+                            && !exchange.getRequestHeaders().containsKey("missing");
+                        final List<String> modes = exchange.getRequestHeaders().get("X-Mode");
+                        final boolean multiValue = modes.size() == 2
+                            && "full".equals(modes.get(0))
+                            && "second".equals(modes.get(1));
+                        final byte[] body = post && multiValue ? new byte[] {'p', 'o', 's', 't'} : new byte[] {'b', 'a', 'd'};
+                        exchange.sendResponseHeaders(post ? 200 : 500, body.length);
+                        exchange.getResponseBody().write(body);
+                        exchange.close();
+                    });
+                    server.start();
+                    final HttpResponse<String> response = HttpClient.newHttpClient().send(
+                        HttpRequest.newBuilder(URI.create("http://127.0.0.1:%d/hello%%20world?mode=full%%20value"))
+                            .POST(HttpRequest.BodyPublishers.ofString(""))
+                            .header("X-Mode", "full")
+                            .header("X-Mode", "second")
+                            .build(),
+                        HttpResponse.BodyHandlers.ofString()
+                    );
+                    System.out.println(response.statusCode());
+                    System.out.println(response.body());
+                    server.stop(0);
+                }
+            }
+            """.formatted(port, port));
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeProcess = process(project, List.of(project.resolve(".javan/bin/http-server-request-method").toString()));
+        assertThat(nativeProcess.stderr()).isEmpty();
+        assertThat(nativeProcess.stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void httpServerResponseHeadersBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("http-server-response-headers");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import com.sun.net.httpserver.HttpServer;
+            import java.io.InputStream;
+            import java.io.OutputStream;
+            import java.net.InetSocketAddress;
+            import java.net.Socket;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", %d), 0);
+                    final boolean serverAddressExpected = server.getAddress().getPort() == %d
+                        && server.getAddress().getAddress() != null;
+                    server.createContext("/hello", exchange -> {
+                        final boolean exchangeAddressesExpected = exchange.getLocalAddress().getPort() == %d
+                            && exchange.getRemoteAddress().getPort() > 0
+                            && exchange.getRemoteAddress().getAddress() != null
+                            && "HTTP/1.1".equals(exchange.getProtocol());
+                        exchange.getResponseHeaders().add("X-mode", "strict");
+                        exchange.getResponseHeaders().add("X-mode", "relaxed");
+                        final boolean populated = exchange.getResponseHeaders().size() == 1
+                            && !exchange.getResponseHeaders().isEmpty();
+                        final java.util.List<String> removed = (java.util.List<String>) exchange.getResponseHeaders().remove("X-mode");
+                        final boolean removedExpected = populated && removed.size() == 2
+                            && "strict".equals(removed.get(0))
+                            && "relaxed".equals(removed.get(1));
+                        exchange.getResponseHeaders().add("X-old", "stale");
+                        exchange.getResponseHeaders().clear();
+                        final boolean cleared = exchange.getResponseHeaders().size() == 0
+                            && exchange.getResponseHeaders().isEmpty();
+                        final java.util.List<String> firstPut = (java.util.List<String>) exchange.getResponseHeaders().put(
+                            "X-mode",
+                            new java.util.ArrayList<String>(java.util.List.of("strict", "relaxed"))
+                        );
+                        final java.util.List<String> secondPut = (java.util.List<String>) exchange.getResponseHeaders().put(
+                            "X-mode",
+                            new java.util.ArrayList<String>(java.util.List.of("strict"))
+                        );
+                        final boolean putExpected = firstPut == null
+                            && secondPut.size() == 2
+                            && "strict".equals(secondPut.get(0))
+                            && "relaxed".equals(secondPut.get(1));
+                        final java.util.Map<String, java.util.List<String>> additions = new java.util.LinkedHashMap<>();
+                        additions.put("X-mode", new java.util.ArrayList<String>(java.util.List.of("strict")));
+                        additions.put("X-extra", new java.util.ArrayList<String>(java.util.List.of("added")));
+                        exchange.getResponseHeaders().putAll(additions);
+                        final boolean putAllExpected = exchange.getResponseHeaders().size() == 2
+                            && exchange.getResponseHeaders().containsKey("x-extra")
+                            && exchange.getResponseHeaders().containsValue(java.util.List.of("added"));
+                        final boolean valueExpected = exchange.getResponseHeaders().containsValue(java.util.List.of("strict"))
+                            && !exchange.getResponseHeaders().containsValue(java.util.List.of("relaxed"));
+                        final java.util.Set<String> keys = exchange.getResponseHeaders().keySet();
+                        final java.util.Collection<java.util.List<String>> values = exchange.getResponseHeaders().values();
+                        final boolean viewsExpected = keys.size() == 2
+                            && keys.contains("x-mode")
+                            && keys.contains("X-extra")
+                            && values.size() == 2
+                            && values.contains(java.util.List.of("strict"))
+                            && values.contains(java.util.List.of("added"));
+                        exchange.getResponseHeaders().add("X-values", "temporary");
+                        final boolean liveValuesExpected = values.remove(java.util.List.of("temporary"))
+                            && !exchange.getResponseHeaders().containsKey("X-values");
+                        exchange.getResponseHeaders().add("X-remove", "temporary");
+                        final java.util.Set<String> liveKeys = exchange.getResponseHeaders().keySet();
+                        final boolean liveViewExpected = liveKeys.remove("x-remove")
+                            && !exchange.getResponseHeaders().containsKey("X-remove");
+                        final java.util.Set<java.util.Map.Entry<String, java.util.List<String>>> entries = exchange.getResponseHeaders().entrySet();
+                        boolean entriesExpected = entries.size() == 2;
+                        for (final java.util.Map.Entry<String, java.util.List<String>> entry : entries) {
+                            final java.util.List<String> entryValues = entry.getValue();
+                            final boolean valueShape = entryValues.size() == 1
+                                && ("strict".equals(entryValues.get(0)) || "added".equals(entryValues.get(0)));
+                            entriesExpected = entriesExpected
+                                && ("X-mode".equals(entry.getKey()) || "X-extra".equals(entry.getKey()))
+                                && valueShape;
+                        }
+                        java.util.Map.Entry<String, java.util.List<String>> modeEntry = null;
+                        for (final java.util.Map.Entry<String, java.util.List<String>> entry : entries) {
+                            if ("X-mode".equals(entry.getKey())) {
+                                modeEntry = entry;
+                            }
+                        }
+                        final boolean liveEntryContainsExpected = modeEntry != null && entries.contains(modeEntry);
+                        final java.util.List<String> previousEntryValue = modeEntry == null
+                            ? null
+                            : modeEntry.setValue(new java.util.ArrayList<String>(java.util.List.of("updated")));
+                        final boolean liveEntryValueExpected = previousEntryValue != null
+                            && previousEntryValue.size() == 1
+                            && "strict".equals(previousEntryValue.get(0))
+                            && "updated".equals(exchange.getResponseHeaders().getFirst("X-mode"));
+                        if (modeEntry != null) {
+                            modeEntry.setValue(new java.util.ArrayList<String>(java.util.List.of("strict")));
+                        }
+                        final boolean liveEntryRemoveExpected = modeEntry != null
+                            && entries.remove(modeEntry)
+                            && !exchange.getResponseHeaders().containsKey("X-mode");
+                        exchange.getResponseHeaders().put(
+                            "X-mode",
+                            new java.util.ArrayList<String>(java.util.List.of("strict"))
+                        );
+                        exchange.getResponseHeaders().add("X-entry-clear", "temporary");
+                        final boolean liveEntryClearExpected = entries.size() == 3;
+                        entries.clear();
+                        final boolean liveEntryCleared = liveEntryClearExpected
+                            && exchange.getResponseHeaders().isEmpty();
+                        exchange.getResponseHeaders().put(
+                            "X-mode",
+                            new java.util.ArrayList<String>(java.util.List.of("strict"))
+                        );
+                        exchange.getResponseHeaders().put(
+                            "X-extra",
+                            new java.util.ArrayList<String>(java.util.List.of("added"))
+                        );
+                        final java.util.List<String> absentPut = (java.util.List<String>) exchange.getResponseHeaders().putIfAbsent(
+                            "X-put-if-absent",
+                            new java.util.ArrayList<String>(java.util.List.of("first"))
+                        );
+                        final java.util.List<String> presentPut = (java.util.List<String>) exchange.getResponseHeaders().putIfAbsent(
+                            "x-mode",
+                            new java.util.ArrayList<String>(java.util.List.of("replacement"))
+                        );
+                        final boolean putIfAbsentExpected = absentPut == null
+                            && presentPut != null
+                            && presentPut.size() == 1
+                            && "strict".equals(presentPut.get(0))
+                            && "first".equals(exchange.getResponseHeaders().getFirst("X-put-if-absent"));
+                        exchange.getResponseHeaders().remove("X-put-if-absent");
+                        exchange.getResponseHeaders().put(
+                            "X-conditional",
+                            new java.util.ArrayList<String>(java.util.List.of("keep"))
+                        );
+                        final boolean conditionalRemoveExpected = exchange.getResponseHeaders().remove(
+                            "x-conditional",
+                            new java.util.ArrayList<String>(java.util.List.of("wrong"))
+                        ) == false
+                            && exchange.getResponseHeaders().containsKey("X-Conditional")
+                            && exchange.getResponseHeaders().remove(
+                                "x-conditional",
+                                new java.util.ArrayList<String>(java.util.List.of("keep"))
+                            )
+                            && !exchange.getResponseHeaders().containsKey("X-Conditional");
+                        final java.util.List<String> presentDefault = (java.util.List<String>) exchange.getResponseHeaders().getOrDefault(
+                            "x-mode",
+                            new java.util.ArrayList<String>(java.util.List.of("fallback"))
+                        );
+                        final java.util.List<String> missingDefault = (java.util.List<String>) exchange.getResponseHeaders().getOrDefault(
+                            "X-missing",
+                            new java.util.ArrayList<String>(java.util.List.of("fallback"))
+                        );
+                        final boolean getOrDefaultExpected = presentDefault.size() == 1
+                            && "strict".equals(presentDefault.get(0))
+                            && missingDefault.size() == 1
+                            && "fallback".equals(missingDefault.get(0));
+                        final java.util.List<String> replacedValues = (java.util.List<String>) exchange.getResponseHeaders().replace(
+                            "X-mode",
+                            new java.util.ArrayList<String>(java.util.List.of("replaced"))
+                        );
+                        final java.util.List<String> missingReplacement = (java.util.List<String>) exchange.getResponseHeaders().replace(
+                            "X-missing",
+                            new java.util.ArrayList<String>(java.util.List.of("unexpected"))
+                        );
+                        final boolean replaceExpected = replacedValues != null
+                            && replacedValues.size() == 1
+                            && "strict".equals(replacedValues.get(0))
+                            && "replaced".equals(exchange.getResponseHeaders().getFirst("x-mode"))
+                            && missingReplacement == null
+                            && !exchange.getResponseHeaders().containsKey("X-missing");
+                        final boolean conditionalReplaceExpected = !exchange.getResponseHeaders().replace(
+                                "x-mode",
+                                new java.util.ArrayList<String>(java.util.List.of("wrong")),
+                                new java.util.ArrayList<String>(java.util.List.of("bad"))
+                            )
+                            && "replaced".equals(exchange.getResponseHeaders().getFirst("X-mode"))
+                            && exchange.getResponseHeaders().replace(
+                                "x-mode",
+                                new java.util.ArrayList<String>(java.util.List.of("replaced")),
+                                new java.util.ArrayList<String>(java.util.List.of("strict"))
+                            )
+                            && "strict".equals(exchange.getResponseHeaders().getFirst("X-mode"));
+                        final java.util.List<String> computedAbsent = (java.util.List<String>) exchange.getResponseHeaders().computeIfAbsent(
+                            "X-computed",
+                            key -> new java.util.ArrayList<String>(java.util.List.of("computed"))
+                        );
+                        final java.util.List<String> computedPresent = (java.util.List<String>) exchange.getResponseHeaders().computeIfAbsent(
+                            "x-mode",
+                            key -> new java.util.ArrayList<String>(java.util.List.of("wrong"))
+                        );
+                        final boolean computeIfAbsentExpected = computedAbsent != null
+                            && computedAbsent.size() == 1
+                            && "computed".equals(computedAbsent.get(0))
+                            && computedPresent != null
+                            && computedPresent.size() == 1
+                            && "strict".equals(computedPresent.get(0))
+                            && "computed".equals(exchange.getResponseHeaders().getFirst("x-computed"));
+                        exchange.getResponseHeaders().remove("X-computed");
+                        final java.util.List<String> computedPresentValue = (java.util.List<String>) exchange.getResponseHeaders().computeIfPresent(
+                            "X-mode",
+                            (key, value) -> new java.util.ArrayList<String>(java.util.List.of("computed-present"))
+                        );
+                        final java.util.List<String> computedMissingValue = (java.util.List<String>) exchange.getResponseHeaders().computeIfPresent(
+                            "X-missing",
+                            (key, value) -> new java.util.ArrayList<String>(java.util.List.of("unexpected"))
+                        );
+                        final boolean computeIfPresentExpected = computedPresentValue != null
+                            && computedPresentValue.size() == 1
+                            && "computed-present".equals(computedPresentValue.get(0))
+                            && computedMissingValue == null
+                            && !exchange.getResponseHeaders().containsKey("X-missing");
+                        final java.util.List<String> computedValue = (java.util.List<String>) exchange.getResponseHeaders().compute(
+                            "x-mode",
+                            (key, value) -> new java.util.ArrayList<String>(java.util.List.of("computed-value"))
+                        );
+                        final java.util.List<String> computedMissing = (java.util.List<String>) exchange.getResponseHeaders().compute(
+                            "X-computed-missing",
+                            (key, value) -> new java.util.ArrayList<String>(java.util.List.of("computed-missing"))
+                        );
+                        final boolean computeExpected = computedValue != null
+                            && computedValue.size() == 1
+                            && "computed-value".equals(computedValue.get(0))
+                            && computedMissing != null
+                            && "computed-missing".equals(computedMissing.get(0));
+                        exchange.getResponseHeaders().remove("X-computed-missing");
+                        final java.util.List<String> mergedPresent = (java.util.List<String>) exchange.getResponseHeaders().merge(
+                            "X-mode",
+                            new java.util.ArrayList<String>(java.util.List.of("incoming")),
+                            (key, value) -> new java.util.ArrayList<String>(java.util.List.of(value.get(0), "merged-present"))
+                        );
+                        final java.util.List<String> mergedAbsent = (java.util.List<String>) exchange.getResponseHeaders().merge(
+                            "X-merged-missing",
+                            new java.util.ArrayList<String>(java.util.List.of("incoming")),
+                            (key, value) -> new java.util.ArrayList<String>(java.util.List.of("unexpected"))
+                        );
+                        final boolean mergeExpected = mergedPresent != null
+                            && mergedPresent.size() == 2
+                            && "computed-value".equals(mergedPresent.get(0))
+                            && "merged-present".equals(mergedPresent.get(1))
+                            && mergedAbsent != null
+                            && "incoming".equals(mergedAbsent.get(0));
+                        exchange.getResponseHeaders().remove("X-merged-missing");
+                        final boolean responseHeaderOk = removedExpected
+                            && cleared
+                            && putExpected
+                            && putAllExpected
+                            && valueExpected
+                            && viewsExpected
+                            && liveValuesExpected
+                            && liveViewExpected
+                            && liveEntryContainsExpected
+                            && liveEntryValueExpected
+                            && liveEntryRemoveExpected
+                            && liveEntryCleared
+                            && entriesExpected
+                            && putIfAbsentExpected
+                            && conditionalRemoveExpected
+                            && getOrDefaultExpected
+                            && replaceExpected
+                            && conditionalReplaceExpected
+                            && computeIfAbsentExpected
+                            && computeIfPresentExpected
+                            && computeExpected
+                            && mergeExpected;
+                        exchange.getResponseHeaders().add("X-endpoint", exchangeAddressesExpected ? "yes" : "no");
+                        exchange.getResponseHeaders().add("X-mode", responseHeaderOk ? "strict" : "bad");
+                        final byte[] body = exchange.getResponseCode() == 200
+                            ? new byte[] {'o', 'k'}
+                            : new byte[] {'b', 'a'};
+                        exchange.sendResponseHeaders(200, body.length);
+                        exchange.getResponseBody().write(body);
+                        exchange.close();
+                    });
+                    server.start();
+                    final Socket client = new Socket("127.0.0.1", %d);
+                    final OutputStream output = client.getOutputStream();
+                    output.write(new byte[] {
+                        'G', 'E', 'T', ' ', '/', 'h', 'e', 'l', 'l', 'o', ' ', 'H', 'T', 'T', 'P', '/', '1', '.', '1', '\\r', '\\n',
+                        'H', 'o', 's', 't', ':', ' ', '1', '\\r', '\\n',
+                        'C', 'o', 'n', 'n', 'e', 'c', 't', 'i', 'o', 'n', ':', ' ', 'c', 'l', 'o', 's', 'e', '\\r', '\\n', '\\r', '\\n'
+                    });
+                    output.flush();
+                    final InputStream input = client.getInputStream();
+                    final byte[] response = new byte[1024];
+                    int length = 0;
+                    while (length < response.length) {
+                        final int read = input.read(response, length, response.length - length);
+                        if (read < 0) {
+                            break;
+                        }
+                        length += read;
+                    }
+                    client.close();
+                    server.stop(0);
+                    final byte[] expectedHeader = new byte[] {'X', '-', 'm', 'o', 'd', 'e', ':', ' ', 's', 't', 'r', 'i', 'c', 't'};
+                    final byte[] endpointHeader = new byte[] {'X', '-', 'e', 'n', 'd', 'p', 'o', 'i', 'n', 't', ':', ' ', 'y', 'e', 's'};
+                    final byte[] secondHeader = new byte[] {'X', '-', 'm', 'o', 'd', 'e', ':', ' ', 'r', 'e', 'l', 'a', 'x', 'e', 'd'};
+                    final byte[] extraHeader = new byte[] {'X', '-', 'e', 'x', 't', 'r', 'a', ':', ' ', 'a', 'd', 'd', 'e', 'd'};
+                    final byte[] staleHeader = new byte[] {'X', '-', 'o', 'l', 'd', ':', ' ', 's', 't', 'a', 'l', 'e'};
+                    System.out.println(serverAddressExpected
+                        && contains(response, length, endpointHeader)
+                        && contains(response, length, expectedHeader)
+                        && !contains(response, length, secondHeader)
+                        && contains(response, length, extraHeader)
+                        && !contains(response, length, staleHeader)
+                        && contains(response, length, new byte[] {'o', 'k'}));
+                }
+
+                private static boolean contains(final byte[] value, final int length, final byte[] needle) {
+                    for (int start = 0; start + needle.length <= length; start++) {
+                        boolean match = true;
+                        for (int index = 0; index < needle.length; index++) {
+                            if (value[start + index] != needle[index]) {
+                                match = false;
+                                break;
+                            }
+                        }
+                        if (match) {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+            }
+            """.formatted(port, port, port, port));
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeProcess = process(project, List.of(project.resolve(".javan/bin/http-server-response-headers").toString()));
+        assertThat(nativeProcess.stderr()).isEmpty();
+        assertThat(nativeProcess.stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void httpServerRejectsMalformedRequestTargetEscapes() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("http-server-malformed-request-target");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import com.sun.net.httpserver.HttpServer;
+            import java.io.InputStream;
+            import java.io.OutputStream;
+            import java.net.InetSocketAddress;
+            import java.net.Socket;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", %d), 0);
+                    server.createContext("/", exchange -> {
+                        final byte[] body = new byte[] {'b', 'a', 'd'};
+                        exchange.sendResponseHeaders(200, body.length);
+                        exchange.getResponseBody().write(body);
+                        exchange.close();
+                    });
+                    server.start();
+                    final Socket client = new Socket("127.0.0.1", %d);
+                    final OutputStream output = client.getOutputStream();
+                    output.write(new byte[] {
+                        'G', 'E', 'T', ' ', '/', 'h', 'e', 'l', 'l', 'o', '%%', '2', ' ', 'H', 'T', 'T', 'P', '/', '1', '.', '1', '\\r', '\\n',
+                        'H', 'o', 's', 't', ':', ' ', 'x', '\\r', '\\n',
+                        'C', 'o', 'n', 'n', 'e', 'c', 't', 'i', 'o', 'n', ':', ' ', 'c', 'l', 'o', 's', 'e', '\\r', '\\n', '\\r', '\\n'
+                    });
+                    output.flush();
+                    final InputStream input = client.getInputStream();
+                    final byte[] response = new byte[128];
+                    final int length = input.read(response);
+                    client.close();
+                    server.stop(0);
+                    System.out.println(length >= 12
+                        && response[9] == '4'
+                        && response[10] == '0'
+                        && response[11] == '0');
+                }
+            }
+            """.formatted(port, port));
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeProcess = process(project, List.of(project.resolve(".javan/bin/http-server-malformed-request-target").toString()));
+        assertThat(nativeProcess.stderr()).isEmpty();
+        assertThat(nativeProcess.stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void httpServerRejectsMalformedRequestFraming() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("http-server-malformed-request-framing");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import com.sun.net.httpserver.HttpServer;
+            import java.io.InputStream;
+            import java.io.OutputStream;
+            import java.net.InetSocketAddress;
+            import java.net.Socket;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", %d), 0);
+                    server.createContext("/", exchange -> {
+                        final byte[] body = new byte[] {'b', 'a', 'd'};
+                        exchange.sendResponseHeaders(200, body.length);
+                        exchange.getResponseBody().write(body);
+                        exchange.close();
+                    });
+                    server.start();
+                    final Socket client = new Socket("127.0.0.1", %d);
+                    final OutputStream output = client.getOutputStream();
+                    output.write(new byte[] {
+                        'P', 'O', 'S', 'T', ' ', '/', ' ', 'H', 'T', 'T', 'P', '/', '1', '.', '1', '\\r', '\\n',
+                        'H', 'o', 's', 't', ':', ' ', 'x', '\\r', '\\n',
+                        'C', 'o', 'n', 't', 'e', 'n', 't', '-', 'L', 'e', 'n', 'g', 't', 'h', ':', ' ', 'n', 'o', 'p', 'e', '\\r', '\\n',
+                        'C', 'o', 'n', 'n', 'e', 'c', 't', 'i', 'o', 'n', ':', ' ', 'c', 'l', 'o', 's', 'e', '\\r', '\\n', '\\r', '\\n'
+                    });
+                    output.flush();
+                    final InputStream input = client.getInputStream();
+                    final byte[] response = new byte[128];
+                    final int length = input.read(response);
+                    client.close();
+                    server.stop(0);
+                    System.out.println(length >= 12
+                        && response[9] == '4'
+                        && response[10] == '0'
+                        && response[11] == '0');
+                }
+            }
+            """.formatted(port, port));
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeProcess = process(project, List.of(project.resolve(".javan/bin/http-server-malformed-request-framing").toString()));
+        assertThat(nativeProcess.stderr()).isEmpty();
+        assertThat(nativeProcess.stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void httpServerUsesConfiguredVirtualExecutorBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("http-server-configured-virtual-executor");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import com.sun.net.httpserver.HttpServer;
+            import java.net.InetSocketAddress;
+            import java.net.URI;
+            import java.net.http.HttpClient;
+            import java.net.http.HttpRequest;
+            import java.net.http.HttpResponse;
+            import java.util.concurrent.ExecutorService;
+            import java.util.concurrent.Executors;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+                    final HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", %d), 0);
+                    server.setExecutor(executor);
+                    server.createContext("/", exchange -> {
+                        final byte[] body = new byte[] {(byte) (Thread.currentThread().isVirtual() ? 'v' : 'p')};
+                        exchange.sendResponseHeaders(200, body.length);
+                        exchange.getResponseBody().write(body);
+                        exchange.close();
+                    });
+                    server.start();
+                    final HttpResponse<String> response = HttpClient.newHttpClient().send(
+                        HttpRequest.newBuilder(URI.create("http://127.0.0.1:%d/hello"))
+                            .GET()
+                            .build(),
+                        HttpResponse.BodyHandlers.ofString()
+                    );
+                    System.out.println(response.statusCode());
+                    System.out.println(response.body());
+                    server.stop(0);
+                    executor.close();
+                }
+            }
+            """.formatted(port, port));
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeProcess = process(project, List.of(project.resolve(".javan/bin/http-server-configured-virtual-executor").toString()));
+        assertThat(nativeProcess.stderr()).isEmpty();
+        assertThat(nativeProcess.stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void httpServerUnmatchedContextBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("http-server-unmatched-context");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import com.sun.net.httpserver.HttpServer;
+            import java.net.InetSocketAddress;
+            import java.net.URI;
+            import java.net.http.HttpClient;
+            import java.net.http.HttpRequest;
+            import java.net.http.HttpResponse;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", %d), 0);
+                    server.createContext("/hello", exchange -> {
+                        final byte[] body = new byte[] {'m', 'a', 't', 'c', 'h'};
+                        exchange.sendResponseHeaders(200, body.length);
+                        exchange.getResponseBody().write(body);
+                        exchange.close();
+                    });
+                    server.start();
+                    final HttpResponse<String> response = HttpClient.newHttpClient().send(
+                        HttpRequest.newBuilder(URI.create("http://127.0.0.1:%d/wrong"))
+                            .GET()
+                            .build(),
+                        HttpResponse.BodyHandlers.ofString()
+                    );
+                    System.out.println(response.statusCode());
+                    server.stop(0);
+                }
+            }
+            """.formatted(port, port));
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeProcess = process(project, List.of(project.resolve(".javan/bin/http-server-unmatched-context").toString()));
+        assertThat(nativeProcess.stderr()).isEmpty();
+        assertThat(nativeProcess.stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void httpServerMultipleContextsBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("http-server-multiple-contexts");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import com.sun.net.httpserver.HttpServer;
+            import java.net.InetSocketAddress;
+            import java.net.URI;
+            import java.net.http.HttpClient;
+            import java.net.http.HttpRequest;
+            import java.net.http.HttpResponse;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", %d), 0);
+                    server.createContext("/hello", exchange -> {
+                        final byte[] body = new byte[] {'h', 'e', 'l', 'l', 'o'};
+                        exchange.sendResponseHeaders(200, body.length);
+                        exchange.getResponseBody().write(body);
+                        exchange.close();
+                    });
+                    server.createContext("/api", exchange -> {
+                        final byte[] body = new byte[] {'a', 'p', 'i'};
+                        exchange.sendResponseHeaders(200, body.length);
+                        exchange.getResponseBody().write(body);
+                        exchange.close();
+                    });
+                    server.removeContext("/api");
+                    server.start();
+                    final HttpResponse<String> removedResponse = HttpClient.newHttpClient().send(
+                        HttpRequest.newBuilder(URI.create("http://127.0.0.1:%d/api"))
+                            .GET()
+                            .build(),
+                        HttpResponse.BodyHandlers.ofString()
+                    );
+                    final HttpResponse<String> response = HttpClient.newHttpClient().send(
+                        HttpRequest.newBuilder(URI.create("http://127.0.0.1:%d/hello"))
+                            .GET()
+                            .build(),
+                        HttpResponse.BodyHandlers.ofString()
+                    );
+                    System.out.println(removedResponse.statusCode());
+                    System.out.println(removedResponse.body());
+                    System.out.println(response.statusCode());
+                    System.out.println(response.body());
+                    server.stop(0);
+                }
+            }
+            """.formatted(port, port, port));
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeProcess = process(project, List.of(project.resolve(".javan/bin/http-server-multiple-contexts").toString()));
+        assertThat(nativeProcess.stderr()).isEmpty();
+        assertThat(nativeProcess.stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void httpServerServesSequentialRequestsUntilStopBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("http-server-sequential-service");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import com.sun.net.httpserver.HttpServer;
+            import java.net.InetSocketAddress;
+            import java.net.URI;
+            import java.net.http.HttpClient;
+            import java.net.http.HttpRequest;
+            import java.net.http.HttpResponse;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", %d), 0);
+                    server.createContext("/hello", exchange -> {
+                        final byte[] body = new byte[] {'o', 'k'};
+                        exchange.sendResponseHeaders(200, body.length);
+                        exchange.getResponseBody().write(body);
+                        exchange.close();
+                    });
+                    server.start();
+                    final HttpClient client = HttpClient.newHttpClient();
+                    final HttpRequest request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:%d/hello"))
+                        .GET()
+                        .build();
+                    final HttpResponse<String> first = client.send(request, HttpResponse.BodyHandlers.ofString());
+                    final HttpResponse<String> second = client.send(request, HttpResponse.BodyHandlers.ofString());
+                    System.out.println(first.statusCode());
+                    System.out.println(first.body());
+                    System.out.println(second.statusCode());
+                    System.out.println(second.body());
+                    server.stop(0);
+                }
+            }
+            """.formatted(port, port));
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeProcess = process(project, List.of(project.resolve(".javan/bin/http-server-sequential-service").toString()));
+        assertThat(nativeProcess.stderr()).isEmpty();
+        assertThat(nativeProcess.stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void httpServerDispatchesConcurrentRequestsBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("http-server-concurrent-requests");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import com.sun.net.httpserver.HttpServer;
+            import java.net.InetSocketAddress;
+            import java.util.concurrent.atomic.AtomicInteger;
+
+            public final class Main {
+                private static final AtomicInteger ARRIVED = new AtomicInteger();
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", %d), 0);
+                    server.createContext("/hello", exchange -> {
+                        ARRIVED.incrementAndGet();
+                        final long deadline = System.nanoTime() + 2_000_000_000L;
+                        while (ARRIVED.get() < 2 && System.nanoTime() < deadline) {
+                            try {
+                                Thread.sleep(5L);
+                            } catch (InterruptedException interrupted) {
+                                Thread.currentThread().interrupt();
+                            }
+                        }
+                        final byte[] body = ARRIVED.get() == 2
+                            ? new byte[] {'c', 'o', 'n', 'c', 'u', 'r', 'r', 'e', 'n', 't'}
+                            : new byte[] {'s', 'e', 'r', 'i', 'a', 'l'};
+                        exchange.sendResponseHeaders(200, body.length);
+                        exchange.getResponseBody().write(body);
+                        exchange.close();
+                    });
+                    server.start();
+                    final long deadline = System.nanoTime() + 5_000_000_000L;
+                    while (ARRIVED.get() < 2 && System.nanoTime() < deadline) {
+                        try {
+                            Thread.sleep(5L);
+                        } catch (InterruptedException interrupted) {
+                            Thread.currentThread().interrupt();
+                        }
+                    }
+                    System.out.println(ARRIVED.get());
+                    server.stop(0);
+                }
+            }
+            """.formatted(port));
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final TestProcesses.Result nativeProcess = runConcurrentHttpServer(
+            project,
+            List.of(project.resolve(".javan/bin/http-server-concurrent-requests").toString()),
+            port
+        );
+        assertThat(nativeProcess.exitCode()).isZero();
+        assertThat(nativeProcess.stderr()).isEmpty();
+        assertThat(nativeProcess.stdout()).isEqualTo("2\n");
+    }
+
+    private static TestProcesses.Result runConcurrentHttpServer(
+        final Path project,
+        final List<String> command,
+        final int port
+    ) {
+        try (TestProcesses.RunningProcess running = TestProcesses.start(
+            project,
+            command,
+            Map.of("JAVAN_GC_STRESS", "1", "JAVAN_GC_SAFEPOINT_INTERVAL", "1")
+        )) {
+            try {
+                final CompletableFuture<String> first = CompletableFuture.supplyAsync(() -> sendConcurrentHttpRequest(port));
+                final CompletableFuture<String> second = CompletableFuture.supplyAsync(() -> sendConcurrentHttpRequest(port));
+                final String firstResponse = first.join();
+                final String secondResponse = second.join();
+                assertThat(firstResponse).contains("concurrent");
+                assertThat(secondResponse).contains("concurrent");
+                return running.await(Duration.ofSeconds(10));
+            } catch (RuntimeException failure) {
+                final TestProcesses.Result result = running.await(Duration.ofSeconds(2));
+                throw new AssertionError("concurrent HTTP process failed: " + result.stderr(), failure);
+            }
+        }
+    }
+
+    private static String sendConcurrentHttpRequest(final int port) {
+        IOException last = null;
+        for (int attempt = 0; attempt < 200; attempt++) {
+            try (java.net.Socket socket = new java.net.Socket()) {
+                socket.connect(new InetSocketAddress("127.0.0.1", port), 100);
+                socket.getOutputStream().write(
+                    "GET /hello HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n"
+                        .getBytes(StandardCharsets.UTF_8)
+                );
+                socket.getOutputStream().flush();
+                return readStream(socket.getInputStream());
+            } catch (IOException exception) {
+                last = exception;
+                try {
+                    Thread.sleep(10L);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("Interrupted while connecting concurrent HTTP client", interrupted);
+                }
+            }
+        }
+        throw new IllegalStateException("Timed out connecting concurrent HTTP client", last);
+    }
+
+    @Test
+    void httpServerRequestBodyBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("http-server-request-body");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import com.sun.net.httpserver.HttpServer;
+            import java.net.InetSocketAddress;
+            import java.net.URI;
+            import java.net.http.HttpClient;
+            import java.net.http.HttpRequest;
+            import java.net.http.HttpResponse;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", %d), 0);
+                    server.createContext("/hello", exchange -> {
+                        final byte[] requestBody = exchange.getRequestBody().readAllBytes();
+                        final boolean accepted = requestBody.length == 1 && requestBody[0] == 'x';
+                        final byte[] body = accepted ? new byte[] {'o', 'k'} : new byte[] {'b', 'a', 'd'};
+                        exchange.sendResponseHeaders(accepted ? 200 : 400, body.length);
+                        exchange.getResponseBody().write(body);
+                        exchange.close();
+                    });
+                    server.start();
+                    final HttpResponse<String> response = HttpClient.newHttpClient().send(
+                        HttpRequest.newBuilder(URI.create("http://127.0.0.1:%d/hello"))
+                            .POST(HttpRequest.BodyPublishers.ofString("x"))
+                            .build(),
+                        HttpResponse.BodyHandlers.ofString()
+                    );
+                    System.out.println(response.statusCode());
+                    System.out.println(response.body());
+                    server.stop(0);
+                }
+            }
+            """.formatted(port, port));
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeProcess = process(project, List.of(project.resolve(".javan/bin/http-server-request-body").toString()));
+        assertThat(nativeProcess.stderr()).isEmpty();
+        assertThat(nativeProcess.stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void httpServerChunkedRequestBodyBuildsAndMatchesJvmOutput() throws Exception {
+        final int port = freeTcpPort();
+        final Path project = project("http-server-chunked-request-body");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import com.sun.net.httpserver.HttpServer;
+            import java.io.InputStream;
+            import java.io.OutputStream;
+            import java.net.InetSocketAddress;
+            import java.net.Socket;
+            import java.nio.charset.StandardCharsets;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws Exception {
+                    final HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", %d), 0);
+                    server.createContext("/hello", exchange -> {
+                        final byte[] requestBody = exchange.getRequestBody().readAllBytes();
+                        final boolean accepted = requestBody.length == 1 && requestBody[0] == 'x';
+                        final byte[] body = accepted ? new byte[] {'o', 'k'} : new byte[] {'b', 'a', 'd'};
+                        exchange.sendResponseHeaders(accepted ? 200 : 400, body.length);
+                        exchange.getResponseBody().write(body);
+                        exchange.close();
+                    });
+                    server.start();
+                    final Socket client = new Socket("127.0.0.1", %d);
+                    final OutputStream output = client.getOutputStream();
+                    output.write(new byte[] {
+                        'P', 'O', 'S', 'T', ' ', '/', 'h', 'e', 'l', 'l', 'o', ' ', 'H', 'T', 'T', 'P', '/', '1', '.', '1', '\\r', '\\n',
+                        'H', 'o', 's', 't', ':', ' ', 'l', 'o', 'c', 'a', 'l', 'h', 'o', 's', 't', '\\r', '\\n',
+                        'T', 'r', 'a', 'n', 's', 'f', 'e', 'r', '-', 'E', 'n', 'c', 'o', 'd', 'i', 'n', 'g', ':', ' ', 'c', 'h', 'u', 'n', 'k', 'e', 'd', '\\r', '\\n',
+                        'C', 'o', 'n', 'n', 'e', 'c', 't', 'i', 'o', 'n', ':', ' ', 'c', 'l', 'o', 's', 'e', '\\r', '\\n', '\\r', '\\n',
+                        '1', '\\r', '\\n', 'x', '\\r', '\\n', '0', '\\r', '\\n', '\\r', '\\n'
+                    });
+                    output.flush();
+                    final InputStream input = client.getInputStream();
+                    final byte[] response = new byte[256];
+                    final int length = input.read(response);
+                    client.close();
+                    server.stop(0);
+                    System.out.println(length > 2
+                        && response[9] == '2'
+                        && response[10] == '0'
+                        && response[11] == '0'
+                        && response[length - 2] == 'o'
+                        && response[length - 1] == 'k');
+                }
+            }
+            """.formatted(port, port));
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final ProcessResult nativeProcess = process(project, List.of(project.resolve(".javan/bin/http-server-chunked-request-body").toString()));
+        assertThat(nativeProcess.stderr()).isEmpty();
+        assertThat(nativeProcess.stdout()).isEqualTo(jvmOutput);
     }
 
     @Test

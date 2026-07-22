@@ -1,0 +1,3 @@
+target/
+src/test/resources/fixture/target/
+src/test/resources/fixture/.javan/

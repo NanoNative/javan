@@ -140,7 +140,7 @@ final class RuntimeSourceResourceSection {
                 stream->magic = JAVAN_RESOURCE_INPUT_STREAM_MAGIC;
                 stream->position = 0;
                 stream->length = resource->length;
-                stream->reserved0 = 0;
+                stream->reserved0 = -1;
                 stream->bytes = bytes_root;
                 javan_update_runtime_allocation_kind(stream_root, JAVAN_RUNTIME_KIND_RESOURCE_INPUT_STREAM);
                 javan_root_frame_pop(roots);
@@ -232,6 +232,83 @@ final class RuntimeSourceResourceSection {
                 stream->position = stream->length;
                 javan_root_frame_pop(roots);
                 return result;
+            }
+
+            void* javan_resource_input_stream_read_n_bytes(void* value, int length) {
+                if (length < 0) {
+                    javan_panic("negative resource read length");
+                }
+                void* stream_root = value;
+                void* result = NULL;
+                void** roots[] = {
+                    (void**) &stream_root,
+                    (void**) &result
+                };
+                javan_root_frame_push(roots, 2);
+                javan_resource_input_stream_value* stream = javan_resource_input_stream_checked(stream_root);
+                int remaining = stream->length - stream->position;
+                int count = remaining < length ? remaining : length;
+                result = javan_arrays_copy_of_range_byte(stream->bytes, stream->position, stream->position + count);
+                stream = javan_resource_input_stream_checked(stream_root);
+                stream->position += count;
+                javan_root_frame_pop(roots);
+                return result;
+            }
+
+            int javan_resource_input_stream_read_n_bytes_into(void* value, void* bytes_value, int offset, int length) {
+                if (length < 0) {
+                    javan_panic("negative resource read length");
+                }
+                javan_byte_array* bytes = (javan_byte_array*) javan_array_checked(bytes_value);
+                javan_array_kind_checked((javan_array_header*) bytes, JAVAN_ARRAY_KIND_BYTE);
+                javan_array_range_checked((javan_array_header*) bytes, offset, length);
+                if (length == 0) {
+                    return 0;
+                }
+                javan_resource_input_stream_value* stream = javan_resource_input_stream_checked(value);
+                if (stream->position >= stream->length) {
+                    return 0;
+                }
+                int remaining = stream->length - stream->position;
+                int count = remaining < length ? remaining : length;
+                memcpy(bytes->values + offset, ((javan_byte_array*) stream->bytes)->values + stream->position, (unsigned long) count);
+                stream->position += count;
+                return count;
+            }
+
+            int javan_resource_input_stream_available(void* value) {
+                javan_resource_input_stream_value* stream = javan_resource_input_stream_checked(value);
+                return stream->length - stream->position;
+            }
+
+            long long javan_resource_input_stream_skip(void* value, long long requested) {
+                javan_resource_input_stream_value* stream = javan_resource_input_stream_checked(value);
+                if (requested <= 0 || stream->position >= stream->length) {
+                    return 0;
+                }
+                long long remaining = (long long) stream->length - stream->position;
+                long long skipped = requested < remaining ? requested : remaining;
+                stream->position += (int) skipped;
+                return skipped;
+            }
+
+            int javan_resource_input_stream_mark_supported(void* value) {
+                javan_resource_input_stream_checked(value);
+                return 1;
+            }
+
+            void javan_resource_input_stream_mark(void* value, int limit) {
+                (void) limit;
+                javan_resource_input_stream_value* stream = javan_resource_input_stream_checked(value);
+                stream->reserved0 = stream->position;
+            }
+
+            void javan_resource_input_stream_reset(void* value) {
+                javan_resource_input_stream_value* stream = javan_resource_input_stream_checked(value);
+                if (stream->reserved0 < 0) {
+                    javan_panic("resource input stream has no mark");
+                }
+                stream->position = stream->reserved0;
             }
 
             void javan_resource_input_stream_close(void* value) {

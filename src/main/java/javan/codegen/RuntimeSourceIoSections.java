@@ -2,12 +2,316 @@ package javan.codegen;
 
 final class RuntimeSourceIoSections {
     private static final String SOURCE_HTTP = """
+        #if defined(__GNUC__) || defined(__clang__)
+        __attribute__((weak))
+        #endif
+        void javan_materialized_lambda_apply_void(void* self, void* arg) {
+            (void) self;
+            (void) arg;
+            javan_panic("materialized lambda dispatch is unavailable in a runtime-only probe");
+        }
+
+        void* javan_server_socket_accept_http(void* value) {
+        #if defined(_WIN32)
+            (void) value;
+            javan_socket_runtime_unsupported();
+            return NULL;
+        #else
+            javan_server_socket* server = javan_server_socket_checked(value);
+            if (server->closed != 0) {
+                return NULL;
+            }
+            if (server->fd < 0 || server->bound == 0) {
+                javan_panic("server socket is not bound");
+            }
+            fd_set read_set;
+            FD_ZERO(&read_set);
+            FD_SET(server->fd, &read_set);
+            struct timeval timeout;
+            timeout.tv_sec = 0;
+            timeout.tv_usec = 100000;
+            int ready = select(server->fd + 1, &read_set, NULL, NULL, &timeout);
+            if (ready == 0) {
+                return NULL;
+            }
+            if (ready < 0) {
+                if (errno == EINTR || server->closed != 0 || errno == EBADF) {
+                    return NULL;
+                }
+                javan_panic("server socket accept wait failed");
+            }
+            int accepted = accept(server->fd, NULL, NULL);
+            if (accepted < 0) {
+                if (server->closed != 0 || errno == EBADF || errno == EINVAL) {
+                    return NULL;
+                }
+                javan_panic("server socket accept failed");
+            }
+            return javan_socket_wrap_connected_fd(accepted);
+        #endif
+        }
+
+        static void* javan_socket_input_stream_with_limit(void* socket_value, int content_length) {
+            if (content_length < 0) {
+                javan_panic("invalid socket input content length");
+            }
+            javan_socket_input_stream_value* stream = (javan_socket_input_stream_value*) javan_socket_stream_new(socket_value, 0);
+            stream->reserved0 = content_length;
+            return stream;
+        }
+
+        static void* javan_socket_input_stream_chunked(void* socket_value) {
+            javan_socket_input_stream_value* stream = (javan_socket_input_stream_value*) javan_socket_stream_new(socket_value, 0);
+            stream->reserved0 = -2;
+            stream->reserved1 = 0;
+            stream->reserved2 = 1;
+            return stream;
+        }
+
+        void* javan_socket_input_stream_read_all_bytes(void* value) {
+            void* stream_root = value;
+            void* result = NULL;
+            void** roots[] = {
+                (void**) &stream_root,
+                (void**) &result
+            };
+            javan_root_frame_push(roots, 2);
+            javan_socket_input_stream_value* stream = javan_socket_input_stream_checked(stream_root);
+            if (stream->reserved0 == -2) {
+                void* chunk_buffer_root = NULL;
+                void* result_root = NULL;
+                void** chunk_roots[] = {
+                    (void**) &stream_root,
+                    (void**) &chunk_buffer_root,
+                    (void**) &result_root
+                };
+                javan_root_frame_push(chunk_roots, 3);
+                chunk_buffer_root = javan_byte_array_new(4096);
+                unsigned char* collected = (unsigned char*) malloc(4096UL);
+                if (collected == NULL) {
+                    javan_root_frame_pop(chunk_roots);
+                    javan_panic("out of memory");
+                }
+                int collected_length = 0;
+                while (1) {
+                    int count = javan_socket_input_stream_read_bytes_range(stream_root, chunk_buffer_root, 0, 4096);
+                    if (count < 0) {
+                        break;
+                    }
+                    if (count == 0) {
+                        free(collected);
+                        javan_root_frame_pop(chunk_roots);
+                        javan_panic("chunked socket read made no progress");
+                    }
+                    if (collected_length > 16777216 - count) {
+                        free(collected);
+                        javan_root_frame_pop(chunk_roots);
+                        javan_panic("chunked request body too large");
+                    }
+                    int required = collected_length + count;
+                    if (required > 4096 && (required & (required - 1)) == 0) {
+                        unsigned char* expanded = (unsigned char*) realloc(collected, (unsigned long) required * 2UL);
+                        if (expanded == NULL) {
+                            free(collected);
+                            javan_root_frame_pop(chunk_roots);
+                            javan_panic("out of memory");
+                        }
+                        collected = expanded;
+                    }
+                    memcpy(collected + collected_length, ((javan_byte_array*) chunk_buffer_root)->values, (unsigned long) count);
+                    collected_length += count;
+                }
+                result_root = javan_byte_array_new(collected_length);
+                memcpy(((javan_byte_array*) result_root)->values, collected, (unsigned long) collected_length);
+                free(collected);
+                javan_root_frame_pop(chunk_roots);
+                javan_root_frame_pop(roots);
+                return result_root;
+            }
+            if (stream->reserved0 < 0) {
+                javan_panic("socket input readAllBytes requires content length");
+            }
+            int length = stream->reserved0;
+            result = javan_byte_array_new(length);
+            int offset = 0;
+            while (offset < length) {
+                int count = javan_socket_input_stream_read_bytes_range(stream_root, result, offset, length - offset);
+                if (count <= 0) {
+                    javan_panic("socket input ended before content length");
+                }
+                offset += count;
+            }
+            javan_root_frame_pop(roots);
+            return result;
+        }
+
         static char* javan_http_copy_range(const char* value, unsigned long length) {
             char* result = javan_string_alloc(length + 1UL);
             if (length > 0) {
                 memcpy(result, value, length);
             }
             result[length] = '\\0';
+            return result;
+        }
+
+        static int javan_http_hex_value(char value) {
+            if (value >= '0' && value <= '9') {
+                return value - '0';
+            }
+            if (value >= 'a' && value <= 'f') {
+                return value - 'a' + 10;
+            }
+            if (value >= 'A' && value <= 'F') {
+                return value - 'A' + 10;
+            }
+            return -1;
+        }
+
+        static int javan_socket_input_stream_read_wire_byte(javan_socket* socket) {
+            javan_socket_wait_readable(socket->fd, socket->so_timeout, "socket read timed out", "socket read wait failed");
+            unsigned char byte = 0;
+            ssize_t result = recv(socket->fd, (char*) &byte, 1, 0);
+            if (result < 0) {
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    javan_panic("socket read timed out");
+                }
+                javan_panic("socket read failed");
+            }
+            return result == 0 ? -1 : (int) byte;
+        }
+
+        static int javan_socket_input_stream_prepare_chunk(javan_socket_input_stream_value* stream) {
+            if (stream->reserved2 == 3) {
+                return 0;
+            }
+            javan_socket* socket = javan_socket_open_checked((void*) stream->socket);
+            if (stream->reserved2 == 2) {
+                if (javan_socket_input_stream_read_wire_byte(socket) != '\\r'
+                    || javan_socket_input_stream_read_wire_byte(socket) != '\\n') {
+                    javan_panic("malformed chunk terminator");
+                }
+                stream->reserved2 = 1;
+            }
+            char line[64];
+            int length = 0;
+            while (length < 63) {
+                int byte = javan_socket_input_stream_read_wire_byte(socket);
+                if (byte < 0) {
+                    javan_panic("truncated chunk size");
+                }
+                line[length++] = (char) byte;
+                if (length >= 2 && line[length - 2] == '\\r' && line[length - 1] == '\\n') {
+                    break;
+                }
+            }
+            if (length < 2 || line[length - 2] != '\\r' || line[length - 1] != '\\n') {
+                javan_panic("chunk size line too large");
+            }
+            unsigned long chunk_size = 0;
+            int digits = 0;
+            for (int index = 0; index < length - 2; index++) {
+                if (line[index] == ';') {
+                    break;
+                }
+                int digit = javan_http_hex_value(line[index]);
+                if (digit < 0) {
+                    javan_panic("malformed chunk size");
+                }
+                if (chunk_size > 16777216UL / 16UL) {
+                    javan_panic("chunked request body too large");
+                }
+                chunk_size = chunk_size * 16UL + (unsigned long) digit;
+                if (chunk_size > 16777216UL) {
+                    javan_panic("chunked request body too large");
+                }
+                digits++;
+            }
+            if (digits == 0) {
+                javan_panic("empty chunk size");
+            }
+            if (chunk_size == 0UL) {
+                while (1) {
+                    int trailer_length = 0;
+                    int previous = 0;
+                    while (trailer_length < 63) {
+                        int byte = javan_socket_input_stream_read_wire_byte(socket);
+                        if (byte < 0) {
+                            javan_panic("truncated chunk trailer");
+                        }
+                        trailer_length++;
+                        if (previous == '\\r' && byte == '\\n') {
+                            break;
+                        }
+                        previous = byte;
+                    }
+                    if (trailer_length == 2) {
+                        break;
+                    }
+                    if (trailer_length >= 63) {
+                        javan_panic("chunk trailer too large");
+                    }
+                }
+                stream->reserved2 = 3;
+                return 0;
+            }
+            stream->reserved1 = (int) chunk_size;
+            stream->reserved2 = 4;
+            return 1;
+        }
+
+        int javan_socket_input_stream_read_chunked_bytes(void* stream_value, signed char* destination, int length) {
+            javan_socket_input_stream_value* stream = javan_socket_input_stream_checked(stream_value);
+            if (length <= 0) {
+                return 0;
+            }
+            if (stream->reserved2 == 3) {
+                return -1;
+            }
+            if (stream->reserved2 != 4 || stream->reserved1 == 0) {
+                if (javan_socket_input_stream_prepare_chunk(stream) == 0) {
+                    return -1;
+                }
+            }
+            javan_socket* socket = javan_socket_open_checked((void*) stream->socket);
+            int requested = stream->reserved1 < length ? stream->reserved1 : length;
+            javan_socket_wait_readable(socket->fd, socket->so_timeout, "socket read timed out", "socket read wait failed");
+            ssize_t result = recv(socket->fd, (char*) destination, (size_t) requested, 0);
+            if (result < 0) {
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    javan_panic("socket read timed out");
+                }
+                javan_panic("socket read failed");
+            }
+            if (result == 0) {
+                javan_panic("socket ended inside chunk");
+            }
+            stream->reserved1 -= (int) result;
+            if (stream->reserved1 == 0) {
+                stream->reserved2 = 2;
+            }
+            return (int) result;
+        }
+
+        static char* javan_http_decode_range(const char* value, unsigned long length) {
+            char* result = javan_string_alloc(length + 1UL);
+            unsigned long output_length = 0;
+            for (unsigned long index = 0; index < length; index++) {
+                if (value[index] == '%' && index + 2UL < length) {
+                    int high = javan_http_hex_value(value[index + 1UL]);
+                    int low = javan_http_hex_value(value[index + 2UL]);
+                    if (high >= 0 && low >= 0) {
+                        int decoded = (high << 4) | low;
+                        if (decoded == 0) {
+                            javan_panic("unsupported null uri escape");
+                        }
+                        result[output_length++] = (char) decoded;
+                        index += 2UL;
+                        continue;
+                    }
+                }
+                result[output_length++] = value[index];
+            }
+            result[output_length] = '\\0';
             return result;
         }
 
@@ -89,6 +393,28 @@ final class RuntimeSourceIoSections {
                 javan_panic("unsupported http response object");
             }
             return response;
+        }
+
+        static javan_http_server_value* javan_http_server_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("null http server");
+            }
+            javan_http_server_value* server = (javan_http_server_value*) value;
+            if (server->magic != JAVAN_HTTP_SERVER_MAGIC || server->server_socket == NULL) {
+                javan_panic("unsupported http server object");
+            }
+            return server;
+        }
+
+        static javan_http_exchange_value* javan_http_exchange_checked(void* value) {
+            if (value == NULL) {
+                javan_panic("null http exchange");
+            }
+            javan_http_exchange_value* exchange = (javan_http_exchange_value*) value;
+            if (exchange->magic != JAVAN_HTTP_EXCHANGE_MAGIC || exchange->socket == NULL) {
+                javan_panic("unsupported http exchange object");
+            }
+            return exchange;
         }
 
         static void javan_http_header_text_checked(const char* value, const char* kind) {
@@ -201,6 +527,77 @@ final class RuntimeSourceIoSections {
             javan_root_frame_pop(javan_uri_owner_roots);
             javan_root_frame_pop(javan_uri_parse_roots);
             return uri;
+        }
+
+        static void* javan_uri_from_request_target(const char* request_target) {
+            void* scheme = NULL;
+            void* host = NULL;
+            void* target = NULL;
+            void* uri_root = NULL;
+            void** roots[] = {
+                (void**) &scheme,
+                (void**) &host,
+                (void**) &target,
+                (void**) &uri_root
+            };
+            javan_root_frame_push(roots, 4);
+            scheme = javan_string_copy("");
+            host = javan_string_copy("");
+            target = javan_string_copy(request_target);
+            uri_root = javan_alloc(sizeof(javan_uri_value));
+            javan_uri_value* uri = (javan_uri_value*) uri_root;
+            uri->magic = JAVAN_URI_MAGIC;
+            uri->port = 80;
+            uri->reserved0 = 0;
+            uri->reserved1 = 0;
+            uri->scheme = (char*) scheme;
+            uri->host = (char*) host;
+            uri->target = (char*) target;
+            javan_update_runtime_allocation_kind(uri_root, JAVAN_RUNTIME_KIND_URI);
+            javan_root_frame_pop(roots);
+            return uri_root;
+        }
+
+        void* javan_uri_get_path(void* value) {
+            javan_uri_value* uri = javan_uri_checked(value);
+            const char* query = strchr(uri->target, '?');
+            if (query == NULL) {
+                return javan_http_decode_range(uri->target, strlen(uri->target));
+            }
+            return javan_http_decode_range(uri->target, (unsigned long) (query - uri->target));
+        }
+
+        void* javan_uri_get_query(void* value) {
+            javan_uri_value* uri = javan_uri_checked(value);
+            const char* query = strchr(uri->target, '?');
+            if (query == NULL) {
+                return NULL;
+            }
+            query++;
+            const char* fragment = strchr(query, '#');
+            const char* end = fragment == NULL ? query + strlen(query) : fragment;
+            return javan_http_decode_range(query, (unsigned long) (end - query));
+        }
+
+        void* javan_uri_get_raw_path(void* value) {
+            javan_uri_value* uri = javan_uri_checked(value);
+            const char* query = strchr(uri->target, '?');
+            unsigned long length = query == NULL
+                ? strlen(uri->target)
+                : (unsigned long) (query - uri->target);
+            return javan_http_copy_range(uri->target, length);
+        }
+
+        void* javan_uri_get_raw_query(void* value) {
+            javan_uri_value* uri = javan_uri_checked(value);
+            const char* query = strchr(uri->target, '?');
+            if (query == NULL) {
+                return NULL;
+            }
+            query++;
+            const char* fragment = strchr(query, '#');
+            const char* end = fragment == NULL ? query + strlen(query) : fragment;
+            return javan_http_copy_range(query, (unsigned long) (end - query));
         }
 
         void* javan_http_client_new(void) {
@@ -399,6 +796,1243 @@ final class RuntimeSourceIoSections {
             }
         }
 
+        static int javan_http_header_name_equals(const char* left, const char* right) {
+            while (left[0] != '\\0' && right[0] != '\\0') {
+                char left_char = left[0] >= 'A' && left[0] <= 'Z' ? (char) (left[0] + ('a' - 'A')) : left[0];
+                char right_char = right[0] >= 'A' && right[0] <= 'Z' ? (char) (right[0] + ('a' - 'A')) : right[0];
+                if (left_char != right_char) {
+                    return 0;
+                }
+                left++;
+                right++;
+            }
+            return left[0] == '\\0' && right[0] == '\\0';
+        }
+
+        static int javan_http_server_read_request(int fd, char* method_out, unsigned long method_capacity, char* target_out, unsigned long target_capacity, int* content_length_out, void** request_headers_out) {
+            char request[8193];
+            unsigned long length = 0;
+            void* headers_root = javan_list_new_with_capacity(0, 0);
+            void* name_root = NULL;
+            void* value_root = NULL;
+            void** roots[] = {
+                (void**) &headers_root,
+                (void**) &name_root,
+                (void**) &value_root
+            };
+            javan_root_frame_push(roots, 3);
+            while (length < 8192UL) {
+                ssize_t received = recv(fd, request + length, 1, 0);
+                if (received <= 0) {
+                    javan_panic("http server request read failed");
+                }
+                length++;
+                request[length] = '\\0';
+                if (length >= 4UL
+                    && request[length - 4UL] == '\\r'
+                    && request[length - 3UL] == '\\n'
+                    && request[length - 2UL] == '\\r'
+                    && request[length - 1UL] == '\\n') {
+                    break;
+                }
+            }
+            if (length == 8192UL) {
+                javan_panic("http server request headers too large");
+            }
+            char* line_end = strstr(request, "\\r\\n");
+            char* method_end = line_end == NULL ? NULL : strchr(request, ' ');
+            char* target_end = method_end == NULL ? NULL : strchr(method_end + 1, ' ');
+            if (line_end == NULL || method_end == NULL || target_end == NULL || target_end >= line_end) {
+                javan_panic("invalid http server request line");
+            }
+            unsigned long method_length = (unsigned long) (method_end - request);
+            unsigned long target_length = (unsigned long) (target_end - method_end - 1);
+            if (method_length == 0UL || method_length >= method_capacity || target_length == 0UL || target_length >= target_capacity) {
+                javan_panic("http server request line too large");
+            }
+            memcpy(method_out, request, method_length);
+            method_out[method_length] = '\\0';
+            memcpy(target_out, method_end + 1, target_length);
+            target_out[target_length] = '\\0';
+            int content_length = -1;
+            int transfer_encoding = 0;
+            char* header_cursor = line_end + 2;
+            while (header_cursor[0] != '\\0') {
+                char* header_end = strstr(header_cursor, "\\r\\n");
+                if (header_end == NULL || header_end == header_cursor) {
+                    break;
+                }
+                char* colon = strchr(header_cursor, ':');
+                if (colon == NULL || colon == header_cursor) {
+                    javan_root_frame_pop(roots);
+                    return 0;
+                }
+                name_root = javan_http_copy_range(header_cursor, (unsigned long) (colon - header_cursor));
+                char* value_cursor = colon + 1;
+                while (value_cursor < header_end && (value_cursor[0] == ' ' || value_cursor[0] == '\\t')) {
+                    value_cursor++;
+                }
+                char* value_end = header_end;
+                while (value_end > value_cursor && (value_end[-1] == ' ' || value_end[-1] == '\\t')) {
+                    value_end--;
+                }
+                value_root = javan_http_copy_range(value_cursor, (unsigned long) (value_end - value_cursor));
+                javan_list_append_raw((javan_object_list*) headers_root, name_root);
+                javan_list_append_raw((javan_object_list*) headers_root, value_root);
+                if (javan_http_header_name_equals((const char*) name_root, "Transfer-Encoding")) {
+                    int next_transfer_encoding = javan_http_header_name_equals((const char*) value_root, "identity")
+                        ? 1
+                        : (javan_http_header_name_equals((const char*) value_root, "chunked") ? 2 : 0);
+                    if (next_transfer_encoding == 0
+                        || (transfer_encoding != 0 && transfer_encoding != next_transfer_encoding)
+                        || (transfer_encoding == 2 && next_transfer_encoding == 2)) {
+                        javan_root_frame_pop(roots);
+                        return 0;
+                    }
+                    transfer_encoding = next_transfer_encoding;
+                }
+                if (javan_http_header_name_equals((const char*) name_root, "Content-Length")) {
+                    value_cursor = (char*) value_root;
+                    char* value_limit = value_cursor + strlen(value_cursor);
+                    if (value_cursor == value_limit) {
+                        javan_root_frame_pop(roots);
+                        return 0;
+                    }
+                    long long parsed = 0;
+                    while (value_cursor < value_limit) {
+                        if (value_cursor[0] < '0' || value_cursor[0] > '9') {
+                            javan_root_frame_pop(roots);
+                            return 0;
+                        }
+                        parsed = parsed * 10 + (value_cursor[0] - '0');
+                        if (parsed > 2147483647LL) {
+                            javan_root_frame_pop(roots);
+                            return 0;
+                        }
+                        value_cursor++;
+                    }
+                    if (content_length >= 0 && content_length != (int) parsed) {
+                        javan_root_frame_pop(roots);
+                        return 0;
+                    }
+                    content_length = (int) parsed;
+                }
+                header_cursor = header_end + 2;
+            }
+            if (transfer_encoding == 2) {
+                if (content_length >= 0) {
+                    javan_root_frame_pop(roots);
+                    return 0;
+                }
+                content_length = -2;
+            }
+            *content_length_out = content_length;
+            *request_headers_out = headers_root;
+            javan_root_frame_pop(roots);
+            return 1;
+        }
+
+        static void* javan_http_exchange_new(void* socket_value, const char* method_text, const char* request_target, int content_length, void* request_headers_value) {
+            void* socket_root = socket_value;
+            void* request_method = NULL;
+            void* request_uri = NULL;
+            void* request_headers = request_headers_value;
+            void* request_body = NULL;
+            void* response_headers = NULL;
+            void* response_body = NULL;
+            void** roots[] = {
+                (void**) &socket_root,
+                (void**) &request_method,
+                (void**) &request_uri,
+                (void**) &request_headers,
+                (void**) &request_body,
+                (void**) &response_headers,
+                (void**) &response_body
+            };
+            javan_root_frame_push(roots, 7);
+            request_method = javan_string_copy(method_text);
+            request_uri = javan_uri_from_request_target(request_target);
+            response_headers = javan_list_new_with_capacity(0, 0);
+            request_body = content_length == -2
+                ? javan_socket_input_stream_chunked(socket_root)
+                : (content_length < 0
+                    ? javan_socket_input_stream(socket_root)
+                    : javan_socket_input_stream_with_limit(socket_root, content_length));
+            response_body = javan_socket_output_stream(socket_root);
+            javan_http_exchange_value* exchange = (javan_http_exchange_value*) javan_alloc(sizeof(javan_http_exchange_value));
+            exchange->magic = JAVAN_HTTP_EXCHANGE_MAGIC;
+            exchange->response_code = 0;
+            exchange->response_headers_sent = 0;
+            exchange->closed = 0;
+            exchange->socket = socket_root;
+            exchange->request_method = request_method;
+            exchange->request_uri = request_uri;
+            exchange->request_headers = (javan_object_list*) request_headers;
+            exchange->request_body = request_body;
+            exchange->response_headers = (javan_object_list*) response_headers;
+            exchange->response_body = response_body;
+            javan_update_runtime_allocation_kind((void*) exchange, JAVAN_RUNTIME_KIND_HTTP_EXCHANGE);
+            javan_root_frame_pop(roots);
+            return (void*) exchange;
+        }
+
+        void* javan_http_server_create(void* address, int backlog) {
+            void* address_root = address;
+            void* socket_root = NULL;
+            void* contexts_root = NULL;
+            void* active_requests_root = NULL;
+            void** roots[] = {
+                (void**) &address_root,
+                (void**) &socket_root,
+                (void**) &contexts_root,
+                (void**) &active_requests_root
+            };
+            javan_root_frame_push(roots, 4);
+            javan_objects_require_non_null_msg(address_root, "null http server bind address");
+            socket_root = javan_server_socket_new();
+            javan_server_socket_bind_socket_address_backlog(socket_root, address_root, backlog);
+            contexts_root = (void*) javan_list_new_with_capacity(0, 0);
+            active_requests_root = (void*) javan_list_new_with_capacity(0, 0);
+            javan_http_server_value* server = (javan_http_server_value*) javan_alloc(sizeof(javan_http_server_value));
+            server->magic = JAVAN_HTTP_SERVER_MAGIC;
+            server->started = 0;
+            server->stopped = 0;
+            server->completed = 0;
+            server->active_request_count = 0;
+            server->server_socket = socket_root;
+            server->contexts = (javan_object_list*) contexts_root;
+            server->active_requests = (javan_object_list*) active_requests_root;
+            server->native_handle = NULL;
+            server->executor = NULL;
+            javan_update_runtime_allocation_kind((void*) server, JAVAN_RUNTIME_KIND_HTTP_SERVER);
+            javan_root_frame_pop(roots);
+            return (void*) server;
+        }
+
+        void* javan_http_server_create_context(void* server_value, void* path_value, void* handler_value) {
+            void* server_root = server_value;
+            void* path_root = path_value;
+            void* handler_root = handler_value;
+            void** roots[] = {
+                (void**) &server_root,
+                (void**) &path_root,
+                (void**) &handler_root
+            };
+            javan_root_frame_push(roots, 3);
+            javan_http_server_value* server = javan_http_server_checked(server_root);
+            javan_objects_require_non_null_msg(path_value, "null http context path");
+            javan_objects_require_non_null_msg(handler_value, "null http handler");
+            if (server->started != 0) {
+                javan_root_frame_pop(roots);
+                javan_panic("cannot create http context after server start");
+            }
+            javan_list_append_raw(server->contexts, path_root);
+            javan_list_append_raw(server->contexts, handler_root);
+            javan_root_frame_pop(roots);
+            return server_root;
+        }
+
+        void javan_http_server_remove_context(void* server_value, void* path_value) {
+            void* server_root = server_value;
+            void* path_root = path_value;
+            void** roots[] = {
+                (void**) &server_root,
+                (void**) &path_root
+            };
+            javan_root_frame_push(roots, 2);
+            javan_http_server_value* server = javan_http_server_checked(server_root);
+            javan_objects_require_non_null_msg(path_root, "null http context path");
+            if (server->started != 0) {
+                javan_root_frame_pop(roots);
+                javan_panic("cannot remove http context after server start");
+            }
+            for (int index = 0; index + 1 < server->contexts->length; index += 2) {
+                if (javan_object_equals(server->contexts->values[index], path_root) != 0) {
+                    memmove(
+                        server->contexts->values + index,
+                        server->contexts->values + index + 2,
+                        (unsigned long) (server->contexts->length - index - 2) * sizeof(void*)
+                    );
+                    server->contexts->length -= 2;
+                    server->contexts->values[server->contexts->length] = NULL;
+                    server->contexts->values[server->contexts->length + 1] = NULL;
+                    javan_root_frame_pop(roots);
+                    return;
+                }
+            }
+            javan_root_frame_pop(roots);
+            javan_panic("http context not found");
+        }
+
+        void* javan_http_server_get_address(void* value) {
+            javan_http_server_value* server = javan_http_server_checked(value);
+            return javan_server_socket_get_local_socket_address(server->server_socket);
+        }
+
+        void javan_http_server_set_executor(void* server_value, void* executor_value) {
+            void* server_root = server_value;
+            void* executor_root = executor_value;
+            void** roots[] = {
+                (void**) &server_root,
+                (void**) &executor_root
+            };
+            javan_root_frame_push(roots, 2);
+            javan_http_server_value* server = javan_http_server_checked(server_root);
+            if (server->started != 0) {
+                javan_root_frame_pop(roots);
+                javan_panic("cannot set http executor after server start");
+            }
+            if (executor_root != NULL) {
+                javan_virtual_thread_executor_checked(executor_root);
+            }
+            server->executor = executor_root;
+            javan_root_frame_pop(roots);
+        }
+
+        static int javan_http_context_matches(const char* context, const char* target) {
+            unsigned long context_length = strlen(context);
+            if (context_length == 1UL && context[0] == '/') {
+                return target[0] == '/';
+            }
+            if (strncmp(target, context, context_length) != 0) {
+                return 0;
+            }
+            return context[context_length - 1UL] == '/'
+                || target[context_length] == '\\0'
+                || target[context_length] == '?'
+                || target[context_length] == '/';
+        }
+
+        static void* javan_http_server_find_handler(javan_http_server_value* server, const char* target) {
+            void* best_handler = NULL;
+            unsigned long best_length = 0;
+            for (int index = 0; index + 1 < server->contexts->length; index += 2) {
+                const char* context = (const char*) server->contexts->values[index];
+                unsigned long context_length = strlen(context);
+                if (javan_http_context_matches(context, target) && context_length >= best_length) {
+                    best_length = context_length;
+                    best_handler = server->contexts->values[index + 1];
+                }
+            }
+            return best_handler;
+        }
+
+        typedef struct {
+            void* server;
+            void* handler;
+            void* exchange;
+        } javan_http_request_task;
+
+        static void javan_http_server_request_run_values(void* server_root, void* handler_root, void* exchange_root, int managed_thread) {
+            void** roots[] = {
+                (void**) &server_root,
+                (void**) &handler_root,
+                (void**) &exchange_root
+            };
+            (void) javan_thread_current();
+            javan_root_frame_push(roots, 3);
+            javan_materialized_lambda_apply_void(handler_root, exchange_root);
+            javan_http_exchange_close(exchange_root);
+            javan_http_server_value* server = javan_http_server_checked(server_root);
+            javan_runtime_lock_enter();
+            (void) javan_list_remove(server->active_requests, handler_root);
+            (void) javan_list_remove(server->active_requests, exchange_root);
+            if (server->active_request_count <= 0) {
+                javan_runtime_lock_leave();
+                javan_panic("http server active request underflow");
+            }
+            server->active_request_count--;
+            javan_runtime_lock_leave();
+            javan_root_frame_pop(roots);
+            if (managed_thread == 0) {
+                javan_thread_leave_live_root(javan_current_thread_value);
+                javan_current_thread_value = NULL;
+            }
+        }
+
+        static void javan_http_server_request_run_managed(void* server, void* handler, void* exchange) {
+            javan_http_server_request_run_values(server, handler, exchange, 1);
+        }
+
+        static void javan_http_server_request_run(void* argument) {
+            javan_http_request_task* task = (javan_http_request_task*) argument;
+            javan_http_server_request_run_values(task->server, task->handler, task->exchange, 0);
+            free(task);
+        }
+
+        #if defined(_WIN32)
+        static unsigned __stdcall javan_http_request_host_start(void* argument) {
+            javan_http_server_request_run(argument);
+            return 0U;
+        }
+        #else
+        static void* javan_http_request_host_start(void* argument) {
+            javan_http_server_request_run(argument);
+            return NULL;
+        }
+        #endif
+
+        static int javan_http_server_start_request(void* server_root, void* handler_root, void* exchange_root) {
+            javan_http_server_value* server = javan_http_server_checked(server_root);
+            if (server->executor != NULL) {
+                void* executor_root = server->executor;
+                void* handler_task_root = handler_root;
+                void* exchange_task_root = exchange_root;
+                void* thread_value = NULL;
+                void** roots[] = {
+                    (void**) &server_root,
+                    (void**) &executor_root,
+                    (void**) &handler_task_root,
+                    (void**) &exchange_task_root,
+                    (void**) &thread_value
+                };
+                javan_root_frame_push(roots, 5);
+                javan_virtual_thread_executor_state* executor = javan_virtual_thread_executor_checked(executor_root);
+                if (executor->closed != 0) {
+                    javan_root_frame_pop(roots);
+                    javan_panic("virtual thread executor is closed");
+                }
+                javan_runtime_lock_enter();
+                javan_list_append_raw(server->active_requests, handler_task_root);
+                javan_list_append_raw(server->active_requests, exchange_task_root);
+                server->active_request_count++;
+                javan_runtime_lock_leave();
+                thread_value = javan_virtual_thread_factory_new_thread(executor->factory, NULL);
+                javan_thread_set_http_request(thread_value, server_root, handler_task_root, exchange_task_root);
+                javan_thread_start(thread_value);
+                javan_list_append_raw(executor->threads, thread_value);
+                javan_root_frame_pop(roots);
+                return 0;
+            }
+        #if defined(_WIN32)
+            (void) server_root;
+            (void) handler_root;
+            (void) exchange_root;
+            javan_socket_runtime_unsupported();
+            return -1;
+        #else
+            javan_http_request_task* task = (javan_http_request_task*) malloc(sizeof(javan_http_request_task));
+            if (task == NULL) {
+                javan_panic("http server request task allocation failed");
+            }
+            task->server = server_root;
+            task->handler = handler_root;
+            task->exchange = exchange_root;
+            javan_runtime_lock_enter();
+            javan_list_append_raw(server->active_requests, handler_root);
+            javan_list_append_raw(server->active_requests, exchange_root);
+            server->active_request_count++;
+            javan_runtime_lock_leave();
+            pthread_attr_t attributes;
+            if (pthread_attr_init(&attributes) != 0) {
+                javan_runtime_lock_enter();
+                (void) javan_list_remove(server->active_requests, handler_root);
+                (void) javan_list_remove(server->active_requests, exchange_root);
+                server->active_request_count--;
+                javan_runtime_lock_leave();
+                free(task);
+                javan_panic("http server request thread setup failed");
+            }
+            if (pthread_attr_setdetachstate(&attributes, PTHREAD_CREATE_DETACHED) != 0) {
+                pthread_attr_destroy(&attributes);
+                javan_runtime_lock_enter();
+                (void) javan_list_remove(server->active_requests, handler_root);
+                (void) javan_list_remove(server->active_requests, exchange_root);
+                server->active_request_count--;
+                javan_runtime_lock_leave();
+                free(task);
+                javan_panic("http server request thread setup failed");
+            }
+            pthread_t native_thread;
+            if (pthread_create(&native_thread, &attributes, javan_http_request_host_start, task) != 0) {
+                pthread_attr_destroy(&attributes);
+                javan_runtime_lock_enter();
+                (void) javan_list_remove(server->active_requests, handler_root);
+                (void) javan_list_remove(server->active_requests, exchange_root);
+                server->active_request_count--;
+                javan_runtime_lock_leave();
+                free(task);
+                javan_panic("http server request thread create failed");
+            }
+            pthread_attr_destroy(&attributes);
+            return 0;
+        #endif
+        }
+
+        """;
+
+    private static final String SOURCE_HTTP_B = """
+        static void javan_http_server_run(void* server_value) {
+            void* server_root = server_value;
+            void* socket_root = NULL;
+            void* exchange_root = NULL;
+            void* request_headers = NULL;
+            void* handler_root = NULL;
+            char request_method[16];
+            char request_target[2048];
+            int content_length = -1;
+            void** roots[] = {
+                (void**) &server_root,
+                (void**) &socket_root,
+                (void**) &exchange_root,
+                (void**) &request_headers,
+                (void**) &handler_root
+            };
+            (void) javan_thread_current();
+            javan_root_frame_push(roots, 5);
+            javan_http_server_value* server = javan_http_server_checked(server_root);
+            while (server->stopped == 0) {
+                socket_root = javan_server_socket_accept_http(server->server_socket);
+                if (socket_root == NULL) {
+                    continue;
+                }
+                request_headers = NULL;
+                exchange_root = NULL;
+                handler_root = NULL;
+                content_length = -1;
+                if (!javan_http_server_read_request(((javan_socket*) socket_root)->fd, request_method, sizeof(request_method), request_target, sizeof(request_target), &content_length, &request_headers)) {
+                    const char* response = "HTTP/1.1 400 Bad Request\\r\\nContent-Length: 0\\r\\nConnection: close\\r\\n\\r\\n";
+                    javan_http_send_all(((javan_socket*) socket_root)->fd, response, strlen(response));
+                    javan_socket_close(socket_root);
+                    socket_root = NULL;
+                    request_headers = NULL;
+                    continue;
+                }
+                if ((socket_root = javan_http_validate_request_target(socket_root, request_target)) == NULL) {
+                    socket_root = NULL;
+                    request_headers = NULL;
+                    continue;
+                }
+                handler_root = javan_http_server_find_handler(server, request_target);
+                if (handler_root == NULL) {
+                    const char* response = "HTTP/1.1 404 Not Found\\r\\nContent-Length: 50\\r\\nConnection: close\\r\\n\\r\\n<h1>404 Not Found</h1>No context found for request";
+                    javan_http_send_all(((javan_socket*) socket_root)->fd, response, strlen(response));
+                    javan_socket_close(socket_root);
+                    socket_root = NULL;
+                    request_headers = NULL;
+                    continue;
+                }
+                exchange_root = javan_http_exchange_new(socket_root, request_method, request_target, content_length, request_headers);
+                javan_http_server_start_request(server_root, handler_root, exchange_root);
+                exchange_root = NULL;
+                socket_root = NULL;
+                request_headers = NULL;
+                handler_root = NULL;
+            }
+            javan_runtime_lock_enter();
+            server->completed = 1;
+            javan_runtime_lock_leave();
+            javan_root_frame_pop(roots);
+            javan_thread_detach_current();
+        }
+
+        #if defined(_WIN32)
+        static unsigned __stdcall javan_http_server_host_start(void* argument) {
+            javan_http_server_run(argument);
+            return 0;
+        }
+        #else
+        static void* javan_http_server_host_start(void* argument) {
+            javan_http_server_run(argument);
+            return NULL;
+        }
+        #endif
+
+        void javan_http_server_start(void* value) {
+            javan_http_server_value* server = javan_http_server_checked(value);
+            if (server->contexts == NULL || server->contexts->length == 0) {
+                javan_panic("http server requires one context");
+            }
+            if (server->started != 0) {
+                javan_panic("http server already started");
+            }
+            server->started = 1;
+            #if defined(_WIN32)
+            server->native_handle = (void*) _beginthreadex(NULL, 0, javan_http_server_host_start, value, 0, NULL);
+            if (server->native_handle == NULL) {
+                server->started = 0;
+                javan_panic("http server host create failed");
+            }
+            #else
+            pthread_attr_t attributes;
+            if (pthread_attr_init(&attributes) != 0) {
+                server->started = 0;
+                javan_panic("http server host create failed");
+            }
+            if (pthread_attr_setdetachstate(&attributes, PTHREAD_CREATE_DETACHED) != 0) {
+                pthread_attr_destroy(&attributes);
+                server->started = 0;
+                javan_panic("http server host create failed");
+            }
+            pthread_t native_thread;
+            if (pthread_create(&native_thread, &attributes, javan_http_server_host_start, value) != 0) {
+                pthread_attr_destroy(&attributes);
+                server->started = 0;
+                javan_panic("http server host create failed");
+            }
+            pthread_attr_destroy(&attributes);
+            #endif
+        }
+
+        void javan_http_server_stop(void* value, int delay_seconds) {
+            (void) delay_seconds;
+            javan_http_server_value* server = javan_http_server_checked(value);
+            javan_runtime_lock_enter();
+            server->stopped = 1;
+            javan_runtime_lock_leave();
+            javan_server_socket_close(server->server_socket);
+            while (1) {
+                javan_runtime_lock_enter();
+                int complete = server->started != 0
+                    && server->completed != 0
+                    && server->active_request_count == 0;
+                javan_runtime_lock_leave();
+                if (complete != 0) {
+                    break;
+                }
+                javan_sleep_micros(1000UL);
+            }
+        }
+
+        void javan_http_exchange_send_response_headers(void* value, int status_code, long long length) {
+            javan_http_exchange_value* exchange = javan_http_exchange_checked(value);
+            if (status_code < 100 || status_code > 999 || length < 0LL) {
+                javan_panic("invalid http response headers");
+            }
+            if (exchange->closed != 0 || exchange->response_headers_sent != 0) {
+                javan_panic("http response headers already sent");
+            }
+            char status_line[64];
+            int status_written = snprintf(status_line, sizeof(status_line), "HTTP/1.1 %d OK\\r\\n", status_code);
+            if (status_written < 0 || (unsigned long) status_written >= sizeof(status_line)) {
+                javan_panic("http response header too large");
+            }
+            javan_object_list* response_headers = exchange->response_headers;
+            unsigned long header_size = (unsigned long) status_written
+                + strlen("Content-Length: ") + 32UL
+                + strlen("Connection: close\\r\\n") + 2UL;
+            for (int index = 0; index + 1 < response_headers->length; index += 2) {
+                const char* name = (const char*) response_headers->values[index];
+                const char* header_value = (const char*) response_headers->values[index + 1];
+                javan_http_header_text_checked(name, "null http response header name");
+                javan_http_header_text_checked(header_value, "null http response header value");
+                header_size += strlen(name) + 2UL + strlen(header_value) + 2UL;
+            }
+            char* header = (char*) malloc(header_size + 1UL);
+            if (header == NULL) {
+                javan_panic("out of memory");
+            }
+            int written = snprintf(header, header_size + 1UL, "%s", status_line);
+            if (written < 0) {
+                free(header);
+                javan_panic("http response header format failed");
+            }
+            unsigned long offset = (unsigned long) written;
+            for (int index = 0; index + 1 < response_headers->length; index += 2) {
+                written = snprintf(
+                    header + offset,
+                    header_size + 1UL - offset,
+                    "%s: %s\\r\\n",
+                    (const char*) response_headers->values[index],
+                    (const char*) response_headers->values[index + 1]
+                );
+                if (written < 0) {
+                    free(header);
+                    javan_panic("http response header format failed");
+                }
+                offset += (unsigned long) written;
+            }
+            written = snprintf(header + offset, header_size + 1UL - offset, "Content-Length: %lld\\r\\nConnection: close\\r\\n\\r\\n", length);
+            if (written < 0) {
+                free(header);
+                javan_panic("http response header format failed");
+            }
+            offset += (unsigned long) written;
+            javan_socket* socket = (javan_socket*) exchange->socket;
+            javan_http_send_all(socket->fd, header, offset);
+            free(header);
+            exchange->response_code = status_code;
+            exchange->response_headers_sent = 1;
+        }
+
+        void* javan_http_exchange_request_method(void* value) {
+            return javan_http_exchange_checked(value)->request_method;
+        }
+
+        void* javan_http_exchange_request_uri(void* value) {
+            return javan_http_exchange_checked(value)->request_uri;
+        }
+
+        void* javan_http_exchange_remote_address(void* value) {
+            return javan_socket_get_remote_socket_address(javan_http_exchange_checked(value)->socket);
+        }
+
+        void* javan_http_exchange_local_address(void* value) {
+            return javan_socket_get_local_socket_address(javan_http_exchange_checked(value)->socket);
+        }
+
+        int javan_http_exchange_response_code(void* value) {
+            return javan_http_exchange_checked(value)->response_code;
+        }
+
+        void* javan_http_exchange_request_headers(void* value) {
+            return (void*) javan_http_exchange_checked(value)->request_headers;
+        }
+
+        void* javan_http_exchange_response_headers(void* value) {
+            return (void*) javan_http_exchange_checked(value)->response_headers;
+        }
+
+        void* javan_http_headers_get_first(void* value, void* name_value) {
+            javan_object_list* headers = javan_list_checked(value);
+            if (name_value == NULL) {
+                javan_panic("null http header lookup name");
+            }
+            const char* name = (const char*) name_value;
+            for (int index = 0; index + 1 < headers->length; index += 2) {
+                if (javan_http_header_name_equals((const char*) headers->values[index], name)) {
+                    return headers->values[index + 1];
+                }
+            }
+            return NULL;
+        }
+
+        void* javan_http_headers_get(void* value, void* name_value) {
+            javan_object_list* headers = javan_list_checked(value);
+            if (name_value == NULL) {
+                return NULL;
+            }
+            void* result_root = NULL;
+            void* name_root = name_value;
+            void* headers_root = (void*) headers;
+            void** roots[] = {
+                (void**) &headers_root,
+                (void**) &name_root,
+                (void**) &result_root
+            };
+            javan_root_frame_push(roots, 3);
+            headers = (javan_object_list*) headers_root;
+            result_root = (void*) javan_list_new_with_capacity(0, 0);
+            for (int index = 0; index + 1 < headers->length; index += 2) {
+                if (javan_http_header_name_equals((const char*) headers->values[index], (const char*) name_root)) {
+                    javan_list_append_raw((javan_object_list*) result_root, headers->values[index + 1]);
+                }
+            }
+            if (((javan_object_list*) result_root)->length == 0) {
+                result_root = NULL;
+            }
+            javan_root_frame_pop(roots);
+            return result_root;
+        }
+
+        void* javan_http_headers_get_or_default(void* value, void* name_value, void* default_value) {
+            void* existing_root = javan_http_headers_get(value, name_value);
+            return existing_root == NULL ? default_value : existing_root;
+        }
+
+        void* javan_http_headers_remove(void* value, void* name_value);
+        int javan_http_headers_size(void* value);
+        void* javan_http_headers_put(void* value, void* name_value, void* values_value);
+
+        void* javan_http_headers_key_set(void* value) {
+            javan_object_list* headers = javan_list_checked(value);
+            void* headers_root = (void*) headers;
+            void* result_root = NULL;
+            void** roots[] = {
+                (void**) &headers_root,
+                (void**) &result_root
+            };
+            javan_root_frame_push(roots, 2);
+            headers = (javan_object_list*) headers_root;
+            result_root = (void*) javan_list_new_view(headers, 0, JAVAN_LIST_VIEW_SET | JAVAN_LIST_VIEW_HTTP_HEADERS_KEYS);
+            javan_root_frame_pop(roots);
+            return result_root;
+        }
+
+        static int javan_http_headers_view_length(javan_object_list* view) {
+            return javan_http_headers_size((void*) view->backing);
+        }
+
+        static void* javan_http_headers_view_get(javan_object_list* view, int index) {
+            javan_object_list* headers = view->backing;
+            int current = 0;
+            for (int cursor = 0; cursor + 1 < headers->length; cursor += 2) {
+                int seen = 0;
+                for (int prior = 0; prior < cursor; prior += 2) {
+                    if (javan_http_header_name_equals(
+                        (const char*) headers->values[prior],
+                        (const char*) headers->values[cursor]
+                    ) != 0) {
+                        seen = 1;
+                        break;
+                    }
+                }
+                if (seen == 0) {
+                    if (current == index) {
+                        if ((view->view_flags & JAVAN_LIST_VIEW_HTTP_HEADERS_VALUES) != 0) {
+                            return javan_http_headers_get((void*) headers, headers->values[cursor]);
+                        }
+                        if ((view->view_flags & JAVAN_LIST_VIEW_HTTP_HEADERS_ENTRIES) != 0) {
+                            void* value_root = NULL;
+                            void* entry_root = NULL;
+                            void* headers_root = (void*) headers;
+                            void** roots[] = {
+                                (void**) &headers_root,
+                                (void**) &value_root,
+                                (void**) &entry_root
+                            };
+                            javan_root_frame_push(roots, 3);
+                            headers = (javan_object_list*) headers_root;
+                            value_root = javan_http_headers_get((void*) headers, headers->values[cursor]);
+                            entry_root = javan_map_entry_new(headers->values[cursor], value_root);
+                            javan_map_entry_attach_owner(entry_root, (void*) headers);
+                            javan_root_frame_pop(roots);
+                            return entry_root;
+                        }
+                        return headers->values[cursor];
+                    }
+                    current++;
+                }
+            }
+            javan_panic("http header view index out of bounds");
+            return NULL;
+        }
+
+        static int javan_http_headers_view_contains(javan_object_list* view, void* element) {
+            if (element == NULL) {
+                return 0;
+            }
+            int length = javan_http_headers_view_length(view);
+            for (int index = 0; index < length; index++) {
+                void* candidate = javan_http_headers_view_get(view, index);
+                if ((view->view_flags & JAVAN_LIST_VIEW_HTTP_HEADERS_ENTRIES) != 0) {
+                    javan_map_entry_state* left = javan_map_entry_checked(candidate);
+                    javan_map_entry_state* right = javan_map_entry_checked(element);
+                    javan_object_list* left_values = javan_list_checked(left->value);
+                    javan_object_list* right_values = javan_list_checked(right->value);
+                    if (javan_http_header_name_equals((const char*) left->key, (const char*) right->key)
+                        && left_values->length == right_values->length) {
+                        int matches = 1;
+                        for (int value_index = 0; value_index < left_values->length; value_index++) {
+                            if (javan_object_equals(left_values->values[value_index], right_values->values[value_index]) == 0) {
+                                matches = 0;
+                                break;
+                            }
+                        }
+                        if (matches != 0) {
+                            return 1;
+                        }
+                    }
+                } else if ((view->view_flags & JAVAN_LIST_VIEW_HTTP_HEADERS_KEYS) != 0) {
+                    if (javan_http_header_name_equals((const char*) candidate, (const char*) element) != 0) {
+                        return 1;
+                    }
+                } else {
+                    javan_object_list* left_values = javan_list_checked(candidate);
+                    javan_object_list* right_values = javan_list_checked(element);
+                    if (left_values->length != right_values->length) {
+                        continue;
+                    }
+                    int matches = 1;
+                    for (int value_index = 0; value_index < left_values->length; value_index++) {
+                        if (javan_object_equals(left_values->values[value_index], right_values->values[value_index]) == 0) {
+                            matches = 0;
+                            break;
+                        }
+                    }
+                    if (matches != 0) {
+                        return 1;
+                    }
+                }
+            }
+            return 0;
+        }
+
+        static int javan_http_headers_view_remove(javan_object_list* view, void* element) {
+            if (element == NULL) {
+                return 0;
+            }
+            javan_object_list* headers = view->backing;
+            for (int cursor = 0; cursor + 1 < headers->length; cursor += 2) {
+                int matches = 0;
+                if ((view->view_flags & JAVAN_LIST_VIEW_HTTP_HEADERS_ENTRIES) != 0) {
+                    void* candidate_key = javan_map_entry_get_key(element);
+                    void* candidate_value_root = javan_map_entry_get_value(element);
+                    javan_object_list* candidate_value = javan_list_checked(candidate_value_root);
+                    void* actual_root = javan_http_headers_get((void*) headers, headers->values[cursor]);
+                    javan_object_list* actual = javan_list_checked(actual_root);
+                    matches = javan_http_header_name_equals(
+                        (const char*) headers->values[cursor],
+                        (const char*) candidate_key
+                    ) != 0 && actual->length == candidate_value->length;
+                    for (int index = 0; matches != 0 && index < actual->length; index++) {
+                        if (javan_object_equals(actual->values[index], candidate_value->values[index]) == 0) {
+                            matches = 0;
+                        }
+                    }
+                } else if ((view->view_flags & JAVAN_LIST_VIEW_HTTP_HEADERS_VALUES) != 0) {
+                    javan_object_list* candidate = javan_list_checked(element);
+                    void* actual_root = javan_http_headers_get((void*) headers, headers->values[cursor]);
+                    javan_object_list* actual = javan_list_checked(actual_root);
+                    matches = actual->length == candidate->length;
+                    for (int index = 0; matches != 0 && index < actual->length; index++) {
+                        if (javan_object_equals(actual->values[index], candidate->values[index]) == 0) {
+                            matches = 0;
+                        }
+                    }
+                } else {
+                    matches = javan_http_header_name_equals((const char*) headers->values[cursor], (const char*) element);
+                }
+                if (matches != 0) {
+                    if ((view->view_flags & (JAVAN_LIST_VIEW_HTTP_HEADERS_VALUES | JAVAN_LIST_VIEW_HTTP_HEADERS_ENTRIES)) != 0) {
+                        javan_http_headers_remove((void*) headers, headers->values[cursor]);
+                    } else {
+                        javan_http_headers_remove((void*) headers, element);
+                    }
+                    return 1;
+                }
+            }
+            return 0;
+        }
+
+        static void javan_http_headers_view_clear(javan_object_list* view) {
+            javan_object_list* headers = view->backing;
+            while (javan_http_headers_size((void*) headers) > 0) {
+                javan_http_headers_remove((void*) headers, headers->values[0]);
+            }
+        }
+
+        void* javan_http_headers_entry_set(void* value) {
+            javan_object_list* headers = javan_list_checked(value);
+            void* headers_root = (void*) headers;
+            void* result_root = NULL;
+            void** roots[] = {
+                (void**) &headers_root,
+                (void**) &result_root
+            };
+            javan_root_frame_push(roots, 2);
+            headers = (javan_object_list*) headers_root;
+            result_root = (void*) javan_list_new_view(headers, 0, JAVAN_LIST_VIEW_SET | JAVAN_LIST_VIEW_HTTP_HEADERS_ENTRIES);
+            javan_root_frame_pop(roots);
+            return result_root;
+        }
+
+        static void* javan_http_headers_entry_set_value(void* owner, void* key, void* value) {
+            javan_list_checked(owner);
+            javan_list_checked(value);
+            return javan_http_headers_put(owner, key, value);
+        }
+
+        void* javan_http_headers_values(void* value) {
+            javan_object_list* headers = javan_list_checked(value);
+            void* headers_root = (void*) headers;
+            void* result_root = NULL;
+            void** roots[] = {
+                (void**) &headers_root,
+                (void**) &result_root
+            };
+            javan_root_frame_push(roots, 2);
+            headers = (javan_object_list*) headers_root;
+            result_root = (void*) javan_list_new_view(headers, 0, JAVAN_LIST_VIEW_HTTP_HEADERS_VALUES);
+            javan_root_frame_pop(roots);
+            return result_root;
+        }
+
+        int javan_http_headers_contains_key(void* value, void* name_value) {
+            javan_object_list* headers = javan_list_checked(value);
+            if (name_value == NULL) {
+                return 0;
+            }
+            const char* name = (const char*) name_value;
+            for (int index = 0; index + 1 < headers->length; index += 2) {
+                if (javan_http_header_name_equals((const char*) headers->values[index], name)) {
+                    return 1;
+                }
+            }
+            return 0;
+        }
+
+        void* javan_http_headers_remove(void* value, void* name_value) {
+            javan_object_list* headers = javan_list_checked(value);
+            javan_list_mutable_checked(headers);
+            if (name_value == NULL) {
+                return NULL;
+            }
+            void* headers_root = (void*) headers;
+            void* name_root = name_value;
+            void* result_root = NULL;
+            void** roots[] = {
+                (void**) &headers_root,
+                (void**) &name_root,
+                (void**) &result_root
+            };
+            javan_root_frame_push(roots, 3);
+            headers = (javan_object_list*) headers_root;
+            result_root = (void*) javan_list_new_with_capacity(0, 0);
+            int index = 0;
+            while (index + 1 < headers->length) {
+                if (javan_http_header_name_equals((const char*) headers->values[index], (const char*) name_root) == 0) {
+                    index += 2;
+                    continue;
+                }
+                javan_list_append_raw((javan_object_list*) result_root, headers->values[index + 1]);
+                if (index + 2 < headers->length) {
+                    memmove(
+                        headers->values + index,
+                        headers->values + index + 2,
+                        (unsigned long) (headers->length - index - 2) * sizeof(void*)
+                    );
+                }
+                headers->length -= 2;
+                headers->values[headers->length] = NULL;
+                headers->values[headers->length + 1] = NULL;
+                headers->mod_count++;
+            }
+            void* result = ((javan_object_list*) result_root)->length == 0 ? NULL : result_root;
+            javan_root_frame_pop(roots);
+            return result;
+        }
+
+        void javan_http_headers_clear(void* value) {
+            javan_list_clear(javan_list_checked(value));
+        }
+
+        int javan_http_headers_size(void* value) {
+            javan_object_list* headers = javan_list_checked(value);
+            int count = 0;
+            for (int index = 0; index + 1 < headers->length; index += 2) {
+                int seen = 0;
+                for (int prior = 0; prior < index; prior += 2) {
+                    if (javan_http_header_name_equals(
+                        (const char*) headers->values[prior],
+                        (const char*) headers->values[index]
+                    ) != 0) {
+                        seen = 1;
+                        break;
+                    }
+                }
+                if (seen == 0) {
+                    count++;
+                }
+            }
+            return count;
+        }
+
+        int javan_http_headers_is_empty(void* value) {
+            return javan_http_headers_size(value) == 0;
+        }
+
+        void* javan_http_headers_put(void* value, void* name_value, void* values_value) {
+            javan_object_list* headers = javan_list_checked(value);
+            javan_object_list* values = javan_list_checked(values_value);
+            javan_list_mutable_checked(headers);
+            javan_http_header_text_checked((const char*) name_value, "null http header name");
+            void* headers_root = (void*) headers;
+            void* name_root = name_value;
+            void* values_root = (void*) values;
+            void* previous_root = NULL;
+            void** roots[] = {
+                (void**) &headers_root,
+                (void**) &name_root,
+                (void**) &values_root,
+                (void**) &previous_root
+            };
+            javan_root_frame_push(roots, 4);
+            headers = (javan_object_list*) headers_root;
+            values = (javan_object_list*) values_root;
+            previous_root = (void*) javan_list_new_with_capacity(0, 0);
+            int index = 0;
+            while (index + 1 < headers->length) {
+                if (javan_http_header_name_equals((const char*) headers->values[index], (const char*) name_root) == 0) {
+                    index += 2;
+                    continue;
+                }
+                javan_list_append_raw((javan_object_list*) previous_root, headers->values[index + 1]);
+                if (index + 2 < headers->length) {
+                    memmove(
+                        headers->values + index,
+                        headers->values + index + 2,
+                        (unsigned long) (headers->length - index - 2) * sizeof(void*)
+                    );
+                }
+                headers->length -= 2;
+                headers->values[headers->length] = NULL;
+                headers->values[headers->length + 1] = NULL;
+                headers->mod_count++;
+            }
+            for (int value_index = 0; value_index < values->length; value_index++) {
+                void* header_value = values->values[value_index];
+                javan_http_header_text_checked((const char*) header_value, "null http header value");
+                javan_list_append_raw(headers, name_root);
+                javan_list_append_raw(headers, header_value);
+            }
+            void* previous = ((javan_object_list*) previous_root)->length == 0 ? NULL : previous_root;
+            javan_root_frame_pop(roots);
+            return previous;
+        }
+
+        void* javan_http_headers_put_if_absent(void* value, void* name_value, void* values_value) {
+            void* existing_root = javan_http_headers_get(value, name_value);
+            if (existing_root != NULL) {
+                return existing_root;
+            }
+            javan_http_headers_put(value, name_value, values_value);
+            return NULL;
+        }
+
+        void* javan_http_headers_replace(void* value, void* name_value, void* values_value) {
+            void* existing_root = javan_http_headers_get(value, name_value);
+            if (existing_root == NULL) {
+                return NULL;
+            }
+            javan_http_headers_put(value, name_value, values_value);
+            return existing_root;
+        }
+
+        int javan_http_headers_replace_entry(void* value, void* name_value, void* expected_values, void* values_value) {
+            void* existing_root = javan_http_headers_get(value, name_value);
+            if (existing_root == NULL || javan_object_equals(existing_root, expected_values) == 0) {
+                return 0;
+            }
+            javan_http_headers_put(value, name_value, values_value);
+            return 1;
+        }
+
+        int javan_http_headers_contains_value(void* value, void* candidate_value) {
+            javan_object_list* headers = javan_list_checked(value);
+            javan_object_list* candidate = javan_list_checked(candidate_value);
+            int candidate_length = candidate->length;
+            for (int index = 0; index + 1 < headers->length; index += 2) {
+                int duplicate_key = 0;
+                for (int prior = 0; prior < index; prior += 2) {
+                    if (javan_http_header_name_equals(
+                        (const char*) headers->values[prior],
+                        (const char*) headers->values[index]
+                    ) != 0) {
+                        duplicate_key = 1;
+                        break;
+                    }
+                }
+                if (duplicate_key != 0) {
+                    continue;
+                }
+                int value_count = 0;
+                for (int probe = index; probe + 1 < headers->length; probe += 2) {
+                    if (javan_http_header_name_equals(
+                        (const char*) headers->values[probe],
+                        (const char*) headers->values[index]
+                    ) != 0) {
+                        value_count++;
+                    }
+                }
+                if (value_count != candidate_length) {
+                    continue;
+                }
+                int candidate_index = 0;
+                int matches = 1;
+                for (int probe = index; probe + 1 < headers->length; probe += 2) {
+                    if (javan_http_header_name_equals(
+                        (const char*) headers->values[probe],
+                        (const char*) headers->values[index]
+                    ) != 0) {
+                        if (javan_object_equals(headers->values[probe + 1], candidate->values[candidate_index]) == 0) {
+                            matches = 0;
+                            break;
+                        }
+                        candidate_index++;
+                    }
+                }
+                if (matches != 0) {
+                    return 1;
+                }
+            }
+            return 0;
+        }
+
+        void javan_http_headers_put_all(void* value, void* source_value) {
+            javan_object_list* headers = javan_list_checked(value);
+            javan_object_map* source = javan_map_checked(source_value);
+            javan_list_mutable_checked(headers);
+            void* headers_root = (void*) headers;
+            void* source_root = (void*) source;
+            void** roots[] = {
+                (void**) &headers_root,
+                (void**) &source_root
+            };
+            javan_root_frame_push(roots, 2);
+            headers = (javan_object_list*) headers_root;
+            source = (javan_object_map*) source_root;
+            int length = javan_map_logical_length(source);
+            for (int index = 0; index < length; index++) {
+                javan_http_headers_put(
+                    (void*) headers,
+                    javan_map_key_unchecked(source, index),
+                    javan_map_value_unchecked(source, index)
+                );
+            }
+            javan_root_frame_pop(roots);
+        }
+
+        void javan_http_headers_set(void* value, void* name_value, void* header_value) {
+            javan_object_list* headers = javan_list_checked(value);
+            javan_http_header_text_checked((const char*) name_value, "null http header name");
+            javan_http_header_text_checked((const char*) header_value, "null http header value");
+            void* headers_root = (void*) headers;
+            void* name_root = name_value;
+            void* header_root = header_value;
+            void** roots[] = {
+                (void**) &headers_root,
+                (void**) &name_root,
+                (void**) &header_root
+            };
+            javan_root_frame_push(roots, 3);
+            headers = (javan_object_list*) headers_root;
+            for (int index = 0; index + 1 < headers->length; index += 2) {
+                if (javan_http_header_name_equals((const char*) headers->values[index], (const char*) name_root)) {
+                    headers->values[index + 1] = header_root;
+                    javan_root_frame_pop(roots);
+                    return;
+                }
+            }
+            javan_list_append_raw(headers, name_root);
+            javan_list_append_raw(headers, header_root);
+            javan_root_frame_pop(roots);
+        }
+
+        void javan_http_headers_add(void* value, void* name_value, void* header_value) {
+            javan_object_list* headers = javan_list_checked(value);
+            javan_http_header_text_checked((const char*) name_value, "null http header name");
+            javan_http_header_text_checked((const char*) header_value, "null http header value");
+            void* headers_root = (void*) headers;
+            void* name_root = name_value;
+            void* header_root = header_value;
+            void** roots[] = {
+                (void**) &headers_root,
+                (void**) &name_root,
+                (void**) &header_root
+            };
+            javan_root_frame_push(roots, 3);
+            javan_list_append_raw((javan_object_list*) headers_root, name_root);
+            javan_list_append_raw((javan_object_list*) headers_root, header_root);
+            javan_root_frame_pop(roots);
+        }
+
+        void* javan_http_exchange_request_body(void* value) {
+            return javan_http_exchange_checked(value)->request_body;
+        }
+
+        void* javan_http_exchange_response_body(void* value) {
+            return javan_http_exchange_checked(value)->response_body;
+        }
+
+        void javan_http_exchange_close(void* value) {
+            javan_http_exchange_value* exchange = javan_http_exchange_checked(value);
+            if (exchange->closed == 0) {
+                exchange->closed = 1;
+                javan_socket_close(exchange->socket);
+            }
+        }
+
         static char* javan_http_read_all(int fd, unsigned long* length_out) {
             unsigned long capacity = 1024;
             unsigned long length = 0;
@@ -460,6 +2094,143 @@ final class RuntimeSourceIoSections {
             }
             javan_panic("invalid http response");
             return 0;
+        }
+
+        static char* javan_http_decode_response_body(const char* response, unsigned long response_length, const char* body_start, unsigned long* body_length_out) {
+            unsigned long body_offset = (unsigned long) (body_start - response);
+            int chunked = 0;
+            long long content_length = -1;
+            const char* cursor = response;
+            while (cursor < body_start) {
+                const char* line_end = strstr(cursor, "\\r\\n");
+                if (line_end == NULL || line_end > body_start) {
+                    javan_panic("invalid http response header");
+                }
+                if (cursor == response) {
+                    cursor = line_end + 2;
+                    continue;
+                }
+                if (line_end == cursor) {
+                    cursor = line_end + 2;
+                    break;
+                }
+                const char* colon = strchr(cursor, ':');
+                if (colon == NULL || colon >= line_end) {
+                    javan_panic("invalid http response header");
+                }
+                unsigned long name_length = (unsigned long) (colon - cursor);
+                char name[64];
+                if (name_length == 0 || name_length >= sizeof(name)) {
+                    javan_panic("invalid http response header");
+                }
+                memcpy(name, cursor, name_length);
+                name[name_length] = '\\0';
+                const char* value = colon + 1;
+                while (value < line_end && (value[0] == ' ' || value[0] == '\\t')) {
+                    value++;
+                }
+                unsigned long value_length = (unsigned long) (line_end - value);
+                if (javan_http_header_name_equals(name, "Transfer-Encoding")) {
+                    if (value_length == 7 && strncasecmp(value, "chunked", 7) == 0) {
+                        chunked = 1;
+                    } else if (value_length != 8 || strncasecmp(value, "identity", 8) != 0) {
+                        javan_panic("unsupported http response transfer encoding");
+                    }
+                } else if (javan_http_header_name_equals(name, "Content-Length")) {
+                    char length_text[32];
+                    if (value_length == 0 || value_length >= sizeof(length_text)) {
+                        javan_panic("invalid http response content length");
+                    }
+                    memcpy(length_text, value, value_length);
+                    length_text[value_length] = '\\0';
+                    char* end = NULL;
+                    long long parsed = strtoll(length_text, &end, 10);
+                    if (end == length_text || end[0] != '\\0' || parsed < 0) {
+                        javan_panic("invalid http response content length");
+                    }
+                    if (content_length >= 0 && content_length != parsed) {
+                        javan_panic("conflicting http response content length");
+                    }
+                    content_length = parsed;
+                }
+                cursor = line_end + 2;
+            }
+            if (!chunked) {
+                unsigned long available = response_length - body_offset;
+                unsigned long length = content_length < 0 ? available : (unsigned long) content_length;
+                if (length > available || length > 16777216UL) {
+                    javan_panic("http response body too large or truncated");
+                }
+                char* body = (char*) malloc(length + 1UL);
+                if (body == NULL) {
+                    javan_panic("out of memory");
+                }
+                memcpy(body, body_start, length);
+                body[length] = '\\0';
+                *body_length_out = length;
+                return body;
+            }
+            unsigned long capacity = 1024;
+            unsigned long length = 0;
+            char* body = (char*) malloc(capacity + 1UL);
+            if (body == NULL) {
+                javan_panic("out of memory");
+            }
+            cursor = body_start;
+            while (1) {
+                const char* line_end = strstr(cursor, "\\r\\n");
+                if (line_end == NULL || line_end >= response + response_length) {
+                    free(body);
+                    javan_panic("truncated http response chunk");
+                }
+                char size_text[32];
+                unsigned long size_length = (unsigned long) (line_end - cursor);
+                const char* extension = memchr(cursor, ';', size_length);
+                if (extension != NULL) {
+                    size_length = (unsigned long) (extension - cursor);
+                }
+                if (size_length == 0 || size_length >= sizeof(size_text)) {
+                    free(body);
+                    javan_panic("invalid http response chunk size");
+                }
+                memcpy(size_text, cursor, size_length);
+                size_text[size_length] = '\\0';
+                char* end = NULL;
+                unsigned long chunk_size = strtoul(size_text, &end, 16);
+                if (end == size_text || end[0] != '\\0' || chunk_size > 16777216UL) {
+                    free(body);
+                    javan_panic("invalid http response chunk size");
+                }
+                cursor = line_end + 2;
+                if (chunk_size == 0) {
+                    break;
+                }
+                if ((unsigned long) (response + response_length - cursor) < chunk_size + 2UL
+                    || length > 16777216UL - chunk_size) {
+                    free(body);
+                    javan_panic("truncated http response chunk");
+                }
+                while (length + chunk_size > capacity) {
+                    capacity *= 2UL;
+                    char* next = (char*) realloc(body, capacity + 1UL);
+                    if (next == NULL) {
+                        free(body);
+                        javan_panic("out of memory");
+                    }
+                    body = next;
+                }
+                memcpy(body + length, cursor, chunk_size);
+                length += chunk_size;
+                cursor += chunk_size;
+                if (cursor[0] != '\\r' || cursor[1] != '\\n') {
+                    free(body);
+                    javan_panic("invalid http response chunk terminator");
+                }
+                cursor += 2;
+            }
+            body[length] = '\\0';
+            *body_length_out = length;
+            return body;
         }
 
         static unsigned long javan_http_body_publisher_length(javan_http_body_publisher_value* publisher) {
@@ -610,13 +2381,15 @@ final class RuntimeSourceIoSections {
             javan_socket_native_close(fd);
             const char* body_start = NULL;
             int status_code = javan_http_parse_status_code(response, response_length, &body_start);
-            unsigned long response_body_length = response_length - (unsigned long) (body_start - response);
+            unsigned long response_body_length = 0;
+            char* response_body = javan_http_decode_response_body(response, response_length, body_start, &response_body_length);
             void* body = NULL;
             if (body_handler->kind == JAVAN_HTTP_BODY_KIND_STRING) {
-                body = (void*) javan_http_copy_range(body_start, response_body_length);
+                body = (void*) javan_http_copy_range(response_body, response_body_length);
             } else {
-                body = javan_byte_array_from((const signed char*) body_start, (int) response_body_length);
+                body = javan_byte_array_from((const signed char*) response_body, (int) response_body_length);
             }
+            free(response_body);
             free(response);
             javan_http_response_value* http_response = (javan_http_response_value*) javan_alloc(sizeof(javan_http_response_value));
             void* response_root = (void*) http_response;
@@ -955,6 +2728,15 @@ final class RuntimeSourceIoSections {
             return result_root;
         }
 
+        int javan_http_headers_remove_entry(void* value, void* name_value, void* expected_values) {
+            void* existing_values = javan_http_headers_get(value, name_value);
+            if (existing_values == NULL || javan_object_equals(existing_values, expected_values) == 0) {
+                return 0;
+            }
+            javan_http_headers_remove(value, name_value);
+            return 1;
+        }
+
         static javan_optional* javan_optional_checked(void* value) {
             if (value == NULL) {
                 javan_panic("null optional");
@@ -1268,7 +3050,7 @@ final class RuntimeSourceIoSections {
     }
 
     static String http() {
-        return SOURCE_HTTP;
+        return SOURCE_HTTP.concat(SOURCE_HTTP_B);
     }
 
     static String files() {

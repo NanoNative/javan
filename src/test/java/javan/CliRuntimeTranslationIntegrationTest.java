@@ -895,6 +895,229 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void listReversedReadViewBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("list-reversed-read-view");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<String> values = new ArrayList<>(List.of("alpha", "beta", "gamma"));
+                    final List<String> reversed = values.reversed();
+                    System.out.println(reversed.size());
+                    System.out.println(reversed.getFirst());
+                    System.out.println(reversed.getLast());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/list-reversed-read-view").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("3\ngamma\nalpha\n");
+    }
+
+    @Test
+    void listReversedMutableViewBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("list-reversed-mutable-view");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final List<String> values = new ArrayList<>(List.of("alpha", "beta", "gamma"));
+                    final List<String> reversed = values.reversed();
+                    reversed.set(0, "G");
+                    reversed.add("delta");
+                    reversed.addFirst("first");
+                    reversed.addLast("last");
+                    reversed.removeFirst();
+                    reversed.remove(reversed.size() - 1);
+                    for (int index = 0; index < reversed.size(); index++) {
+                        System.out.println(reversed.get(index));
+                    }
+                    System.out.println(values.getFirst());
+                    System.out.println(values.getLast());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/list-reversed-mutable-view").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("G\nbeta\nalpha\ndelta\ndelta\nG\n");
+    }
+
+    @Test
+    void sequencedCollectionInterfaceEndpointsBuildAndMatchJvmOutput() throws Exception {
+        final Path project = project("sequenced-collection-endpoints");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.ArrayList;
+            import java.util.List;
+            import java.util.SequencedCollection;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final SequencedCollection<String> values = new ArrayList<>(List.of("alpha", "beta"));
+                    System.out.println(values.getFirst());
+                    System.out.println(values.getLast());
+                    values.addFirst("first");
+                    values.addLast("last");
+                    System.out.println(values.removeFirst());
+                    System.out.println(values.removeLast());
+                    final SequencedCollection<String> reversed = values.reversed();
+                    System.out.println(reversed.getFirst());
+                    System.out.println(reversed.getLast());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/sequenced-collection-endpoints").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("alpha\nbeta\nfirst\nlast\nbeta\nalpha\n");
+    }
+
+    @Test
+    void sequencedMapEntryEndpointsBuildAndMatchJvmOutput() throws Exception {
+        final Path project = project("sequenced-map-entry-endpoints");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.LinkedHashMap;
+            import java.util.Map;
+            import java.util.SequencedMap;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final SequencedMap<String, Integer> values = new LinkedHashMap<>();
+                    values.put("alpha", 1);
+                    values.put("beta", 2);
+                    final Map.Entry<String, Integer> first = values.firstEntry();
+                    final Map.Entry<String, Integer> last = values.lastEntry();
+                    System.out.println(first.getKey() + ":" + first.getValue());
+                    System.out.println(last.getKey() + ":" + last.getValue());
+                    values.putFirst("zero", 0);
+                    values.putLast("omega", 3);
+                    System.out.println(values.putFirst("alpha", 9));
+                    System.out.println(values.putLast("beta", 8));
+                    final Map.Entry<String, Integer> polledFirst = values.pollFirstEntry();
+                    final Map.Entry<String, Integer> polledLast = values.pollLastEntry();
+                    System.out.println(polledFirst.getKey() + ":" + polledFirst.getValue());
+                    System.out.println(polledLast.getKey() + ":" + polledLast.getValue());
+                    System.out.println(values.isEmpty());
+                    final SequencedMap<String, Integer> empty = new LinkedHashMap<>();
+                    System.out.println(empty.firstEntry() == null);
+                    System.out.println(empty.lastEntry() == null);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/sequenced-map-entry-endpoints").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("alpha:1\nbeta:2\n1\n2\nalpha:9\nbeta:8\nfalse\ntrue\ntrue\n");
+    }
+
+    @Test
+    void floatingPointConversionsBuildAndMatchJvmOutput() throws Exception {
+        final Path project = project("floating-point-conversions");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final float floatValue = 1.5f;
+                    final double doubleValue = 2.5d;
+                    final float intOverflow = 2147483648.0f;
+                    final double longOverflow = 9223372036854775808.0d;
+                    System.out.println((int) floatValue);
+                    System.out.println((long) floatValue);
+                    System.out.println((double) floatValue);
+                    System.out.println((int) doubleValue);
+                    System.out.println((long) doubleValue);
+                    System.out.println((float) doubleValue);
+                    System.out.println((int) intOverflow);
+                    System.out.println((long) longOverflow);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/floating-point-conversions").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("1\n1\n1.5\n2\n2\n2.5\n2147483647\n9223372036854775807\n");
+    }
+
+    @Test
+    void primitiveRemainderAndIntegerNegationBuildAndMatchJvmOutput() throws Exception {
+        final Path project = project("primitive-remainder-negation");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final int value = 7;
+                    final float floatValue = 7.5f;
+                    final double doubleValue = 7.5d;
+                    System.out.println(-value);
+                    System.out.println(floatValue % 2.0f);
+                    System.out.println(doubleValue % 2.0d);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/primitive-remainder-negation").toString())).stdout())
+            .isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("-7\n1.5\n1.5\n");
+    }
+
+    @Test
     void listRemoveAllBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("list-remove-all");
         writeJava(project, "com.acme.Main", """

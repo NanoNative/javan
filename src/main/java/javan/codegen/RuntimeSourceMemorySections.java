@@ -70,8 +70,15 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_RUNTIME_KIND_ATOMIC_INTEGER 31
         #define JAVAN_RUNTIME_KIND_ATOMIC_REFERENCE 32
         #define JAVAN_RUNTIME_KIND_RESOURCE_INPUT_STREAM 33
+        #define JAVAN_RUNTIME_KIND_HTTP_SERVER 34
+        #define JAVAN_RUNTIME_KIND_HTTP_EXCHANGE 35
+        #define JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA_OBJECT 36
         #define JAVAN_LIST_VIEW_UNMODIFIABLE 1
         #define JAVAN_LIST_VIEW_SET 2
+        #define JAVAN_LIST_VIEW_HTTP_HEADERS_KEYS 4
+        #define JAVAN_LIST_VIEW_HTTP_HEADERS_VALUES 8
+        #define JAVAN_LIST_VIEW_HTTP_HEADERS_ENTRIES 16
+        #define JAVAN_LIST_VIEW_REVERSED 32
         #define JAVAN_MAP_VIEW_UNMODIFIABLE 1
         #define JAVAN_BUILTIN_INSTANCEOF_COLLECTION 1
         #define JAVAN_BUILTIN_INSTANCEOF_MAP 2
@@ -97,6 +104,13 @@ final class RuntimeSourceMemorySections {
             struct javan_object_list* backing;
             void** values;
         } javan_object_list;
+
+        static int javan_http_headers_view_length(javan_object_list* view);
+        static void* javan_http_headers_view_get(javan_object_list* view, int index);
+        static int javan_http_headers_view_contains(javan_object_list* view, void* element);
+        static int javan_http_headers_view_remove(javan_object_list* view, void* element);
+        static void javan_http_headers_view_clear(javan_object_list* view);
+        static void* javan_http_headers_entry_set_value(void* owner, void* key, void* value);
 
         typedef struct {
             int magic;
@@ -241,6 +255,7 @@ final class RuntimeSourceMemorySections {
             int reserved2;
             void* key;
             void* value;
+            void* owner;
         } javan_map_entry_state;
 
         typedef struct {
@@ -380,6 +395,33 @@ final class RuntimeSourceMemorySections {
             void* body;
         } javan_http_response_value;
 
+        typedef struct {
+            int magic;
+            int started;
+            int stopped;
+            int completed;
+            int active_request_count;
+            void* server_socket;
+            javan_object_list* contexts;
+            javan_object_list* active_requests;
+            void* native_handle;
+            void* executor;
+        } javan_http_server_value;
+
+        typedef struct {
+            int magic;
+            int response_code;
+            int response_headers_sent;
+            int closed;
+            void* socket;
+            void* request_method;
+            void* request_uri;
+            javan_object_list* request_headers;
+            void* request_body;
+            javan_object_list* response_headers;
+            void* response_body;
+        } javan_http_exchange_value;
+
         #define JAVAN_OBJECT_LIST_MAGIC 0x4a4c5354
         #define JAVAN_OBJECT_ITERATOR_MAGIC 0x4a495452
         #define JAVAN_OBJECT_MAP_MAGIC 0x4a4d4150
@@ -398,6 +440,8 @@ final class RuntimeSourceMemorySections {
         #define JAVAN_HTTP_REQUEST_MAGIC 0x4a485452
         #define JAVAN_HTTP_BODY_PUBLISHER_MAGIC 0x4a485450
         #define JAVAN_HTTP_BODY_HANDLER_MAGIC 0x4a485448
+        #define JAVAN_HTTP_SERVER_MAGIC 0x4a485356
+        #define JAVAN_HTTP_EXCHANGE_MAGIC 0x4a485445
         #define JAVAN_HTTP_RESPONSE_MAGIC 0x4a485453
         #define JAVAN_VIRTUAL_THREAD_BUILDER_MAGIC 0x4a565442
         #define JAVAN_VIRTUAL_THREAD_FACTORY_MAGIC 0x4a565446
@@ -470,6 +514,12 @@ final class RuntimeSourceMemorySections {
             struct javan_root_frame* next;
         } javan_root_frame;
 
+        struct javan_object_handle {
+            void* value;
+            unsigned long references;
+            struct javan_object_handle* next;
+        };
+
         #define JAVAN_ROOT_FRAME_CACHE_LIMIT 32
 
         typedef void (*javan_native_resource_cleanup)(void* value);
@@ -491,6 +541,7 @@ final class RuntimeSourceMemorySections {
         } javan_allocation_registry;
 
         static javan_allocation_node* javan_allocations = NULL;
+        static JavanObjectHandle* javan_object_handles = NULL;
         static void* javan_allocation_cache_values[JAVAN_ALLOCATION_CACHE_SIZE];
         static javan_allocation_node* javan_allocation_cache_nodes[JAVAN_ALLOCATION_CACHE_SIZE];
         static javan_allocation_registry javan_allocation_index = { NULL, NULL, 0, 0 };
@@ -685,6 +736,8 @@ final class RuntimeSourceMemorySections {
 
         static void javan_heap_maybe_validate(void);
         static void javan_object_registry_cleanup(void);
+        static void javan_object_handle_cleanup_all(void);
+        static void javan_gc_mark_object_handles(void);
         static int javan_registered_type_id(void* value);
         static JavanTypeDescriptor* javan_type_descriptor_for(int type_id);
         static int javan_probably_string_key(void* value);
@@ -893,6 +946,7 @@ final class RuntimeSourceMemorySections {
             javan_root_frame_cleanup();
             javan_root_frame_cache_cleanup();
             javan_thread_root_cleanup();
+            javan_object_handle_cleanup_all();
             javan_object_registry_cleanup();
             for (int index = 0; index < JAVAN_ALLOCATION_CACHE_SIZE; index++) {
                 javan_allocation_cache_values[index] = NULL;
@@ -1344,12 +1398,15 @@ final class RuntimeSourceMemorySections {
                 || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_BODY_PUBLISHER
                 || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_BODY_HANDLER
                 || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_RESPONSE
+                || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_SERVER
+                || runtime_kind == JAVAN_RUNTIME_KIND_HTTP_EXCHANGE
                 || runtime_kind == JAVAN_RUNTIME_KIND_SCHEDULED_THREAD_POOL_EXECUTOR
                 || runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_LONG
                 || runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_BOOLEAN
                 || runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_INTEGER
                 || runtime_kind == JAVAN_RUNTIME_KIND_ATOMIC_REFERENCE
-                || runtime_kind == JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA;
+                || runtime_kind == JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA
+                || runtime_kind == JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA_OBJECT;
             javan_heap_maybe_validate();
             javan_runtime_lock_leave();
         }
@@ -1623,6 +1680,13 @@ final class RuntimeSourceMemorySections {
                     javan_panic("invalid materialized lambda metadata");
                 }
                 javan_validate_owned_runtime_buffer_reference((void*) state->captures);
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA_OBJECT) {
+                struct javan_object_header* header = (struct javan_object_header*) node->value;
+                if (header->_javan_runtime_state == NULL
+                    || header->_javan_runtime_kind != JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA) {
+                    javan_panic("invalid materialized lambda object metadata");
+                }
+                javan_validate_runtime_managed_reference(header->_javan_runtime_state);
             } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_MAP_ENTRY) {
                 javan_map_entry_state* state = (javan_map_entry_state*) node->value;
                 if (state->magic != JAVAN_MAP_ENTRY_MAGIC) {
@@ -1784,6 +1848,45 @@ final class RuntimeSourceMemorySections {
                 if (response->magic != JAVAN_HTTP_RESPONSE_MAGIC || response->status_code < 0 || response->body == NULL) {
                     javan_panic("invalid runtime http response metadata");
                 }
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_HTTP_SERVER) {
+                javan_http_server_value* server = (javan_http_server_value*) node->value;
+                if (server->magic != JAVAN_HTTP_SERVER_MAGIC
+                    || (server->started != 0 && server->started != 1)
+                    || (server->stopped != 0 && server->stopped != 1)
+                    || (server->completed != 0 && server->completed != 1)
+                    || server->active_request_count < 0
+                    || server->server_socket == NULL
+                    || server->contexts == NULL
+                    || server->active_requests == NULL) {
+                    javan_panic("invalid runtime http server metadata");
+                }
+                javan_validate_runtime_managed_reference(server->server_socket);
+                javan_validate_runtime_managed_reference((void*) server->contexts);
+                javan_validate_runtime_managed_reference((void*) server->active_requests);
+                if (server->executor != NULL) {
+                    javan_validate_runtime_managed_reference(server->executor);
+                }
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_HTTP_EXCHANGE) {
+                javan_http_exchange_value* exchange = (javan_http_exchange_value*) node->value;
+                if (exchange->magic != JAVAN_HTTP_EXCHANGE_MAGIC
+                    || exchange->socket == NULL
+                    || exchange->request_method == NULL
+                    || exchange->request_uri == NULL
+                    || exchange->request_headers == NULL
+                    || exchange->request_body == NULL
+                    || exchange->response_headers == NULL
+                    || exchange->response_body == NULL
+                    || (exchange->response_headers_sent != 0 && exchange->response_headers_sent != 1)
+                    || (exchange->closed != 0 && exchange->closed != 1)) {
+                    javan_panic("invalid runtime http exchange metadata");
+                }
+                javan_validate_runtime_managed_reference(exchange->socket);
+                javan_validate_runtime_managed_reference(exchange->request_method);
+                javan_validate_runtime_managed_reference(exchange->request_uri);
+                javan_validate_runtime_managed_reference((void*) exchange->request_headers);
+                javan_validate_runtime_managed_reference(exchange->request_body);
+                javan_validate_runtime_managed_reference((void*) exchange->response_headers);
+                javan_validate_runtime_managed_reference(exchange->response_body);
             }
         }
 
@@ -1917,6 +2020,8 @@ final class RuntimeSourceMemorySections {
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_HTTP_BODY_PUBLISHER
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_HTTP_BODY_HANDLER
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_HTTP_RESPONSE
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_HTTP_SERVER
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_HTTP_EXCHANGE
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_BUILDER
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_FACTORY
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_VIRTUAL_THREAD_EXECUTOR
@@ -1926,7 +2031,8 @@ final class RuntimeSourceMemorySections {
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_ATOMIC_INTEGER
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_ATOMIC_BOOLEAN
                     && node->runtime_kind != JAVAN_RUNTIME_KIND_ATOMIC_REFERENCE
-                    && node->runtime_kind != JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA) {
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA
+                    && node->runtime_kind != JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA_OBJECT) {
                     javan_panic("invalid runtime allocation kind");
                 }
                 javan_validate_runtime_container_references(node);
@@ -2308,6 +2414,16 @@ final class RuntimeSourceMemorySections {
                     javan_socket_native_close(socket->fd);
                     socket->fd = -1;
                     socket->closed = 1;
+                }
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_HTTP_SERVER) {
+                javan_http_server_value* server = (javan_http_server_value*) node->value;
+                if (server != NULL && server->magic == JAVAN_HTTP_SERVER_MAGIC && server->server_socket != NULL) {
+                    javan_server_socket_close(server->server_socket);
+                }
+            } else if (node->runtime_kind == JAVAN_RUNTIME_KIND_HTTP_EXCHANGE) {
+                javan_http_exchange_value* exchange = (javan_http_exchange_value*) node->value;
+                if (exchange != NULL && exchange->magic == JAVAN_HTTP_EXCHANGE_MAGIC && exchange->socket != NULL) {
+                    javan_socket_close(exchange->socket);
                 }
             }
         }
@@ -2747,6 +2863,9 @@ final class RuntimeSourceMemorySections {
             void* target;
             void* scheduled_executor;
             void* thread_locals;
+            void* http_server;
+            void* http_handler;
+            void* http_exchange;
         } javan_thread;
 
         static long long javan_platform_thread_name_counter_value = 0;
@@ -4371,6 +4490,9 @@ final class RuntimeSourceMemorySections {
             object->target = NULL;
             object->scheduled_executor = NULL;
             object->thread_locals = NULL;
+            object->http_server = NULL;
+            object->http_handler = NULL;
+            object->http_exchange = NULL;
             if (javan_current_thread_value != NULL) {
                 object->priority = ((javan_thread*) javan_current_thread_value)->priority;
             }
@@ -5056,6 +5178,13 @@ final class RuntimeSourceMemorySections {
             javan_require_thread(value)->target = target;
         }
 
+        void javan_thread_set_http_request(void* value, void* server, void* handler, void* exchange) {
+            javan_thread* thread = javan_require_thread(value);
+            thread->http_server = server;
+            thread->http_handler = handler;
+            thread->http_exchange = exchange;
+        }
+
         static javan_thread_local* javan_require_thread_local(void* value) {
             if (value == NULL) {
                 javan_panic("null ThreadLocal");
@@ -5276,12 +5405,19 @@ final class RuntimeSourceMemorySections {
             }
         }
 
+        static void javan_http_server_request_run_managed(void* server, void* handler, void* exchange);
+
         static void javan_thread_run_registered_target(void* value) {
             javan_thread* thread = javan_require_thread(value);
             void* target = thread->target;
             void** javan_thread_start_roots[] = { &value, &target };
             javan_root_frame_push(javan_thread_start_roots, 2);
-            if (thread->schedule_mode == 0) {
+            if (thread->http_server != NULL) {
+                javan_http_server_request_run_managed(thread->http_server, thread->http_handler, thread->http_exchange);
+                thread->http_server = NULL;
+                thread->http_handler = NULL;
+                thread->http_exchange = NULL;
+            } else if (thread->schedule_mode == 0) {
                 if (thread->future_cancelled == 0 && target != NULL) {
                     javan_thread_run_target(target);
                 }
@@ -6126,6 +6262,13 @@ final class RuntimeSourceMemorySections {
                 }
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_OBJECT_MAP) {
                 javan_gc_mark_runtime_map((javan_object_map*) value);
+            } else if (runtime_kind == JAVAN_RUNTIME_KIND_MAP_ENTRY) {
+                javan_map_entry_state* entry = (javan_map_entry_state*) value;
+                if (entry != NULL && entry->magic == JAVAN_MAP_ENTRY_MAGIC) {
+                    javan_gc_mark_value(entry->key);
+                    javan_gc_mark_value(entry->value);
+                    javan_gc_mark_value(entry->owner);
+                }
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_OPTIONAL) {
                 javan_optional* optional = (javan_optional*) value;
                 if (optional != NULL && optional->magic == JAVAN_OPTIONAL_MAGIC && optional->present != 0) {
@@ -6138,6 +6281,11 @@ final class RuntimeSourceMemorySections {
                     for (int index = 0; index < state->capture_count; index++) {
                         javan_gc_mark_value(state->captures[index]);
                     }
+                }
+            } else if (runtime_kind == JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA_OBJECT) {
+                struct javan_object_header* header = (struct javan_object_header*) value;
+                if (header != NULL && header->_javan_runtime_kind == JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA) {
+                    javan_gc_mark_value(header->_javan_runtime_state);
                 }
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_STRING_BUILDER) {
                 javan_string_builder* builder = (javan_string_builder*) value;
@@ -6242,6 +6390,25 @@ final class RuntimeSourceMemorySections {
                 if (response != NULL && response->magic == JAVAN_HTTP_RESPONSE_MAGIC) {
                     javan_gc_mark_value((void*) response->body);
                 }
+            } else if (runtime_kind == JAVAN_RUNTIME_KIND_HTTP_SERVER) {
+                javan_http_server_value* server = (javan_http_server_value*) value;
+                if (server != NULL && server->magic == JAVAN_HTTP_SERVER_MAGIC) {
+                    javan_gc_mark_value(server->server_socket);
+                    javan_gc_mark_value((void*) server->contexts);
+                    javan_gc_mark_value((void*) server->active_requests);
+                    javan_gc_mark_value(server->executor);
+                }
+            } else if (runtime_kind == JAVAN_RUNTIME_KIND_HTTP_EXCHANGE) {
+                javan_http_exchange_value* exchange = (javan_http_exchange_value*) value;
+                if (exchange != NULL && exchange->magic == JAVAN_HTTP_EXCHANGE_MAGIC) {
+                    javan_gc_mark_value(exchange->socket);
+                    javan_gc_mark_value(exchange->request_method);
+                    javan_gc_mark_value(exchange->request_uri);
+                    javan_gc_mark_value((void*) exchange->request_headers);
+                    javan_gc_mark_value(exchange->request_body);
+                    javan_gc_mark_value((void*) exchange->response_headers);
+                    javan_gc_mark_value(exchange->response_body);
+                }
             } else if (runtime_kind == JAVAN_RUNTIME_KIND_PROCESS_RESULT) {
                 javan_process_result* result = (javan_process_result*) value;
                 javan_gc_mark_value(result->stdout_value);
@@ -6263,8 +6430,8 @@ final class RuntimeSourceMemorySections {
             node->mark = 1;
             if (node->kind == JAVAN_HEAP_KIND_OBJECT) {
                 javan_gc_mark_object_fields(value, node->type_id);
-                if (node->type_id > 0) {
-                    struct javan_object_header* header = (struct javan_object_header*) value;
+                struct javan_object_header* header = (struct javan_object_header*) value;
+                if (node->type_id > 0 || header->_javan_runtime_kind == JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA) {
                     javan_gc_mark_value(header->_javan_runtime_state);
                 }
                 if (node->type_id == JAVAN_TYPE_JAVA_LANG_THREAD) {
@@ -6272,6 +6439,9 @@ final class RuntimeSourceMemorySections {
                     javan_gc_mark_value(((javan_thread*) value)->target);
                     javan_gc_mark_value(((javan_thread*) value)->scheduled_executor);
                     javan_gc_mark_value(((javan_thread*) value)->thread_locals);
+                    javan_gc_mark_value(((javan_thread*) value)->http_server);
+                    javan_gc_mark_value(((javan_thread*) value)->http_handler);
+                    javan_gc_mark_value(((javan_thread*) value)->http_exchange);
                 }
                 return;
             }
@@ -6291,6 +6461,7 @@ final class RuntimeSourceMemorySections {
                     javan_gc_mark_value(*slot);
                 }
             }
+            javan_gc_mark_object_handles();
         }
 
         static void javan_gc_mark_thread_roots(void) {
@@ -7500,11 +7671,27 @@ final class RuntimeSourceMemorySections {
             return 0;
         }
 
+        static int javan_list_logical_length(javan_object_list* list);
+
         static javan_object_list* javan_list_storage_owner(javan_object_list* list) {
             while (list->backing != NULL) {
                 list = list->backing;
             }
             return list;
+        }
+
+        static javan_object_list* javan_list_mutation_owner(javan_object_list* list) {
+            if ((list->view_flags & JAVAN_LIST_VIEW_REVERSED) != 0 && list->backing != NULL) {
+                return javan_list_mutation_owner(list->backing);
+            }
+            return list;
+        }
+
+        static int javan_list_mutation_index(javan_object_list* list, int index) {
+            if ((list->view_flags & JAVAN_LIST_VIEW_REVERSED) != 0) {
+                return javan_list_logical_length(list->backing) - 1 - index;
+            }
+            return index;
         }
 
         void* javan_list_unmodifiable(void* value) {
@@ -7538,6 +7725,9 @@ final class RuntimeSourceMemorySections {
         }
 
         static int javan_list_logical_length(javan_object_list* list) {
+            if ((list->view_flags & (JAVAN_LIST_VIEW_HTTP_HEADERS_KEYS | JAVAN_LIST_VIEW_HTTP_HEADERS_VALUES | JAVAN_LIST_VIEW_HTTP_HEADERS_ENTRIES)) != 0) {
+                return javan_http_headers_view_length(list);
+            }
             if (list->backing != NULL) {
                 return javan_list_logical_length(list->backing);
             }
@@ -7565,6 +7755,13 @@ final class RuntimeSourceMemorySections {
         }
 
         static void* javan_list_get_unchecked(javan_object_list* list, int index) {
+            if ((list->view_flags & JAVAN_LIST_VIEW_REVERSED) != 0) {
+                int length = javan_list_logical_length(list->backing);
+                return javan_list_get_unchecked(list->backing, length - 1 - index);
+            }
+            if ((list->view_flags & (JAVAN_LIST_VIEW_HTTP_HEADERS_KEYS | JAVAN_LIST_VIEW_HTTP_HEADERS_VALUES | JAVAN_LIST_VIEW_HTTP_HEADERS_ENTRIES)) != 0) {
+                return javan_http_headers_view_get(list, index);
+            }
             if (list->backing != NULL) {
                 return javan_list_get_unchecked(list->backing, index);
             }
@@ -7574,6 +7771,9 @@ final class RuntimeSourceMemorySections {
         static void javan_list_mutable_checked(javan_object_list* list) {
             if (list->immutable != 0) {
                 javan_panic("unsupported operation on immutable list");
+            }
+            if (list->backing != NULL) {
+                javan_list_mutable_checked(list->backing);
             }
         }
 
@@ -7634,8 +7834,12 @@ final class RuntimeSourceMemorySections {
         int javan_arraylist_add(void* value, void* element) {
             javan_object_list* list = javan_list_checked(value);
             javan_list_mutable_checked(list);
-            javan_list_append_raw(list, element);
-            list->mod_count++;
+            if ((list->view_flags & JAVAN_LIST_VIEW_REVERSED) != 0) {
+                javan_arraylist_add_at(list->backing, 0, element);
+            } else {
+                javan_list_append_raw(list, element);
+                list->mod_count++;
+            }
             return 1;
         }
 
@@ -7650,8 +7854,13 @@ final class RuntimeSourceMemorySections {
         void javan_arraylist_add_at(void* value, int index, void* element) {
             javan_object_list* list = javan_list_checked(value);
             javan_list_mutable_checked(list);
-            if (index < 0 || index > list->length) {
+            int length = javan_list_logical_length(list);
+            if (index < 0 || index > length) {
                 javan_panic("list index out of bounds");
+            }
+            if ((list->view_flags & JAVAN_LIST_VIEW_REVERSED) != 0) {
+                javan_arraylist_add_at(list->backing, length - index, element);
+                return;
             }
             void* element_root = element;
             void** javan_list_insert_roots[] = {
@@ -7736,6 +7945,10 @@ final class RuntimeSourceMemorySections {
         void javan_arraylist_add_first(void* value, void* element) {
             javan_object_list* list = javan_list_checked(value);
             javan_list_mutable_checked(list);
+            if ((list->view_flags & JAVAN_LIST_VIEW_REVERSED) != 0) {
+                javan_arraylist_add_last(list->backing, element);
+                return;
+            }
             void* element_root = element;
             void** javan_list_add_first_roots[] = {
                 (void**) &list,
@@ -7753,6 +7966,11 @@ final class RuntimeSourceMemorySections {
         }
 
         void javan_arraylist_add_last(void* value, void* element) {
+            javan_object_list* list = javan_list_checked(value);
+            if ((list->view_flags & JAVAN_LIST_VIEW_REVERSED) != 0) {
+                javan_arraylist_add_first(list->backing, element);
+                return;
+            }
             javan_arraylist_add(value, element);
         }
 
@@ -7760,8 +7978,10 @@ final class RuntimeSourceMemorySections {
             javan_object_list* list = javan_list_checked(value);
             javan_list_mutable_checked(list);
             javan_list_bounds_checked(list, index);
-            void* previous = list->values[index];
-            list->values[index] = element;
+            javan_object_list* owner = javan_list_mutation_owner(list);
+            int owner_index = javan_list_mutation_index(list, index);
+            void* previous = owner->values[owner_index];
+            owner->values[owner_index] = element;
             return previous;
         }
 
@@ -7769,19 +7989,24 @@ final class RuntimeSourceMemorySections {
             javan_object_list* list = javan_list_checked(value);
             javan_list_mutable_checked(list);
             javan_list_bounds_checked(list, index);
-            void* previous = list->values[index];
-            if (index + 1 < list->length) {
-                memmove(list->values + index, list->values + index + 1, (unsigned long) (list->length - index - 1) * sizeof(void*));
+            javan_object_list* owner = javan_list_mutation_owner(list);
+            int owner_index = javan_list_mutation_index(list, index);
+            void* previous = owner->values[owner_index];
+            if (owner_index + 1 < owner->length) {
+                memmove(owner->values + owner_index, owner->values + owner_index + 1, (unsigned long) (owner->length - owner_index - 1) * sizeof(void*));
             }
-            list->length--;
-            list->values[list->length] = NULL;
-            list->mod_count++;
+            owner->length--;
+            owner->values[owner->length] = NULL;
+            owner->mod_count++;
             return previous;
         }
 
         void* javan_arraylist_remove_first(void* value) {
             javan_object_list* list = javan_list_checked(value);
             javan_list_mutable_checked(list);
+            if ((list->view_flags & JAVAN_LIST_VIEW_REVERSED) != 0) {
+                return javan_arraylist_remove_last(list->backing);
+            }
             if (list->length == 0) {
                 javan_panic("list is empty");
             }
@@ -7798,6 +8023,9 @@ final class RuntimeSourceMemorySections {
         void* javan_arraylist_remove_last(void* value) {
             javan_object_list* list = javan_list_checked(value);
             javan_list_mutable_checked(list);
+            if ((list->view_flags & JAVAN_LIST_VIEW_REVERSED) != 0) {
+                return javan_arraylist_remove_first(list->backing);
+            }
             if (list->length == 0) {
                 javan_panic("list is empty");
             }
@@ -7890,6 +8118,9 @@ final class RuntimeSourceMemorySections {
 
         int javan_list_contains(void* value, void* element) {
             javan_object_list* list = javan_list_checked(value);
+            if ((list->view_flags & (JAVAN_LIST_VIEW_HTTP_HEADERS_KEYS | JAVAN_LIST_VIEW_HTTP_HEADERS_VALUES | JAVAN_LIST_VIEW_HTTP_HEADERS_ENTRIES)) != 0) {
+                return javan_http_headers_view_contains(list, element);
+            }
             int length = javan_list_logical_length(list);
             for (int index = 0; index < length; index++) {
                 if (javan_object_equals(javan_list_get_unchecked(list, index), element) != 0) {
@@ -7923,6 +8154,9 @@ final class RuntimeSourceMemorySections {
         int javan_list_remove(void* value, void* element) {
             javan_object_list* list = javan_list_checked(value);
             javan_list_mutable_checked(list);
+            if ((list->view_flags & (JAVAN_LIST_VIEW_HTTP_HEADERS_KEYS | JAVAN_LIST_VIEW_HTTP_HEADERS_VALUES | JAVAN_LIST_VIEW_HTTP_HEADERS_ENTRIES)) != 0) {
+                return javan_http_headers_view_remove(list, element);
+            }
             int length = javan_list_logical_length(list);
             for (int index = 0; index < length; index++) {
                 if (javan_object_equals(javan_list_get_unchecked(list, index), element) == 0) {
@@ -8031,8 +8265,16 @@ final class RuntimeSourceMemorySections {
         void javan_list_clear(void* value) {
             javan_object_list* list = javan_list_checked(value);
             javan_list_mutable_checked(list);
+            if ((list->view_flags & (JAVAN_LIST_VIEW_HTTP_HEADERS_KEYS | JAVAN_LIST_VIEW_HTTP_HEADERS_VALUES | JAVAN_LIST_VIEW_HTTP_HEADERS_ENTRIES)) != 0) {
+                javan_http_headers_view_clear(list);
+                return;
+            }
             int length = javan_list_logical_length(list);
             if (length == 0) {
+                return;
+            }
+            if ((list->view_flags & JAVAN_LIST_VIEW_REVERSED) != 0) {
+                javan_list_clear(list->backing);
                 return;
             }
             memset(list->values, 0, (unsigned long) length * sizeof(void*));
@@ -8044,6 +8286,14 @@ final class RuntimeSourceMemorySections {
             javan_object_list* list = javan_list_checked(value);
             javan_list_bounds_checked(list, index);
             return javan_list_get_unchecked(list, index);
+        }
+
+        void* javan_list_reversed(void* value) {
+            javan_object_list* list = javan_list_checked(value);
+            if ((list->view_flags & JAVAN_LIST_VIEW_REVERSED) != 0 && list->backing != NULL) {
+                return list->backing;
+            }
+            return javan_list_new_view(list, list->immutable, JAVAN_LIST_VIEW_REVERSED);
         }
 
         void* javan_list_get_first(void* value) {
@@ -9045,6 +9295,7 @@ final class RuntimeSourceMemorySections {
             entry->reserved2 = 0;
             entry->key = key;
             entry->value = value;
+            entry->owner = NULL;
             javan_update_runtime_allocation_kind(entry_value, JAVAN_RUNTIME_KIND_MAP_ENTRY);
             return entry_value;
         }
@@ -9065,6 +9316,71 @@ final class RuntimeSourceMemorySections {
             entry_value = javan_map_entry_alloc(key_root, value_root);
             javan_root_frame_pop(roots);
             return entry_value;
+        }
+
+        void* javan_map_first_entry(void* value) {
+            javan_object_map* map = javan_map_checked(value);
+            int length = javan_map_logical_length(map);
+            if (length == 0) {
+                return NULL;
+            }
+            return javan_map_entry_new(javan_map_key_unchecked(map, 0), javan_map_value_unchecked(map, 0));
+        }
+
+        void* javan_map_last_entry(void* value) {
+            javan_object_map* map = javan_map_checked(value);
+            int length = javan_map_logical_length(map);
+            if (length == 0) {
+                return NULL;
+            }
+            int index = length - 1;
+            return javan_map_entry_new(javan_map_key_unchecked(map, index), javan_map_value_unchecked(map, index));
+        }
+
+        static void* javan_map_poll_entry(void* value, int first) {
+            javan_object_map* map = javan_map_checked(value);
+            int length = javan_map_logical_length(map);
+            if (length == 0) {
+                return NULL;
+            }
+            int index = first != 0 ? 0 : length - 1;
+            void* key = javan_map_key_unchecked(map, index);
+            void* entry_value = NULL;
+            void** roots[] = {
+                (void**) &map,
+                (void**) &key,
+                (void**) &entry_value
+            };
+            javan_root_frame_push(roots, 3);
+            entry_value = javan_map_entry_new(key, javan_map_value_unchecked(map, index));
+            javan_map_remove(map, key);
+            javan_root_frame_pop(roots);
+            return entry_value;
+        }
+
+        void* javan_map_poll_first_entry(void* value) {
+            return javan_map_poll_entry(value, 1);
+        }
+
+        void* javan_map_poll_last_entry(void* value) {
+            return javan_map_poll_entry(value, 0);
+        }
+
+        void javan_map_entry_attach_owner(void* value, void* owner) {
+            javan_map_entry_checked(value)->owner = owner;
+        }
+
+        void* javan_map_entry_set_value(void* value, void* new_value) {
+            javan_map_entry_state* entry = javan_map_entry_checked(value);
+            if (new_value == NULL) {
+                javan_panic("null Map.Entry value");
+            }
+            if (entry->owner == NULL) {
+                javan_panic("immutable Map.Entry");
+            }
+            void* previous = javan_http_headers_entry_set_value(entry->owner, entry->key, new_value);
+            entry->value = new_value;
+            return previous;
         }
 
         void* javan_map_empty(void) {
@@ -10096,6 +10412,7 @@ final class RuntimeSourceMemorySections {
             header->_javan_runtime_state = state_value;
             header->_javan_runtime_kind = JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA;
             header->_javan_runtime_reserved = 0;
+            javan_update_runtime_allocation_kind(object_value, JAVAN_RUNTIME_KIND_MATERIALIZED_LAMBDA_OBJECT);
             javan_root_frame_pop(roots);
             return object_value;
         }
@@ -10331,6 +10648,134 @@ final class RuntimeSourceMemorySections {
             #endif
         }
 
+        void* javan_process_run_attached(
+            void* cwd, void* command_value, long long timeout_millis, void* stdout_stream, void* stderr_stream
+        ) {
+            #if defined(_WIN32)
+            (void) cwd;
+            (void) command_value;
+            (void) timeout_millis;
+            (void) stdout_stream;
+            (void) stderr_stream;
+            return javan_process_result_new(127, "", "attached process execution unsupported on Windows");
+            #else
+            javan_object_list* command = javan_list_checked(command_value);
+            if (command->length <= 0) {
+                return javan_process_result_new(127, "", "empty command");
+            }
+            void* cwd_root = cwd;
+            void* command_root = command_value;
+            void** roots[] = {(void**) &cwd_root, (void**) &command_root};
+            javan_root_frame_push(roots, 2);
+            char** argv = (char**) javan_alloc((unsigned long) (command->length + 1) * sizeof(char*));
+            for (int index = 0; index < command->length; index++) {
+                argv[index] = (char*) command->values[index];
+                if (argv[index] == NULL) {
+                    argv[index] = "";
+                }
+            }
+            argv[command->length] = NULL;
+            javan_root_frame_pop(roots);
+
+            int stdout_pipe[2] = {-1, -1};
+            int stderr_pipe[2] = {-1, -1};
+            if (pipe(stdout_pipe) != 0 || pipe(stderr_pipe) != 0) {
+                if (stdout_pipe[0] >= 0) { close(stdout_pipe[0]); close(stdout_pipe[1]); }
+                if (stderr_pipe[0] >= 0) { close(stderr_pipe[0]); close(stderr_pipe[1]); }
+                javan_free(argv);
+                return javan_process_result_new(127, "", "attached process pipe failed");
+            }
+            FILE* stdout_file = tmpfile();
+            FILE* stderr_file = tmpfile();
+            if (stdout_file == NULL || stderr_file == NULL) {
+                if (stdout_file != NULL) { fclose(stdout_file); }
+                if (stderr_file != NULL) { fclose(stderr_file); }
+                close(stdout_pipe[0]); close(stdout_pipe[1]);
+                close(stderr_pipe[0]); close(stderr_pipe[1]);
+                javan_free(argv);
+                return javan_process_result_new(127, "", "attached process output capture failed");
+            }
+            pid_t child = fork();
+            if (child < 0) {
+                fclose(stdout_file); fclose(stderr_file);
+                close(stdout_pipe[0]); close(stdout_pipe[1]);
+                close(stderr_pipe[0]); close(stderr_pipe[1]);
+                javan_free(argv);
+                return javan_process_result_new(127, "", "attached process fork failed");
+            }
+            if (child == 0) {
+                close(stdout_pipe[0]);
+                close(stderr_pipe[0]);
+                if (cwd != NULL && chdir((const char*) cwd) != 0) { _exit(127); }
+                dup2(stdout_pipe[1], STDOUT_FILENO);
+                dup2(stderr_pipe[1], STDERR_FILENO);
+                close(stdout_pipe[1]);
+                close(stderr_pipe[1]);
+                execvp(argv[0], argv);
+                _exit(127);
+            }
+            close(stdout_pipe[1]);
+            close(stderr_pipe[1]);
+            int stdout_flags = fcntl(stdout_pipe[0], F_GETFL, 0);
+            int stderr_flags = fcntl(stderr_pipe[0], F_GETFL, 0);
+            fcntl(stdout_pipe[0], F_SETFL, stdout_flags | O_NONBLOCK);
+            fcntl(stderr_pipe[0], F_SETFL, stderr_flags | O_NONBLOCK);
+            int stdout_open = 1;
+            int stderr_open = 1;
+            int completed = 0;
+            int status = 0;
+            long long started = javan_system_current_time_millis();
+            long long timeout = timeout_millis <= 0 ? 300000LL : timeout_millis;
+            char buffer[4096];
+            while (!completed || stdout_open || stderr_open) {
+                if (!completed) {
+                    pid_t waited = waitpid(child, &status, WNOHANG);
+                    if (waited == child || waited < 0) { completed = 1; }
+                    if (!completed && javan_system_current_time_millis() - started >= timeout) {
+                        kill(child, SIGKILL);
+                        waitpid(child, &status, 0);
+                        status = 124 << 8;
+                        completed = 1;
+                    }
+                }
+                if (stdout_open) {
+                    ssize_t count = read(stdout_pipe[0], buffer, sizeof(buffer) - 1);
+                    if (count > 0) {
+                        buffer[count] = '\\0'; fwrite(buffer, 1, (size_t) count, stdout_file); fflush(stdout_file);
+                        javan_printstream_print(stdout_stream, buffer);
+                    } else if (count == 0 || (count < 0 && errno != EAGAIN && errno != EINTR)) {
+                        close(stdout_pipe[0]); stdout_open = 0;
+                    }
+                }
+                if (stderr_open) {
+                    ssize_t count = read(stderr_pipe[0], buffer, sizeof(buffer) - 1);
+                    if (count > 0) {
+                        buffer[count] = '\\0'; fwrite(buffer, 1, (size_t) count, stderr_file); fflush(stderr_file);
+                        javan_printstream_print(stderr_stream, buffer);
+                    } else if (count == 0 || (count < 0 && errno != EAGAIN && errno != EINTR)) {
+                        close(stderr_pipe[0]); stderr_open = 0;
+                    }
+                }
+                if (!completed || stdout_open || stderr_open) { javan_sleep_micros(1000UL); }
+            }
+            char* stdout_text = javan_file_to_string(stdout_file);
+            void** stdout_root[] = {(void**) &stdout_text};
+            javan_root_frame_push(stdout_root, 1);
+            char* stderr_text = javan_file_to_string(stderr_file);
+            javan_root_frame_pop(stdout_root);
+            fclose(stdout_file);
+            fclose(stderr_file);
+            close(stdout_pipe[0]);
+            close(stderr_pipe[0]);
+            javan_free(argv);
+            int exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : 127;
+            javan_process_result* result = javan_process_result_new(exit_code, stdout_text, stderr_text);
+            javan_free(stdout_text);
+            javan_free(stderr_text);
+            return result;
+            #endif
+        }
+
         int javan_process_result_exit_code(void* value) {
             if (value == NULL) {
                 javan_panic("null process result");
@@ -10479,6 +10924,148 @@ final class RuntimeSourceMemorySections {
         }
         """;
 
+    private static final String SOURCE_COLLECTIONS_SEQUENCED_MAP = """
+        static void* javan_map_put_at(void* value, void* key, void* element, int index) {
+            javan_object_map* map = javan_map_checked(value);
+            javan_map_mutable_checked(map);
+            int existing = javan_map_find(map, key);
+            void* previous = NULL;
+            if (existing >= 0) {
+                previous = javan_map_remove(map, key);
+            }
+            if (index < 0 || index > map->length) {
+                javan_panic("invalid sequenced map insertion index");
+            }
+            void* key_root = key;
+            void* element_root = element;
+            void** roots[] = {
+                (void**) &map,
+                (void**) &key_root,
+                (void**) &element_root,
+                (void**) &previous
+            };
+            javan_root_frame_push(roots, 4);
+            javan_map_ensure_capacity(map, map->length + 1);
+            for (int cursor = map->length; cursor > index; cursor--) {
+                map->keys[cursor] = map->keys[cursor - 1];
+                map->values[cursor] = map->values[cursor - 1];
+            }
+            map->keys[index] = key_root;
+            map->values[index] = element_root;
+            map->length++;
+            map->mod_count++;
+            javan_root_frame_pop(roots);
+            return previous;
+        }
+
+        void* javan_map_put_first(void* value, void* key, void* element) {
+            return javan_map_put_at(value, key, element, 0);
+        }
+
+        void* javan_map_put_last(void* value, void* key, void* element) {
+            javan_object_map* map = javan_map_checked(value);
+            int index = javan_map_logical_length(map);
+            if (javan_map_find(map, key) >= 0) {
+                index--;
+            }
+            return javan_map_put_at(value, key, element, index);
+        }
+        """;
+
+    private static final String SOURCE_C_ABI_OBJECT_HANDLES = """
+        static JavanObjectHandle* javan_object_handle_checked(JavanObjectHandle* handle) {
+            if (handle == NULL) {
+                return NULL;
+            }
+            JavanObjectHandle* current = javan_object_handles;
+            while (current != NULL) {
+                if (current == handle) {
+                    return handle;
+                }
+                current = current->next;
+            }
+            javan_panic("invalid Javan object handle");
+            return NULL;
+        }
+
+        JavanObjectHandle* javan_object_handle_new(void* value) {
+            if (value == NULL) {
+                return NULL;
+            }
+            JavanObjectHandle* handle = (JavanObjectHandle*) calloc(1, sizeof(JavanObjectHandle));
+            if (handle == NULL) {
+                javan_panic("out of memory creating Javan object handle");
+            }
+            handle->value = value;
+            handle->references = 1;
+            javan_runtime_lock_enter();
+            handle->next = javan_object_handles;
+            javan_object_handles = handle;
+            javan_runtime_lock_leave();
+            return handle;
+        }
+
+        void* javan_object_handle_value(JavanObjectHandle* handle) {
+            if (handle == NULL) {
+                return NULL;
+            }
+            javan_runtime_lock_enter();
+            void* value = javan_object_handle_checked(handle)->value;
+            javan_runtime_lock_leave();
+            return value;
+        }
+
+        void javan_object_handle_retain(JavanObjectHandle* handle) {
+            if (handle == NULL) {
+                return;
+            }
+            javan_runtime_lock_enter();
+            JavanObjectHandle* checked = javan_object_handle_checked(handle);
+            if (checked->references == 0) {
+                javan_panic("Javan object handle reference underflow");
+            }
+            checked->references++;
+            javan_runtime_lock_leave();
+        }
+
+        void javan_object_handle_release(JavanObjectHandle* handle) {
+            if (handle == NULL) {
+                return;
+            }
+            javan_runtime_lock_enter();
+            JavanObjectHandle* checked = javan_object_handle_checked(handle);
+            if (checked->references == 0) {
+                javan_panic("Javan object handle reference underflow");
+            }
+            checked->references--;
+            if (checked->references == 0) {
+                JavanObjectHandle** cursor = &javan_object_handles;
+                while (*cursor != checked) {
+                    cursor = &(*cursor)->next;
+                }
+                *cursor = checked->next;
+                free(checked);
+            }
+            javan_runtime_lock_leave();
+        }
+
+        static void javan_object_handle_cleanup_all(void) {
+            JavanObjectHandle* current = javan_object_handles;
+            javan_object_handles = NULL;
+            while (current != NULL) {
+                JavanObjectHandle* next = current->next;
+                free(current);
+                current = next;
+            }
+        }
+
+        static void javan_gc_mark_object_handles(void) {
+            for (JavanObjectHandle* current = javan_object_handles; current != NULL; current = current->next) {
+                javan_gc_mark_value(current->value);
+            }
+        }
+        """;
+
     private RuntimeSourceMemorySections() {
     }
 
@@ -10508,6 +11095,8 @@ final class RuntimeSourceMemorySections {
     static String collections() {
         String result = SOURCE_COLLECTIONS_HEAD;
         result = result + SOURCE_COLLECTIONS_TAIL;
+        result = result + SOURCE_COLLECTIONS_SEQUENCED_MAP;
+        result = result + SOURCE_C_ABI_OBJECT_HANDLES;
         return result;
     }
 }

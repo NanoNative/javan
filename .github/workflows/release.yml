@@ -94,7 +94,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.release == 'true'
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:

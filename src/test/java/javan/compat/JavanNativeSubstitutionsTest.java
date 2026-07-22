@@ -14,10 +14,19 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 final class JavanNativeSubstitutionsTest {
     private static final String PROCESS_RUNNER_DESCRIPTOR =
         "(Ljava/nio/file/Path;Ljava/util/List;)Ljavan/util/ProcessRunner$Result;";
+    private static final String PROCESS_RUNNER_ATTACHED_DESCRIPTOR =
+        "(Ljava/nio/file/Path;Ljava/util/List;Ljava/io/PrintStream;Ljava/io/PrintStream;)Ljavan/util/ProcessRunner$Result;";
 
     @Test
     void isSubstitutedCallAcceptsProcessRunnerRun() {
         assertThat(JavanNativeSubstitutions.isSubstitutedCall(processRunnerRunRef())).isTrue();
+    }
+
+    @Test
+    void isSubstitutedCallAcceptsProcessRunnerRunAttached() {
+        assertThat(JavanNativeSubstitutions.isSubstitutedCall(new MethodRef(
+            "javan/util/ProcessRunner", "runAttached", PROCESS_RUNNER_ATTACHED_DESCRIPTOR
+        ))).isTrue();
     }
 
     @Test
@@ -56,6 +65,26 @@ final class JavanNativeSubstitutionsTest {
     }
 
     @Test
+    void isSubstitutedFallbackMethodAcceptsProcessRunnerRunAttached() {
+        assertThat(JavanNativeSubstitutions.isSubstitutedFallbackMethod(
+            "javan/util/ProcessRunner",
+            new MethodInfo(0, "runAttached", PROCESS_RUNNER_ATTACHED_DESCRIPTOR, Optional.empty())
+        )).isTrue();
+    }
+
+    @Test
+    void isSubstitutedFallbackMethodAcceptsRunAttachedHelpers() {
+        assertThat(JavanNativeSubstitutions.isSubstitutedFallbackMethod(
+            "javan/util/ProcessRunner",
+            new MethodInfo(0, "copy", "(Ljava/io/InputStream;Ljava/io/PrintStream;Ljava/io/ByteArrayOutputStream;)V", Optional.empty())
+        )).isTrue();
+        assertThat(JavanNativeSubstitutions.isSubstitutedFallbackMethod(
+            "javan/util/ProcessRunner",
+            new MethodInfo(0, "text", "(Ljava/io/ByteArrayOutputStream;)Ljava/lang/String;", Optional.empty())
+        )).isTrue();
+    }
+
+    @Test
     void isSubstitutedFallbackMethodRejectsDifferentOwner() {
         assertThat(JavanNativeSubstitutions.isSubstitutedFallbackMethod(
             "javan/util/OtherRunner",
@@ -82,7 +111,8 @@ final class JavanNativeSubstitutionsTest {
     @Test
     void reportLinesDescribeProcessRunnerNativeLowering() {
         assertThat(JavanNativeSubstitutions.reportLines()).containsExactly(
-            "javan/util/ProcessRunner.run(Ljava/nio/file/Path;Ljava/util/List;)Ljavan/util/ProcessRunner$Result; -> javan_process_run"
+            "javan/util/ProcessRunner.run(Ljava/nio/file/Path;Ljava/util/List;)Ljavan/util/ProcessRunner$Result; -> javan_process_run",
+            "javan/util/ProcessRunner.runAttached(Ljava/nio/file/Path;Ljava/util/List;Ljava/io/PrintStream;Ljava/io/PrintStream;)Ljavan/util/ProcessRunner$Result; -> javan_process_run + captured stream forwarding"
         );
     }
 

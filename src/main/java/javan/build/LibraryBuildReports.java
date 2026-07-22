@@ -4,7 +4,9 @@ import javan.analysis.CallGraph;
 import javan.classfile.ClassFile;
 import javan.util.Files2;
 import javan.util.Json;
+import javan.util.Strings2;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -57,6 +59,7 @@ public final class LibraryBuildReports {
             + "  \"abiVersion\": " + ABI_VERSION + ",\n"
             + "  \"stringOwnership\": \"input-copied-gc-managed-utf8-output-javan-owned-free-with-javan_free\",\n"
             + "  \"byteArrayOwnership\": \"input-copied-gc-managed-output-javan-owned-data-free-with-javan_free\",\n"
+            + "  \"objectHandleOwnership\": \"opaque-refcounted-gc-rooted-c-handle-release-with-javan_object_handle_release\",\n"
             + "  \"errorResultAbi\": \"" + ERROR_RESULT_ABI + "\",\n"
             + "  \"exceptionMapping\": \"caught-runtime-panic-to-last-error-limited-same-method-catch\",\n"
             + "  \"threadRuntimeRules\": \"parallel-host-thread-bootstrap-current-thread-interrupt-isalive-sleep-start-join-runnable-target-plus-startvirtualthread-builderstart-builderunstarted-factory-executor-threadlocal-park-parknanos-parkuntil-unpark-and-isvirtual-no-virtual-scheduler\",\n"
@@ -88,10 +91,48 @@ public final class LibraryBuildReports {
             + "- artifact bytes: `" + artifactSize + "`\n"
             + "- runtime modules linked: `" + join(", ", runtimeModules) + "`\n"
             + "- dependency reduction methods: `" + Math.max(0, inputMethods - reachableMethods) + "`\n";
+        Files2.writeString(outputDirectory.resolve("dist/library-manifest.json"), manifest(
+            outputDirectory,
+            artifacts,
+            bindings,
+            exports,
+            runtimeModules
+        ));
         return List.of(
             Files2.writeString(reports.resolve("library-build.json"), json),
             Files2.writeString(reports.resolve("library-build.md"), markdown)
         );
+    }
+
+    private static String manifest(
+        final Path outputDirectory,
+        final List<Path> artifacts,
+        final List<Path> bindings,
+        final List<ExportedMethod> exports,
+        final List<String> runtimeModules
+    ) {
+        final List<String> exportNames = new ArrayList<>();
+        for (final ExportedMethod export : exports) {
+            exportNames.add(export.display());
+        }
+        return "{\n"
+            + "  \"schemaVersion\": 1,\n"
+            + "  \"abiVersion\": " + ABI_VERSION + ",\n"
+            + "  \"artifacts\": " + Json.stringList(relativePaths(outputDirectory, artifacts)) + ",\n"
+            + "  \"bindings\": " + Json.stringList(relativePaths(outputDirectory, bindings)) + ",\n"
+            + "  \"exports\": " + Json.stringList(exportNames) + ",\n"
+            + "  \"runtimeModules\": " + Json.stringList(runtimeModules) + "\n"
+            + "}\n";
+    }
+
+    private static List<String> relativePaths(final Path outputDirectory, final List<Path> paths) {
+        final Path base = outputDirectory.toAbsolutePath().normalize();
+        final List<String> result = new ArrayList<>();
+        for (final Path path : paths) {
+            final String relative = base.relativize(path.toAbsolutePath().normalize()).toString();
+            result.add(Strings2.replaceChar(relative, File.separatorChar, '/'));
+        }
+        return List.copyOf(result);
     }
 
     private static List<String> runtimeModules(final CallGraph callGraph) {

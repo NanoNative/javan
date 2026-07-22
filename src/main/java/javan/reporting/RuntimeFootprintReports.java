@@ -120,10 +120,10 @@ public final class RuntimeFootprintReports {
     private static List<Footprint> footprints(final boolean release) {
         return List.of(
             new Footprint("system-linked", true, true, "verified-host", "uses host C compiler and system runtime libraries"),
-            new Footprint("self-contained", false, false, "not-implemented", "static/self-contained packaging is a release gate"),
+            new Footprint("self-contained", false, false, "supported-linux-windows", "native app linking uses -static on Linux/Windows; macOS rejects this posture"),
             new Footprint("release-conservative", release, release, release ? "accepted-conservative" : "not-requested",
-                "release flag is accepted; size/speed specialization remains conservative"),
-            new Footprint("debug-symbols", false, false, "not-requested", "native debug symbol policy is not implemented"),
+                "release flag is accepted; runtime.optimize selects deterministic size, balanced, or speed compiler posture"),
+            new Footprint("debug-symbols", false, false, "supported-compiler-flag", "runtime.debug=true adds -g to native app/library compilation"),
             new Footprint("live-profiling", false, false, "not-linked", "profiling hooks are not linked by default"),
             new Footprint("sanitizer-instrumented", false, false, "external-probe", "sanitizer smoke uses .github/scripts/sanitizer-smoke.sh")
         );

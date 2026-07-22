@@ -194,6 +194,72 @@ final class NativeLinkerTest {
     }
 
     @Test
+    void linkUsesRequestedOptimizationPosture() throws Exception {
+        final RecordingProcessRunner runner = new RecordingProcessRunner(
+            new ProcessRunner.Result(0, "", "")
+        );
+
+        withOsName("Linux", () -> new NativeLinker(runner).link(
+            tempDir,
+            tempDir.resolve("main.c"),
+            tempDir.resolve("runtime.c"),
+            tempDir.resolve("out/app"),
+            "size-first"
+        ));
+
+        assertThat(runner.commands()).singleElement().satisfies(command -> assertThat(command).contains("-Os"));
+    }
+
+    @Test
+    void linkUsesDebugSymbolsWhenRequested() throws Exception {
+        final RecordingProcessRunner runner = new RecordingProcessRunner(new ProcessRunner.Result(0, "", ""));
+
+        withOsName("Linux", () -> new NativeLinker(runner).link(
+            tempDir,
+            tempDir.resolve("main.c"),
+            tempDir.resolve("runtime.c"),
+            tempDir.resolve("out/app"),
+            "balanced",
+            true
+        ));
+
+        assertThat(runner.commands()).singleElement().satisfies(command -> assertThat(command).contains("-g"));
+    }
+
+    @Test
+    void linkUsesStaticContainmentOnLinux() throws Exception {
+        final RecordingProcessRunner runner = new RecordingProcessRunner(new ProcessRunner.Result(0, "", ""));
+
+        withOsName("Linux", () -> new NativeLinker(runner).link(
+            tempDir,
+            tempDir.resolve("main.c"),
+            tempDir.resolve("runtime.c"),
+            tempDir.resolve("out/app"),
+            "balanced",
+            false,
+            "self-contained"
+        ));
+
+        assertThat(runner.commands()).singleElement().satisfies(command -> assertThat(command).contains("-static"));
+    }
+
+    @Test
+    void linkRejectsStaticContainmentOnMac() {
+        final RecordingProcessRunner runner = new RecordingProcessRunner(new ProcessRunner.Result(0, "", ""));
+
+        assertThatThrownBy(() -> withOsName("Mac OS X", () -> new NativeLinker(runner).link(
+            tempDir,
+            tempDir.resolve("main.c"),
+            tempDir.resolve("runtime.c"),
+            tempDir.resolve("out/app"),
+            "balanced",
+            false,
+            "self-contained"
+        ))).isInstanceOf(IOException.class)
+            .hasMessage("Self-contained native linking is unsupported on macOS; use system-linked containment.");
+    }
+
+    @Test
     void linkThrowsWhenCompilerReturnsFailure() {
         final RecordingProcessRunner runner = new RecordingProcessRunner(
             new ProcessRunner.Result(1, "stdout", "stderr")

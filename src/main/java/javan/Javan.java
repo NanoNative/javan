@@ -110,7 +110,8 @@ public final class Javan {
      *
      * @param cwd current working directory
      * @param options parsed options
-     * @param out output stream
+     * @param out stdout stream
+     * @param err stderr stream
      * @return check result
      * @throws IOException when IO or build invocation fails
      * @throws InterruptedException when interrupted while waiting for processes
@@ -230,8 +231,14 @@ public final class Javan {
         final Path mainC = cCodegen.generate(program, generated);
         final Path runtimeC = runtimeFiles.write(generated, resources);
         final Path output = check.layout().outputDirectory().resolve("bin").resolve(check.layout().outputName());
-        final Path binary = nativeLinker.link(check.layout().root(), mainC, runtimeC, output);
-        runtimeContractReports.write(check.layout().outputDirectory(), "app", List.of(binary));
+        final RuntimeFeatureSelection.Settings settings = runtimeFeatureSelection.read(check.layout().root());
+        final Path binary = nativeLinker.link(
+            check.layout().root(), mainC, runtimeC, output,
+            settings.optimize(), settings.debug(), settings.containment()
+        );
+        runtimeContractReports.write(
+            check.layout().outputDirectory(), "app", List.of(binary), List.of(), settings.containment(), settings.debug()
+        );
         runtimeFootprintReports.write(
             check.layout().outputDirectory(),
             "app",
@@ -257,10 +264,13 @@ public final class Javan {
         final List<ResourceBundler.ResourceFile> resources = resourceBundler.bundle(check.layout());
         final Path libraryC = cCodegen.generateLibrary(program, generated, check.exports());
         final Path runtimeC = runtimeFiles.write(generated, resources);
+        final RuntimeFeatureSelection.Settings settings = runtimeFeatureSelection.read(check.layout().root());
         final List<Path> artifacts = new ArrayList<>();
         for (final LibraryFormat format : options.libraryFormats()) {
             final Path output = libraryArtifactPath(format, check.layout().outputDirectory(), check.layout().outputName());
-            artifacts.add(linkLibraryFormat(format, check.layout().root(), libraryC, runtimeC, output));
+            artifacts.add(linkLibraryFormat(
+                format, check.layout().root(), libraryC, runtimeC, output, settings.optimize(), settings.debug()
+            ));
         }
         final List<Path> bindings = bindingGenerator.generate(
             check.layout().outputDirectory(),
@@ -270,7 +280,10 @@ public final class Javan {
             artifacts
         );
         libraryBuildReports.write(check.layout().outputDirectory(), check.classes(), check.callGraph(), check.exports(), artifacts, bindings);
-        runtimeContractReports.write(check.layout().outputDirectory(), "library", artifacts, exportedSymbols(check.exports()));
+        runtimeContractReports.write(
+            check.layout().outputDirectory(), "library", artifacts, exportedSymbols(check.exports()),
+            settings.containment(), settings.debug()
+        );
         runtimeFootprintReports.write(
             check.layout().outputDirectory(),
             "library",
@@ -292,6 +305,10 @@ public final class Javan {
         printInt(out, "  exported methods: ", check.exports().size());
         printInt(out, "  reachable methods: ", check.callGraph().reachableMethods().size());
         printText(out, "  report: ", check.layout().outputDirectory().resolve("reports/library-build.md").toString());
+        if (options.jarAlongsideLibrary()) {
+            final Path jar = buildJar(check.layout().root(), options, out);
+            printText(out, "Jar: ", jar.toString());
+        }
         if (options.combinedLibraryBuild()) {
             return check.layout().outputDirectory().resolve("dist").resolve("lib").resolve(check.layout().outputName());
         }
@@ -323,7 +340,8 @@ public final class Javan {
      * @throws IOException when build or execution fails
      * @throws InterruptedException when interrupted while running
      */
-    public RunResult run(final Path cwd, final Options options, final PrintStream out) throws IOException, InterruptedException {
+    public RunResult run(final Path cwd, final Options options, final PrintStream out, final PrintStream err)
+        throws IOException, InterruptedException {
         final ProjectLayout detected = projectDetector.detect(cwd, options);
         final BuildResult build = build(cwd, options, out);
         if (!build.pass()) {
@@ -334,11 +352,7 @@ public final class Javan {
         command.add(binary.toString());
         command.addAll(runtimeProfilingArguments(detected));
         command.addAll(options.passthroughArgs());
-        final ProcessRunner.Result result = processRunner.run(binary.getParent(), command);
-        out.print(result.stdout());
-        if (!Strings2.isBlank(result.stderr())) {
-            out.print(result.stderr());
-        }
+        final ProcessRunner.Result result = processRunner.runAttached(binary.getParent(), command, out, err);
         writeUnifiedReport(detected.outputDirectory());
         return RunResult.success(result.exitCode());
     }
@@ -638,13 +652,15 @@ public final class Javan {
         final Path root,
         final Path libraryC,
         final Path runtimeC,
-        final Path output
+        final Path output,
+        final String optimize,
+        final boolean debug
     ) throws IOException, InterruptedException {
         if ("STATIC".equals(Options.formatName(format))) {
-            return nativeLinker.linkStaticLibrary(root, libraryC, runtimeC, output);
+            return nativeLinker.linkStaticLibrary(root, libraryC, runtimeC, output, optimize, debug);
         }
         if ("SHARED".equals(Options.formatName(format))) {
-            return nativeLinker.linkSharedLibrary(root, libraryC, runtimeC, output);
+            return nativeLinker.linkSharedLibrary(root, libraryC, runtimeC, output, optimize, debug);
         }
         throw new IllegalStateException("Unsupported library format");
     }

@@ -100,6 +100,8 @@ public record Options(
         Optional<String> outputName = Optional.empty();
         BuildKind buildKind = BuildKind.APP;
         String buildKindName = "APP";
+        boolean jarRequested = false;
+        boolean libraryRequested = false;
         final List<LibraryFormat> libraryFormats = new ArrayList<>();
         Profile profile = Profile.CORE;
         boolean release = false;
@@ -153,9 +155,11 @@ public record Options(
                 buildKindName = parsed.name();
                 buildKind = parsed.kind();
             } else if ("--jar".equals(arg)) {
+                jarRequested = true;
                 buildKind = BuildKind.JAR;
                 buildKindName = "JAR";
             } else if ("--library".equals(arg) || "--lib".equals(arg)) {
+                libraryRequested = true;
                 buildKind = BuildKind.LIBRARY;
                 buildKindName = "LIBRARY";
             } else if ("--format".equals(arg)) {
@@ -209,6 +213,11 @@ public record Options(
             } else {
                 passthroughArgs.add(arg);
             }
+        }
+
+        if (jarRequested && libraryRequested) {
+            buildKind = BuildKind.LIBRARY;
+            buildKindName = "LIBRARY_JAR";
         }
 
         final FormatResult resolvedFormats = libraryFormatsResult(buildKindName, libraryFormats);
@@ -373,7 +382,7 @@ public record Options(
         if ("SHAREDLIB".equals(buildKindName)) {
             return FormatResult.success(List.of(LibraryFormat.SHARED));
         }
-        if ("LIBRARY".equals(buildKindName)) {
+        if ("LIBRARY".equals(buildKindName) || "LIBRARY_JAR".equals(buildKindName)) {
             return FormatResult.success(List.of(LibraryFormat.STATIC, LibraryFormat.SHARED));
         }
         if ("APP".equals(buildKindName) || "JAR".equals(buildKindName)) {
@@ -419,6 +428,9 @@ public record Options(
 
     private static boolean libraryBuildName(final String buildKindName) {
         if ("LIBRARY".equals(buildKindName)) {
+            return true;
+        }
+        if ("LIBRARY_JAR".equals(buildKindName)) {
             return true;
         }
         if ("STATICLIB".equals(buildKindName)) {
@@ -470,7 +482,16 @@ public record Options(
      * @return true for combined library builds
      */
     public boolean combinedLibraryBuild() {
-        return "LIBRARY".equals(buildKindName);
+        return "LIBRARY".equals(buildKindName) || "LIBRARY_JAR".equals(buildKindName);
+    }
+
+    /**
+     * Returns true when a library build also requests a JVM jar beside native artifacts.
+     *
+     * @return true for the combined library-plus-jar mode
+     */
+    public boolean jarAlongsideLibrary() {
+        return "LIBRARY_JAR".equals(buildKindName);
     }
 
     /**

@@ -43,7 +43,7 @@ final class RuntimeFootprintReportsTest {
             "\"name\": \"system-linked\"",
             "\"status\": \"verified-host\"",
             "\"name\": \"self-contained\"",
-            "\"status\": \"not-implemented\"",
+            "\"status\": \"supported-linux-windows\"",
             "\"target\": \"linux-x64\"",
             "\"target\": \"linux-aarch64\"",
             "\"target\": \"macos-aarch64\"",

@@ -1954,7 +1954,7 @@ final class RuntimeSourcePlatformSection {
             javan_root_frame_push(javan_socket_input_stream_roots, 2);
             stream = (javan_socket_input_stream_value*) stream_root;
             stream->magic = JAVAN_SOCKET_INPUT_STREAM_MAGIC;
-            stream->reserved0 = 0;
+            stream->reserved0 = -1;
             stream->reserved1 = 0;
             stream->reserved2 = 0;
             stream->socket = (javan_socket*) socket_root;
@@ -2386,6 +2386,9 @@ final class RuntimeSourcePlatformSection {
             return NULL;
         }
 
+        """;
+
+    private static final String SOURCE_TAIL_C = """
         void* javan_socket_input_stream(void* value) {
             return javan_socket_stream_new(value, 0);
         }
@@ -2405,6 +2408,11 @@ final class RuntimeSourcePlatformSection {
             if (socket->input_shutdown != 0) {
                 javan_panic("socket input is shutdown");
             }
+            if (stream->reserved0 == -2) {
+                unsigned char byte = 0;
+                int count = javan_socket_input_stream_read_chunked_bytes(stream, &byte, 1);
+                return count < 0 ? -1 : (int) byte;
+            }
             javan_socket_wait_readable(socket->fd, socket->so_timeout, "socket read timed out", "socket read wait failed");
             unsigned char byte = 0;
             ssize_t result = recv(socket->fd, &byte, 1, 0);
@@ -2416,6 +2424,9 @@ final class RuntimeSourcePlatformSection {
             }
             if (result == 0) {
                 return -1;
+            }
+            if (stream->reserved0 >= 0) {
+                stream->reserved0 -= (int) result;
             }
             return byte;
         #endif
@@ -2447,8 +2458,18 @@ final class RuntimeSourcePlatformSection {
             if (socket->input_shutdown != 0) {
                 javan_panic("socket input is shutdown");
             }
+            if (stream->reserved0 == -2) {
+                return javan_socket_input_stream_read_chunked_bytes(stream, bytes->values + offset, length);
+            }
             javan_socket_wait_readable(socket->fd, socket->so_timeout, "socket read timed out", "socket read wait failed");
-            ssize_t result = recv(socket->fd, bytes->values + offset, (size_t) length, 0);
+            int requested = length;
+            if (stream->reserved0 >= 0 && stream->reserved0 < requested) {
+                requested = stream->reserved0;
+            }
+            if (requested == 0) {
+                return -1;
+            }
+            ssize_t result = recv(socket->fd, bytes->values + offset, (size_t) requested, 0);
             if (result < 0) {
                 if (errno == EAGAIN || errno == EWOULDBLOCK) {
                     javan_panic("socket read timed out");
@@ -2457,6 +2478,9 @@ final class RuntimeSourcePlatformSection {
             }
             if (result == 0) {
                 return -1;
+            }
+            if (stream->reserved0 >= 0) {
+                stream->reserved0 -= (int) result;
             }
             return (int) result;
         #endif
@@ -2825,12 +2849,76 @@ final class RuntimeSourcePlatformSection {
             }
             socket->closed = 1;
         }
+
+        """;
+
+    private static final String SOURCE_HTTP_PROTOCOL = """
+        void* javan_http_exchange_protocol(void* value) {
+            if (value == NULL) {
+                javan_panic("null http exchange");
+            }
+            javan_http_exchange_value* exchange = (javan_http_exchange_value*) value;
+            if (exchange->magic != JAVAN_HTTP_EXCHANGE_MAGIC || exchange->socket == NULL) {
+                javan_panic("unsupported http exchange object");
+            }
+            return javan_string_copy("HTTP/1.1");
+        }
+        """;
+
+    private static final String SOURCE_HTTP_URI_POLICY = """
+        static int javan_http_uri_hex_value(char value) {
+            if (value >= '0' && value <= '9') {
+                return value - '0';
+            }
+            if (value >= 'a' && value <= 'f') {
+                return value - 'a' + 10;
+            }
+            if (value >= 'A' && value <= 'F') {
+                return value - 'A' + 10;
+            }
+            return -1;
+        }
+
+        void* javan_http_validate_request_target(void* socket_value, const char* value) {
+            unsigned long length = strlen(value);
+            for (unsigned long index = 0; index < length; index++) {
+                if (value[index] != '%') {
+                    continue;
+                }
+                if (index + 2UL >= length
+                    || javan_http_uri_hex_value(value[index + 1UL]) < 0
+                    || javan_http_uri_hex_value(value[index + 2UL]) < 0) {
+                    javan_socket* socket = javan_socket_checked(socket_value);
+                    const char* response = "HTTP/1.1 400 Bad Request\\r\\nContent-Length: 0\\r\\nConnection: close\\r\\n\\r\\n";
+                    unsigned long offset = 0;
+                    while (offset < strlen(response)) {
+                        ssize_t sent = send(socket->fd, response + offset, strlen(response) - offset, 0);
+                        if (sent <= 0) {
+                            break;
+                        }
+                        offset += (unsigned long) sent;
+                    }
+                    javan_socket_close(socket_value);
+                    return NULL;
+                }
+                index += 2UL;
+            }
+            return socket_value;
+        }
         """;
 
     private RuntimeSourcePlatformSection() {
     }
 
     static String tail() {
-        return SOURCE_TAIL_A.concat(SOURCE_TAIL_B);
+        return SOURCE_TAIL_A.concat(SOURCE_TAIL_B).concat(SOURCE_TAIL_C);
+    }
+
+    static String protocol() {
+        return SOURCE_HTTP_PROTOCOL;
+    }
+
+    static String uriPolicy() {
+        return SOURCE_HTTP_URI_POLICY;
     }
 }

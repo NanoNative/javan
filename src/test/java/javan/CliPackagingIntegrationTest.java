@@ -157,8 +157,8 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         final CliRun run = run(tempDir, "run", project.toString());
 
         assertThat(run.exitCode()).isZero();
-        assertThat(run.stdout()).contains("native-err");
-        assertThat(run.stderr()).isEmpty();
+        assertThat(run.stdout()).doesNotContain("native-err");
+        assertThat(run.stderr()).contains("native-err");
     }
 
     @Test
@@ -230,7 +230,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "\"name\": \"system-linked\"",
             "\"status\": \"verified-host\"",
             "\"name\": \"self-contained\"",
-            "\"status\": \"not-implemented\"",
+            "\"status\": \"supported-linux-windows\"",
             "\"target\": \"linux-aarch64\"",
             "\"target\": \"macos-aarch64\""
         );
@@ -253,6 +253,35 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "threadLifecycleInventory: `true`",
             "threadLifecycleInventoryScope: `heap-thread-object-thread-root-registry-started-completed-active-non-current-target-current-root-and-completed-target-release-counters`",
             "threads: `current-thread-interrupt-state-isalive-isvirtual-entry-interrupted-sleep-start-startvirtualthread-builderstart-builderunstarted-factory-executor-threadlocal-park-parknanos-parkuntil-unpark-parallel-host-thread-bootstrap-join-same-method-catch-thread-construction-duplicate-start-rejection-current-join-rejection-and-runnable-target-no-virtual-scheduler`"
+        );
+    }
+
+    @Test
+    void buildRejectsSelfContainedContainmentOnMacos() throws Exception {
+        Assumptions.assumeTrue(System.getProperty("os.name", "").toLowerCase().contains("mac"));
+        final Path project = project("self-contained-macos");
+        Files.writeString(project.resolve("javan.toml"), """
+            [runtime]
+            containment = "self-contained"
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println("self-contained");
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).isEqualTo(1);
+        assertThat(run.stderr()).contains(
+            "Self-contained native linking is unsupported on macOS; use system-linked containment."
         );
     }
 
@@ -515,6 +544,15 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         assertThat(project.resolve(".javan/dist/bindings/rust/lib.rs")).exists();
         assertThat(project.resolve(".javan/dist/bindings/go/library_add.go")).exists();
         assertThat(project.resolve(".javan/dist/bindings/python/library_add.py")).exists();
+        final Path manifest = project.resolve(".javan/dist/library-manifest.json");
+        assertThat(manifest).exists();
+        assertThat(Files.readString(manifest)).contains(
+            "\"schemaVersion\": 1",
+            "\"abiVersion\": 2",
+            "dist/liblibrary-add.a",
+            "dist/bindings/c/library-add.h",
+            "com/acme/Math.add(II)I"
+        );
         assertThat(project.resolve(".javan/reports/library-build.json")).exists();
         assertThat(Files.readString(header)).contains(
             "#define JAVAN_ABI_VERSION 2",
@@ -524,6 +562,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "#define JAVAN_ABI_RUNTIME_DIAGNOSTICS 1",
             "#define JAVAN_ABI_STRUCTURED_ERROR 1",
             "#define JAVAN_ABI_RESULT_WRAPPERS 1",
+            "#define JAVAN_ABI_OBJECT_HANDLES 1",
             "typedef struct {",
             "int ok;",
             "char* message;",
@@ -540,6 +579,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "\"abiVersion\": 2",
             "\"stringOwnership\": \"input-copied-gc-managed-utf8-output-javan-owned-free-with-javan_free\"",
             "\"byteArrayOwnership\": \"input-copied-gc-managed-output-javan-owned-data-free-with-javan_free\"",
+            "\"objectHandleOwnership\": \"opaque-refcounted-gc-rooted-c-handle-release-with-javan_object_handle_release\"",
             "\"errorResultAbi\": \"abi-v2-c-owned-javanresult-try-wrappers-v1-direct-exports-compatible\"",
             "\"exceptionMapping\": \"caught-runtime-panic-to-last-error-limited-same-method-catch\"",
             "\"threadRuntimeRules\": \"parallel-host-thread-bootstrap-current-thread-interrupt-isalive-sleep-start-join-runnable-target-plus-startvirtualthread-builderstart-builderunstarted-factory-executor-threadlocal-park-parknanos-parkuntil-unpark-and-isvirtual-no-virtual-scheduler\"",
@@ -591,6 +631,325 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void staticLibraryExportedBooleanMethodBuildsWithoutMainAndRunsFromC() throws Exception {
+        final Path project = project("library-boolean");
+        writeJava(project, "com.acme.Flags", """
+            package com.acme;
+
+            public final class Flags {
+                private Flags() {
+                }
+
+                public static boolean identity(final boolean value) {
+                    return value;
+                }
+            }
+            """);
+
+        final CliRun run = run(
+            tempDir,
+            "build",
+            project.toString(),
+            "--kind",
+            "staticlib",
+            "--export",
+            "com.acme.Flags.identity(boolean):boolean"
+        );
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Path library = project.resolve(".javan/dist/liblibrary-boolean.a");
+        final Path header = project.resolve(".javan/dist/bindings/c/library-boolean.h");
+        assertThat(library).exists();
+        assertThat(Files.readString(header)).contains(
+            "int javan_export_com_acme_Flags_identity_int(int arg0);",
+            "JavanResult javan_try_com_acme_Flags_identity_int(int arg0, int* out);"
+        );
+        final Path caller = writeC(project, "call_boolean.c", """
+            #include <stdio.h>
+            #include ".javan/dist/bindings/c/library-boolean.h"
+
+            int main(void) {
+                printf("%d:%d\\n", javan_export_com_acme_Flags_identity_int(0), javan_export_com_acme_Flags_identity_int(1));
+                int result_value = 0;
+                JavanResult result = javan_try_com_acme_Flags_identity_int(1, &result_value);
+                printf("try:%d:%d\\n", result.ok, result_value);
+                javan_result_free(&result);
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-boolean");
+        assertThat(process(project, List.of("cc", caller.toString(), library.toString(), "-o", binary.toString())).exitCode())
+            .isZero();
+        assertThat(process(project, List.of(binary.toString())).stdout()).isEqualTo("0:1\ntry:1:1\n");
+    }
+
+    @Test
+    void staticLibraryExportedVoidMethodBuildsWithoutMainAndRunsFromC() throws Exception {
+        final Path project = project("library-void");
+        writeJava(project, "com.acme.Actions", """
+            package com.acme;
+
+            public final class Actions {
+                private Actions() {
+                }
+
+                public static void ping() {
+                    System.out.print("native-void");
+                }
+            }
+            """);
+
+        final CliRun run = run(
+            tempDir,
+            "build",
+            project.toString(),
+            "--kind",
+            "staticlib",
+            "--export",
+            "com.acme.Actions.ping():void"
+        );
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Path library = project.resolve(".javan/dist/liblibrary-void.a");
+        final Path header = project.resolve(".javan/dist/bindings/c/library-void.h");
+        assertThat(library).exists();
+        assertThat(Files.readString(header)).contains(
+            "void javan_export_com_acme_Actions_ping_void(void);",
+            "JavanResult javan_try_com_acme_Actions_ping_void(void);"
+        );
+        final Path caller = writeC(project, "call_void.c", """
+            #include <stdio.h>
+            #include ".javan/dist/bindings/c/library-void.h"
+
+            int main(void) {
+                javan_export_com_acme_Actions_ping_void();
+                JavanResult result = javan_try_com_acme_Actions_ping_void();
+                printf("|try:%d\\n", result.ok);
+                javan_result_free(&result);
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-void");
+        assertThat(process(project, List.of("cc", caller.toString(), library.toString(), "-o", binary.toString())).exitCode())
+            .isZero();
+        assertThat(process(project, List.of(binary.toString())).stdout()).isEqualTo("native-voidnative-void|try:1\n");
+    }
+
+    @Test
+    void staticLibraryExportedMixedPrimitiveMethodBuildsWithoutMainAndRunsFromC() throws Exception {
+        final Path project = project("library-mixed-primitives");
+        writeJava(project, "com.acme.Numbers", """
+            package com.acme;
+
+            public final class Numbers {
+                private Numbers() {
+                }
+
+                public static double combine(final boolean enabled, final long value, final double scale) {
+                    return enabled ? value * scale : -value * scale;
+                }
+            }
+            """);
+
+        final CliRun run = run(
+            tempDir,
+            "build",
+            project.toString(),
+            "--kind",
+            "staticlib",
+            "--export",
+            "com.acme.Numbers.combine(boolean,long,double):double"
+        );
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Path library = project.resolve(".javan/dist/liblibrary-mixed-primitives.a");
+        final Path header = project.resolve(".javan/dist/bindings/c/library-mixed-primitives.h");
+        assertThat(library).exists();
+        assertThat(Files.readString(header)).contains(
+            "double javan_export_com_acme_Numbers_combine_int_long_double(int arg0, long long arg1, double arg2);",
+            "JavanResult javan_try_com_acme_Numbers_combine_int_long_double(int arg0, long long arg1, double arg2, double* out);"
+        );
+        final Path caller = writeC(project, "call_mixed_primitives.c", """
+            #include <stdio.h>
+            #include ".javan/dist/bindings/c/library-mixed-primitives.h"
+
+            int main(void) {
+                printf("%.1f:%.1f\\n",
+                    javan_export_com_acme_Numbers_combine_int_long_double(1, 7LL, 0.5),
+                    javan_export_com_acme_Numbers_combine_int_long_double(0, 7LL, 0.5));
+                double result_value = 0.0;
+                JavanResult result = javan_try_com_acme_Numbers_combine_int_long_double(1, 7LL, 0.5, &result_value);
+                printf("try:%d:%.1f\\n", result.ok, result_value);
+                javan_result_free(&result);
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-mixed-primitives");
+        assertThat(process(project, List.of("cc", caller.toString(), library.toString(), "-o", binary.toString())).exitCode())
+            .isZero();
+        assertThat(process(project, List.of(binary.toString())).stdout()).isEqualTo("3.5:-3.5\ntry:1:3.5\n");
+    }
+
+    @Test
+    void staticLibraryExportedFloatMethodBuildsWithoutMainAndRunsFromC() throws Exception {
+        final Path project = project("library-float");
+        writeJava(project, "com.acme.Numbers", """
+            package com.acme;
+
+            public final class Numbers {
+                private Numbers() {
+                }
+
+                public static float scale(final float value) {
+                    return value * 1.5f;
+                }
+            }
+            """);
+
+        final CliRun run = run(
+            tempDir,
+            "build",
+            project.toString(),
+            "--kind",
+            "staticlib",
+            "--export",
+            "com.acme.Numbers.scale(float):float"
+        );
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Path library = project.resolve(".javan/dist/liblibrary-float.a");
+        final Path header = project.resolve(".javan/dist/bindings/c/library-float.h");
+        assertThat(library).exists();
+        assertThat(Files.readString(header)).contains(
+            "float javan_export_com_acme_Numbers_scale_float(float arg0);",
+            "JavanResult javan_try_com_acme_Numbers_scale_float(float arg0, float* out);"
+        );
+        final Path caller = writeC(project, "call_float.c", """
+            #include <stdio.h>
+            #include ".javan/dist/bindings/c/library-float.h"
+
+            int main(void) {
+                printf("%.2f\\n", javan_export_com_acme_Numbers_scale_float(2.0f));
+                float result_value = 0.0f;
+                JavanResult result = javan_try_com_acme_Numbers_scale_float(2.0f, &result_value);
+                printf("try:%d:%.2f\\n", result.ok, result_value);
+                javan_result_free(&result);
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-float");
+        assertThat(process(project, List.of("cc", caller.toString(), library.toString(), "-o", binary.toString())).exitCode())
+            .isZero();
+        assertThat(process(project, List.of(binary.toString())).stdout()).isEqualTo("3.00\ntry:1:3.00\n");
+    }
+
+    @Test
+    void staticLibraryExportedDoubleMethodBuildsWithoutMainAndRunsFromC() throws Exception {
+        final Path project = project("library-double");
+        writeJava(project, "com.acme.Numbers", """
+            package com.acme;
+
+            public final class Numbers {
+                private Numbers() {
+                }
+
+                public static double scale(final double value) {
+                    return value * 1.5d;
+                }
+            }
+            """);
+
+        final CliRun run = run(
+            tempDir,
+            "build",
+            project.toString(),
+            "--kind",
+            "staticlib",
+            "--export",
+            "com.acme.Numbers.scale(double):double"
+        );
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Path library = project.resolve(".javan/dist/liblibrary-double.a");
+        final Path header = project.resolve(".javan/dist/bindings/c/library-double.h");
+        assertThat(library).exists();
+        assertThat(Files.readString(header)).contains(
+            "double javan_export_com_acme_Numbers_scale_double(double arg0);",
+            "JavanResult javan_try_com_acme_Numbers_scale_double(double arg0, double* out);"
+        );
+        final Path caller = writeC(project, "call_double.c", """
+            #include <stdio.h>
+            #include ".javan/dist/bindings/c/library-double.h"
+
+            int main(void) {
+                printf("%.2f\\n", javan_export_com_acme_Numbers_scale_double(2.0));
+                double result_value = 0.0;
+                JavanResult result = javan_try_com_acme_Numbers_scale_double(2.0, &result_value);
+                printf("try:%d:%.2f\\n", result.ok, result_value);
+                javan_result_free(&result);
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-double");
+        assertThat(process(project, List.of("cc", caller.toString(), library.toString(), "-o", binary.toString())).exitCode())
+            .isZero();
+        assertThat(process(project, List.of(binary.toString())).stdout()).isEqualTo("3.00\ntry:1:3.00\n");
+    }
+
+    @Test
+    void staticLibraryExportedLongMethodBuildsWithoutMainAndRunsFromC() throws Exception {
+        final Path project = project("library-long");
+        writeJava(project, "com.acme.Numbers", """
+            package com.acme;
+
+            public final class Numbers {
+                private Numbers() {
+                }
+
+                public static long scale(final long value) {
+                    return value * 3L;
+                }
+            }
+            """);
+
+        final CliRun run = run(
+            tempDir,
+            "build",
+            project.toString(),
+            "--kind",
+            "staticlib",
+            "--export",
+            "com.acme.Numbers.scale(long):long"
+        );
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Path library = project.resolve(".javan/dist/liblibrary-long.a");
+        final Path header = project.resolve(".javan/dist/bindings/c/library-long.h");
+        assertThat(library).exists();
+        assertThat(Files.readString(header)).contains(
+            "long long javan_export_com_acme_Numbers_scale_long(long long arg0);",
+            "JavanResult javan_try_com_acme_Numbers_scale_long(long long arg0, long long* out);"
+        );
+        final Path caller = writeC(project, "call_long.c", """
+            #include <stdio.h>
+            #include ".javan/dist/bindings/c/library-long.h"
+
+            int main(void) {
+                printf("%lld\\n", javan_export_com_acme_Numbers_scale_long(3000000000LL));
+                long long result_value = 0;
+                JavanResult result = javan_try_com_acme_Numbers_scale_long(3000000000LL, &result_value);
+                printf("try:%d:%lld\\n", result.ok, result_value);
+                javan_result_free(&result);
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-long");
+        assertThat(process(project, List.of("cc", caller.toString(), library.toString(), "-o", binary.toString())).exitCode())
+            .isZero();
+        assertThat(process(project, List.of(binary.toString())).stdout()).isEqualTo("9000000000\ntry:1:9000000000\n");
+    }
+
+    @Test
     void libraryAliasBuildsStaticSharedAndLanguageFolders() throws Exception {
         final Path project = project("library-friendly");
         writeJava(project, "com.acme.Math", """
@@ -623,11 +982,14 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
         assertThat(project.resolve(".javan/dist/lib/library-friendly/c/library-friendly.h")).exists();
         assertThat(project.resolve(".javan/dist/lib/library-friendly/c/liblibrary-friendly.a")).exists();
         assertThat(project.resolve(".javan/dist/lib/library-friendly/rust/lib.rs")).exists();
+        assertThat(project.resolve(".javan/dist/lib/library-friendly/rust/Cargo.toml")).exists();
         assertThat(project.resolve(".javan/dist/lib/library-friendly/rust/liblibrary-friendly.a")).exists();
         assertThat(project.resolve(".javan/dist/lib/library-friendly/go/library-friendly.h")).exists();
         assertThat(project.resolve(".javan/dist/lib/library-friendly/go/library_friendly.go")).exists();
+        assertThat(project.resolve(".javan/dist/lib/library-friendly/go/go.mod")).exists();
         assertThat(project.resolve(".javan/dist/lib/library-friendly/go/liblibrary-friendly.a")).exists();
         assertThat(project.resolve(".javan/dist/lib/library-friendly/python/library_friendly.py")).exists();
+        assertThat(project.resolve(".javan/dist/lib/library-friendly/python/pyproject.toml")).exists();
         assertThat(project.resolve(".javan/dist/lib/library-friendly/python/liblibrary-friendly.a")).exists();
         assertThat(Files.readString(project.resolve(".javan/reports/library-build.json")))
             .contains("\"artifacts\"", "liblibrary-friendly.a", sharedLibraryName("library-friendly"));
@@ -649,6 +1011,38 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             binary.toString()
         )).exitCode()).isZero();
         assertThat(process(project, List.of(binary.toString())).stdout()).isEqualTo("10\n");
+    }
+
+    @Test
+    void libraryAndJarBuildProduceNativeArtifactsAndJvmJar() throws Exception {
+        final Path project = project("library-with-jar");
+        writeJava(project, "com.acme.Math", """
+            package com.acme;
+
+            public final class Math {
+                private Math() {
+                }
+
+                public static int add(final int left, final int right) {
+                    return left + right;
+                }
+            }
+            """);
+
+        final CliRun run = run(
+            tempDir,
+            "build",
+            project.toString(),
+            "--library",
+            "--jar",
+            "--export",
+            "com.acme.Math.add"
+        );
+
+        assertThat(run.exitCode()).isZero();
+        assertThat(project.resolve(".javan/dist/liblibrary-with-jar.a")).exists();
+        assertThat(project.resolve(".javan/dist/" + sharedLibraryName("library-with-jar"))).exists();
+        assertThat(project.resolve(".javan/dist/library-with-jar.jar")).exists();
     }
 
     @Test
@@ -719,6 +1113,11 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
 
         assertThat(run.exitCode()).isZero();
         final Path library = project.resolve(".javan/dist/liblibrary-string.a");
+        final Path header = project.resolve(".javan/dist/bindings/c/library-string.h");
+        assertThat(Files.readString(header)).contains(
+            "char* javan_export_com_acme_Text_greet_string(const char* arg0);",
+            "JavanResult javan_try_com_acme_Text_greet_string(const char* arg0, char** out);"
+        );
         final Path caller = writeC(project, "call_string.c", """
             #include <stdio.h>
             #include ".javan/dist/bindings/c/library-string.h"
@@ -727,12 +1126,17 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 char* value = javan_export_com_acme_Text_greet_string("Yuna");
                 puts(value);
                 javan_free(value);
+                char* try_value = NULL;
+                JavanResult result = javan_try_com_acme_Text_greet_string("Yuna", &try_value);
+                printf("try:%d:%s\\n", result.ok, try_value);
+                javan_free(try_value);
+                javan_result_free(&result);
                 return 0;
             }
             """);
         final Path binary = project.resolve("call-string");
         assertThat(process(project, List.of("cc", caller.toString(), library.toString(), "-o", binary.toString())).exitCode()).isZero();
-        assertThat(process(project, List.of(binary.toString())).stdout()).isEqualTo("Hi Yuna\n");
+        assertThat(process(project, List.of(binary.toString())).stdout()).isEqualTo("Hi Yuna\ntry:1:Hi Yuna\n");
     }
 
     @Test
@@ -755,6 +1159,11 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
 
         assertThat(run.exitCode()).isZero();
         final Path library = project.resolve(".javan/dist/liblibrary-bytes.a");
+        final Path header = project.resolve(".javan/dist/bindings/c/library-bytes.h");
+        assertThat(Files.readString(header)).contains(
+            "JavanByteArray javan_export_com_acme_Bytes_echo_bytes(JavanByteArray arg0);",
+            "JavanResult javan_try_com_acme_Bytes_echo_bytes(JavanByteArray arg0, JavanByteArray* out);"
+        );
         final Path caller = writeC(project, "call_bytes.c", """
             #include <stdint.h>
             #include <stdio.h>
@@ -766,12 +1175,137 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 JavanByteArray output = javan_export_com_acme_Bytes_echo_bytes(input);
                 printf("%d %d\\n", output.length, output.data[1]);
                 javan_free(output.data);
+                JavanByteArray try_output = {0};
+                JavanResult result = javan_try_com_acme_Bytes_echo_bytes(input, &try_output);
+                printf("try:%d:%d:%d\\n", result.ok, try_output.length, try_output.data[1]);
+                javan_free(try_output.data);
+                javan_result_free(&result);
                 return 0;
             }
             """);
         final Path binary = project.resolve("call-bytes");
         assertThat(process(project, List.of("cc", caller.toString(), library.toString(), "-o", binary.toString())).exitCode()).isZero();
-        assertThat(process(project, List.of(binary.toString())).stdout()).isEqualTo("3 2\n");
+        assertThat(process(project, List.of(binary.toString())).stdout()).isEqualTo("3 2\ntry:1:3:2\n");
+    }
+
+    @Test
+    void staticLibraryObjectHandleExportBuildsAndRunsFromC() throws Exception {
+        final Path project = project("library-object-handle");
+        writeJava(project, "com.acme.Handles", """
+            package com.acme;
+
+            public final class Handles {
+                private Handles() {
+                }
+
+                public static Object create() {
+                    return new String("native-handle");
+                }
+
+                public static Object identity(final Object value) {
+                    return value;
+                }
+
+                public static String describe(final Object value) {
+                    return String.valueOf(value);
+                }
+            }
+            """);
+
+        final CliRun run = run(
+            tempDir,
+            "build",
+            project.toString(),
+            "--kind",
+            "staticlib",
+            "--export",
+            "com.acme.Handles.create():object",
+            "--export",
+            "com.acme.Handles.identity(object):object",
+            "--export",
+            "com.acme.Handles.describe(object):String"
+        );
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Path library = project.resolve(".javan/dist/liblibrary-object-handle.a");
+        final Path header = project.resolve(".javan/dist/bindings/c/library-object-handle.h");
+        assertThat(library).exists();
+        assertThat(Files.readString(header)).contains(
+            "typedef struct javan_object_handle JavanObjectHandle;",
+            "JavanObjectHandle* javan_export_com_acme_Handles_create_void(void);",
+            "JavanObjectHandle* javan_export_com_acme_Handles_identity_object(JavanObjectHandle* arg0);",
+            "JavanResult javan_try_com_acme_Handles_create_void(JavanObjectHandle** out);",
+            "void javan_object_handle_retain(JavanObjectHandle* handle);",
+            "void javan_object_handle_release(JavanObjectHandle* handle);"
+        );
+        final Path caller = writeC(project, "call_object_handle.c", """
+            #include <stdio.h>
+            #include ".javan/dist/bindings/c/library-object-handle.h"
+
+            int main(void) {
+                JavanObjectHandle* value = javan_export_com_acme_Handles_create_void();
+                if (value == NULL) {
+                    return 2;
+                }
+                char* text = javan_export_com_acme_Handles_describe_object(value);
+                printf("%s\\n", text);
+                javan_free(text);
+                javan_object_handle_retain(value);
+                JavanObjectHandle* identity = javan_export_com_acme_Handles_identity_object(value);
+                if (identity == NULL) {
+                    return 3;
+                }
+                char* second = javan_export_com_acme_Handles_describe_object(identity);
+                printf("%s\\n", second);
+                javan_free(second);
+                javan_object_handle_release(identity);
+                javan_object_handle_release(value);
+                javan_object_handle_release(value);
+                JavanObjectHandle* try_value = NULL;
+                JavanResult result = javan_try_com_acme_Handles_create_void(&try_value);
+                printf("try:%d:%d\\n", result.ok, try_value != NULL);
+                javan_object_handle_release(try_value);
+                javan_result_free(&result);
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-object-handle");
+        assertThat(process(project, List.of("cc", caller.toString(), library.toString(), "-o", binary.toString())).exitCode())
+            .isZero();
+        assertThat(process(project, List.of(binary.toString())).stdout())
+            .isEqualTo("native-handle\nnative-handle\ntry:1:1\n");
+    }
+
+    @Test
+    void objectHandleExportsRejectNonCBindingsExplicitly() throws Exception {
+        final Path project = project("library-object-bindings");
+        writeJava(project, "com.acme.Handles", """
+            package com.acme;
+
+            public final class Handles {
+                private Handles() {
+                }
+
+                public static Object create() {
+                    return new String("native-handle");
+                }
+            }
+            """);
+
+        final CliRun run = run(
+            tempDir,
+            "build",
+            project.toString(),
+            "--kind",
+            "staticlib",
+            "--bindings",
+            "rust",
+            "--export",
+            "com.acme.Handles.create():object"
+        );
+
+        assertThat(run.exitCode()).isNotZero();
+        assertThat(run.stderr()).contains("Object-handle exports currently support C bindings only");
     }
 
     @Test
@@ -832,6 +1366,160 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
                 """.formatted(library);
             assertThat(process(project, List.of("python3", "-c", script)).stdout()).isEqualTo("7\n");
         }
+    }
+
+    @Test
+    void sharedLibraryPythonBindingLoadsAndCallsTryWrapper() throws Exception {
+        Assumptions.assumeTrue(commandAvailable("python3"));
+        final Path project = project("library-python-binding");
+        writeJava(project, "com.acme.Math", """
+            package com.acme;
+
+            public final class Math {
+                private Math() {
+                }
+
+                public static int add(final int left, final int right) {
+                    return left + right;
+                }
+            }
+            """);
+
+        final CliRun run = run(
+            tempDir,
+            "build",
+            project.toString(),
+            "--kind",
+            "sharedlib",
+            "--bindings",
+            "python",
+            "--export",
+            "com.acme.Math.add"
+        );
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Path library = project.resolve(".javan/dist/" + sharedLibraryName("library-python-binding"));
+        final Path binding = project.resolve(".javan/dist/bindings/python/library_python_binding.py");
+        assertThat(library).exists();
+        assertThat(binding).exists();
+        final String script = """
+            import importlib.util
+            spec = importlib.util.spec_from_file_location("binding", r"%s")
+            binding = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(binding)
+            lib = binding.load(r"%s")
+            print(binding.try_javan_export_com_acme_Math_add_int_int(lib, 2, 5))
+            """.formatted(binding, library);
+        assertThat(process(project, List.of("python3", "-c", script)).stdout()).isEqualTo("7\n");
+    }
+
+    @Test
+    void sharedLibraryGoBindingCallsTryWrapper() throws Exception {
+        Assumptions.assumeTrue(commandAvailable("go"));
+        final Path project = project("library-go-binding");
+        writeJava(project, "com.acme.Math", """
+            package com.acme;
+
+            public final class Math {
+                private Math() {
+                }
+
+                public static int add(final int left, final int right) {
+                    return left + right;
+                }
+            }
+            """);
+
+        final CliRun run = run(
+            tempDir,
+            "build",
+            project.toString(),
+            "--kind",
+            "sharedlib",
+            "--bindings",
+            "go",
+            "--export",
+            "com.acme.Math.add"
+        );
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Path library = project.resolve(".javan/dist/" + sharedLibraryName("library-go-binding"));
+        final Path goDirectory = project.resolve(".javan/dist/bindings/go");
+        assertThat(library).exists();
+        assertThat(goDirectory.resolve("library_go_binding.go")).exists();
+        Files.writeString(goDirectory.resolve("library_go_binding_test.go"), """
+            package library_go_binding
+
+            import "testing"
+
+            func TestTryWrapper(t *testing.T) {
+                value, err := TryJavanExportComAcmeMathAddIntInt(2, 5)
+                if err != nil || value != 7 {
+                    t.Fatalf("unexpected result: value=%d err=%v", value, err)
+                }
+            }
+            """);
+        assertThat(processSlow(project, List.of("sh", "-c", "cd '" + goDirectory + "' && GO111MODULE=off CGO_ENABLED=1 go test")).exitCode())
+            .isZero();
+    }
+
+    @Test
+    void sharedLibraryRustBindingCallsTryWrapper() throws Exception {
+        Assumptions.assumeTrue(commandAvailable("rustc"));
+        final Path project = project("library-rust-binding");
+        writeJava(project, "com.acme.Math", """
+            package com.acme;
+
+            public final class Math {
+                private Math() {
+                }
+
+                public static int add(final int left, final int right) {
+                    return left + right;
+                }
+            }
+            """);
+
+        final CliRun run = run(
+            tempDir,
+            "build",
+            project.toString(),
+            "--kind",
+            "sharedlib",
+            "--bindings",
+            "rust",
+            "--export",
+            "com.acme.Math.add"
+        );
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Path library = project.resolve(".javan/dist/" + sharedLibraryName("library-rust-binding"));
+        final Path rust = project.resolve(".javan/dist/bindings/rust/lib.rs");
+        assertThat(library).exists();
+        assertThat(rust).exists();
+        Files.writeString(rust, """
+            #[cfg(test)]
+            mod generated_binding_test {
+                #[test]
+                fn try_wrapper_returns_expected_value() {
+                    let value = unsafe { super::try_javan_export_com_acme_Math_add_int_int(2, 5) }
+                        .expect("native result");
+                    assert_eq!(value, 7);
+                }
+            }
+            """, java.nio.file.StandardOpenOption.APPEND);
+        final Path binary = project.resolve("rust-binding-test");
+        assertThat(processSlow(project, List.of(
+            "rustc",
+            "--edition=2021",
+            "--test",
+            rust.toString(),
+            "-L",
+            "native=" + project.resolve(".javan/dist"),
+            "-o",
+            binary.toString()
+        )).exitCode()).isZero();
+        assertThat(processSlow(project, List.of(binary.toString())).exitCode()).isZero();
     }
 
     @Test

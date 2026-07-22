@@ -1,8 +1,12 @@
 package javan.util;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -80,6 +84,48 @@ public class ProcessRunner {
     }
 
     /**
+     * Runs a command while forwarding each output stream as it is produced.
+     * Captured output is still returned for diagnostics and callers that need it.
+     *
+     * @param workingDirectory process working directory
+     * @param command command and arguments
+     * @param out destination for forwarded standard output
+     * @param err destination for forwarded standard error
+     * @return captured process result
+     * @throws IOException when the process cannot be started or read
+     * @throws InterruptedException when interrupted while waiting
+     */
+    public Result runAttached(
+        final Path workingDirectory,
+        final List<String> command,
+        final PrintStream out,
+        final PrintStream err
+    ) throws IOException, InterruptedException {
+        final ProcessBuilder builder = new ProcessBuilder(new ArrayList<>(command));
+        builder.directory(workingDirectory.toFile());
+        final Process process = builder.start();
+        final ByteArrayOutputStream stdout = new ByteArrayOutputStream();
+        final ByteArrayOutputStream stderr = new ByteArrayOutputStream();
+        final Thread stdoutPump = Thread.ofVirtual().start(() -> copy(process.getInputStream(), out, stdout));
+        final Thread stderrPump = Thread.ofVirtual().start(() -> copy(process.getErrorStream(), err, stderr));
+        try {
+            final boolean completed = process.waitFor(timeoutMillis, TimeUnit.MILLISECONDS);
+            if (!completed) {
+                process.destroyForcibly();
+                process.waitFor();
+                joinPumps(stdoutPump, stderrPump);
+                return new Result(124, text(stdout), timeoutMessage(command, text(stderr)));
+            }
+            joinPumps(stdoutPump, stderrPump);
+            return new Result(process.exitValue(), text(stdout), text(stderr));
+        } finally {
+            if (process.isAlive()) {
+                process.destroyForcibly();
+            }
+        }
+    }
+
+    /**
      * Returns true when a command can be started.
      *
      * @param executable executable name
@@ -135,11 +181,37 @@ public class ProcessRunner {
     }
 
     private String timeoutMessage(final List<String> command, final Path stderrFile) throws IOException {
-        final String stderr = Files.readString(stderrFile);
+        return timeoutMessage(command, Files.readString(stderrFile));
+    }
+
+    private String timeoutMessage(final List<String> command, final String stderr) {
         if (Strings2.isBlank(stderr)) {
             return "Timed out after " + (timeoutMillis / 1000L) + "s: " + commandLine(command);
         }
         return stderr + System.lineSeparator() + "Timed out after " + (timeoutMillis / 1000L) + "s: " + commandLine(command);
+    }
+
+    private static void copy(final InputStream input, final PrintStream destination, final ByteArrayOutputStream captured) {
+        try (InputStream stream = input) {
+            final byte[] buffer = new byte[8192];
+            int read;
+            while ((read = stream.read(buffer)) >= 0) {
+                captured.write(buffer, 0, read);
+                destination.write(buffer, 0, read);
+                destination.flush();
+            }
+        } catch (IOException ignored) {
+            // Process teardown owns the final exit result.
+        }
+    }
+
+    private static void joinPumps(final Thread stdoutPump, final Thread stderrPump) throws InterruptedException {
+        stdoutPump.join();
+        stderrPump.join();
+    }
+
+    private static String text(final ByteArrayOutputStream output) {
+        return output.toString(StandardCharsets.UTF_8);
     }
 
     /**

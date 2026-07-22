@@ -1,5 +1,6 @@
 package javan.build;
 
+import javan.cli.Version;
 import javan.util.Files2;
 import javan.util.Strings2;
 
@@ -40,6 +41,11 @@ public final class BindingGenerator {
             if (!containsLanguage(languages, language)) {
                 languages.add(language);
             }
+        }
+        if (exports.stream().anyMatch(export -> export.returnType() == AbiType.OBJECT
+            || export.parameterTypes().contains(AbiType.OBJECT))
+            && languages.stream().anyMatch(language -> language != BindingLanguage.C)) {
+            throw new IllegalArgumentException("Object-handle exports currently support C bindings only; omit Rust/Go/Python bindings.");
         }
         final List<Path> files = new ArrayList<>();
         if (containsLanguage(languages, BindingLanguage.C)) {
@@ -98,7 +104,8 @@ public final class BindingGenerator {
         header.append("#define JAVAN_ABI_BYTE_ARRAY_POINTER_LENGTH 1").append(System.lineSeparator());
         header.append("#define JAVAN_ABI_RUNTIME_DIAGNOSTICS 1").append(System.lineSeparator());
         header.append("#define JAVAN_ABI_STRUCTURED_ERROR 1").append(System.lineSeparator());
-        header.append("#define JAVAN_ABI_RESULT_WRAPPERS 1").append(System.lineSeparator()).append(System.lineSeparator());
+        header.append("#define JAVAN_ABI_RESULT_WRAPPERS 1").append(System.lineSeparator());
+        header.append("#define JAVAN_ABI_OBJECT_HANDLES 1").append(System.lineSeparator()).append(System.lineSeparator());
         header.append("#ifdef __cplusplus").append(System.lineSeparator());
         header.append("extern \"C\" {").append(System.lineSeparator());
         header.append("#endif").append(System.lineSeparator()).append(System.lineSeparator());
@@ -106,6 +113,10 @@ public final class BindingGenerator {
         header.append("    int8_t* data;").append(System.lineSeparator());
         header.append("    int length;").append(System.lineSeparator());
         header.append("} JavanByteArray;").append(System.lineSeparator()).append(System.lineSeparator());
+        header.append("typedef struct javan_object_handle JavanObjectHandle;").append(System.lineSeparator());
+        header.append("/* Opaque GC-rooted object handles; retain each copied handle and release every owned reference. */").append(System.lineSeparator());
+        header.append("void javan_object_handle_retain(JavanObjectHandle* handle);").append(System.lineSeparator());
+        header.append("void javan_object_handle_release(JavanObjectHandle* handle);").append(System.lineSeparator()).append(System.lineSeparator());
         appendResultStruct(header);
         header.append("/* Frees memory returned by javan-owned String and byte[] exports. */").append(System.lineSeparator());
         header.append("void javan_free(void* value);").append(System.lineSeparator()).append(System.lineSeparator());
@@ -726,20 +737,45 @@ public final class BindingGenerator {
         if (containsLanguage(languages, BindingLanguage.RUST)) {
             final Path rust = root.resolve("rust");
             files.add(Files2.writeString(rust.resolve("lib.rs"), rust(libraryName, exports)));
+            files.add(Files2.writeString(rust.resolve("Cargo.toml"), rustManifest(libraryName)));
             files.addAll(copyArtifacts(artifacts, rust));
         }
         if (containsLanguage(languages, BindingLanguage.GO)) {
             final Path go = root.resolve("go");
             files.add(Files2.writeString(go.resolve(libraryName + ".h"), cHeader(libraryName, exports)));
             files.add(Files2.writeString(go.resolve(safePackage(libraryName) + ".go"), goPackaged(libraryName, exports)));
+            files.add(Files2.writeString(go.resolve("go.mod"), goManifest(libraryName)));
             files.addAll(copyArtifacts(artifacts, go));
         }
         if (containsLanguage(languages, BindingLanguage.PYTHON)) {
             final Path python = root.resolve("python");
             files.add(Files2.writeString(python.resolve(safePackage(libraryName) + ".py"), python(libraryName, exports)));
+            files.add(Files2.writeString(python.resolve("pyproject.toml"), pythonManifest(libraryName)));
             files.addAll(copyArtifacts(artifacts, python));
         }
         return files;
+    }
+
+    private static String rustManifest(final String libraryName) {
+        return "[package]\n"
+            + "name = \"" + safePackage(libraryName) + "\"\n"
+            + "version = \"" + Version.number() + "\"\n"
+            + "edition = \"2021\"\n\n"
+            + "[lib]\n"
+            + "path = \"lib.rs\"\n";
+    }
+
+    private static String goManifest(final String libraryName) {
+        return "module example.com/javan/" + safePackage(libraryName) + "\n\n"
+            + "go 1.21\n";
+    }
+
+    private static String pythonManifest(final String libraryName) {
+        return "[project]\n"
+            + "name = \"" + safePackage(libraryName) + "\"\n"
+            + "version = \"" + Version.number() + "\"\n"
+            + "description = \"Generated Javan native-library ctypes binding\"\n"
+            + "requires-python = \">=3.10\"\n";
     }
 
     private static boolean containsLanguage(final List<BindingLanguage> languages, final BindingLanguage target) {
