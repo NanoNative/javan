@@ -735,6 +735,59 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void staticLibraryExportedLongMethodBuildsWithoutMainAndRunsFromC() throws Exception {
+        final Path project = project("library-long");
+        writeJava(project, "com.acme.Numbers", """
+            package com.acme;
+
+            public final class Numbers {
+                private Numbers() {
+                }
+
+                public static long scale(final long value) {
+                    return value * 3L;
+                }
+            }
+            """);
+
+        final CliRun run = run(
+            tempDir,
+            "build",
+            project.toString(),
+            "--kind",
+            "staticlib",
+            "--export",
+            "com.acme.Numbers.scale(long):long"
+        );
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Path library = project.resolve(".javan/dist/liblibrary-long.a");
+        final Path header = project.resolve(".javan/dist/bindings/c/library-long.h");
+        assertThat(library).exists();
+        assertThat(Files.readString(header)).contains(
+            "long long javan_export_com_acme_Numbers_scale_long(long long arg0);",
+            "JavanResult javan_try_com_acme_Numbers_scale_long(long long arg0, long long* out);"
+        );
+        final Path caller = writeC(project, "call_long.c", """
+            #include <stdio.h>
+            #include ".javan/dist/bindings/c/library-long.h"
+
+            int main(void) {
+                printf("%lld\\n", javan_export_com_acme_Numbers_scale_long(3000000000LL));
+                long long result_value = 0;
+                JavanResult result = javan_try_com_acme_Numbers_scale_long(3000000000LL, &result_value);
+                printf("try:%d:%lld\\n", result.ok, result_value);
+                javan_result_free(&result);
+                return 0;
+            }
+            """);
+        final Path binary = project.resolve("call-long");
+        assertThat(process(project, List.of("cc", caller.toString(), library.toString(), "-o", binary.toString())).exitCode())
+            .isZero();
+        assertThat(process(project, List.of(binary.toString())).stdout()).isEqualTo("9000000000\ntry:1:9000000000\n");
+    }
+
+    @Test
     void libraryAliasBuildsStaticSharedAndLanguageFolders() throws Exception {
         final Path project = project("library-friendly");
         writeJava(project, "com.acme.Math", """
