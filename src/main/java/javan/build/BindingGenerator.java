@@ -41,6 +41,11 @@ public final class BindingGenerator {
                 languages.add(language);
             }
         }
+        if (exports.stream().anyMatch(export -> export.returnType() == AbiType.OBJECT
+            || export.parameterTypes().contains(AbiType.OBJECT))
+            && languages.stream().anyMatch(language -> language != BindingLanguage.C)) {
+            throw new IllegalArgumentException("Object-handle exports currently support C bindings only; omit Rust/Go/Python bindings.");
+        }
         final List<Path> files = new ArrayList<>();
         if (containsLanguage(languages, BindingLanguage.C)) {
             files.add(Files2.writeString(cHeader(outputDirectory, libraryName), cHeader(libraryName, exports)));
@@ -98,7 +103,8 @@ public final class BindingGenerator {
         header.append("#define JAVAN_ABI_BYTE_ARRAY_POINTER_LENGTH 1").append(System.lineSeparator());
         header.append("#define JAVAN_ABI_RUNTIME_DIAGNOSTICS 1").append(System.lineSeparator());
         header.append("#define JAVAN_ABI_STRUCTURED_ERROR 1").append(System.lineSeparator());
-        header.append("#define JAVAN_ABI_RESULT_WRAPPERS 1").append(System.lineSeparator()).append(System.lineSeparator());
+        header.append("#define JAVAN_ABI_RESULT_WRAPPERS 1").append(System.lineSeparator());
+        header.append("#define JAVAN_ABI_OBJECT_HANDLES 1").append(System.lineSeparator()).append(System.lineSeparator());
         header.append("#ifdef __cplusplus").append(System.lineSeparator());
         header.append("extern \"C\" {").append(System.lineSeparator());
         header.append("#endif").append(System.lineSeparator()).append(System.lineSeparator());
@@ -106,6 +112,10 @@ public final class BindingGenerator {
         header.append("    int8_t* data;").append(System.lineSeparator());
         header.append("    int length;").append(System.lineSeparator());
         header.append("} JavanByteArray;").append(System.lineSeparator()).append(System.lineSeparator());
+        header.append("typedef struct javan_object_handle JavanObjectHandle;").append(System.lineSeparator());
+        header.append("/* Opaque GC-rooted object handles; retain each copied handle and release every owned reference. */").append(System.lineSeparator());
+        header.append("void javan_object_handle_retain(JavanObjectHandle* handle);").append(System.lineSeparator());
+        header.append("void javan_object_handle_release(JavanObjectHandle* handle);").append(System.lineSeparator()).append(System.lineSeparator());
         appendResultStruct(header);
         header.append("/* Frees memory returned by javan-owned String and byte[] exports. */").append(System.lineSeparator());
         header.append("void javan_free(void* value);").append(System.lineSeparator()).append(System.lineSeparator());

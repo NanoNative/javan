@@ -122,6 +122,7 @@ final class RuntimeHeaderFile {
             char* fix;
             char* detail;
         } JavanResult;
+        typedef struct javan_object_handle JavanObjectHandle;
         typedef struct {
             int type_id;
             const char* name;
@@ -141,6 +142,10 @@ final class RuntimeHeaderFile {
         JavanResult javan_result_error_from_last_error(void);
         JavanResult javan_result_error_message(const char* code, const char* summary, const char* detail);
         void javan_result_free(JavanResult* result);
+        JavanObjectHandle* javan_object_handle_new(void* value);
+        void* javan_object_handle_value(JavanObjectHandle* handle);
+        void javan_object_handle_retain(JavanObjectHandle* handle);
+        void javan_object_handle_release(JavanObjectHandle* handle);
         void javan_register_type_descriptors(JavanTypeDescriptor* descriptors, int count);
         void javan_register_static_roots(void*** roots, int count);
         void javan_root_frame_push(void*** roots, int count);
