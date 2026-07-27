@@ -16,6 +16,15 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 @Execution(CONCURRENT)
 final class JdkCallSupportTest {
     @Test
+    void objectCloneIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Object",
+            "clone",
+            "()Ljava/lang/Object;"
+        ))).isTrue();
+    }
+
+    @Test
     void mathRoundFloatIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/Math",

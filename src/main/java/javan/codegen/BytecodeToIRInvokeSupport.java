@@ -315,6 +315,9 @@ final class BytecodeToIRInvokeSupport {
         if (lowerArrayClone(classFile, method, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
+        if (lowerObjectClone(classFile, method, methodRef, stack)) {
+            return;
+        }
         if (lowerJavanProcessRunnerRun(classes, classFile, method, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
@@ -1665,6 +1668,9 @@ final class BytecodeToIRInvokeSupport {
             : normalizedMethodRef;
         if (isZeroArgNoopPlatformConstructor(methodRef)) {
             popObject(classFile, method, stack);
+            return;
+        }
+        if (lowerObjectClone(classFile, method, methodRef, stack)) {
             return;
         }
         final MethodDescriptor descriptor = MethodDescriptor.parse(methodRef.descriptor());
@@ -10960,5 +10966,25 @@ final class BytecodeToIRInvokeSupport {
         }
         return Optional.empty();
     }
+    private static boolean lowerObjectClone(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final MethodRef methodRef,
+        final List<StackValue> stack
+    ) {
+        boolean objectCloneCall = "java/lang/Object".equals(methodRef.owner())
+            && "clone".equals(methodRef.name())
+            && "()Ljava/lang/Object;".equals(methodRef.descriptor());
+        if (!objectCloneCall) {
+            return false;
+        }
 
+        final IrExpression receiver = popObject(classFile, method, stack);
+        final IrExpression clonedObject = IrExpression.objectCall(
+            "javan_generated_object_clone",
+            List.of(receiver)
+        );
+        stack.add(StackValue.objectExpression(clonedObject));
+        return true;
+    }
 }

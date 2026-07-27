@@ -7690,4 +7690,52 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
         assertThat(jvmOutput).isEqualTo("hello\n");
     }
 
+    @Test
+    void objectCloneBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("object-clone");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) throws CloneNotSupportedException {
+                    final Box box = new Box(7, "left");
+                    final Box copy = box.copy();
+                    box.count = 9;
+                    box.label = "right";
+                    System.out.println(copy.count);
+                    System.out.println(copy.label);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Box", """
+            package com.acme;
+
+            public final class Box implements Cloneable {
+                int count;
+                String label;
+
+                Box(final int count, final String label) {
+                    this.count = count;
+                    this.label = label;
+                }
+
+                Box copy() throws CloneNotSupportedException {
+                    return (Box) super.clone();
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
+        final Path nativeBinary = project.resolve(".javan/bin/object-clone");
+        final ProcessResult nativeRun = process(project, List.of(nativeBinary.toString()));
+
+        assertThat(nativeRun.stdout()).isEqualTo(jvmOutput);
+        assertThat(jvmOutput).isEqualTo("7\nleft\n");
+    }
 }
