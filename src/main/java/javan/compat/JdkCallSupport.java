@@ -90,6 +90,7 @@ public final class JdkCallSupport {
         intrinsic("System.exit", "java/lang/System", "exit", "(I)V"),
         runtime("Object.equals", "java/lang/Object", "equals", "(Ljava/lang/Object;)Z"),
         runtime("Object.getClass", "java/lang/Object", "getClass", "()Ljava/lang/Class;"),
+        runtime("Object.clone", "java/lang/Object", "clone", "()Ljava/lang/Object;"),
         runtime("Class.isInstance", "java/lang/Class", "isInstance", "(Ljava/lang/Object;)Z"),
         runtime("Class.cast", "java/lang/Class", "cast", "(Ljava/lang/Object;)Ljava/lang/Object;"),
         runtime("Class.isEnum", "java/lang/Class", "isEnum", "()Z"),

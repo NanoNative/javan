@@ -12,9 +12,11 @@ import javan.ir.IrType;
 import javan.util.Strings2;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static javan.codegen.BytecodeToIR.*;
 
@@ -28,7 +30,8 @@ final class BytecodeToIRMetadataSupport {
                 classSymbol(classFile.name()),
                 fields(classFile, false),
                 fields(classFile, true),
-                enumConstants(classFile)
+                enumConstants(classFile),
+                isCloneable(classes, classFile)
             ));
         }
         return List.copyOf(result);
@@ -147,4 +150,40 @@ final class BytecodeToIRMetadataSupport {
         return Optional.empty();
     }
 
+    private static boolean isCloneable(final Map<String, ClassFile> classes, final ClassFile classFile) {
+        final Set<String> visited = new HashSet<>();
+        return hasInterface(classes, classFile, "java/lang/Cloneable", visited);
+    }
+
+    private static boolean hasInterface(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final String expected,
+        final Set<String> visited
+    ) {
+        if (!visited.add(classFile.name())) {
+            return false;
+        }
+        if (classFile.interfaces().contains(expected)) {
+            return true;
+        }
+        for (final String interfaceName : classFile.interfaces()) {
+            final ClassFile interfaceClass = classes.get(interfaceName);
+            if (interfaceClass == null) {
+                continue;
+            }
+            if (hasInterface(classes, interfaceClass, expected, visited)) {
+                return true;
+            }
+        }
+        final String superName = classFile.superName();
+        if (superName == null || superName.isEmpty()) {
+            return false;
+        }
+        final ClassFile superClass = classes.get(superName);
+        if (superClass == null) {
+            return false;
+        }
+        return hasInterface(classes, superClass, expected, visited);
+    }
 }

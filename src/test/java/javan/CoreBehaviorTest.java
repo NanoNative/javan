@@ -14140,4 +14140,82 @@ final class CoreBehaviorTest {
         assertThat(MethodDescriptor.parse("()Ljava/lang/String;").returnType()).isEqualTo(IrType.OBJECT);
         assertThat(MethodDescriptor.parse("()[Ljava/lang/String;").returnType()).isEqualTo(IrType.OBJECT);
     }
+
+    @Test
+    void cCodegenEmitsObjectCloneHelpersOnlyWhenUsed() throws Exception {
+        final IrClass cloneableClass = new IrClass(
+            "com/acme/Box",
+            "javan_class_com_acme_Box",
+            List.of(new IrField(IrType.OBJECT, "label", "field_label")),
+            List.of(),
+            List.of(),
+            true
+        );
+        final IrClass nonCloneableClass = new IrClass(
+            "com/acme/Other",
+            "javan_class_com_acme_Other",
+            List.of(),
+            List.of(),
+            List.of(),
+            false
+        );
+        final IrFunction noCloneFunction = new IrFunction(
+            "com/acme/Main",
+            "main",
+            "([Ljava/lang/String;)V",
+            "main_symbol",
+            IrType.VOID,
+            List.of(),
+            List.of(),
+            List.of(IrInstruction.returnVoid())
+        );
+        final IrProgram noCloneProgram = new IrProgram(
+            List.of(cloneableClass),
+            List.of(noCloneFunction),
+            "main_symbol"
+        );
+
+        final String noCloneGenerated = Files.readString(new CCodegen().generate(noCloneProgram, tempDir));
+
+        assertThat(noCloneGenerated).doesNotContain("javan_generated_object_clone", "javan_clone_com_acme_Box");
+
+        final IrFunction cloneFunction = new IrFunction(
+            "com/acme/Box",
+            "copy",
+            "()Ljava/lang/Object;",
+            "copy_symbol",
+            IrType.OBJECT,
+            List.of(new IrParameter(IrType.OBJECT, "self")),
+            List.of(),
+            List.of(IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_generated_object_clone",
+                List.of(IrExpression.objectLocal("self"))
+            )))
+        );
+        final IrProgram cloneProgram = new IrProgram(
+            List.of(cloneableClass, nonCloneableClass),
+            List.of(cloneFunction),
+            "copy_symbol"
+        );
+
+        final String cloneGenerated = Files.readString(new CCodegen().generate(cloneProgram, tempDir));
+
+        assertThat(cloneGenerated).contains(
+            "static void* javan_generated_object_clone(void* value);",
+            "static void* javan_clone_com_acme_Box(void* value) {",
+            "\tstruct javan_class_com_acme_Box* source = (struct javan_class_com_acme_Box*) value;",
+            "\tstruct javan_class_com_acme_Box* copy = (struct javan_class_com_acme_Box*) javan_new_com_acme_Box();",
+            "\tcopy->field_label = source->field_label;",
+            "\treturn (void*) copy;",
+            "\t\tcase 1:",
+            "\t\t\treturn javan_clone_com_acme_Box(value);",
+            "\t\tdefault:",
+            "\t\t\tjavan_panic(\"CloneNotSupportedException\");"
+        );
+        assertThat(cloneGenerated).doesNotContain(
+            "javan_clone_com_acme_Other",
+            "\t\tcase 2:\n\t\t\treturn javan_clone",
+            "javan_clone_roots"
+        );
+    }
 }

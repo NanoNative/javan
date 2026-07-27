@@ -58,7 +58,7 @@ final class BytecodeToIRTest {
             "com/acme/Model",
             "java/lang/Object",
             0,
-            List.of(),
+            List.of("java/lang/Cloneable"),
             List.of(
                 new FieldInfo(0, "count", "I"),
                 new FieldInfo(0, "total", "J"),
@@ -88,7 +88,8 @@ final class BytecodeToIRTest {
                     new IrField(IrType.DOUBLE, "exact", "field_exact"),
                     new IrField(IrType.OBJECT, "READY", "field_READY")
                 ),
-                List.of("READY")
+                List.of("READY"),
+                true
             ),
             new IrClass(
                 "com/acme/Zeta",
@@ -18576,6 +18577,27 @@ final class BytecodeToIRTest {
             "([Ljava/lang/String;)[Ljava/lang/String;",
             "[Ljava/lang/String;",
             "javan_arrays_copy_of_object"
+        );
+    }
+
+    @Test
+    void lowersObjectCloneToGeneratedCloneHelper() {
+        final IrFunction function = lowerMain(method(
+            0x0000,
+            "copy",
+            "()Ljava/lang/Object;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeSpecial(1, new MethodRef("java/lang/Object", "clone", "()Ljava/lang/Object;")),
+            plain(2, 176, "areturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnObject(IrExpression.objectCall(
+                "javan_generated_object_clone",
+                List.of(IrExpression.objectLocal("self"))
+            ))
         );
     }
 
