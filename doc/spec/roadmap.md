@@ -83,7 +83,7 @@ Implemented details:
   `indexOf`, and `lastIndexOf`
 - static fields and reachable class initializers for supported bytecode
 - long, float, and double primitive arrays
-- object-array and int-array `clone()` lowering
+- object-array, int-array, and generated `Cloneable` object `clone()` lowering
 - object reference compare branches and dense/sparse integer switch bytecode
 
 Current gates:

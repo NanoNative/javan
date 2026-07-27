@@ -6,6 +6,7 @@
 **/.gradle/
 /.javan/
 **/.javan/
+.idea/
 src/test/resources/projects/acceptance/library-dependency/lib/
 src/test/resources/projects/acceptance/library-dependency/lib-classes/
 *.class

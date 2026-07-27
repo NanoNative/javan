@@ -3073,6 +3073,14 @@ public final class CCodegen {
             .append(classSymbol)
             .append("*) value;")
             .append(System.lineSeparator())
+            .append("\tvoid** javan_clone_roots[] = {")
+            .append(System.lineSeparator())
+            .append("\t\t(void**) &source")
+            .append(System.lineSeparator())
+            .append("\t};")
+            .append(System.lineSeparator())
+            .append("\tjavan_root_frame_push(javan_clone_roots, 1);")
+            .append(System.lineSeparator())
             .append("\tstruct ")
             .append(classSymbol)
             .append("* copy = (struct ")
@@ -3084,6 +3092,7 @@ public final class CCodegen {
         for (final javan.ir.IrField field : classInfo.fields()) {
             emitCloneFieldCopy(field, c);
         }
+        c.append("\tjavan_root_frame_pop(javan_clone_roots);").append(System.lineSeparator());
         c.append("\treturn (void*) copy;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
     }
