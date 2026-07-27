@@ -58,7 +58,7 @@ Current state after the latest verified run:
   descriptor coverage, Optional instance-helper coverage, concrete `HashMap` helper coverage,
   PrintStream receiver-branch coverage, boolean/float/double instance-field coverage, and
   unsupported PrintStream/field descriptor diagnostics, unsupported collection and empty-stack
-  diagnostics, array clone variant coverage, StringBuilder lowering coverage, exact unsupported JDK
+  diagnostics, array and generated-object clone variant coverage, StringBuilder lowering coverage, exact unsupported JDK
   branch diagnostics, print-stream object coercion, static-field lookup diagnostics, wrong-kind call
   argument and return stack diagnostics, primitive empty-return stack diagnostics, shared call-result
   lowering, complete multi-target interface dispatch return-type coverage, PrintStream receiver

@@ -467,6 +467,7 @@ public final class CompatibilityReports {
             pass("primitive-array-variants"),
             pass("object-array-clone"),
             pass("int-array-clone"),
+            pass("generated-object-clone"),
             pass("main-args"),
             pass("jar-output"),
             pass("jar-main-manifest"),

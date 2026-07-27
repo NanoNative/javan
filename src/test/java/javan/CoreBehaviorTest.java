@@ -14204,18 +14204,22 @@ final class CoreBehaviorTest {
             "static void* javan_generated_object_clone(void* value);",
             "static void* javan_clone_com_acme_Box(void* value) {",
             "\tstruct javan_class_com_acme_Box* source = (struct javan_class_com_acme_Box*) value;",
+            "\tvoid** javan_clone_roots[] = {",
+            "\t\t(void**) &source",
+            "\t};",
+            "\tjavan_root_frame_push(javan_clone_roots, 1);",
             "\tstruct javan_class_com_acme_Box* copy = (struct javan_class_com_acme_Box*) javan_new_com_acme_Box();",
             "\tcopy->field_label = source->field_label;",
+            "\tjavan_root_frame_pop(javan_clone_roots);",
             "\treturn (void*) copy;",
             "\t\tcase 1:",
             "\t\t\treturn javan_clone_com_acme_Box(value);",
             "\t\tdefault:",
             "\t\t\tjavan_panic(\"CloneNotSupportedException\");"
         );
-        assertThat(cloneGenerated).doesNotContain(
-            "javan_clone_com_acme_Other",
-            "\t\tcase 2:\n\t\t\treturn javan_clone",
-            "javan_clone_roots"
-        );
+        assertThat(cloneGenerated.indexOf("\tjavan_root_frame_push(javan_clone_roots, 1);"))
+            .isLessThan(cloneGenerated.indexOf("\tstruct javan_class_com_acme_Box* copy"));
+        assertThat(cloneGenerated.indexOf("\tcopy->field_label = source->field_label;"))
+            .isLessThan(cloneGenerated.indexOf("\tjavan_root_frame_pop(javan_clone_roots);"));
     }
 }
