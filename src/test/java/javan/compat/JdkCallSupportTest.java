@@ -3500,6 +3500,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void longCompareIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Long",
+            "compare",
+            "(JJ)I"
+        ))).isTrue();
+    }
+
+    @Test
+    void longCompareUnsignedIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Long",
+            "compareUnsigned",
+            "(JJ)I"
+        ))).isTrue();
+    }
+
+    @Test
     void longInstanceToStringIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/Long",

@@ -79,6 +79,8 @@ final class IntrinsicUsageReportsTest {
             new IntrinsicCallCount("Arrays.copyOf", 1),
             new IntrinsicCallCount("Arrays.copyOfRange", 0),
             new IntrinsicCallCount("Integer.toString", 1),
+            new IntrinsicCallCount("Long.compare", 0),
+            new IntrinsicCallCount("Long.compareUnsigned", 0),
             new IntrinsicCallCount("Long.toString", 1),
             new IntrinsicCallCount("Float.toString", 0),
             new IntrinsicCallCount("Float.intBitsToFloat", 0),
@@ -138,6 +140,40 @@ final class IntrinsicUsageReportsTest {
                 "| none | 0 |",
                 "Total reachable call sites: `0`"
             );
+    }
+
+    @Test
+    void countsReachableLongCompareAsSupportedIntrinsic() {
+        final IntrinsicUsageReports reports = new IntrinsicUsageReports();
+        final EntryPoint entry = new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V");
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classFile("com/acme/Main", method(
+                "main",
+                "([Ljava/lang/String;)V",
+                instruction("java/lang/Long", "compare", "(JJ)I")
+            ))
+        );
+
+        assertThat(reports.analyze(classes, List.of(entry)).intrinsics())
+            .contains(new IntrinsicCallCount("Long.compare", 1));
+    }
+
+    @Test
+    void countsReachableLongCompareUnsignedAsSupportedIntrinsic() {
+        final IntrinsicUsageReports reports = new IntrinsicUsageReports();
+        final EntryPoint entry = new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V");
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classFile("com/acme/Main", method(
+                "main",
+                "([Ljava/lang/String;)V",
+                instruction("java/lang/Long", "compareUnsigned", "(JJ)I")
+            ))
+        );
+
+        assertThat(reports.analyze(classes, List.of(entry)).intrinsics())
+            .contains(new IntrinsicCallCount("Long.compareUnsigned", 1));
     }
 
     @Test

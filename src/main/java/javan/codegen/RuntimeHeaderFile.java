@@ -704,6 +704,7 @@ final class RuntimeHeaderFile {
         void javan_stringbuilder_set_length(void* builder, int length);
         int javan_stringbuilder_capacity(void* builder);
         int javan_lcmp(long long left, long long right);
+        int javan_long_compare_unsigned(long long left, long long right);
         int javan_float_compare(float left, float right, int nan_value);
         int javan_double_compare(double left, double right, int nan_value);
         const char* javan_last_error(void);

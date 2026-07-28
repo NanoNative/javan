@@ -20384,6 +20384,50 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersLongCompareInJavaOperandOrder() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(JJ)I",
+            4,
+            4,
+            plain(0, 30, "lload_0"),
+            plain(1, 32, "lload_2"),
+            invokeStatic(2, new MethodRef("java/lang/Long", "compare", "(JJ)I")),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_lcmp",
+                List.of(IrExpression.longLocal("arg0"), IrExpression.longLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersLongCompareUnsignedInJavaOperandOrder() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(JJ)I",
+            4,
+            4,
+            plain(0, 30, "lload_0"),
+            plain(1, 32, "lload_2"),
+            invokeStatic(2, new MethodRef("java/lang/Long", "compareUnsigned", "(JJ)I")),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_long_compare_unsigned",
+                List.of(IrExpression.longLocal("arg0"), IrExpression.longLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
     void lowersBooleanToStringToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,

@@ -1131,6 +1131,18 @@ final class RuntimeSourceIoSections {
             return -1;
         }
 
+        int javan_long_compare_unsigned(long long left, long long right) {
+            const uint64_t unsigned_left = (uint64_t) left;
+            const uint64_t unsigned_right = (uint64_t) right;
+            if (unsigned_left > unsigned_right) {
+                return 1;
+            }
+            if (unsigned_left == unsigned_right) {
+                return 0;
+            }
+            return -1;
+        }
+
         int javan_float_compare(float left, float right, int nan_value) {
             if (isnan(left) || isnan(right)) {
                 return nan_value;
