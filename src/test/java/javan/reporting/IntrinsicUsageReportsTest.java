@@ -67,6 +67,7 @@ final class IntrinsicUsageReportsTest {
             new IntrinsicCallCount("Math.abs", 1),
             new IntrinsicCallCount("Math.min", 0),
             new IntrinsicCallCount("Math.max", 1),
+            new IntrinsicCallCount("Math.addExact", 0),
             new IntrinsicCallCount("Math.toIntExact", 0),
             new IntrinsicCallCount("System.nanoTime", 2),
             new IntrinsicCallCount("System.currentTimeMillis", 0),
