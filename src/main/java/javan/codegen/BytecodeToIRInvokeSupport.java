@@ -5,6 +5,7 @@ import javan.analysis.EntryPoint;
 import javan.classfile.ClassFile;
 import javan.classfile.DynamicRef;
 import javan.classfile.FieldRef;
+import javan.classfile.FunctionLambdaUse;
 import javan.classfile.Instruction;
 import javan.classfile.LambdaMetafactoryCall;
 import javan.classfile.MethodInfo;
@@ -9130,7 +9131,12 @@ final class BytecodeToIRInvokeSupport {
                 }
                 final LambdaMetafactoryCall resolved = lambdaCall.orElseThrow();
                 final boolean materializedFunction = resolved.isMaterializedFunctionLambda()
-                    && shouldMaterializeFunctionLambda(method.orElseThrow(), instruction);
+                    && shouldMaterializeFunctionLambda(method.orElseThrow(), instruction)
+                    && !FunctionLambdaUse.isProvablyDiscardedZeroCapture(
+                        resolved,
+                        method.orElseThrow(),
+                        instruction
+                    );
                 final boolean materializedBoundCustom = resolved.isMaterializedBoundCustomObjectLambda(classes);
                 if (!resolved.isZeroCaptureMaterializedObjectLambda()
                     && !resolved.isZeroCaptureMaterializedBooleanLambda()
@@ -9242,7 +9248,8 @@ final class BytecodeToIRInvokeSupport {
         final LambdaMetafactoryCall resolved = lambdaCall.orElseThrow();
         final MethodRef implementation = resolved.implementation();
         final boolean materializedFunction = resolved.isMaterializedFunctionLambda()
-            && shouldMaterializeFunctionLambda(method, instruction);
+            && shouldMaterializeFunctionLambda(method, instruction)
+            && !FunctionLambdaUse.isProvablyDiscardedZeroCapture(resolved, method, instruction);
         final boolean materializedBoundCustom = resolved.isMaterializedBoundCustomObjectLambda(classes);
         if (resolved.isZeroCaptureMaterializedObjectLambda()
             || resolved.isZeroCaptureMaterializedBooleanLambda()
