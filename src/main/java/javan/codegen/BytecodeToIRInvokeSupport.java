@@ -1628,8 +1628,14 @@ final class BytecodeToIRInvokeSupport {
         final List<StackValue> stack
     ) {
         final MethodRef rawMethodRef = instruction.methodRef().orElseThrow();
-        final MethodRef methodRef = JdkCallSupport.normalizeInheritedSupportedJdkCall(classes, rawMethodRef)
+        final MethodRef normalizedMethodRef = JdkCallSupport.normalizeInheritedSupportedJdkCall(classes, rawMethodRef)
             .orElse(rawMethodRef);
+        final MethodRef methodRef = instruction.opcode() == 182
+            && isConcreteExactCallTarget(classes, normalizedMethodRef.owner())
+            ? resolvedVirtualTarget(classes, normalizedMethodRef.owner(), normalizedMethodRef)
+                .map(target -> new MethodRef(target.className(), target.methodName(), target.descriptor()))
+                .orElse(normalizedMethodRef)
+            : normalizedMethodRef;
         if (isZeroArgNoopPlatformConstructor(methodRef)) {
             popObject(classFile, method, stack);
             return;

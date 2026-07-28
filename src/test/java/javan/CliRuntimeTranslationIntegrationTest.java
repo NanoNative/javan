@@ -6134,6 +6134,43 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void inheritedMethodThroughFinalSubclassBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("final-subclass-inherited-method");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main extends Base {
+                public Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new Main().value());
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Base", """
+            package com.acme;
+
+            public class Base {
+                public Base() {
+                }
+
+                public int value() {
+                    return 42;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        requireBuildSuccess(run(tempDir, "build", project.toString()));
+
+        assertThat(process(
+            project,
+            List.of(project.resolve(".javan/bin/final-subclass-inherited-method").toString())
+        ).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void singleImplementationInterfaceDispatchBuilds() throws Exception {
         final Path project = project("interface-dispatch");
         writeJava(project, "com.acme.Main", """
