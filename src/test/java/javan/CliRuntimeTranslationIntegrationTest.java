@@ -5040,6 +5040,112 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void optionalOrElseGetBoundInstanceMixedCaptureSupplierBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-or-else-get-bound-instance-mixed-capture-supplier");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private final String prefix;
+
+                private Main(final String prefix) {
+                    this.prefix = prefix;
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new Main("row").select(Optional.empty(), "wide", 7));
+                }
+
+                private String select(final Optional<String> previous, final String viewport, final int row) {
+                    final String state = "ready";
+                    return previous.orElseGet(() -> resolve(state, viewport, row));
+                }
+
+                private String resolve(final String state, final String viewport, final int row) {
+                    return prefix + ":" + state + ":" + viewport + ":" + row;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        if (run.exitCode() != 0) {
+            throw new AssertionError(run.stderr());
+        }
+
+        assertThat(process(
+            project,
+            List.of(project.resolve(".javan/bin/optional-or-else-get-bound-instance-mixed-capture-supplier").toString())
+        ).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void optionalOrElseGetBoundMethodSupplierBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-or-else-get-bound-method-supplier");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                public static void main(final String[] args) {
+                    System.out.println(new Main().select(Optional.empty()));
+                }
+
+                private String select(final Optional<String> previous) {
+                    return previous.orElseGet(this::supply);
+                }
+
+                private String supply() {
+                    return "fallback";
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        if (run.exitCode() != 0) {
+            throw new AssertionError(run.stderr());
+        }
+
+        assertThat(process(
+            project,
+            List.of(project.resolve(".javan/bin/optional-or-else-get-bound-method-supplier").toString())
+        ).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void optionalOrElseGetBoundInstanceSupplierOnNonFinalClassFailsClearly() throws Exception {
+        final Path project = project("optional-or-else-get-bound-instance-supplier-non-final");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public class Main {
+                public static void main(final String[] args) {
+                    System.out.println(new Main().select(Optional.empty()));
+                }
+
+                private String select(final Optional<String> previous) {
+                    return previous.orElseGet(() -> supply());
+                }
+
+                private String supply() {
+                    return "fallback";
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.exitCode() + "\n" + run.stderr())
+            .contains("2\nerror[JAVAN012]", "Optional.orElseGet", "supported direct supplier lambda target");
+    }
+
+    @Test
     void optionalOrElseGetCapturedSupplierLambdaBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("optional-or-else-get-captured-supplier-lambda");
         writeJava(project, "com.acme.Main", """
@@ -5279,7 +5385,8 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
             "error[JAVAN030]",
             "Only StringConcatFactory string concatenation, exact record ObjectMethods equals/hashCode, exact LambdaMetafactory Function/Predicate shapes, "
                 + "the exact Supplier subset (zero-argument reference-return invocation directly lowered to admitted application-static "
-                + "implementations, plus application static/instance-target materialization with reference-only captures and reference "
+                + "implementations or final implementation-owner bound instance targets, plus application static/instance-target "
+                + "materialization with reference-only captures and reference "
                 + "returns), the current "
                 + "Consumer/BiConsumer object-capture materialization slice, and the current custom-SAM materialization subset are implemented."
         );
@@ -5310,7 +5417,8 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
             "error[JAVAN030]",
             "Only StringConcatFactory string concatenation, exact record ObjectMethods equals/hashCode, exact LambdaMetafactory Function/Predicate shapes, "
                 + "the exact Supplier subset (zero-argument reference-return invocation directly lowered to admitted application-static "
-                + "implementations, plus application static/instance-target materialization with reference-only captures and reference "
+                + "implementations or final implementation-owner bound instance targets, plus application static/instance-target "
+                + "materialization with reference-only captures and reference "
                 + "returns), the current "
                 + "Consumer/BiConsumer object-capture materialization slice, and the current custom-SAM materialization subset are implemented."
         );

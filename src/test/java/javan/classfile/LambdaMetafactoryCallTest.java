@@ -3,7 +3,9 @@ package javan.classfile;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
 
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -266,6 +268,210 @@ final class LambdaMetafactoryCallTest {
     }
 
     @Test
+    void directlyLowerableAcceptsBoundInstanceSupplierLambdaReferenceKindFive() {
+        final LambdaMetafactoryCall resolved = LambdaMetafactoryCall.resolve(dynamicRef(
+            "get",
+            "(Lcom/acme/Main;Ljava/lang/String;I)Ljava/util/function/Supplier;",
+            "java/lang/invoke/LambdaMetafactory",
+            "metafactory",
+            List.of(
+                BootstrapArgument.methodType("()Ljava/lang/Object;"),
+                BootstrapArgument.methodHandle(
+                    5,
+                    new MethodRef("com/acme/Main", "lambda$supply$0", "(Ljava/lang/String;I)Ljava/lang/String;")
+                ),
+                BootstrapArgument.methodType("()Ljava/lang/String;")
+            )
+        )).orElseThrow();
+
+        assertThat(resolved.isDirectlyLowerable(finalMainClass())).isTrue();
+    }
+
+    @Test
+    void directlyLowerableAcceptsBoundInstanceSupplierMethodReferenceOnFinalClass() {
+        final LambdaMetafactoryCall resolved = LambdaMetafactoryCall.resolve(dynamicRef(
+            "get",
+            "(Lcom/acme/Main;)Ljava/util/function/Supplier;",
+            "java/lang/invoke/LambdaMetafactory",
+            "metafactory",
+            List.of(
+                BootstrapArgument.methodType("()Ljava/lang/Object;"),
+                BootstrapArgument.methodHandle(
+                    5,
+                    new MethodRef("com/acme/Main", "supply", "()Ljava/lang/String;")
+                ),
+                BootstrapArgument.methodType("()Ljava/lang/String;")
+            )
+        )).orElseThrow();
+
+        assertThat(resolved.isDirectlyLowerable(finalMainClass())).isTrue();
+    }
+
+    @Test
+    void directlyLowerableRejectsBoundInstanceSupplierOnNonFinalClass() {
+        final LambdaMetafactoryCall resolved = LambdaMetafactoryCall.resolve(dynamicRef(
+            "get",
+            "(Lcom/acme/Main;)Ljava/util/function/Supplier;",
+            "java/lang/invoke/LambdaMetafactory",
+            "metafactory",
+            List.of(
+                BootstrapArgument.methodType("()Ljava/lang/Object;"),
+                BootstrapArgument.methodHandle(
+                    5,
+                    new MethodRef("com/acme/Main", "supply", "()Ljava/lang/String;")
+                ),
+                BootstrapArgument.methodType("()Ljava/lang/String;")
+            )
+        )).orElseThrow();
+
+        assertThat(resolved.isDirectlyLowerable(mainClass(0))).isFalse();
+    }
+
+    @Test
+    void directlyLowerableRejectsBoundInstanceSupplierLambdaWithMismatchedPrimitiveCapture() {
+        final LambdaMetafactoryCall resolved = LambdaMetafactoryCall.resolve(dynamicRef(
+            "get",
+            "(Lcom/acme/Main;J)Ljava/util/function/Supplier;",
+            "java/lang/invoke/LambdaMetafactory",
+            "metafactory",
+            List.of(
+                BootstrapArgument.methodType("()Ljava/lang/Object;"),
+                BootstrapArgument.methodHandle(
+                    5,
+                    new MethodRef("com/acme/Main", "lambda$supply$0", "(I)Ljava/lang/String;")
+                ),
+                BootstrapArgument.methodType("()Ljava/lang/String;")
+            )
+        )).orElseThrow();
+
+        assertThat(resolved.isDirectlyLowerable(finalMainClass())).isFalse();
+    }
+
+    @Test
+    void directlyLowerableRejectsBoundInstanceCustomSamOnFinalClass() {
+        final LambdaMetafactoryCall resolved = LambdaMetafactoryCall.resolve(dynamicRef(
+            "load",
+            "(Lcom/acme/Main;)Lcom/acme/Loader;",
+            "java/lang/invoke/LambdaMetafactory",
+            "metafactory",
+            List.of(
+                BootstrapArgument.methodType("()Ljava/lang/Object;"),
+                BootstrapArgument.methodHandle(
+                    5,
+                    new MethodRef("com/acme/Main", "load", "()Ljava/lang/String;")
+                ),
+                BootstrapArgument.methodType("()Ljava/lang/String;")
+            )
+        )).orElseThrow();
+
+        assertThat(resolved.isDirectlyLowerable(finalMainClass())).isFalse();
+    }
+
+    @Test
+    void directlyLowerableRejectsBoundInstanceSupplierWithMalformedImplementationReturnDescriptor() {
+        final LambdaMetafactoryCall resolved = LambdaMetafactoryCall.resolve(dynamicRef(
+            "get",
+            "(Lcom/acme/Main;Ljava/lang/String;)Ljava/util/function/Supplier;",
+            "java/lang/invoke/LambdaMetafactory",
+            "metafactory",
+            List.of(
+                BootstrapArgument.methodType("()Ljava/lang/Object;"),
+                BootstrapArgument.methodHandle(
+                    5,
+                    new MethodRef(
+                        "com/acme/Main",
+                        "supply",
+                        "(Ljava/lang/String;)Ljava/lang/String;junk"
+                    )
+                ),
+                BootstrapArgument.methodType("()Ljava/lang/String;")
+            )
+        )).orElseThrow();
+
+        assertThat(resolved.isDirectlyLowerable(finalMainClass())).isFalse();
+    }
+
+    @Test
+    void directlyLowerableRejectsBoundInstanceSupplierWithEmptyObjectArrayComponent() {
+        final LambdaMetafactoryCall resolved = LambdaMetafactoryCall.resolve(dynamicRef(
+            "get",
+            "(Lcom/acme/Main;)Ljava/util/function/Supplier;",
+            "java/lang/invoke/LambdaMetafactory",
+            "metafactory",
+            List.of(
+                BootstrapArgument.methodType("()Ljava/lang/Object;"),
+                BootstrapArgument.methodHandle(
+                    5,
+                    new MethodRef("com/acme/Main", "supply", "()[L;")
+                ),
+                BootstrapArgument.methodType("()[Ljava/lang/String;")
+            )
+        )).orElseThrow();
+
+        assertThat(resolved.isDirectlyLowerable(finalMainClass())).isFalse();
+    }
+
+    @Test
+    void directlyLowerableRejectsBoundInstanceSupplierWithEmptyObjectCapture() {
+        final Optional<LambdaMetafactoryCall> resolved = LambdaMetafactoryCall.resolve(dynamicRef(
+            "get",
+            "(Lcom/acme/Main;L;)Ljava/util/function/Supplier;",
+            "java/lang/invoke/LambdaMetafactory",
+            "metafactory",
+            List.of(
+                BootstrapArgument.methodType("()Ljava/lang/Object;"),
+                BootstrapArgument.methodHandle(
+                    5,
+                    new MethodRef("com/acme/Main", "supply", "(L;)Ljava/lang/String;")
+                ),
+                BootstrapArgument.methodType("()Ljava/lang/String;")
+            )
+        ));
+
+        assertThat(resolved).isEmpty();
+    }
+
+    @Test
+    void directlyLowerableRejectsBoundInstanceSupplierWithMalformedImplementationParameter() {
+        final LambdaMetafactoryCall resolved = LambdaMetafactoryCall.resolve(dynamicRef(
+            "get",
+            "(Lcom/acme/Main;)Ljava/util/function/Supplier;",
+            "java/lang/invoke/LambdaMetafactory",
+            "metafactory",
+            List.of(
+                BootstrapArgument.methodType("()Ljava/lang/Object;"),
+                BootstrapArgument.methodHandle(
+                    5,
+                    new MethodRef("com/acme/Main", "supply", "(L;)Ljava/lang/String;")
+                ),
+                BootstrapArgument.methodType("()Ljava/lang/String;")
+            )
+        )).orElseThrow();
+
+        assertThat(resolved.isDirectlyLowerable(finalMainClass())).isFalse();
+    }
+
+    @Test
+    void directlyLowerableRejectsBoundInstanceSupplierWithMalformedInstantiatedParameter() {
+        final LambdaMetafactoryCall resolved = LambdaMetafactoryCall.resolve(dynamicRef(
+            "get",
+            "(Lcom/acme/Main;)Ljava/util/function/Supplier;",
+            "java/lang/invoke/LambdaMetafactory",
+            "metafactory",
+            List.of(
+                BootstrapArgument.methodType("()Ljava/lang/Object;"),
+                BootstrapArgument.methodHandle(
+                    5,
+                    new MethodRef("com/acme/Main", "supply", "()Ljava/lang/String;")
+                ),
+                BootstrapArgument.methodType("(L;)Ljava/lang/String;")
+            )
+        )).orElseThrow();
+
+        assertThat(resolved.isDirectlyLowerable(finalMainClass())).isFalse();
+    }
+
+    @Test
     void directlyLowerableRejectsConsumerShape() {
         final LambdaMetafactoryCall resolved = LambdaMetafactoryCall.resolve(dynamicRef(
             "accept",
@@ -480,5 +686,26 @@ final class LambdaMetafactoryCallTest {
         return "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
             + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
             + "Ljava/lang/invoke/CallSite;";
+    }
+
+    private static Map<String, ClassFile> finalMainClass() {
+        return mainClass(0x0010);
+    }
+
+    private static Map<String, ClassFile> mainClass(final int accessFlags) {
+        return Map.of(
+            "com/acme/Main",
+            new ClassFile(
+                69,
+                "com/acme/Main",
+                "java/lang/Object",
+                accessFlags,
+                List.of(),
+                List.of(),
+                List.of(),
+                Path.of("Main.class"),
+                true
+            )
+        );
     }
 }

@@ -3036,7 +3036,7 @@ public final class StaticVerifier {
                 return false;
             }
         }
-        return lambda.isDirectlyLowerable()
+        return lambda.isDirectlyLowerable(classes)
             || lambda.isZeroCaptureMaterializedObjectLambda()
             || lambda.isZeroCaptureMaterializedBooleanLambda()
             || lambda.isMaterializedBiFunctionLambda()
@@ -3244,7 +3244,8 @@ public final class StaticVerifier {
         final String reason =
             "Only StringConcatFactory string concatenation, exact record ObjectMethods equals/hashCode, exact LambdaMetafactory Function/Predicate shapes, "
                 + "the exact Supplier subset (zero-argument reference-return invocation directly lowered to admitted application-static "
-                + "implementations, plus application static/instance-target materialization with reference-only captures and reference "
+                + "implementations or final implementation-owner bound instance targets, plus application static/instance-target "
+                + "materialization with reference-only captures and reference "
                 + "returns), the current "
                 + "Consumer/BiConsumer object-capture materialization slice, and the current custom-SAM materialization subset are implemented.";
         final String fix =

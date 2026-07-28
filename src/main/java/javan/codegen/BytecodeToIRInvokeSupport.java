@@ -9079,7 +9079,7 @@ final class BytecodeToIRInvokeSupport {
             )));
             return true;
         }
-        if (!resolved.isDirectlyLowerable()) {
+        if (!resolved.isDirectlyLowerable(classes)) {
             return false;
         }
         if (implementation.owner().startsWith("java/")
@@ -9089,7 +9089,8 @@ final class BytecodeToIRInvokeSupport {
             && "(Ljava/lang/Object;)Ljava/lang/Object;".equals(implementation.descriptor()))) {
             return false;
         }
-        if (resolved.implementationReferenceKind() == 6 && !classes.containsKey(implementation.owner())) {
+        if ((resolved.implementationReferenceKind() == 5 || resolved.implementationReferenceKind() == 6)
+            && !classes.containsKey(implementation.owner())) {
             return false;
         }
         final Optional<List<String>> captureDescriptors = parameterDescriptors(dynamicRef.descriptor());
@@ -9174,6 +9175,9 @@ final class BytecodeToIRInvokeSupport {
             return false;
         }
         final List<String> parameters = implementationParameters.orElseThrow();
+        if (lambdaCall.implementationReferenceKind() == 5) {
+            return lambdaCall.isSupplier();
+        }
         if (lambdaCall.implementationReferenceKind() == 6) {
             if (lambdaCall.isSupplier()) {
                 if (parameters.size() != captureDescriptors.size()) {
@@ -9280,7 +9284,7 @@ final class BytecodeToIRInvokeSupport {
     }
 
     private static IrExpression invokeSupplierLambdaExpression(final DynamicLambda lambda) {
-        if (lambda.implementationReferenceKind() == 6) {
+        if (lambda.implementationReferenceKind() == 5 || lambda.implementationReferenceKind() == 6) {
             return IrExpression.objectCall(symbol(new EntryPoint(
                 lambda.implementationOwner(),
                 lambda.implementationName(),
