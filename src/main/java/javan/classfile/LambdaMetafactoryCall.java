@@ -266,12 +266,17 @@ public record LambdaMetafactoryCall(
             return false;
         }
         for (int index = 1; index < capturedParameterDescriptors.size(); index++) {
-            if (!sameOrObjectCompatible(capturedParameterDescriptors.get(index), parameters.get(index - 1))) {
+            if (!sameOrBoundPredicateCompatible(capturedParameterDescriptors.get(index), parameters.get(index - 1))) {
                 return false;
             }
         }
         final Optional<String> input = inputDescriptor();
-        return input.isPresent() && sameOrObjectCompatible(input.orElseThrow(), parameters.getLast());
+        return input.isPresent() && sameOrBoundPredicateCompatible(input.orElseThrow(), parameters.getLast());
+    }
+
+    private static boolean sameOrBoundPredicateCompatible(final String source, final String target) {
+        return source.equals(target)
+            || ("Ljava/lang/Object;".equals(target) && (source.startsWith("L") || source.startsWith("[")));
     }
 
     /**
