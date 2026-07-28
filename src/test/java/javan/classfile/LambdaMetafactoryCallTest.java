@@ -268,6 +268,47 @@ final class LambdaMetafactoryCallTest {
     }
 
     @Test
+    void directlyLowerableAcceptsBoundInstancePredicateOnFinalClass() {
+        final LambdaMetafactoryCall resolved = boundInstancePredicate("(Lcom/acme/Main;)Ljava/util/function/Predicate;");
+
+        assertThat(resolved.isDirectlyLowerable(finalMainClass())).isTrue();
+    }
+
+    @Test
+    void directlyLowerableRejectsBoundInstancePredicateOnNonFinalClass() {
+        final LambdaMetafactoryCall resolved = boundInstancePredicate("(Lcom/acme/Main;)Ljava/util/function/Predicate;");
+
+        assertThat(resolved.isDirectlyLowerable(mainClass(0))).isFalse();
+    }
+
+    @Test
+    void directlyLowerableRejectsBoundInstancePredicateWithMismatchedReceiverCapture() {
+        final LambdaMetafactoryCall resolved = boundInstancePredicate("(Lcom/acme/Other;)Ljava/util/function/Predicate;");
+
+        assertThat(resolved.isDirectlyLowerable(finalMainClass())).isFalse();
+    }
+
+    @Test
+    void directlyLowerableRejectsBoundInstancePredicateWithMismatchedInput() {
+        final LambdaMetafactoryCall resolved = LambdaMetafactoryCall.resolve(dynamicRef(
+            "test",
+            "(Lcom/acme/Main;)Ljava/util/function/Predicate;",
+            "java/lang/invoke/LambdaMetafactory",
+            "metafactory",
+            List.of(
+                BootstrapArgument.methodType("(Ljava/lang/Object;)Z"),
+                BootstrapArgument.methodHandle(
+                    5,
+                    new MethodRef("com/acme/Main", "matches", "(I)Z")
+                ),
+                BootstrapArgument.methodType("(Ljava/lang/String;)Z")
+            )
+        )).orElseThrow();
+
+        assertThat(resolved.isDirectlyLowerable(finalMainClass())).isFalse();
+    }
+
+    @Test
     void directlyLowerableAcceptsBoundInstanceSupplierLambdaReferenceKindFive() {
         final LambdaMetafactoryCall resolved = LambdaMetafactoryCall.resolve(dynamicRef(
             "get",
@@ -690,6 +731,23 @@ final class LambdaMetafactoryCallTest {
 
     private static Map<String, ClassFile> finalMainClass() {
         return mainClass(0x0010);
+    }
+
+    private static LambdaMetafactoryCall boundInstancePredicate(final String callSiteDescriptor) {
+        return LambdaMetafactoryCall.resolve(dynamicRef(
+            "test",
+            callSiteDescriptor,
+            "java/lang/invoke/LambdaMetafactory",
+            "metafactory",
+            List.of(
+                BootstrapArgument.methodType("(Ljava/lang/Object;)Z"),
+                BootstrapArgument.methodHandle(
+                    5,
+                    new MethodRef("com/acme/Main", "matches", "(Ljava/lang/Object;)Z")
+                ),
+                BootstrapArgument.methodType("(Ljava/lang/String;)Z")
+            )
+        )).orElseThrow();
     }
 
     private static Map<String, ClassFile> mainClass(final int accessFlags) {
