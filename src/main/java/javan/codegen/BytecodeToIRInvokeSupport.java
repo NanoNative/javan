@@ -2134,6 +2134,18 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.longExpression(IrExpression.longCall("javan_math_min_long", List.of(left, right))));
             return true;
         }
+        if ("min".equals(methodRef.name()) && "(FF)F".equals(methodRef.descriptor())) {
+            final IrExpression right = popFloat(classFile, method, stack);
+            final IrExpression left = popFloat(classFile, method, stack);
+            stack.add(StackValue.floatExpression(IrExpression.floatCall("javan_math_min_float", List.of(left, right))));
+            return true;
+        }
+        if ("min".equals(methodRef.name()) && "(DD)D".equals(methodRef.descriptor())) {
+            final IrExpression right = popDouble(classFile, method, stack);
+            final IrExpression left = popDouble(classFile, method, stack);
+            stack.add(StackValue.doubleExpression(IrExpression.doubleCall("javan_math_min_double", List.of(left, right))));
+            return true;
+        }
         if ("max".equals(methodRef.name()) && "(II)I".equals(methodRef.descriptor())) {
             final IrExpression right = popInt(classFile, method, stack);
             final IrExpression left = popInt(classFile, method, stack);
@@ -2144,6 +2156,18 @@ final class BytecodeToIRInvokeSupport {
             final IrExpression right = popLong(classFile, method, stack);
             final IrExpression left = popLong(classFile, method, stack);
             stack.add(StackValue.longExpression(IrExpression.longCall("javan_math_max_long", List.of(left, right))));
+            return true;
+        }
+        if ("max".equals(methodRef.name()) && "(FF)F".equals(methodRef.descriptor())) {
+            final IrExpression right = popFloat(classFile, method, stack);
+            final IrExpression left = popFloat(classFile, method, stack);
+            stack.add(StackValue.floatExpression(IrExpression.floatCall("javan_math_max_float", List.of(left, right))));
+            return true;
+        }
+        if ("max".equals(methodRef.name()) && "(DD)D".equals(methodRef.descriptor())) {
+            final IrExpression right = popDouble(classFile, method, stack);
+            final IrExpression left = popDouble(classFile, method, stack);
+            stack.add(StackValue.doubleExpression(IrExpression.doubleCall("javan_math_max_double", List.of(left, right))));
             return true;
         }
         if ("toIntExact".equals(methodRef.name()) && "(J)I".equals(methodRef.descriptor())) {
