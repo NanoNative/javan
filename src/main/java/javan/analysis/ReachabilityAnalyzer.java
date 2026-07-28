@@ -775,7 +775,6 @@ public final class ReachabilityAnalyzer {
                     enqueueAll(work, workSet, targetMethods);
                     addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
                 }
-                return;
             }
             if (isCatchNullFunctionalInterfaceCall(classes, target)) {
                 final MethodRef implementationTarget = new MethodRef(target.owner(), "applyWithException", target.descriptor());
@@ -784,7 +783,9 @@ public final class ReachabilityAnalyzer {
                     enqueueAll(work, workSet, targetMethods);
                     addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
                 }
-                if (containsMethodRef(materializedLambdaMethods, target) || !targetMethods.isEmpty()) {
+                if (containsMethodRef(materializedLambdaMethods, target)
+                    || !targetMethods.isEmpty()
+                    || defaultTarget.isPresent()) {
                     return;
                 }
                 diagnostics.add(Diagnostic.error(
@@ -798,13 +799,14 @@ public final class ReachabilityAnalyzer {
                 ));
                 return;
             }
-            if (containsMethodRef(materializedLambdaMethods, target)) {
-                return;
-            }
             final List<EntryPoint> targetMethods = interfaceTargets(classes, target, entryPoints);
             if (!targetMethods.isEmpty()) {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
+            }
+            if (containsMethodRef(materializedLambdaMethods, target)
+                || !targetMethods.isEmpty()
+                || defaultTarget.isPresent()) {
                 return;
             }
             diagnostics.add(Diagnostic.error(
@@ -903,12 +905,14 @@ public final class ReachabilityAnalyzer {
             && shouldMaterializeFunctionLambda(classes, current, instruction);
         final boolean materializedSupplier = resolved.isMaterializedSupplierLambda()
             && shouldMaterializeSupplierLambda(classes, current, instruction);
+        final boolean materializedBoundCustom = resolved.isMaterializedBoundCustomObjectLambda(classes);
         if (resolved.isZeroCaptureMaterializedObjectLambda()
             || resolved.isZeroCaptureMaterializedBooleanLambda()
             || resolved.isMaterializedBiFunctionLambda()
             || resolved.isMaterializedVoidLambda()
             || materializedFunction
-            || materializedSupplier) {
+            || materializedSupplier
+            || materializedBoundCustom) {
             final MethodRef interfaceMethod = new MethodRef(
                 resolved.interfaceOwner(),
                 resolved.interfaceMethodName(),
@@ -924,7 +928,8 @@ public final class ReachabilityAnalyzer {
             && !resolved.isMaterializedBiFunctionLambda()
             && !resolved.isMaterializedVoidLambda()
             && !materializedFunction
-            && !materializedSupplier) {
+            && !materializedSupplier
+            && !materializedBoundCustom) {
             return;
         }
         final MethodRef implementation = resolved.implementation();
