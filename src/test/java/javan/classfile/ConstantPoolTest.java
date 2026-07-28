@@ -101,6 +101,35 @@ final class ConstantPoolTest {
     }
 
     @Test
+    void dynamicRefRejectsFieldGetterHandleTargetingMethodReference() {
+        final ConstantPool pool = new ConstantPool(new Object[]{
+            null,
+            new ConstantPool.DynamicEntry(18, 0, 2),
+            new ConstantPool.NameAndTypeEntry(3, 4),
+            new ConstantPool.Utf8Entry("equals"),
+            new ConstantPool.Utf8Entry("()V"),
+            new ConstantPool.MethodHandleEntry(6, 6),
+            new ConstantPool.RefEntry(10, 7, 8),
+            new ConstantPool.ClassEntry(9),
+            new ConstantPool.NameAndTypeEntry(10, 11),
+            new ConstantPool.Utf8Entry("java/lang/runtime/ObjectMethods"),
+            new ConstantPool.Utf8Entry("bootstrap"),
+            new ConstantPool.Utf8Entry("()V"),
+            new ConstantPool.MethodHandleEntry(1, 13),
+            new ConstantPool.RefEntry(10, 14, 15),
+            new ConstantPool.ClassEntry(16),
+            new ConstantPool.NameAndTypeEntry(17, 18),
+            new ConstantPool.Utf8Entry("com/acme/Sample"),
+            new ConstantPool.Utf8Entry("value"),
+            new ConstantPool.Utf8Entry("Ljava/lang/String;")
+        });
+
+        assertThat(pool.dynamicRef(1, List.of(new BootstrapMethod(5, List.of(12)))))
+            .map(dynamicRef -> dynamicRef.bootstrapArgumentDetails().getFirst().kind())
+            .contains(BootstrapArgument.Kind.UNKNOWN);
+    }
+
+    @Test
     void dynamicRefRejectsNonInvokeDynamicAndInvalidBootstrapShapes() {
         final ConstantPool pool = new ConstantPool(new Object[]{
             null,

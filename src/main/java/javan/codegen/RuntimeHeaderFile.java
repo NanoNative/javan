@@ -73,8 +73,12 @@ final class RuntimeHeaderFile {
         double javan_math_abs_double(double value);
         int javan_math_min_int(int left, int right);
         long long javan_math_min_long(long long left, long long right);
+        float javan_math_min_float(float left, float right);
+        double javan_math_min_double(double left, double right);
         int javan_math_max_int(int left, int right);
         long long javan_math_max_long(long long left, long long right);
+        float javan_math_max_float(float left, float right);
+        double javan_math_max_double(double left, double right);
         int javan_math_to_int_exact(long long value);
         int javan_int_shl(int value, int shift);
         long long javan_long_shl(long long value, int shift);
@@ -215,6 +219,8 @@ final class RuntimeHeaderFile {
         void* javan_arrays_copy_of_char(void* array, int new_length);
         void* javan_arrays_copy_of_range_byte(void* array, int begin, int end);
         void* javan_arrays_copy_of_range_object(void* array, int begin, int end);
+        int javan_arrays_fill_byte(void* array, int value);
+        int javan_arrays_fill_range_byte(void* array, int begin, int end, int value);
         void* javan_string_array_from_args(int argc, char** argv);
         void* javan_string_from(const char* value);
         void* javan_string_from_chars(void* array, int offset, int count);
@@ -352,8 +358,28 @@ final class RuntimeHeaderFile {
         void* javan_map_entry_get_value(void* value);
         void* javan_map_values(void* map);
         int javan_object_equals(void* left, void* right);
+        void javan_register_record_object_method_resolvers(
+            int (*equals_resolver)(void*, void*),
+            int (*hash_code_resolver)(void*),
+            int (*exact_type_resolver)(void*, int)
+        );
+        int javan_record_hash_combine(int current, int component);
+        int javan_record_boolean_hash_code(int value);
+        int javan_record_long_hash_code(long long value);
+        int javan_record_float_hash_code(float value);
+        int javan_record_double_hash_code(double value);
+        int javan_record_float_equals(float left, float right);
+        int javan_record_double_equals(double left, double right);
+        int javan_record_reference_identity_equals(void* left, void* right);
+        int javan_record_reference_identity_hash_code(void* value);
+        int javan_record_shape_exact_type(void* value, int expected_type_id);
+        void javan_record_shape_validate(void* value, const char* shape);
+        int javan_record_shape_equals(void* left, void* right, const char* shape);
+        int javan_record_shape_equals_prevalidated(void* left, void* right, const char* shape);
+        int javan_record_shape_hash_code(void* value, const char* shape);
         void* javan_materialized_lambda_new(int target_id);
         void* javan_materialized_lambda_new_with_captures(int target_id, int capture_count, ...);
+        int javan_materialized_lambda_is_instance(void* value);
         int javan_materialized_lambda_target_id(void* value);
         void* javan_materialized_lambda_capture(void* value, int capture_index);
         void* javan_path_of(void* first, void* more);
@@ -658,7 +684,6 @@ final class RuntimeHeaderFile {
         void* javan_string_value_of_bool(int value);
         void* javan_string_value_of_char(int value);
         void* javan_printable_object_string(void* value);
-        int javan_record_object_equals(void* self, void* other, int expected_type_id, int field_count, ...);
         void* javan_string_concat(const char* recipe, int argc, const char** values);
         char* javan_string_export(const char* value);
         void* javan_stringbuilder_new(void);
@@ -704,6 +729,7 @@ final class RuntimeHeaderFile {
         void javan_stringbuilder_set_length(void* builder, int length);
         int javan_stringbuilder_capacity(void* builder);
         int javan_lcmp(long long left, long long right);
+        int javan_long_compare_unsigned(long long left, long long right);
         int javan_float_compare(float left, float right, int nan_value);
         int javan_double_compare(double left, double right, int nan_value);
         const char* javan_last_error(void);

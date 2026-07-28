@@ -183,31 +183,44 @@ public final class ConstantPool {
      * @return dynamic reference when resolvable
      */
     public Optional<DynamicRef> dynamicRef(final int index, final List<BootstrapMethod> bootstrapMethods) {
-        final Object entry = entries[index];
+        final Object entry = entry(index);
         if (!(entry instanceof DynamicEntry dynamic) || dynamic.tag() != 18) {
             return Optional.empty();
         }
         if (dynamic.bootstrapMethodAttributeIndex() < 0 || dynamic.bootstrapMethodAttributeIndex() >= bootstrapMethods.size()) {
             return Optional.empty();
         }
-        final NameAndTypeEntry nameAndType = (NameAndTypeEntry) entries[dynamic.nameAndTypeIndex()];
+        final Object nameAndTypeEntry = entry(dynamic.nameAndTypeIndex());
+        if (!(nameAndTypeEntry instanceof NameAndTypeEntry nameAndType)) {
+            return Optional.empty();
+        }
+        final Optional<String> dynamicName = utf8Value(nameAndType.nameIndex());
+        final Optional<String> dynamicDescriptor = utf8Value(nameAndType.descriptorIndex());
+        if (dynamicName.isEmpty() || dynamicDescriptor.isEmpty()) {
+            return Optional.empty();
+        }
         final BootstrapMethod bootstrapMethod = bootstrapMethods.get(dynamic.bootstrapMethodAttributeIndex());
-        final Object handleEntry = entries[bootstrapMethod.methodHandleIndex()];
+        final Object handleEntry = entry(bootstrapMethod.methodHandleIndex());
         if (!(handleEntry instanceof MethodHandleEntry handle)) {
             return Optional.empty();
         }
-        final MethodRef bootstrap = methodRef(handle.referenceIndex());
+        final Optional<MethodRef> maybeBootstrap = methodHandleReference(handle);
+        if (maybeBootstrap.isEmpty()) {
+            return Optional.empty();
+        }
+        final MethodRef bootstrap = maybeBootstrap.orElseThrow();
         final List<BootstrapArgument> bootstrapArgumentDetails = bootstrapArgumentDetails(bootstrapMethod.argumentIndexes());
         final java.util.ArrayList<String> bootstrapArguments = new java.util.ArrayList<>();
         for (final BootstrapArgument bootstrapArgument : bootstrapArgumentDetails) {
             bootstrapArguments.add(bootstrapArgument.text());
         }
         return Optional.of(new DynamicRef(
-            utf8(nameAndType.nameIndex()),
-            utf8(nameAndType.descriptorIndex()),
+            dynamicName.orElseThrow(),
+            dynamicDescriptor.orElseThrow(),
             bootstrap.owner(),
             bootstrap.name(),
             bootstrap.descriptor(),
+            handle.referenceKind(),
             List.copyOf(bootstrapArguments),
             bootstrapArgumentDetails
         ));
@@ -313,23 +326,84 @@ public final class ConstantPool {
     }
 
     private BootstrapArgument bootstrapArgument(final int index) {
-        final Object entry = entries[index];
+        final Object entry = entry(index);
         if (entry instanceof StringEntry stringEntry) {
-            return BootstrapArgument.string(utf8(stringEntry.stringIndex()));
+            final Optional<String> value = utf8Value(stringEntry.stringIndex());
+            return value.isPresent()
+                ? BootstrapArgument.string(value.orElseThrow())
+                : BootstrapArgument.unknown("");
         }
         if (entry instanceof Utf8Entry utf8Entry) {
             return BootstrapArgument.utf8(utf8Entry.value());
         }
+        if (entry instanceof ClassEntry classEntry) {
+            final Optional<String> value = utf8Value(classEntry.nameIndex());
+            return value.isPresent()
+                ? BootstrapArgument.classLiteral(value.orElseThrow())
+                : BootstrapArgument.unknown("");
+        }
         if (entry instanceof MethodTypeEntry methodType) {
-            return BootstrapArgument.methodType(utf8(methodType.descriptorIndex()));
+            final Optional<String> value = utf8Value(methodType.descriptorIndex());
+            return value.isPresent()
+                ? BootstrapArgument.methodType(value.orElseThrow())
+                : BootstrapArgument.unknown("");
         }
         if (entry instanceof MethodHandleEntry handle) {
-            return BootstrapArgument.methodHandle(handle.referenceKind(), methodRef(handle.referenceIndex()));
+            final Optional<MethodRef> reference = methodHandleReference(handle);
+            return reference.isPresent()
+                ? BootstrapArgument.methodHandle(handle.referenceKind(), reference.orElseThrow())
+                : BootstrapArgument.unknown("");
         }
         if (entry instanceof RawEntry rawEntry) {
             return rawBootstrapArgument(rawEntry.value());
         }
         return BootstrapArgument.unknown("");
+    }
+
+    private Optional<MethodRef> methodHandleReference(final MethodHandleEntry handle) {
+        final Object referenceEntry = entry(handle.referenceIndex());
+        if (!(referenceEntry instanceof RefEntry reference)
+            || !referenceKindMatchesTag(handle.referenceKind(), reference.tag())) {
+            return Optional.empty();
+        }
+        final Object ownerEntry = entry(reference.classIndex());
+        final Object nameAndTypeEntry = entry(reference.nameAndTypeIndex());
+        if (!(ownerEntry instanceof ClassEntry owner)
+            || !(nameAndTypeEntry instanceof NameAndTypeEntry nameAndType)) {
+            return Optional.empty();
+        }
+        final Optional<String> ownerName = utf8Value(owner.nameIndex());
+        final Optional<String> memberName = utf8Value(nameAndType.nameIndex());
+        final Optional<String> descriptor = utf8Value(nameAndType.descriptorIndex());
+        if (ownerName.isEmpty() || memberName.isEmpty() || descriptor.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(new MethodRef(
+            ownerName.orElseThrow(),
+            memberName.orElseThrow(),
+            descriptor.orElseThrow()
+        ));
+    }
+
+    private static boolean referenceKindMatchesTag(final int referenceKind, final int referenceTag) {
+        return switch (referenceKind) {
+            case 1, 2, 3, 4 -> referenceTag == 9;
+            case 5, 8 -> referenceTag == 10;
+            case 6, 7 -> referenceTag == 10 || referenceTag == 11;
+            case 9 -> referenceTag == 11;
+            default -> false;
+        };
+    }
+
+    private Optional<String> utf8Value(final int index) {
+        final Object entry = entry(index);
+        return entry instanceof Utf8Entry utf8Entry
+            ? Optional.of(utf8Entry.value())
+            : Optional.empty();
+    }
+
+    private Object entry(final int index) {
+        return index > 0 && index < entries.length ? entries[index] : null;
     }
 
     private static BootstrapArgument rawBootstrapArgument(final Object value) {

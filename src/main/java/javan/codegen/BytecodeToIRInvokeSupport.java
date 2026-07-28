@@ -9,6 +9,7 @@ import javan.classfile.Instruction;
 import javan.classfile.LambdaMetafactoryCall;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
+import javan.classfile.RecordObjectMethodsCall;
 import javan.compat.JdkCallSupport;
 import javan.compat.JavanNativeSubstitutions;
 import javan.ir.IrDispatch;
@@ -24,23 +25,30 @@ import javan.verify.Diagnostic;
 import javan.verify.DiagnosticException;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static javan.codegen.BytecodeToIR.*;
 import static javan.codegen.BytecodeToIRMetadataSupport.*;
 
 final class BytecodeToIRInvokeSupport {
+    private static final int ARRAYS_FILL_STATUS_SUCCESS = 0;
+    private static final int ARRAYS_FILL_STATUS_NULL = 1;
+    private static final int ARRAYS_FILL_STATUS_INVERTED_RANGE = 2;
     private static final MethodRef RUNNABLE_RUN = new MethodRef("java/lang/Runnable", "run", "()V");
     private static final String MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL = "javan_materialized_lambda_apply_object";
     private static final String MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL = "javan_materialized_lambda_apply_object2";
+    private static final String MATERIALIZED_LAMBDA_SUPPLIER_APPLY_SYMBOL = "javan_materialized_lambda_apply_supplier";
     private static final String MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL = "javan_materialized_lambda_apply_boolean";
     private static final String MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL = "javan_materialized_lambda_apply_void";
     private static final String MATERIALIZED_LAMBDA_VOID2_APPLY_SYMBOL = "javan_materialized_lambda_apply_void2";
     private static final String MATERIALIZED_LAMBDA_NEW_SYMBOL = "javan_materialized_lambda_new";
     private static final String MATERIALIZED_LAMBDA_NEW_WITH_CAPTURES_SYMBOL = "javan_materialized_lambda_new_with_captures";
+    private static final String MATERIALIZED_LAMBDA_IS_INSTANCE_SYMBOL = "javan_materialized_lambda_is_instance";
     private static final String MATERIALIZED_LAMBDA_CAPTURE_SYMBOL = "javan_materialized_lambda_capture";
     private static final String DATE_TIME_FORMATTER_BUILDER_OWNER = "java/time/format/DateTimeFormatterBuilder";
     private static final String DATE_TIME_FORMATTER_OWNER = "java/time/format/DateTimeFormatter";
@@ -61,7 +69,8 @@ final class BytecodeToIRInvokeSupport {
     enum MaterializedLambdaDispatchKind {
         OBJECT,
         BOOLEAN,
-        VOID
+        VOID,
+        SUPPLIER
     }
 
     static void lowerInstanceOf(
@@ -817,12 +826,22 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if (isConcreteExactCallTarget(classes, methodRef.owner())) {
-            lowerInstanceCall(classes, classFile, method, instruction, instructions, stack);
+            lowerInstanceCall(classes, classFile, method, instruction, instructions, stack, localDeclarations);
             return;
         }
         final List<EntryPoint> targets = virtualTargets(classes, methodRef);
         if (!targets.isEmpty()) {
-            lowerDispatchCall(classFile, method, instruction, instructions, stack, dispatches, methodRef, targets);
+            lowerDispatchCall(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                localDeclarations,
+                dispatches,
+                methodRef,
+                targets
+            );
             return;
         }
         throw unsupported(classFile, method, instruction);
@@ -1625,7 +1644,8 @@ final class BytecodeToIRInvokeSupport {
         final MethodInfo method,
         final Instruction instruction,
         final List<IrInstruction> instructions,
-        final List<StackValue> stack
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations
     ) {
         final MethodRef rawMethodRef = instruction.methodRef().orElseThrow();
         final MethodRef normalizedMethodRef = JdkCallSupport.normalizeInheritedSupportedJdkCall(classes, rawMethodRef)
@@ -1704,7 +1724,7 @@ final class BytecodeToIRInvokeSupport {
         final List<IrExpression> callArguments = new ArrayList<>(arguments);
         callArguments.addFirst(receiver);
         final String symbol = symbol(new EntryPoint(methodRef.owner(), methodRef.name(), methodRef.descriptor()));
-        appendCallResult(instructions, stack, descriptor.returnType(), symbol, callArguments);
+        appendCallResult(instructions, stack, localDeclarations, descriptor.returnType(), symbol, callArguments);
     }
 
     private static boolean isZeroArgNoopPlatformConstructor(final MethodRef methodRef) {
@@ -1777,7 +1797,7 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.virtualThreadFactory(IrExpression.objectCall(symbol, arguments)));
             return;
         }
-        appendCallResult(instructions, stack, descriptor.returnType(), symbol, arguments);
+        appendCallResult(instructions, stack, localDeclarations, descriptor.returnType(), symbol, arguments);
     }
 
     private static boolean lowerExecutorsStaticCall(
@@ -1925,7 +1945,17 @@ final class BytecodeToIRInvokeSupport {
             );
         }
         if ("java/util/Arrays".equals(methodRef.owner())) {
-            return lowerArraysIntrinsic(classFile, method, methodRef, stack);
+            return lowerArraysIntrinsic(
+                classFile,
+                method,
+                instruction,
+                methodRef,
+                instructions,
+                stack,
+                localDeclarations,
+                pendingExceptionHandlerStacks,
+                sourceLines
+            );
         }
         if ("java/lang/Integer".equals(methodRef.owner())) {
             return lowerIntegerIntrinsic(classFile, method, methodRef, stack);
@@ -2140,6 +2170,18 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.longExpression(IrExpression.longCall("javan_math_min_long", List.of(left, right))));
             return true;
         }
+        if ("min".equals(methodRef.name()) && "(FF)F".equals(methodRef.descriptor())) {
+            final IrExpression right = popFloat(classFile, method, stack);
+            final IrExpression left = popFloat(classFile, method, stack);
+            stack.add(StackValue.floatExpression(IrExpression.floatCall("javan_math_min_float", List.of(left, right))));
+            return true;
+        }
+        if ("min".equals(methodRef.name()) && "(DD)D".equals(methodRef.descriptor())) {
+            final IrExpression right = popDouble(classFile, method, stack);
+            final IrExpression left = popDouble(classFile, method, stack);
+            stack.add(StackValue.doubleExpression(IrExpression.doubleCall("javan_math_min_double", List.of(left, right))));
+            return true;
+        }
         if ("max".equals(methodRef.name()) && "(II)I".equals(methodRef.descriptor())) {
             final IrExpression right = popInt(classFile, method, stack);
             final IrExpression left = popInt(classFile, method, stack);
@@ -2150,6 +2192,18 @@ final class BytecodeToIRInvokeSupport {
             final IrExpression right = popLong(classFile, method, stack);
             final IrExpression left = popLong(classFile, method, stack);
             stack.add(StackValue.longExpression(IrExpression.longCall("javan_math_max_long", List.of(left, right))));
+            return true;
+        }
+        if ("max".equals(methodRef.name()) && "(FF)F".equals(methodRef.descriptor())) {
+            final IrExpression right = popFloat(classFile, method, stack);
+            final IrExpression left = popFloat(classFile, method, stack);
+            stack.add(StackValue.floatExpression(IrExpression.floatCall("javan_math_max_float", List.of(left, right))));
+            return true;
+        }
+        if ("max".equals(methodRef.name()) && "(DD)D".equals(methodRef.descriptor())) {
+            final IrExpression right = popDouble(classFile, method, stack);
+            final IrExpression left = popDouble(classFile, method, stack);
+            stack.add(StackValue.doubleExpression(IrExpression.doubleCall("javan_math_max_double", List.of(left, right))));
             return true;
         }
         if ("toIntExact".equals(methodRef.name()) && "(J)I".equals(methodRef.descriptor())) {
@@ -2180,6 +2234,21 @@ final class BytecodeToIRInvokeSupport {
         final MethodRef methodRef,
         final List<StackValue> stack
     ) {
+        if ("compare".equals(methodRef.name()) && "(JJ)I".equals(methodRef.descriptor())) {
+            final IrExpression right = popLong(classFile, method, stack);
+            final IrExpression left = popLong(classFile, method, stack);
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_lcmp", List.of(left, right))));
+            return true;
+        }
+        if ("compareUnsigned".equals(methodRef.name()) && "(JJ)I".equals(methodRef.descriptor())) {
+            final IrExpression right = popLong(classFile, method, stack);
+            final IrExpression left = popLong(classFile, method, stack);
+            stack.add(StackValue.intExpression(IrExpression.intCall(
+                "javan_long_compare_unsigned",
+                List.of(left, right)
+            )));
+            return true;
+        }
         if ("toString".equals(methodRef.name()) && "(J)Ljava/lang/String;".equals(methodRef.descriptor())) {
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_string_value_of_long", List.of(popLong(classFile, method, stack)))));
             return true;
@@ -2541,9 +2610,52 @@ final class BytecodeToIRInvokeSupport {
     static boolean lowerArraysIntrinsic(
         final ClassFile classFile,
         final MethodInfo method,
+        final Instruction instruction,
         final MethodRef methodRef,
-        final List<StackValue> stack
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
     ) {
+        if ("fill".equals(methodRef.name()) && "([BB)V".equals(methodRef.descriptor())) {
+            final IrExpression value = popInt(classFile, method, stack);
+            final IrExpression array = popObject(classFile, method, stack);
+            lowerByteArrayFill(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                localDeclarations,
+                pendingExceptionHandlerStacks,
+                sourceLines,
+                "javan_arrays_fill_byte",
+                List.of(array, value),
+                false
+            );
+            return true;
+        }
+        if ("fill".equals(methodRef.name()) && "([BIIB)V".equals(methodRef.descriptor())) {
+            final IrExpression value = popInt(classFile, method, stack);
+            final IrExpression end = popInt(classFile, method, stack);
+            final IrExpression begin = popInt(classFile, method, stack);
+            final IrExpression array = popObject(classFile, method, stack);
+            lowerByteArrayFill(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                localDeclarations,
+                pendingExceptionHandlerStacks,
+                sourceLines,
+                "javan_arrays_fill_range_byte",
+                List.of(array, begin, end, value),
+                true
+            );
+            return true;
+        }
         if ("copyOfRange".equals(methodRef.name()) && "([BII)[B".equals(methodRef.descriptor())) {
             final IrExpression end = popInt(classFile, method, stack);
             final IrExpression begin = popInt(classFile, method, stack);
@@ -2575,6 +2687,102 @@ final class BytecodeToIRInvokeSupport {
         final IrExpression source = popObject(classFile, method, stack);
         stack.add(StackValue.objectExpression(IrExpression.objectCall(symbol.orElseThrow(), List.of(source, newLength))));
         return true;
+    }
+    static void lowerByteArrayFill(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines,
+        final String symbol,
+        final List<IrExpression> arguments,
+        final boolean ranged
+    ) {
+        final int resultLocalIndex = localDeclarations.size();
+        final String resultLocalName = "int" + resultLocalIndex;
+        localDeclarations.put(Integer.MIN_VALUE + resultLocalIndex, new IrLocal(IrType.INT, resultLocalName));
+        instructions.add(IrInstruction.assignInt(resultLocalName, IrExpression.intCall(symbol, arguments)));
+
+        final IrExpression result = IrExpression.intLocal(resultLocalName);
+        final String labelSuffix = instruction.offset() + "_" + resultLocalIndex;
+        final String successLabel = "label_arrays_fill_success_" + labelSuffix;
+        instructions.add(IrInstruction.branchIf(
+            successLabel,
+            IrExpression.intComparison("==", result, IrExpression.intLiteral(ARRAYS_FILL_STATUS_SUCCESS))
+        ));
+        if (!ranged) {
+            routePendingPlatformException(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                pendingExceptionHandlerStacks,
+                sourceLines,
+                "java/lang/NullPointerException",
+                IrExpression.stringLiteral("array")
+            );
+            instructions.add(IrInstruction.label(successLabel));
+            return;
+        }
+
+        final int messageLocalIndex = localDeclarations.size();
+        final String messageLocalName = "object" + messageLocalIndex;
+        localDeclarations.put(Integer.MIN_VALUE + messageLocalIndex, new IrLocal(IrType.OBJECT, messageLocalName));
+        final IrExpression message = IrExpression.objectLocal(messageLocalName);
+        final String nonNullLabel = "label_arrays_fill_non_null_" + labelSuffix;
+        instructions.add(IrInstruction.branchIf(
+            nonNullLabel,
+            IrExpression.intComparison("!=", result, IrExpression.intLiteral(ARRAYS_FILL_STATUS_NULL))
+        ));
+        instructions.add(IrInstruction.assignObject(messageLocalName, IrExpression.stringLiteral("array")));
+        routePendingPlatformException(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            pendingExceptionHandlerStacks,
+            sourceLines,
+            "java/lang/NullPointerException",
+            message
+        );
+        instructions.add(IrInstruction.label(nonNullLabel));
+
+        final String validOrderLabel = "label_arrays_fill_valid_order_" + labelSuffix;
+        instructions.add(IrInstruction.branchIf(
+            validOrderLabel,
+            IrExpression.intComparison("!=", result, IrExpression.intLiteral(ARRAYS_FILL_STATUS_INVERTED_RANGE))
+        ));
+        instructions.add(IrInstruction.assignObject(messageLocalName, IrExpression.stringLiteral("fromIndex > toIndex")));
+        routePendingPlatformException(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            pendingExceptionHandlerStacks,
+            sourceLines,
+            "java/lang/IllegalArgumentException",
+            message
+        );
+        instructions.add(IrInstruction.label(validOrderLabel));
+        instructions.add(IrInstruction.assignObject(messageLocalName, IrExpression.stringLiteral("array index out of bounds")));
+        routePendingPlatformException(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            pendingExceptionHandlerStacks,
+            sourceLines,
+            "java/lang/ArrayIndexOutOfBoundsException",
+            message
+        );
+        instructions.add(IrInstruction.label(successLabel));
     }
     static Optional<String> arraysCopyOfSymbol(final String descriptor) {
         if ("([II)[I".equals(descriptor)) {
@@ -5988,6 +6196,42 @@ final class BytecodeToIRInvokeSupport {
     ) {
         final MethodRef supplierGet = new MethodRef("java/util/function/Supplier", "get", "()Ljava/lang/Object;");
         final List<EntryPoint> targets = interfaceTargets(classes, supplierGet);
+        final Optional<EntryPoint> defaultTarget = defaultInterfaceTarget(classes, supplierGet);
+        final boolean hasMaterializedTarget =
+            materializedLambdaMethods.get(supplierGet) == MaterializedLambdaDispatchKind.SUPPLIER;
+        if (hasMaterializedTarget && (!targets.isEmpty() || defaultTarget.isPresent())) {
+            final String materializedLabel =
+                "label_supplier_get_materialized_" + instruction.offset() + "_" + resultLocal;
+            final String endLabel = "label_supplier_get_end_" + instruction.offset() + "_" + resultLocal;
+            instructions.add(IrInstruction.branchIf(
+                materializedLabel,
+                IrExpression.intCall(MATERIALIZED_LAMBDA_IS_INSTANCE_SYMBOL, List.of(supplier))
+            ));
+            if (!targets.isEmpty()) {
+                final String dispatchSymbol = dispatchSymbol(supplierGet);
+                dispatches.putIfAbsent(
+                    dispatchSymbol,
+                    dispatch(dispatchSymbol, MethodDescriptor.parse(supplierGet.descriptor()), targets)
+                );
+                instructions.add(IrInstruction.assignObject(
+                    resultLocal,
+                    IrExpression.objectCall(dispatchSymbol, List.of(supplier))
+                ));
+            } else {
+                instructions.add(IrInstruction.assignObject(
+                    resultLocal,
+                    IrExpression.objectCall(symbol(defaultTarget.orElseThrow()), List.of(supplier))
+                ));
+            }
+            instructions.add(IrInstruction.jump(endLabel));
+            instructions.add(IrInstruction.label(materializedLabel));
+            instructions.add(IrInstruction.assignObject(
+                resultLocal,
+                IrExpression.objectCall(MATERIALIZED_LAMBDA_SUPPLIER_APPLY_SYMBOL, List.of(supplier))
+            ));
+            instructions.add(IrInstruction.label(endLabel));
+            return;
+        }
         if (targets.size() > 1) {
             final String dispatchSymbol = dispatchSymbol(supplierGet);
             dispatches.putIfAbsent(dispatchSymbol, dispatch(dispatchSymbol, MethodDescriptor.parse(supplierGet.descriptor()), targets));
@@ -6004,11 +6248,17 @@ final class BytecodeToIRInvokeSupport {
             ));
             return;
         }
-        final Optional<EntryPoint> defaultTarget = defaultInterfaceTarget(classes, supplierGet);
         if (defaultTarget.isPresent()) {
             instructions.add(IrInstruction.assignObject(
                 resultLocal,
                 IrExpression.objectCall(symbol(defaultTarget.orElseThrow()), List.of(supplier))
+            ));
+            return;
+        }
+        if (hasMaterializedTarget) {
+            instructions.add(IrInstruction.assignObject(
+                resultLocal,
+                IrExpression.objectCall(MATERIALIZED_LAMBDA_SUPPLIER_APPLY_SYMBOL, List.of(supplier))
             ));
             return;
         }
@@ -6162,7 +6412,7 @@ final class BytecodeToIRInvokeSupport {
             IrExpression.intComparison("==", IrExpression.intLocal(interruptedResultLocalName), IrExpression.intLiteral(0))
         ));
         instructions.add(IrInstruction.label(interruptedLabel));
-        routePendingInterruptedException(
+        routePendingPlatformException(
             classFile,
             method,
             instruction,
@@ -6170,11 +6420,12 @@ final class BytecodeToIRInvokeSupport {
             stack,
             pendingExceptionHandlerStacks,
             sourceLines,
+            "java/lang/InterruptedException",
             interruptedMessage
         );
         instructions.add(IrInstruction.label(successLabel));
     }
-    static void routePendingInterruptedException(
+    static void routePendingPlatformException(
         final ClassFile classFile,
         final MethodInfo method,
         final Instruction instruction,
@@ -6182,11 +6433,12 @@ final class BytecodeToIRInvokeSupport {
         final List<StackValue> stack,
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final SourceLineIndex sourceLines,
-        final IrExpression interruptedMessage
+        final String throwableType,
+        final IrExpression message
     ) {
         final StackValue thrownValue = StackValue.platformThrowable(
-            "java/lang/InterruptedException",
-            interruptedMessage
+            throwableType,
+            message
         );
         final Optional<Integer> handler = BytecodeToIRControlFlowSupport.exceptionHandler(
             classFile,
@@ -6197,19 +6449,59 @@ final class BytecodeToIRInvokeSupport {
         );
         if (handler.isPresent()) {
             final int handlerOffset = handler.orElseThrow();
-            if (pendingExceptionHandlerStacks.containsKey(handlerOffset)) {
-                throw unsupportedTypedExceptionHandler(classFile, method, instruction);
+            final StackValue pending = pendingExceptionHandlerStacks.get(handlerOffset);
+            if (pending == null) {
+                pendingExceptionHandlerStacks.put(handlerOffset, thrownValue);
+            } else {
+                pendingExceptionHandlerStacks.put(
+                    handlerOffset,
+                    mergePendingPlatformThrowables(classFile, method, instruction, pending, thrownValue)
+                );
             }
-            pendingExceptionHandlerStacks.put(handlerOffset, thrownValue);
             instructions.add(IrInstruction.jump(label(handlerOffset)));
             BytecodeToIRControlFlowSupport.clearStack(stack);
             return;
         }
         instructions.add(IrInstruction.panic(
-            IrExpression.stringLiteral("java/lang/InterruptedException"),
+            IrExpression.stringLiteral(throwableType),
             BytecodeToIRControlFlowSupport.sourceLocation(classFile, method, instruction, sourceLines)
         ));
         BytecodeToIRControlFlowSupport.clearStack(stack);
+    }
+    static StackValue mergePendingPlatformThrowables(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final StackValue first,
+        final StackValue second
+    ) {
+        if (first.expression().isEmpty()
+            || second.expression().isEmpty()
+            || !first.expression().orElseThrow().equals(second.expression().orElseThrow())
+            || first.throwableType().isEmpty()
+            || second.throwableType().isEmpty()) {
+            throw unsupportedTypedExceptionHandler(classFile, method, instruction);
+        }
+        final String firstType = first.throwableType().orElseThrow();
+        final String secondType = second.throwableType().orElseThrow();
+        if (JdkCallSupport.isPlatformThrowableAssignable(firstType, secondType)) {
+            return StackValue.platformThrowable(secondType, first.expression().orElseThrow());
+        }
+        if (JdkCallSupport.isPlatformThrowableAssignable(secondType, firstType)) {
+            return StackValue.platformThrowable(firstType, first.expression().orElseThrow());
+        }
+        for (final String commonType : List.of(
+            "java/lang/RuntimeException",
+            "java/lang/Exception",
+            "java/lang/Error",
+            "java/lang/Throwable"
+        )) {
+            if (JdkCallSupport.isPlatformThrowableAssignable(firstType, commonType)
+                && JdkCallSupport.isPlatformThrowableAssignable(secondType, commonType)) {
+                return StackValue.platformThrowable(commonType, first.expression().orElseThrow());
+            }
+        }
+        throw unsupportedTypedExceptionHandler(classFile, method, instruction);
     }
     static boolean isJdkCollectionOwner(final String owner) {
         if (isJdkListOrCollection(owner)) {
@@ -7701,13 +7993,41 @@ final class BytecodeToIRInvokeSupport {
             lowerSupplierGetLambdaCall(classFile, method, instruction, stack);
             return;
         }
+        if (isSupplierGet(methodRef)
+            && materializedLambdaMethods.get(methodRef) == MaterializedLambdaDispatchKind.SUPPLIER) {
+            final IrExpression supplier = popObject(classFile, method, stack);
+            final String resultLocal = newObjectLocal(localDeclarations);
+            lowerSupplierGetCall(
+                classes,
+                classFile,
+                method,
+                instruction,
+                instructions,
+                dispatches,
+                materializedLambdaMethods,
+                supplier,
+                resultLocal
+            );
+            stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
+            return;
+        }
         if (isFunctionApply(methodRef) && hasFunctionLambdaReceiverOnStack(stack)) {
             lowerFunctionApplyLambdaCall(classFile, method, instruction, stack);
             return;
         }
         final List<EntryPoint> targets = interfaceTargets(classes, methodRef);
         if (targets.size() > 1) {
-            lowerDispatchCall(classFile, method, instruction, instructions, stack, dispatches, methodRef, targets);
+            lowerDispatchCall(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                localDeclarations,
+                dispatches,
+                methodRef,
+                targets
+            );
             return;
         }
         final MethodDescriptor descriptor = MethodDescriptor.parse(methodRef.descriptor());
@@ -7717,13 +8037,20 @@ final class BytecodeToIRInvokeSupport {
             final EntryPoint target = targets.getFirst();
             arguments.addFirst(receiver);
             final String symbol = symbol(target);
-            appendCallResult(instructions, stack, descriptor.returnType(), symbol, arguments);
+            appendCallResult(instructions, stack, localDeclarations, descriptor.returnType(), symbol, arguments);
             return;
         }
         final Optional<EntryPoint> defaultTarget = defaultInterfaceTarget(classes, methodRef);
         if (defaultTarget.isPresent()) {
             arguments.addFirst(receiver);
-            appendCallResult(instructions, stack, descriptor.returnType(), symbol(defaultTarget.orElseThrow()), arguments);
+            appendCallResult(
+                instructions,
+                stack,
+                localDeclarations,
+                descriptor.returnType(),
+                symbol(defaultTarget.orElseThrow()),
+                arguments
+            );
             return;
         }
         if (materializedLambdaMethods.containsKey(methodRef)) {
@@ -8418,6 +8745,7 @@ final class BytecodeToIRInvokeSupport {
         final Instruction instruction,
         final List<IrInstruction> instructions,
         final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
         final MethodRef methodRef,
         final List<EntryPoint> targets
@@ -8428,22 +8756,57 @@ final class BytecodeToIRInvokeSupport {
         arguments.addFirst(receiver);
         final String dispatchSymbol = dispatchSymbol(methodRef);
         dispatches.putIfAbsent(dispatchSymbol, dispatch(dispatchSymbol, descriptor, targets));
-        appendCallResult(instructions, stack, descriptor.returnType(), dispatchSymbol, arguments);
+        appendCallResult(instructions, stack, localDeclarations, descriptor.returnType(), dispatchSymbol, arguments);
     }
     static void appendCallResult(
         final List<IrInstruction> instructions,
         final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
         final IrType returnType,
         final String symbol,
         final List<IrExpression> arguments
     ) {
-        switch (returnType) {
-            case VOID -> instructions.add(IrInstruction.callStaticVoid(symbol, arguments));
-            case INT -> stack.add(StackValue.intExpression(IrExpression.intCall(symbol, arguments)));
-            case LONG -> stack.add(StackValue.longExpression(IrExpression.longCall(symbol, arguments)));
-            case FLOAT -> stack.add(StackValue.floatExpression(IrExpression.floatCall(symbol, arguments)));
-            case DOUBLE -> stack.add(StackValue.doubleExpression(IrExpression.doubleCall(symbol, arguments)));
-            case OBJECT -> stack.add(StackValue.objectExpression(IrExpression.objectCall(symbol, arguments)));
+        if (returnType == IrType.VOID) {
+            instructions.add(IrInstruction.callStaticVoid(symbol, arguments));
+            return;
+        }
+        final String localName = Strings2.toAsciiLowerCase(returnType.name()) + localDeclarations.size();
+        final IrLocal local = new IrLocal(returnType, localName);
+        localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), local);
+        final IrExpression call;
+        final StackKind stackKind;
+        if (returnType == IrType.INT) {
+            call = IrExpression.intCall(symbol, arguments);
+            stackKind = StackKind.INT;
+        } else if (returnType == IrType.LONG) {
+            call = IrExpression.longCall(symbol, arguments);
+            stackKind = StackKind.LONG;
+        } else if (returnType == IrType.FLOAT) {
+            call = IrExpression.floatCall(symbol, arguments);
+            stackKind = StackKind.FLOAT;
+        } else if (returnType == IrType.DOUBLE) {
+            call = IrExpression.doubleCall(symbol, arguments);
+            stackKind = StackKind.DOUBLE;
+        } else if (returnType == IrType.OBJECT) {
+            call = IrExpression.objectCall(symbol, arguments);
+            stackKind = StackKind.OBJECT;
+        } else {
+            throw new IllegalStateException("Unsupported call result type.");
+        }
+        instructions.add(BytecodeToIRControlFlowSupport.assignLocal(stackKind, localName, call));
+        final IrExpression localExpression = BytecodeToIR.localExpression(returnType, local);
+        if (returnType == IrType.INT) {
+            stack.add(StackValue.intExpression(localExpression));
+        } else if (returnType == IrType.LONG) {
+            stack.add(StackValue.longExpression(localExpression));
+        } else if (returnType == IrType.FLOAT) {
+            stack.add(StackValue.floatExpression(localExpression));
+        } else if (returnType == IrType.DOUBLE) {
+            stack.add(StackValue.doubleExpression(localExpression));
+        } else if (returnType == IrType.OBJECT) {
+            stack.add(StackValue.objectExpression(localExpression));
+        } else {
+            throw new IllegalStateException("Unsupported call result type.");
         }
     }
     static IrDispatch dispatch(final String symbol, final MethodDescriptor descriptor, final List<EntryPoint> targets) {
@@ -8540,7 +8903,11 @@ final class BytecodeToIRInvokeSupport {
         for (final MaterializedLambdaKey key : targetIds.keySet()) {
             result.put(
                 new MethodRef(key.interfaceOwner(), key.interfaceMethodName(), key.interfaceMethodDescriptor()),
-                key.voidResult()
+                "java/util/function/Supplier".equals(key.interfaceOwner())
+                    && "get".equals(key.interfaceMethodName())
+                    && "()Ljava/lang/Object;".equals(key.interfaceMethodDescriptor())
+                    ? MaterializedLambdaDispatchKind.SUPPLIER
+                    : key.voidResult()
                     ? MaterializedLambdaDispatchKind.VOID
                     : (key.booleanResult() ? MaterializedLambdaDispatchKind.BOOLEAN : MaterializedLambdaDispatchKind.OBJECT)
             );
@@ -8575,7 +8942,8 @@ final class BytecodeToIRInvokeSupport {
                 if (!resolved.isZeroCaptureMaterializedObjectLambda()
                     && !resolved.isZeroCaptureMaterializedBooleanLambda()
                     && !resolved.isMaterializedBiFunctionLambda()
-                    && !resolved.isMaterializedVoidLambda()) {
+                    && !resolved.isMaterializedVoidLambda()
+                    && !(resolved.isMaterializedSupplierLambda() && shouldMaterializeSupplierLambda(method.orElseThrow(), instruction))) {
                     continue;
                 }
                 if (!classes.containsKey(resolved.implementation().owner())) {
@@ -8624,10 +8992,16 @@ final class BytecodeToIRInvokeSupport {
         final ClassFile classFile,
         final MethodInfo method,
         final Instruction instruction,
+        final List<IrInstruction> instructions,
         final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<String, IrDispatch> dispatches,
         final Map<String, Integer> materializedLambdaTargetIds
     ) {
-        if (lowerRecordEqualsDynamic(classes, classFile, method, instruction, stack)) {
+        if (lowerRecordHashCodeDynamic(classes, classFile, method, instruction, instructions, stack, localDeclarations, dispatches)) {
+            return;
+        }
+        if (lowerRecordEqualsDynamic(classes, classFile, method, instruction, instructions, stack, localDeclarations, dispatches)) {
             return;
         }
         final Optional<DynamicRef> maybeDynamicRef = instruction.dynamicRef();
@@ -8675,7 +9049,8 @@ final class BytecodeToIRInvokeSupport {
         if (resolved.isZeroCaptureMaterializedObjectLambda()
             || resolved.isZeroCaptureMaterializedBooleanLambda()
             || resolved.isMaterializedBiFunctionLambda()
-            || resolved.isMaterializedVoidLambda()) {
+            || resolved.isMaterializedVoidLambda()
+            || (resolved.isMaterializedSupplierLambda() && shouldMaterializeSupplierLambda(method, instruction))) {
             final Integer targetId = materializedLambdaTargetIds.get(materializedLambdaKey(resolved));
             if (targetId == null) {
                 return false;
@@ -8710,7 +9085,7 @@ final class BytecodeToIRInvokeSupport {
             )));
             return true;
         }
-        if (!resolved.isDirectlyLowerable()) {
+        if (!resolved.isDirectlyLowerable(classes)) {
             return false;
         }
         if (implementation.owner().startsWith("java/")
@@ -8720,7 +9095,8 @@ final class BytecodeToIRInvokeSupport {
             && "(Ljava/lang/Object;)Ljava/lang/Object;".equals(implementation.descriptor()))) {
             return false;
         }
-        if (resolved.implementationReferenceKind() == 6 && !classes.containsKey(implementation.owner())) {
+        if ((resolved.implementationReferenceKind() == 5 || resolved.implementationReferenceKind() == 6)
+            && !classes.containsKey(implementation.owner())) {
             return false;
         }
         final Optional<List<String>> captureDescriptors = parameterDescriptors(dynamicRef.descriptor());
@@ -8761,6 +9137,40 @@ final class BytecodeToIRInvokeSupport {
         return false;
     }
 
+    private static boolean shouldMaterializeSupplierLambda(
+        final MethodInfo method,
+        final Instruction instruction
+    ) {
+        if (method.code().isEmpty()) {
+            return true;
+        }
+        final List<Instruction> bytecode = method.code().orElseThrow().instructions();
+        for (int index = 0; index + 1 < bytecode.size(); index++) {
+            if (bytecode.get(index).offset() != instruction.offset()) {
+                continue;
+            }
+            final Optional<MethodRef> consumer = bytecode.get(index + 1).methodRef();
+            if (consumer.isEmpty()) {
+                return true;
+            }
+            return !isInlineSupplierConsumer(consumer.orElseThrow());
+        }
+        return true;
+    }
+
+    private static boolean isInlineSupplierConsumer(final MethodRef target) {
+        if (isSupplierGet(target)) {
+            return true;
+        }
+        if ("java/util/Optional".equals(target.owner())) {
+            return ("or".equals(target.name()) && "(Ljava/util/function/Supplier;)Ljava/util/Optional;".equals(target.descriptor()))
+                || ("orElseGet".equals(target.name()) && "(Ljava/util/function/Supplier;)Ljava/lang/Object;".equals(target.descriptor()));
+        }
+        return "java/util/Objects".equals(target.owner())
+            && "requireNonNullElseGet".equals(target.name())
+            && "(Ljava/lang/Object;Ljava/util/function/Supplier;)Ljava/lang/Object;".equals(target.descriptor());
+    }
+
     private static boolean supportsLambdaImplementationShape(
         final LambdaMetafactoryCall lambdaCall,
         final List<String> captureDescriptors
@@ -8771,6 +9181,23 @@ final class BytecodeToIRInvokeSupport {
             return false;
         }
         final List<String> parameters = implementationParameters.orElseThrow();
+        if (lambdaCall.implementationReferenceKind() == 5) {
+            if (lambdaCall.isSupplier()) {
+                return true;
+            }
+            if (!lambdaCall.isPredicate()
+                || captureDescriptors.isEmpty()
+                || parameters.size() != captureDescriptors.size()) {
+                return false;
+            }
+            for (int index = 1; index < captureDescriptors.size(); index++) {
+                if (!sameOrObjectCompatible(captureDescriptors.get(index), parameters.get(index - 1))) {
+                    return false;
+                }
+            }
+            final Optional<String> input = lambdaCall.inputDescriptor();
+            return input.isPresent() && sameOrObjectCompatible(input.orElseThrow(), parameters.getLast());
+        }
         if (lambdaCall.implementationReferenceKind() == 6) {
             if (lambdaCall.isSupplier()) {
                 if (parameters.size() != captureDescriptors.size()) {
@@ -8864,7 +9291,7 @@ final class BytecodeToIRInvokeSupport {
     }
 
     private static IrExpression invokePredicateLambdaExpression(final DynamicLambda lambda, final IrExpression argument) {
-        if (lambda.implementationReferenceKind() == 6) {
+        if (lambda.implementationReferenceKind() == 5 || lambda.implementationReferenceKind() == 6) {
             final List<IrExpression> arguments = new ArrayList<>(lambda.captures());
             arguments.add(argument);
             return IrExpression.intCall(symbol(new EntryPoint(
@@ -8877,7 +9304,7 @@ final class BytecodeToIRInvokeSupport {
     }
 
     private static IrExpression invokeSupplierLambdaExpression(final DynamicLambda lambda) {
-        if (lambda.implementationReferenceKind() == 6) {
+        if (lambda.implementationReferenceKind() == 5 || lambda.implementationReferenceKind() == 6) {
             return IrExpression.objectCall(symbol(new EntryPoint(
                 lambda.implementationOwner(),
                 lambda.implementationName(),
@@ -8920,73 +9347,367 @@ final class BytecodeToIRInvokeSupport {
         return localName;
     }
 
+    static boolean lowerRecordHashCodeDynamic(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<String, IrDispatch> dispatches
+    ) {
+        if (instruction.dynamicRef().isEmpty()) {
+            return false;
+        }
+        final Optional<RecordObjectMethodsCall> recordCall =
+            RecordObjectMethodsCall.resolveHashCode(classFile, method, instruction.dynamicRef().orElseThrow());
+        if (recordCall.isEmpty()) {
+            return false;
+        }
+        final IrExpression self = popObject(classFile, method, stack);
+        final String selfLocal = newObjectLocal(localDeclarations);
+        final String resultLocal = newIntLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(selfLocal, self));
+        instructions.add(IrInstruction.assignInt(resultLocal, IrExpression.intLiteral(0)));
+        final IrExpression materializedSelf = IrExpression.objectLocal(selfLocal);
+        for (final RecordObjectMethodsCall.Component component : recordCall.orElseThrow().components()) {
+            final javan.classfile.FieldInfo field = component.field();
+            final IrExpression fieldHash = component.shape().referenceOwner().isPresent()
+                ? lowerRecordReferenceFieldHashCode(classes, classFile, component, materializedSelf, dispatches)
+                : recordHashCodeFieldExpression(classFile.name(), field, materializedSelf);
+            instructions.add(IrInstruction.assignInt(
+                resultLocal,
+                IrExpression.intCall("javan_record_hash_combine", List.of(IrExpression.intLocal(resultLocal), fieldHash))
+            ));
+        }
+        stack.add(StackValue.intExpression(IrExpression.intLocal(resultLocal)));
+        return true;
+    }
+
+    private static IrExpression lowerRecordReferenceFieldHashCode(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final RecordObjectMethodsCall.Component component,
+        final IrExpression self,
+        final Map<String, IrDispatch> dispatches
+    ) {
+        markRecordReferenceObjectMethodDispatch(classes, component.shape(), dispatches, true);
+        return IrExpression.intCall(
+            "javan_record_shape_hash_code",
+            List.of(
+                IrExpression.objectField(classFile.name(), component.field().name(), self),
+                IrExpression.stringLiteral(recordShapeEncoding(classes, component.shape()))
+            )
+        );
+    }
+
+    private static IrExpression recordHashCodeFieldExpression(
+        final String owner,
+        final javan.classfile.FieldInfo field,
+        final IrExpression self
+    ) {
+        return switch (field.descriptor()) {
+            case "Z" -> IrExpression.intCall("javan_record_boolean_hash_code", List.of(IrExpression.intField(owner, field.name(), self)));
+            case "B", "C", "I", "S" -> IrExpression.intField(owner, field.name(), self);
+            case "J" -> IrExpression.intCall("javan_record_long_hash_code", List.of(IrExpression.longField(owner, field.name(), self)));
+            case "F" -> IrExpression.intCall("javan_record_float_hash_code", List.of(IrExpression.floatField(owner, field.name(), self)));
+            case "D" -> IrExpression.intCall("javan_record_double_hash_code", List.of(IrExpression.doubleField(owner, field.name(), self)));
+            default -> IrExpression.intCall(
+                "javan_record_reference_identity_hash_code",
+                List.of(IrExpression.objectField(owner, field.name(), self))
+            );
+        };
+    }
+
     static boolean lowerRecordEqualsDynamic(
         final Map<String, ClassFile> classes,
         final ClassFile classFile,
         final MethodInfo method,
         final Instruction instruction,
-        final List<StackValue> stack
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<String, IrDispatch> dispatches
     ) {
-        if (!supportedRecordEqualsDynamic(classFile, method, instruction)) {
+        if (instruction.dynamicRef().isEmpty()) {
+            return false;
+        }
+        final Optional<RecordObjectMethodsCall> recordCall =
+            RecordObjectMethodsCall.resolve(classFile, method, instruction.dynamicRef().orElseThrow());
+        if (recordCall.isEmpty()) {
             return false;
         }
         final IrExpression other = popObject(classFile, method, stack);
         final IrExpression self = popObject(classFile, method, stack);
-        final List<javan.classfile.FieldInfo> fields = recordObjectEqualsFields(classFile);
-        final List<IrExpression> arguments = new ArrayList<>();
-        arguments.add(self);
-        arguments.add(other);
-        arguments.add(IrExpression.intLiteral(exactTypeId(classes, classFile.name())));
-        arguments.add(IrExpression.intLiteral(fields.size()));
-        for (final javan.classfile.FieldInfo field : fields) {
-            arguments.add(IrExpression.objectField(classFile.name(), field.name(), self));
-            arguments.add(IrExpression.objectField(classFile.name(), field.name(), other));
-        }
-        stack.add(StackValue.intExpression(IrExpression.intCall("javan_record_object_equals", arguments)));
-        return true;
-    }
-
-    private static boolean supportedRecordEqualsDynamic(
-        final ClassFile classFile,
-        final MethodInfo method,
-        final Instruction instruction
-    ) {
-        if (!"java/lang/Record".equals(classFile.superName())) {
-            return false;
-        }
-        if (!"equals".equals(method.name()) || !"(Ljava/lang/Object;)Z".equals(method.descriptor())) {
-            return false;
-        }
-        final Optional<DynamicRef> dynamicRef = instruction.dynamicRef();
-        if (dynamicRef.isEmpty()) {
-            return false;
-        }
-        final DynamicRef ref = dynamicRef.orElseThrow();
-        if (!"java/lang/runtime/ObjectMethods".equals(ref.bootstrapOwner())) {
-            return false;
-        }
-        if (!"bootstrap".equals(ref.bootstrapName())) {
-            return false;
-        }
-        for (final javan.classfile.FieldInfo field : classFile.fields()) {
-            if (field.isStatic()) {
+        final String selfLocal = newObjectLocal(localDeclarations);
+        final String otherLocal = newObjectLocal(localDeclarations);
+        instructions.add(IrInstruction.assignObject(selfLocal, self));
+        instructions.add(IrInstruction.assignObject(otherLocal, other));
+        final IrExpression materializedSelf = IrExpression.objectLocal(selfLocal);
+        final IrExpression materializedOther = IrExpression.objectLocal(otherLocal);
+        final String resultLocal = newIntLocal(localDeclarations);
+        final String doneLabel = "label_record_equals_done_" + instruction.offset() + "_" + localDeclarations.size();
+        instructions.add(IrInstruction.assignInt(resultLocal, IrExpression.intLiteral(0)));
+        for (final RecordObjectMethodsCall.Component component : recordCall.orElseThrow().components()) {
+            if (component.shape().referenceOwner().isEmpty()) {
                 continue;
             }
-            if (!field.descriptor().startsWith("L") && !field.descriptor().startsWith("[")) {
-                return false;
-            }
+            instructions.add(IrInstruction.callStaticVoid(
+                "javan_record_shape_validate",
+                List.of(
+                    IrExpression.objectField(classFile.name(), component.field().name(), materializedSelf),
+                    IrExpression.stringLiteral(recordShapeEncoding(classes, component.shape()))
+                )
+            ));
         }
+        instructions.add(IrInstruction.branchIf(doneLabel, IrExpression.objectComparison("==", materializedOther, IrExpression.objectNull())));
+        instructions.add(IrInstruction.branchIf(
+            doneLabel,
+            IrExpression.intComparison(
+                "==",
+                IrExpression.intCall(
+                    "javan_object_type_in",
+                    List.of(materializedOther, IrExpression.intLiteral(1), IrExpression.intLiteral(exactTypeId(classes, classFile.name())))
+                ),
+                IrExpression.intLiteral(0)
+            )
+        ));
+        for (final RecordObjectMethodsCall.Component component : recordCall.orElseThrow().components()) {
+            if (component.shape().referenceOwner().isEmpty()) {
+                continue;
+            }
+            instructions.add(IrInstruction.callStaticVoid(
+                "javan_record_shape_validate",
+                List.of(
+                    IrExpression.objectField(classFile.name(), component.field().name(), materializedOther),
+                    IrExpression.stringLiteral(recordShapeEncoding(classes, component.shape()))
+                )
+            ));
+        }
+        for (final RecordObjectMethodsCall.Component component : recordCall.orElseThrow().components()) {
+            final javan.classfile.FieldInfo field = component.field();
+            if (component.shape().referenceOwner().isPresent()) {
+                lowerRecordReferenceFieldEquals(
+                    classes,
+                    classFile,
+                    component,
+                    materializedSelf,
+                    materializedOther,
+                    instructions,
+                    localDeclarations,
+                    dispatches,
+                    doneLabel
+                );
+                continue;
+            }
+            instructions.add(IrInstruction.branchIf(
+                doneLabel,
+                IrExpression.intComparison(
+                    "==",
+                    recordObjectEqualsFieldExpression(classFile.name(), field, materializedSelf, materializedOther),
+                    IrExpression.intLiteral(0)
+                )
+            ));
+        }
+        instructions.add(IrInstruction.assignInt(resultLocal, IrExpression.intLiteral(1)));
+        instructions.add(IrInstruction.label(doneLabel));
+        stack.add(StackValue.intExpression(IrExpression.intLocal(resultLocal)));
         return true;
     }
 
-    private static List<javan.classfile.FieldInfo> recordObjectEqualsFields(final ClassFile classFile) {
-        final List<javan.classfile.FieldInfo> result = new ArrayList<>();
-        for (final javan.classfile.FieldInfo field : classFile.fields()) {
-            if (!field.isStatic()) {
-                result.add(field);
-            }
+    private static void lowerRecordReferenceFieldEquals(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final RecordObjectMethodsCall.Component component,
+        final IrExpression self,
+        final IrExpression other,
+        final List<IrInstruction> instructions,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<String, IrDispatch> dispatches,
+        final String doneLabel
+    ) {
+        final String leftLocal = newObjectLocal(localDeclarations);
+        final String rightLocal = newObjectLocal(localDeclarations);
+        final IrExpression left = IrExpression.objectLocal(leftLocal);
+        final IrExpression right = IrExpression.objectLocal(rightLocal);
+        instructions.add(IrInstruction.assignObject(
+            leftLocal,
+            IrExpression.objectField(classFile.name(), component.field().name(), self)
+        ));
+        instructions.add(IrInstruction.assignObject(
+            rightLocal,
+            IrExpression.objectField(classFile.name(), component.field().name(), other)
+        ));
+        instructions.add(IrInstruction.branchIf(
+            doneLabel,
+            IrExpression.intComparison(
+                "==",
+                recordReferenceEqualsExpression(classes, component.shape(), left, right, dispatches),
+                IrExpression.intLiteral(0)
+            )
+        ));
+    }
+
+    private static IrExpression recordReferenceEqualsExpression(
+        final Map<String, ClassFile> classes,
+        final RecordObjectMethodsCall.Shape shape,
+        final IrExpression left,
+        final IrExpression right,
+        final Map<String, IrDispatch> dispatches
+    ) {
+        markRecordReferenceObjectMethodDispatch(classes, shape, dispatches, false);
+        return IrExpression.intCall(
+            "javan_record_shape_equals_prevalidated",
+            List.of(left, right, IrExpression.stringLiteral(recordShapeEncoding(classes, shape)))
+        );
+    }
+
+    private static final String RECORD_REFERENCE_EQUALS_DISPATCH = "javan_dispatch_record_reference_equals";
+    private static final String RECORD_REFERENCE_HASH_CODE_DISPATCH = "javan_dispatch_record_reference_hash_code";
+
+    private static void markRecordReferenceObjectMethodDispatch(
+        final Map<String, ClassFile> classes,
+        final RecordObjectMethodsCall.Shape shape,
+        final Map<String, IrDispatch> dispatches,
+        final boolean hashCode
+    ) {
+        if (!shape.valid() || shape.isArray() || shape.referenceOwner().isEmpty()) {
+            return;
         }
-        return List.copyOf(result);
+        if (shape.isList()) {
+            markRecordReferenceObjectMethodDispatch(
+                classes,
+                shape.listElement().orElseThrow(),
+                dispatches,
+                hashCode
+            );
+            return;
+        }
+        final String owner = shape.referenceOwner().orElseThrow();
+        if ("java/lang/String".equals(owner) || recordBoxedTypeId(owner) != 0) {
+            return;
+        }
+        final String symbol = hashCode ? RECORD_REFERENCE_HASH_CODE_DISPATCH : RECORD_REFERENCE_EQUALS_DISPATCH;
+        final List<IrParameter> parameters = hashCode
+            ? List.of(new IrParameter(IrType.OBJECT, "self"))
+            : List.of(new IrParameter(IrType.OBJECT, "self"), new IrParameter(IrType.OBJECT, "arg0"));
+        final IrDispatch existing =
+            dispatches.getOrDefault(symbol, new IrDispatch(symbol, IrType.INT, parameters, List.of()));
+        final List<IrDispatchTarget> targets = new ArrayList<>();
+        for (final IrDispatchTarget target : existing.targets()) {
+            if (owner.equals(target.owner())) {
+                return;
+            }
+            targets.add(target);
+        }
+        final Optional<EntryPoint> target = recordReferenceTarget(classes, owner, hashCode);
+        final String functionSymbol = target.isPresent()
+            ? BytecodeToIR.symbol(target.orElseThrow())
+            : hashCode ? "javan_record_reference_identity_hash_code" : "javan_record_reference_identity_equals";
+        final IrDispatchTarget added = new IrDispatchTarget(owner, functionSymbol);
+        int insertionIndex = 0;
+        while (insertionIndex < targets.size()
+            && Strings2.compareAscii(targets.get(insertionIndex).owner(), owner) <= 0) {
+            insertionIndex++;
+        }
+        targets.add(insertionIndex, added);
+        dispatches.put(symbol, new IrDispatch(symbol, IrType.INT, parameters, List.copyOf(targets)));
+    }
+
+    static Optional<EntryPoint> recordReferenceTarget(
+        final Map<String, ClassFile> classes,
+        final String receiver,
+        final boolean hashCode
+    ) {
+        String current = receiver;
+        final String methodName = hashCode ? "hashCode" : "equals";
+        final String descriptor = hashCode ? "()I" : "(Ljava/lang/Object;)Z";
+        final Set<String> visited = new HashSet<>();
+        while (classes.containsKey(current) && visited.add(current)) {
+            final ClassFile classFile = classes.get(current);
+            final Optional<MethodInfo> target = classFile.method(methodName, descriptor);
+            if (target.isPresent()) {
+                return classFile.application()
+                    && !target.orElseThrow().isStatic()
+                    && target.orElseThrow().code().isPresent()
+                    ? Optional.of(new EntryPoint(current, methodName, descriptor))
+                    : Optional.empty();
+            }
+            current = classFile.superName();
+        }
+        return Optional.empty();
+    }
+
+    private static String recordShapeEncoding(
+        final Map<String, ClassFile> classes,
+        final RecordObjectMethodsCall.Shape shape
+    ) {
+        if (shape.isList()) {
+            return "l" + recordShapeEncoding(classes, shape.listElement().orElseThrow());
+        }
+        if (shape.isArray()) {
+            final String binaryDescriptor = Strings2.replaceChar(shape.descriptor(), '/', '.');
+            return "a" + binaryDescriptor.length() + ":" + binaryDescriptor;
+        }
+        final String owner = shape.referenceOwner().orElseThrow();
+        if ("java/lang/String".equals(owner)) {
+            return "s";
+        }
+        final int boxedTypeId = recordBoxedTypeId(owner);
+        if (boxedTypeId != 0) {
+            return "b" + boxedTypeId + ";";
+        }
+        final ClassFile ownerClass = classes.get(owner);
+        return (ownerClass != null && ownerClass.isEnum() ? "e" : "o")
+            + exactTypeId(classes, owner)
+            + ";";
+    }
+
+    private static int recordBoxedTypeId(final String owner) {
+        return switch (owner) {
+            case "java/lang/Boolean" -> TYPE_JAVA_LANG_BOOLEAN;
+            case "java/lang/Byte" -> TYPE_JAVA_LANG_BYTE;
+            case "java/lang/Character" -> TYPE_JAVA_LANG_CHARACTER;
+            case "java/lang/Short" -> TYPE_JAVA_LANG_SHORT;
+            case "java/lang/Integer" -> TYPE_JAVA_LANG_INTEGER;
+            case "java/lang/Long" -> TYPE_JAVA_LANG_LONG;
+            case "java/lang/Float" -> TYPE_JAVA_LANG_FLOAT;
+            case "java/lang/Double" -> TYPE_JAVA_LANG_DOUBLE;
+            default -> 0;
+        };
+    }
+
+    private static IrExpression recordObjectEqualsFieldExpression(
+        final String owner,
+        final javan.classfile.FieldInfo field,
+        final IrExpression self,
+        final IrExpression other
+    ) {
+        return switch (field.descriptor()) {
+            case "B", "C", "I", "S", "Z" -> IrExpression.intComparison(
+                "==", IrExpression.intField(owner, field.name(), self), IrExpression.intField(owner, field.name(), other)
+            );
+            case "J" -> IrExpression.intComparison(
+                "==",
+                IrExpression.intCall(
+                    "javan_lcmp",
+                    List.of(IrExpression.longField(owner, field.name(), self), IrExpression.longField(owner, field.name(), other))
+                ),
+                IrExpression.intLiteral(0)
+            );
+            case "F" -> IrExpression.intCall(
+                "javan_record_float_equals",
+                List.of(IrExpression.floatField(owner, field.name(), self), IrExpression.floatField(owner, field.name(), other))
+            );
+            case "D" -> IrExpression.intCall(
+                "javan_record_double_equals",
+                List.of(IrExpression.doubleField(owner, field.name(), self), IrExpression.doubleField(owner, field.name(), other))
+            );
+            default -> IrExpression.objectComparison(
+                "==", IrExpression.objectField(owner, field.name(), self), IrExpression.objectField(owner, field.name(), other)
+            );
+        };
     }
     static IrExpression popStringConcatArgument(
         final ClassFile classFile,

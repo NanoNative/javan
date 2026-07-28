@@ -16,6 +16,7 @@ import javan.classfile.FieldInfo;
 import javan.classfile.FieldRef;
 import javan.classfile.Instruction;
 import javan.classfile.MethodInfo;
+import javan.classfile.RecordComponentInfo;
 import javan.cli.Command;
 import javan.cli.Options;
 import javan.codegen.CCodegen;
@@ -5533,11 +5534,83 @@ final class CoreBehaviorTest {
             "java/lang/Record",
             "equals",
             "(Ljava/lang/Object;)Z",
-            List.of(new javan.classfile.FieldInfo(0, "value", "Ljava/lang/String;")),
+            List.of(new javan.classfile.FieldInfo(0x0012, "value", "Ljava/lang/String;")),
             true
         );
 
         assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierAcceptsReachableJavacRecordHashCodeMethod() {
+        final List<Diagnostic> diagnostics = verifyRecordObjectMethod(
+            "java/lang/Record",
+            "hashCode",
+            "()I",
+            List.of(new javan.classfile.FieldInfo(0x0012, "value", "I")),
+            true
+        );
+
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void staticVerifierRejectsMalformedRecordGenericSignature() {
+        final String malformed = "Ljava/util/List<Ljava/lang/String;";
+        final List<Diagnostic> diagnostics = verifyRecordObjectMethod(
+            "java/lang/Record",
+            "hashCode",
+            "()I",
+            List.of(new FieldInfo(
+                0x0012,
+                "value",
+                "Ljava/util/List;",
+                Optional.of(malformed)
+            )),
+            true
+        );
+
+        assertThat(diagnostics)
+            .extracting(Diagnostic::code, Diagnostic::message, Diagnostic::subject)
+            .containsExactly(tuple("JAVAN030", "unsupported record component type", malformed));
+    }
+
+    @Test
+    void staticVerifierRejectsCyclicRecordComponentHierarchy() {
+        final List<FieldInfo> fields = List.of(new FieldInfo(0x0012, "value", "Lcom/acme/Leaf;"));
+        final MethodInfo method = methodInfo("equals", "(Ljava/lang/Object;)Z", new Instruction(
+            0,
+            186,
+            "invokedynamic",
+            new byte[]{0, 1, 0, 0},
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(recordObjectMethodsDynamic("equals", "(Ljava/lang/Object;)Z", fields))
+        ));
+        final ClassFile record = new ClassFile(
+            69,
+            "com/acme/Message",
+            "java/lang/Record",
+            0x0010,
+            List.of(),
+            fields,
+            List.of(method),
+            Optional.empty(),
+            Optional.of(List.of(new RecordComponentInfo("value", "Lcom/acme/Leaf;"))),
+            Path.of("com/acme/Message.class"),
+            true
+        );
+        final ClassFile leaf = hierarchyClass("com/acme/Leaf", "com/acme/Cycle");
+        final ClassFile cycle = hierarchyClass("com/acme/Cycle", "com/acme/Leaf");
+
+        assertThat(new StaticVerifier().verify(
+            Map.of(record.name(), record, leaf.name(), leaf, cycle.name(), cycle),
+            List.of(new EntryPoint(record.name(), method.name(), method.descriptor()))
+        )).extracting(Diagnostic::code).containsExactly("JAVAN030");
     }
 
     @Test
@@ -12326,14 +12399,53 @@ final class CoreBehaviorTest {
         final List<javan.classfile.FieldInfo> fields,
         final boolean reachable
     ) {
-        return verifyRecordObjectMethod(superName, methodName, descriptor, Optional.of(new DynamicRef(
+        return verifyRecordObjectMethod(
+            superName,
             methodName,
             descriptor,
+            Optional.of(recordObjectMethodsDynamic(methodName, descriptor, fields)),
+            fields,
+            reachable
+        );
+    }
+
+    private static DynamicRef recordObjectMethodsDynamic(
+        final String methodName,
+        final String descriptor,
+        final List<javan.classfile.FieldInfo> fields
+    ) {
+        final String owner = "com/acme/Message";
+        final String dynamicDescriptor = "equals".equals(methodName)
+            ? "(L" + owner + ";Ljava/lang/Object;)Z"
+            : "hashCode".equals(methodName) ? "(L" + owner + ";)I" : descriptor;
+        final List<BootstrapArgument> arguments = new java.util.ArrayList<>();
+        arguments.add(BootstrapArgument.classLiteral(owner));
+        final StringBuilder fieldNames = new StringBuilder();
+        for (int index = 0; index < fields.size(); index++) {
+            if (index > 0) {
+                fieldNames.append(';');
+            }
+            final javan.classfile.FieldInfo field = fields.get(index);
+            fieldNames.append(field.name());
+        }
+        arguments.add(BootstrapArgument.string(fieldNames.toString()));
+        for (final javan.classfile.FieldInfo field : fields) {
+            arguments.add(BootstrapArgument.methodHandle(
+                1,
+                new MethodRef(owner, field.name(), field.descriptor())
+            ));
+        }
+        return new DynamicRef(
+            methodName,
+            dynamicDescriptor,
             "java/lang/runtime/ObjectMethods",
             "bootstrap",
-            "()V",
-            List.of("field")
-        )), fields, reachable);
+            "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/TypeDescriptor;"
+                + "Ljava/lang/Class;Ljava/lang/String;[Ljava/lang/invoke/MethodHandle;)Ljava/lang/Object;",
+            6,
+            arguments.stream().map(BootstrapArgument::text).toList(),
+            arguments
+        );
     }
 
     private static List<Diagnostic> verifyRecordObjectMethod(
@@ -12371,10 +12483,14 @@ final class CoreBehaviorTest {
             69,
             "com/acme/Message",
             superName,
-            0,
+            0x0010,
             List.of(),
             List.copyOf(fields),
             List.of(method),
+            Optional.empty(),
+            Optional.of(fields.stream()
+                .map(field -> new RecordComponentInfo(field.name(), field.descriptor(), field.signature()))
+                .toList()),
             Path.of("com/acme/Message.class"),
             true
         );
@@ -12385,6 +12501,20 @@ final class CoreBehaviorTest {
             reachableMethods = List.of();
         }
         return new StaticVerifier().verify(Map.of(classFile.name(), classFile), reachableMethods);
+    }
+
+    private static ClassFile hierarchyClass(final String name, final String superName) {
+        return new ClassFile(
+            69,
+            name,
+            superName,
+            0x0010,
+            List.of(),
+            List.of(),
+            List.of(),
+            Path.of(name + ".class"),
+            true
+        );
     }
 
     private static List<Diagnostic> verifyStringSemanticMethod(

@@ -85,6 +85,36 @@ final class ClassFileReaderTest {
     }
 
     @Test
+    void readerParsesRecordAttributeComponents() throws Exception {
+        final ClassFile classFile = new ClassFileReader().read(classfileWithRecordComponent("Ljava/lang/String;"), SOURCE);
+
+        assertThat(classFile.recordComponents()).contains(List.of(
+            new RecordComponentInfo("value", "Ljava/lang/String;")
+        ));
+    }
+
+    @Test
+    void readerRejectsMalformedReferenceFieldDescriptor() {
+        assertThatThrownBy(() -> new ClassFileReader().read(classfileWithRecordComponent("L"), SOURCE))
+            .isInstanceOf(IOException.class)
+            .hasMessage("Invalid field descriptor for value: L");
+    }
+
+    @Test
+    void readerRejectsDuplicateRecordComponentNames() {
+        assertThatThrownBy(() -> new ClassFileReader().read(classfileWithDuplicateRecordComponents(), SOURCE))
+            .isInstanceOf(IOException.class)
+            .hasMessage("Duplicate record component: value");
+    }
+
+    @Test
+    void readerRejectsDuplicateFields() {
+        assertThatThrownBy(() -> new ClassFileReader().read(classfileWithDuplicateFields(), SOURCE))
+            .isInstanceOf(IOException.class)
+            .hasMessage("Duplicate field: value Ljava/lang/String;");
+    }
+
+    @Test
     void readerRejectsUnsupportedConstantPoolTag() {
         final byte[] bytes = new Bytes()
             .u4(0xCAFEBABEL)
@@ -547,6 +577,105 @@ final class ClassFileReaderTest {
             .u2(1)
             .u4(methodCode.length)
             .bytes(methodCode)
+            .u2(0)
+            .u2(0)
+            .u2(0)
+            .toByteArray();
+    }
+
+    private static byte[] classfileWithRecordComponent(final String descriptor) {
+        return new Bytes()
+            .u4(0xCAFEBABEL)
+            .u2(0)
+            .u2(65)
+            .u2(8)
+            .utf8("sample/Value")
+            .classInfo(1)
+            .utf8("java/lang/Record")
+            .classInfo(3)
+            .utf8("value")
+            .utf8(descriptor)
+            .utf8("Record")
+            .u2(0x0031)
+            .u2(2)
+            .u2(4)
+            .u2(0)
+            .u2(1)
+            .u2(0x0012)
+            .u2(5)
+            .u2(6)
+            .u2(0)
+            .u2(0)
+            .u2(1)
+            .u2(7)
+            .u4(8)
+            .u2(1)
+            .u2(5)
+            .u2(6)
+            .u2(0)
+            .toByteArray();
+    }
+
+    private static byte[] classfileWithDuplicateRecordComponents() {
+        return new Bytes()
+            .u4(0xCAFEBABEL)
+            .u2(0)
+            .u2(65)
+            .u2(8)
+            .utf8("sample/Value")
+            .classInfo(1)
+            .utf8("java/lang/Record")
+            .classInfo(3)
+            .utf8("value")
+            .utf8("Ljava/lang/String;")
+            .utf8("Record")
+            .u2(0x0031)
+            .u2(2)
+            .u2(4)
+            .u2(0)
+            .u2(1)
+            .u2(0x0012)
+            .u2(5)
+            .u2(6)
+            .u2(0)
+            .u2(0)
+            .u2(1)
+            .u2(7)
+            .u4(14)
+            .u2(2)
+            .u2(5)
+            .u2(6)
+            .u2(0)
+            .u2(5)
+            .u2(6)
+            .u2(0)
+            .toByteArray();
+    }
+
+    private static byte[] classfileWithDuplicateFields() {
+        return new Bytes()
+            .u4(0xCAFEBABEL)
+            .u2(0)
+            .u2(65)
+            .u2(7)
+            .utf8("sample/Value")
+            .classInfo(1)
+            .utf8("java/lang/Record")
+            .classInfo(3)
+            .utf8("value")
+            .utf8("Ljava/lang/String;")
+            .u2(0x0031)
+            .u2(2)
+            .u2(4)
+            .u2(0)
+            .u2(2)
+            .u2(0x0012)
+            .u2(5)
+            .u2(6)
+            .u2(0)
+            .u2(0x0012)
+            .u2(5)
+            .u2(6)
             .u2(0)
             .u2(0)
             .u2(0)
