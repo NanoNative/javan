@@ -290,6 +290,117 @@ final class LambdaMetafactoryCallTest {
     }
 
     @Test
+    void materializedBoundCustomObjectLambdaAcceptsFinalApplicationOwner() {
+        final LambdaMetafactoryCall resolved = materializedBoundCustomObjectLambda(
+            "(Lcom/acme/Main;)Lcom/acme/Renderer;",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
+        );
+
+        assertThat(resolved.isMaterializedBoundCustomObjectLambda(finalMainClass())).isTrue();
+    }
+
+    @Test
+    void materializedBoundCustomLongLambdaAcceptsFinalApplicationOwner() {
+        final LambdaMetafactoryCall resolved = LambdaMetafactoryCall.resolve(dynamicRef(
+            "key",
+            "(Lcom/acme/Main;)Lcom/acme/KeySource;",
+            "java/lang/invoke/LambdaMetafactory",
+            "metafactory",
+            List.of(
+                BootstrapArgument.methodType("(J)Ljava/lang/String;"),
+                BootstrapArgument.methodHandle(5, new MethodRef("com/acme/Main", "key", "(J)Ljava/lang/String;")),
+                BootstrapArgument.methodType("(J)Ljava/lang/String;")
+            )
+        )).orElseThrow();
+
+        assertThat(resolved.isMaterializedBoundCustomObjectLambda(finalMainClass())).isTrue();
+    }
+
+    @Test
+    void materializedBoundCustomDoubleLambdaRemainsUnsupported() {
+        final LambdaMetafactoryCall resolved = LambdaMetafactoryCall.resolve(dynamicRef(
+            "key",
+            "(Lcom/acme/Main;)Lcom/acme/KeySource;",
+            "java/lang/invoke/LambdaMetafactory",
+            "metafactory",
+            List.of(
+                BootstrapArgument.methodType("(D)Ljava/lang/String;"),
+                BootstrapArgument.methodHandle(5, new MethodRef("com/acme/Main", "key", "(D)Ljava/lang/String;")),
+                BootstrapArgument.methodType("(D)Ljava/lang/String;")
+            )
+        )).orElseThrow();
+
+        assertThat(resolved.isMaterializedBoundCustomObjectLambda(finalMainClass())).isFalse();
+    }
+
+    @Test
+    void materializedBoundCustomObjectLambdaRejectsPrimitiveCapture() {
+        final LambdaMetafactoryCall resolved = materializedBoundCustomObjectLambda(
+            "(Lcom/acme/Main;I)Lcom/acme/Renderer;",
+            "(ILjava/lang/Object;)Ljava/lang/Object;"
+        );
+
+        assertThat(resolved.isMaterializedBoundCustomObjectLambda()).isFalse();
+    }
+
+    @Test
+    void materializedBoundCustomObjectLambdaRejectsPrimitiveReturn() {
+        final LambdaMetafactoryCall resolved = materializedBoundCustomObjectLambda(
+            "(Lcom/acme/Main;)Lcom/acme/Renderer;",
+            "(Ljava/lang/Object;)I"
+        );
+
+        assertThat(resolved.isMaterializedBoundCustomObjectLambda()).isFalse();
+    }
+
+    @Test
+    void materializedBoundCustomObjectLambdaRejectsMismatchedReceiverCapture() {
+        final LambdaMetafactoryCall resolved = materializedBoundCustomObjectLambda(
+            "(Lcom/acme/Other;)Lcom/acme/Renderer;",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
+        );
+
+        assertThat(resolved.isMaterializedBoundCustomObjectLambda()).isFalse();
+    }
+
+    @Test
+    void materializedBoundCustomObjectLambdaRejectsNonFinalOwner() {
+        final LambdaMetafactoryCall resolved = materializedBoundCustomObjectLambda(
+            "(Lcom/acme/Main;)Lcom/acme/Renderer;",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
+        );
+
+        assertThat(resolved.isMaterializedBoundCustomObjectLambda(mainClass(0))).isFalse();
+    }
+
+    @Test
+    void materializedBoundCustomObjectLambdaRejectsDependencyOwner() {
+        final LambdaMetafactoryCall resolved = materializedBoundCustomObjectLambda(
+            "(Lcom/acme/Main;)Lcom/acme/Renderer;",
+            "(Ljava/lang/Object;)Ljava/lang/Object;"
+        );
+
+        assertThat(resolved.isMaterializedBoundCustomObjectLambda(dependencyMainClass())).isFalse();
+    }
+
+    @Test
+    void materializedBoundCustomObjectLambdaRejectsStandardFunction() {
+        final LambdaMetafactoryCall resolved = LambdaMetafactoryCall.resolve(dynamicRef(
+            "apply",
+            "(Lcom/acme/Main;)Ljava/util/function/Function;",
+            "java/lang/invoke/LambdaMetafactory",
+            "metafactory",
+            List.of(
+                BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;"),
+                BootstrapArgument.methodHandle(5, new MethodRef("com/acme/Main", "render", "(Ljava/lang/Object;)Ljava/lang/Object;")),
+                BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;")
+            )
+        )).orElseThrow();
+
+        assertThat(resolved.isMaterializedBoundCustomObjectLambda(finalMainClass())).isFalse();
+    }
+
+    @Test
     void directlyLowerableAcceptsInterfacePredicateReferenceKindNine() {
         final LambdaMetafactoryCall resolved = LambdaMetafactoryCall.resolve(dynamicRef(
             "test",
@@ -810,6 +921,26 @@ final class LambdaMetafactoryCallTest {
         )).orElseThrow();
     }
 
+    private static LambdaMetafactoryCall materializedBoundCustomObjectLambda(
+        final String callSiteDescriptor,
+        final String implementationDescriptor
+    ) {
+        return LambdaMetafactoryCall.resolve(dynamicRef(
+            "render",
+            callSiteDescriptor,
+            "java/lang/invoke/LambdaMetafactory",
+            "metafactory",
+            List.of(
+                BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;"),
+                BootstrapArgument.methodHandle(
+                    5,
+                    new MethodRef("com/acme/Main", "render", implementationDescriptor)
+                ),
+                BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;")
+            )
+        )).orElseThrow();
+    }
+
     private static Map<String, ClassFile> mainClass(final int accessFlags) {
         return Map.of(
             "com/acme/Main",
@@ -823,6 +954,23 @@ final class LambdaMetafactoryCallTest {
                 List.of(),
                 Path.of("Main.class"),
                 true
+            )
+        );
+    }
+
+    private static Map<String, ClassFile> dependencyMainClass() {
+        return Map.of(
+            "com/acme/Main",
+            new ClassFile(
+                69,
+                "com/acme/Main",
+                "java/lang/Object",
+                0x0010,
+                List.of(),
+                List.of(),
+                List.of(),
+                Path.of("Main.class"),
+                false
             )
         );
     }

@@ -41,6 +41,7 @@ final class BytecodeToIRInvokeSupport {
     private static final int ARRAYS_FILL_STATUS_INVERTED_RANGE = 2;
     private static final MethodRef RUNNABLE_RUN = new MethodRef("java/lang/Runnable", "run", "()V");
     private static final String MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL = "javan_materialized_lambda_apply_object";
+    private static final String MATERIALIZED_LAMBDA_LONG_OBJECT_APPLY_SYMBOL = "javan_materialized_lambda_apply_long_object";
     private static final String MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL = "javan_materialized_lambda_apply_object2";
     private static final String MATERIALIZED_LAMBDA_SUPPLIER_APPLY_SYMBOL = "javan_materialized_lambda_apply_supplier";
     private static final String MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL = "javan_materialized_lambda_apply_boolean";
@@ -68,6 +69,7 @@ final class BytecodeToIRInvokeSupport {
 
     enum MaterializedLambdaDispatchKind {
         OBJECT,
+        LONG_OBJECT,
         BOOLEAN,
         VOID,
         SUPPLIER
@@ -8016,8 +8018,15 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         final List<EntryPoint> targets = interfaceTargets(classes, methodRef);
-        if (targets.size() > 1) {
-            lowerDispatchCall(
+        final MethodDescriptor descriptor = MethodDescriptor.parse(methodRef.descriptor());
+        final List<IrExpression> arguments = new ArrayList<>(popArguments(classFile, method, stack, descriptor));
+        final IrExpression receiver = popObject(classFile, method, stack);
+        final Optional<EntryPoint> defaultTarget = defaultInterfaceTarget(classes, methodRef);
+        final MaterializedLambdaDispatchKind dispatchKind = materializedLambdaMethods.get(methodRef);
+        if (dispatchKind != null
+            && dispatchKind != MaterializedLambdaDispatchKind.SUPPLIER
+            && (!targets.isEmpty() || defaultTarget.isPresent())) {
+            lowerMixedMaterializedInterfaceCall(
                 classFile,
                 method,
                 instruction,
@@ -8026,13 +8035,22 @@ final class BytecodeToIRInvokeSupport {
                 localDeclarations,
                 dispatches,
                 methodRef,
-                targets
+                targets,
+                defaultTarget,
+                dispatchKind,
+                descriptor,
+                receiver,
+                arguments
             );
             return;
         }
-        final MethodDescriptor descriptor = MethodDescriptor.parse(methodRef.descriptor());
-        final List<IrExpression> arguments = new ArrayList<>(popArguments(classFile, method, stack, descriptor));
-        final IrExpression receiver = popObject(classFile, method, stack);
+        if (targets.size() > 1) {
+            arguments.addFirst(receiver);
+            final String dispatchSymbol = dispatchSymbol(methodRef);
+            dispatches.putIfAbsent(dispatchSymbol, dispatch(dispatchSymbol, descriptor, targets));
+            appendCallResult(instructions, stack, localDeclarations, descriptor.returnType(), dispatchSymbol, arguments);
+            return;
+        }
         if (!targets.isEmpty()) {
             final EntryPoint target = targets.getFirst();
             arguments.addFirst(receiver);
@@ -8040,7 +8058,6 @@ final class BytecodeToIRInvokeSupport {
             appendCallResult(instructions, stack, localDeclarations, descriptor.returnType(), symbol, arguments);
             return;
         }
-        final Optional<EntryPoint> defaultTarget = defaultInterfaceTarget(classes, methodRef);
         if (defaultTarget.isPresent()) {
             arguments.addFirst(receiver);
             appendCallResult(
@@ -8053,31 +8070,195 @@ final class BytecodeToIRInvokeSupport {
             );
             return;
         }
-        if (materializedLambdaMethods.containsKey(methodRef)) {
-            final MaterializedLambdaDispatchKind dispatchKind = materializedLambdaMethods.get(methodRef);
-            if (dispatchKind == MaterializedLambdaDispatchKind.BOOLEAN) {
-                stack.add(StackValue.intExpression(IrExpression.intCall(MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL, List.of(receiver, arguments.getFirst()))));
-                return;
-            }
-            if (dispatchKind == MaterializedLambdaDispatchKind.VOID) {
-                if (arguments.size() == 2) {
-                    instructions.add(IrInstruction.callStaticVoid(MATERIALIZED_LAMBDA_VOID2_APPLY_SYMBOL, List.of(receiver, arguments.get(0), arguments.get(1))));
-                    return;
-                }
-                instructions.add(IrInstruction.callStaticVoid(MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL, List.of(receiver, arguments.getFirst())));
-                return;
-            }
-            if (arguments.size() == 2) {
-                stack.add(StackValue.objectExpression(IrExpression.objectCall(
-                    MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL,
-                    List.of(receiver, arguments.get(0), arguments.get(1))
-                )));
-                return;
-            }
-            stack.add(StackValue.objectExpression(IrExpression.objectCall(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL, List.of(receiver, arguments.getFirst()))));
+        if (dispatchKind != null) {
+            lowerMaterializedInterfaceCall(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                dispatchKind,
+                descriptor,
+                receiver,
+                arguments
+            );
             return;
         }
         throw unsupported(classFile, method, instruction);
+    }
+
+    private static void lowerMaterializedInterfaceCall(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final MaterializedLambdaDispatchKind dispatchKind,
+        final MethodDescriptor descriptor,
+        final IrExpression receiver,
+        final List<IrExpression> arguments
+    ) {
+        final String helper = materializedInterfaceHelper(classFile, method, instruction, dispatchKind, descriptor);
+        final List<IrExpression> callArguments = materializedInterfaceArguments(receiver, arguments);
+        if (descriptor.returnType() == IrType.OBJECT) {
+            stack.add(StackValue.objectExpression(IrExpression.objectCall(helper, callArguments)));
+            return;
+        }
+        if (descriptor.returnType() == IrType.INT) {
+            stack.add(StackValue.intExpression(IrExpression.intCall(helper, callArguments)));
+            return;
+        }
+        if (descriptor.returnType() == IrType.VOID) {
+            instructions.add(IrInstruction.callStaticVoid(helper, callArguments));
+            return;
+        }
+        throw unsupported(classFile, method, instruction);
+    }
+
+    private static void lowerMixedMaterializedInterfaceCall(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<String, IrDispatch> dispatches,
+        final MethodRef methodRef,
+        final List<EntryPoint> targets,
+        final Optional<EntryPoint> defaultTarget,
+        final MaterializedLambdaDispatchKind dispatchKind,
+        final MethodDescriptor descriptor,
+        final IrExpression receiver,
+        final List<IrExpression> arguments
+    ) {
+        final String materializedHelper =
+            materializedInterfaceHelper(classFile, method, instruction, dispatchKind, descriptor);
+        final String resultLocal;
+        if (descriptor.returnType() == IrType.OBJECT) {
+            resultLocal = newObjectLocal(localDeclarations);
+        } else if (descriptor.returnType() == IrType.INT) {
+            resultLocal = newIntLocal(localDeclarations);
+        } else if (descriptor.returnType() == IrType.VOID) {
+            resultLocal = "void" + localDeclarations.size();
+        } else {
+            throw unsupported(classFile, method, instruction);
+        }
+        final String materializedLabel = "label_interface_materialized_" + instruction.offset() + "_" + resultLocal;
+        final String endLabel = "label_interface_end_" + instruction.offset() + "_" + resultLocal;
+        instructions.add(IrInstruction.branchIf(
+            materializedLabel,
+            IrExpression.intCall(MATERIALIZED_LAMBDA_IS_INSTANCE_SYMBOL, List.of(receiver))
+        ));
+        final List<IrExpression> concreteArguments = new ArrayList<>(arguments);
+        concreteArguments.addFirst(receiver);
+        final String concreteSymbol;
+        if (targets.size() > 1) {
+            concreteSymbol = dispatchSymbol(methodRef);
+            dispatches.putIfAbsent(
+                concreteSymbol,
+                dispatch(concreteSymbol, descriptor, targets)
+            );
+        } else if (!targets.isEmpty()) {
+            concreteSymbol = symbol(targets.getFirst());
+        } else {
+            concreteSymbol = symbol(defaultTarget.orElseThrow());
+        }
+        if (descriptor.returnType() == IrType.OBJECT) {
+            instructions.add(IrInstruction.assignObject(
+                resultLocal,
+                IrExpression.objectCall(concreteSymbol, concreteArguments)
+            ));
+        } else if (descriptor.returnType() == IrType.INT) {
+            instructions.add(IrInstruction.assignInt(
+                resultLocal,
+                IrExpression.intCall(concreteSymbol, concreteArguments)
+            ));
+        } else {
+            instructions.add(IrInstruction.callStaticVoid(concreteSymbol, concreteArguments));
+        }
+        instructions.add(IrInstruction.jump(endLabel));
+        instructions.add(IrInstruction.label(materializedLabel));
+        final List<IrExpression> materializedArguments = materializedInterfaceArguments(receiver, arguments);
+        if (descriptor.returnType() == IrType.OBJECT) {
+            instructions.add(IrInstruction.assignObject(
+                resultLocal,
+                IrExpression.objectCall(materializedHelper, materializedArguments)
+            ));
+        } else if (descriptor.returnType() == IrType.INT) {
+            instructions.add(IrInstruction.assignInt(
+                resultLocal,
+                IrExpression.intCall(materializedHelper, materializedArguments)
+            ));
+        } else {
+            instructions.add(IrInstruction.callStaticVoid(materializedHelper, materializedArguments));
+        }
+        instructions.add(IrInstruction.label(endLabel));
+        if (descriptor.returnType() == IrType.OBJECT) {
+            stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
+        } else if (descriptor.returnType() == IrType.INT) {
+            stack.add(StackValue.intExpression(IrExpression.intLocal(resultLocal)));
+        }
+    }
+
+    private static List<IrExpression> materializedInterfaceArguments(
+        final IrExpression receiver,
+        final List<IrExpression> arguments
+    ) {
+        final List<IrExpression> result = new ArrayList<>(arguments);
+        result.addFirst(receiver);
+        return List.copyOf(result);
+    }
+
+    private static String materializedInterfaceHelper(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final MaterializedLambdaDispatchKind dispatchKind,
+        final MethodDescriptor descriptor
+    ) {
+        final List<IrType> parameterTypes = descriptor.parameterTypes();
+        if (dispatchKind == MaterializedLambdaDispatchKind.OBJECT
+            && descriptor.returnType() == IrType.OBJECT
+            && allObjectParameters(parameterTypes)) {
+            if (parameterTypes.size() == 1) {
+                return MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL;
+            }
+            if (parameterTypes.size() == 2) {
+                return MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL;
+            }
+        }
+        if (dispatchKind == MaterializedLambdaDispatchKind.LONG_OBJECT
+            && descriptor.returnType() == IrType.OBJECT
+            && parameterTypes.size() == 1
+            && parameterTypes.getFirst() == IrType.LONG) {
+            return MATERIALIZED_LAMBDA_LONG_OBJECT_APPLY_SYMBOL;
+        }
+        if (dispatchKind == MaterializedLambdaDispatchKind.BOOLEAN
+            && descriptor.returnType() == IrType.INT
+            && parameterTypes.size() == 1
+            && parameterTypes.getFirst() == IrType.OBJECT) {
+            return MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL;
+        }
+        if (dispatchKind == MaterializedLambdaDispatchKind.VOID
+            && descriptor.returnType() == IrType.VOID
+            && allObjectParameters(parameterTypes)) {
+            if (parameterTypes.size() == 1) {
+                return MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL;
+            }
+            if (parameterTypes.size() == 2) {
+                return MATERIALIZED_LAMBDA_VOID2_APPLY_SYMBOL;
+            }
+        }
+        throw unsupported(classFile, method, instruction);
+    }
+
+    private static boolean allObjectParameters(final List<IrType> parameterTypes) {
+        for (final IrType parameterType : parameterTypes) {
+            if (parameterType != IrType.OBJECT) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static void lowerFunctionApplyLambdaCall(
@@ -8909,10 +9090,19 @@ final class BytecodeToIRInvokeSupport {
                     ? MaterializedLambdaDispatchKind.SUPPLIER
                     : key.voidResult()
                     ? MaterializedLambdaDispatchKind.VOID
-                    : (key.booleanResult() ? MaterializedLambdaDispatchKind.BOOLEAN : MaterializedLambdaDispatchKind.OBJECT)
+                    : key.booleanResult()
+                    ? MaterializedLambdaDispatchKind.BOOLEAN
+                    : materializedLambdaSingleLongInput(key)
+                    ? MaterializedLambdaDispatchKind.LONG_OBJECT
+                    : MaterializedLambdaDispatchKind.OBJECT
             );
         }
         return Map.copyOf(result);
+    }
+
+    private static boolean materializedLambdaSingleLongInput(final MaterializedLambdaKey key) {
+        final List<IrType> parameterTypes = MethodDescriptor.parse(key.interfaceMethodDescriptor()).parameterTypes();
+        return parameterTypes.size() == 1 && parameterTypes.getFirst() == IrType.LONG;
     }
 
     private static Map<MaterializedLambdaKey, Integer> materializedLambdaTargetIds(
@@ -8941,12 +9131,14 @@ final class BytecodeToIRInvokeSupport {
                 final LambdaMetafactoryCall resolved = lambdaCall.orElseThrow();
                 final boolean materializedFunction = resolved.isMaterializedFunctionLambda()
                     && shouldMaterializeFunctionLambda(method.orElseThrow(), instruction);
+                final boolean materializedBoundCustom = resolved.isMaterializedBoundCustomObjectLambda(classes);
                 if (!resolved.isZeroCaptureMaterializedObjectLambda()
                     && !resolved.isZeroCaptureMaterializedBooleanLambda()
                     && !resolved.isMaterializedBiFunctionLambda()
                     && !materializedFunction
                     && !resolved.isMaterializedVoidLambda()
-                    && !(resolved.isMaterializedSupplierLambda() && shouldMaterializeSupplierLambda(method.orElseThrow(), instruction))) {
+                    && !(resolved.isMaterializedSupplierLambda() && shouldMaterializeSupplierLambda(method.orElseThrow(), instruction))
+                    && !materializedBoundCustom) {
                     continue;
                 }
                 if (!classes.containsKey(resolved.implementation().owner())) {
@@ -9051,12 +9243,14 @@ final class BytecodeToIRInvokeSupport {
         final MethodRef implementation = resolved.implementation();
         final boolean materializedFunction = resolved.isMaterializedFunctionLambda()
             && shouldMaterializeFunctionLambda(method, instruction);
+        final boolean materializedBoundCustom = resolved.isMaterializedBoundCustomObjectLambda(classes);
         if (resolved.isZeroCaptureMaterializedObjectLambda()
             || resolved.isZeroCaptureMaterializedBooleanLambda()
             || resolved.isMaterializedBiFunctionLambda()
             || materializedFunction
             || resolved.isMaterializedVoidLambda()
-            || (resolved.isMaterializedSupplierLambda() && shouldMaterializeSupplierLambda(method, instruction))) {
+            || (resolved.isMaterializedSupplierLambda() && shouldMaterializeSupplierLambda(method, instruction))
+            || materializedBoundCustom) {
             final Integer targetId = materializedLambdaTargetIds.get(materializedLambdaKey(resolved));
             if (targetId == null) {
                 return false;

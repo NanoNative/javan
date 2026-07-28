@@ -366,6 +366,55 @@ public record LambdaMetafactoryCall(
             && sameOrMaterializedFunctionCompatible(input.orElseThrow(), parameters.getLast());
     }
 
+    /**
+     * Returns whether this custom one-argument object-return lambda can be represented by the captured-lambda runtime.
+     *
+     * @return true for bound instance implementations with reference-only captures and reference returns
+     */
+    public boolean isMaterializedBoundCustomObjectLambda() {
+        if (interfaceOwner.startsWith("java/util/function/")
+            || implementationReferenceKind != 5
+            || !singleObjectOrLongInput(samMethodDescriptor)
+            || !objectReturn(samMethodDescriptor)
+            || !singleObjectOrLongInput(instantiatedMethodDescriptor)
+            || !objectReturn(instantiatedMethodDescriptor)
+            || !objectReturn(implementation.descriptor())
+            || !hasObjectCaptures()
+            || capturedParameterDescriptors.isEmpty()
+            || !("L" + implementation.owner() + ";").equals(capturedParameterDescriptors.getFirst())) {
+            return false;
+        }
+        final List<String> parameters = parameterDescriptors(implementation.descriptor());
+        if (!parametersMatchDescriptor(implementation.descriptor(), parameters)
+            || parameters.size() != capturedParameterDescriptors.size()) {
+            return false;
+        }
+        for (int index = 1; index < capturedParameterDescriptors.size(); index++) {
+            if (!sameOrObjectCompatible(capturedParameterDescriptors.get(index), parameters.get(index - 1))) {
+                return false;
+            }
+        }
+        final Optional<String> input = inputDescriptor();
+        return input.isPresent()
+            && sameOrObjectCompatible(input.orElseThrow(), parameters.getLast());
+    }
+
+    /**
+     * Returns whether this custom lambda has a closed-world implementation owner that preserves virtual semantics.
+     *
+     * @param classes parsed closed-world classes
+     * @return true when the implementation owner is a final application class
+     */
+    public boolean isMaterializedBoundCustomObjectLambda(final Map<String, ClassFile> classes) {
+        if (!isMaterializedBoundCustomObjectLambda()) {
+            return false;
+        }
+        final ClassFile implementationClass = classes.get(implementation.owner());
+        return implementationClass != null
+            && implementationClass.application()
+            && implementationClass.isFinal();
+    }
+
     private static boolean sameOrMaterializedFunctionCompatible(final String source, final String target) {
         return source.equals(target)
             || ("Ljava/lang/Object;".equals(target) && (source.startsWith("L") || source.startsWith("[")));
@@ -495,6 +544,13 @@ public record LambdaMetafactoryCall(
         return input.isPresent() && input.orElseThrow().startsWith("L");
     }
 
+    private static boolean singleObjectOrLongInput(final String descriptor) {
+        final Optional<String> input = new LambdaMetafactoryCall("", "", "", "", new MethodRef("", "", ""), -1, descriptor, List.of())
+            .inputDescriptor();
+        return input.isPresent()
+            && (input.orElseThrow().startsWith("L") || input.orElseThrow().startsWith("[") || "J".equals(input.orElseThrow()));
+    }
+
     private static boolean noInputs(final String descriptor) {
         return descriptor.startsWith("()");
     }
@@ -598,7 +654,19 @@ public record LambdaMetafactoryCall(
         if (!descriptor.startsWith("(") || separator < 1) {
             return false;
         }
-        return String.join("", parameters).equals(descriptor.substring(1, separator));
+        int descriptorIndex = 1;
+        for (final String parameter : parameters) {
+            if (descriptorIndex + parameter.length() > separator) {
+                return false;
+            }
+            for (int parameterIndex = 0; parameterIndex < parameter.length(); parameterIndex++) {
+                if (descriptor.charAt(descriptorIndex + parameterIndex) != parameter.charAt(parameterIndex)) {
+                    return false;
+                }
+            }
+            descriptorIndex += parameter.length();
+        }
+        return descriptorIndex == separator;
     }
 
     private static int skipArrayDescriptor(final String descriptor, final int start) {

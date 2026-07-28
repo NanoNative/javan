@@ -3049,7 +3049,8 @@ public final class StaticVerifier {
             || lambda.isZeroCaptureMaterializedBooleanLambda()
             || lambda.isMaterializedBiFunctionLambda()
             || lambda.isMaterializedVoidLambda()
-            || lambda.isMaterializedSupplierLambda();
+            || lambda.isMaterializedSupplierLambda()
+            || lambda.isMaterializedBoundCustomObjectLambda(classes);
     }
 
     private static boolean shouldMaterializeFunctionLambda(
