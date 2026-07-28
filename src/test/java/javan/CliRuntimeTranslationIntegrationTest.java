@@ -6162,7 +6162,10 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
             """);
 
         final String jvmOutput = runJvm(project, "com.acme.Main");
-        requireBuildSuccess(run(tempDir, "build", project.toString()));
+        final CliRun run = run(tempDir, "build", project.toString());
+        if (run.exitCode() != 0) {
+            throw new AssertionError(run.stderr());
+        }
 
         assertThat(process(
             project,
