@@ -5012,6 +5012,50 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void optionalFilterBoundFinalReceiverPredicateBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-filter-bound-final-receiver");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Expected expected = new Expected("focused");
+                    System.out.println(Optional.of("focused").filter(expected::matches).isPresent());
+                    System.out.println(Optional.of("other").filter(expected::matches).isPresent());
+                }
+
+                private static final class Expected {
+                    private final String value;
+
+                    private Expected(final String value) {
+                        this.value = value;
+                    }
+
+                    private boolean matches(final Object candidate) {
+                        return value.equals(candidate);
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        if (run.exitCode() != 0) {
+            throw new AssertionError(run.stderr());
+        }
+
+        assertThat(process(
+            project,
+            List.of(project.resolve(".javan/bin/optional-filter-bound-final-receiver").toString())
+        ).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
     void optionalOrElseGetInlineSupplierLambdaBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("optional-or-else-get-lambda");
         writeJava(project, "com.acme.Main", """
