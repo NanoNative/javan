@@ -67,6 +67,7 @@ final class IntrinsicUsageReportsTest {
             new IntrinsicCallCount("Math.abs", 1),
             new IntrinsicCallCount("Math.min", 0),
             new IntrinsicCallCount("Math.max", 1),
+            new IntrinsicCallCount("Math.atan2", 0),
             new IntrinsicCallCount("Math.toIntExact", 0),
             new IntrinsicCallCount("System.nanoTime", 2),
             new IntrinsicCallCount("System.currentTimeMillis", 0),
@@ -247,6 +248,23 @@ final class IntrinsicUsageReportsTest {
         assertThat(report.supportedJdkCallSiteCount()).isEqualTo(1);
         assertThat(report.unsupportedJdkCallCandidateCount()).isZero();
         assertThat(report.unsupportedJdkCallCandidates()).isEmpty();
+    }
+
+    @Test
+    void countsReachableMathAtan2Intrinsic() {
+        final EntryPoint entry = new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V");
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classFile("com/acme/Main", method(
+                "main",
+                "([Ljava/lang/String;)V",
+                instruction("java/lang/Math", "atan2", "(DD)D")
+            ))
+        );
+
+        final IntrinsicUsageReport report = new IntrinsicUsageReports().analyze(classes, List.of(entry));
+
+        assertThat(report.intrinsics()).contains(new IntrinsicCallCount("Math.atan2", 1));
     }
 
     @Test

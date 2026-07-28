@@ -1899,7 +1899,7 @@ final class BytecodeToIRInvokeSupport {
         final SourceLineIndex sourceLines
     ) {
         if ("java/lang/Math".equals(methodRef.owner())) {
-            return lowerMathIntrinsic(classFile, method, methodRef, stack);
+            return lowerMathIntrinsic(classFile, method, methodRef, instructions, stack, localDeclarations);
         }
         if ("java/lang/System".equals(methodRef.owner())) {
             return lowerSystemIntrinsic(classFile, method, methodRef, instructions, stack);
@@ -2104,7 +2104,9 @@ final class BytecodeToIRInvokeSupport {
         final ClassFile classFile,
         final MethodInfo method,
         final MethodRef methodRef,
-        final List<StackValue> stack
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations
     ) {
         if ("abs".equals(methodRef.name()) && "(I)I".equals(methodRef.descriptor())) {
             stack.add(StackValue.intExpression(IrExpression.intCall("javan_math_abs_int", List.of(popInt(classFile, method, stack)))));
@@ -2144,6 +2146,19 @@ final class BytecodeToIRInvokeSupport {
             final IrExpression right = popLong(classFile, method, stack);
             final IrExpression left = popLong(classFile, method, stack);
             stack.add(StackValue.longExpression(IrExpression.longCall("javan_math_max_long", List.of(left, right))));
+            return true;
+        }
+        if ("atan2".equals(methodRef.name()) && "(DD)D".equals(methodRef.descriptor())) {
+            final IrExpression x = popDouble(classFile, method, stack);
+            final IrExpression y = popDouble(classFile, method, stack);
+            final String yLocal = newDoubleLocal(localDeclarations);
+            instructions.add(IrInstruction.assignDouble(yLocal, y));
+            final String xLocal = newDoubleLocal(localDeclarations);
+            instructions.add(IrInstruction.assignDouble(xLocal, x));
+            stack.add(StackValue.doubleExpression(IrExpression.doubleCall(
+                "javan_math_atan2_double",
+                List.of(IrExpression.doubleLocal(yLocal), IrExpression.doubleLocal(xLocal))
+            )));
             return true;
         }
         if ("toIntExact".equals(methodRef.name()) && "(J)I".equals(methodRef.descriptor())) {
@@ -8911,6 +8926,13 @@ final class BytecodeToIRInvokeSupport {
         final int localIndex = localDeclarations.size();
         final String localName = "int" + localIndex;
         localDeclarations.put(Integer.MIN_VALUE + localIndex, new IrLocal(IrType.INT, localName));
+        return localName;
+    }
+
+    private static String newDoubleLocal(final Map<Integer, IrLocal> localDeclarations) {
+        final int localIndex = localDeclarations.size();
+        final String localName = "double" + localIndex;
+        localDeclarations.put(Integer.MIN_VALUE + localIndex, new IrLocal(IrType.DOUBLE, localName));
         return localName;
     }
 

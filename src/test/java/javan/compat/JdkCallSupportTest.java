@@ -2512,6 +2512,16 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void mathAtan2DoubleIsSupportedOnlyForItsExactStaticSignature() {
+        assertThat(List.of(
+            JdkCallSupport.isSupported(new javan.classfile.MethodRef("java/lang/Math", "atan2", "(DD)D")),
+            JdkCallSupport.isSupported(new javan.classfile.MethodRef("java/lang/StrictMath", "atan2", "(DD)D")),
+            JdkCallSupport.isSupported(new javan.classfile.MethodRef("java/lang/Math", "atan2", "(FF)F")),
+            JdkCallSupport.isSupported(new javan.classfile.MethodRef("java/lang/Math", "atan2", "(D)D"))
+        )).containsExactly(true, false, false, false);
+    }
+
+    @Test
     void executorCloseIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/concurrent/ExecutorService",
