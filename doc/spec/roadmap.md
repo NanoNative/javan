@@ -164,9 +164,10 @@ static final SecureRandom RANDOM = new SecureRandom();
 must leave object construction at the JVM-equivalent active class-initialization trigger.
 Native startup may prepare an unobservable random runtime module, but it may not allocate a
 shared Java object, consume entropy, or eagerly execute `<clinit>`. The required lazy
-class-initialization state machine and exact `SecureRandom` runtime substitution remain
-planned; until both exist, unsupported random shapes must reject clearly rather than be
-silently hoisted.
+class-initialization state machine is planned below; the exact `SecureRandom` runtime
+substitution remains planned in the
+[optimizer roadmap](optimizer-roadmap.md). Until both exist,
+unsupported random shapes must reject clearly rather than be silently hoisted.
 
 ## 0.28 Native Library Output
 
@@ -397,8 +398,8 @@ do not yet provide one shared Java semantic fact model.
 
 | Priority / analysis | Status | Smallest useful Javan scope | Acceptance gate |
 | --- | --- | --- | --- |
-| P0: canonical bytecode CFG | Partial | Replace the current separate control-flow scans with one shared basic-block graph covering normal successors, branches, switches, stack merges, and supported exception edges. | Invalid targets and incompatible merges fail deterministically; existing supported programs keep native/JVM parity; a stable report lists blocks and edges. |
-| P0: class-initialization trigger graph | Partial | Extend direct `<clinit>` edges with superclass-before-subclass ordering, applicable interface rules, lazy JVM triggers, re-entry, and cycles. Keep application initialization at runtime. | Public CLI fixtures prove JVM/native ordering for `new`, `getstatic`, `putstatic`, `invokestatic`, inheritance, interfaces, re-entry, and supported cycles; unsupported cycles fail before C generation. |
+| P0: canonical bytecode CFG | Planned | Replace the current separate control-flow scans with one shared basic-block graph covering normal successors, branches, switches, stack merges, and supported exception edges. | Invalid targets and incompatible merges fail deterministically; existing supported programs keep native/JVM parity; a stable report lists blocks and edges. |
+| P0: class-initialization trigger graph | Planned | Extend direct `<clinit>` edges with superclass-before-subclass ordering, applicable interface rules, lazy JVM triggers, re-entry, and cycles. Keep application initialization at runtime. | Public CLI fixtures prove JVM/native ordering for `new`, `getstatic`, `putstatic`, `invokestatic`, inheritance, interfaces, re-entry, and supported cycles; unsupported cycles fail before C generation. |
 | P1: closed-world instantiated-type analysis (RTA) | Planned | Record types created by reachable bytecode, materialized lambdas, substitutions, and runtime factories, then intersect virtual/interface targets with those instantiated types. Unknown or externally supplied receivers remain conservative. | Uninstantiated subclasses disappear from dispatch reports and generated stubs, every constructible receiver remains, and native/JVM parity covers direct, inherited, lambda, runtime-created, and unknown receiver paths. |
 | P1: bounded receiver and callable provenance | Planned | Track exact allocation type, checked-cast refinement, small merged type sets, and unknown through locals plus direct arguments/returns. Use the same bounded flow for supported SAM/lambda targets; fields remain unknown initially. | Exact `new`, local, cast, stored-lambda, passed-callback, and returned-callback cases resolve without API-specific guesses; merges and unknown values fall back conservatively with stable diagnostics. |
 | P1: local CFG value facts | Planned | Per-block nullness, constants, integer ranges, exact types, and array/string lengths. Do not retain mutable-field facts across unknown calls. Start with reporting and unreachable-branch diagnostics before removing checks. | Facts and merge results are deterministic; only proven unreachable unsupported code is ignored; each removed guard has a proof record; debug behavior and native/JVM semantics remain unchanged. |
