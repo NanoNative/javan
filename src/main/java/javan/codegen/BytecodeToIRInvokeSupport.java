@@ -2174,6 +2174,21 @@ final class BytecodeToIRInvokeSupport {
         final MethodRef methodRef,
         final List<StackValue> stack
     ) {
+        if ("compare".equals(methodRef.name()) && "(JJ)I".equals(methodRef.descriptor())) {
+            final IrExpression right = popLong(classFile, method, stack);
+            final IrExpression left = popLong(classFile, method, stack);
+            stack.add(StackValue.intExpression(IrExpression.intCall("javan_lcmp", List.of(left, right))));
+            return true;
+        }
+        if ("compareUnsigned".equals(methodRef.name()) && "(JJ)I".equals(methodRef.descriptor())) {
+            final IrExpression right = popLong(classFile, method, stack);
+            final IrExpression left = popLong(classFile, method, stack);
+            stack.add(StackValue.intExpression(IrExpression.intCall(
+                "javan_long_compare_unsigned",
+                List.of(left, right)
+            )));
+            return true;
+        }
         if ("toString".equals(methodRef.name()) && "(J)Ljava/lang/String;".equals(methodRef.descriptor())) {
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_string_value_of_long", List.of(popLong(classFile, method, stack)))));
             return true;

@@ -273,6 +273,8 @@ public final class JdkCallSupport {
             "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Integer;",
             "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Object;"
         ),
+        intrinsic("Long.compare", "java/lang/Long", "compare", "(JJ)I"),
+        intrinsic("Long.compareUnsigned", "java/lang/Long", "compareUnsigned", "(JJ)I"),
         intrinsic("Long.toString", "java/lang/Long", "toString", "(J)Ljava/lang/String;"),
         runtime("Long.toString.instance", "java/lang/Long", "toString", "()Ljava/lang/String;"),
         runtime("Long.valueOf", "java/lang/Long", "valueOf", "(J)Ljava/lang/Long;"),
