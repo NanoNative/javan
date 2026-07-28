@@ -379,6 +379,7 @@ final class RuntimeHeaderFile {
         int javan_record_shape_hash_code(void* value, const char* shape);
         void* javan_materialized_lambda_new(int target_id);
         void* javan_materialized_lambda_new_with_captures(int target_id, int capture_count, ...);
+        int javan_materialized_lambda_is_instance(void* value);
         int javan_materialized_lambda_target_id(void* value);
         void* javan_materialized_lambda_capture(void* value, int capture_index);
         void* javan_path_of(void* first, void* more);

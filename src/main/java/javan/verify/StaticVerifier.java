@@ -2868,7 +2868,7 @@ public final class StaticVerifier {
         if (supportedStringConcat(dynamicRef.orElseThrow())) {
             return false;
         }
-        if (supportedLambdaMetafactory(dynamicRef.orElseThrow())) {
+        if (supportedLambdaMetafactory(classes, dynamicRef.orElseThrow())) {
             return false;
         }
         if (supportedRecordObjectMethodsDynamic(classes, classFile, method, instruction)) {
@@ -3021,14 +3021,27 @@ public final class StaticVerifier {
             && dynamicRef.bootstrapArguments().getFirst().indexOf(2) < 0;
     }
 
-    private static boolean supportedLambdaMetafactory(final DynamicRef dynamicRef) {
+    private static boolean supportedLambdaMetafactory(
+        final Map<String, ClassFile> classes,
+        final DynamicRef dynamicRef
+    ) {
         final Optional<LambdaMetafactoryCall> lambdaCall = LambdaMetafactoryCall.resolve(dynamicRef);
-        return lambdaCall.isPresent()
-            && (lambdaCall.orElseThrow().isDirectlyLowerable()
-            || lambdaCall.orElseThrow().isZeroCaptureMaterializedObjectLambda()
-            || lambdaCall.orElseThrow().isZeroCaptureMaterializedBooleanLambda()
-            || lambdaCall.orElseThrow().isMaterializedBiFunctionLambda()
-            || lambdaCall.orElseThrow().isMaterializedVoidLambda());
+        if (lambdaCall.isEmpty()) {
+            return false;
+        }
+        final LambdaMetafactoryCall lambda = lambdaCall.orElseThrow();
+        if (lambda.isSupplier()) {
+            final ClassFile implementationClass = classes.get(lambda.implementation().owner());
+            if (implementationClass == null || !implementationClass.application()) {
+                return false;
+            }
+        }
+        return lambda.isDirectlyLowerable()
+            || lambda.isZeroCaptureMaterializedObjectLambda()
+            || lambda.isZeroCaptureMaterializedBooleanLambda()
+            || lambda.isMaterializedBiFunctionLambda()
+            || lambda.isMaterializedVoidLambda()
+            || lambda.isMaterializedSupplierLambda();
     }
 
     private static boolean supportedStringConcatParameters(final String descriptor) {
@@ -3229,7 +3242,11 @@ public final class StaticVerifier {
         final int reachable
     ) {
         final String reason =
-            "Only StringConcatFactory string concatenation, exact record ObjectMethods equals/hashCode, exact LambdaMetafactory Function/Predicate shapes, the current Consumer/BiConsumer object-capture materialization slice, and the current custom-SAM materialization subset are implemented.";
+            "Only StringConcatFactory string concatenation, exact record ObjectMethods equals/hashCode, exact LambdaMetafactory Function/Predicate shapes, "
+                + "the exact Supplier subset (zero-argument reference-return invocation directly lowered to admitted application-static "
+                + "implementations, plus application static/instance-target materialization with reference-only captures and reference "
+                + "returns), the current "
+                + "Consumer/BiConsumer object-capture materialization slice, and the current custom-SAM materialization subset are implemented.";
         final String fix =
             "Keep invokedynamic limited to supported javac string concatenation, exact supported record equals/hashCode, or the admitted LambdaMetafactory subset.";
         if (reachable == 1) {
