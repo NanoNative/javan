@@ -6,8 +6,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Minimal Java class file reader.
@@ -33,8 +35,8 @@ public final class ClassFileReader {
      * @param bytes class file bytes
      * @param source source path used for diagnostics
      * @return parsed class file
-     * @throws IOException when parsing fails
-     */
+    * @throws IOException when parsing fails
+    */
     public ClassFile read(final byte[] bytes, final Path source) throws IOException {
         final ClassByteCursor in = new ClassByteCursor(bytes);
         if (in.i4() != MAGIC) {
@@ -60,6 +62,7 @@ public final class ClassFileReader {
             List.copyOf(fields),
             resolveInstructions(methods, constantPool, classAttributes.bootstrapMethods()),
             classAttributes.sourceFile(),
+            classAttributes.recordComponents(),
             source,
             true
         );
@@ -108,12 +111,19 @@ public final class ClassFileReader {
     private static List<FieldInfo> readFields(final ClassByteCursor in, final ConstantPool constantPool) throws IOException {
         final int count = in.u2();
         final List<FieldInfo> result = new ArrayList<>();
+        final Set<String> declarations = new HashSet<>();
         for (int index = 0; index < count; index++) {
             final int accessFlags = in.u2();
             final String name = constantPool.utf8(in.u2());
             final String descriptor = constantPool.utf8(in.u2());
-            skipAttributes(in);
-            result.add(new FieldInfo(accessFlags, name, descriptor));
+            if (!FieldInfo.isValidDescriptor(descriptor)) {
+                throw new IOException("Invalid field descriptor for " + name + ": " + descriptor);
+            }
+            if (!declarations.add(name + "\u0000" + descriptor)) {
+                throw new IOException("Duplicate field: " + name + " " + descriptor);
+            }
+            final Optional<String> signature = readSignatureAttribute(in, constantPool, "field " + name);
+            result.add(new FieldInfo(accessFlags, name, descriptor, signature));
         }
         return result;
     }
@@ -205,6 +215,7 @@ public final class ClassFileReader {
         final int count = in.u2();
         final List<BootstrapMethod> bootstrapMethods = new ArrayList<>();
         Optional<String> sourceFile = Optional.empty();
+        Optional<List<RecordComponentInfo>> recordComponents = Optional.empty();
         for (int index = 0; index < count; index++) {
             final String attributeName = constantPool.utf8(in.u2());
             final long length = in.u4();
@@ -212,11 +223,43 @@ public final class ClassFileReader {
                 bootstrapMethods.addAll(readBootstrapMethods(in));
             } else if ("SourceFile".equals(attributeName)) {
                 sourceFile = Optional.of(constantPool.utf8(in.u2()));
+            } else if ("Record".equals(attributeName)) {
+                if (recordComponents.isPresent()) {
+                    throw new IOException("Duplicate Record attribute");
+                }
+                final ClassByteCursor attribute = new ClassByteCursor(in.bytes(length));
+                recordComponents = Optional.of(readRecordComponents(attribute, constantPool));
+                if (!attribute.exhausted()) {
+                    throw new IOException("Invalid Record attribute length");
+                }
             } else {
                 in.skip(length);
             }
         }
-        return new ClassAttributes(List.copyOf(bootstrapMethods), sourceFile);
+        return new ClassAttributes(List.copyOf(bootstrapMethods), sourceFile, recordComponents);
+    }
+
+    private static List<RecordComponentInfo> readRecordComponents(
+        final ClassByteCursor in,
+        final ConstantPool constantPool
+    ) throws IOException {
+        final int count = in.u2();
+        final List<RecordComponentInfo> result = new ArrayList<>();
+        final Set<String> names = new HashSet<>();
+        for (int index = 0; index < count; index++) {
+            final String name = constantPool.utf8(in.u2());
+            final String descriptor = constantPool.utf8(in.u2());
+            if (!names.add(name)) {
+                throw new IOException("Duplicate record component: " + name);
+            }
+            if (!FieldInfo.isValidDescriptor(descriptor)) {
+                throw new IOException("Invalid record component descriptor for " + name + ": " + descriptor);
+            }
+            final Optional<String> signature =
+                readSignatureAttribute(in, constantPool, "record component " + name);
+            result.add(new RecordComponentInfo(name, descriptor, signature));
+        }
+        return List.copyOf(result);
     }
 
     private static List<BootstrapMethod> readBootstrapMethods(final ClassByteCursor in) throws IOException {
@@ -259,15 +302,36 @@ public final class ClassFileReader {
         return List.copyOf(result);
     }
 
-    private record ClassAttributes(List<BootstrapMethod> bootstrapMethods, Optional<String> sourceFile) {
+    private record ClassAttributes(
+        List<BootstrapMethod> bootstrapMethods,
+        Optional<String> sourceFile,
+        Optional<List<RecordComponentInfo>> recordComponents
+    ) {
     }
 
-    private static void skipAttributes(final ClassByteCursor in) throws IOException {
+    private static Optional<String> readSignatureAttribute(
+        final ClassByteCursor in,
+        final ConstantPool constantPool,
+        final String owner
+    ) throws IOException {
         final int count = in.u2();
+        Optional<String> signature = Optional.empty();
         for (int index = 0; index < count; index++) {
-            in.u2();
-            in.skip(in.u4());
+            final String name = constantPool.utf8(in.u2());
+            final long length = in.u4();
+            if (!"Signature".equals(name)) {
+                in.skip(length);
+                continue;
+            }
+            if (signature.isPresent()) {
+                throw new IOException("Duplicate Signature attribute for " + owner);
+            }
+            if (length != 2) {
+                throw new IOException("Invalid Signature attribute length for " + owner);
+            }
+            signature = Optional.of(constantPool.utf8(in.u2()));
         }
+        return signature;
     }
 
     private static List<Instruction> decode(

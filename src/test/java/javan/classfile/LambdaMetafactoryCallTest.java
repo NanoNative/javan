@@ -549,6 +549,57 @@ final class LambdaMetafactoryCallTest {
     }
 
     @Test
+    void materializedSupplierLambdaAcceptsCapturedStaticTarget() {
+        final LambdaMetafactoryCall resolved = LambdaMetafactoryCall.resolve(dynamicRef(
+            "get",
+            "(Ljava/lang/String;Ljava/lang/String;)Ljava/util/function/Supplier;",
+            "java/lang/invoke/LambdaMetafactory",
+            "metafactory",
+            List.of(
+                BootstrapArgument.methodType("()Ljava/lang/Object;"),
+                BootstrapArgument.methodHandle(6, new MethodRef("com/acme/Main", "lambda$0", "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;")),
+                BootstrapArgument.methodType("()Ljava/lang/String;")
+            )
+        )).orElseThrow();
+
+        assertThat(resolved.isMaterializedSupplierLambda()).isTrue();
+    }
+
+    @Test
+    void materializedSupplierLambdaAcceptsCapturedInstanceTarget() {
+        final LambdaMetafactoryCall resolved = LambdaMetafactoryCall.resolve(dynamicRef(
+            "get",
+            "(Lcom/acme/Main;)Ljava/util/function/Supplier;",
+            "java/lang/invoke/LambdaMetafactory",
+            "metafactory",
+            List.of(
+                BootstrapArgument.methodType("()Ljava/lang/Object;"),
+                BootstrapArgument.methodHandle(5, new MethodRef("com/acme/Main", "value", "()Ljava/lang/String;")),
+                BootstrapArgument.methodType("()Ljava/lang/String;")
+            )
+        )).orElseThrow();
+
+        assertThat(resolved.isMaterializedSupplierLambda()).isTrue();
+    }
+
+    @Test
+    void materializedSupplierLambdaRejectsPrimitiveCapture() {
+        final LambdaMetafactoryCall resolved = LambdaMetafactoryCall.resolve(dynamicRef(
+            "get",
+            "(I)Ljava/util/function/Supplier;",
+            "java/lang/invoke/LambdaMetafactory",
+            "metafactory",
+            List.of(
+                BootstrapArgument.methodType("()Ljava/lang/Object;"),
+                BootstrapArgument.methodHandle(6, new MethodRef("com/acme/Main", "lambda$0", "(I)Ljava/lang/String;")),
+                BootstrapArgument.methodType("()Ljava/lang/String;")
+            )
+        )).orElseThrow();
+
+        assertThat(resolved.isMaterializedSupplierLambda()).isFalse();
+    }
+
+    @Test
     void exactFunctionOrNullMaterializationAcceptsZeroCaptureStaticShape() {
         final LambdaMetafactoryCall resolved = LambdaMetafactoryCall.resolve(dynamicRef(
             "applyWithException",

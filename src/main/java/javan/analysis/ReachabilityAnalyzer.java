@@ -2,11 +2,13 @@ package javan.analysis;
 
 import javan.classfile.ClassFile;
 import javan.classfile.CodeAttribute;
+import javan.classfile.DynamicRef;
 import javan.classfile.FieldRef;
 import javan.classfile.Instruction;
 import javan.classfile.LambdaMetafactoryCall;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
+import javan.classfile.RecordObjectMethodsCall;
 import javan.compat.ExactMethodSupport;
 import javan.compat.JdkCallSupport;
 import javan.compat.NetworkApiSupport;
@@ -14,9 +16,11 @@ import javan.compat.JavanNativeSubstitutions;
 import javan.verify.Diagnostic;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Builds a small closed-world call graph for reachable application methods.
@@ -96,6 +100,17 @@ public final class ReachabilityAnalyzer {
                         continue;
                     }
                     for (final Instruction instruction : code.orElseThrow().instructions()) {
+                        enqueueRecordReferenceObjectMethodTargets(
+                            classes,
+                            classes.get(current.className()),
+                            method.orElseThrow(),
+                            instruction,
+                            work,
+                            workSet,
+                            current,
+                            callEdges,
+                            entryPoints
+                        );
                         enqueueClassInitializer(classes, instruction, work, workSet, current, callEdges, entryPoints);
                         enqueueLambdaApplicationCall(classes, instruction, work, workSet, current, callEdges, materializedLambdaMethods, entryPoints);
                         enqueueApplicationCall(classes, instruction, work, workSet, diagnostics, current, callEdges, materializedLambdaMethods, entryPoints, methodRefFacts);
@@ -107,6 +122,111 @@ public final class ReachabilityAnalyzer {
             }
         }
         return new CallGraph(roots.getFirst(), List.copyOf(reachable), List.copyOf(diagnostics), callEdges.snapshot());
+    }
+
+    private static void enqueueRecordReferenceObjectMethodTargets(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<EntryPoint> work,
+        final EntryPointMembership workSet,
+        final EntryPoint current,
+        final CallEdgeTracker callEdges,
+        final EntryPointPool entryPoints
+    ) {
+        if (instruction.dynamicRef().isEmpty()) {
+            return;
+        }
+        final DynamicRef dynamicRef = instruction.dynamicRef().orElseThrow();
+        final boolean hashCode = "hashCode".equals(method.name());
+        final Optional<RecordObjectMethodsCall> recordCall = hashCode
+            ? RecordObjectMethodsCall.resolveHashCode(classFile, method, dynamicRef)
+            : RecordObjectMethodsCall.resolve(classFile, method, dynamicRef);
+        if (recordCall.isEmpty()) {
+            return;
+        }
+        for (final RecordObjectMethodsCall.Component component : recordCall.orElseThrow().components()) {
+            enqueueRecordReferenceObjectMethodTarget(
+                classes,
+                component.shape(),
+                hashCode,
+                work,
+                workSet,
+                current,
+                callEdges,
+                entryPoints
+            );
+        }
+    }
+
+    private static void enqueueRecordReferenceObjectMethodTarget(
+        final Map<String, ClassFile> classes,
+        final RecordObjectMethodsCall.Shape shape,
+        final boolean hashCode,
+        final List<EntryPoint> work,
+        final EntryPointMembership workSet,
+        final EntryPoint current,
+        final CallEdgeTracker callEdges,
+        final EntryPointPool entryPoints
+    ) {
+        if (!shape.valid() || shape.isArray() || shape.referenceOwner().isEmpty()) {
+            return;
+        }
+        if (shape.isList()) {
+            enqueueRecordReferenceObjectMethodTarget(
+                classes,
+                shape.listElement().orElseThrow(),
+                hashCode,
+                work,
+                workSet,
+                current,
+                callEdges,
+                entryPoints
+            );
+            return;
+        }
+        final String declaredOwner = shape.referenceOwner().orElseThrow();
+        if ("java/lang/String".equals(declaredOwner)) {
+            return;
+        }
+        final ClassFile declaredClass = classes.get(declaredOwner);
+        if (declaredClass == null || declaredClass.isInterface() || !declaredClass.isFinal()) {
+            return;
+        }
+        final Optional<EntryPoint> target =
+            recordReferenceObjectMethodTarget(classes, declaredOwner, hashCode, entryPoints);
+        if (target.isEmpty()) {
+            return;
+        }
+        final EntryPoint callee = target.orElseThrow();
+        enqueue(work, workSet, callee);
+        addEdge(callEdges, current, callee, CallEdge.Kind.CALL);
+    }
+
+    private static Optional<EntryPoint> recordReferenceObjectMethodTarget(
+        final Map<String, ClassFile> classes,
+        final String receiver,
+        final boolean hashCode,
+        final EntryPointPool entryPoints
+    ) {
+        final String methodName = hashCode ? "hashCode" : "equals";
+        final String descriptor = hashCode ? "()I" : "(Ljava/lang/Object;)Z";
+        String current = receiver;
+        final Set<String> visited = new HashSet<>();
+        while (classes.containsKey(current) && visited.add(current)) {
+            final ClassFile classFile = classes.get(current);
+            final Optional<MethodInfo> target = classFile.method(methodName, descriptor);
+            if (target.isPresent()) {
+                return classFile.application()
+                    && !target.orElseThrow().isStatic()
+                    && target.orElseThrow().code().isPresent()
+                    ? Optional.of(entryPoints.entry(current, methodName, descriptor))
+                    : Optional.empty();
+            }
+            current = classFile.superName();
+        }
+        return Optional.empty();
     }
 
     private static boolean sameEntry(final EntryPoint left, final EntryPoint right) {
@@ -416,7 +536,9 @@ public final class ReachabilityAnalyzer {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
             }
-            if (hasInlineDirectSupplierLambda(classes, current, instruction) || !targetMethods.isEmpty()) {
+            if (hasInlineDirectSupplierLambda(classes, current, instruction)
+                || containsMethodRef(materializedLambdaMethods, supplierGet)
+                || !targetMethods.isEmpty()) {
                 return;
             }
             diagnostics.add(Diagnostic.error(
@@ -437,7 +559,9 @@ public final class ReachabilityAnalyzer {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
             }
-            if (hasInlineDirectSupplierLambda(classes, current, instruction) || !targetMethods.isEmpty()) {
+            if (hasInlineDirectSupplierLambda(classes, current, instruction)
+                || containsMethodRef(materializedLambdaMethods, supplierGet)
+                || !targetMethods.isEmpty()) {
                 return;
             }
             diagnostics.add(Diagnostic.error(
@@ -458,7 +582,9 @@ public final class ReachabilityAnalyzer {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
             }
-            if (hasInlineDirectSupplierLambda(classes, current, instruction) || !targetMethods.isEmpty()) {
+            if (hasInlineDirectSupplierLambda(classes, current, instruction)
+                || containsMethodRef(materializedLambdaMethods, supplierGet)
+                || !targetMethods.isEmpty()) {
                 return;
             }
             diagnostics.add(Diagnostic.error(
@@ -770,10 +896,13 @@ public final class ReachabilityAnalyzer {
             return;
         }
         final LambdaMetafactoryCall resolved = lambdaCall.orElseThrow();
+        final boolean materializedSupplier = resolved.isMaterializedSupplierLambda()
+            && shouldMaterializeSupplierLambda(classes, current, instruction);
         if (resolved.isZeroCaptureMaterializedObjectLambda()
             || resolved.isZeroCaptureMaterializedBooleanLambda()
             || resolved.isMaterializedBiFunctionLambda()
-            || resolved.isMaterializedVoidLambda()) {
+            || resolved.isMaterializedVoidLambda()
+            || materializedSupplier) {
             final MethodRef interfaceMethod = new MethodRef(
                 resolved.interfaceOwner(),
                 resolved.interfaceMethodName(),
@@ -787,7 +916,8 @@ public final class ReachabilityAnalyzer {
             && !resolved.isZeroCaptureMaterializedObjectLambda()
             && !resolved.isZeroCaptureMaterializedBooleanLambda()
             && !resolved.isMaterializedBiFunctionLambda()
-            && !resolved.isMaterializedVoidLambda()) {
+            && !resolved.isMaterializedVoidLambda()
+            && !materializedSupplier) {
             return;
         }
         final MethodRef implementation = resolved.implementation();
@@ -885,6 +1015,37 @@ public final class ReachabilityAnalyzer {
         final Instruction instruction
     ) {
         return hasInlineDirectLambda(classes, current, instruction, InlineLambdaKind.SUPPLIER);
+    }
+
+    private static boolean shouldMaterializeSupplierLambda(
+        final Map<String, ClassFile> classes,
+        final EntryPoint current,
+        final Instruction instruction
+    ) {
+        final Optional<MethodInfo> method = method(classes, current);
+        if (method.isEmpty() || method.orElseThrow().code().isEmpty()) {
+            return true;
+        }
+        final List<Instruction> instructions = method.orElseThrow().code().orElseThrow().instructions();
+        for (int index = 0; index + 1 < instructions.size(); index++) {
+            if (instructions.get(index).offset() != instruction.offset()) {
+                continue;
+            }
+            final Optional<MethodRef> consumer = instructions.get(index + 1).methodRef();
+            return consumer.isEmpty() || !isInlineSupplierConsumer(consumer.orElseThrow());
+        }
+        return true;
+    }
+
+    private static boolean isInlineSupplierConsumer(final MethodRef target) {
+        if (isSupplierGet(target)) {
+            return true;
+        }
+        if ("java/util/Optional".equals(target.owner())) {
+            return ("or".equals(target.name()) && "(Ljava/util/function/Supplier;)Ljava/util/Optional;".equals(target.descriptor()))
+                || ("orElseGet".equals(target.name()) && "(Ljava/util/function/Supplier;)Ljava/lang/Object;".equals(target.descriptor()));
+        }
+        return isObjectsRequireNonNullElseGet(target);
     }
 
     private static boolean hasInlineDirectLambda(

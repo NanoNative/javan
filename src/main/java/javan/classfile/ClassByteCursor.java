@@ -203,6 +203,10 @@ public final class ClassByteCursor {
         return new String(chars, 0, charIndex);
     }
 
+    boolean exhausted() {
+        return position == bytes.length;
+    }
+
     private void require(final long length) throws EOFException {
         if (length < 0L) {
             throw new IllegalArgumentException("Negative classfile length: " + length);

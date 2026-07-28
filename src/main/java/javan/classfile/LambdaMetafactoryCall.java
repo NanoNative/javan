@@ -340,12 +340,63 @@ public record LambdaMetafactoryCall(
     }
 
     /**
+     * Returns whether this {@code Supplier} can be represented by the captured-lambda runtime.
+     *
+     * @return true for application static or instance implementations with object captures
+     */
+    public boolean isMaterializedSupplierLambda() {
+        if (!isSupplier()
+            || (implementationReferenceKind != 5 && implementationReferenceKind != 6)
+            || !objectReturn(implementation.descriptor())
+            || !hasObjectCaptures()) {
+            return false;
+        }
+        final List<String> implementationParameters = parameterDescriptors(implementation.descriptor());
+        if (implementationReferenceKind == 6) {
+            if (implementationParameters.size() != capturedParameterDescriptors.size()) {
+                return false;
+            }
+            for (int index = 0; index < capturedParameterDescriptors.size(); index++) {
+                if (!sameOrObjectCompatible(capturedParameterDescriptors.get(index), implementationParameters.get(index))) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        if (capturedParameterDescriptors.isEmpty()
+            || !("L" + implementation.owner() + ";").equals(capturedParameterDescriptors.getFirst())
+            || implementationParameters.size() != capturedParameterDescriptors.size() - 1) {
+            return false;
+        }
+        for (int index = 1; index < capturedParameterDescriptors.size(); index++) {
+            if (!sameOrObjectCompatible(capturedParameterDescriptors.get(index), implementationParameters.get(index - 1))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * Returns whether this is a materializable void-return lambda with object captures only.
      *
      * @return true when the current runtime can materialize the callable as a lambda object
      */
     public boolean isMaterializedVoidLambda() {
         return isMaterializedConsumerLambda() || isMaterializedBiConsumerLambda();
+    }
+
+    private boolean hasObjectCaptures() {
+        for (final String capture : capturedParameterDescriptors) {
+            if (!capture.startsWith("L") && !capture.startsWith("[")) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean sameOrObjectCompatible(final String source, final String target) {
+        return source.equals(target)
+            || ("Ljava/lang/Object;".equals(target) && (source.startsWith("L") || source.startsWith("[")));
     }
 
     /**
