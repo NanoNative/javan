@@ -340,6 +340,38 @@ public record LambdaMetafactoryCall(
     }
 
     /**
+     * Returns whether this {@code Function} can be represented by the captured-lambda runtime.
+     *
+     * @return true for static implementations with reference-only captures and reference returns
+     */
+    public boolean isMaterializedFunctionLambda() {
+        if (!isFunction()
+            || implementationReferenceKind != 6
+            || !objectReturn(implementation.descriptor())
+            || !hasObjectCaptures()) {
+            return false;
+        }
+        final List<String> parameters = parameterDescriptors(implementation.descriptor());
+        if (!parametersMatchDescriptor(implementation.descriptor(), parameters)
+            || parameters.size() != capturedParameterDescriptors.size() + 1) {
+            return false;
+        }
+        for (int index = 0; index < capturedParameterDescriptors.size(); index++) {
+            if (!sameOrMaterializedFunctionCompatible(capturedParameterDescriptors.get(index), parameters.get(index))) {
+                return false;
+            }
+        }
+        final Optional<String> input = inputDescriptor();
+        return input.isPresent()
+            && sameOrMaterializedFunctionCompatible(input.orElseThrow(), parameters.getLast());
+    }
+
+    private static boolean sameOrMaterializedFunctionCompatible(final String source, final String target) {
+        return source.equals(target)
+            || ("Ljava/lang/Object;".equals(target) && (source.startsWith("L") || source.startsWith("[")));
+    }
+
+    /**
      * Returns whether this {@code Supplier} can be represented by the captured-lambda runtime.
      *
      * @return true for application static or instance implementations with object captures

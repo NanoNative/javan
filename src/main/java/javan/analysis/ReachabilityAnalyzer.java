@@ -899,12 +899,15 @@ public final class ReachabilityAnalyzer {
             return;
         }
         final LambdaMetafactoryCall resolved = lambdaCall.orElseThrow();
+        final boolean materializedFunction = resolved.isMaterializedFunctionLambda()
+            && shouldMaterializeFunctionLambda(classes, current, instruction);
         final boolean materializedSupplier = resolved.isMaterializedSupplierLambda()
             && shouldMaterializeSupplierLambda(classes, current, instruction);
         if (resolved.isZeroCaptureMaterializedObjectLambda()
             || resolved.isZeroCaptureMaterializedBooleanLambda()
             || resolved.isMaterializedBiFunctionLambda()
             || resolved.isMaterializedVoidLambda()
+            || materializedFunction
             || materializedSupplier) {
             final MethodRef interfaceMethod = new MethodRef(
                 resolved.interfaceOwner(),
@@ -920,6 +923,7 @@ public final class ReachabilityAnalyzer {
             && !resolved.isZeroCaptureMaterializedBooleanLambda()
             && !resolved.isMaterializedBiFunctionLambda()
             && !resolved.isMaterializedVoidLambda()
+            && !materializedFunction
             && !materializedSupplier) {
             return;
         }
@@ -1018,6 +1022,44 @@ public final class ReachabilityAnalyzer {
         final Instruction instruction
     ) {
         return hasInlineDirectLambda(classes, current, instruction, InlineLambdaKind.SUPPLIER);
+    }
+
+    private static boolean shouldMaterializeFunctionLambda(
+        final Map<String, ClassFile> classes,
+        final EntryPoint current,
+        final Instruction instruction
+    ) {
+        final Optional<MethodInfo> method = method(classes, current);
+        if (method.isEmpty() || method.orElseThrow().code().isEmpty()) {
+            return true;
+        }
+        final List<Instruction> instructions = method.orElseThrow().code().orElseThrow().instructions();
+        for (int index = 0; index < instructions.size(); index++) {
+            if (instructions.get(index).offset() != instruction.offset()) {
+                continue;
+            }
+            for (int consumerIndex = index + 1; consumerIndex < instructions.size(); consumerIndex++) {
+                final Instruction candidate = instructions.get(consumerIndex);
+                final Optional<MethodRef> consumer = candidate.methodRef();
+                if (consumer.isPresent()) {
+                    return !isInlineFunctionConsumer(consumer.orElseThrow());
+                }
+                if (isControlFlowBoundary(candidate.opcode())
+                    || candidate.opcode() == 179
+                    || candidate.opcode() == 181) {
+                    return true;
+                }
+            }
+            return true;
+        }
+        return true;
+    }
+
+    private static boolean isInlineFunctionConsumer(final MethodRef target) {
+        return isFunctionApply(target)
+            || isMapComputeIfAbsent(target)
+            || isOptionalMap(target)
+            || isOptionalFlatMap(target);
     }
 
     private static boolean shouldMaterializeSupplierLambda(
