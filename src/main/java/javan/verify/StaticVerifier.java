@@ -451,7 +451,8 @@ public final class StaticVerifier {
         if (unsupportedNewArrayType(instruction)) {
             diagnostics.add(newArrayDiagnostic(classFile, method, instruction, reachable));
         }
-        if (unsupportedInvokedynamic(classFile, method, instruction) && !ignoredUnreachableRecordObjectMethod(classFile, method, instruction, reachable)) {
+        if (unsupportedInvokedynamic(classes, classFile, method, instruction)
+            && !ignoredUnreachableRecordObjectMethod(classFile, method, instruction, reachable)) {
             diagnostics.add(invokedynamicDiagnostic(classFile, method, instruction, reachable));
         }
         if (unsupportedStringConstant == 1 && unsupportedRuntimeStringSemanticCall(instruction)) {
@@ -2780,6 +2781,7 @@ public final class StaticVerifier {
     }
 
     private static boolean unsupportedInvokedynamic(
+        final Map<String, ClassFile> classes,
         final ClassFile classFile,
         final MethodInfo method,
         final Instruction instruction
@@ -2794,7 +2796,7 @@ public final class StaticVerifier {
         if (supportedStringConcat(dynamicRef.orElseThrow())) {
             return false;
         }
-        if (supportedLambdaMetafactory(dynamicRef.orElseThrow())) {
+        if (supportedLambdaMetafactory(classes, dynamicRef.orElseThrow())) {
             return false;
         }
         if (supportedRecordEqualsDynamic(classFile, method, instruction)) {
@@ -2855,14 +2857,27 @@ public final class StaticVerifier {
             && dynamicRef.bootstrapArguments().getFirst().indexOf(2) < 0;
     }
 
-    private static boolean supportedLambdaMetafactory(final DynamicRef dynamicRef) {
+    private static boolean supportedLambdaMetafactory(
+        final Map<String, ClassFile> classes,
+        final DynamicRef dynamicRef
+    ) {
         final Optional<LambdaMetafactoryCall> lambdaCall = LambdaMetafactoryCall.resolve(dynamicRef);
-        return lambdaCall.isPresent()
-            && (lambdaCall.orElseThrow().isDirectlyLowerable()
-            || lambdaCall.orElseThrow().isZeroCaptureMaterializedObjectLambda()
-            || lambdaCall.orElseThrow().isZeroCaptureMaterializedBooleanLambda()
-            || lambdaCall.orElseThrow().isMaterializedBiFunctionLambda()
-            || lambdaCall.orElseThrow().isMaterializedVoidLambda());
+        if (lambdaCall.isEmpty()) {
+            return false;
+        }
+        final LambdaMetafactoryCall lambda = lambdaCall.orElseThrow();
+        if (lambda.isSupplier()) {
+            final ClassFile implementationClass = classes.get(lambda.implementation().owner());
+            if (implementationClass == null || !implementationClass.application()) {
+                return false;
+            }
+        }
+        return lambda.isDirectlyLowerable()
+            || lambda.isZeroCaptureMaterializedObjectLambda()
+            || lambda.isZeroCaptureMaterializedBooleanLambda()
+            || lambda.isMaterializedBiFunctionLambda()
+            || lambda.isMaterializedVoidLambda()
+            || lambda.isMaterializedSupplierLambda();
     }
 
     private static boolean supportedStringConcatParameters(final String descriptor) {
@@ -3063,7 +3078,11 @@ public final class StaticVerifier {
         final int reachable
     ) {
         final String reason =
-            "Only StringConcatFactory string concatenation, record ObjectMethods equals, exact LambdaMetafactory Function/Predicate shapes, the current Consumer/BiConsumer object-capture materialization slice, and the current custom-SAM materialization subset are implemented.";
+            "Only StringConcatFactory string concatenation, record ObjectMethods equals, exact LambdaMetafactory Function/Predicate shapes, "
+                + "the exact Supplier subset (zero-argument reference-return invocation directly lowered to admitted application-static "
+                + "implementations, plus application static/instance-target materialization with reference-only captures and reference "
+                + "returns), the current "
+                + "Consumer/BiConsumer object-capture materialization slice, and the current custom-SAM materialization subset are implemented.";
         final String fix =
             "Keep invokedynamic limited to supported javac string concatenation, supported record equals, or the admitted LambdaMetafactory subset.";
         if (reachable == 1) {

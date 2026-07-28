@@ -36,11 +36,13 @@ final class BytecodeToIRInvokeSupport {
     private static final MethodRef RUNNABLE_RUN = new MethodRef("java/lang/Runnable", "run", "()V");
     private static final String MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL = "javan_materialized_lambda_apply_object";
     private static final String MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL = "javan_materialized_lambda_apply_object2";
+    private static final String MATERIALIZED_LAMBDA_SUPPLIER_APPLY_SYMBOL = "javan_materialized_lambda_apply_supplier";
     private static final String MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL = "javan_materialized_lambda_apply_boolean";
     private static final String MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL = "javan_materialized_lambda_apply_void";
     private static final String MATERIALIZED_LAMBDA_VOID2_APPLY_SYMBOL = "javan_materialized_lambda_apply_void2";
     private static final String MATERIALIZED_LAMBDA_NEW_SYMBOL = "javan_materialized_lambda_new";
     private static final String MATERIALIZED_LAMBDA_NEW_WITH_CAPTURES_SYMBOL = "javan_materialized_lambda_new_with_captures";
+    private static final String MATERIALIZED_LAMBDA_IS_INSTANCE_SYMBOL = "javan_materialized_lambda_is_instance";
     private static final String MATERIALIZED_LAMBDA_CAPTURE_SYMBOL = "javan_materialized_lambda_capture";
     private static final String DATE_TIME_FORMATTER_BUILDER_OWNER = "java/time/format/DateTimeFormatterBuilder";
     private static final String DATE_TIME_FORMATTER_OWNER = "java/time/format/DateTimeFormatter";
@@ -61,7 +63,8 @@ final class BytecodeToIRInvokeSupport {
     enum MaterializedLambdaDispatchKind {
         OBJECT,
         BOOLEAN,
-        VOID
+        VOID,
+        SUPPLIER
     }
 
     static void lowerInstanceOf(
@@ -5982,6 +5985,42 @@ final class BytecodeToIRInvokeSupport {
     ) {
         final MethodRef supplierGet = new MethodRef("java/util/function/Supplier", "get", "()Ljava/lang/Object;");
         final List<EntryPoint> targets = interfaceTargets(classes, supplierGet);
+        final Optional<EntryPoint> defaultTarget = defaultInterfaceTarget(classes, supplierGet);
+        final boolean hasMaterializedTarget =
+            materializedLambdaMethods.get(supplierGet) == MaterializedLambdaDispatchKind.SUPPLIER;
+        if (hasMaterializedTarget && (!targets.isEmpty() || defaultTarget.isPresent())) {
+            final String materializedLabel =
+                "label_supplier_get_materialized_" + instruction.offset() + "_" + resultLocal;
+            final String endLabel = "label_supplier_get_end_" + instruction.offset() + "_" + resultLocal;
+            instructions.add(IrInstruction.branchIf(
+                materializedLabel,
+                IrExpression.intCall(MATERIALIZED_LAMBDA_IS_INSTANCE_SYMBOL, List.of(supplier))
+            ));
+            if (!targets.isEmpty()) {
+                final String dispatchSymbol = dispatchSymbol(supplierGet);
+                dispatches.putIfAbsent(
+                    dispatchSymbol,
+                    dispatch(dispatchSymbol, MethodDescriptor.parse(supplierGet.descriptor()), targets)
+                );
+                instructions.add(IrInstruction.assignObject(
+                    resultLocal,
+                    IrExpression.objectCall(dispatchSymbol, List.of(supplier))
+                ));
+            } else {
+                instructions.add(IrInstruction.assignObject(
+                    resultLocal,
+                    IrExpression.objectCall(symbol(defaultTarget.orElseThrow()), List.of(supplier))
+                ));
+            }
+            instructions.add(IrInstruction.jump(endLabel));
+            instructions.add(IrInstruction.label(materializedLabel));
+            instructions.add(IrInstruction.assignObject(
+                resultLocal,
+                IrExpression.objectCall(MATERIALIZED_LAMBDA_SUPPLIER_APPLY_SYMBOL, List.of(supplier))
+            ));
+            instructions.add(IrInstruction.label(endLabel));
+            return;
+        }
         if (targets.size() > 1) {
             final String dispatchSymbol = dispatchSymbol(supplierGet);
             dispatches.putIfAbsent(dispatchSymbol, dispatch(dispatchSymbol, MethodDescriptor.parse(supplierGet.descriptor()), targets));
@@ -5998,11 +6037,17 @@ final class BytecodeToIRInvokeSupport {
             ));
             return;
         }
-        final Optional<EntryPoint> defaultTarget = defaultInterfaceTarget(classes, supplierGet);
         if (defaultTarget.isPresent()) {
             instructions.add(IrInstruction.assignObject(
                 resultLocal,
                 IrExpression.objectCall(symbol(defaultTarget.orElseThrow()), List.of(supplier))
+            ));
+            return;
+        }
+        if (hasMaterializedTarget) {
+            instructions.add(IrInstruction.assignObject(
+                resultLocal,
+                IrExpression.objectCall(MATERIALIZED_LAMBDA_SUPPLIER_APPLY_SYMBOL, List.of(supplier))
             ));
             return;
         }
@@ -7695,6 +7740,24 @@ final class BytecodeToIRInvokeSupport {
             lowerSupplierGetLambdaCall(classFile, method, instruction, stack);
             return;
         }
+        if (isSupplierGet(methodRef)
+            && materializedLambdaMethods.get(methodRef) == MaterializedLambdaDispatchKind.SUPPLIER) {
+            final IrExpression supplier = popObject(classFile, method, stack);
+            final String resultLocal = newObjectLocal(localDeclarations);
+            lowerSupplierGetCall(
+                classes,
+                classFile,
+                method,
+                instruction,
+                instructions,
+                dispatches,
+                materializedLambdaMethods,
+                supplier,
+                resultLocal
+            );
+            stack.add(StackValue.objectExpression(IrExpression.objectLocal(resultLocal)));
+            return;
+        }
         if (isFunctionApply(methodRef) && hasFunctionLambdaReceiverOnStack(stack)) {
             lowerFunctionApplyLambdaCall(classFile, method, instruction, stack);
             return;
@@ -8534,7 +8597,11 @@ final class BytecodeToIRInvokeSupport {
         for (final MaterializedLambdaKey key : targetIds.keySet()) {
             result.put(
                 new MethodRef(key.interfaceOwner(), key.interfaceMethodName(), key.interfaceMethodDescriptor()),
-                key.voidResult()
+                "java/util/function/Supplier".equals(key.interfaceOwner())
+                    && "get".equals(key.interfaceMethodName())
+                    && "()Ljava/lang/Object;".equals(key.interfaceMethodDescriptor())
+                    ? MaterializedLambdaDispatchKind.SUPPLIER
+                    : key.voidResult()
                     ? MaterializedLambdaDispatchKind.VOID
                     : (key.booleanResult() ? MaterializedLambdaDispatchKind.BOOLEAN : MaterializedLambdaDispatchKind.OBJECT)
             );
@@ -8569,7 +8636,8 @@ final class BytecodeToIRInvokeSupport {
                 if (!resolved.isZeroCaptureMaterializedObjectLambda()
                     && !resolved.isZeroCaptureMaterializedBooleanLambda()
                     && !resolved.isMaterializedBiFunctionLambda()
-                    && !resolved.isMaterializedVoidLambda()) {
+                    && !resolved.isMaterializedVoidLambda()
+                    && !(resolved.isMaterializedSupplierLambda() && shouldMaterializeSupplierLambda(method.orElseThrow(), instruction))) {
                     continue;
                 }
                 if (!classes.containsKey(resolved.implementation().owner())) {
@@ -8669,7 +8737,8 @@ final class BytecodeToIRInvokeSupport {
         if (resolved.isZeroCaptureMaterializedObjectLambda()
             || resolved.isZeroCaptureMaterializedBooleanLambda()
             || resolved.isMaterializedBiFunctionLambda()
-            || resolved.isMaterializedVoidLambda()) {
+            || resolved.isMaterializedVoidLambda()
+            || (resolved.isMaterializedSupplierLambda() && shouldMaterializeSupplierLambda(method, instruction))) {
             final Integer targetId = materializedLambdaTargetIds.get(materializedLambdaKey(resolved));
             if (targetId == null) {
                 return false;
@@ -8753,6 +8822,40 @@ final class BytecodeToIRInvokeSupport {
             return true;
         }
         return false;
+    }
+
+    private static boolean shouldMaterializeSupplierLambda(
+        final MethodInfo method,
+        final Instruction instruction
+    ) {
+        if (method.code().isEmpty()) {
+            return true;
+        }
+        final List<Instruction> bytecode = method.code().orElseThrow().instructions();
+        for (int index = 0; index + 1 < bytecode.size(); index++) {
+            if (bytecode.get(index).offset() != instruction.offset()) {
+                continue;
+            }
+            final Optional<MethodRef> consumer = bytecode.get(index + 1).methodRef();
+            if (consumer.isEmpty()) {
+                return true;
+            }
+            return !isInlineSupplierConsumer(consumer.orElseThrow());
+        }
+        return true;
+    }
+
+    private static boolean isInlineSupplierConsumer(final MethodRef target) {
+        if (isSupplierGet(target)) {
+            return true;
+        }
+        if ("java/util/Optional".equals(target.owner())) {
+            return ("or".equals(target.name()) && "(Ljava/util/function/Supplier;)Ljava/util/Optional;".equals(target.descriptor()))
+                || ("orElseGet".equals(target.name()) && "(Ljava/util/function/Supplier;)Ljava/lang/Object;".equals(target.descriptor()));
+        }
+        return "java/util/Objects".equals(target.owner())
+            && "requireNonNullElseGet".equals(target.name())
+            && "(Ljava/lang/Object;Ljava/util/function/Supplier;)Ljava/lang/Object;".equals(target.descriptor());
     }
 
     private static boolean supportsLambdaImplementationShape(

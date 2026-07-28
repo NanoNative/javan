@@ -172,6 +172,13 @@ abstract class CliIntegrationSupport {
         return runWithTimeout(cwd, Duration.ofSeconds(90), args);
     }
 
+    protected static CliRun requireBuildSuccess(final CliRun run) {
+        if (run.exitCode() != 0) {
+            throw new AssertionError(run.stderr());
+        }
+        return run;
+    }
+
     protected static CliRun runWithTimeout(final Path cwd, final Duration timeout, final String... args) {
         final CliTestHarness.CliResult result = CliTestHarness.run(cwd, timeout, args);
         return new CliRun(

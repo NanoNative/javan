@@ -416,7 +416,9 @@ public final class ReachabilityAnalyzer {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
             }
-            if (hasInlineDirectSupplierLambda(classes, current, instruction) || !targetMethods.isEmpty()) {
+            if (hasInlineDirectSupplierLambda(classes, current, instruction)
+                || containsMethodRef(materializedLambdaMethods, supplierGet)
+                || !targetMethods.isEmpty()) {
                 return;
             }
             diagnostics.add(Diagnostic.error(
@@ -437,7 +439,9 @@ public final class ReachabilityAnalyzer {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
             }
-            if (hasInlineDirectSupplierLambda(classes, current, instruction) || !targetMethods.isEmpty()) {
+            if (hasInlineDirectSupplierLambda(classes, current, instruction)
+                || containsMethodRef(materializedLambdaMethods, supplierGet)
+                || !targetMethods.isEmpty()) {
                 return;
             }
             diagnostics.add(Diagnostic.error(
@@ -458,7 +462,9 @@ public final class ReachabilityAnalyzer {
                 enqueueAll(work, workSet, targetMethods);
                 addEdges(callEdges, current, targetMethods, CallEdge.Kind.CALL);
             }
-            if (hasInlineDirectSupplierLambda(classes, current, instruction) || !targetMethods.isEmpty()) {
+            if (hasInlineDirectSupplierLambda(classes, current, instruction)
+                || containsMethodRef(materializedLambdaMethods, supplierGet)
+                || !targetMethods.isEmpty()) {
                 return;
             }
             diagnostics.add(Diagnostic.error(
@@ -770,10 +776,13 @@ public final class ReachabilityAnalyzer {
             return;
         }
         final LambdaMetafactoryCall resolved = lambdaCall.orElseThrow();
+        final boolean materializedSupplier = resolved.isMaterializedSupplierLambda()
+            && shouldMaterializeSupplierLambda(classes, current, instruction);
         if (resolved.isZeroCaptureMaterializedObjectLambda()
             || resolved.isZeroCaptureMaterializedBooleanLambda()
             || resolved.isMaterializedBiFunctionLambda()
-            || resolved.isMaterializedVoidLambda()) {
+            || resolved.isMaterializedVoidLambda()
+            || materializedSupplier) {
             final MethodRef interfaceMethod = new MethodRef(
                 resolved.interfaceOwner(),
                 resolved.interfaceMethodName(),
@@ -787,7 +796,8 @@ public final class ReachabilityAnalyzer {
             && !resolved.isZeroCaptureMaterializedObjectLambda()
             && !resolved.isZeroCaptureMaterializedBooleanLambda()
             && !resolved.isMaterializedBiFunctionLambda()
-            && !resolved.isMaterializedVoidLambda()) {
+            && !resolved.isMaterializedVoidLambda()
+            && !materializedSupplier) {
             return;
         }
         final MethodRef implementation = resolved.implementation();
@@ -885,6 +895,37 @@ public final class ReachabilityAnalyzer {
         final Instruction instruction
     ) {
         return hasInlineDirectLambda(classes, current, instruction, InlineLambdaKind.SUPPLIER);
+    }
+
+    private static boolean shouldMaterializeSupplierLambda(
+        final Map<String, ClassFile> classes,
+        final EntryPoint current,
+        final Instruction instruction
+    ) {
+        final Optional<MethodInfo> method = method(classes, current);
+        if (method.isEmpty() || method.orElseThrow().code().isEmpty()) {
+            return true;
+        }
+        final List<Instruction> instructions = method.orElseThrow().code().orElseThrow().instructions();
+        for (int index = 0; index + 1 < instructions.size(); index++) {
+            if (instructions.get(index).offset() != instruction.offset()) {
+                continue;
+            }
+            final Optional<MethodRef> consumer = instructions.get(index + 1).methodRef();
+            return consumer.isEmpty() || !isInlineSupplierConsumer(consumer.orElseThrow());
+        }
+        return true;
+    }
+
+    private static boolean isInlineSupplierConsumer(final MethodRef target) {
+        if (isSupplierGet(target)) {
+            return true;
+        }
+        if ("java/util/Optional".equals(target.owner())) {
+            return ("or".equals(target.name()) && "(Ljava/util/function/Supplier;)Ljava/util/Optional;".equals(target.descriptor()))
+                || ("orElseGet".equals(target.name()) && "(Ljava/util/function/Supplier;)Ljava/lang/Object;".equals(target.descriptor()));
+        }
+        return isObjectsRequireNonNullElseGet(target);
     }
 
     private static boolean hasInlineDirectLambda(
