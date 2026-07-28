@@ -7,7 +7,7 @@ import java.util.List;
  *
  * @param jvmName JVM internal class name
  * @param symbol C struct symbol
- * @param fields lowered field metadata
+ * @param fields complete root-to-leaf instance layout for generated objects
  * @param staticFields lowered static field metadata
  * @param enumConstants enum constant names in declaration order
  * @param cloneable whether instances may be cloned through Object.clone

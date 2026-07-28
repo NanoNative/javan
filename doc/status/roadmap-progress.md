@@ -1,6 +1,6 @@
 # Javan Roadmap Progress
 
-Last updated: 2026-07-17
+Last updated: 2026-07-28
 
 This page tracks verified progress toward a standalone native Javan release toolchain.
 "Done" means implemented, tested, and release-gated for the stated scope, not full Java
@@ -24,16 +24,16 @@ Status words are exact. No colors, no mood lighting.
 
 | Measure | Current value | Meaning |
 | --- | ---: | --- |
-| Self-check reachable classes | 248 | Current branch verification of `java -cp target/classes javan.Main check target/classes --main javan.Main` on current Javan classes. |
-| Self-check reachable methods | 2,974 | Same current-branch self-check. |
+| Self-check reachable classes | 247 | Current branch verification of `java -cp target/classes javan.Main check target/classes --main javan.Main` on current Javan classes. |
+| Self-check reachable methods | 3,021 | Same current-branch self-check. |
 | Self-check diagnostics | 0 | Current Javan source shape is clean for reachable native self-build analysis. |
-| Scenario ledger done | 300/300 | Named compiler-owned support scenarios with explicit pass/reject status. |
-| Scenario ledger left | 0 | No named support scenario rows remain outside `pass`/`rejected`. |
-| Exact supported JDK callables | 1435/267886 (0.5%) | Lower-bound callable-member coverage on the scanned JDK 25.0.1 image for members that already match the exact native support registry on the current branch baseline. |
+| Scenario ledger done | 301/302 | Named compiler-owned support scenarios with explicit pass/reject status. |
+| Scenario ledger left | 1 | Concurrent generated-object return handoff remains a planned scenario rather than a native-support claim. |
+| Exact supported JDK callables | 1438/267886 (0.5%) | Lower-bound callable-member coverage on the scanned JDK 25.0.1 image for members that already match the exact native support registry on the current branch baseline. |
 | Exact explicit rejected JDK callables | 174596 | Deterministic callable-member rejects currently counted exactly from forbidden APIs, verifier-backed monitor/concurrency members, deliberate unsupported owner families, and the current exact member-level unsupported registries. |
-| Exact done JDK callables | 176031/267886 (65.7%) | Lower-bound supported-plus-explicitly-rejected callable-member accounting on the scanned JDK 25.0.1 image for the current branch baseline. |
-| Exact unknown JDK callables | 91855 | Callable members on the scanned JDK 25.0.1 image not yet counted as supported or explicitly rejected. |
-| Exact supported JDK callables left | 266451 | Callables on the scanned JDK 25.0.1 image that are not yet in the exact supported callable ledger. |
+| Exact done JDK callables | 176034/267886 (65.7%) | Lower-bound supported-plus-explicitly-rejected callable-member accounting on the scanned JDK 25.0.1 image for the current branch baseline. |
+| Exact unknown JDK callables | 91852 | Callable members on the scanned JDK 25.0.1 image not yet counted as supported or explicitly rejected. |
+| Exact supported JDK callables left | 266448 | Callables on the scanned JDK 25.0.1 image that are not yet in the exact supported callable ledger. |
 | Flow-qualified rejected JDK call shapes | 0 | Separate diagnostic-shape ledger exists now; the current self-check profile has no such diagnostics. |
 | Full first-JDK release gate | 0.0% | Inventory and exact supported callable counts exist, but supported/rejected/unknown accounting for the first release-gated JDK is still incomplete. |
 | CI package target rows | 2 | Linux x64 and Linux aarch64 are configured; macOS aarch64 is verified by the required local host gate. |
@@ -44,12 +44,19 @@ Status words are exact. No colors, no mood lighting.
 Release accounting rule: a JDK or feature area is not "done" until
 `supported + explicitly rejected + dismissed = total known variants`, with `unknown = 0`.
 
+Clone support boundary: `generated-object-clone-single-threaded` covers a generated runtime receiver
+that implements `Cloneable` through a generated hierarchy whose complete superclass chain ends at
+`java.lang.Object`. It performs a shallow field-for-field copy, including inherited and hidden fields,
+without rerunning constructors. Runtime-attached or external superclass state is rejected.
+Concurrent clone/GC return handoff is not claimed and remains the
+`generated-object-clone-concurrent-return-handoff` target.
+
 ## Coverage Snapshot
 
 | Measure | Done | Total | % | Meaning |
 | --- | ---: | ---: | ---: | --- |
-| Scenario rows fully passing | 300 | 300 | 100.0% | Named deterministic compiler-owned support scenarios implemented and tested. |
-| Scenario rows implemented or scoped | 300 | 300 | 100.0% | Rows with working behavior or an explicit scoped subset. |
+| Scenario rows fully passing | 301 | 302 | 99.7% | Named deterministic compiler-owned support scenarios implemented and tested. |
+| Scenario rows implemented or scoped | 301 | 302 | 99.7% | Rows with working behavior or an explicit scoped subset. |
 | Roadmap rows fully done | 4 | 38 | 10.5% | Big product rows release-gated for their stated scope. |
 | Roadmap rows with implementation evidence | 25 | 38 | 65.8% | Rows marked `Done`, `Partial`, `In progress`, or `Blocked`. |
 | Remote release rows proven | 2 | 2 | 100.0% | Configured Linux x64 and Linux aarch64 package rows passed on remote CI; macOS aarch64 is local-only. |
