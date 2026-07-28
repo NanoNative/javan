@@ -854,10 +854,13 @@ public final class ReachabilityAnalyzer {
             return;
         }
         if (instruction.opcode() == 182 && isConcreteExactCallTarget(classes, target.owner())) {
-            final EntryPoint callee = entryPoints.entry(target.owner(), target.name(), target.descriptor());
-            enqueue(work, workSet, callee);
-            addEdge(callEdges, current, callee, CallEdge.Kind.CALL);
-            return;
+            final Optional<EntryPoint> resolved = resolvedVirtualTarget(classes, target.owner(), target, entryPoints);
+            if (resolved.isPresent()) {
+                final EntryPoint callee = resolved.orElseThrow();
+                enqueue(work, workSet, callee);
+                addEdge(callEdges, current, callee, CallEdge.Kind.CALL);
+                return;
+            }
         }
         if (instruction.opcode() == 182) {
             final List<EntryPoint> targets = virtualTargets(classes, target, entryPoints);
