@@ -817,12 +817,22 @@ final class BytecodeToIRInvokeSupport {
             return;
         }
         if (isConcreteExactCallTarget(classes, methodRef.owner())) {
-            lowerInstanceCall(classes, classFile, method, instruction, instructions, stack);
+            lowerInstanceCall(classes, classFile, method, instruction, instructions, stack, localDeclarations);
             return;
         }
         final List<EntryPoint> targets = virtualTargets(classes, methodRef);
         if (!targets.isEmpty()) {
-            lowerDispatchCall(classFile, method, instruction, instructions, stack, dispatches, methodRef, targets);
+            lowerDispatchCall(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                localDeclarations,
+                dispatches,
+                methodRef,
+                targets
+            );
             return;
         }
         throw unsupported(classFile, method, instruction);
@@ -1625,7 +1635,8 @@ final class BytecodeToIRInvokeSupport {
         final MethodInfo method,
         final Instruction instruction,
         final List<IrInstruction> instructions,
-        final List<StackValue> stack
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations
     ) {
         final MethodRef rawMethodRef = instruction.methodRef().orElseThrow();
         final MethodRef methodRef = JdkCallSupport.normalizeInheritedSupportedJdkCall(classes, rawMethodRef)
@@ -1698,7 +1709,7 @@ final class BytecodeToIRInvokeSupport {
         final List<IrExpression> callArguments = new ArrayList<>(arguments);
         callArguments.addFirst(receiver);
         final String symbol = symbol(new EntryPoint(methodRef.owner(), methodRef.name(), methodRef.descriptor()));
-        appendCallResult(instructions, stack, descriptor.returnType(), symbol, callArguments);
+        appendCallResult(instructions, stack, localDeclarations, descriptor.returnType(), symbol, callArguments);
     }
 
     private static boolean isZeroArgNoopPlatformConstructor(final MethodRef methodRef) {
@@ -1771,7 +1782,7 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.virtualThreadFactory(IrExpression.objectCall(symbol, arguments)));
             return;
         }
-        appendCallResult(instructions, stack, descriptor.returnType(), symbol, arguments);
+        appendCallResult(instructions, stack, localDeclarations, descriptor.returnType(), symbol, arguments);
     }
 
     private static boolean lowerExecutorsStaticCall(
@@ -7701,7 +7712,17 @@ final class BytecodeToIRInvokeSupport {
         }
         final List<EntryPoint> targets = interfaceTargets(classes, methodRef);
         if (targets.size() > 1) {
-            lowerDispatchCall(classFile, method, instruction, instructions, stack, dispatches, methodRef, targets);
+            lowerDispatchCall(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                localDeclarations,
+                dispatches,
+                methodRef,
+                targets
+            );
             return;
         }
         final MethodDescriptor descriptor = MethodDescriptor.parse(methodRef.descriptor());
@@ -7711,13 +7732,20 @@ final class BytecodeToIRInvokeSupport {
             final EntryPoint target = targets.getFirst();
             arguments.addFirst(receiver);
             final String symbol = symbol(target);
-            appendCallResult(instructions, stack, descriptor.returnType(), symbol, arguments);
+            appendCallResult(instructions, stack, localDeclarations, descriptor.returnType(), symbol, arguments);
             return;
         }
         final Optional<EntryPoint> defaultTarget = defaultInterfaceTarget(classes, methodRef);
         if (defaultTarget.isPresent()) {
             arguments.addFirst(receiver);
-            appendCallResult(instructions, stack, descriptor.returnType(), symbol(defaultTarget.orElseThrow()), arguments);
+            appendCallResult(
+                instructions,
+                stack,
+                localDeclarations,
+                descriptor.returnType(),
+                symbol(defaultTarget.orElseThrow()),
+                arguments
+            );
             return;
         }
         if (materializedLambdaMethods.containsKey(methodRef)) {
@@ -8412,6 +8440,7 @@ final class BytecodeToIRInvokeSupport {
         final Instruction instruction,
         final List<IrInstruction> instructions,
         final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
         final Map<String, IrDispatch> dispatches,
         final MethodRef methodRef,
         final List<EntryPoint> targets
@@ -8422,22 +8451,57 @@ final class BytecodeToIRInvokeSupport {
         arguments.addFirst(receiver);
         final String dispatchSymbol = dispatchSymbol(methodRef);
         dispatches.putIfAbsent(dispatchSymbol, dispatch(dispatchSymbol, descriptor, targets));
-        appendCallResult(instructions, stack, descriptor.returnType(), dispatchSymbol, arguments);
+        appendCallResult(instructions, stack, localDeclarations, descriptor.returnType(), dispatchSymbol, arguments);
     }
     static void appendCallResult(
         final List<IrInstruction> instructions,
         final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
         final IrType returnType,
         final String symbol,
         final List<IrExpression> arguments
     ) {
-        switch (returnType) {
-            case VOID -> instructions.add(IrInstruction.callStaticVoid(symbol, arguments));
-            case INT -> stack.add(StackValue.intExpression(IrExpression.intCall(symbol, arguments)));
-            case LONG -> stack.add(StackValue.longExpression(IrExpression.longCall(symbol, arguments)));
-            case FLOAT -> stack.add(StackValue.floatExpression(IrExpression.floatCall(symbol, arguments)));
-            case DOUBLE -> stack.add(StackValue.doubleExpression(IrExpression.doubleCall(symbol, arguments)));
-            case OBJECT -> stack.add(StackValue.objectExpression(IrExpression.objectCall(symbol, arguments)));
+        if (returnType == IrType.VOID) {
+            instructions.add(IrInstruction.callStaticVoid(symbol, arguments));
+            return;
+        }
+        final String localName = Strings2.toAsciiLowerCase(returnType.name()) + localDeclarations.size();
+        final IrLocal local = new IrLocal(returnType, localName);
+        localDeclarations.put(Integer.MIN_VALUE + localDeclarations.size(), local);
+        final IrExpression call;
+        final StackKind stackKind;
+        if (returnType == IrType.INT) {
+            call = IrExpression.intCall(symbol, arguments);
+            stackKind = StackKind.INT;
+        } else if (returnType == IrType.LONG) {
+            call = IrExpression.longCall(symbol, arguments);
+            stackKind = StackKind.LONG;
+        } else if (returnType == IrType.FLOAT) {
+            call = IrExpression.floatCall(symbol, arguments);
+            stackKind = StackKind.FLOAT;
+        } else if (returnType == IrType.DOUBLE) {
+            call = IrExpression.doubleCall(symbol, arguments);
+            stackKind = StackKind.DOUBLE;
+        } else if (returnType == IrType.OBJECT) {
+            call = IrExpression.objectCall(symbol, arguments);
+            stackKind = StackKind.OBJECT;
+        } else {
+            throw new IllegalStateException("Unsupported call result type.");
+        }
+        instructions.add(BytecodeToIRControlFlowSupport.assignLocal(stackKind, localName, call));
+        final IrExpression localExpression = BytecodeToIR.localExpression(returnType, local);
+        if (returnType == IrType.INT) {
+            stack.add(StackValue.intExpression(localExpression));
+        } else if (returnType == IrType.LONG) {
+            stack.add(StackValue.longExpression(localExpression));
+        } else if (returnType == IrType.FLOAT) {
+            stack.add(StackValue.floatExpression(localExpression));
+        } else if (returnType == IrType.DOUBLE) {
+            stack.add(StackValue.doubleExpression(localExpression));
+        } else if (returnType == IrType.OBJECT) {
+            stack.add(StackValue.objectExpression(localExpression));
+        } else {
+            throw new IllegalStateException("Unsupported call result type.");
         }
     }
     static IrDispatch dispatch(final String symbol, final MethodDescriptor descriptor, final List<EntryPoint> targets) {

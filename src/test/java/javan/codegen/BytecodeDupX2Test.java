@@ -6,6 +6,7 @@ import javan.classfile.BootstrapArgument;
 import javan.classfile.ClassFile;
 import javan.classfile.CodeAttribute;
 import javan.classfile.DynamicRef;
+import javan.classfile.FieldRef;
 import javan.classfile.Instruction;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
@@ -26,6 +27,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 
@@ -57,21 +59,21 @@ final class BytecodeDupX2Test {
 
         assertThat(new DupEvidence(function.locals(), function.instructions())).isEqualTo(new DupEvidence(
             List.of(
-                new IrLocal(IrType.INT, "stackDup0"),
-                new IrLocal(IrType.INT, "stackDup1"),
-                new IrLocal(IrType.INT, "stackDup2")
+                new IrLocal(IrType.INT, "int0"),
+                new IrLocal(IrType.INT, "int1"),
+                new IrLocal(IrType.INT, "int2")
             ),
             List.of(
-                IrInstruction.assignInt("stackDup0", IrExpression.intCall("javan_com_acme_Values_first___I", List.of())),
-                IrInstruction.assignInt("stackDup1", IrExpression.intCall("javan_com_acme_Values_second___I", List.of())),
-                IrInstruction.assignInt("stackDup2", IrExpression.intCall("javan_com_acme_Values_third___I", List.of())),
+                IrInstruction.assignInt("int0", IrExpression.intCall("javan_com_acme_Values_first___I", List.of())),
+                IrInstruction.assignInt("int1", IrExpression.intCall("javan_com_acme_Values_second___I", List.of())),
+                IrInstruction.assignInt("int2", IrExpression.intCall("javan_com_acme_Values_third___I", List.of())),
                 IrInstruction.returnInt(IrExpression.intBinary(
                     "-",
-                    IrExpression.intLocal("stackDup2"),
+                    IrExpression.intLocal("int2"),
                     IrExpression.intBinary(
                         "-",
-                        IrExpression.intLocal("stackDup0"),
-                        IrExpression.intBinary("-", IrExpression.intLocal("stackDup1"), IrExpression.intLocal("stackDup2"))
+                        IrExpression.intLocal("int0"),
+                        IrExpression.intBinary("-", IrExpression.intLocal("int1"), IrExpression.intLocal("int2"))
                     )
                 ))
             )
@@ -101,7 +103,73 @@ final class BytecodeDupX2Test {
             plain(7, 172, "ireturn")
         ), values);
 
-        assertThat(function.locals()).containsExactly(new IrLocal(IrType.LONG, "stackDup0"), new IrLocal(IrType.INT, "stackDup1"));
+        assertThat(function.locals()).containsExactly(new IrLocal(IrType.LONG, "long0"), new IrLocal(IrType.INT, "int1"));
+    }
+
+    @Test
+    void formOneSystemOutMaterializesOnceAndDirectInvocationReusesLocal() {
+        final IrFunction function = lower(method(
+            0x0008,
+            "main",
+            "()V",
+            4,
+            0,
+            plain(0, 1, "aconst_null"),
+            stringConstant(1, "unused"),
+            getStatic(2, new FieldRef("java/lang/System", "out", "Ljava/io/PrintStream;")),
+            plain(3, 91, "dup_x2"),
+            plain(4, 87, "pop"),
+            plain(5, 87, "pop"),
+            plain(6, 87, "pop"),
+            stringConstant(7, "form-one-out"),
+            invokeVirtual(8, new MethodRef("java/io/PrintStream", "println", "(Ljava/lang/String;)V")),
+            plain(9, 177, "return")
+        ));
+
+        assertThat(new DupEvidence(function.locals(), function.instructions())).isEqualTo(new DupEvidence(
+            List.of(new IrLocal(IrType.OBJECT, "stackDup0")),
+            List.of(
+                IrInstruction.assignObject("stackDup0", IrExpression.objectCall("javan_system_out", List.of())),
+                IrInstruction.callStaticVoid(
+                    "javan_printstream_println_object",
+                    List.of(IrExpression.objectLocal("stackDup0"), IrExpression.stringLiteral("form-one-out"))
+                ),
+                IrInstruction.returnVoid()
+            )
+        ));
+    }
+
+    @Test
+    void formTwoSystemErrMaterializesOnceAndDirectInvocationReusesLocal() {
+        final IrFunction function = lower(method(
+            0x0008,
+            "main",
+            "()V",
+            4,
+            0,
+            longConstant(0, 7L),
+            getStatic(1, new FieldRef("java/lang/System", "err", "Ljava/io/PrintStream;")),
+            plain(2, 91, "dup_x2"),
+            plain(3, 87, "pop"),
+            plain(4, 136, "l2i"),
+            plain(5, 87, "pop"),
+            stringConstant(6, "form-two-err"),
+            invokeVirtual(7, new MethodRef("java/io/PrintStream", "println", "(Ljava/lang/String;)V")),
+            plain(8, 177, "return")
+        ));
+
+        assertThat(new DupEvidence(function.locals(), function.instructions())).isEqualTo(new DupEvidence(
+            List.of(new IrLocal(IrType.OBJECT, "stackDup0")),
+            List.of(
+                IrInstruction.assignObject("stackDup0", IrExpression.objectCall("javan_system_err", List.of())),
+                IrInstruction.callStaticVoid("javan_l2i", List.of(IrExpression.longLiteral(7L))),
+                IrInstruction.callStaticVoid(
+                    "javan_printstream_println_object",
+                    List.of(IrExpression.objectLocal("stackDup0"), IrExpression.stringLiteral("form-two-err"))
+                ),
+                IrInstruction.returnVoid()
+            )
+        ));
     }
 
     @Test
@@ -180,18 +248,23 @@ final class BytecodeDupX2Test {
     }
 
     @Test
-    void deferredLambdaTopRejectsDeterministically() {
+    void deferredLambdaTopPermutesWithoutRuntimeMaterialization() {
         final MethodInfo main = method(
             0x0008,
             "main",
-            "()V",
-            3,
+            "()I",
+            4,
             0,
             intConstant(0, 0),
             intConstant(1, 1),
             invokeDynamic(2, functionLambda()),
             plain(3, 91, "dup_x2"),
-            plain(4, 177, "return")
+            plain(4, 87, "pop"),
+            plain(5, 87, "pop"),
+            plain(6, 87, "pop"),
+            plain(7, 87, "pop"),
+            intConstant(8, 7),
+            plain(9, 172, "ireturn")
         );
         final MethodInfo implementation = method(
             0x0008,
@@ -203,9 +276,7 @@ final class BytecodeDupX2Test {
             plain(1, 176, "areturn")
         );
 
-        assertThatThrownBy(() -> lowerMainClass(main, implementation))
-            .isInstanceOf(DiagnosticException.class)
-            .hasMessageContaining("dup_x2 cannot duplicate deferred compiler value lambda function");
+        assertThatCode(() -> lowerMainClass(main, implementation)).doesNotThrowAnyException();
     }
 
     private static IrFunction lower(final MethodInfo main, final ClassFile... extraClasses) {
@@ -276,6 +347,16 @@ final class BytecodeDupX2Test {
             Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
     }
 
+    private static Instruction getStatic(final int offset, final FieldRef fieldRef) {
+        return new Instruction(offset, 178, "getstatic", new byte[0], Optional.empty(), Optional.of(fieldRef),
+            Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+    }
+
+    private static Instruction invokeVirtual(final int offset, final MethodRef target) {
+        return new Instruction(offset, 182, "invokevirtual", new byte[0], Optional.of(target), Optional.empty(),
+            Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+    }
+
     private static Instruction invokeStatic(final int offset, final MethodRef target) {
         return new Instruction(offset, 184, "invokestatic", new byte[0], Optional.of(target), Optional.empty(),
             Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
@@ -294,6 +375,11 @@ final class BytecodeDupX2Test {
     private static Instruction intConstant(final int offset, final int value) {
         return new Instruction(offset, 18, "ldc", new byte[0], Optional.empty(), Optional.empty(), Optional.empty(),
             Optional.empty(), Optional.of(value), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.of(3));
+    }
+
+    private static Instruction stringConstant(final int offset, final String value) {
+        return new Instruction(offset, 18, "ldc", new byte[0], Optional.empty(), Optional.empty(), Optional.empty(),
+            Optional.of(value), Optional.empty(), Optional.empty(), Optional.empty());
     }
 
     private record DupEvidence(List<IrLocal> locals, List<IrInstruction> instructions) {
