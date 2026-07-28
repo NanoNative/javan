@@ -14,6 +14,17 @@ import java.util.List;
  * Writes deterministic compatibility reports.
  */
 public final class CompatibilityReports {
+    static final List<Path> MATRIX_STATUS_FILES = List.of(
+        Path.of("doc/status/support-matrix.md"),
+        Path.of("doc/status/support-matrix.json")
+    );
+    static final Path JDK_STATUS_FILE = Path.of("doc/status/jdk-compatibility.md");
+    static final List<Path> STATUS_FILES = List.of(
+        MATRIX_STATUS_FILES.get(0),
+        MATRIX_STATUS_FILES.get(1),
+        JDK_STATUS_FILE
+    );
+
     /**
      * Writes all compatibility reports.
      *
@@ -46,9 +57,9 @@ public final class CompatibilityReports {
         files.add(Files2.writeString(bytecodePatterns, bytecodePatternsJson(javaVersion, feature, root, projectClasses)));
         files.add(Files2.writeString(reports.resolve("compatibility-summary.json"), summaryJson(javaVersion, feature, projectClasses, jdkClasses, diagnostics)));
         files.add(Files2.writeString(reports.resolve("compatibility-summary.md"), summaryMarkdown(javaVersion, feature, projectClasses, jdkClasses, diagnostics)));
-        files.add(Files2.writeString(root.resolve("doc/status/support-matrix.json"), supportMatrixJson(feature)));
-        files.add(Files2.writeString(root.resolve("doc/status/support-matrix.md"), supportMatrixMarkdown(feature)));
-        files.add(Files2.writeString(root.resolve("doc/status/jdk-compatibility.md"), jdkCompatibilityMarkdown(javaVersion, feature, projectClasses, jdkClasses, diagnostics)));
+        files.add(Files2.writeString(root.resolve(MATRIX_STATUS_FILES.get(1)), supportMatrixJson(feature)));
+        files.add(Files2.writeString(root.resolve(MATRIX_STATUS_FILES.get(0)), supportMatrixMarkdown(feature)));
+        files.add(Files2.writeString(root.resolve(JDK_STATUS_FILE), jdkCompatibilityMarkdown(javaVersion, feature, projectClasses, jdkClasses, diagnostics)));
         return new CompatibilityResult(
             outputDirectory,
             javaVersion,
@@ -60,7 +71,7 @@ public final class CompatibilityReports {
         );
     }
 
-    private static int javaFeature(final String version) {
+    static int javaFeature(final String version) {
         if (Strings2.isBlank(version)) {
             return 0;
         }
@@ -74,7 +85,11 @@ public final class CompatibilityReports {
             if (ch < '0' || ch > '9') {
                 break;
             }
-            result = (result * 10) + (ch - '0');
+            final int digit = ch - '0';
+            if (result > (Integer.MAX_VALUE - digit) / 10) {
+                return 0;
+            }
+            result = (result * 10) + digit;
         }
         return result;
     }
@@ -775,6 +790,9 @@ public final class CompatibilityReports {
             .append("| 25 | 69 | integrated local gate |\n\n")
             .append("## Active Scan\n\n")
             .append("- scanned java: `").append(javaVersion).append("`\n")
+            .append("- scanned vendor: `").append(System.getProperty("java.vendor", "")).append("`\n")
+            .append("- scanned platform: `").append(System.getProperty("os.name", "")).append("/")
+            .append(System.getProperty("os.arch", "")).append("`\n")
             .append("- scanned JDK: `JDK").append(feature).append("`\n")
             .append("- project classfile majors: `").append(intListText(majorVersions(projectClasses))).append("`\n")
             .append("- JDK classfile majors: `").append(intListText(majorVersions(jdkClasses))).append("`\n")

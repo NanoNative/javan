@@ -100,6 +100,45 @@ final class WorkflowPolicySurfaceTest {
     }
 
     @Test
+    void mavenVerifyRefreshesCompatibilityStatusThroughTheCanonicalCli() throws Exception {
+        assertThat(Files.readString(POM))
+            .contains("<javan.compatibility.reference.java.vendor>Eclipse Adoptium</javan.compatibility.reference.java.vendor>")
+            .contains("<javan.compatibility.reference.java.version>25.0.1</javan.compatibility.reference.java.version>")
+            .contains("<javan.compatibility.reference.os.name>Linux</javan.compatibility.reference.os.name>")
+            .contains("<javan.compatibility.reference.os.arch>amd64</javan.compatibility.reference.os.arch>")
+            .contains("<javan.compatibility.require-reference-jdk>false</javan.compatibility.require-reference-jdk>")
+            .contains("<artifactId>exec-maven-plugin</artifactId>")
+            .contains("<id>refresh-compatibility-status</id>")
+            .contains("<phase>verify</phase>")
+            .contains("<goal>java</goal>")
+            .contains("<mainClass>javan.compat.CompatibilityStatusRefresh</mainClass>")
+            .contains("<argument>${project.basedir}</argument>")
+            .contains("<argument>${project.build.outputDirectory}</argument>")
+            .contains("<argument>${java-version}</argument>")
+            .contains("<argument>${javan.compatibility.reference.java.vendor}</argument>")
+            .contains("<argument>${javan.compatibility.reference.java.version}</argument>")
+            .contains("<argument>${javan.compatibility.reference.os.name}</argument>")
+            .contains("<argument>${javan.compatibility.reference.os.arch}</argument>")
+            .contains("<argument>${javan.compatibility.require-reference-jdk}</argument>");
+    }
+
+    @Test
+    void ciWorkflowVerifiesTrackedCompatibilityStatusOnThePinnedReferenceJdk() throws Exception {
+        assertThat(Files.readString(CI_WORKFLOW))
+            .contains("verify-compatibility-status:")
+            .contains("name: verify-compatibility-status")
+            .contains("java-version: '25.0.1'")
+            .contains("distribution: temurin")
+            .contains("mvn -q -DskipTests -Djacoco.skip=true")
+            .contains("-Djavan.compatibility.require-reference-jdk=true verify")
+            .contains(
+                "needs:\n"
+                    + "      - verify-compatibility-status\n"
+                    + "      - verify-core"
+            );
+    }
+
+    @Test
     void ciWorkflowKeepsMacOsOutOfRemoteNativeMatrix() throws Exception {
         assertThat(Files.readString(CI_WORKFLOW))
             .contains("branches:\n      - main")

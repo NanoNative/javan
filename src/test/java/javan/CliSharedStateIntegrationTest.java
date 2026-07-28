@@ -61,6 +61,21 @@ final class CliSharedStateIntegrationTest {
             .doesNotContain("JAVAN011")
             .doesNotContain("JAVAN012")
             .doesNotContain("javan/build/BuildInvoker.<init>()V");
+
+        assertThat(classes.resolve("javan/compat/CompatibilityStatusRefresh.class")).exists();
+        final CliRun refreshRun = run(
+            classes,
+            "check",
+            classes.toString(),
+            "--main",
+            "javan.compat.CompatibilityStatusRefresh"
+        );
+
+        assertThat(refreshRun.exitCode()).isZero();
+        assertThat(refreshRun.stderr()).isEmpty();
+        assertThat(refreshRun.stdout())
+            .contains("Checking static Java profile", "diagnostics:       0")
+            .doesNotContain("warning[", "error[");
     }
 
     @Test
