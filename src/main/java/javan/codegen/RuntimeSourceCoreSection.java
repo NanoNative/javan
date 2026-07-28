@@ -684,8 +684,11 @@ final class RuntimeSourceCoreSection {
         }
 
         float javan_math_min_float(float left, float right) {
-            if (isnan(left) || isnan(right)) {
-                return NAN;
+            if (isnan(left)) {
+                return left;
+            }
+            if (isnan(right)) {
+                return right;
             }
             if (left == 0.0f && right == 0.0f) {
                 return signbit(left) ? left : right;
@@ -694,8 +697,11 @@ final class RuntimeSourceCoreSection {
         }
 
         double javan_math_min_double(double left, double right) {
-            if (isnan(left) || isnan(right)) {
-                return NAN;
+            if (isnan(left)) {
+                return left;
+            }
+            if (isnan(right)) {
+                return right;
             }
             if (left == 0.0 && right == 0.0) {
                 return signbit(left) ? left : right;
@@ -712,8 +718,11 @@ final class RuntimeSourceCoreSection {
         }
 
         float javan_math_max_float(float left, float right) {
-            if (isnan(left) || isnan(right)) {
-                return NAN;
+            if (isnan(left)) {
+                return left;
+            }
+            if (isnan(right)) {
+                return right;
             }
             if (left == 0.0f && right == 0.0f) {
                 return signbit(left) ? right : left;
@@ -722,8 +731,11 @@ final class RuntimeSourceCoreSection {
         }
 
         double javan_math_max_double(double left, double right) {
-            if (isnan(left) || isnan(right)) {
-                return NAN;
+            if (isnan(left)) {
+                return left;
+            }
+            if (isnan(right)) {
+                return right;
             }
             if (left == 0.0 && right == 0.0) {
                 return signbit(left) ? right : left;

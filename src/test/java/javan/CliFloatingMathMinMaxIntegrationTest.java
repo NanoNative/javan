@@ -14,6 +14,114 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 @ResourceLock("native-cli-heavy")
 final class CliFloatingMathMinMaxIntegrationTest extends CliIntegrationSupport {
     @Test
+    void floatMinReturnsLeftNanRawBitsFromNativeLibrary() throws Exception {
+        assertFloatRawBits(
+            "float-min-left-nan-bits",
+            "Math.min(Float.intBitsToFloat(0xffc01234), 7.0f)",
+            "ffc01234\n"
+        );
+    }
+
+    @Test
+    void floatMinReturnsRightNanRawBitsFromNativeLibrary() throws Exception {
+        assertFloatRawBits(
+            "float-min-right-nan-bits",
+            "Math.min(7.0f, Float.intBitsToFloat(0x7fc05678))",
+            "7fc05678\n"
+        );
+    }
+
+    @Test
+    void floatMaxReturnsLeftNanRawBitsFromNativeLibrary() throws Exception {
+        assertFloatRawBits(
+            "float-max-left-nan-bits",
+            "Math.max(Float.intBitsToFloat(0xffc01234), 7.0f)",
+            "ffc01234\n"
+        );
+    }
+
+    @Test
+    void floatMaxReturnsRightNanRawBitsFromNativeLibrary() throws Exception {
+        assertFloatRawBits(
+            "float-max-right-nan-bits",
+            "Math.max(7.0f, Float.intBitsToFloat(0x7fc05678))",
+            "7fc05678\n"
+        );
+    }
+
+    @Test
+    void floatMinReturnsLeftSignalingNanWhenBothOperandsAreNan() throws Exception {
+        assertFloatRawBits(
+            "float-min-both-nan-left-precedence",
+            "Math.min(Float.intBitsToFloat(0xff801234), Float.intBitsToFloat(0x7f805678))",
+            "ff801234\n"
+        );
+    }
+
+    @Test
+    void floatMaxReturnsLeftSignalingNanWhenBothOperandsAreNan() throws Exception {
+        assertFloatRawBits(
+            "float-max-both-nan-left-precedence",
+            "Math.max(Float.intBitsToFloat(0x7f802468), Float.intBitsToFloat(0xff8068ac))",
+            "7f802468\n"
+        );
+    }
+
+    @Test
+    void doubleMinReturnsLeftNanRawBitsFromNativeLibrary() throws Exception {
+        assertDoubleRawBits(
+            "double-min-left-nan-bits",
+            "Math.min(Double.longBitsToDouble(0xfff8000000001234L), 7.0d)",
+            "fff8000000001234\n"
+        );
+    }
+
+    @Test
+    void doubleMinReturnsRightNanRawBitsFromNativeLibrary() throws Exception {
+        assertDoubleRawBits(
+            "double-min-right-nan-bits",
+            "Math.min(7.0d, Double.longBitsToDouble(0x7ff8000000005678L))",
+            "7ff8000000005678\n"
+        );
+    }
+
+    @Test
+    void doubleMaxReturnsLeftNanRawBitsFromNativeLibrary() throws Exception {
+        assertDoubleRawBits(
+            "double-max-left-nan-bits",
+            "Math.max(Double.longBitsToDouble(0xfff8000000001234L), 7.0d)",
+            "fff8000000001234\n"
+        );
+    }
+
+    @Test
+    void doubleMaxReturnsRightNanRawBitsFromNativeLibrary() throws Exception {
+        assertDoubleRawBits(
+            "double-max-right-nan-bits",
+            "Math.max(7.0d, Double.longBitsToDouble(0x7ff8000000005678L))",
+            "7ff8000000005678\n"
+        );
+    }
+
+    @Test
+    void doubleMinReturnsLeftSignalingNanWhenBothOperandsAreNan() throws Exception {
+        assertDoubleRawBits(
+            "double-min-both-nan-left-precedence",
+            "Math.min(Double.longBitsToDouble(0xfff0000000001234L), Double.longBitsToDouble(0x7ff0000000005678L))",
+            "fff0000000001234\n"
+        );
+    }
+
+    @Test
+    void doubleMaxReturnsLeftSignalingNanWhenBothOperandsAreNan() throws Exception {
+        assertDoubleRawBits(
+            "double-max-both-nan-left-precedence",
+            "Math.max(Double.longBitsToDouble(0x7ff0000000002468L), Double.longBitsToDouble(0xfff00000000068acL))",
+            "7ff0000000002468\n"
+        );
+    }
+
+    @Test
     void floatMinReturnsNanBuildsAndMatchesJvmOutput() throws Exception {
         assertNativeOutputMatchesJvm("float-min-nan", """
             float zero = 0.0f;
@@ -40,6 +148,38 @@ final class CliFloatingMathMinMaxIntegrationTest extends CliIntegrationSupport {
         assertNativeOutputMatchesJvm("double-max-nan", """
             double zero = 0.0d;
             System.out.println(Math.max(7.0d, zero / zero));
+            """);
+    }
+
+    @Test
+    void floatMinOrdersInfinityBuildsAndMatchesJvmOutput() throws Exception {
+        assertNativeOutputMatchesJvm("float-min-infinity", """
+            float zero = 0.0f;
+            System.out.println(Math.min(1.0f / zero, -1.0f / zero));
+            """);
+    }
+
+    @Test
+    void floatMaxOrdersInfinityBuildsAndMatchesJvmOutput() throws Exception {
+        assertNativeOutputMatchesJvm("float-max-infinity", """
+            float zero = 0.0f;
+            System.out.println(Math.max(-1.0f / zero, 1.0f / zero));
+            """);
+    }
+
+    @Test
+    void doubleMinOrdersInfinityBuildsAndMatchesJvmOutput() throws Exception {
+        assertNativeOutputMatchesJvm("double-min-infinity", """
+            double zero = 0.0d;
+            System.out.println(Math.min(1.0d / zero, -1.0d / zero));
+            """);
+    }
+
+    @Test
+    void doubleMaxOrdersInfinityBuildsAndMatchesJvmOutput() throws Exception {
+        assertNativeOutputMatchesJvm("double-max-infinity", """
+            double zero = 0.0d;
+            System.out.println(Math.max(-1.0d / zero, 1.0d / zero));
             """);
     }
 
@@ -89,5 +229,79 @@ final class CliFloatingMathMinMaxIntegrationTest extends CliIntegrationSupport {
 
         assertThat(process(project, List.of(project.resolve(".javan/bin/" + projectName).toString())).stdout())
             .isEqualTo(jvmOutput);
+    }
+
+    private void assertFloatRawBits(
+        final String projectName,
+        final String expression,
+        final String expected
+    ) throws Exception {
+        assertRawBits(projectName, "float", "uint32_t", "%08llx", expression, expected);
+    }
+
+    private void assertDoubleRawBits(
+        final String projectName,
+        final String expression,
+        final String expected
+    ) throws Exception {
+        assertRawBits(projectName, "double", "uint64_t", "%016llx", expression, expected);
+    }
+
+    private void assertRawBits(
+        final String projectName,
+        final String javaType,
+        final String cBitsType,
+        final String cFormat,
+        final String expression,
+        final String expected
+    ) throws Exception {
+        final Path project = project(projectName);
+        writeJava(project, "com.acme.Probe", """
+            package com.acme;
+
+            public final class Probe {
+                private Probe() {
+                }
+
+                public static %s value() {
+                    return %s;
+                }
+            }
+            """.formatted(javaType, expression));
+        run(
+            tempDir,
+            "build",
+            project.toString(),
+            "--kind",
+            "staticlib",
+            "--export",
+            "com.acme.Probe.value",
+            "--bindings",
+            "c"
+        );
+        final Path caller = writeC(project, "read_bits.c", """
+            #include <stdint.h>
+            #include <stdio.h>
+            #include <string.h>
+            #include ".javan/dist/bindings/c/%s.h"
+
+            int main(void) {
+                %s value = javan_export_com_acme_Probe_value_void();
+                %s bits = 0;
+                memcpy(&bits, &value, sizeof(value));
+                printf("%s\\n", (unsigned long long) bits);
+                return 0;
+            }
+            """.formatted(projectName, javaType, cBitsType, cFormat));
+        final Path binary = project.resolve("read-bits");
+        process(project, List.of(
+            "cc",
+            caller.toString(),
+            project.resolve(".javan/dist/lib" + projectName + ".a").toString(),
+            "-o",
+            binary.toString()
+        ));
+
+        assertThat(process(project, List.of(binary.toString())).stdout()).isEqualTo(expected);
     }
 }
