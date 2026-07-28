@@ -3644,6 +3644,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void byteArraysWholeFillIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Arrays",
+            "fill",
+            "([BB)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void byteArraysRangedFillIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Arrays",
+            "fill",
+            "([BIIB)V"
+        ))).isTrue();
+    }
+
+    @Test
     void pathsGetRequiresFilesystemRuntimeModule() {
         assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
             "java/nio/file/Paths",

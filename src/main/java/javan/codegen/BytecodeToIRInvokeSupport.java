@@ -1919,7 +1919,7 @@ final class BytecodeToIRInvokeSupport {
             );
         }
         if ("java/util/Arrays".equals(methodRef.owner())) {
-            return lowerArraysIntrinsic(classFile, method, methodRef, stack);
+            return lowerArraysIntrinsic(classFile, method, methodRef, instructions, stack);
         }
         if ("java/lang/Integer".equals(methodRef.owner())) {
             return lowerIntegerIntrinsic(classFile, method, methodRef, stack);
@@ -2536,8 +2536,26 @@ final class BytecodeToIRInvokeSupport {
         final ClassFile classFile,
         final MethodInfo method,
         final MethodRef methodRef,
+        final List<IrInstruction> instructions,
         final List<StackValue> stack
     ) {
+        if ("fill".equals(methodRef.name()) && "([BB)V".equals(methodRef.descriptor())) {
+            final IrExpression value = popInt(classFile, method, stack);
+            final IrExpression array = popObject(classFile, method, stack);
+            instructions.add(IrInstruction.callStaticVoid("javan_arrays_fill_byte", List.of(array, value)));
+            return true;
+        }
+        if ("fill".equals(methodRef.name()) && "([BIIB)V".equals(methodRef.descriptor())) {
+            final IrExpression value = popInt(classFile, method, stack);
+            final IrExpression end = popInt(classFile, method, stack);
+            final IrExpression begin = popInt(classFile, method, stack);
+            final IrExpression array = popObject(classFile, method, stack);
+            instructions.add(IrInstruction.callStaticVoid(
+                "javan_arrays_fill_range_byte",
+                List.of(array, begin, end, value)
+            ));
+            return true;
+        }
         if ("copyOfRange".equals(methodRef.name()) && "([BII)[B".equals(methodRef.descriptor())) {
             final IrExpression end = popInt(classFile, method, stack);
             final IrExpression begin = popInt(classFile, method, stack);

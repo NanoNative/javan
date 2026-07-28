@@ -78,6 +78,7 @@ final class IntrinsicUsageReportsTest {
             new IntrinsicCallCount("Character.isWhitespace", 0),
             new IntrinsicCallCount("Arrays.copyOf", 1),
             new IntrinsicCallCount("Arrays.copyOfRange", 0),
+            new IntrinsicCallCount("Arrays.fill", 0),
             new IntrinsicCallCount("Integer.toString", 1),
             new IntrinsicCallCount("Long.toString", 1),
             new IntrinsicCallCount("Float.toString", 0),
@@ -281,6 +282,23 @@ final class IntrinsicUsageReportsTest {
         assertThat(report.unsupportedJdkCallCandidates()).containsExactly(
             new UnsupportedJdkCallCandidate("java/util/Objects.equals(Ljava/lang/Object;Ljava/lang/Object;)Z", 1)
         );
+    }
+
+    @Test
+    void countsReachableByteArrayFillIntrinsic() {
+        final EntryPoint entry = new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V");
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classFile("com/acme/Main", method(
+                "main",
+                "([Ljava/lang/String;)V",
+                instruction("java/util/Arrays", "fill", "([BB)V")
+            ))
+        );
+
+        final IntrinsicUsageReport report = new IntrinsicUsageReports().analyze(classes, List.of(entry));
+
+        assertThat(report.intrinsics()).contains(new IntrinsicCallCount("Arrays.fill", 1));
     }
 
     private static ClassFile classFile(final String name, final MethodInfo method) {

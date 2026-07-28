@@ -20940,6 +20940,59 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersWholeByteArrayFillToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "([B)V",
+            2,
+            1,
+            plain(0, 42, "aload_0"),
+            plain(1, 8, "iconst_5"),
+            invokeStatic(2, new MethodRef("java/util/Arrays", "fill", "([BB)V")),
+            plain(3, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid(
+                "javan_arrays_fill_byte",
+                List.of(IrExpression.objectLocal("arg0"), IrExpression.intLiteral(5))
+            ),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
+    void lowersRangedByteArrayFillToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "([B)V",
+            4,
+            1,
+            plain(0, 42, "aload_0"),
+            plain(1, 4, "iconst_1"),
+            plain(2, 5, "iconst_2"),
+            plain(3, 8, "iconst_5"),
+            invokeStatic(4, new MethodRef("java/util/Arrays", "fill", "([BIIB)V")),
+            plain(5, 177, "return")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.callStaticVoid(
+                "javan_arrays_fill_range_byte",
+                List.of(
+                    IrExpression.objectLocal("arg0"),
+                    IrExpression.intLiteral(1),
+                    IrExpression.intLiteral(2),
+                    IrExpression.intLiteral(5)
+                )
+            ),
+            IrInstruction.returnVoid()
+        );
+    }
+
+    @Test
     void lowersObjectArrayCopyOfRangeToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
