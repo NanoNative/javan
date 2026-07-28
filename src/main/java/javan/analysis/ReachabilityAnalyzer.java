@@ -1199,9 +1199,6 @@ public final class ReachabilityAnalyzer {
         if (!"()Ljava/lang/Object;".equals(target.descriptor())) {
             return false;
         }
-        if ("[Z".equals(target.owner())) {
-            return false;
-        }
         return true;
     }
 

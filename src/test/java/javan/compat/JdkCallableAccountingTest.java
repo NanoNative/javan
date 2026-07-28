@@ -16,6 +16,15 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
+    void marksObjectCloneAsSupported() {
+        assertThat(JdkCallableAccounting.status(new MethodRef(
+            "java/lang/Object",
+            "clone",
+            "()Ljava/lang/Object;"
+        ))).isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
+    }
+
+    @Test
     void marksForbiddenDynamicApiAsExplicitRejected() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/Class", "forName", "(Ljava/lang/String;)Ljava/lang/Class;")))
             .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);

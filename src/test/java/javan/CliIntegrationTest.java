@@ -1611,6 +1611,126 @@ final class CliIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void everyArrayCloneKindBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("all-array-clones");
+        writeJava(project, "com.acme.Payload", """
+            package com.acme;
+
+            public final class Payload {
+                final int value;
+
+                Payload(final int value) {
+                    this.value = value;
+                }
+            }
+            """);
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final boolean[] booleans = new boolean[]{true};
+                    final byte[] bytes = new byte[]{2};
+                    final char[] chars = new char[]{'A'};
+                    final short[] shorts = new short[]{3};
+                    final int[] ints = new int[]{4};
+                    final long[] longs = new long[]{5L};
+                    final float[] floats = new float[]{6.5f};
+                    final double[] doubles = new double[]{7.25d};
+                    final boolean[] booleanCopy = booleans.clone();
+                    final byte[] byteCopy = bytes.clone();
+                    final char[] charCopy = chars.clone();
+                    final short[] shortCopy = shorts.clone();
+                    final int[] intCopy = ints.clone();
+                    final long[] longCopy = longs.clone();
+                    final float[] floatCopy = floats.clone();
+                    final double[] doubleCopy = doubles.clone();
+
+                    booleans[0] = false;
+                    bytes[0] = 9;
+                    chars[0] = 'Z';
+                    shorts[0] = 9;
+                    ints[0] = 9;
+                    longs[0] = 9L;
+                    floats[0] = 9.5f;
+                    doubles[0] = 9.25d;
+
+                    System.out.println(booleans != booleanCopy);
+                    System.out.println(booleanCopy[0]);
+                    System.out.println(bytes != byteCopy);
+                    System.out.println(byteCopy[0]);
+                    System.out.println(chars != charCopy);
+                    System.out.println(charCopy[0]);
+                    System.out.println(shorts != shortCopy);
+                    System.out.println(shortCopy[0]);
+                    System.out.println(ints != intCopy);
+                    System.out.println(intCopy[0]);
+                    System.out.println(longs != longCopy);
+                    System.out.println(longCopy[0]);
+                    System.out.println(floats != floatCopy);
+                    System.out.println(floatCopy[0]);
+                    System.out.println(doubles != doubleCopy);
+                    System.out.println(doubleCopy[0]);
+
+                    final Payload payload = new Payload(8);
+                    final Payload[] objects = new Payload[]{payload, null};
+                    final Payload[] objectCopy = objects.clone();
+                    objects[0] = new Payload(9);
+                    System.out.println(objects != objectCopy);
+                    System.out.println(objectCopy[0] == payload);
+                    System.out.println(objectCopy[1] == null);
+
+                    final int[][] nested = new int[][]{new int[]{10}, null};
+                    final int[][] nestedCopy = nested.clone();
+                    nested[0][0] = 11;
+                    System.out.println(nested != nestedCopy);
+                    System.out.println(nested[0] == nestedCopy[0]);
+                    System.out.println(nestedCopy[0][0]);
+                    System.out.println(nestedCopy[1] == null);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        assertThat(process(project, List.of(project.resolve(".javan/bin/all-array-clones").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void nullArrayCloneBuildsAndFailsClearly() throws Exception {
+        final Path project = project("null-array-clone");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final int[] values = null;
+                    values.clone();
+                }
+            }
+            """);
+
+        final CliRun build = run(tempDir, "build", project.toString());
+
+        assertThat(build.exitCode()).as(build.stderr()).isZero();
+        final ProcessResult nativeRun = process(
+            project,
+            List.of(project.resolve(".javan/bin/null-array-clone").toString())
+        );
+        assertThat(nativeRun.exitCode()).isEqualTo(1);
+        assertThat(nativeRun.stderr()).contains("null array");
+    }
+
+    @Test
     void objectReferenceCompareBuildsAndRuns() throws Exception {
         final Path project = project("object-reference-compare");
         writeJava(project, "com.acme.Main", """
