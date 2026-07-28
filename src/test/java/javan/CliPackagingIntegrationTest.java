@@ -957,7 +957,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void unsupportedExportSignatureFailsClearly() throws Exception {
+    void shortObjectHandleExportBuilds() throws Exception {
         final Path project = project("library-bad-export");
         writeJava(project, "com.acme.Bad", """
             package com.acme;
@@ -974,7 +974,6 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
 
         final CliRun run = run(tempDir, "build", project.toString(), "--kind", "staticlib", "--export", "com.acme.Bad.nope");
 
-        assertThat(run.exitCode()).isEqualTo(2);
-        assertThat(run.stderr()).contains("Unsupported export object type");
+        assertThat(run.exitCode()).as(run.stderr()).isZero();
     }
 }

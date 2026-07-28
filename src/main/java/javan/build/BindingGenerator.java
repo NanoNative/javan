@@ -41,9 +41,21 @@ public final class BindingGenerator {
                 languages.add(language);
             }
         }
-        if (exports.stream().anyMatch(export -> export.returnType() == AbiType.OBJECT
-            || export.parameterTypes().contains(AbiType.OBJECT))
-            && languages.stream().anyMatch(language -> language != BindingLanguage.C)) {
+        boolean hasObjectHandleExport = false;
+        for (final ExportedMethod export : exports) {
+            if (export.returnType() == AbiType.OBJECT || export.parameterTypes().contains(AbiType.OBJECT)) {
+                hasObjectHandleExport = true;
+                break;
+            }
+        }
+        boolean requestsNonCBinding = false;
+        for (final BindingLanguage language : languages) {
+            if (language != BindingLanguage.C) {
+                requestsNonCBinding = true;
+                break;
+            }
+        }
+        if (hasObjectHandleExport && requestsNonCBinding) {
             throw new IllegalArgumentException("Object-handle exports currently support C bindings only; omit Rust/Go/Python bindings.");
         }
         final List<Path> files = new ArrayList<>();
