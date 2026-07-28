@@ -46,6 +46,12 @@ final class NativeLinkerTest {
     }
 
     @Test
+    void linuxHostLinksTheSystemMathLibrary() {
+        assertThat(NativeLinker.platformLinkFlagsForOs("Linux"))
+            .containsExactly("-lm");
+    }
+
+    @Test
     void windowsHostResolvesExeSuffixFromPathEntry() throws Exception {
         final Path compiler = Files.createFile(tempDir.resolve("gcc.exe"));
         assertThat(compiler.toFile().setExecutable(true)).isTrue();

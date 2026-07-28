@@ -75,6 +75,7 @@ final class RuntimeHeaderFile {
         long long javan_math_min_long(long long left, long long right);
         int javan_math_max_int(int left, int right);
         long long javan_math_max_long(long long left, long long right);
+        double javan_math_atan2_double(double y, double x);
         int javan_math_to_int_exact(long long value);
         int javan_int_shl(int value, int shift);
         long long javan_long_shl(long long value, int shift);

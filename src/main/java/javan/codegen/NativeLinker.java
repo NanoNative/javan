@@ -165,6 +165,9 @@ public final class NativeLinker {
         if (isWindowsHost(osName)) {
             return List.of("-lws2_32");
         }
+        if (Strings2.toAsciiLowerCase(osName).contains("linux")) {
+            return List.of("-lm");
+        }
         return List.of();
     }
 

@@ -691,6 +691,10 @@ final class RuntimeSourceCoreSection {
             return left >= right ? left : right;
         }
 
+        double javan_math_atan2_double(double y, double x) {
+            return atan2(y, x);
+        }
+
         int javan_math_to_int_exact(long long value) {
             if (value < INT_MIN || value > INT_MAX) {
                 javan_panic("integer overflow");
