@@ -20372,6 +20372,28 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersMathAddExactIntToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(II)I",
+            2,
+            2,
+            plain(0, 26, "iload_0"),
+            plain(1, 27, "iload_1"),
+            invokeStatic(2, new MethodRef("java/lang/Math", "addExact", "(II)I")),
+            plain(3, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).contains(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_math_add_exact_int",
+                List.of(IrExpression.intLocal("int0"), IrExpression.intLocal("int1"))
+            ))
+        );
+    }
+
+    @Test
     void lowersIntegerToStringToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,

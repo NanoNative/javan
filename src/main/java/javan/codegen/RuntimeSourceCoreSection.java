@@ -743,6 +743,16 @@ final class RuntimeSourceCoreSection {
             return left >= right ? left : right;
         }
 
+        int javan_math_add_exact_int_overflows(int left, int right) {
+            const long long result = (long long) left + (long long) right;
+            return result < INT_MIN || result > INT_MAX;
+        }
+
+        int javan_math_add_exact_int(int left, int right) {
+            const long long result = (long long) left + (long long) right;
+            return (int) result;
+        }
+
         int javan_math_to_int_exact(long long value) {
             if (value < INT_MIN || value > INT_MAX) {
                 javan_panic("integer overflow");

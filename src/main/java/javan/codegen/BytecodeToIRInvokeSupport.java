@@ -1927,7 +1927,17 @@ final class BytecodeToIRInvokeSupport {
         final SourceLineIndex sourceLines
     ) {
         if ("java/lang/Math".equals(methodRef.owner())) {
-            return lowerMathIntrinsic(classFile, method, methodRef, stack);
+            return lowerMathIntrinsic(
+                classFile,
+                method,
+                instruction,
+                methodRef,
+                instructions,
+                stack,
+                localDeclarations,
+                pendingExceptionHandlerStacks,
+                sourceLines
+            );
         }
         if ("java/lang/System".equals(methodRef.owner())) {
             return lowerSystemIntrinsic(classFile, method, methodRef, instructions, stack);
@@ -2141,8 +2151,13 @@ final class BytecodeToIRInvokeSupport {
     static boolean lowerMathIntrinsic(
         final ClassFile classFile,
         final MethodInfo method,
+        final Instruction instruction,
         final MethodRef methodRef,
-        final List<StackValue> stack
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
     ) {
         if ("abs".equals(methodRef.name()) && "(I)I".equals(methodRef.descriptor())) {
             stack.add(StackValue.intExpression(IrExpression.intCall("javan_math_abs_int", List.of(popInt(classFile, method, stack)))));
@@ -2208,11 +2223,88 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.doubleExpression(IrExpression.doubleCall("javan_math_max_double", List.of(left, right))));
             return true;
         }
+        if ("addExact".equals(methodRef.name()) && "(II)I".equals(methodRef.descriptor())) {
+            final IrExpression right = popInt(classFile, method, stack);
+            final IrExpression left = popInt(classFile, method, stack);
+            lowerMathAddExactInt(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                localDeclarations,
+                pendingExceptionHandlerStacks,
+                sourceLines,
+                left,
+                right
+            );
+            return true;
+        }
         if ("toIntExact".equals(methodRef.name()) && "(J)I".equals(methodRef.descriptor())) {
             stack.add(StackValue.intExpression(IrExpression.intCall("javan_math_to_int_exact", List.of(popLong(classFile, method, stack)))));
             return true;
         }
         return false;
+    }
+    static void lowerMathAddExactInt(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines,
+        final IrExpression left,
+        final IrExpression right
+    ) {
+        final int leftLocalIndex = localDeclarations.size();
+        final String leftLocalName = "int" + leftLocalIndex;
+        localDeclarations.put(Integer.MIN_VALUE + leftLocalIndex, new IrLocal(IrType.INT, leftLocalName));
+        instructions.add(IrInstruction.assignInt(leftLocalName, left));
+
+        final int rightLocalIndex = localDeclarations.size();
+        final String rightLocalName = "int" + rightLocalIndex;
+        localDeclarations.put(Integer.MIN_VALUE + rightLocalIndex, new IrLocal(IrType.INT, rightLocalName));
+        instructions.add(IrInstruction.assignInt(rightLocalName, right));
+
+        final IrExpression checkedLeft = IrExpression.intLocal(leftLocalName);
+        final IrExpression checkedRight = IrExpression.intLocal(rightLocalName);
+        final int overflowLocalIndex = localDeclarations.size();
+        final String overflowLocalName = "int" + overflowLocalIndex;
+        localDeclarations.put(Integer.MIN_VALUE + overflowLocalIndex, new IrLocal(IrType.INT, overflowLocalName));
+        instructions.add(IrInstruction.assignInt(
+            overflowLocalName,
+            IrExpression.intCall("javan_math_add_exact_int_overflows", List.of(checkedLeft, checkedRight))
+        ));
+
+        final String successLabel = "label_math_add_exact_success_" + instruction.offset() + "_" + overflowLocalIndex;
+        instructions.add(IrInstruction.branchIf(
+            successLabel,
+            IrExpression.intComparison(
+                "==",
+                IrExpression.intLocal(overflowLocalName),
+                IrExpression.intLiteral(0)
+            )
+        ));
+        final List<StackValue> successStack = List.copyOf(stack);
+        routePendingPlatformException(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            pendingExceptionHandlerStacks,
+            sourceLines,
+            "java/lang/ArithmeticException",
+            IrExpression.stringLiteral("integer overflow")
+        );
+        instructions.add(IrInstruction.label(successLabel));
+        stack.addAll(successStack);
+        stack.add(StackValue.intExpression(IrExpression.intCall(
+            "javan_math_add_exact_int",
+            List.of(checkedLeft, checkedRight)
+        )));
     }
     static boolean lowerIntegerIntrinsic(
         final ClassFile classFile,

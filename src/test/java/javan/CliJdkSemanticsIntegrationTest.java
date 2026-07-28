@@ -9165,6 +9165,167 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void mathAddExactIntBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("math-add-exact-int");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Math.addExact(1_000_000_000, 234_567_890));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/math-add-exact-int").toString())).stdout()
+            : "";
+
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput)
+            .isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
+    void mathAddExactIntEvaluatesOperandsOnceInOrderInsidePrintln() throws Exception {
+        final Path project = project("math-add-exact-int-operand-order");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private static int trace;
+
+                private Main() {
+                }
+
+                private static int left() {
+                    trace = trace * 10 + 1;
+                    return 4;
+                }
+
+                private static int right() {
+                    trace = trace * 10 + 2;
+                    return 5;
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Math.addExact(left(), right()));
+                    System.out.println(trace);
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        final String nativeOutput = build.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/math-add-exact-int-operand-order").toString())).stdout()
+            : "";
+
+        assertThat(build.exitCode() + "\n" + build.stderr() + nativeOutput)
+            .isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
+    void mathAddExactIntOverflowFailsAtRuntime() throws Exception {
+        final Path project = project("math-add-exact-int-overflow");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Math.addExact(Integer.MAX_VALUE, 1));
+                }
+            }
+            """);
+
+        final CliRun build = run(tempDir, "build", project.toString());
+        final ProcessResult nativeRun = build.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/math-add-exact-int-overflow").toString()))
+            : new ProcessResult(-1, "", build.stderr());
+
+        assertThat(List.of(
+            build.exitCode(),
+            nativeRun.exitCode() == 0 ? 0 : 1,
+            nativeRun.stderr().contains("java/lang/ArithmeticException") ? 1 : 0
+        )).containsExactly(0, 1, 1);
+    }
+
+    @Test
+    void mathAddExactIntPositiveOverflowCanBeCaught() throws Exception {
+        final Path project = project("math-add-exact-int-caught-positive-overflow");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                private static int add() {
+                    try {
+                        return Math.addExact(Integer.MAX_VALUE, 1);
+                    } catch (final ArithmeticException ignored) {
+                        return 41;
+                    }
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(add());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        final String nativeOutput = build.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/math-add-exact-int-caught-positive-overflow").toString())).stdout()
+            : "";
+
+        assertThat(build.exitCode() + "\n" + build.stderr() + nativeOutput)
+            .isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
+    void mathAddExactIntNegativeOverflowCanBeCaught() throws Exception {
+        final Path project = project("math-add-exact-int-caught-negative-overflow");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                private static int add() {
+                    try {
+                        return Math.addExact(Integer.MIN_VALUE, -1);
+                    } catch (final ArithmeticException ignored) {
+                        return -41;
+                    }
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(add());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun build = run(tempDir, "build", project.toString());
+        final String nativeOutput = build.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/math-add-exact-int-caught-negative-overflow").toString())).stdout()
+            : "";
+
+        assertThat(build.exitCode() + "\n" + build.stderr() + nativeOutput)
+            .isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
     void exactCatchNullEnumLookupBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("exact-catch-null-enum-lookup");
         writeJava(project, "com.acme.Color", """

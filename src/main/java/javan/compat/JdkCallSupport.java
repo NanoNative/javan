@@ -81,6 +81,7 @@ public final class JdkCallSupport {
         intrinsic("Math.abs", "java/lang/Math", "abs", "(I)I", "(J)J", "(F)F", "(D)D"),
         intrinsic("Math.min", "java/lang/Math", "min", "(II)I", "(JJ)J", "(FF)F", "(DD)D"),
         intrinsic("Math.max", "java/lang/Math", "max", "(II)I", "(JJ)J", "(FF)F", "(DD)D"),
+        intrinsic("Math.addExact", "java/lang/Math", "addExact", "(II)I"),
         intrinsic("Math.toIntExact", "java/lang/Math", "toIntExact", "(J)I"),
         intrinsic("System.nanoTime", "java/lang/System", "nanoTime", "()J"),
         intrinsic("System.currentTimeMillis", "java/lang/System", "currentTimeMillis", "()J"),

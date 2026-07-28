@@ -584,6 +584,9 @@ public final class StaticVerifier {
         if (supportedArraysFillHandler(code, handler)) {
             return true;
         }
+        if (supportedMathAddExactHandler(code, handler)) {
+            return true;
+        }
         if (supportedFinallyRethrowHandler(code, handler)) {
             return true;
         }
@@ -728,6 +731,57 @@ public final class StaticVerifier {
             return true;
         }
         return JdkCallSupport.isPlatformThrowableAssignable("java/lang/ArrayIndexOutOfBoundsException", catchType);
+    }
+
+    private static boolean supportedMathAddExactHandler(final CodeAttribute code, final CodeException handler) {
+        if (handler.catchType().isEmpty()
+            || !JdkCallSupport.isPlatformThrowableAssignable(
+                "java/lang/ArithmeticException",
+                handler.catchType().orElseThrow()
+            )) {
+            return false;
+        }
+        int hasAddExactCall = 0;
+        for (final Instruction instruction : code.instructions()) {
+            if (instruction.offset() < handler.startPc()) {
+                continue;
+            }
+            if (instruction.offset() >= handler.endPc()) {
+                continue;
+            }
+            if (isMathAddExactIntCall(instruction)) {
+                hasAddExactCall = 1;
+                continue;
+            }
+            if (!supportedMathAddExactProtectedInstruction(instruction)) {
+                return false;
+            }
+        }
+        return hasAddExactCall == 1;
+    }
+
+    private static boolean isMathAddExactIntCall(final Instruction instruction) {
+        if (instruction.opcode() != 184 || instruction.methodRef().isEmpty()) {
+            return false;
+        }
+        final MethodRef target = instruction.methodRef().orElseThrow();
+        return "java/lang/Math".equals(target.owner())
+            && "addExact".equals(target.name())
+            && "(II)I".equals(target.descriptor());
+    }
+
+    private static boolean supportedMathAddExactProtectedInstruction(final Instruction instruction) {
+        final int opcode = instruction.opcode();
+        if (opcode >= 2 && opcode <= 8) {
+            return true;
+        }
+        if (opcode == 16 || opcode == 17 || opcode == 18 || opcode == 19) {
+            return true;
+        }
+        if (opcode == 21) {
+            return true;
+        }
+        return opcode >= 26 && opcode <= 29;
     }
 
     private static boolean supportedFinallyRethrowHandler(final CodeAttribute code, final CodeException handler) {
