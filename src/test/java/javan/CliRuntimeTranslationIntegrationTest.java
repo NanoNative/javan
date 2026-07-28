@@ -5277,7 +5277,7 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
 
         assertThat(run.stderr()).contains(
             "error[JAVAN030]",
-            "Only StringConcatFactory string concatenation, record ObjectMethods equals, exact LambdaMetafactory Function/Predicate shapes, "
+            "Only StringConcatFactory string concatenation, exact record ObjectMethods equals/hashCode, exact LambdaMetafactory Function/Predicate shapes, "
                 + "the exact Supplier subset (zero-argument reference-return invocation directly lowered to admitted application-static "
                 + "implementations, plus application static/instance-target materialization with reference-only captures and reference "
                 + "returns), the current "
@@ -5308,7 +5308,7 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
 
         assertThat(run.stderr()).contains(
             "error[JAVAN030]",
-            "Only StringConcatFactory string concatenation, record ObjectMethods equals, exact LambdaMetafactory Function/Predicate shapes, "
+            "Only StringConcatFactory string concatenation, exact record ObjectMethods equals/hashCode, exact LambdaMetafactory Function/Predicate shapes, "
                 + "the exact Supplier subset (zero-argument reference-return invocation directly lowered to admitted application-static "
                 + "implementations, plus application static/instance-target materialization with reference-only captures and reference "
                 + "returns), the current "

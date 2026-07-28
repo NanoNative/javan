@@ -10,6 +10,7 @@ import java.util.List;
  * @param bootstrapOwner bootstrap method owner
  * @param bootstrapName bootstrap method name
  * @param bootstrapDescriptor bootstrap method descriptor
+ * @param bootstrapReferenceKind JVM bootstrap method-handle reference kind, or {@code -1} when unavailable
  * @param bootstrapArguments normalized static bootstrap arguments
  * @param bootstrapArgumentDetails resolved bootstrap argument metadata
  */
@@ -19,9 +20,42 @@ public record DynamicRef(
     String bootstrapOwner,
     String bootstrapName,
     String bootstrapDescriptor,
+    int bootstrapReferenceKind,
     List<String> bootstrapArguments,
     List<BootstrapArgument> bootstrapArgumentDetails
 ) {
+    /**
+     * Backward-compatible constructor for callers with parsed argument details but no bootstrap handle kind.
+     *
+     * @param name dynamic call name
+     * @param descriptor dynamic call descriptor
+     * @param bootstrapOwner bootstrap method owner
+     * @param bootstrapName bootstrap method name
+     * @param bootstrapDescriptor bootstrap method descriptor
+     * @param bootstrapArguments normalized static bootstrap arguments
+     * @param bootstrapArgumentDetails resolved bootstrap argument metadata
+     */
+    public DynamicRef(
+        final String name,
+        final String descriptor,
+        final String bootstrapOwner,
+        final String bootstrapName,
+        final String bootstrapDescriptor,
+        final List<String> bootstrapArguments,
+        final List<BootstrapArgument> bootstrapArgumentDetails
+    ) {
+        this(
+            name,
+            descriptor,
+            bootstrapOwner,
+            bootstrapName,
+            bootstrapDescriptor,
+            -1,
+            List.copyOf(bootstrapArguments),
+            List.copyOf(bootstrapArgumentDetails)
+        );
+    }
+
     /**
      * Backward-compatible constructor for tests and existing string-only callers.
      *
@@ -46,6 +80,7 @@ public record DynamicRef(
             bootstrapOwner,
             bootstrapName,
             bootstrapDescriptor,
+            -1,
             List.copyOf(bootstrapArguments),
             unknownArguments(bootstrapArguments)
         );

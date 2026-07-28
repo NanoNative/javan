@@ -78,7 +78,10 @@ final class IntrinsicUsageReportsTest {
             new IntrinsicCallCount("Character.isWhitespace", 0),
             new IntrinsicCallCount("Arrays.copyOf", 1),
             new IntrinsicCallCount("Arrays.copyOfRange", 0),
+            new IntrinsicCallCount("Arrays.fill", 0),
             new IntrinsicCallCount("Integer.toString", 1),
+            new IntrinsicCallCount("Long.compare", 0),
+            new IntrinsicCallCount("Long.compareUnsigned", 0),
             new IntrinsicCallCount("Long.toString", 1),
             new IntrinsicCallCount("Float.toString", 0),
             new IntrinsicCallCount("Float.intBitsToFloat", 0),
@@ -138,6 +141,40 @@ final class IntrinsicUsageReportsTest {
                 "| none | 0 |",
                 "Total reachable call sites: `0`"
             );
+    }
+
+    @Test
+    void countsReachableLongCompareAsSupportedIntrinsic() {
+        final IntrinsicUsageReports reports = new IntrinsicUsageReports();
+        final EntryPoint entry = new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V");
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classFile("com/acme/Main", method(
+                "main",
+                "([Ljava/lang/String;)V",
+                instruction("java/lang/Long", "compare", "(JJ)I")
+            ))
+        );
+
+        assertThat(reports.analyze(classes, List.of(entry)).intrinsics())
+            .contains(new IntrinsicCallCount("Long.compare", 1));
+    }
+
+    @Test
+    void countsReachableLongCompareUnsignedAsSupportedIntrinsic() {
+        final IntrinsicUsageReports reports = new IntrinsicUsageReports();
+        final EntryPoint entry = new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V");
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classFile("com/acme/Main", method(
+                "main",
+                "([Ljava/lang/String;)V",
+                instruction("java/lang/Long", "compareUnsigned", "(JJ)I")
+            ))
+        );
+
+        assertThat(reports.analyze(classes, List.of(entry)).intrinsics())
+            .contains(new IntrinsicCallCount("Long.compareUnsigned", 1));
     }
 
     @Test
@@ -250,6 +287,23 @@ final class IntrinsicUsageReportsTest {
     }
 
     @Test
+    void countsReachableFloatingMathMinAsSupportedIntrinsic() {
+        final IntrinsicUsageReports reports = new IntrinsicUsageReports();
+        final EntryPoint entry = new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V");
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classFile("com/acme/Main", method(
+                "main",
+                "([Ljava/lang/String;)V",
+                instruction("java/lang/Math", "min", "(FF)F")
+            ))
+        );
+
+        assertThat(reports.analyze(classes, List.of(entry)).intrinsics())
+            .contains(new IntrinsicCallCount("Math.min", 1));
+    }
+
+    @Test
     void unsupportedOverloadsAreReportedAsUnsupportedCandidates() {
         final IntrinsicUsageReports reports = new IntrinsicUsageReports();
         final EntryPoint entry = new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V");
@@ -281,6 +335,23 @@ final class IntrinsicUsageReportsTest {
         assertThat(report.unsupportedJdkCallCandidates()).containsExactly(
             new UnsupportedJdkCallCandidate("java/util/Objects.equals(Ljava/lang/Object;Ljava/lang/Object;)Z", 1)
         );
+    }
+
+    @Test
+    void countsReachableByteArrayFillIntrinsic() {
+        final EntryPoint entry = new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V");
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classFile("com/acme/Main", method(
+                "main",
+                "([Ljava/lang/String;)V",
+                instruction("java/util/Arrays", "fill", "([BB)V")
+            ))
+        );
+
+        final IntrinsicUsageReport report = new IntrinsicUsageReports().analyze(classes, List.of(entry));
+
+        assertThat(report.intrinsics()).contains(new IntrinsicCallCount("Arrays.fill", 1));
     }
 
     private static ClassFile classFile(final String name, final MethodInfo method) {
