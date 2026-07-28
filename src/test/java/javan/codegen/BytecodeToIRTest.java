@@ -20120,6 +20120,50 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersMathMinFloatToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(FF)F",
+            2,
+            2,
+            plain(0, 34, "fload_0"),
+            plain(1, 35, "fload_1"),
+            invokeStatic(2, new MethodRef("java/lang/Math", "min", "(FF)F")),
+            plain(3, 174, "freturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnFloat(IrExpression.floatCall(
+                "javan_math_min_float",
+                List.of(IrExpression.floatLocal("arg0"), IrExpression.floatLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersMathMinDoubleToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(DD)D",
+            4,
+            4,
+            plain(0, 38, "dload_0"),
+            plain(1, 40, "dload_2"),
+            invokeStatic(2, new MethodRef("java/lang/Math", "min", "(DD)D")),
+            plain(3, 175, "dreturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnDouble(IrExpression.doubleCall(
+                "javan_math_min_double",
+                List.of(IrExpression.doubleLocal("arg0"), IrExpression.doubleLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
     void lowersMathMaxIntToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
@@ -20159,6 +20203,50 @@ final class BytecodeToIRTest {
             IrInstruction.returnLong(IrExpression.longCall(
                 "javan_math_max_long",
                 List.of(IrExpression.longLocal("arg0"), IrExpression.longLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersMathMaxFloatToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(FF)F",
+            2,
+            2,
+            plain(0, 34, "fload_0"),
+            plain(1, 35, "fload_1"),
+            invokeStatic(2, new MethodRef("java/lang/Math", "max", "(FF)F")),
+            plain(3, 174, "freturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnFloat(IrExpression.floatCall(
+                "javan_math_max_float",
+                List.of(IrExpression.floatLocal("arg0"), IrExpression.floatLocal("arg1"))
+            ))
+        );
+    }
+
+    @Test
+    void lowersMathMaxDoubleToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(DD)D",
+            4,
+            4,
+            plain(0, 38, "dload_0"),
+            plain(1, 40, "dload_2"),
+            invokeStatic(2, new MethodRef("java/lang/Math", "max", "(DD)D")),
+            plain(3, 175, "dreturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnDouble(IrExpression.doubleCall(
+                "javan_math_max_double",
+                List.of(IrExpression.doubleLocal("arg0"), IrExpression.doubleLocal("arg1"))
             ))
         );
     }
