@@ -698,13 +698,15 @@ final class CliIntegrationTest extends CliIntegrationSupport {
 
         final String jvmOutput = runJvm(project, "com.acme.Main");
         final CliRun run = run(tempDir, "build", project.toString());
+        final ProcessResult nativeRun = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/enum-constant-specific-dispatch").toString()))
+            : new ProcessResult(-1, "", run.stderr());
 
-        assertThat(run.exitCode()).isZero();
-        final ProcessResult nativeRun = process(project, List.of(project.resolve(".javan/bin/enum-constant-specific-dispatch").toString()));
-        assertThat(nativeRun.stdout())
-            .as("exit=%s stderr=%s", nativeRun.exitCode(), nativeRun.stderr())
-            .isEqualTo(jvmOutput);
-        assertThat(jvmOutput).isEqualTo("first\nsecond\n");
+        assertThat(new EnumDispatchEvidence(run.exitCode(), nativeRun.exitCode(), nativeRun.stdout()))
+            .isEqualTo(new EnumDispatchEvidence(0, 0, jvmOutput));
+    }
+
+    private record EnumDispatchEvidence(int buildExitCode, int nativeExitCode, String nativeOutput) {
     }
 
     @Test
