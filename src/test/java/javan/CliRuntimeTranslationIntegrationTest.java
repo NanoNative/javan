@@ -5146,6 +5146,394 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void optionalOrElseGetCapturedSupplierLambdaBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-or-else-get-captured-supplier-lambda");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+            import java.util.function.Supplier;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String prefix = "prefix";
+                    final String middle = "middle";
+                    final String suffix = "suffix";
+                    final Supplier<String> fallback = () -> join(prefix, middle, suffix);
+                    System.out.println(Optional.<String>empty().orElseGet(fallback));
+                }
+
+                private static String join(final String prefix, final String middle, final String suffix) {
+                    return prefix + ":" + middle + ":" + suffix;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        requireBuildSuccess(run(tempDir, "build", project.toString()));
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-or-else-get-captured-supplier-lambda").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void optionalOrElseGetMaterializedSupplierSkipsPresentValue() throws Exception {
+        final Path project = project("optional-or-else-get-materialized-supplier-present");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+            import java.util.function.Supplier;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Supplier<String> fallback = () -> fallback();
+                    System.out.println(Optional.of("value").orElseGet(fallback));
+                }
+
+                private static String fallback() {
+                    System.out.println("called");
+                    return "fallback";
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        requireBuildSuccess(run(tempDir, "build", project.toString()));
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-or-else-get-materialized-supplier-present").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void optionalOrElseGetMaterializedSupplierInvokesEmptyValueOnce() throws Exception {
+        final Path project = project("optional-or-else-get-materialized-supplier-empty");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+            import java.util.function.Supplier;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Supplier<String> fallback = () -> fallback();
+                    System.out.println(Optional.<String>empty().orElseGet(fallback));
+                }
+
+                private static String fallback() {
+                    System.out.println("called");
+                    return "fallback";
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        requireBuildSuccess(run(tempDir, "build", project.toString()));
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-or-else-get-materialized-supplier-empty").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void optionalOrMaterializedSupplierBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-or-materialized-supplier");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+            import java.util.function.Supplier;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Supplier<Optional<String>> fallback = () -> fallback();
+                    System.out.println(Optional.<String>empty().or(fallback).orElse("missing"));
+                }
+
+                private static Optional<String> fallback() {
+                    System.out.println("called");
+                    return Optional.of("fallback");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        requireBuildSuccess(run(tempDir, "build", project.toString()));
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-or-materialized-supplier").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void objectsRequireNonNullElseGetMaterializedSupplierBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("objects-require-non-null-else-get-materialized-supplier");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Objects;
+            import java.util.function.Supplier;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Supplier<String> fallback = () -> fallback();
+                    System.out.println(Objects.requireNonNullElseGet(null, fallback));
+                }
+
+                private static String fallback() {
+                    System.out.println("called");
+                    return "fallback";
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        requireBuildSuccess(run(tempDir, "build", project.toString()));
+        assertThat(process(project, List.of(project.resolve(".javan/bin/objects-require-non-null-else-get-materialized-supplier").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void supplierGetMaterializedInstanceMethodReferenceBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("supplier-get-materialized-instance-method-reference");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Supplier;
+
+            public final class Main {
+                private final String value;
+
+                private Main(final String value) {
+                    this.value = value;
+                }
+
+                public static void main(final String[] args) {
+                    final Main receiver = new Main("instance");
+                    final Supplier<String> supplier = receiver::value;
+                    System.out.println(supplier.get());
+                }
+
+                private String value() {
+                    return value;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        requireBuildSuccess(run(tempDir, "build", project.toString()));
+        assertThat(process(project, List.of(project.resolve(".javan/bin/supplier-get-materialized-instance-method-reference").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void unsupportedSupplierConstructorReferenceIsRejected() throws Exception {
+        final Path project = project("unsupported-supplier-constructor-reference");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+            import java.util.function.Supplier;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Supplier<StringBuilder> fallback = StringBuilder::new;
+                    System.out.println(Optional.<StringBuilder>empty().orElseGet(fallback));
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.stderr()).contains("error[JAVAN012]", "Optional.orElseGet");
+    }
+
+    @Test
+    void unsupportedSupplierShapeReportsExactSupportedSubset() throws Exception {
+        final Path project = project("unsupported-supplier-shape-diagnostic");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Supplier;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Supplier<StringBuilder> unsupported = StringBuilder::new;
+                    System.out.println(unsupported == null);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.stderr()).contains(
+            "error[JAVAN030]",
+            "Only StringConcatFactory string concatenation, exact record ObjectMethods equals/hashCode, exact LambdaMetafactory Function/Predicate shapes, "
+                + "the exact Supplier subset (zero-argument reference-return invocation directly lowered to admitted application-static "
+                + "implementations or final implementation-owner bound instance targets, plus application static/instance-target "
+                + "materialization with reference-only captures and reference "
+                + "returns), the current "
+                + "Consumer/BiConsumer object-capture materialization slice, and the current custom-SAM materialization subset are implemented."
+        );
+    }
+
+    @Test
+    void jdkOwnerSupplierInstanceMethodReferenceReportsExactSupportedSubset() throws Exception {
+        final Path project = project("unsupported-jdk-owner-supplier-method-reference");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Supplier;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Supplier<String> unsupported = "value"::toString;
+                    System.out.println(unsupported == null);
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.stderr()).contains(
+            "error[JAVAN030]",
+            "Only StringConcatFactory string concatenation, exact record ObjectMethods equals/hashCode, exact LambdaMetafactory Function/Predicate shapes, "
+                + "the exact Supplier subset (zero-argument reference-return invocation directly lowered to admitted application-static "
+                + "implementations or final implementation-owner bound instance targets, plus application static/instance-target "
+                + "materialization with reference-only captures and reference "
+                + "returns), the current "
+                + "Consumer/BiConsumer object-capture materialization slice, and the current custom-SAM materialization subset are implemented."
+        );
+    }
+
+    @Test
+    void supplierGetMixedConcreteAndMaterializedReceiversBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("supplier-get-mixed-concrete-materialized");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Supplier;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String prefix = "captured";
+                    final String suffix = "-lambda";
+                    final Supplier<String> captured = () -> prefix + suffix;
+                    System.out.println(read(new ConcreteSupplier()) + ":" + read(captured));
+                }
+
+                private static String read(final Supplier<String> supplier) {
+                    return supplier.get();
+                }
+            }
+            """);
+        writeJava(project, "com.acme.ConcreteSupplier", """
+            package com.acme;
+
+            import java.util.function.Supplier;
+
+            public final class ConcreteSupplier implements Supplier<String> {
+                @Override
+                public String get() {
+                    return "concrete";
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        requireBuildSuccess(run(tempDir, "build", project.toString()));
+        assertThat(process(project, List.of(project.resolve(".javan/bin/supplier-get-mixed-concrete-materialized").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void supplierGetMaterializedArrayCaptureBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("supplier-get-materialized-array-capture");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Supplier;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String[] values = new String[] {"zero", "one"};
+                    final Supplier<String> captured = () -> values[1];
+                    System.out.println(read(captured));
+                }
+
+                private static String read(final Supplier<String> supplier) {
+                    return supplier.get();
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        requireBuildSuccess(run(tempDir, "build", project.toString()));
+        assertThat(process(
+            project,
+            List.of(project.resolve(".javan/bin/supplier-get-materialized-array-capture").toString()),
+            defaultProcessTimeout(),
+            java.util.Map.of("JAVAN_GC_STRESS", "1")
+        ).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void optionalOrMaterializedSupplierSkipsPresentValue() throws Exception {
+        final Path project = project("optional-or-materialized-supplier-present");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+            import java.util.function.Supplier;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Supplier<Optional<String>> fallback = () -> fallback();
+                    System.out.println(Optional.of("value").or(fallback).orElse("missing"));
+                }
+
+                private static Optional<String> fallback() {
+                    System.out.println("called");
+                    return Optional.of("fallback");
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        requireBuildSuccess(run(tempDir, "build", project.toString()));
+        assertThat(process(project, List.of(project.resolve(".javan/bin/optional-or-materialized-supplier-present").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
+    @Test
     void optionalOrElseGetConcreteSupplierBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("optional-or-else-get-concrete");
         writeJava(project, "com.acme.Main", """

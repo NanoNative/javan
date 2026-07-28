@@ -2512,6 +2512,42 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void mathMinFloatIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Math",
+            "min",
+            "(FF)F"
+        ))).isTrue();
+    }
+
+    @Test
+    void mathMinDoubleIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Math",
+            "min",
+            "(DD)D"
+        ))).isTrue();
+    }
+
+    @Test
+    void mathMaxFloatIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Math",
+            "max",
+            "(FF)F"
+        ))).isTrue();
+    }
+
+    @Test
+    void mathMaxDoubleIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Math",
+            "max",
+            "(DD)D"
+        ))).isTrue();
+    }
+
+    @Test
     void executorCloseIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/concurrent/ExecutorService",
@@ -3500,6 +3536,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void longCompareIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Long",
+            "compare",
+            "(JJ)I"
+        ))).isTrue();
+    }
+
+    @Test
+    void longCompareUnsignedIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Long",
+            "compareUnsigned",
+            "(JJ)I"
+        ))).isTrue();
+    }
+
+    @Test
     void longInstanceToStringIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/Long",
@@ -3644,6 +3698,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void byteArraysWholeFillIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Arrays",
+            "fill",
+            "([BB)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void byteArraysRangedFillIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Arrays",
+            "fill",
+            "([BIIB)V"
+        ))).isTrue();
+    }
+
+    @Test
     void pathsGetRequiresFilesystemRuntimeModule() {
         assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
             "java/nio/file/Paths",
@@ -3656,6 +3728,14 @@ final class JdkCallSupportTest {
     void fileNotFoundExceptionIsAssignableToIOException() {
         assertThat(JdkCallSupport.isPlatformThrowableAssignable("java/io/FileNotFoundException", "java/io/IOException"))
             .isTrue();
+    }
+
+    @Test
+    void arrayIndexOutOfBoundsExceptionIsAssignableToIndexOutOfBoundsException() {
+        assertThat(JdkCallSupport.isPlatformThrowableAssignable(
+            "java/lang/ArrayIndexOutOfBoundsException",
+            "java/lang/IndexOutOfBoundsException"
+        )).isTrue();
     }
 
     @Test

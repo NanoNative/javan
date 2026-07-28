@@ -457,6 +457,7 @@ final class BytecodeToIRControlFlowSupport {
         final Map<Integer, DynamicLambda> workingObjectLocalLambdas = copyObjectLocalLambdas(objectLocalLambdas);
         final List<IrInstruction> mergedInstructions = new ArrayList<>();
         final List<StackValue> workingStack = new ArrayList<>(stack);
+        final int lastDupX2Offset = BytecodeToIR.lastDupX2Offset(bytecode);
         List<StackValue> prefix = List.of();
         int conditionalCount = 0;
         final String targetLabel = "guarded_value_target_" + instruction.offset();
@@ -487,7 +488,8 @@ final class BytecodeToIRControlFlowSupport {
                     dispatches,
                     Map.of(),
                     Map.of(),
-                    SourceLineIndex.empty()
+                    SourceLineIndex.empty(),
+                    lastDupX2Offset
                 );
             }
         }
@@ -567,6 +569,7 @@ final class BytecodeToIRControlFlowSupport {
         final Map<Integer, StackKind> blockObjectLocalKinds = copyObjectLocalKinds(objectLocalKinds);
         final Map<Integer, String> blockObjectLocalThrowableTypes = copyObjectLocalThrowableTypes(objectLocalThrowableTypes);
         final Map<Integer, DynamicLambda> blockObjectLocalLambdas = copyObjectLocalLambdas(objectLocalLambdas);
+        final int lastDupX2Offset = BytecodeToIR.lastDupX2Offset(bytecode);
         for (int index = startIndex; index < endIndex; index++) {
             final Instruction blockInstruction = bytecode.get(index);
             if (isControlTransfer(blockInstruction.opcode())) {
@@ -588,7 +591,8 @@ final class BytecodeToIRControlFlowSupport {
                 dispatches,
                 Map.of(),
                 Map.of(),
-                SourceLineIndex.empty()
+                SourceLineIndex.empty(),
+                lastDupX2Offset
             );
         }
         return new BlockResult(List.copyOf(blockInstructions), List.copyOf(blockStack));

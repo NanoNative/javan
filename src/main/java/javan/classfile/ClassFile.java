@@ -15,6 +15,7 @@ import java.util.Optional;
  * @param fields fields declared by the class
  * @param methods methods declared by the class
  * @param sourceFile SourceFile attribute value when present
+ * @param recordComponents Record attribute components when the attribute is present
  * @param source source class file path
  * @param application whether the class belongs to the application input rather than a dependency
  */
@@ -27,6 +28,7 @@ public record ClassFile(
     List<FieldInfo> fields,
     List<MethodInfo> methods,
     Optional<String> sourceFile,
+    Optional<List<RecordComponentInfo>> recordComponents,
     Path source,
     boolean application
 ) {
@@ -59,7 +61,66 @@ public record ClassFile(
         final Path source,
         final boolean application
     ) {
-        this(majorVersion, name, superName, accessFlags, interfaces, fields, methods, Optional.empty(), source, application);
+        this(
+            majorVersion,
+            name,
+            superName,
+            accessFlags,
+            interfaces,
+            fields,
+            methods,
+            Optional.empty(),
+            Optional.empty(),
+            source,
+            application
+        );
+    }
+
+    /**
+     * Creates a class file without a parsed Record attribute.
+     *
+     * @param majorVersion class file major version
+     * @param name JVM internal class name
+     * @param superName JVM internal superclass name
+     * @param accessFlags class access flags
+     * @param interfaces JVM internal interface names implemented by this class
+     * @param fields fields declared by the class
+     * @param methods methods declared by the class
+     * @param sourceFile parsed source-file metadata
+     * @param source source class file path
+     * @param application whether the class belongs to the application input
+     */
+    public ClassFile(
+        final int majorVersion,
+        final String name,
+        final String superName,
+        final int accessFlags,
+        final List<String> interfaces,
+        final List<FieldInfo> fields,
+        final List<MethodInfo> methods,
+        final Optional<String> sourceFile,
+        final Path source,
+        final boolean application
+    ) {
+        this(
+            majorVersion,
+            name,
+            superName,
+            accessFlags,
+            interfaces,
+            fields,
+            methods,
+            sourceFile,
+            Optional.empty(),
+            source,
+            application
+        );
+    }
+
+    public ClassFile {
+        if (recordComponents.isPresent()) {
+            recordComponents = Optional.of(List.copyOf(recordComponents.orElseThrow()));
+        }
     }
 
     /**
@@ -127,12 +188,33 @@ public record ClassFile(
     }
 
     /**
+     * Returns true when the classfile contains an authoritative Record attribute.
+     *
+     * @return true when record metadata is present
+     */
+    public boolean isRecord() {
+        return recordComponents.isPresent();
+    }
+
+    /**
      * Returns a copy with an explicit application/dependency flag.
      *
      * @param value true for application classes
      * @return updated class file
      */
     public ClassFile withApplication(final boolean value) {
-        return new ClassFile(majorVersion, name, superName, accessFlags, interfaces, fields, methods, sourceFile, source, value);
+        return new ClassFile(
+            majorVersion,
+            name,
+            superName,
+            accessFlags,
+            interfaces,
+            fields,
+            methods,
+            sourceFile,
+            recordComponents,
+            source,
+            value
+        );
     }
 }
