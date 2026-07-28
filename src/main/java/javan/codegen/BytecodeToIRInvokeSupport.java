@@ -2,6 +2,7 @@ package javan.codegen;
 
 import javan.analysis.VirtualThreadInvokePatterns;
 import javan.analysis.EntryPoint;
+import javan.analysis.GeneratedObjectCloneSupport;
 import javan.classfile.ClassFile;
 import javan.classfile.DynamicRef;
 import javan.classfile.FieldRef;
@@ -303,7 +304,7 @@ final class BytecodeToIRInvokeSupport {
         if (lowerArrayClone(classFile, method, methodRef, instructions, stack, localDeclarations)) {
             return;
         }
-        if (lowerObjectClone(classFile, method, methodRef, stack)) {
+        if (lowerObjectClone(classes, classFile, method, methodRef, stack)) {
             return;
         }
         if (lowerJavanProcessRunnerRun(classes, classFile, method, methodRef, instructions, stack, localDeclarations)) {
@@ -1396,6 +1397,9 @@ final class BytecodeToIRInvokeSupport {
         return true;
     }
     static Optional<String> arrayCloneSymbol(final String owner) {
+        if ("[Z".equals(owner)) {
+            return Optional.of("javan_arrays_copy_of_boolean");
+        }
         if ("[I".equals(owner)) {
             return Optional.of("javan_arrays_copy_of_int");
         }
@@ -1637,7 +1641,7 @@ final class BytecodeToIRInvokeSupport {
             popObject(classFile, method, stack);
             return;
         }
-        if (lowerObjectClone(classFile, method, methodRef, stack)) {
+        if (lowerObjectClone(classes, classFile, method, methodRef, stack)) {
             return;
         }
         final MethodDescriptor descriptor = MethodDescriptor.parse(methodRef.descriptor());
@@ -9635,16 +9639,19 @@ final class BytecodeToIRInvokeSupport {
         return Optional.empty();
     }
     private static boolean lowerObjectClone(
+        final Map<String, ClassFile> classes,
         final ClassFile classFile,
         final MethodInfo method,
         final MethodRef methodRef,
         final List<StackValue> stack
     ) {
-        boolean objectCloneCall = "java/lang/Object".equals(methodRef.owner())
-            && "clone".equals(methodRef.name())
-            && "()Ljava/lang/Object;".equals(methodRef.descriptor());
-        if (!objectCloneCall) {
+        if (!GeneratedObjectCloneSupport.isObjectClone(methodRef)) {
             return false;
+        }
+        final GeneratedObjectCloneSupport.Status status =
+            GeneratedObjectCloneSupport.invocationStatus(classes, classFile);
+        if (status != GeneratedObjectCloneSupport.Status.SUPPORTED) {
+            throw unsupportedObjectClone(classFile, method, methodRef, status);
         }
 
         final IrExpression receiver = popObject(classFile, method, stack);
@@ -9654,5 +9661,22 @@ final class BytecodeToIRInvokeSupport {
         );
         stack.add(StackValue.objectExpression(clonedObject));
         return true;
+    }
+
+    private static DiagnosticException unsupportedObjectClone(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final MethodRef methodRef,
+        final GeneratedObjectCloneSupport.Status status
+    ) {
+        return new DiagnosticException(Diagnostic.error(
+            "JAVAN050",
+            "Object.clone requires a supported Cloneable class",
+            classFile.name(),
+            method.name() + method.descriptor(),
+            methodRef.display(),
+            GeneratedObjectCloneSupport.reason(status),
+            GeneratedObjectCloneSupport.fix(status)
+        ));
     }
 }
