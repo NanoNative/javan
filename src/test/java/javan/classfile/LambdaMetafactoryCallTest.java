@@ -250,6 +250,46 @@ final class LambdaMetafactoryCallTest {
     }
 
     @Test
+    void materializedFunctionAcceptsZeroCaptureStaticTarget() {
+        final LambdaMetafactoryCall resolved = materializedFunction(
+            "()Ljava/util/function/Function;",
+            "(Ljava/lang/Object;)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isMaterializedFunctionLambda()).isTrue();
+    }
+
+    @Test
+    void materializedFunctionAcceptsReferenceCapture() {
+        final LambdaMetafactoryCall resolved = materializedFunction(
+            "(Ljava/lang/String;)Ljava/util/function/Function;",
+            "(Ljava/lang/String;Ljava/lang/Object;)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isMaterializedFunctionLambda()).isTrue();
+    }
+
+    @Test
+    void materializedFunctionRejectsPrimitiveCapture() {
+        final LambdaMetafactoryCall resolved = materializedFunction(
+            "(I)Ljava/util/function/Function;",
+            "(ILjava/lang/Object;)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isMaterializedFunctionLambda()).isFalse();
+    }
+
+    @Test
+    void materializedFunctionRejectsPrimitiveReturn() {
+        final LambdaMetafactoryCall resolved = materializedFunction(
+            "()Ljava/util/function/Function;",
+            "(Ljava/lang/Object;)I"
+        );
+
+        assertThat(resolved.isMaterializedFunctionLambda()).isFalse();
+    }
+
+    @Test
     void directlyLowerableAcceptsInterfacePredicateReferenceKindNine() {
         final LambdaMetafactoryCall resolved = LambdaMetafactoryCall.resolve(dynamicRef(
             "test",
@@ -746,6 +786,26 @@ final class LambdaMetafactoryCallTest {
                     new MethodRef("com/acme/Main", "matches", "(Ljava/lang/Object;)Z")
                 ),
                 BootstrapArgument.methodType("(Ljava/lang/String;)Z")
+            )
+        )).orElseThrow();
+    }
+
+    private static LambdaMetafactoryCall materializedFunction(
+        final String callSiteDescriptor,
+        final String implementationDescriptor
+    ) {
+        return LambdaMetafactoryCall.resolve(dynamicRef(
+            "apply",
+            callSiteDescriptor,
+            "java/lang/invoke/LambdaMetafactory",
+            "metafactory",
+            List.of(
+                BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;"),
+                BootstrapArgument.methodHandle(
+                    6,
+                    new MethodRef("com/acme/Main", "lambda$apply$0", implementationDescriptor)
+                ),
+                BootstrapArgument.methodType("(Ljava/lang/String;)Ljava/lang/String;")
             )
         )).orElseThrow();
     }

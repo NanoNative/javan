@@ -4279,6 +4279,220 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void functionStoredInFieldBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("function-stored-in-field");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Reader reader = new Reader(value -> value + "-stored");
+                    System.out.println(reader.read("value"));
+                }
+
+                private static final class Reader {
+                    private final Function<String, String> function;
+
+                    private Reader(final Function<String, String> function) {
+                        this.function = function;
+                    }
+
+                    private String read(final String value) {
+                        return function.apply(value);
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        if (run.exitCode() != 0) {
+            throw new AssertionError(run.stderr());
+        }
+
+        assertThat(process(
+            project,
+            List.of(project.resolve(".javan/bin/function-stored-in-field").toString())
+        ).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void capturedFunctionStoredInFieldSurvivesGcStress() throws Exception {
+        final Path project = project("captured-function-stored-in-field");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final String prefix = new String("captured-");
+                    final Reader reader = new Reader(value -> prefix + value);
+                    System.out.println(reader.read("value"));
+                }
+
+                private static final class Reader {
+                    private final Function<String, String> function;
+
+                    private Reader(final Function<String, String> function) {
+                        this.function = function;
+                    }
+
+                    private String read(final String value) {
+                        return function.apply(value);
+                    }
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        if (run.exitCode() != 0) {
+            throw new AssertionError(run.stderr());
+        }
+
+        assertThat(process(
+            project,
+            List.of(project.resolve(".javan/bin/captured-function-stored-in-field").toString()),
+            defaultProcessTimeout(),
+            java.util.Map.of("JAVAN_GC_STRESS", "1")
+        ).stdout()).isEqualTo(jvmOutput);
+    }
+
+    @Test
+    void storedJdkFunctionReferenceIsRejectedAtVerification() throws Exception {
+        final Path project = project("stored-jdk-function-reference");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Function<Object, String> function = String::valueOf;
+                    System.out.println(new Reader(function).read("value"));
+                }
+
+                private static final class Reader {
+                    private final Function<Object, String> function;
+
+                    private Reader(final Function<Object, String> function) {
+                        this.function = function;
+                    }
+
+                    private String read(final Object value) {
+                        return function.apply(value);
+                    }
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.stderr())
+            .contains("error[JAVAN030]", "unsupported reachable bytecode", "invokedynamic")
+            .doesNotContain("error[JAVAN012]");
+    }
+
+    @Test
+    void storedFunctionWithPrimitiveCaptureIsRejectedAtVerification() throws Exception {
+        final Path project = project("stored-function-primitive-capture");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final int suffix = args.length;
+                    final Function<String, String> function = value -> value + suffix;
+                    System.out.println(new Reader(function).read("value"));
+                }
+
+                private static final class Reader {
+                    private final Function<String, String> function;
+
+                    private Reader(final Function<String, String> function) {
+                        this.function = function;
+                    }
+
+                    private String read(final String value) {
+                        return function.apply(value);
+                    }
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.stderr())
+            .contains(
+                "error[JAVAN012]",
+                "Function.apply requires either a closed-world Function implementation class or a supported materialized Function lambda target."
+            )
+            .doesNotContain("error[JAVAN030]");
+    }
+
+    @Test
+    void storedFunctionWithPrimitiveReturnIsRejectedAtVerification() throws Exception {
+        final Path project = project("stored-function-primitive-return");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.function.Function;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Function<String, Integer> function = Main::length;
+                    System.out.println(new Reader(function).read("value"));
+                }
+
+                private static int length(final String value) {
+                    return value.length();
+                }
+
+                private static final class Reader {
+                    private final Function<String, Integer> function;
+
+                    private Reader(final Function<String, Integer> function) {
+                        this.function = function;
+                    }
+
+                    private Integer read(final String value) {
+                        return function.apply(value);
+                    }
+                }
+            }
+            """);
+
+        final CliRun run = run(tempDir, "build", project.toString());
+
+        assertThat(run.stderr())
+            .contains(
+                "error[JAVAN012]",
+                "Function.apply requires either a closed-world Function implementation class or a supported materialized Function lambda target."
+            )
+            .doesNotContain("error[JAVAN030]");
+    }
+
+    @Test
     void supplierGetConcreteImplementationBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("supplier-get-concrete");
         writeJava(project, "com.acme.Main", """

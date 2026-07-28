@@ -2868,7 +2868,7 @@ public final class StaticVerifier {
         if (supportedStringConcat(dynamicRef.orElseThrow())) {
             return false;
         }
-        if (supportedLambdaMetafactory(classes, dynamicRef.orElseThrow())) {
+        if (supportedLambdaMetafactory(classes, method, instruction, dynamicRef.orElseThrow())) {
             return false;
         }
         if (supportedRecordObjectMethodsDynamic(classes, classFile, method, instruction)) {
@@ -3023,6 +3023,8 @@ public final class StaticVerifier {
 
     private static boolean supportedLambdaMetafactory(
         final Map<String, ClassFile> classes,
+        final MethodInfo method,
+        final Instruction instruction,
         final DynamicRef dynamicRef
     ) {
         final Optional<LambdaMetafactoryCall> lambdaCall = LambdaMetafactoryCall.resolve(dynamicRef);
@@ -3030,6 +3032,12 @@ public final class StaticVerifier {
             return false;
         }
         final LambdaMetafactoryCall lambda = lambdaCall.orElseThrow();
+        if (lambda.isFunction() && shouldMaterializeFunctionLambda(method, instruction)) {
+            final ClassFile implementationClass = classes.get(lambda.implementation().owner());
+            return implementationClass != null
+                && implementationClass.application()
+                && lambda.isMaterializedFunctionLambda();
+        }
         if (lambda.isSupplier()) {
             final ClassFile implementationClass = classes.get(lambda.implementation().owner());
             if (implementationClass == null || !implementationClass.application()) {
@@ -3042,6 +3050,66 @@ public final class StaticVerifier {
             || lambda.isMaterializedBiFunctionLambda()
             || lambda.isMaterializedVoidLambda()
             || lambda.isMaterializedSupplierLambda();
+    }
+
+    private static boolean shouldMaterializeFunctionLambda(
+        final MethodInfo method,
+        final Instruction instruction
+    ) {
+        if (method.code().isEmpty()) {
+            return true;
+        }
+        final List<Instruction> instructions = method.code().orElseThrow().instructions();
+        for (int index = 0; index < instructions.size(); index++) {
+            if (instructions.get(index).offset() != instruction.offset()) {
+                continue;
+            }
+            for (int consumerIndex = index + 1; consumerIndex < instructions.size(); consumerIndex++) {
+                final Instruction candidate = instructions.get(consumerIndex);
+                final Optional<MethodRef> consumer = candidate.methodRef();
+                if (consumer.isPresent()) {
+                    return !isInlineFunctionConsumer(consumer.orElseThrow());
+                }
+                if (endsInlineFunctionSearch(candidate.opcode())) {
+                    return true;
+                }
+            }
+            return true;
+        }
+        return true;
+    }
+
+    private static boolean endsInlineFunctionSearch(final int opcode) {
+        return (opcode >= 54 && opcode <= 58)
+            || (opcode >= 79 && opcode <= 95)
+            || (opcode >= 153 && opcode <= 177)
+            || opcode == 179
+            || opcode == 181
+            || opcode == 186
+            || opcode == 191
+            || opcode == 194
+            || opcode == 195
+            || opcode == 198
+            || opcode == 199;
+    }
+
+    private static boolean isInlineFunctionConsumer(final MethodRef target) {
+        if ("java/util/function/Function".equals(target.owner())
+            && "apply".equals(target.name())
+            && "(Ljava/lang/Object;)Ljava/lang/Object;".equals(target.descriptor())) {
+            return true;
+        }
+        if ("computeIfAbsent".equals(target.name())
+            && "(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;".equals(target.descriptor())
+            && ("java/util/Map".equals(target.owner())
+            || "java/util/HashMap".equals(target.owner())
+            || "java/util/LinkedHashMap".equals(target.owner())
+            || "java/util/TreeMap".equals(target.owner()))) {
+            return true;
+        }
+        return "java/util/Optional".equals(target.owner())
+            && ("map".equals(target.name()) || "flatMap".equals(target.name()))
+            && "(Ljava/util/function/Function;)Ljava/util/Optional;".equals(target.descriptor());
     }
 
     private static boolean supportedStringConcatParameters(final String descriptor) {

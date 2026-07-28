@@ -8939,9 +8939,12 @@ final class BytecodeToIRInvokeSupport {
                     continue;
                 }
                 final LambdaMetafactoryCall resolved = lambdaCall.orElseThrow();
+                final boolean materializedFunction = resolved.isMaterializedFunctionLambda()
+                    && shouldMaterializeFunctionLambda(method.orElseThrow(), instruction);
                 if (!resolved.isZeroCaptureMaterializedObjectLambda()
                     && !resolved.isZeroCaptureMaterializedBooleanLambda()
                     && !resolved.isMaterializedBiFunctionLambda()
+                    && !materializedFunction
                     && !resolved.isMaterializedVoidLambda()
                     && !(resolved.isMaterializedSupplierLambda() && shouldMaterializeSupplierLambda(method.orElseThrow(), instruction))) {
                     continue;
@@ -9046,9 +9049,12 @@ final class BytecodeToIRInvokeSupport {
         }
         final LambdaMetafactoryCall resolved = lambdaCall.orElseThrow();
         final MethodRef implementation = resolved.implementation();
+        final boolean materializedFunction = resolved.isMaterializedFunctionLambda()
+            && shouldMaterializeFunctionLambda(method, instruction);
         if (resolved.isZeroCaptureMaterializedObjectLambda()
             || resolved.isZeroCaptureMaterializedBooleanLambda()
             || resolved.isMaterializedBiFunctionLambda()
+            || materializedFunction
             || resolved.isMaterializedVoidLambda()
             || (resolved.isMaterializedSupplierLambda() && shouldMaterializeSupplierLambda(method, instruction))) {
             final Integer targetId = materializedLambdaTargetIds.get(materializedLambdaKey(resolved));
@@ -9135,6 +9141,59 @@ final class BytecodeToIRInvokeSupport {
             return true;
         }
         return false;
+    }
+
+    private static boolean shouldMaterializeFunctionLambda(
+        final MethodInfo method,
+        final Instruction instruction
+    ) {
+        if (method.code().isEmpty()) {
+            return true;
+        }
+        final List<Instruction> bytecode = method.code().orElseThrow().instructions();
+        for (int index = 0; index < bytecode.size(); index++) {
+            if (bytecode.get(index).offset() != instruction.offset()) {
+                continue;
+            }
+            for (int consumerIndex = index + 1; consumerIndex < bytecode.size(); consumerIndex++) {
+                final Instruction candidate = bytecode.get(consumerIndex);
+                final Optional<MethodRef> consumer = candidate.methodRef();
+                if (consumer.isPresent()) {
+                    return !isInlineFunctionConsumer(consumer.orElseThrow());
+                }
+                if (endsInlineFunctionSearch(candidate.opcode())) {
+                    return true;
+                }
+            }
+            return true;
+        }
+        return true;
+    }
+
+    private static boolean endsInlineFunctionSearch(final int opcode) {
+        return (opcode >= 54 && opcode <= 58)
+            || (opcode >= 79 && opcode <= 95)
+            || (opcode >= 153 && opcode <= 177)
+            || opcode == 179
+            || opcode == 181
+            || opcode == 186
+            || opcode == 191
+            || opcode == 194
+            || opcode == 195
+            || opcode == 198
+            || opcode == 199;
+    }
+
+    private static boolean isInlineFunctionConsumer(final MethodRef target) {
+        if (isFunctionApply(target)) {
+            return true;
+        }
+        if (isSupportedMapComputeIfAbsentOwner(target)) {
+            return true;
+        }
+        return "java/util/Optional".equals(target.owner())
+            && ("map".equals(target.name()) || "flatMap".equals(target.name()))
+            && "(Ljava/util/function/Function;)Ljava/util/Optional;".equals(target.descriptor());
     }
 
     private static boolean shouldMaterializeSupplierLambda(
