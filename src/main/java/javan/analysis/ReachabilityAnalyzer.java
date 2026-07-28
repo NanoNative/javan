@@ -783,7 +783,7 @@ public final class ReachabilityAnalyzer {
                 materializedLambdaMethods.add(interfaceMethod);
             }
         }
-        if (!resolved.isDirectlyLowerable()
+        if (!resolved.isDirectlyLowerable(classes)
             && !resolved.isZeroCaptureMaterializedObjectLambda()
             && !resolved.isZeroCaptureMaterializedBooleanLambda()
             && !resolved.isMaterializedBiFunctionLambda()
@@ -908,7 +908,7 @@ public final class ReachabilityAnalyzer {
                     final Optional<LambdaMetafactoryCall> lambdaCall = LambdaMetafactoryCall.resolve(producer.dynamicRef().orElseThrow());
                     return lambdaCall.isPresent()
                         && matchesInlineLambdaKind(lambdaCall.orElseThrow(), lambdaKind)
-                        && lambdaCall.orElseThrow().isDirectlyLowerable();
+                        && lambdaCall.orElseThrow().isDirectlyLowerable(classes);
                 }
                 if (isControlFlowBoundary(producer.opcode())) {
                     return false;

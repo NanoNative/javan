@@ -2,6 +2,7 @@ package javan.classfile;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -199,7 +200,7 @@ public record LambdaMetafactoryCall(
     /**
      * Returns whether the lambda is directly lowerable by the current profile.
      *
-     * @return true for the supported function/predicate subset
+     * @return true for the supported function, predicate, and supplier subset
      */
     public boolean isDirectlyLowerable() {
         if (!(isFunction() || isPredicate() || isSupplier())) {
@@ -212,6 +213,43 @@ public record LambdaMetafactoryCall(
             return noInputs(instantiatedMethodDescriptor);
         }
         return inputDescriptor().isPresent();
+    }
+
+    /**
+     * Returns whether the lambda is directly lowerable with the parsed class hierarchy.
+     *
+     * @param classes parsed closed-world classes
+     * @return true when direct invocation preserves the lambda method-handle semantics
+     */
+    public boolean isDirectlyLowerable(final Map<String, ClassFile> classes) {
+        if (isDirectlyLowerable()) {
+            return true;
+        }
+        final ClassFile implementationClass = classes.get(implementation.owner());
+        return implementationClass != null
+            && implementationClass.isFinal()
+            && isBoundInstanceSupplierLambda();
+    }
+
+    private boolean isBoundInstanceSupplierLambda() {
+        if (!isSupplier()
+            || implementationReferenceKind != 5
+            || !objectReturn(implementation.descriptor())
+            || capturedParameterDescriptors.isEmpty()
+            || !("L" + implementation.owner() + ";").equals(capturedParameterDescriptors.getFirst())) {
+            return false;
+        }
+        final List<String> parameters = parameterDescriptors(implementation.descriptor());
+        if (!parametersMatchDescriptor(implementation.descriptor(), parameters)
+            || parameters.size() != capturedParameterDescriptors.size() - 1) {
+            return false;
+        }
+        for (int index = 1; index < capturedParameterDescriptors.size(); index++) {
+            if (!capturedParameterDescriptors.get(index).equals(parameters.get(index - 1))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -348,7 +386,7 @@ public record LambdaMetafactoryCall(
     }
 
     private static boolean noInputs(final String descriptor) {
-        return parameterDescriptors(descriptor).isEmpty();
+        return descriptor.startsWith("()");
     }
 
     private static boolean objectInputs(final String descriptor, final int count) {
@@ -375,7 +413,12 @@ public record LambdaMetafactoryCall(
             return false;
         }
         final String descriptorValue = value.orElseThrow();
-        return descriptorValue.startsWith("L") || descriptorValue.startsWith("[");
+        if (descriptorValue.startsWith("L")) {
+            return descriptorValue.length() > 2
+                && descriptorValue.indexOf(';') == descriptorValue.length() - 1;
+        }
+        return descriptorValue.startsWith("[")
+            && skipArrayDescriptor(descriptorValue, 0) == descriptorValue.length();
     }
 
     private static boolean voidReturn(final String descriptor) {
@@ -414,7 +457,7 @@ public record LambdaMetafactoryCall(
             }
             if (type == 'L') {
                 final int end = descriptor.indexOf(';', index);
-                if (end < 0) {
+                if (end <= index + 1) {
                     return List.of();
                 }
                 result.add(descriptor.substring(start, end + 1));
@@ -437,6 +480,17 @@ public record LambdaMetafactoryCall(
         return List.copyOf(result);
     }
 
+    private static boolean parametersMatchDescriptor(
+        final String descriptor,
+        final List<String> parameters
+    ) {
+        final int separator = descriptor.indexOf(')');
+        if (!descriptor.startsWith("(") || separator < 1) {
+            return false;
+        }
+        return String.join("", parameters).equals(descriptor.substring(1, separator));
+    }
+
     private static int skipArrayDescriptor(final String descriptor, final int start) {
         int index = start;
         while (index < descriptor.length() && descriptor.charAt(index) == '[') {
@@ -450,7 +504,7 @@ public record LambdaMetafactoryCall(
         }
         if (descriptor.charAt(index) == 'L') {
             final int end = descriptor.indexOf(';', index);
-            if (end < 0) {
+            if (end <= index + 1) {
                 return -1;
             }
             return end + 1;
