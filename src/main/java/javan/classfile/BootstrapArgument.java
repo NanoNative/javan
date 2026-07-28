@@ -15,6 +15,7 @@ public record BootstrapArgument(Kind kind, String text, Optional<MethodRef> meth
      * Bootstrap argument kind.
      */
     public enum Kind {
+        CLASS,
         STRING,
         UTF8,
         METHOD_TYPE,
@@ -24,6 +25,16 @@ public record BootstrapArgument(Kind kind, String text, Optional<MethodRef> meth
         FLOAT,
         DOUBLE,
         UNKNOWN
+    }
+
+    /**
+     * Class-literal bootstrap argument.
+     *
+     * @param internalName JVM internal class name
+     * @return bootstrap argument
+     */
+    public static BootstrapArgument classLiteral(final String internalName) {
+        return new BootstrapArgument(Kind.CLASS, internalName, Optional.empty(), -1);
     }
 
     /**

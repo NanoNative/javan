@@ -358,6 +358,25 @@ final class RuntimeHeaderFile {
         void* javan_map_entry_get_value(void* value);
         void* javan_map_values(void* map);
         int javan_object_equals(void* left, void* right);
+        void javan_register_record_object_method_resolvers(
+            int (*equals_resolver)(void*, void*),
+            int (*hash_code_resolver)(void*),
+            int (*exact_type_resolver)(void*, int)
+        );
+        int javan_record_hash_combine(int current, int component);
+        int javan_record_boolean_hash_code(int value);
+        int javan_record_long_hash_code(long long value);
+        int javan_record_float_hash_code(float value);
+        int javan_record_double_hash_code(double value);
+        int javan_record_float_equals(float left, float right);
+        int javan_record_double_equals(double left, double right);
+        int javan_record_reference_identity_equals(void* left, void* right);
+        int javan_record_reference_identity_hash_code(void* value);
+        int javan_record_shape_exact_type(void* value, int expected_type_id);
+        void javan_record_shape_validate(void* value, const char* shape);
+        int javan_record_shape_equals(void* left, void* right, const char* shape);
+        int javan_record_shape_equals_prevalidated(void* left, void* right, const char* shape);
+        int javan_record_shape_hash_code(void* value, const char* shape);
         void* javan_materialized_lambda_new(int target_id);
         void* javan_materialized_lambda_new_with_captures(int target_id, int capture_count, ...);
         int javan_materialized_lambda_target_id(void* value);
@@ -664,7 +683,6 @@ final class RuntimeHeaderFile {
         void* javan_string_value_of_bool(int value);
         void* javan_string_value_of_char(int value);
         void* javan_printable_object_string(void* value);
-        int javan_record_object_equals(void* self, void* other, int expected_type_id, int field_count, ...);
         void* javan_string_concat(const char* recipe, int argc, const char** values);
         char* javan_string_export(const char* value);
         void* javan_stringbuilder_new(void);

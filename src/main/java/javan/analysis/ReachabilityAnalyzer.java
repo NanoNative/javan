@@ -2,11 +2,13 @@ package javan.analysis;
 
 import javan.classfile.ClassFile;
 import javan.classfile.CodeAttribute;
+import javan.classfile.DynamicRef;
 import javan.classfile.FieldRef;
 import javan.classfile.Instruction;
 import javan.classfile.LambdaMetafactoryCall;
 import javan.classfile.MethodInfo;
 import javan.classfile.MethodRef;
+import javan.classfile.RecordObjectMethodsCall;
 import javan.compat.ExactMethodSupport;
 import javan.compat.JdkCallSupport;
 import javan.compat.NetworkApiSupport;
@@ -14,9 +16,11 @@ import javan.compat.JavanNativeSubstitutions;
 import javan.verify.Diagnostic;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Builds a small closed-world call graph for reachable application methods.
@@ -96,6 +100,17 @@ public final class ReachabilityAnalyzer {
                         continue;
                     }
                     for (final Instruction instruction : code.orElseThrow().instructions()) {
+                        enqueueRecordReferenceObjectMethodTargets(
+                            classes,
+                            classes.get(current.className()),
+                            method.orElseThrow(),
+                            instruction,
+                            work,
+                            workSet,
+                            current,
+                            callEdges,
+                            entryPoints
+                        );
                         enqueueClassInitializer(classes, instruction, work, workSet, current, callEdges, entryPoints);
                         enqueueLambdaApplicationCall(classes, instruction, work, workSet, current, callEdges, materializedLambdaMethods, entryPoints);
                         enqueueApplicationCall(classes, instruction, work, workSet, diagnostics, current, callEdges, materializedLambdaMethods, entryPoints, methodRefFacts);
@@ -107,6 +122,111 @@ public final class ReachabilityAnalyzer {
             }
         }
         return new CallGraph(roots.getFirst(), List.copyOf(reachable), List.copyOf(diagnostics), callEdges.snapshot());
+    }
+
+    private static void enqueueRecordReferenceObjectMethodTargets(
+        final Map<String, ClassFile> classes,
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<EntryPoint> work,
+        final EntryPointMembership workSet,
+        final EntryPoint current,
+        final CallEdgeTracker callEdges,
+        final EntryPointPool entryPoints
+    ) {
+        if (instruction.dynamicRef().isEmpty()) {
+            return;
+        }
+        final DynamicRef dynamicRef = instruction.dynamicRef().orElseThrow();
+        final boolean hashCode = "hashCode".equals(method.name());
+        final Optional<RecordObjectMethodsCall> recordCall = hashCode
+            ? RecordObjectMethodsCall.resolveHashCode(classFile, method, dynamicRef)
+            : RecordObjectMethodsCall.resolve(classFile, method, dynamicRef);
+        if (recordCall.isEmpty()) {
+            return;
+        }
+        for (final RecordObjectMethodsCall.Component component : recordCall.orElseThrow().components()) {
+            enqueueRecordReferenceObjectMethodTarget(
+                classes,
+                component.shape(),
+                hashCode,
+                work,
+                workSet,
+                current,
+                callEdges,
+                entryPoints
+            );
+        }
+    }
+
+    private static void enqueueRecordReferenceObjectMethodTarget(
+        final Map<String, ClassFile> classes,
+        final RecordObjectMethodsCall.Shape shape,
+        final boolean hashCode,
+        final List<EntryPoint> work,
+        final EntryPointMembership workSet,
+        final EntryPoint current,
+        final CallEdgeTracker callEdges,
+        final EntryPointPool entryPoints
+    ) {
+        if (!shape.valid() || shape.isArray() || shape.referenceOwner().isEmpty()) {
+            return;
+        }
+        if (shape.isList()) {
+            enqueueRecordReferenceObjectMethodTarget(
+                classes,
+                shape.listElement().orElseThrow(),
+                hashCode,
+                work,
+                workSet,
+                current,
+                callEdges,
+                entryPoints
+            );
+            return;
+        }
+        final String declaredOwner = shape.referenceOwner().orElseThrow();
+        if ("java/lang/String".equals(declaredOwner)) {
+            return;
+        }
+        final ClassFile declaredClass = classes.get(declaredOwner);
+        if (declaredClass == null || declaredClass.isInterface() || !declaredClass.isFinal()) {
+            return;
+        }
+        final Optional<EntryPoint> target =
+            recordReferenceObjectMethodTarget(classes, declaredOwner, hashCode, entryPoints);
+        if (target.isEmpty()) {
+            return;
+        }
+        final EntryPoint callee = target.orElseThrow();
+        enqueue(work, workSet, callee);
+        addEdge(callEdges, current, callee, CallEdge.Kind.CALL);
+    }
+
+    private static Optional<EntryPoint> recordReferenceObjectMethodTarget(
+        final Map<String, ClassFile> classes,
+        final String receiver,
+        final boolean hashCode,
+        final EntryPointPool entryPoints
+    ) {
+        final String methodName = hashCode ? "hashCode" : "equals";
+        final String descriptor = hashCode ? "()I" : "(Ljava/lang/Object;)Z";
+        String current = receiver;
+        final Set<String> visited = new HashSet<>();
+        while (classes.containsKey(current) && visited.add(current)) {
+            final ClassFile classFile = classes.get(current);
+            final Optional<MethodInfo> target = classFile.method(methodName, descriptor);
+            if (target.isPresent()) {
+                return classFile.application()
+                    && !target.orElseThrow().isStatic()
+                    && target.orElseThrow().code().isPresent()
+                    ? Optional.of(entryPoints.entry(current, methodName, descriptor))
+                    : Optional.empty();
+            }
+            current = classFile.superName();
+        }
+        return Optional.empty();
     }
 
     private static boolean sameEntry(final EntryPoint left, final EntryPoint right) {
