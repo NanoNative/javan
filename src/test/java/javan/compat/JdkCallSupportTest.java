@@ -3677,6 +3677,14 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void arrayIndexOutOfBoundsExceptionIsAssignableToIndexOutOfBoundsException() {
+        assertThat(JdkCallSupport.isPlatformThrowableAssignable(
+            "java/lang/ArrayIndexOutOfBoundsException",
+            "java/lang/IndexOutOfBoundsException"
+        )).isTrue();
+    }
+
+    @Test
     void noSuchElementExceptionIsAssignableToRuntimeException() {
         assertThat(JdkCallSupport.isPlatformThrowableAssignable("java/util/NoSuchElementException", "java/lang/RuntimeException"))
             .isTrue();

@@ -36,6 +36,7 @@ public final class JdkCallSupport {
         {"java/lang/IllegalMonitorStateException", "java/lang/RuntimeException"},
         {"java/lang/IllegalStateException", "java/lang/RuntimeException"},
         {"java/lang/IllegalThreadStateException", "java/lang/RuntimeException"},
+        {"java/lang/ArrayIndexOutOfBoundsException", "java/lang/IndexOutOfBoundsException"},
         {"java/lang/IndexOutOfBoundsException", "java/lang/RuntimeException"},
         {"java/lang/NegativeArraySizeException", "java/lang/RuntimeException"},
         {"java/lang/NullPointerException", "java/lang/RuntimeException"},

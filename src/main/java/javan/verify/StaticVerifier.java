@@ -569,6 +569,9 @@ public final class StaticVerifier {
         if (supportedInterruptedWaitHandler(code, handler)) {
             return true;
         }
+        if (supportedArraysFillHandler(code, handler)) {
+            return true;
+        }
         if (supportedFinallyRethrowHandler(code, handler)) {
             return true;
         }
@@ -655,6 +658,64 @@ public final class StaticVerifier {
             }
         }
         return hasWaitCall == 1;
+    }
+
+    private static boolean supportedArraysFillHandler(final CodeAttribute code, final CodeException handler) {
+        if (handler.catchType().isEmpty()) {
+            return false;
+        }
+        final String catchType = handler.catchType().orElseThrow();
+        int hasCaughtFillCall = 0;
+        for (final Instruction instruction : code.instructions()) {
+            if (instruction.offset() < handler.startPc()) {
+                continue;
+            }
+            if (instruction.offset() >= handler.endPc()) {
+                continue;
+            }
+            if (isArraysFillCall(instruction)) {
+                if (arraysFillCanThrowTo(instruction.methodRef().orElseThrow(), catchType)) {
+                    hasCaughtFillCall = 1;
+                }
+                continue;
+            }
+            if (instruction.opcode() == 1) {
+                continue;
+            }
+            if (instruction.opcode() == 192
+                && instruction.className().isPresent()
+                && "[B".equals(instruction.className().orElseThrow())) {
+                continue;
+            }
+            if (!supportedInterruptedWaitProtectedInstruction(instruction)) {
+                return false;
+            }
+        }
+        return hasCaughtFillCall == 1;
+    }
+
+    private static boolean isArraysFillCall(final Instruction instruction) {
+        if (instruction.opcode() != 184 || instruction.methodRef().isEmpty()) {
+            return false;
+        }
+        final MethodRef target = instruction.methodRef().orElseThrow();
+        if (!"java/util/Arrays".equals(target.owner()) || !"fill".equals(target.name())) {
+            return false;
+        }
+        return "([BB)V".equals(target.descriptor()) || "([BIIB)V".equals(target.descriptor());
+    }
+
+    private static boolean arraysFillCanThrowTo(final MethodRef target, final String catchType) {
+        if (JdkCallSupport.isPlatformThrowableAssignable("java/lang/NullPointerException", catchType)) {
+            return true;
+        }
+        if (!"([BIIB)V".equals(target.descriptor())) {
+            return false;
+        }
+        if (JdkCallSupport.isPlatformThrowableAssignable("java/lang/IllegalArgumentException", catchType)) {
+            return true;
+        }
+        return JdkCallSupport.isPlatformThrowableAssignable("java/lang/ArrayIndexOutOfBoundsException", catchType);
     }
 
     private static boolean supportedFinallyRethrowHandler(final CodeAttribute code, final CodeException handler) {

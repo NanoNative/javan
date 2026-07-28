@@ -20940,7 +20940,7 @@ final class BytecodeToIRTest {
     }
 
     @Test
-    void lowersWholeByteArrayFillToRuntimeCall() {
+    void lowersWholeByteArrayFillToStatusRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -20953,17 +20953,19 @@ final class BytecodeToIRTest {
             plain(3, 177, "return")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.callStaticVoid(
-                "javan_arrays_fill_byte",
-                List.of(IrExpression.objectLocal("arg0"), IrExpression.intLiteral(5))
-            ),
-            IrInstruction.returnVoid()
+        assertThat(function.instructions().getFirst()).isEqualTo(
+            IrInstruction.assignInt(
+                "int0",
+                IrExpression.intCall(
+                    "javan_arrays_fill_byte",
+                    List.of(IrExpression.objectLocal("arg0"), IrExpression.intLiteral(5))
+                )
+            )
         );
     }
 
     @Test
-    void lowersRangedByteArrayFillToRuntimeCall() {
+    void lowersRangedByteArrayFillToStatusRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,
             "main",
@@ -20978,17 +20980,19 @@ final class BytecodeToIRTest {
             plain(5, 177, "return")
         ));
 
-        assertThat(function.instructions()).containsExactly(
-            IrInstruction.callStaticVoid(
-                "javan_arrays_fill_range_byte",
-                List.of(
-                    IrExpression.objectLocal("arg0"),
-                    IrExpression.intLiteral(1),
-                    IrExpression.intLiteral(2),
-                    IrExpression.intLiteral(5)
+        assertThat(function.instructions().getFirst()).isEqualTo(
+            IrInstruction.assignInt(
+                "int0",
+                IrExpression.intCall(
+                    "javan_arrays_fill_range_byte",
+                    List.of(
+                        IrExpression.objectLocal("arg0"),
+                        IrExpression.intLiteral(1),
+                        IrExpression.intLiteral(2),
+                        IrExpression.intLiteral(5)
+                    )
                 )
-            ),
-            IrInstruction.returnVoid()
+            )
         );
     }
 

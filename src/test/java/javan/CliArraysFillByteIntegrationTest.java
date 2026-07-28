@@ -80,29 +80,146 @@ final class CliArraysFillByteIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
-    void wholeByteArrayFillRejectsNullArray() throws Exception {
-        assertNativeFailure("arrays-fill-byte-null", "java.util.Arrays.fill((byte[]) null, (byte) 1);", "null array");
+    void wholeByteArrayFillThrowsCatchableNullPointerException() throws Exception {
+        assertMatchesJvm("arrays-fill-byte-null", """
+            try {
+                java.util.Arrays.fill((byte[]) null, (byte) 1);
+                System.out.println("not thrown");
+            } catch (final NullPointerException ignored) {
+                System.out.println("NullPointerException");
+            }
+            """);
     }
 
     @Test
-    void rangedByteArrayFillRejectsNegativeFromIndex() throws Exception {
-        assertNativeFailure("arrays-fill-byte-negative-from", """
-            java.util.Arrays.fill(new byte[] {1}, -1, 1, (byte) 2);
-            """, "array copy out of bounds");
+    void rangedByteArrayFillThrowsCatchableNullPointerException() throws Exception {
+        assertMatchesJvm("arrays-fill-byte-range-null", """
+            try {
+                java.util.Arrays.fill((byte[]) null, 0, 0, (byte) 1);
+                System.out.println("not thrown");
+            } catch (final NullPointerException ignored) {
+                System.out.println("NullPointerException");
+            }
+            """);
     }
 
     @Test
-    void rangedByteArrayFillRejectsInvertedRange() throws Exception {
-        assertNativeFailure("arrays-fill-byte-inverted-range", """
-            java.util.Arrays.fill(new byte[] {1}, 1, 0, (byte) 2);
-            """, "array range invalid");
+    void rangedByteArrayFillThrowsCatchableIllegalArgumentException() throws Exception {
+        assertMatchesJvm("arrays-fill-byte-inverted-range", """
+            final byte[] values = {1};
+            try {
+                java.util.Arrays.fill(values, 1, 0, (byte) 2);
+                System.out.println("not thrown");
+            } catch (final IllegalArgumentException ignored) {
+                System.out.println("IllegalArgumentException");
+            }
+            """);
     }
 
     @Test
-    void rangedByteArrayFillRejectsPastEndIndex() throws Exception {
-        assertNativeFailure("arrays-fill-byte-past-end", """
-            java.util.Arrays.fill(new byte[] {1}, 0, 2, (byte) 2);
-            """, "array copy out of bounds");
+    void rangedByteArrayFillThrowsCatchableArrayIndexOutOfBoundsExceptionForNegativeFromIndex() throws Exception {
+        assertMatchesJvm("arrays-fill-byte-negative-from", """
+            final byte[] values = {1};
+            try {
+                java.util.Arrays.fill(values, -1, 1, (byte) 2);
+                System.out.println("not thrown");
+            } catch (final ArrayIndexOutOfBoundsException ignored) {
+                System.out.println("ArrayIndexOutOfBoundsException");
+            }
+            """);
+    }
+
+    @Test
+    void rangedByteArrayFillThrowsCatchableArrayIndexOutOfBoundsExceptionForPastEndIndex() throws Exception {
+        assertMatchesJvm("arrays-fill-byte-past-end", """
+            final byte[] values = {1};
+            try {
+                java.util.Arrays.fill(values, 0, 2, (byte) 2);
+                System.out.println("not thrown");
+            } catch (final ArrayIndexOutOfBoundsException ignored) {
+                System.out.println("ArrayIndexOutOfBoundsException");
+            }
+            """);
+    }
+
+    @Test
+    void rangedByteArrayFillChecksNullBeforeInvertedRange() throws Exception {
+        assertMatchesJvm("arrays-fill-byte-null-precedence", """
+            try {
+                java.util.Arrays.fill((byte[]) null, 1, 0, (byte) 2);
+                System.out.println("not thrown");
+            } catch (final NullPointerException ignored) {
+                System.out.println("NullPointerException");
+            } catch (final IllegalArgumentException ignored) {
+                System.out.println("IllegalArgumentException");
+            }
+            """);
+    }
+
+    @Test
+    void rangedByteArrayFillChecksInvertedRangeBeforeNegativeBounds() throws Exception {
+        assertMatchesJvm("arrays-fill-byte-range-precedence", """
+            final byte[] values = {1};
+            try {
+                java.util.Arrays.fill(values, -1, -2, (byte) 2);
+                System.out.println("not thrown");
+            } catch (final IllegalArgumentException ignored) {
+                System.out.println("IllegalArgumentException");
+            } catch (final ArrayIndexOutOfBoundsException ignored) {
+                System.out.println("ArrayIndexOutOfBoundsException");
+            }
+            """);
+    }
+
+    @Test
+    void rangedByteArrayFillIsCatchableThroughRuntimeException() throws Exception {
+        assertMatchesJvm("arrays-fill-byte-runtime-exception", """
+            final byte[] values = {1};
+            try {
+                java.util.Arrays.fill(values, 1, 0, (byte) 2);
+                System.out.println("not thrown");
+            } catch (final RuntimeException ignored) {
+                System.out.println("RuntimeException");
+            }
+            """);
+    }
+
+    @Test
+    void rangedByteArrayBoundsFailureIsCatchableThroughIndexOutOfBoundsException() throws Exception {
+        assertMatchesJvm("arrays-fill-byte-index-out-of-bounds-exception", """
+            final byte[] values = {1};
+            try {
+                java.util.Arrays.fill(values, 0, 2, (byte) 2);
+                System.out.println("not thrown");
+            } catch (final IndexOutOfBoundsException ignored) {
+                System.out.println("IndexOutOfBoundsException");
+            }
+            """);
+    }
+
+    @Test
+    void rangedByteArrayInvertedRangeIsCatchableThroughException() throws Exception {
+        assertMatchesJvm("arrays-fill-byte-exception", """
+            final byte[] values = {1};
+            try {
+                java.util.Arrays.fill(values, 1, 0, (byte) 2);
+                System.out.println("not thrown");
+            } catch (final Exception ignored) {
+                System.out.println("Exception");
+            }
+            """);
+    }
+
+    @Test
+    void wholeByteArrayNullFailureIsCatchableThroughThrowable() throws Exception {
+        assertMatchesJvm("arrays-fill-byte-throwable", """
+            try {
+                java.util.Arrays.fill((byte[]) null, (byte) 2);
+                System.out.println("not thrown");
+            } catch (final Throwable ignored) {
+                System.out.println("Throwable");
+            }
+            """);
     }
 
     private void assertMatchesJvm(final String projectName, final String body) throws Exception {
@@ -120,18 +237,6 @@ final class CliArraysFillByteIntegrationTest extends CliIntegrationSupport {
             : "";
 
         assertThat(nativeOutput).as(build.stderr()).isEqualTo(jvmOutput);
-    }
-
-    private void assertNativeFailure(final String projectName, final String body, final String expectedError) throws Exception {
-        final Path project = project(projectName);
-        writeJava(project, "com.acme.Main", source(body, ""));
-
-        final CliRun build = run(tempDir, "build", project.toString());
-        final ProcessResult nativeRun = build.exitCode() == 0
-            ? process(project, List.of(project.resolve(".javan/bin").resolve(projectName).toString()))
-            : new ProcessResult(-1, "", build.stderr());
-
-        assertThat(nativeRun.stderr()).contains(expectedError);
     }
 
     private static String source(final String body, final String members) {

@@ -33,6 +33,9 @@ import static javan.codegen.BytecodeToIR.*;
 import static javan.codegen.BytecodeToIRMetadataSupport.*;
 
 final class BytecodeToIRInvokeSupport {
+    private static final int ARRAYS_FILL_STATUS_SUCCESS = 0;
+    private static final int ARRAYS_FILL_STATUS_NULL = 1;
+    private static final int ARRAYS_FILL_STATUS_INVERTED_RANGE = 2;
     private static final MethodRef RUNNABLE_RUN = new MethodRef("java/lang/Runnable", "run", "()V");
     private static final String MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL = "javan_materialized_lambda_apply_object";
     private static final String MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL = "javan_materialized_lambda_apply_object2";
@@ -1919,7 +1922,17 @@ final class BytecodeToIRInvokeSupport {
             );
         }
         if ("java/util/Arrays".equals(methodRef.owner())) {
-            return lowerArraysIntrinsic(classFile, method, methodRef, instructions, stack);
+            return lowerArraysIntrinsic(
+                classFile,
+                method,
+                instruction,
+                methodRef,
+                instructions,
+                stack,
+                localDeclarations,
+                pendingExceptionHandlerStacks,
+                sourceLines
+            );
         }
         if ("java/lang/Integer".equals(methodRef.owner())) {
             return lowerIntegerIntrinsic(classFile, method, methodRef, stack);
@@ -2535,14 +2548,30 @@ final class BytecodeToIRInvokeSupport {
     static boolean lowerArraysIntrinsic(
         final ClassFile classFile,
         final MethodInfo method,
+        final Instruction instruction,
         final MethodRef methodRef,
         final List<IrInstruction> instructions,
-        final List<StackValue> stack
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines
     ) {
         if ("fill".equals(methodRef.name()) && "([BB)V".equals(methodRef.descriptor())) {
             final IrExpression value = popInt(classFile, method, stack);
             final IrExpression array = popObject(classFile, method, stack);
-            instructions.add(IrInstruction.callStaticVoid("javan_arrays_fill_byte", List.of(array, value)));
+            lowerByteArrayFill(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                localDeclarations,
+                pendingExceptionHandlerStacks,
+                sourceLines,
+                "javan_arrays_fill_byte",
+                List.of(array, value),
+                false
+            );
             return true;
         }
         if ("fill".equals(methodRef.name()) && "([BIIB)V".equals(methodRef.descriptor())) {
@@ -2550,10 +2579,19 @@ final class BytecodeToIRInvokeSupport {
             final IrExpression end = popInt(classFile, method, stack);
             final IrExpression begin = popInt(classFile, method, stack);
             final IrExpression array = popObject(classFile, method, stack);
-            instructions.add(IrInstruction.callStaticVoid(
+            lowerByteArrayFill(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                localDeclarations,
+                pendingExceptionHandlerStacks,
+                sourceLines,
                 "javan_arrays_fill_range_byte",
-                List.of(array, begin, end, value)
-            ));
+                List.of(array, begin, end, value),
+                true
+            );
             return true;
         }
         if ("copyOfRange".equals(methodRef.name()) && "([BII)[B".equals(methodRef.descriptor())) {
@@ -2587,6 +2625,102 @@ final class BytecodeToIRInvokeSupport {
         final IrExpression source = popObject(classFile, method, stack);
         stack.add(StackValue.objectExpression(IrExpression.objectCall(symbol.orElseThrow(), List.of(source, newLength))));
         return true;
+    }
+    static void lowerByteArrayFill(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack,
+        final Map<Integer, IrLocal> localDeclarations,
+        final Map<Integer, StackValue> pendingExceptionHandlerStacks,
+        final SourceLineIndex sourceLines,
+        final String symbol,
+        final List<IrExpression> arguments,
+        final boolean ranged
+    ) {
+        final int resultLocalIndex = localDeclarations.size();
+        final String resultLocalName = "int" + resultLocalIndex;
+        localDeclarations.put(Integer.MIN_VALUE + resultLocalIndex, new IrLocal(IrType.INT, resultLocalName));
+        instructions.add(IrInstruction.assignInt(resultLocalName, IrExpression.intCall(symbol, arguments)));
+
+        final IrExpression result = IrExpression.intLocal(resultLocalName);
+        final String labelSuffix = instruction.offset() + "_" + resultLocalIndex;
+        final String successLabel = "label_arrays_fill_success_" + labelSuffix;
+        instructions.add(IrInstruction.branchIf(
+            successLabel,
+            IrExpression.intComparison("==", result, IrExpression.intLiteral(ARRAYS_FILL_STATUS_SUCCESS))
+        ));
+        if (!ranged) {
+            routePendingPlatformException(
+                classFile,
+                method,
+                instruction,
+                instructions,
+                stack,
+                pendingExceptionHandlerStacks,
+                sourceLines,
+                "java/lang/NullPointerException",
+                IrExpression.stringLiteral("array")
+            );
+            instructions.add(IrInstruction.label(successLabel));
+            return;
+        }
+
+        final int messageLocalIndex = localDeclarations.size();
+        final String messageLocalName = "object" + messageLocalIndex;
+        localDeclarations.put(Integer.MIN_VALUE + messageLocalIndex, new IrLocal(IrType.OBJECT, messageLocalName));
+        final IrExpression message = IrExpression.objectLocal(messageLocalName);
+        final String nonNullLabel = "label_arrays_fill_non_null_" + labelSuffix;
+        instructions.add(IrInstruction.branchIf(
+            nonNullLabel,
+            IrExpression.intComparison("!=", result, IrExpression.intLiteral(ARRAYS_FILL_STATUS_NULL))
+        ));
+        instructions.add(IrInstruction.assignObject(messageLocalName, IrExpression.stringLiteral("array")));
+        routePendingPlatformException(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            pendingExceptionHandlerStacks,
+            sourceLines,
+            "java/lang/NullPointerException",
+            message
+        );
+        instructions.add(IrInstruction.label(nonNullLabel));
+
+        final String validOrderLabel = "label_arrays_fill_valid_order_" + labelSuffix;
+        instructions.add(IrInstruction.branchIf(
+            validOrderLabel,
+            IrExpression.intComparison("!=", result, IrExpression.intLiteral(ARRAYS_FILL_STATUS_INVERTED_RANGE))
+        ));
+        instructions.add(IrInstruction.assignObject(messageLocalName, IrExpression.stringLiteral("fromIndex > toIndex")));
+        routePendingPlatformException(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            pendingExceptionHandlerStacks,
+            sourceLines,
+            "java/lang/IllegalArgumentException",
+            message
+        );
+        instructions.add(IrInstruction.label(validOrderLabel));
+        instructions.add(IrInstruction.assignObject(messageLocalName, IrExpression.stringLiteral("array index out of bounds")));
+        routePendingPlatformException(
+            classFile,
+            method,
+            instruction,
+            instructions,
+            stack,
+            pendingExceptionHandlerStacks,
+            sourceLines,
+            "java/lang/ArrayIndexOutOfBoundsException",
+            message
+        );
+        instructions.add(IrInstruction.label(successLabel));
     }
     static Optional<String> arraysCopyOfSymbol(final String descriptor) {
         if ("([II)[I".equals(descriptor)) {
@@ -6174,7 +6308,7 @@ final class BytecodeToIRInvokeSupport {
             IrExpression.intComparison("==", IrExpression.intLocal(interruptedResultLocalName), IrExpression.intLiteral(0))
         ));
         instructions.add(IrInstruction.label(interruptedLabel));
-        routePendingInterruptedException(
+        routePendingPlatformException(
             classFile,
             method,
             instruction,
@@ -6182,11 +6316,12 @@ final class BytecodeToIRInvokeSupport {
             stack,
             pendingExceptionHandlerStacks,
             sourceLines,
+            "java/lang/InterruptedException",
             interruptedMessage
         );
         instructions.add(IrInstruction.label(successLabel));
     }
-    static void routePendingInterruptedException(
+    static void routePendingPlatformException(
         final ClassFile classFile,
         final MethodInfo method,
         final Instruction instruction,
@@ -6194,11 +6329,12 @@ final class BytecodeToIRInvokeSupport {
         final List<StackValue> stack,
         final Map<Integer, StackValue> pendingExceptionHandlerStacks,
         final SourceLineIndex sourceLines,
-        final IrExpression interruptedMessage
+        final String throwableType,
+        final IrExpression message
     ) {
         final StackValue thrownValue = StackValue.platformThrowable(
-            "java/lang/InterruptedException",
-            interruptedMessage
+            throwableType,
+            message
         );
         final Optional<Integer> handler = BytecodeToIRControlFlowSupport.exceptionHandler(
             classFile,
@@ -6209,19 +6345,59 @@ final class BytecodeToIRInvokeSupport {
         );
         if (handler.isPresent()) {
             final int handlerOffset = handler.orElseThrow();
-            if (pendingExceptionHandlerStacks.containsKey(handlerOffset)) {
-                throw unsupportedTypedExceptionHandler(classFile, method, instruction);
+            final StackValue pending = pendingExceptionHandlerStacks.get(handlerOffset);
+            if (pending == null) {
+                pendingExceptionHandlerStacks.put(handlerOffset, thrownValue);
+            } else {
+                pendingExceptionHandlerStacks.put(
+                    handlerOffset,
+                    mergePendingPlatformThrowables(classFile, method, instruction, pending, thrownValue)
+                );
             }
-            pendingExceptionHandlerStacks.put(handlerOffset, thrownValue);
             instructions.add(IrInstruction.jump(label(handlerOffset)));
             BytecodeToIRControlFlowSupport.clearStack(stack);
             return;
         }
         instructions.add(IrInstruction.panic(
-            IrExpression.stringLiteral("java/lang/InterruptedException"),
+            IrExpression.stringLiteral(throwableType),
             BytecodeToIRControlFlowSupport.sourceLocation(classFile, method, instruction, sourceLines)
         ));
         BytecodeToIRControlFlowSupport.clearStack(stack);
+    }
+    static StackValue mergePendingPlatformThrowables(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final StackValue first,
+        final StackValue second
+    ) {
+        if (first.expression().isEmpty()
+            || second.expression().isEmpty()
+            || !first.expression().orElseThrow().equals(second.expression().orElseThrow())
+            || first.throwableType().isEmpty()
+            || second.throwableType().isEmpty()) {
+            throw unsupportedTypedExceptionHandler(classFile, method, instruction);
+        }
+        final String firstType = first.throwableType().orElseThrow();
+        final String secondType = second.throwableType().orElseThrow();
+        if (JdkCallSupport.isPlatformThrowableAssignable(firstType, secondType)) {
+            return StackValue.platformThrowable(secondType, first.expression().orElseThrow());
+        }
+        if (JdkCallSupport.isPlatformThrowableAssignable(secondType, firstType)) {
+            return StackValue.platformThrowable(firstType, first.expression().orElseThrow());
+        }
+        for (final String commonType : List.of(
+            "java/lang/RuntimeException",
+            "java/lang/Exception",
+            "java/lang/Error",
+            "java/lang/Throwable"
+        )) {
+            if (JdkCallSupport.isPlatformThrowableAssignable(firstType, commonType)
+                && JdkCallSupport.isPlatformThrowableAssignable(secondType, commonType)) {
+                return StackValue.platformThrowable(commonType, first.expression().orElseThrow());
+            }
+        }
+        throw unsupportedTypedExceptionHandler(classFile, method, instruction);
     }
     static boolean isJdkCollectionOwner(final String owner) {
         if (isJdkListOrCollection(owner)) {
