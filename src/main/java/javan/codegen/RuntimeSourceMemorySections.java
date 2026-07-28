@@ -510,6 +510,9 @@ final class RuntimeSourceMemorySections {
         static unsigned long javan_peak_live_allocated_bytes_value = 0;
         static JavanTypeDescriptor* javan_type_descriptors_value = NULL;
         static int javan_type_descriptor_count_value = 0;
+        static int (*javan_record_object_equals_resolver_value)(void*, void*) = NULL;
+        static int (*javan_record_object_hash_code_resolver_value)(void*) = NULL;
+        static int (*javan_record_exact_type_resolver_value)(void*, int) = NULL;
         static void*** javan_static_roots_value = NULL;
         static int javan_static_root_count_value = 0;
         static JAVAN_THREAD_LOCAL javan_root_frame* javan_root_frames_value = NULL;
@@ -1224,6 +1227,18 @@ final class RuntimeSourceMemorySections {
             javan_type_descriptors_value = descriptors;
             javan_type_descriptor_count_value = count;
             javan_heap_maybe_validate();
+            javan_runtime_lock_leave();
+        }
+
+        void javan_register_record_object_method_resolvers(
+            int (*equals_resolver)(void*, void*),
+            int (*hash_code_resolver)(void*),
+            int (*exact_type_resolver)(void*, int)
+        ) {
+            javan_runtime_lock_enter();
+            javan_record_object_equals_resolver_value = equals_resolver;
+            javan_record_object_hash_code_resolver_value = hash_code_resolver;
+            javan_record_exact_type_resolver_value = exact_type_resolver;
             javan_runtime_lock_leave();
         }
 
@@ -7424,31 +7439,79 @@ final class RuntimeSourceMemorySections {
             return 0;
         }
 
-        int javan_record_object_equals(void* self, void* other, int expected_type_id, int field_count, ...) {
-            if (self == other) {
+        int javan_record_hash_combine(int current, int component) {
+            uint32_t combined = ((uint32_t) current * 31U) + (uint32_t) component;
+            return (int32_t) combined;
+        }
+
+        int javan_record_boolean_hash_code(int value) {
+            return value != 0 ? 1231 : 1237;
+        }
+
+        int javan_record_long_hash_code(long long value) {
+            uint64_t bits = (uint64_t) value;
+            return (int32_t) (uint32_t) (bits ^ (bits >> 32));
+        }
+
+        int javan_record_float_hash_code(float value) {
+            uint32_t bits = 0U;
+            memcpy(&bits, &value, sizeof(bits));
+            if (isnan(value)) {
+                bits = 0x7fc00000U;
+            }
+            return (int32_t) bits;
+        }
+
+        int javan_record_double_hash_code(double value) {
+            uint64_t bits = 0U;
+            memcpy(&bits, &value, sizeof(bits));
+            if (isnan(value)) {
+                bits = 0x7ff8000000000000ULL;
+            }
+            return (int32_t) (uint32_t) (bits ^ (bits >> 32));
+        }
+
+        int javan_record_float_equals(float left, float right) {
+            if (left == right) {
+                return left == 0.0f ? signbit(left) == signbit(right) : 1;
+            }
+            return isnan(left) && isnan(right);
+        }
+
+        int javan_record_double_equals(double left, double right) {
+            if (left == right) {
+                return left == 0.0 ? signbit(left) == signbit(right) : 1;
+            }
+            return isnan(left) && isnan(right);
+        }
+
+        int javan_record_reference_identity_equals(void* left, void* right) {
+            return left == right;
+        }
+
+        int javan_record_reference_identity_hash_code(void* value) {
+            if (value == NULL) {
+                return 0;
+            }
+            uintptr_t bits = (uintptr_t) value;
+            bits >>= 3;
+            bits ^= bits >> 17;
+            bits *= (uintptr_t) 0xed5ad4bbU;
+            bits ^= bits >> 11;
+            return (int32_t) (uint32_t) bits;
+        }
+
+        int javan_record_shape_exact_type(void* value, int expected_type_id) {
+            if (value == NULL) {
                 return 1;
             }
-            if (self == NULL || other == NULL) {
-                return 0;
+            int actual_type_id = javan_registered_type_id(value);
+            if (actual_type_id != 0) {
+                return actual_type_id == expected_type_id;
             }
-            if (field_count < 0) {
-                javan_panic("negative record field count");
-            }
-            if (javan_registered_type_id(other) != expected_type_id) {
-                return 0;
-            }
-            va_list arguments;
-            va_start(arguments, field_count);
-            for (int index = 0; index < field_count; index++) {
-                void* left = va_arg(arguments, void*);
-                void* right = va_arg(arguments, void*);
-                if (javan_object_equals(left, right) == 0) {
-                    va_end(arguments);
-                    return 0;
-                }
-            }
-            va_end(arguments);
-            return 1;
+            return javan_record_exact_type_resolver_value == NULL
+                ? 0
+                : javan_record_exact_type_resolver_value(value, expected_type_id);
         }
 
         static javan_object_list* javan_list_new_with_capacity(int capacity, int immutable) {
@@ -7582,6 +7645,291 @@ final class RuntimeSourceMemorySections {
             return list->values[index];
         }
 
+        """;
+    private static final String SOURCE_RECORD_SHAPES = """
+        static void javan_record_shape_mismatch(void) {
+            javan_panic("record generic value does not match declared shape");
+        }
+
+        static int javan_record_shape_type_id(const char* shape) {
+            int index = 1;
+            int sign = 1;
+            int value = 0;
+            if (shape[index] == '-') {
+                sign = -1;
+                index++;
+            }
+            int digit_count = 0;
+            while (shape[index] >= '0' && shape[index] <= '9') {
+                value = (value * 10) + (shape[index] - '0');
+                index++;
+                digit_count++;
+            }
+            if (digit_count == 0 || shape[index] != ';' || shape[index + 1] != '\\0') {
+                javan_panic("invalid generated record shape");
+            }
+            return sign * value;
+        }
+
+        static const char* javan_record_shape_array_name(const char* shape) {
+            int index = 1;
+            int length = 0;
+            int digit_count = 0;
+            while (shape[index] >= '0' && shape[index] <= '9') {
+                length = (length * 10) + (shape[index] - '0');
+                index++;
+                digit_count++;
+            }
+            if (digit_count == 0 || shape[index] != ':') {
+                javan_panic("invalid generated record shape");
+            }
+            const char* name = shape + index + 1;
+            if ((int) strlen(name) != length) {
+                javan_panic("invalid generated record shape");
+            }
+            return name;
+        }
+
+        static int javan_record_shape_array_assignable(void* value, const char* expected_name) {
+            void* value_root = value;
+            void* expected_class = NULL;
+            void* actual_class = NULL;
+            void** roots[] = {
+                (void**) &value_root,
+                (void**) &expected_class,
+                (void**) &actual_class
+            };
+            javan_root_frame_push(roots, 3);
+            expected_class = javan_runtime_class_from_binary_name(expected_name);
+            actual_class = javan_object_get_class(value_root);
+            int result = javan_class_is_assignable_from(expected_class, actual_class);
+            javan_root_frame_pop(roots);
+            return result;
+        }
+
+        static int javan_record_boxed_equals(void* left, void* right, int type_id) {
+            if (type_id == JAVAN_TYPE_JAVA_LANG_INTEGER) {
+                return ((javan_boxed_int*) left)->value == ((javan_boxed_int*) right)->value;
+            }
+            if (type_id == JAVAN_TYPE_JAVA_LANG_LONG) {
+                return ((javan_boxed_long*) left)->value == ((javan_boxed_long*) right)->value;
+            }
+            if (type_id == JAVAN_TYPE_JAVA_LANG_FLOAT) {
+                return javan_record_float_equals(
+                    ((javan_boxed_float*) left)->value,
+                    ((javan_boxed_float*) right)->value
+                );
+            }
+            if (type_id == JAVAN_TYPE_JAVA_LANG_DOUBLE) {
+                return javan_record_double_equals(
+                    ((javan_boxed_double*) left)->value,
+                    ((javan_boxed_double*) right)->value
+                );
+            }
+            if (type_id == JAVAN_TYPE_JAVA_LANG_BOOLEAN) {
+                return ((javan_boxed_boolean*) left)->value == ((javan_boxed_boolean*) right)->value;
+            }
+            if (type_id == JAVAN_TYPE_JAVA_LANG_BYTE) {
+                return ((javan_boxed_byte*) left)->value == ((javan_boxed_byte*) right)->value;
+            }
+            if (type_id == JAVAN_TYPE_JAVA_LANG_SHORT) {
+                return ((javan_boxed_short*) left)->value == ((javan_boxed_short*) right)->value;
+            }
+            if (type_id == JAVAN_TYPE_JAVA_LANG_CHARACTER) {
+                return ((javan_boxed_character*) left)->value == ((javan_boxed_character*) right)->value;
+            }
+            javan_panic("invalid generated record shape");
+            return 0;
+        }
+
+        static int javan_record_boxed_hash_code(void* value, int type_id) {
+            if (type_id == JAVAN_TYPE_JAVA_LANG_INTEGER) return ((javan_boxed_int*) value)->value;
+            if (type_id == JAVAN_TYPE_JAVA_LANG_LONG) {
+                return javan_record_long_hash_code(((javan_boxed_long*) value)->value);
+            }
+            if (type_id == JAVAN_TYPE_JAVA_LANG_FLOAT) {
+                return javan_record_float_hash_code(((javan_boxed_float*) value)->value);
+            }
+            if (type_id == JAVAN_TYPE_JAVA_LANG_DOUBLE) {
+                return javan_record_double_hash_code(((javan_boxed_double*) value)->value);
+            }
+            if (type_id == JAVAN_TYPE_JAVA_LANG_BOOLEAN) {
+                return javan_record_boolean_hash_code(((javan_boxed_boolean*) value)->value);
+            }
+            if (type_id == JAVAN_TYPE_JAVA_LANG_BYTE) return ((javan_boxed_byte*) value)->value;
+            if (type_id == JAVAN_TYPE_JAVA_LANG_SHORT) return ((javan_boxed_short*) value)->value;
+            if (type_id == JAVAN_TYPE_JAVA_LANG_CHARACTER) return ((javan_boxed_character*) value)->value;
+            javan_panic("invalid generated record shape");
+            return 0;
+        }
+
+        void javan_record_shape_validate(void* value, const char* shape) {
+            if (shape == NULL || shape[0] == '\\0') {
+                javan_panic("invalid generated record shape");
+            }
+            if (shape[0] == 's') {
+                if (shape[1] != '\\0') {
+                    javan_panic("invalid generated record shape");
+                }
+                if (value == NULL) {
+                    return;
+                }
+                javan_allocation_node* node = javan_find_allocation(value, NULL);
+                if (javan_registered_type_id(value) != 0
+                    || (node != NULL && node->runtime_kind != JAVAN_RUNTIME_KIND_STRING)
+                    || (node == NULL && javan_probably_string_key(value) == 0)) {
+                    javan_record_shape_mismatch();
+                }
+                return;
+            }
+            if (shape[0] == 'b') {
+                int expected_type_id = javan_record_shape_type_id(shape);
+                if (value != NULL && javan_registered_type_id(value) != expected_type_id) {
+                    javan_record_shape_mismatch();
+                }
+                return;
+            }
+            if (shape[0] == 'o' || shape[0] == 'e') {
+                int expected_type_id = javan_record_shape_type_id(shape);
+                if (value != NULL && javan_record_shape_exact_type(value, expected_type_id) == 0) {
+                    javan_record_shape_mismatch();
+                }
+                return;
+            }
+            if (shape[0] == 'a') {
+                const char* expected_name = javan_record_shape_array_name(shape);
+                if (value == NULL) {
+                    return;
+                }
+                javan_allocation_node* node = javan_find_allocation(value, NULL);
+                if (node == NULL
+                    || node->kind != JAVAN_HEAP_KIND_ARRAY
+                    || node->array_class_name == NULL
+                    || javan_record_shape_array_assignable(value, expected_name) == 0) {
+                    javan_record_shape_mismatch();
+                }
+                return;
+            }
+            if (shape[0] == 'l') {
+                if (shape[1] == '\\0') {
+                    javan_panic("invalid generated record shape");
+                }
+                if (value == NULL) {
+                    return;
+                }
+                javan_allocation_node* node = javan_find_allocation(value, NULL);
+                if (node == NULL || node->runtime_kind != JAVAN_RUNTIME_KIND_OBJECT_LIST) {
+                    javan_record_shape_mismatch();
+                }
+                javan_object_list* list = (javan_object_list*) value;
+                if (list->magic != JAVAN_OBJECT_LIST_MAGIC) {
+                    javan_record_shape_mismatch();
+                }
+                int length = javan_list_logical_length(list);
+                for (int index = 0; index < length; index++) {
+                    javan_record_shape_validate(javan_list_get_unchecked(list, index), shape + 1);
+                }
+                return;
+            }
+            javan_panic("invalid generated record shape");
+        }
+
+        int javan_record_shape_equals_prevalidated(void* left, void* right, const char* shape) {
+            if (left == right) {
+                return 1;
+            }
+            if (left == NULL || right == NULL) {
+                return 0;
+            }
+            if (shape[0] == 'a') {
+                return 0;
+            }
+            if (shape[0] == 'e') {
+                return left == right;
+            }
+            if (shape[0] == 's') {
+                return strcmp((const char*) left, (const char*) right) == 0;
+            }
+            if (shape[0] == 'b') {
+                return javan_record_boxed_equals(left, right, javan_record_shape_type_id(shape));
+            }
+            if (shape[0] == 'o') {
+                return javan_record_object_equals_resolver_value == NULL
+                    ? javan_record_reference_identity_equals(left, right)
+                    : javan_record_object_equals_resolver_value(left, right);
+            }
+            if (shape[0] != 'l') {
+                javan_panic("invalid generated record shape");
+                return 0;
+            }
+            javan_object_list* left_list = (javan_object_list*) left;
+            javan_object_list* right_list = (javan_object_list*) right;
+            int length = javan_list_logical_length(left_list);
+            if (length != javan_list_logical_length(right_list)) {
+                return 0;
+            }
+            for (int index = 0; index < length; index++) {
+                if (javan_record_shape_equals_prevalidated(
+                    javan_list_get_unchecked(left_list, index),
+                    javan_list_get_unchecked(right_list, index),
+                    shape + 1
+                ) == 0) {
+                    return 0;
+                }
+            }
+            return 1;
+        }
+
+        int javan_record_shape_equals(void* left, void* right, const char* shape) {
+            javan_record_shape_validate(left, shape);
+            javan_record_shape_validate(right, shape);
+            return javan_record_shape_equals_prevalidated(left, right, shape);
+        }
+
+        static int javan_record_shape_hash_code_valid(void* value, const char* shape) {
+            if (value == NULL) {
+                return 0;
+            }
+            if (shape[0] == 'a') {
+                return javan_record_reference_identity_hash_code(value);
+            }
+            if (shape[0] == 'e') {
+                return javan_record_reference_identity_hash_code(value);
+            }
+            if (shape[0] == 's') {
+                return javan_string_hash_code((const char*) value);
+            }
+            if (shape[0] == 'b') {
+                return javan_record_boxed_hash_code(value, javan_record_shape_type_id(shape));
+            }
+            if (shape[0] == 'o') {
+                return javan_record_object_hash_code_resolver_value == NULL
+                    ? javan_record_reference_identity_hash_code(value)
+                    : javan_record_object_hash_code_resolver_value(value);
+            }
+            if (shape[0] != 'l') {
+                javan_panic("invalid generated record shape");
+                return 0;
+            }
+            javan_object_list* list = (javan_object_list*) value;
+            uint32_t hash = 1U;
+            int length = javan_list_logical_length(list);
+            for (int index = 0; index < length; index++) {
+                hash = (hash * 31U) + (uint32_t) javan_record_shape_hash_code_valid(
+                    javan_list_get_unchecked(list, index),
+                    shape + 1
+                );
+            }
+            return (int32_t) hash;
+        }
+
+        int javan_record_shape_hash_code(void* value, const char* shape) {
+            javan_record_shape_validate(value, shape);
+            return javan_record_shape_hash_code_valid(value, shape);
+        }
+
+        """;
+    private static final String SOURCE_COLLECTIONS_HEAD_CONTINUED = """
         static void javan_list_mutable_checked(javan_object_list* list) {
             if (list->immutable != 0) {
                 javan_panic("unsupported operation on immutable list");
@@ -10612,6 +10960,8 @@ final class RuntimeSourceMemorySections {
 
     static String collections() {
         String result = SOURCE_COLLECTIONS_HEAD;
+        result = result + SOURCE_RECORD_SHAPES;
+        result = result + SOURCE_COLLECTIONS_HEAD_CONTINUED;
         result = result + SOURCE_COLLECTIONS_TAIL;
         result = result + SOURCE_C_ABI_OBJECT_HANDLES;
         return result;

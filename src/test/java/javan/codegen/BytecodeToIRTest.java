@@ -44,6 +44,31 @@ final class BytecodeToIRTest {
     private Path tempDir;
 
     @Test
+    void recordReferenceDispatchTerminatesOnCyclicSuperclassHierarchy() {
+        final ClassFile leaf = classFile(
+            "com/acme/Leaf",
+            "com/acme/Cycle",
+            0x0010,
+            List.of(),
+            List.of(),
+            List.of()
+        );
+        final ClassFile cycle = classFile(
+            "com/acme/Cycle",
+            leaf.name(),
+            0x0010,
+            List.of(),
+            List.of(),
+            List.of()
+        );
+        assertThat(BytecodeToIRInvokeSupport.recordReferenceTarget(
+            Map.of(leaf.name(), leaf, cycle.name(), cycle),
+            leaf.name(),
+            false
+        )).isEmpty();
+    }
+
+    @Test
     void lowersClassMetadataFieldsStaticFieldsEnumConstantsAndSortedClasses() {
         final MethodInfo main = method(0x0008, "main", "()V", 0, 0, plain(0, 177, "return"));
         final ClassFile zeta = classFile(

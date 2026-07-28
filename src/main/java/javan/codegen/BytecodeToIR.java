@@ -954,7 +954,17 @@ public final class BytecodeToIR {
                 );
                 break;
             case 186:
-                BytecodeToIRInvokeSupport.lowerDynamicCall(classes, classFile, method, instruction, stack, functionOrNullTargetIds);
+                BytecodeToIRInvokeSupport.lowerDynamicCall(
+                    classes,
+                    classFile,
+                    method,
+                    instruction,
+                    instructions,
+                    stack,
+                    localDeclarations,
+                    dispatches,
+                    functionOrNullTargetIds
+                );
                 break;
             case 187:
                 BytecodeToIRInvokeSupport.newObject(classes, classFile, method, instruction, instructions, stack, localDeclarations);
