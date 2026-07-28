@@ -41,6 +41,8 @@ final class CliDupX2IntegrationTest extends CliIntegrationSupport {
     private static final ClassDesc LOCAL_SNAPSHOT_CLASS = ClassDesc.of("dep.DupX2LocalSnapshot");
     private static final ClassDesc DEFERRED_CALL_CLASS = ClassDesc.of("dep.DupX2DeferredCall");
     private static final ClassDesc DEFERRED_LAMBDA_CLASS = ClassDesc.of("dep.DupX2DeferredLambda");
+    private static final ClassDesc DEFERRED_LAMBDA_INVOKE_CLASS = ClassDesc.of("dep.DupX2DeferredLambdaInvoke");
+    private static final ClassDesc DEFERRED_CAPTURED_LAMBDA_CLASS = ClassDesc.of("dep.DupX2DeferredCapturedLambda");
     private static final ClassDesc SYSTEM = ClassDesc.of("java.lang.System");
     private static final ClassDesc INT = ClassDesc.ofDescriptor("I");
     private static final ClassDesc LONG = ClassDesc.ofDescriptor("J");
@@ -535,6 +537,52 @@ final class CliDupX2IntegrationTest extends CliIntegrationSupport {
         assertThat(buildAndRun(project, "dup-x2-deferred-lambda", List.of(dependency))).isEqualTo("7\n");
     }
 
+    @Test
+    void dependencyFunctionValueInvokedAfterDupX2RemainsRejected() throws Exception {
+        final Path dependency = deferredLambdaInvocationDependency();
+        final Path project = project("dup-x2-deferred-lambda-invoke");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import dep.DupX2DeferredLambdaInvoke;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(DupX2DeferredLambdaInvoke.evaluate());
+                }
+            }
+            """);
+
+        assertThat(buildAndRun(project, "dup-x2-deferred-lambda-invoke", List.of(dependency)))
+            .contains("error[JAVAN030]", "dep/DupX2DeferredLambdaInvoke", "invokedynamic");
+    }
+
+    @Test
+    void discardedCapturedDependencyFunctionRemainsRejected() throws Exception {
+        final Path dependency = deferredCapturedLambdaDependency();
+        final Path project = project("dup-x2-deferred-captured-lambda");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import dep.DupX2DeferredCapturedLambda;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(DupX2DeferredCapturedLambda.evaluate());
+                }
+            }
+            """);
+
+        assertThat(buildAndRun(project, "dup-x2-deferred-captured-lambda", List.of(dependency)))
+            .contains("error[JAVAN030]", "dep/DupX2DeferredCapturedLambda", "invokedynamic");
+    }
+
     private String buildAndRun(final Path project, final String name, final List<Path> classpath) {
         final java.util.ArrayList<String> arguments = new java.util.ArrayList<>();
         arguments.add("build");
@@ -857,6 +905,112 @@ final class CliDupX2IntegrationTest extends CliIntegrationSupport {
                     .ireturn()
             ));
         return jar("dup-x2-deferred-lambda.jar", DEFERRED_LAMBDA_CLASS, bytes);
+    }
+
+    private Path deferredLambdaInvocationDependency() throws Exception {
+        final MethodTypeDesc functionMethod = MethodTypeDesc.of(OBJECT, OBJECT);
+        final DirectMethodHandleDesc bootstrap = ConstantDescs.ofCallsiteBootstrap(
+            ClassDesc.of("java.lang.invoke.LambdaMetafactory"),
+            "metafactory",
+            ConstantDescs.CD_CallSite,
+            ConstantDescs.CD_MethodType,
+            ConstantDescs.CD_MethodHandle,
+            ConstantDescs.CD_MethodType
+        );
+        final MethodHandleDesc implementation = MethodHandleDesc.ofMethod(
+            DirectMethodHandleDesc.Kind.STATIC,
+            DEFERRED_LAMBDA_INVOKE_CLASS,
+            "identity",
+            functionMethod
+        );
+        final DynamicCallSiteDesc lambda = DynamicCallSiteDesc.of(
+            bootstrap,
+            "apply",
+            MethodTypeDesc.of(FUNCTION),
+            functionMethod,
+            implementation,
+            functionMethod
+        );
+        final byte[] bytes = ClassFile.of().build(DEFERRED_LAMBDA_INVOKE_CLASS, classBuilder -> classBuilder
+            .withFlags(ClassFile.ACC_PUBLIC | ClassFile.ACC_FINAL | ClassFile.ACC_SUPER)
+            .withMethodBody(
+                "identity",
+                functionMethod,
+                ClassFile.ACC_PRIVATE | ClassFile.ACC_STATIC,
+                code -> code.aload(0).areturn()
+            )
+            .withMethodBody(
+                "evaluate",
+                MethodTypeDesc.of(INT),
+                ClassFile.ACC_PUBLIC | ClassFile.ACC_STATIC,
+                code -> code
+                    .iconst_0()
+                    .iconst_1()
+                    .invokedynamic(lambda)
+                    .dup_x2()
+                    .pop()
+                    .pop()
+                    .pop()
+                    .aconst_null()
+                    .invokeinterface(FUNCTION, "apply", MethodTypeDesc.of(OBJECT, OBJECT))
+                    .pop()
+                    .bipush(7)
+                    .ireturn()
+            ));
+        return jar("dup-x2-deferred-lambda-invoke.jar", DEFERRED_LAMBDA_INVOKE_CLASS, bytes);
+    }
+
+    private Path deferredCapturedLambdaDependency() throws Exception {
+        final MethodTypeDesc functionMethod = MethodTypeDesc.of(OBJECT, OBJECT);
+        final MethodTypeDesc capturedImplementation = MethodTypeDesc.of(OBJECT, OBJECT, OBJECT);
+        final DirectMethodHandleDesc bootstrap = ConstantDescs.ofCallsiteBootstrap(
+            ClassDesc.of("java.lang.invoke.LambdaMetafactory"),
+            "metafactory",
+            ConstantDescs.CD_CallSite,
+            ConstantDescs.CD_MethodType,
+            ConstantDescs.CD_MethodHandle,
+            ConstantDescs.CD_MethodType
+        );
+        final MethodHandleDesc implementation = MethodHandleDesc.ofMethod(
+            DirectMethodHandleDesc.Kind.STATIC,
+            DEFERRED_CAPTURED_LAMBDA_CLASS,
+            "identity",
+            capturedImplementation
+        );
+        final DynamicCallSiteDesc lambda = DynamicCallSiteDesc.of(
+            bootstrap,
+            "apply",
+            MethodTypeDesc.of(FUNCTION, OBJECT),
+            functionMethod,
+            implementation,
+            functionMethod
+        );
+        final byte[] bytes = ClassFile.of().build(DEFERRED_CAPTURED_LAMBDA_CLASS, classBuilder -> classBuilder
+            .withFlags(ClassFile.ACC_PUBLIC | ClassFile.ACC_FINAL | ClassFile.ACC_SUPER)
+            .withMethodBody(
+                "identity",
+                capturedImplementation,
+                ClassFile.ACC_PRIVATE | ClassFile.ACC_STATIC,
+                code -> code.aload(1).areturn()
+            )
+            .withMethodBody(
+                "evaluate",
+                MethodTypeDesc.of(INT),
+                ClassFile.ACC_PUBLIC | ClassFile.ACC_STATIC,
+                code -> code
+                    .iconst_0()
+                    .iconst_1()
+                    .aconst_null()
+                    .invokedynamic(lambda)
+                    .dup_x2()
+                    .pop()
+                    .pop()
+                    .pop()
+                    .pop()
+                    .bipush(7)
+                    .ireturn()
+            ));
+        return jar("dup-x2-deferred-captured-lambda.jar", DEFERRED_CAPTURED_LAMBDA_CLASS, bytes);
     }
 
     private Path localSnapshotDependency() throws Exception {

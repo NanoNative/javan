@@ -7,6 +7,7 @@ import javan.classfile.CodeAttribute;
 import javan.classfile.CodeException;
 import javan.classfile.DynamicRef;
 import javan.classfile.FieldRef;
+import javan.classfile.FunctionLambdaUse;
 import javan.classfile.Instruction;
 import javan.classfile.LambdaMetafactoryCall;
 import javan.classfile.MethodInfo;
@@ -3086,7 +3087,9 @@ public final class StaticVerifier {
             return false;
         }
         final LambdaMetafactoryCall lambda = lambdaCall.orElseThrow();
-        if (lambda.isFunction() && shouldMaterializeFunctionLambda(method, instruction)) {
+        if (lambda.isFunction()
+            && shouldMaterializeFunctionLambda(method, instruction)
+            && !FunctionLambdaUse.isProvablyDiscardedZeroCapture(lambda, method, instruction)) {
             final ClassFile implementationClass = classes.get(lambda.implementation().owner());
             return implementationClass != null
                 && implementationClass.application()
