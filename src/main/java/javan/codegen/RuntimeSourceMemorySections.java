@@ -6858,6 +6858,36 @@ final class RuntimeSourceMemorySections {
             return result;
         }
 
+        int javan_arrays_fill_byte(void* array, int value) {
+            if (array == NULL) {
+                return 1;
+            }
+            javan_byte_array* values = (javan_byte_array*) javan_array_checked(array);
+            javan_array_kind_checked((javan_array_header*) values, JAVAN_ARRAY_KIND_BYTE);
+            if (values->length > 0) {
+                memset(values->values, (unsigned char) value, (unsigned long) values->length);
+            }
+            return 0;
+        }
+
+        int javan_arrays_fill_range_byte(void* array, int begin, int end, int value) {
+            if (array == NULL) {
+                return 1;
+            }
+            javan_byte_array* values = (javan_byte_array*) javan_array_checked(array);
+            javan_array_kind_checked((javan_array_header*) values, JAVAN_ARRAY_KIND_BYTE);
+            if (begin > end) {
+                return 2;
+            }
+            if (begin < 0 || end > values->length) {
+                return 3;
+            }
+            if (begin < end) {
+                memset(values->values + begin, (unsigned char) value, (unsigned long) (end - begin));
+            }
+            return 0;
+        }
+
         void* javan_string_array_from_args(int argc, char** argv) {
             int length = argc > 0 ? argc - 1 : 0;
             void* result = javan_object_array_new(length, "[Ljava.lang.String;");

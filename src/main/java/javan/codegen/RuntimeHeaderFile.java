@@ -215,6 +215,8 @@ final class RuntimeHeaderFile {
         void* javan_arrays_copy_of_char(void* array, int new_length);
         void* javan_arrays_copy_of_range_byte(void* array, int begin, int end);
         void* javan_arrays_copy_of_range_object(void* array, int begin, int end);
+        int javan_arrays_fill_byte(void* array, int value);
+        int javan_arrays_fill_range_byte(void* array, int begin, int end, int value);
         void* javan_string_array_from_args(int argc, char** argv);
         void* javan_string_from(const char* value);
         void* javan_string_from_chars(void* array, int offset, int count);

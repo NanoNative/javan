@@ -3662,6 +3662,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void byteArraysWholeFillIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Arrays",
+            "fill",
+            "([BB)V"
+        ))).isTrue();
+    }
+
+    @Test
+    void byteArraysRangedFillIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/util/Arrays",
+            "fill",
+            "([BIIB)V"
+        ))).isTrue();
+    }
+
+    @Test
     void pathsGetRequiresFilesystemRuntimeModule() {
         assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
             "java/nio/file/Paths",
@@ -3674,6 +3692,14 @@ final class JdkCallSupportTest {
     void fileNotFoundExceptionIsAssignableToIOException() {
         assertThat(JdkCallSupport.isPlatformThrowableAssignable("java/io/FileNotFoundException", "java/io/IOException"))
             .isTrue();
+    }
+
+    @Test
+    void arrayIndexOutOfBoundsExceptionIsAssignableToIndexOutOfBoundsException() {
+        assertThat(JdkCallSupport.isPlatformThrowableAssignable(
+            "java/lang/ArrayIndexOutOfBoundsException",
+            "java/lang/IndexOutOfBoundsException"
+        )).isTrue();
     }
 
     @Test
