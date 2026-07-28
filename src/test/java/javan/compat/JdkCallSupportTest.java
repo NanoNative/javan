@@ -2512,6 +2512,42 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void mathMinFloatIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Math",
+            "min",
+            "(FF)F"
+        ))).isTrue();
+    }
+
+    @Test
+    void mathMinDoubleIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Math",
+            "min",
+            "(DD)D"
+        ))).isTrue();
+    }
+
+    @Test
+    void mathMaxFloatIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Math",
+            "max",
+            "(FF)F"
+        ))).isTrue();
+    }
+
+    @Test
+    void mathMaxDoubleIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Math",
+            "max",
+            "(DD)D"
+        ))).isTrue();
+    }
+
+    @Test
     void executorCloseIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/util/concurrent/ExecutorService",
