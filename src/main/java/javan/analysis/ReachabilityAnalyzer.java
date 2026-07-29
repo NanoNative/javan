@@ -23,7 +23,7 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Builds a small closed-world call graph for reachable application methods.
+ * Builds a small call graph for reachable methods in the scanned closed world.
  */
 public final class ReachabilityAnalyzer {
     private static final MethodRef RUNNABLE_RUN = new MethodRef("java/lang/Runnable", "run", "()V");
@@ -31,7 +31,7 @@ public final class ReachabilityAnalyzer {
     /**
      * Analyzes reachability from a main class.
      *
-     * @param classes parsed application classes
+     * @param classes parsed closed-world classes
      * @param mainClass JVM internal main class
      * @return call graph
      */
@@ -43,7 +43,7 @@ public final class ReachabilityAnalyzer {
     /**
      * Analyzes reachability from explicit entry points.
      *
-     * @param classes parsed application classes
+     * @param classes parsed closed-world classes
      * @param entries entry points
      * @return call graph
      */
@@ -85,8 +85,8 @@ public final class ReachabilityAnalyzer {
                         current.className(),
                         current.methodName() + current.descriptor(),
                         current.display(),
-                        "Closed-world analysis requires every reachable application method to be known.",
-                        "Compile all application classes before running javan."
+                        "Closed-world analysis requires every reachable method to be known.",
+                        "Compile application classes and provide the complete dependency classpath before running javan."
                     ));
                     continue;
                 }
@@ -218,8 +218,7 @@ public final class ReachabilityAnalyzer {
             final ClassFile classFile = classes.get(current);
             final Optional<MethodInfo> target = classFile.method(methodName, descriptor);
             if (target.isPresent()) {
-                return classFile.application()
-                    && !target.orElseThrow().isStatic()
+                return !target.orElseThrow().isStatic()
                     && target.orElseThrow().code().isPresent()
                     ? Optional.of(entryPoints.entry(current, methodName, descriptor))
                     : Optional.empty();

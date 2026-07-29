@@ -10141,8 +10141,7 @@ final class BytecodeToIRInvokeSupport {
             final ClassFile classFile = classes.get(current);
             final Optional<MethodInfo> target = classFile.method(methodName, descriptor);
             if (target.isPresent()) {
-                return classFile.application()
-                    && !target.orElseThrow().isStatic()
+                return !target.orElseThrow().isStatic()
                     && target.orElseThrow().code().isPresent()
                     ? Optional.of(new EntryPoint(current, methodName, descriptor))
                     : Optional.empty();

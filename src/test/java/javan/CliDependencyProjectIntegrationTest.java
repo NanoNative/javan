@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.jar.JarFile;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -464,6 +465,322 @@ final class CliDependencyProjectIntegrationTest extends CliIntegrationSupport {
         assertThat(run.exitCode()).isZero();
         assertThat(process(project, List.of(project.resolve(".javan/bin/dependency-nullable-record").toString())).stdout()).isEqualTo(jvmOutput);
         assertThat(jvmOutput).isEqualTo("requests\n");
+    }
+
+    @Test
+    void applicationRecordEqualsSupportsFinalDependencyValue() throws Exception {
+        final Path dependency = dependencyJar("record-equals-value", "dep.Value", dependencyRecordValue());
+        final Path project = project("dependency-record-value-equals");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import dep.Value;
+
+            public final class Main {
+                private record Holder(Value value) {
+                }
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new Holder(new Value(7)).equals(new Holder(new Value(7))));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main", List.of(dependency));
+        final CliRun build = run(tempDir, "build", project.toString(), "--classpath", dependency.toString());
+        final ProcessResult nativeRun = build.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/dependency-record-value-equals").toString()))
+            : new ProcessResult(build.exitCode(), "", build.stderr());
+
+        assertThat(nativeRun).isEqualTo(new ProcessResult(0, jvmOutput, ""));
+    }
+
+    @Test
+    void applicationRecordHashCodeSupportsFinalDependencyValue() throws Exception {
+        final Path dependency = dependencyJar("record-hash-value", "dep.Value", dependencyRecordValue());
+        final Path project = project("dependency-record-value-hash");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import dep.Value;
+
+            public final class Main {
+                private record Holder(Value value) {
+                }
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new Holder(new Value(7)).hashCode());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main", List.of(dependency));
+        final CliRun build = run(tempDir, "build", project.toString(), "--classpath", dependency.toString());
+        final ProcessResult nativeRun = build.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/dependency-record-value-hash").toString()))
+            : new ProcessResult(build.exitCode(), "", build.stderr());
+
+        assertThat(nativeRun).isEqualTo(new ProcessResult(0, jvmOutput, ""));
+    }
+
+    @Test
+    void applicationRecordEqualsSupportsFinalDependencyIdentity() throws Exception {
+        final Path dependency = dependencyJar("record-equals-identity", "dep.Value", dependencyIdentityValue());
+        final Path project = project("dependency-record-identity-equals");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import dep.Value;
+
+            public final class Main {
+                private record Holder(Value value) {
+                }
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Value value = new Value();
+                    System.out.println(new Holder(value).equals(new Holder(value)));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main", List.of(dependency));
+        final CliRun build = run(tempDir, "build", project.toString(), "--classpath", dependency.toString());
+        final ProcessResult nativeRun = build.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/dependency-record-identity-equals").toString()))
+            : new ProcessResult(build.exitCode(), "", build.stderr());
+
+        assertThat(nativeRun).isEqualTo(new ProcessResult(0, jvmOutput, ""));
+    }
+
+    @Test
+    void applicationRecordHashCodeSupportsFinalDependencyIdentity() throws Exception {
+        final Path dependency = dependencyJar("record-hash-identity", "dep.Value", dependencyIdentityValue());
+        final Path project = project("dependency-record-identity-hash");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import dep.Value;
+
+            public final class Main {
+                private record Holder(Value value) {
+                }
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    final Holder holder = new Holder(new Value());
+                    System.out.println(holder.hashCode() == holder.hashCode());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main", List.of(dependency));
+        final CliRun build = run(tempDir, "build", project.toString(), "--classpath", dependency.toString());
+        final ProcessResult nativeRun = build.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/dependency-record-identity-hash").toString()))
+            : new ProcessResult(build.exitCode(), "", build.stderr());
+
+        assertThat(nativeRun).isEqualTo(new ProcessResult(0, jvmOutput, ""));
+    }
+
+    @Test
+    void applicationRecordRejectsNonFinalDependencyValue() throws Exception {
+        final Path dependency = dependencyJar("record-non-final-value", "dep.Value", """
+            package dep;
+
+            public class Value {
+                @Override
+                public boolean equals(final Object other) {
+                    return other instanceof Value;
+                }
+
+                @Override
+                public int hashCode() {
+                    return 7;
+                }
+            }
+            """);
+        final Path project = project("dependency-record-non-final-value");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import dep.Value;
+
+            public final class Main {
+                private record Holder(Value value) {
+                }
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new Holder(new Value()).equals(new Holder(new Value())));
+                }
+            }
+            """);
+
+        final CliRun build = run(tempDir, "build", project.toString(), "--classpath", dependency.toString());
+
+        assertThat(build.exitCode() + "\n" + build.stderr())
+            .contains("2\nerror[JAVAN030]", "Ldep/Value;", "final closed-world class");
+    }
+
+    @Test
+    void applicationRecordEqualsSupportsInheritedDependencyValue() throws Exception {
+        final Path dependency = dependencyJar("record-inherited-equals", dependencyInheritedRecordValue());
+        final Path project = project("dependency-record-inherited-equals");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import dep.Value;
+
+            public final class Main {
+                private record Holder(Value value) {
+                }
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new Holder(new Value(7)).equals(new Holder(new Value(7))));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main", List.of(dependency));
+        final CliRun build = run(tempDir, "build", project.toString(), "--classpath", dependency.toString());
+        final ProcessResult nativeRun = build.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/dependency-record-inherited-equals").toString()))
+            : new ProcessResult(build.exitCode(), "", build.stderr());
+
+        assertThat(nativeRun).isEqualTo(new ProcessResult(0, jvmOutput, ""));
+    }
+
+    @Test
+    void applicationRecordHashCodeSupportsInheritedDependencyValue() throws Exception {
+        final Path dependency = dependencyJar("record-inherited-hash", dependencyInheritedRecordValue());
+        final Path project = project("dependency-record-inherited-hash");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import dep.Value;
+
+            public final class Main {
+                private record Holder(Value value) {
+                }
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new Holder(new Value(7)).hashCode());
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main", List.of(dependency));
+        final CliRun build = run(tempDir, "build", project.toString(), "--classpath", dependency.toString());
+        final ProcessResult nativeRun = build.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/dependency-record-inherited-hash").toString()))
+            : new ProcessResult(build.exitCode(), "", build.stderr());
+
+        assertThat(nativeRun).isEqualTo(new ProcessResult(0, jvmOutput, ""));
+    }
+
+    @Test
+    void applicationRecordRejectsUnsupportedDependencyEqualsBytecode() throws Exception {
+        final Path dependency = dependencyJar("record-unsupported-equals", "dep.Value", """
+            package dep;
+
+            public final class Value {
+                @Override
+                public boolean equals(final Object other) {
+                    synchronized (this) {
+                        return other instanceof Value;
+                    }
+                }
+
+                @Override
+                public int hashCode() {
+                    return 7;
+                }
+            }
+            """);
+        final Path project = project("dependency-record-unsupported-equals");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import dep.Value;
+
+            public final class Main {
+                private record Holder(Value value) {
+                }
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new Holder(new Value()).equals(new Holder(new Value())));
+                }
+            }
+            """);
+
+        final CliRun build = run(tempDir, "build", project.toString(), "--classpath", dependency.toString());
+
+        assertThat(build.exitCode() + "\n" + build.stderr())
+            .contains("2\nerror[JAVAN076]", "dep/Value", "equals(Ljava/lang/Object;)Z");
+    }
+
+    @Test
+    void applicationRecordRejectsSynchronizedDependencyEqualsMethod() throws Exception {
+        final Path dependency = dependencyJar("record-synchronized-equals", "dep.Value", """
+            package dep;
+
+            public final class Value {
+                @Override
+                public synchronized boolean equals(final Object other) {
+                    return other instanceof Value;
+                }
+
+                @Override
+                public int hashCode() {
+                    return 7;
+                }
+            }
+            """);
+        final Path project = project("dependency-record-synchronized-equals");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import dep.Value;
+
+            public final class Main {
+                private record Holder(Value value) {
+                }
+
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new Holder(new Value()).equals(new Holder(new Value())));
+                }
+            }
+            """);
+
+        final CliRun build = run(tempDir, "build", project.toString(), "--classpath", dependency.toString());
+
+        assertThat(build.exitCode() + "\n" + build.stderr())
+            .contains("2\nerror[JAVAN076]", "dep/Value", "equals(Ljava/lang/Object;)Z");
     }
 
     @Test
@@ -1314,5 +1631,81 @@ final class CliDependencyProjectIntegrationTest extends CliIntegrationSupport {
 
         assertThat(run.exitCode()).isZero();
         assertThat(run.stdout()).contains("Project: GRADLE", ".javan/bin/blade-tool");
+    }
+
+    private static String dependencyRecordValue() {
+        return """
+            package dep;
+
+            public final class Value {
+                private final int value;
+
+                public Value(final int value) {
+                    this.value = value;
+                }
+
+                @Override
+                public boolean equals(final Object other) {
+                    if (this == other) {
+                        return true;
+                    }
+                    if (!(other instanceof Value)) {
+                        return false;
+                    }
+                    return value == ((Value) other).value;
+                }
+
+                @Override
+                public int hashCode() {
+                    return value;
+                }
+            }
+            """;
+    }
+
+    private static String dependencyIdentityValue() {
+        return """
+            package dep;
+
+            public final class Value {
+            }
+            """;
+    }
+
+    private static Map<String, String> dependencyInheritedRecordValue() {
+        return Map.of(
+            "dep.BaseValue",
+            """
+                package dep;
+
+                public class BaseValue {
+                    private final int value;
+
+                    protected BaseValue(final int value) {
+                        this.value = value;
+                    }
+
+                    @Override
+                    public boolean equals(final Object other) {
+                        return other instanceof BaseValue && value == ((BaseValue) other).value;
+                    }
+
+                    @Override
+                    public int hashCode() {
+                        return value;
+                    }
+                }
+                """,
+            "dep.Value",
+            """
+                package dep;
+
+                public final class Value extends BaseValue {
+                    public Value(final int value) {
+                        super(value);
+                    }
+                }
+                """
+        );
     }
 }

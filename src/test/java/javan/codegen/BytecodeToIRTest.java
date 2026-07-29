@@ -69,6 +69,66 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void recordReferenceEqualsDispatchTargetsFinalDependencyMethod() {
+        final MethodInfo equals = method(
+            0,
+            "equals",
+            "(Ljava/lang/Object;)Z",
+            1,
+            2,
+            plain(0, 4, "iconst_1"),
+            plain(1, 172, "ireturn")
+        );
+        final ClassFile dependency = new ClassFile(
+            69,
+            "dep/Value",
+            "java/lang/Object",
+            0x0010,
+            List.of(),
+            List.of(),
+            List.of(equals),
+            Path.of("dep/Value.class"),
+            false
+        );
+
+        assertThat(BytecodeToIRInvokeSupport.recordReferenceTarget(
+            Map.of(dependency.name(), dependency),
+            dependency.name(),
+            false
+        )).contains(new EntryPoint(dependency.name(), "equals", "(Ljava/lang/Object;)Z"));
+    }
+
+    @Test
+    void recordReferenceHashCodeDispatchTargetsFinalDependencyMethod() {
+        final MethodInfo hashCode = method(
+            0,
+            "hashCode",
+            "()I",
+            1,
+            1,
+            plain(0, 4, "iconst_1"),
+            plain(1, 172, "ireturn")
+        );
+        final ClassFile dependency = new ClassFile(
+            69,
+            "dep/Value",
+            "java/lang/Object",
+            0x0010,
+            List.of(),
+            List.of(),
+            List.of(hashCode),
+            Path.of("dep/Value.class"),
+            false
+        );
+
+        assertThat(BytecodeToIRInvokeSupport.recordReferenceTarget(
+            Map.of(dependency.name(), dependency),
+            dependency.name(),
+            true
+        )).contains(new EntryPoint(dependency.name(), "hashCode", "()I"));
+    }
+
+    @Test
     void lowersClassMetadataFieldsStaticFieldsEnumConstantsAndSortedClasses() {
         final MethodInfo main = method(0x0008, "main", "()V", 0, 0, plain(0, 177, "return"));
         final ClassFile zeta = classFile(
