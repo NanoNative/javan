@@ -585,6 +585,72 @@ final class LambdaMetafactoryCallTest {
     }
 
     @Test
+    void directlyLowerableAcceptsUnboundInstanceFunctionReferenceOnFinalClass() {
+        final LambdaMetafactoryCall resolved = unboundInstanceFunctionReference(
+            "()Ljava/util/function/Function;",
+            "()Ljava/lang/String;",
+            "(Lcom/acme/Row;)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isDirectlyLowerable(classMap("com/acme/Row", 0x0010))).isTrue();
+    }
+
+    @Test
+    void directlyLowerableRejectsUnboundInstanceFunctionReferenceOnNonFinalClass() {
+        final LambdaMetafactoryCall resolved = unboundInstanceFunctionReference(
+            "()Ljava/util/function/Function;",
+            "()Ljava/lang/String;",
+            "(Lcom/acme/Row;)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isDirectlyLowerable(classMap("com/acme/Row", 0))).isFalse();
+    }
+
+    @Test
+    void directlyLowerableRejectsCapturedUnboundInstanceFunctionReference() {
+        final LambdaMetafactoryCall resolved = unboundInstanceFunctionReference(
+            "(Lcom/acme/Row;)Ljava/util/function/Function;",
+            "()Ljava/lang/String;",
+            "(Lcom/acme/Row;)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isDirectlyLowerable(classMap("com/acme/Row", 0x0010))).isFalse();
+    }
+
+    @Test
+    void directlyLowerableRejectsUnboundInstanceFunctionReferenceWithMismatchedInputOwner() {
+        final LambdaMetafactoryCall resolved = unboundInstanceFunctionReference(
+            "()Ljava/util/function/Function;",
+            "()Ljava/lang/String;",
+            "(Lcom/acme/Other;)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isDirectlyLowerable(classMap("com/acme/Row", 0x0010))).isFalse();
+    }
+
+    @Test
+    void directlyLowerableRejectsUnboundInstanceFunctionReferenceWithImplementationParameter() {
+        final LambdaMetafactoryCall resolved = unboundInstanceFunctionReference(
+            "()Ljava/util/function/Function;",
+            "(Ljava/lang/String;)Ljava/lang/String;",
+            "(Lcom/acme/Row;)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isDirectlyLowerable(classMap("com/acme/Row", 0x0010))).isFalse();
+    }
+
+    @Test
+    void directlyLowerableRejectsUnboundInstanceFunctionReferenceWithPrimitiveReturn() {
+        final LambdaMetafactoryCall resolved = unboundInstanceFunctionReference(
+            "()Ljava/util/function/Function;",
+            "()I",
+            "(Lcom/acme/Row;)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isDirectlyLowerable(classMap("com/acme/Row", 0x0010))).isFalse();
+    }
+
+    @Test
     void directlyLowerableAcceptsBoundInstanceSupplierLambdaReferenceKindFive() {
         final LambdaMetafactoryCall resolved = LambdaMetafactoryCall.resolve(dynamicRef(
             "get",
@@ -1068,6 +1134,27 @@ final class LambdaMetafactoryCallTest {
         )).orElseThrow();
     }
 
+    private static LambdaMetafactoryCall unboundInstanceFunctionReference(
+        final String callSiteDescriptor,
+        final String implementationDescriptor,
+        final String instantiatedDescriptor
+    ) {
+        return LambdaMetafactoryCall.resolve(dynamicRef(
+            "apply",
+            callSiteDescriptor,
+            "java/lang/invoke/LambdaMetafactory",
+            "metafactory",
+            List.of(
+                BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;"),
+                BootstrapArgument.methodHandle(
+                    5,
+                    new MethodRef("com/acme/Row", "key", implementationDescriptor)
+                ),
+                BootstrapArgument.methodType(instantiatedDescriptor)
+            )
+        )).orElseThrow();
+    }
+
     private static LambdaMetafactoryCall materializedFunction(
         final String callSiteDescriptor,
         final String implementationDescriptor
@@ -1130,17 +1217,21 @@ final class LambdaMetafactoryCallTest {
     }
 
     private static Map<String, ClassFile> mainClass(final int accessFlags) {
+        return classMap("com/acme/Main", accessFlags);
+    }
+
+    private static Map<String, ClassFile> classMap(final String name, final int accessFlags) {
         return Map.of(
-            "com/acme/Main",
+            name,
             new ClassFile(
                 69,
-                "com/acme/Main",
+                name,
                 "java/lang/Object",
                 accessFlags,
                 List.of(),
                 List.of(),
                 List.of(),
-                Path.of("Main.class"),
+                Path.of(name.substring(name.lastIndexOf('/') + 1) + ".class"),
                 true
             )
         );

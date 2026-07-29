@@ -1502,6 +1502,55 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersUnboundInstanceOptionalMapFunctionInputAsReceiver() {
+        final EntryPoint entryPoint = new EntryPoint(
+            "com/acme/Main",
+            "mapRow",
+            "(Ljava/util/Optional;)Ljava/util/Optional;"
+        );
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile(
+                    "com/acme/Main",
+                    "java/lang/Object",
+                    0,
+                    List.of(),
+                    List.of(),
+                    List.of(optionalUnboundInstanceMapReferenceMethod())
+                ),
+                "com/acme/Row",
+                classFile(
+                    "com/acme/Row",
+                    "java/lang/Object",
+                    0x0010,
+                    List.of(),
+                    List.of(),
+                    List.of(rowKeyMethod())
+                )
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint), List.of()),
+            SourceLineIndex.empty()
+        );
+        final String implementation = symbol("com/acme/Row", "key", "()Ljava/lang/Object;");
+        final IrExpression invocation = program.functions().stream()
+            .filter(function -> function.name().equals("mapRow"))
+            .flatMap(function -> function.instructions().stream())
+            .flatMap(instruction -> instruction.expression().stream())
+            .filter(expression -> implementation.equals(expression.value()))
+            .findFirst()
+            .orElseThrow();
+
+        assertThat(invocation).isEqualTo(IrExpression.objectCall(
+            implementation,
+            List.of(IrExpression.objectCall(
+                "javan_objects_require_non_null",
+                List.of(IrExpression.objectLocal("object0"))
+            ))
+        ));
+    }
+
+    @Test
     void lowersOptionalMapStringInputLambdaToObjectCompatibleImplementation() {
         final EntryPoint entryPoint = new EntryPoint("com/acme/Main", "mapStringValue", "(Ljava/util/Optional;)Ljava/util/Optional;");
         final IrProgram program = new BytecodeToIR().lower(
@@ -27659,6 +27708,57 @@ final class BytecodeToIRTest {
             1,
             3,
             plain(0, 44, "aload_2"),
+            plain(1, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo optionalUnboundInstanceMapReferenceMethod() {
+        return method(
+            0x0008,
+            "mapRow",
+            "(Ljava/util/Optional;)Ljava/util/Optional;",
+            2,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeDynamic(1, new DynamicRef(
+                "apply",
+                "()Ljava/util/function/Function;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "invokevirtual com/acme/Row.key:()Ljava/lang/Object;",
+                    "(Lcom/acme/Row;)Ljava/lang/Object;"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;"),
+                    BootstrapArgument.methodHandle(
+                        5,
+                        new MethodRef("com/acme/Row", "key", "()Ljava/lang/Object;")
+                    ),
+                    BootstrapArgument.methodType("(Lcom/acme/Row;)Ljava/lang/Object;")
+                )
+            )),
+            invokeVirtual(2, new MethodRef(
+                "java/util/Optional",
+                "map",
+                "(Ljava/util/function/Function;)Ljava/util/Optional;"
+            )),
+            plain(5, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo rowKeyMethod() {
+        return method(
+            0,
+            "key",
+            "()Ljava/lang/Object;",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
             plain(1, 176, "areturn")
         );
     }
