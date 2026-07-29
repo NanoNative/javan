@@ -749,6 +749,9 @@ public final class BytecodeToIR {
                     discardTop(instructions, stack);
                 }
                 break;
+            case 88:
+                discardTopTwoSlots(classFile, method, instruction, instructions, stack);
+                break;
             case 96:
                 binaryInt(classFile, method, stack, "+");
                 break;
@@ -1849,7 +1852,56 @@ public final class BytecodeToIR {
     }
 
     static void discardTop(final List<IrInstruction> instructions, final List<StackValue> stack) {
-        final StackValue value = pop(stack);
+        discardValue(instructions, pop(stack));
+    }
+
+    private static void discardTopTwoSlots(
+        final ClassFile classFile,
+        final MethodInfo method,
+        final Instruction instruction,
+        final List<IrInstruction> instructions,
+        final List<StackValue> stack
+    ) {
+        if (stack.isEmpty()) {
+            throw invalidStack(
+                classFile,
+                method,
+                instruction,
+                "pop2 requires either one category-2 value or two category-1 values."
+            );
+        }
+        final StackValue top = stack.getLast();
+        if (isCategoryTwo(top.kind())) {
+            pop(stack);
+            discardValue(instructions, top);
+            return;
+        }
+        if (stack.size() < 2) {
+            throw invalidStack(
+                classFile,
+                method,
+                instruction,
+                "pop2 requires two category-1 values, but only one is available."
+            );
+        }
+        final StackValue lower = stack.get(stack.size() - 2);
+        if (isCategoryTwo(lower.kind())) {
+            throw invalidStack(
+                classFile,
+                method,
+                instruction,
+                "pop2 cannot pair a category-1 top value with a category-2 value beneath it."
+            );
+        }
+        pop(stack);
+        pop(stack);
+        discardValue(instructions, lower);
+        if (top != lower) {
+            discardValue(instructions, top);
+        }
+    }
+
+    private static void discardValue(final List<IrInstruction> instructions, final StackValue value) {
         if (value.expression().isPresent()) {
             final IrExpression expression = value.expression().orElseThrow();
             if (expression.kind() == IrExpression.Kind.CALL) {
