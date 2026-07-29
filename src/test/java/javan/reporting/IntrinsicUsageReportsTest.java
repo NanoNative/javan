@@ -65,6 +65,7 @@ final class IntrinsicUsageReportsTest {
             new IntrinsicCallCount("Objects.nonNull", 0),
             new IntrinsicCallCount("Objects.toString", 0),
             new IntrinsicCallCount("Math.abs", 1),
+            new IntrinsicCallCount("Math.round", 0),
             new IntrinsicCallCount("Math.min", 0),
             new IntrinsicCallCount("Math.max", 1),
             new IntrinsicCallCount("Math.addExact", 0),

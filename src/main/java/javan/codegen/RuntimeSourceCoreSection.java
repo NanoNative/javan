@@ -653,6 +653,45 @@ final class RuntimeSourceCoreSection {
             javan_println_bool(value);
         }
 
+        int javan_math_round_float(float value) {
+            uint32_t bits = 0U;
+            memcpy(&bits, &value, sizeof(bits));
+            const uint32_t exponent = (bits >> 23U) & 0xffU;
+            const uint32_t fraction = bits & 0x007fffffU;
+            const int negative = (bits & 0x80000000U) != 0U;
+            if (exponent == 0xffU) {
+                if (fraction != 0U) {
+                    return 0;
+                }
+                return negative ? INT_MIN : INT_MAX;
+            }
+            if (exponent == 0U) {
+                return 0;
+            }
+            const int unbiased_exponent = (int) exponent - 127;
+            if (unbiased_exponent < -1) {
+                return 0;
+            }
+            if (unbiased_exponent >= 31) {
+                return negative ? INT_MIN : INT_MAX;
+            }
+            const uint32_t significand = 0x00800000U | fraction;
+            if (unbiased_exponent >= 23) {
+                const uint32_t magnitude = significand << (unsigned int) (unbiased_exponent - 23);
+                return negative ? -(int) magnitude : (int) magnitude;
+            }
+            const unsigned int fractional_shift = (unsigned int) (23 - unbiased_exponent);
+            uint32_t magnitude = significand >> fractional_shift;
+            const uint32_t fractional_mask = (1U << fractional_shift) - 1U;
+            const uint32_t fractional_part = significand & fractional_mask;
+            const uint32_t half = 1U << (fractional_shift - 1U);
+            if ((!negative && fractional_part >= half)
+                || (negative && fractional_part > half)) {
+                magnitude++;
+            }
+            return negative ? -(int) magnitude : (int) magnitude;
+        }
+
         int javan_math_abs_int(int value) {
             if (value == INT_MIN) {
                 return value;

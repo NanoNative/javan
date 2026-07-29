@@ -16,6 +16,15 @@ import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
 @Execution(CONCURRENT)
 final class JdkCallSupportTest {
     @Test
+    void mathRoundFloatIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Math",
+            "round",
+            "(F)I"
+        ))).isTrue();
+    }
+
+    @Test
     void classDescriptorStringIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/Class",
