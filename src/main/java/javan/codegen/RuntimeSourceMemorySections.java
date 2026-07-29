@@ -7065,6 +7065,75 @@ final class RuntimeSourceMemorySections {
             return javan_string_length(value) == 0;
         }
 
+        static unsigned int javan_utf8_next_code_point(const unsigned char** cursor) {
+            const unsigned char* current = *cursor;
+            unsigned char first = *current;
+            if ((first & 0x80U) == 0U) {
+                *cursor = current + 1;
+                return first;
+            }
+            if (first >= 0xC2U && first <= 0xDFU) {
+                unsigned char second = current[1];
+                if ((second & 0xC0U) != 0x80U) {
+                    javan_panic("invalid UTF-8 string");
+                }
+                *cursor = current + 2;
+                return ((unsigned int) (first & 0x1FU) << 6)
+                    | (unsigned int) (second & 0x3FU);
+            }
+            if (first >= 0xE0U && first <= 0xEFU) {
+                unsigned char second = current[1];
+                if ((second & 0xC0U) != 0x80U) {
+                    javan_panic("invalid UTF-8 string");
+                }
+                unsigned char third = current[2];
+                if ((third & 0xC0U) != 0x80U || (first == 0xE0U && second < 0xA0U)) {
+                    javan_panic("invalid UTF-8 string");
+                }
+                *cursor = current + 3;
+                return ((unsigned int) (first & 0x0FU) << 12)
+                    | ((unsigned int) (second & 0x3FU) << 6)
+                    | (unsigned int) (third & 0x3FU);
+            }
+            if (first >= 0xF0U && first <= 0xF4U) {
+                unsigned char second = current[1];
+                if ((second & 0xC0U) != 0x80U) {
+                    javan_panic("invalid UTF-8 string");
+                }
+                unsigned char third = current[2];
+                if ((third & 0xC0U) != 0x80U) {
+                    javan_panic("invalid UTF-8 string");
+                }
+                unsigned char fourth = current[3];
+                if ((fourth & 0xC0U) != 0x80U
+                    || (first == 0xF0U && second < 0x90U)
+                    || (first == 0xF4U && second > 0x8FU)) {
+                    javan_panic("invalid UTF-8 string");
+                }
+                *cursor = current + 4;
+                return ((unsigned int) (first & 0x07U) << 18)
+                    | ((unsigned int) (second & 0x3FU) << 12)
+                    | ((unsigned int) (third & 0x3FU) << 6)
+                    | (unsigned int) (fourth & 0x3FU);
+            }
+            javan_panic("invalid UTF-8 string");
+            return 0U;
+        }
+
+        int javan_string_is_blank(const char* value) {
+            if (value == NULL) {
+                javan_panic("null string");
+            }
+            const unsigned char* current = (const unsigned char*) value;
+            while (*current != 0U) {
+                unsigned int code_point = javan_utf8_next_code_point(&current);
+                if (!javan_character_is_whitespace((int) code_point)) {
+                    return 0;
+                }
+            }
+            return 1;
+        }
+
         int javan_string_char_at(const char* value, int index) {
             int length = javan_string_length(value);
             if (index < 0 || index >= length) {

@@ -16038,6 +16038,27 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersStringIsBlankToRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(Ljava/lang/String;)Z",
+            1,
+            1,
+            plain(0, 42, "aload_0"),
+            invokeVirtual(1, new MethodRef("java/lang/String", "isBlank", "()Z")),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_string_is_blank",
+                List.of(IrExpression.objectLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
     void lowersStringCharAtToRuntimeCall() {
         final IrFunction function = lowerMain(method(
             0x0008,

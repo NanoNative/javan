@@ -616,4 +616,27 @@ final class CliStringApiIntegrationTest extends CliIntegrationSupport {
         assertThat(process(project, List.of(project.resolve(".javan/bin/string-sub-sequence").toString())).stdout()).isEqualTo(jvmOutput);
     }
 
+    @Test
+    void characterUnicodeWhitespaceMatchesJvm() throws Exception {
+        final Path project = project("character-unicode-whitespace");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private Main() {
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(Character.isWhitespace((char) 0x2003));
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        requireBuildSuccess(run(tempDir, "build", project.toString()));
+
+        assertThat(process(project, List.of(project.resolve(".javan/bin/character-unicode-whitespace").toString())).stdout())
+            .isEqualTo(jvmOutput);
+    }
+
 }

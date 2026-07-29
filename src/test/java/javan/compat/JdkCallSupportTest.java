@@ -25,6 +25,24 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void stringIsBlankIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/String",
+            "isBlank",
+            "()Z"
+        ))).isTrue();
+    }
+
+    @Test
+    void stringIsBlankRequiresStringsRuntimeModule() {
+        assertThat(JdkCallSupport.runtimeModules(new javan.classfile.MethodRef(
+            "java/lang/String",
+            "isBlank",
+            "()Z"
+        ))).containsExactly("strings");
+    }
+
+    @Test
     void classDescriptorStringIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/Class",

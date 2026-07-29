@@ -1258,9 +1258,9 @@ final class JdkCallableAccountingTest {
     }
 
     @Test
-    void marksStringIsBlankAsExplicitRejected() {
+    void marksStringIsBlankAsSupported() {
         assertThat(JdkCallableAccounting.status(new MethodRef("java/lang/String", "isBlank", "()Z")))
-            .isEqualTo(JdkCallableAccounting.Status.EXPLICIT_REJECTED);
+            .isEqualTo(JdkCallableAccounting.Status.SUPPORTED);
     }
 
     @Test

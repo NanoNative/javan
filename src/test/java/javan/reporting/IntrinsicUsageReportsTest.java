@@ -163,6 +163,23 @@ final class IntrinsicUsageReportsTest {
     }
 
     @Test
+    void countsReachableStringIsBlankAsRuntimeCall() {
+        final IntrinsicUsageReports reports = new IntrinsicUsageReports();
+        final EntryPoint entry = new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V");
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classFile("com/acme/Main", method(
+                "main",
+                "([Ljava/lang/String;)V",
+                instruction("java/lang/String", "isBlank", "()Z")
+            ))
+        );
+
+        assertThat(reports.analyze(classes, List.of(entry)).runtimeCalls())
+            .contains(new RuntimeJdkCallCount("String.isBlank", 1));
+    }
+
+    @Test
     void countsReachableLongCompareUnsignedAsSupportedIntrinsic() {
         final IntrinsicUsageReports reports = new IntrinsicUsageReports();
         final EntryPoint entry = new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V");
