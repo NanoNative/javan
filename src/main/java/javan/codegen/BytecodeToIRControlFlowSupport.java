@@ -457,7 +457,7 @@ final class BytecodeToIRControlFlowSupport {
         final Map<Integer, DynamicLambda> workingObjectLocalLambdas = copyObjectLocalLambdas(objectLocalLambdas);
         final List<IrInstruction> mergedInstructions = new ArrayList<>();
         final List<StackValue> workingStack = new ArrayList<>(stack);
-        final int lastDupX2Offset = BytecodeToIR.lastDupX2Offset(bytecode);
+        final int lastMaterializingDuplicateOffset = BytecodeToIR.lastMaterializingDuplicateOffset(bytecode);
         List<StackValue> prefix = List.of();
         int conditionalCount = 0;
         final String targetLabel = "guarded_value_target_" + instruction.offset();
@@ -489,7 +489,7 @@ final class BytecodeToIRControlFlowSupport {
                     Map.of(),
                     Map.of(),
                     SourceLineIndex.empty(),
-                    lastDupX2Offset
+                    lastMaterializingDuplicateOffset
                 );
             }
         }
@@ -604,7 +604,7 @@ final class BytecodeToIRControlFlowSupport {
         final Map<Integer, StackKind> blockObjectLocalKinds = copyObjectLocalKinds(objectLocalKinds);
         final Map<Integer, String> blockObjectLocalThrowableTypes = copyObjectLocalThrowableTypes(objectLocalThrowableTypes);
         final Map<Integer, DynamicLambda> blockObjectLocalLambdas = copyObjectLocalLambdas(objectLocalLambdas);
-        final int lastDupX2Offset = BytecodeToIR.lastDupX2Offset(bytecode);
+        final int lastMaterializingDuplicateOffset = BytecodeToIR.lastMaterializingDuplicateOffset(bytecode);
         for (int index = startIndex; index < endIndex; index++) {
             final Instruction blockInstruction = bytecode.get(index);
             if (isControlTransfer(blockInstruction.opcode())) {
@@ -627,7 +627,7 @@ final class BytecodeToIRControlFlowSupport {
                 Map.of(),
                 Map.of(),
                 sourceLines,
-                lastDupX2Offset
+                lastMaterializingDuplicateOffset
             );
         }
         return new BlockResult(List.copyOf(blockInstructions), List.copyOf(blockStack));
