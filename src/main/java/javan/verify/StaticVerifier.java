@@ -769,7 +769,8 @@ public final class StaticVerifier {
         if (!"java/lang/Math".equals(target.owner())) {
             return false;
         }
-        if ("addExact".equals(target.name()) && "(II)I".equals(target.descriptor())) {
+        if ("addExact".equals(target.name())
+            && ("(II)I".equals(target.descriptor()) || "(JJ)J".equals(target.descriptor()))) {
             return true;
         }
         return "multiplyExact".equals(target.name())

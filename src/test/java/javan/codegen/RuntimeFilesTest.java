@@ -7029,6 +7029,45 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void addExactLongAcceptsMaximumBoundary() throws Exception {
+        assertThat(addExactLongOverflow("LLONG_MAX", "0LL")).isEqualTo("0\n");
+    }
+
+    @Test
+    void addExactLongRejectsPositiveOverflow() throws Exception {
+        assertThat(addExactLongOverflow("LLONG_MAX", "1LL")).isEqualTo("1\n");
+    }
+
+    @Test
+    void addExactLongAcceptsMinimumBoundary() throws Exception {
+        assertThat(addExactLongOverflow("LLONG_MIN", "0LL")).isEqualTo("0\n");
+    }
+
+    @Test
+    void addExactLongRejectsNegativeOverflow() throws Exception {
+        assertThat(addExactLongOverflow("LLONG_MIN", "-1LL")).isEqualTo("1\n");
+    }
+
+    private String addExactLongOverflow(final String left, final String right) throws Exception {
+        return runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <limits.h>
+            #include <stdio.h>
+
+            int main(void) {
+                printf(
+                    "%%d\\n",
+                    javan_math_add_exact_long_overflows(%s, %s)
+                );
+                return 0;
+            }
+            """.formatted(left, right),
+            "4096"
+        );
+    }
+
+    @Test
     void multiplyExactLongIntDetectsMinimumTimesNegativeOne() throws Exception {
         final String stdout = runRuntimeBoundaryProbe(
             """
