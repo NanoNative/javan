@@ -315,6 +315,7 @@ public final class JdkCallSupport {
             "(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/Object;"
         ),
         intrinsic("Float.intBitsToFloat", "java/lang/Float", "intBitsToFloat", "(I)F"),
+        intrinsic("Float.floatToRawIntBits", "java/lang/Float", "floatToRawIntBits", "(F)I"),
         intrinsic("Double.toString", "java/lang/Double", "toString", "(D)Ljava/lang/String;"),
         runtime("Double.toString.instance", "java/lang/Double", "toString", "()Ljava/lang/String;"),
         runtime("Double.valueOf", "java/lang/Double", "valueOf", "(D)Ljava/lang/Double;"),

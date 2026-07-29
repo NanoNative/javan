@@ -2383,6 +2383,13 @@ final class BytecodeToIRInvokeSupport {
             stack.add(StackValue.floatExpression(IrExpression.floatCall("javan_float_int_bits_to_float", List.of(popInt(classFile, method, stack)))));
             return true;
         }
+        if ("floatToRawIntBits".equals(methodRef.name()) && "(F)I".equals(methodRef.descriptor())) {
+            stack.add(StackValue.intExpression(IrExpression.intCall(
+                "javan_float_to_raw_int_bits",
+                List.of(popFloat(classFile, method, stack))
+            )));
+            return true;
+        }
         if ("valueOf".equals(methodRef.name()) && "(F)Ljava/lang/Float;".equals(methodRef.descriptor())) {
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_float_value_of", List.of(popFloat(classFile, method, stack)))));
             return true;

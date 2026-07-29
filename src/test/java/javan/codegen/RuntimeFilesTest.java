@@ -6882,6 +6882,25 @@ final class RuntimeFilesTest {
         assertThat(stdout).isEqualTo("invalid UTF-8 string\n");
     }
 
+    @Test
+    void floatToRawIntBitsPreservesQuietNanPayload() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <stdio.h>
+
+            int main(void) {
+                float value = javan_float_int_bits_to_float(0x7fc01234);
+                printf("%08x\\n", (unsigned int) javan_float_to_raw_int_bits(value));
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo("7fc01234\n");
+    }
+
     private String runRuntimePanicProbe(final String setup, final String statement) throws Exception {
         return runRuntimeBoundaryProbe(
             """
