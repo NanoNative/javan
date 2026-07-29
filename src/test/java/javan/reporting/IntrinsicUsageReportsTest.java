@@ -69,6 +69,7 @@ final class IntrinsicUsageReportsTest {
             new IntrinsicCallCount("Math.min", 0),
             new IntrinsicCallCount("Math.max", 1),
             new IntrinsicCallCount("Math.addExact", 0),
+            new IntrinsicCallCount("Math.multiplyExact", 0),
             new IntrinsicCallCount("Math.toIntExact", 0),
             new IntrinsicCallCount("System.nanoTime", 2),
             new IntrinsicCallCount("System.currentTimeMillis", 0),
@@ -195,6 +196,23 @@ final class IntrinsicUsageReportsTest {
 
         assertThat(reports.analyze(classes, List.of(entry)).intrinsics())
             .contains(new IntrinsicCallCount("Float.floatToRawIntBits", 1));
+    }
+
+    @Test
+    void countsReachableMathMultiplyExactLongIntAsIntrinsic() {
+        final IntrinsicUsageReports reports = new IntrinsicUsageReports();
+        final EntryPoint entry = new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V");
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classFile("com/acme/Main", method(
+                "main",
+                "([Ljava/lang/String;)V",
+                instruction("java/lang/Math", "multiplyExact", "(JI)J")
+            ))
+        );
+
+        assertThat(reports.analyze(classes, List.of(entry)).intrinsics())
+            .contains(new IntrinsicCallCount("Math.multiplyExact", 1));
     }
 
     @Test

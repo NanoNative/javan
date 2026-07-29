@@ -25,6 +25,15 @@ final class JdkCallSupportTest {
     }
 
     @Test
+    void mathMultiplyExactLongIntIsSupported() {
+        assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
+            "java/lang/Math",
+            "multiplyExact",
+            "(JI)J"
+        ))).isTrue();
+    }
+
+    @Test
     void floatToRawIntBitsIsSupported() {
         assertThat(JdkCallSupport.isSupported(new javan.classfile.MethodRef(
             "java/lang/Float",
