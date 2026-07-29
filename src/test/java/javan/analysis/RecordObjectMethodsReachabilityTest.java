@@ -73,6 +73,57 @@ final class RecordObjectMethodsReachabilityTest {
     }
 
     @Test
+    void finalDependencyComponentAddsItsEqualsTarget() throws Exception {
+        final Map<String, ClassFile> classes = compile(
+            "dependency-equals",
+            dependencyComponentSource(
+                "System.out.println(new Holder(new Leaf(7)).equals(new Holder(new Leaf(7))));"
+            )
+        );
+        final ClassFile leaf = classes.get("com/acme/Main$Leaf");
+        classes.put(leaf.name(), withApplication(leaf, false));
+
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(classes, "com/acme/Main");
+
+        assertThat(recordObjectMethods(graph, "equals"))
+            .containsExactly("com/acme/Main$Holder.equals(Ljava/lang/Object;)Z", "com/acme/Main$Leaf.equals(Ljava/lang/Object;)Z");
+    }
+
+    @Test
+    void finalDependencyComponentAddsItsHashCodeTarget() throws Exception {
+        final Map<String, ClassFile> classes = compile(
+            "dependency-hash",
+            dependencyComponentSource("System.out.println(new Holder(new Leaf(7)).hashCode());")
+        );
+        final ClassFile leaf = classes.get("com/acme/Main$Leaf");
+        classes.put(leaf.name(), withApplication(leaf, false));
+
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(classes, "com/acme/Main");
+
+        assertThat(recordObjectMethods(graph, "hashCode"))
+            .containsExactly("com/acme/Main$Holder.hashCode()I", "com/acme/Main$Leaf.hashCode()I");
+    }
+
+    @Test
+    void finalDependencyComponentAddsItsEqualsDispatchTarget() throws Exception {
+        final Map<String, ClassFile> classes = compile(
+            "dependency-dispatch",
+            dependencyComponentSource(
+                "System.out.println(new Holder(new Leaf(7)).equals(new Holder(new Leaf(7))));"
+            )
+        );
+        final ClassFile leaf = classes.get("com/acme/Main$Leaf");
+        classes.put(leaf.name(), withApplication(leaf, false));
+        final CallGraph graph = new ReachabilityAnalyzer().analyze(classes, "com/acme/Main");
+
+        assertThat(new BytecodeToIR().lower(classes, graph).dispatches().stream()
+            .filter(dispatch -> dispatch.symbol().equals("javan_dispatch_record_reference_equals"))
+            .flatMap(dispatch -> dispatch.targets().stream())
+            .map(target -> target.owner())
+            .toList()).containsExactly("com/acme/Main$Leaf");
+    }
+
+    @Test
     void unsafeObjectComponentDoesNotExpandObjectMethodReachability() throws Exception {
         final CallGraph graph = analyze("unsafe-object", """
             package com.acme;
@@ -262,6 +313,55 @@ final class RecordObjectMethodsReachabilityTest {
             classFile.source(),
             classFile.application()
         );
+    }
+
+    private static ClassFile withApplication(final ClassFile classFile, final boolean application) {
+        return new ClassFile(
+            classFile.majorVersion(),
+            classFile.name(),
+            classFile.superName(),
+            classFile.accessFlags(),
+            classFile.interfaces(),
+            classFile.fields(),
+            classFile.methods(),
+            classFile.sourceFile(),
+            classFile.recordComponents(),
+            classFile.source(),
+            application
+        );
+    }
+
+    private static String dependencyComponentSource(final String statement) {
+        return """
+            package com.acme;
+
+            public final class Main {
+                static final class Leaf {
+                    private final int value;
+
+                    Leaf(final int value) {
+                        this.value = value;
+                    }
+
+                    @Override
+                    public boolean equals(final Object other) {
+                        return other instanceof Leaf && value == ((Leaf) other).value;
+                    }
+
+                    @Override
+                    public int hashCode() {
+                        return value;
+                    }
+                }
+
+                record Holder(Leaf value) {
+                }
+
+                public static void main(final String[] args) {
+                    %s
+                }
+            }
+            """.formatted(statement);
     }
 
     private static List<String> recordObjectMethods(final CallGraph graph, final String methodName) {

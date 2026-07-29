@@ -3023,7 +3023,6 @@ public final class StaticVerifier {
         }
         final ClassFile componentClass = classes.get(owner);
         return componentClass != null
-            && componentClass.application()
             && !componentClass.isInterface()
             && componentClass.isFinal()
             && hasSupportedRecordReferenceObjectMethod(classes, componentClass, hashCode);
@@ -3059,8 +3058,7 @@ public final class StaticVerifier {
             final ClassFile currentClass = classes.get(current);
             final Optional<MethodInfo> target = currentClass.method(methodName, descriptor);
             if (target.isPresent()) {
-                return currentClass.application()
-                    && !target.orElseThrow().isStatic()
+                return !target.orElseThrow().isStatic()
                     && target.orElseThrow().code().isPresent();
             }
             current = currentClass.superName();
@@ -3406,7 +3404,7 @@ public final class StaticVerifier {
             "unsupported record component type",
             descriptor,
             "Record equals/hashCode only admits closed reference shapes with complete native semantics.",
-            "Use String, a boxed primitive, an array, an exact List/ArrayList element shape, an enum, or a final application class with a reachable equals/hashCode implementation."
+            "Use String, a boxed primitive, an array, an exact List/ArrayList element shape, an enum, or a final closed-world class with a reachable equals/hashCode implementation."
         );
     }
 

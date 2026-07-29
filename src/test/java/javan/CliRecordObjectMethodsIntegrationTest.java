@@ -334,7 +334,7 @@ final class CliRecordObjectMethodsIntegrationTest extends CliIntegrationSupport 
     @Test
     void declaredInterfaceComponentIsRejectedBeforeCodeGeneration() throws Exception {
         assertThat(rejectedRecordBuild("unsafe-interface", "CharSequence", "\"value\""))
-            .contains("unsupported record component type", "java/lang/CharSequence");
+            .contains("unsupported record component type", "java/lang/CharSequence", "final closed-world class");
     }
 
     @Test
