@@ -9689,11 +9689,22 @@ final class BytecodeToIRInvokeSupport {
                 ? IrExpression.objectCall("javan_objects_require_non_null", List.of(argument))
                 : argument;
             arguments.add(input);
-            return IrExpression.objectCall(symbol(new EntryPoint(
+            final String target = symbol(new EntryPoint(
                 lambda.implementationOwner(),
                 lambda.implementationName(),
                 lambda.implementationDescriptor()
-            )), arguments);
+            ));
+            if (lambda.implementationReferenceKind() == 5
+                && lambda.captures().isEmpty()
+                && "()J".equals(lambda.implementationDescriptor())
+                && ("(L" + lambda.implementationOwner() + ";)Ljava/lang/Long;")
+                    .equals(lambda.instantiatedMethodDescriptor())) {
+                return IrExpression.objectCall(
+                    "javan_long_value_of",
+                    List.of(IrExpression.longCall(target, arguments))
+                );
+            }
+            return IrExpression.objectCall(target, arguments);
         }
         if (lambda.implementationReferenceKind() == 9
             && "java/util/Map".equals(lambda.implementationOwner())

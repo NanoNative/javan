@@ -301,9 +301,12 @@ public record LambdaMetafactoryCall(
     }
 
     private boolean isUnboundInstanceFunctionReference() {
+        final boolean supportedReturn = objectReturn(implementation.descriptor())
+            || ("()J".equals(implementation.descriptor())
+                && ("(L" + implementation.owner() + ";)Ljava/lang/Long;").equals(instantiatedMethodDescriptor));
         if (!isFunction()
             || implementationReferenceKind != 5
-            || !objectReturn(implementation.descriptor())
+            || !supportedReturn
             || !capturedParameterDescriptors.isEmpty()) {
             return false;
         }
