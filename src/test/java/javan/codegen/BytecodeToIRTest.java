@@ -5172,6 +5172,27 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersIntNegationToWrappingRuntimeCall() {
+        final IrFunction function = lowerMain(method(
+            0x0008,
+            "main",
+            "(I)I",
+            1,
+            1,
+            plain(0, 26, "iload_0"),
+            plain(1, 116, "ineg"),
+            plain(2, 172, "ireturn")
+        ));
+
+        assertThat(function.instructions()).containsExactly(
+            IrInstruction.returnInt(IrExpression.intCall(
+                "javan_int_neg",
+                List.of(IrExpression.intLocal("arg0"))
+            ))
+        );
+    }
+
+    @Test
     void lowersIntDivisionToIrExpression() {
         final IrFunction function = lowerMain(method(
             0x0008,

@@ -792,6 +792,9 @@ public final class BytecodeToIR {
             case 113:
                 binaryLong(classFile, method, stack, "%");
                 break;
+            case 116:
+                unaryIntNeg(classFile, method, stack);
+                break;
             case 120:
                 shiftInt(classFile, method, stack, "javan_int_shl");
                 break;
@@ -1178,6 +1181,13 @@ public final class BytecodeToIR {
         final IrExpression right = popDouble(classFile, method, stack);
         final IrExpression left = popDouble(classFile, method, stack);
         stack.add(StackValue.doubleExpression(IrExpression.doubleBinary(operator, left, right)));
+    }
+
+    static void unaryIntNeg(final ClassFile classFile, final MethodInfo method, final List<StackValue> stack) {
+        stack.add(StackValue.intExpression(IrExpression.intCall(
+            "javan_int_neg",
+            List.of(popInt(classFile, method, stack))
+        )));
     }
 
     static void unaryFloatNeg(final ClassFile classFile, final MethodInfo method, final List<StackValue> stack) {
