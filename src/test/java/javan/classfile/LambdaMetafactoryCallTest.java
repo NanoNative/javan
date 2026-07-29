@@ -317,6 +317,62 @@ final class LambdaMetafactoryCallTest {
     }
 
     @Test
+    void zeroCaptureStaticCustomLongLambdaAcceptsApplicationOwner() {
+        final LambdaMetafactoryCall resolved = staticCustomLongLambda(
+            "()Lcom/acme/KeySource;",
+            "(J)Ljava/lang/String;",
+            "(J)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isZeroCaptureMaterializedLongObjectLambda(applicationStaticLongSamClasses())).isTrue();
+    }
+
+    @Test
+    void zeroCaptureStaticCustomLongLambdaRejectsCapturedReference() {
+        final LambdaMetafactoryCall resolved = staticCustomLongLambda(
+            "(Ljava/lang/String;)Lcom/acme/KeySource;",
+            "(J)Ljava/lang/String;",
+            "(Ljava/lang/String;J)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isZeroCaptureMaterializedLongObjectLambda(applicationStaticLongSamClasses())).isFalse();
+    }
+
+    @Test
+    void zeroCaptureStaticCustomLongLambdaRejectsDoubleInput() {
+        final LambdaMetafactoryCall resolved = staticCustomLongLambda(
+            "()Lcom/acme/KeySource;",
+            "(D)Ljava/lang/String;",
+            "(D)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isZeroCaptureMaterializedLongObjectLambda(applicationStaticLongSamClasses())).isFalse();
+    }
+
+    @Test
+    void zeroCaptureStaticCustomLongLambdaRejectsDependencyOwner() {
+        final LambdaMetafactoryCall resolved = staticCustomLongLambda(
+            "()Lcom/acme/KeySource;",
+            "(J)Ljava/lang/String;",
+            "(J)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isZeroCaptureMaterializedLongObjectLambda(dependencyMainClass())).isFalse();
+    }
+
+    @Test
+    void zeroCaptureStaticCustomLongLambdaRejectsDependencyInterface() {
+        final LambdaMetafactoryCall resolved = staticCustomLongLambda(
+            "()Ldep/KeySource;",
+            "(J)Ljava/lang/String;",
+            "(J)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isZeroCaptureMaterializedLongObjectLambda(dependencyStaticLongSamInterfaceClasses()))
+            .isFalse();
+    }
+
+    @Test
     void materializedBoundCustomDoubleLambdaRemainsUnsupported() {
         final LambdaMetafactoryCall resolved = LambdaMetafactoryCall.resolve(dynamicRef(
             "key",
@@ -884,6 +940,15 @@ final class LambdaMetafactoryCallTest {
         return mainClass(0x0010);
     }
 
+    private static Map<String, ClassFile> applicationStaticLongSamClasses() {
+        return Map.of(
+            "com/acme/Main",
+            classFile("com/acme/Main", true),
+            "com/acme/KeySource",
+            classFile("com/acme/KeySource", true)
+        );
+    }
+
     private static LambdaMetafactoryCall boundInstancePredicate(final String callSiteDescriptor) {
         return LambdaMetafactoryCall.resolve(dynamicRef(
             "test",
@@ -941,6 +1006,27 @@ final class LambdaMetafactoryCallTest {
         )).orElseThrow();
     }
 
+    private static LambdaMetafactoryCall staticCustomLongLambda(
+        final String callSiteDescriptor,
+        final String samDescriptor,
+        final String implementationDescriptor
+    ) {
+        return LambdaMetafactoryCall.resolve(dynamicRef(
+            "key",
+            callSiteDescriptor,
+            "java/lang/invoke/LambdaMetafactory",
+            "metafactory",
+            List.of(
+                BootstrapArgument.methodType(samDescriptor),
+                BootstrapArgument.methodHandle(
+                    6,
+                    new MethodRef("com/acme/Main", "lambda$key$0", implementationDescriptor)
+                ),
+                BootstrapArgument.methodType(samDescriptor)
+            )
+        )).orElseThrow();
+    }
+
     private static Map<String, ClassFile> mainClass(final int accessFlags) {
         return Map.of(
             "com/acme/Main",
@@ -961,17 +1047,30 @@ final class LambdaMetafactoryCallTest {
     private static Map<String, ClassFile> dependencyMainClass() {
         return Map.of(
             "com/acme/Main",
-            new ClassFile(
-                69,
-                "com/acme/Main",
-                "java/lang/Object",
-                0x0010,
-                List.of(),
-                List.of(),
-                List.of(),
-                Path.of("Main.class"),
-                false
-            )
+            classFile("com/acme/Main", false)
+        );
+    }
+
+    private static Map<String, ClassFile> dependencyStaticLongSamInterfaceClasses() {
+        return Map.of(
+            "com/acme/Main",
+            classFile("com/acme/Main", true),
+            "dep/KeySource",
+            classFile("dep/KeySource", false)
+        );
+    }
+
+    private static ClassFile classFile(final String name, final boolean application) {
+        return new ClassFile(
+            69,
+            name,
+            "java/lang/Object",
+            0x0010,
+            List.of(),
+            List.of(),
+            List.of(),
+            Path.of(name.substring(name.lastIndexOf('/') + 1) + ".class"),
+            application
         );
     }
 }

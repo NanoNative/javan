@@ -4643,6 +4643,52 @@ final class CliRuntimeTranslationIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void staticCustomLongSamPassedThroughFactoryAndStoredInFieldBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("static-custom-long-sam");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            public final class Main {
+                private final KeySource keySource;
+
+                private Main(final KeySource keySource) {
+                    this.keySource = keySource;
+                }
+
+                public static void main(final String[] args) {
+                    final Main application = create(index -> "row-" + index);
+                    System.out.println(application.keyLater(7L));
+                }
+
+                private static Main create(final KeySource keySource) {
+                    return new Main(keySource);
+                }
+
+                private String keyLater(final long value) {
+                    return keySource.key(value);
+                }
+            }
+            """);
+        writeJava(project, "com.acme.KeySource", """
+            package com.acme;
+
+            @FunctionalInterface
+            public interface KeySource {
+                String key(long value);
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/static-custom-long-sam").toString())).stdout()
+            : "";
+
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput)
+            .isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
     void boundCustomLongSamWithConcreteAndMaterializedReceiversBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("bound-custom-long-sam-mixed-receivers");
         writeJava(project, "com.acme.Main", """

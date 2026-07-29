@@ -521,6 +521,44 @@ public record LambdaMetafactoryCall(
     }
 
     /**
+     * Returns whether this is a zero-capture static custom SAM with one long input and an object return.
+     *
+     * @return true when the typed long-to-object materialized-lambda runtime can represent the call
+     */
+    public boolean isZeroCaptureMaterializedLongObjectLambda() {
+        if (isDirectlyLowerable()
+            || interfaceOwner.startsWith("java/")
+            || implementationReferenceKind != 6
+            || !capturedParameterDescriptors.isEmpty()) {
+            return false;
+        }
+        return singleLongInput(samMethodDescriptor)
+            && objectReturn(samMethodDescriptor)
+            && singleLongInput(instantiatedMethodDescriptor)
+            && objectReturn(instantiatedMethodDescriptor)
+            && singleLongInput(implementation.descriptor())
+            && objectReturn(implementation.descriptor());
+    }
+
+    /**
+     * Returns whether the static long-to-object custom SAM interface and implementation are owned by application code.
+     *
+     * @param classes parsed closed-world classes
+     * @return true when both owners are application classes
+     */
+    public boolean isZeroCaptureMaterializedLongObjectLambda(final Map<String, ClassFile> classes) {
+        if (!isZeroCaptureMaterializedLongObjectLambda()) {
+            return false;
+        }
+        final ClassFile interfaceClass = classes.get(interfaceOwner);
+        final ClassFile implementationClass = classes.get(implementation.owner());
+        return interfaceClass != null
+            && interfaceClass.application()
+            && implementationClass != null
+            && implementationClass.application();
+    }
+
+    /**
      * Returns whether this is a zero-capture custom SAM boolean-return materialization.
      *
      * @return true when the current native profile can materialize the lambda as an object
@@ -549,6 +587,11 @@ public record LambdaMetafactoryCall(
             .inputDescriptor();
         return input.isPresent()
             && (input.orElseThrow().startsWith("L") || input.orElseThrow().startsWith("[") || "J".equals(input.orElseThrow()));
+    }
+
+    private static boolean singleLongInput(final String descriptor) {
+        final List<String> parameters = parameterDescriptors(descriptor);
+        return parameters.size() == 1 && "J".equals(parameters.getFirst());
     }
 
     private static boolean noInputs(final String descriptor) {
