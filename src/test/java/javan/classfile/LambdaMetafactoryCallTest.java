@@ -516,6 +516,75 @@ final class LambdaMetafactoryCallTest {
     }
 
     @Test
+    void directlyLowerableAcceptsBoundInstanceFunctionOnFinalClass() {
+        final LambdaMetafactoryCall resolved = boundInstanceFunction();
+
+        assertThat(resolved.isDirectlyLowerable(finalMainClass())).isTrue();
+    }
+
+    @Test
+    void directlyLowerableRejectsBoundInstanceFunctionOnNonFinalClass() {
+        final LambdaMetafactoryCall resolved = boundInstanceFunction();
+
+        assertThat(resolved.isDirectlyLowerable(mainClass(0))).isFalse();
+    }
+
+    @Test
+    void directlyLowerableRejectsBoundInstanceFunctionWithMismatchedReceiverCapture() {
+        final LambdaMetafactoryCall resolved = boundInstanceFunction(
+            "(Lcom/acme/Other;Ljava/lang/String;)Ljava/util/function/Function;",
+            "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;",
+            "(Ljava/lang/String;)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isDirectlyLowerable(finalMainClass())).isFalse();
+    }
+
+    @Test
+    void directlyLowerableRejectsBoundInstanceFunctionWithPrimitiveCapture() {
+        final LambdaMetafactoryCall resolved = boundInstanceFunction(
+            "(Lcom/acme/Main;I)Ljava/util/function/Function;",
+            "(ILjava/lang/String;)Ljava/lang/String;",
+            "(Ljava/lang/String;)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isDirectlyLowerable(finalMainClass())).isFalse();
+    }
+
+    @Test
+    void directlyLowerableRejectsBoundInstanceFunctionWithPrimitiveReturn() {
+        final LambdaMetafactoryCall resolved = boundInstanceFunction(
+            "(Lcom/acme/Main;Ljava/lang/String;)Ljava/util/function/Function;",
+            "(Ljava/lang/String;Ljava/lang/String;)I",
+            "(Ljava/lang/String;)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isDirectlyLowerable(finalMainClass())).isFalse();
+    }
+
+    @Test
+    void directlyLowerableRejectsBoundInstanceFunctionWithVoidReturn() {
+        final LambdaMetafactoryCall resolved = boundInstanceFunction(
+            "(Lcom/acme/Main;Ljava/lang/String;)Ljava/util/function/Function;",
+            "(Ljava/lang/String;Ljava/lang/String;)V",
+            "(Ljava/lang/String;)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isDirectlyLowerable(finalMainClass())).isFalse();
+    }
+
+    @Test
+    void directlyLowerableRejectsBoundInstanceFunctionWithIncompatibleInput() {
+        final LambdaMetafactoryCall resolved = boundInstanceFunction(
+            "(Lcom/acme/Main;Ljava/lang/String;)Ljava/util/function/Function;",
+            "(Ljava/lang/String;Ljava/lang/Integer;)Ljava/lang/String;",
+            "(Ljava/lang/String;)Ljava/lang/String;"
+        );
+
+        assertThat(resolved.isDirectlyLowerable(finalMainClass())).isFalse();
+    }
+
+    @Test
     void directlyLowerableAcceptsBoundInstanceSupplierLambdaReferenceKindFive() {
         final LambdaMetafactoryCall resolved = LambdaMetafactoryCall.resolve(dynamicRef(
             "get",
@@ -962,6 +1031,39 @@ final class LambdaMetafactoryCallTest {
                     new MethodRef("com/acme/Main", "matches", "(Ljava/lang/Object;)Z")
                 ),
                 BootstrapArgument.methodType("(Ljava/lang/String;)Z")
+            )
+        )).orElseThrow();
+    }
+
+    private static LambdaMetafactoryCall boundInstanceFunction() {
+        return boundInstanceFunction(
+            "(Lcom/acme/Main;Ljava/lang/String;)Ljava/util/function/Function;",
+            "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;",
+            "(Ljava/lang/String;)Ljava/lang/String;"
+        );
+    }
+
+    private static LambdaMetafactoryCall boundInstanceFunction(
+        final String callSiteDescriptor,
+        final String implementationDescriptor,
+        final String instantiatedDescriptor
+    ) {
+        return LambdaMetafactoryCall.resolve(dynamicRef(
+            "apply",
+            callSiteDescriptor,
+            "java/lang/invoke/LambdaMetafactory",
+            "metafactory",
+            List.of(
+                BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;"),
+                BootstrapArgument.methodHandle(
+                    5,
+                    new MethodRef(
+                        "com/acme/Main",
+                        "lambda$map$0",
+                        implementationDescriptor
+                    )
+                ),
+                BootstrapArgument.methodType(instantiatedDescriptor)
             )
         )).orElseThrow();
     }

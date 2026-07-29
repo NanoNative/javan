@@ -1461,6 +1461,47 @@ final class BytecodeToIRTest {
     }
 
     @Test
+    void lowersBoundInstanceOptionalMapFunctionArgumentsInReceiverCaptureInputOrder() {
+        final EntryPoint entryPoint = new EntryPoint(
+            "com/acme/Main",
+            "mapBoundValue",
+            "(Lcom/acme/Main;Ljava/lang/Object;Ljava/util/Optional;)Ljava/util/Optional;"
+        );
+        final IrProgram program = new BytecodeToIR().lower(
+            Map.of(
+                "com/acme/Main",
+                classFile("com/acme/Main", "java/lang/Object", 0x0010, List.of(), List.of(), List.of(
+                    optionalBoundInstanceMapLambdaMethod(),
+                    optionalBoundInstanceMapLambdaImplementationMethod()
+                ))
+            ),
+            new CallGraph(entryPoint, List.of(entryPoint), List.of()),
+            SourceLineIndex.empty()
+        );
+        final String implementation = symbol(
+            "com/acme/Main",
+            "lambda$map$0",
+            "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"
+        );
+        final IrExpression invocation = program.functions().stream()
+            .filter(function -> function.name().equals("mapBoundValue"))
+            .flatMap(function -> function.instructions().stream())
+            .flatMap(instruction -> instruction.expression().stream())
+            .filter(expression -> implementation.equals(expression.value()))
+            .findFirst()
+            .orElseThrow();
+
+        assertThat(invocation).isEqualTo(IrExpression.objectCall(
+            implementation,
+            List.of(
+                IrExpression.objectLocal("arg0"),
+                IrExpression.objectLocal("arg1"),
+                IrExpression.objectLocal("object0")
+            )
+        ));
+    }
+
+    @Test
     void lowersOptionalMapStringInputLambdaToObjectCompatibleImplementation() {
         final EntryPoint entryPoint = new EntryPoint("com/acme/Main", "mapStringValue", "(Ljava/util/Optional;)Ljava/util/Optional;");
         final IrProgram program = new BytecodeToIR().lower(
@@ -27562,6 +27603,63 @@ final class BytecodeToIRTest {
             )),
             invokeVirtual(3, new MethodRef("java/util/Optional", "map", "(Ljava/util/function/Function;)Ljava/util/Optional;")),
             plain(4, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo optionalBoundInstanceMapLambdaMethod() {
+        return method(
+            0x0008,
+            "mapBoundValue",
+            "(Lcom/acme/Main;Ljava/lang/Object;Ljava/util/Optional;)Ljava/util/Optional;",
+            3,
+            3,
+            plain(0, 44, "aload_2"),
+            plain(1, 42, "aload_0"),
+            plain(2, 43, "aload_1"),
+            invokeDynamic(3, new DynamicRef(
+                "apply",
+                "(Lcom/acme/Main;Ljava/lang/Object;)Ljava/util/function/Function;",
+                "java/lang/invoke/LambdaMetafactory",
+                "metafactory",
+                "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;"
+                    + "Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)"
+                    + "Ljava/lang/invoke/CallSite;",
+                List.of(
+                    "(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "invokevirtual com/acme/Main.lambda$map$0:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+                    "(Ljava/lang/Object;)Ljava/lang/Object;"
+                ),
+                List.of(
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;"),
+                    BootstrapArgument.methodHandle(
+                        5,
+                        new MethodRef(
+                            "com/acme/Main",
+                            "lambda$map$0",
+                            "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"
+                        )
+                    ),
+                    BootstrapArgument.methodType("(Ljava/lang/Object;)Ljava/lang/Object;")
+                )
+            )),
+            invokeVirtual(4, new MethodRef(
+                "java/util/Optional",
+                "map",
+                "(Ljava/util/function/Function;)Ljava/util/Optional;"
+            )),
+            plain(7, 176, "areturn")
+        );
+    }
+
+    private static MethodInfo optionalBoundInstanceMapLambdaImplementationMethod() {
+        return method(
+            0,
+            "lambda$map$0",
+            "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+            1,
+            3,
+            plain(0, 44, "aload_2"),
+            plain(1, 176, "areturn")
         );
     }
 

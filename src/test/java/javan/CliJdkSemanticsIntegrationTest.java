@@ -8701,6 +8701,45 @@ final class CliJdkSemanticsIntegrationTest extends CliIntegrationSupport {
     }
 
     @Test
+    void optionalMapWithBoundInstanceFunctionBuildsAndMatchesJvmOutput() throws Exception {
+        final Path project = project("optional-map-bound-instance-function");
+        writeJava(project, "com.acme.Main", """
+            package com.acme;
+
+            import java.util.Optional;
+
+            public final class Main {
+                private final String prefix;
+
+                private Main(final String prefix) {
+                    this.prefix = prefix;
+                }
+
+                public static void main(final String[] args) {
+                    System.out.println(new Main("[").render(Optional.of("value"), "]"));
+                }
+
+                private String render(final Optional<String> value, final String suffix) {
+                    return value.map(item -> decorate(suffix, item)).orElse("missing");
+                }
+
+                private String decorate(final String suffix, final String item) {
+                    return prefix + item + suffix;
+                }
+            }
+            """);
+
+        final String jvmOutput = runJvm(project, "com.acme.Main");
+        final CliRun run = run(tempDir, "build", project.toString());
+        final String nativeOutput = run.exitCode() == 0
+            ? process(project, List.of(project.resolve(".javan/bin/optional-map-bound-instance-function").toString())).stdout()
+            : "";
+
+        assertThat(run.exitCode() + "\n" + run.stderr() + nativeOutput)
+            .isEqualTo("0\n" + jvmOutput);
+    }
+
+    @Test
     void optionalFlatMapWithStaticFunctionBuildsAndMatchesJvmOutput() throws Exception {
         final Path project = project("optional-flat-map-static-function");
         writeJava(project, "com.acme.Main", """

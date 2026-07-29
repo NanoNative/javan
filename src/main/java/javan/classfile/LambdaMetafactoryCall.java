@@ -228,7 +228,9 @@ public record LambdaMetafactoryCall(
         final ClassFile implementationClass = classes.get(implementation.owner());
         return implementationClass != null
             && implementationClass.isFinal()
-            && (isBoundInstanceSupplierLambda() || isBoundInstancePredicateLambda());
+            && (isBoundInstanceSupplierLambda()
+                || isBoundInstancePredicateLambda()
+                || isBoundInstanceFunctionLambda());
     }
 
     private boolean isBoundInstanceSupplierLambda() {
@@ -272,6 +274,29 @@ public record LambdaMetafactoryCall(
         }
         final Optional<String> input = inputDescriptor();
         return input.isPresent() && sameOrBoundPredicateCompatible(input.orElseThrow(), parameters.getLast());
+    }
+
+    private boolean isBoundInstanceFunctionLambda() {
+        if (!isFunction()
+            || implementationReferenceKind != 5
+            || !objectReturn(implementation.descriptor())
+            || !hasObjectCaptures()
+            || capturedParameterDescriptors.isEmpty()
+            || !("L" + implementation.owner() + ";").equals(capturedParameterDescriptors.getFirst())) {
+            return false;
+        }
+        final List<String> parameters = parameterDescriptors(implementation.descriptor());
+        if (!parametersMatchDescriptor(implementation.descriptor(), parameters)
+            || parameters.size() != capturedParameterDescriptors.size()) {
+            return false;
+        }
+        for (int index = 1; index < capturedParameterDescriptors.size(); index++) {
+            if (!sameOrObjectCompatible(capturedParameterDescriptors.get(index), parameters.get(index - 1))) {
+                return false;
+            }
+        }
+        final Optional<String> input = inputDescriptor();
+        return input.isPresent() && sameOrObjectCompatible(input.orElseThrow(), parameters.getLast());
     }
 
     private static boolean sameOrBoundPredicateCompatible(final String source, final String target) {
