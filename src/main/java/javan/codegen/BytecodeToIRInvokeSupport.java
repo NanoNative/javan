@@ -2503,6 +2503,13 @@ final class BytecodeToIRInvokeSupport {
             )));
             return true;
         }
+        if ("isFinite".equals(methodRef.name()) && "(F)Z".equals(methodRef.descriptor())) {
+            stack.add(StackValue.intExpression(IrExpression.intCall(
+                "javan_float_is_finite",
+                List.of(popFloat(classFile, method, stack))
+            )));
+            return true;
+        }
         if ("valueOf".equals(methodRef.name()) && "(F)Ljava/lang/Float;".equals(methodRef.descriptor())) {
             stack.add(StackValue.objectExpression(IrExpression.objectCall("javan_float_value_of", List.of(popFloat(classFile, method, stack)))));
             return true;

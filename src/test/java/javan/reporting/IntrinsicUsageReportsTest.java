@@ -89,6 +89,7 @@ final class IntrinsicUsageReportsTest {
             new IntrinsicCallCount("Float.toString", 0),
             new IntrinsicCallCount("Float.intBitsToFloat", 0),
             new IntrinsicCallCount("Float.floatToRawIntBits", 0),
+            new IntrinsicCallCount("Float.isFinite", 0),
             new IntrinsicCallCount("Double.toString", 0),
             new IntrinsicCallCount("Double.longBitsToDouble", 0),
             new IntrinsicCallCount("Boolean.toString", 0),
@@ -196,6 +197,23 @@ final class IntrinsicUsageReportsTest {
 
         assertThat(reports.analyze(classes, List.of(entry)).intrinsics())
             .contains(new IntrinsicCallCount("Float.floatToRawIntBits", 1));
+    }
+
+    @Test
+    void countsReachableFloatIsFiniteAsIntrinsic() {
+        final IntrinsicUsageReports reports = new IntrinsicUsageReports();
+        final EntryPoint entry = new EntryPoint("com/acme/Main", "main", "([Ljava/lang/String;)V");
+        final Map<String, ClassFile> classes = Map.of(
+            "com/acme/Main",
+            classFile("com/acme/Main", method(
+                "main",
+                "([Ljava/lang/String;)V",
+                instruction("java/lang/Float", "isFinite", "(F)Z")
+            ))
+        );
+
+        assertThat(reports.analyze(classes, List.of(entry)).intrinsics())
+            .contains(new IntrinsicCallCount("Float.isFinite", 1));
     }
 
     @Test
