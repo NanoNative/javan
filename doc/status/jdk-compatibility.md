@@ -15,19 +15,21 @@ bytecode pattern or rejects it before native code generation.
 ## Active Scan
 
 - scanned java: `25.0.1`
+- scanned vendor: `Eclipse Adoptium`
+- scanned platform: `Linux/amd64`
 - scanned JDK: `JDK25`
 - project classfile majors: `[69]`
-- JDK classfile majors: `[53, 55, 61, 65, 69]`
-- JDK modules: `84`
+- JDK classfile majors: `[52, 69]`
+- JDK modules: `69`
 
 ## Inventory Totals
 
 | item | count |
 | --- | ---: |
-| classes | 32482 |
-| fields | 118632 |
-| constructors | 35209 |
-| methods | 232677 |
+| classes | 27027 |
+| fields | 108521 |
+| constructors | 29925 |
+| methods | 204453 |
 
 ## Inventory Is Not Support
 
@@ -60,11 +62,11 @@ Current support ledger for the active JDK 25 evidence set:
 | exact supported JDK callable classes | 487 |
 | exact supported JDK constructors | 723 |
 | exact supported JDK methods | 715 |
-| exact supported JDK callables | 1438 / 267886 (0.5%) |
-| exact explicit rejected JDK callables | 174596 |
-| exact done JDK callables | 176034 / 267886 (65.7%) |
-| exact unknown JDK callables | 91852 |
-| exact supported JDK callables left | 266448 |
+| exact supported JDK callables | 1438 / 234378 (0.6%) |
+| exact explicit rejected JDK callables | 141819 |
+| exact done JDK callables | 143257 / 234378 (61.1%) |
+| exact unknown JDK callables | 91121 |
+| exact supported JDK callables left | 232940 |
 | flow-qualified reachable current-thread lifecycle rejects | 0 |
 | flow-qualified unreachable current-thread lifecycle rejects | 0 |
 | flow-qualified reachable thread-builder receiver-shape rejects | 0 |

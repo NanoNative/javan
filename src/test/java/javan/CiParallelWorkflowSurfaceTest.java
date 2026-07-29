@@ -13,6 +13,7 @@ final class CiParallelWorkflowSurfaceTest {
     @Test
     void ciWorkflowSplitsCoreVerifyCliVerifyAndNativeSmokeIntoParallelJobs() throws Exception {
         assertThat(Files.readString(CI_WORKFLOW))
+            .contains("verify-compatibility-status:")
             .contains("verify-core:")
             .contains("verify-cli-integration:")
             .contains("native-smoke:")
@@ -35,6 +36,7 @@ final class CiParallelWorkflowSurfaceTest {
     @Test
     void ciWorkflowLeavesParallelLanesIndependentUntilRelease() throws Exception {
         assertThat(Files.readString(CI_WORKFLOW))
+            .contains("verify-compatibility-status:")
             .contains("verify-core:")
             .contains("verify-cli-integration:")
             .contains("native-smoke:")
@@ -42,7 +44,15 @@ final class CiParallelWorkflowSurfaceTest {
             .contains("max-parallel: 2")
             .contains("shard: current-thread")
             .contains("shard: worker-thread")
-            .contains("needs:\n      - verify-core\n      - verify-cli-integration\n      - native-smoke\n      - windows-runtime-smoke")
+            .contains(
+                "needs:\n"
+                    + "      - verify-compatibility-status\n"
+                    + "      - verify-core\n"
+                    + "      - verify-cli-integration\n"
+                    + "      - native-smoke\n"
+                    + "      - windows-runtime-smoke"
+            )
+            .doesNotContain("verify-compatibility-status:\n    needs:")
             .doesNotContain("verify-core:\n    needs:")
             .doesNotContain("verify-cli-integration:\n    needs:")
             .doesNotContain("native-smoke:\n    needs:")
@@ -53,6 +63,7 @@ final class CiParallelWorkflowSurfaceTest {
     void releaseWaitsForNativeSmokeBeforePackaging() throws Exception {
         assertThat(Files.readString(CI_WORKFLOW))
             .contains("needs:")
+            .contains("- verify-compatibility-status")
             .contains("- verify-core")
             .contains("- verify-cli-integration")
             .contains("- native-smoke")

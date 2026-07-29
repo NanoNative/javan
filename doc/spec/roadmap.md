@@ -114,6 +114,10 @@ Implemented details:
 - fatal unknown-opcode policy
 - generated compatibility summary reports
 - generated support matrix docs
+- full Maven verification refreshes the tracked compatibility status from already compiled
+  classes through the same `javan compat` entrypoint
+- Eclipse Temurin 25.0.1 on Linux x64 is the pinned reference for the tracked JDK inventory,
+  with a dedicated strict CI lifecycle gate
 
 Current gates:
 
@@ -121,6 +125,13 @@ Current gates:
 - unknown opcodes remain fatal instead of being ignored or treated as best effort
 - support matrix records named pass/scoped/target scenarios without claiming full JDK API
   support
+- stale support-matrix Markdown or JSON is regenerated automatically on every full JDK 25
+  Maven verification and fails once with an exact rerun instruction
+- the tracked JDK page is also regenerated and gated on the pinned reference JDK; other JDK
+  25 vendors and patches generate their active report without modifying the reference page
+- CI provisions and requires the exact reference vendor, version, OS, and architecture
+  before running the same `mvn verify` lifecycle; there is no separate generation,
+  comparison, or copy command
 
 Open acceptance criteria:
 
@@ -129,6 +140,34 @@ Open acceptance criteria:
 - committed test-project baselines per JDK release
 - API inventory diffs between JDK releases
 - bootstrap-method shape policy gates beyond reporting
+
+### Fail-Fast And Compiler-Owned Repair Policy
+
+Javan should keep ordinary Java source ordinary. When the compiler can preserve Java
+semantics, the default is an automatic lowering or runtime adaptation rather than a request
+for the user to rewrite application code. Such repairs are compiler-owned, always enabled,
+and reported. They do not require another feature flag.
+
+Automatic repair is allowed only with a proof for initialization timing, evaluation order,
+identity, exceptions, threading, and GC visibility. Application initializers are never run
+at compile time. If that proof is unavailable, `check`, `compat`, or `build` must fail before
+C generation with a stable diagnostic that names the unsupported shape and the compiler
+capability still required. Users should not discover it later as a C compiler error, linker
+error, or unexplained runtime panic.
+
+For example, future support for:
+
+```java
+static final SecureRandom RANDOM = new SecureRandom();
+```
+
+must leave object construction at the JVM-equivalent active class-initialization trigger.
+Native startup may prepare an unobservable random runtime module, but it may not allocate a
+shared Java object, consume entropy, or eagerly execute `<clinit>`. The required lazy
+class-initialization state machine is planned below; the exact `SecureRandom` runtime
+substitution remains planned in the
+[optimizer roadmap](optimizer-roadmap.md). Until both exist,
+unsupported random shapes must reject clearly rather than be silently hoisted.
 
 ## 0.28 Native Library Output
 
@@ -346,6 +385,48 @@ Reports:
 
 - `.javan/reports/optimizations.json`
 - `.javan/reports/optimizations.md`
+
+### Analysis Roadmap
+
+Javan does not need Graal-scale analysis by default. Analysis must stay deterministic,
+automatic, and bounded enough to preserve fast builds. Priority below is acceptance order,
+not a requirement to implement every row before Javan is useful.
+
+The current baseline is an entry-point-rooted method worklist with class-hierarchy-style
+dispatch plus a separate CFG-aware GC-root liveness pass. Both are real analyses, but they
+do not yet provide one shared Java semantic fact model.
+
+| Priority / analysis | Status | Smallest useful Javan scope | Acceptance gate |
+| --- | --- | --- | --- |
+| P0: canonical bytecode CFG | Planned | Replace the current separate control-flow scans with one shared basic-block graph covering normal successors, branches, switches, stack merges, and supported exception edges. | Invalid targets and incompatible merges fail deterministically; existing supported programs keep native/JVM parity; a stable report lists blocks and edges. |
+| P0: class-initialization trigger graph | Planned | Extend direct `<clinit>` edges with superclass-before-subclass ordering, applicable interface rules, lazy JVM triggers, re-entry, and cycles. Keep application initialization at runtime. | Public CLI fixtures prove JVM/native ordering for `new`, `getstatic`, `putstatic`, `invokestatic`, inheritance, interfaces, re-entry, and supported cycles; unsupported cycles fail before C generation. |
+| P1: closed-world instantiated-type analysis (RTA) | Planned | Record types created by reachable bytecode, materialized lambdas, substitutions, and runtime factories, then intersect virtual/interface targets with those instantiated types. Unknown or externally supplied receivers remain conservative. | Uninstantiated subclasses disappear from dispatch reports and generated stubs, every constructible receiver remains, and native/JVM parity covers direct, inherited, lambda, runtime-created, and unknown receiver paths. |
+| P1: bounded receiver and callable provenance | Planned | Track exact allocation type, checked-cast refinement, small merged type sets, and unknown through locals plus direct arguments/returns. Use the same bounded flow for supported SAM/lambda targets; fields remain unknown initially. | Exact `new`, local, cast, stored-lambda, passed-callback, and returned-callback cases resolve without API-specific guesses; merges and unknown values fall back conservatively with stable diagnostics. |
+| P1: local CFG value facts | Planned | Per-block nullness, constants, integer ranges, exact types, and array/string lengths. Do not retain mutable-field facts across unknown calls. Start with reporting and unreachable-branch diagnostics before removing checks. | Facts and merge results are deterministic; only proven unreachable unsupported code is ignored; each removed guard has a proof record; debug behavior and native/JVM semantics remain unchanged. |
+| P1: method effect and throw summaries | Planned | Use a small explicit lattice for pure/non-throwing, pure/may-throw, allocates, reads, writes, and unknown. Begin with compiler-owned IR operations and registered intrinsics rather than inference across every JDK method. | Mutation invalidates affected facts, known-pure calls preserve them, and evaluation-order, null, bounds, division, allocation-failure, and exception probes remain JVM-equivalent. |
+| P2: intraprocedural escape classification | Planned | Report `NoEscape`, `ArgumentEscape`, and `GlobalEscape` for supported allocations. Do not change allocation strategy in the first slice. | Reports are stable first; stack or arena allocation lands only after identity, monitor, exception, GC-root, sanitizer, and allocation-count gates prove the exact transformed shapes. |
+
+Analysis rules:
+
+- prefer class-hierarchy analysis plus RTA and bounded provenance over a general points-to engine
+- centralize recursive superclass/interface assignability before narrowing dispatch
+- represent unknown facts explicitly and fall back conservatively
+- emit analysis evidence before allowing an optimization to consume it
+- measure compile time and peak memory on the showcase and self-host gates for every new
+  default analysis; simplify the pass if its build cost is not justified by current behavior
+- do not add analysis-specific user flags; supported builds choose the safe path automatically
+
+Dismissed from the current C-backend analysis scope:
+
+- full context-sensitive or object-sensitive points-to and global alias analysis
+- general symbolic execution, memory SSA, speculative optimization, and JIT-style tiering
+- profile-guided compiler specialization before a measured public workload requires it
+- arbitrary reflection, proxy, JNI, or runtime class-loader discovery
+- build-time execution of application initializers and Graal-style application image heaps
+
+These items may be reconsidered only when a named public-entrypoint program proves the
+bounded analyses insufficient. Detailed optimizer facts, safety rules, and intrinsic status
+remain canonical in [optimizer-roadmap.md](optimizer-roadmap.md).
 
 ## 0.295 CLI UX Consolidation
 
