@@ -14090,23 +14090,77 @@ final class CoreBehaviorTest {
             "javan_root_frame_push(javan_roots_pick_symbol, 2);",
             "javan_gc_safe_point();",
             "void* javan_return_value = tmp;",
-            "javan_generated_return_root = javan_return_value;",
+            "javan_runtime_lock_enter();",
+            "*result = javan_return_value;",
+            "javan_runtime_lock_leave();",
             "javan_gc_safe_point();",
             "javan_root_frame_pop(javan_roots_pick_symbol);",
-            "javan_generated_return_root = 0;",
-            "return javan_return_value;"
+            "return;"
         );
-        assertThat(generated).doesNotContain("(void**) &count", "(void**) &index");
+        assertThat(generated).doesNotContain(
+            "(void**) &count",
+            "(void**) &index",
+            "javan_generated_return_root"
+        );
         assertThat(generated.indexOf("javan_root_frame_push(javan_roots_pick_symbol, 2);"))
             .isLessThan(generated.indexOf("javan_gc_safe_point();"));
         assertThat(generated.indexOf("javan_gc_safe_point();"))
             .isLessThan(generated.indexOf("void* javan_return_value = tmp;"));
         assertThat(generated.indexOf("void* javan_return_value = tmp;"))
-            .isLessThan(generated.indexOf("javan_generated_return_root = javan_return_value;"));
-        assertThat(generated.indexOf("javan_generated_return_root = javan_return_value;"))
+            .isLessThan(generated.indexOf("*result = javan_return_value;"));
+        assertThat(generated.indexOf("*result = javan_return_value;"))
             .isLessThan(generated.indexOf("javan_root_frame_pop(javan_roots_pick_symbol);"));
-        assertThat(generated.indexOf("javan_root_frame_pop(javan_roots_pick_symbol);"))
-            .isLessThan(generated.lastIndexOf("javan_generated_return_root = 0;"));
+    }
+
+    @Test
+    void cCodegenDoesNotHoldTheRuntimeLockAcrossOpaqueBlockingObjectCalls() throws Exception {
+        final IrFunction function = new IrFunction(
+            "com/acme/Main",
+            "main",
+            "()V",
+            "main_symbol",
+            IrType.VOID,
+            List.of(),
+            List.of(
+                new IrLocal(IrType.OBJECT, "server"),
+                new IrLocal(IrType.OBJECT, "accepted"),
+                new IrLocal(IrType.OBJECT, "reference"),
+                new IrLocal(IrType.OBJECT, "current")
+            ),
+            List.of(
+                IrInstruction.assignObject(
+                    "accepted",
+                    IrExpression.objectCall(
+                        "javan_server_socket_accept",
+                        List.of(IrExpression.objectLocal("server"))
+                    )
+                ),
+                IrInstruction.assignObject(
+                    "current",
+                    IrExpression.objectCall(
+                        "javan_atomic_reference_get",
+                        List.of(IrExpression.objectLocal("reference"))
+                    )
+                ),
+                IrInstruction.returnVoid()
+            )
+        );
+        final IrProgram program = new IrProgram(List.of(), List.of(function), "main_symbol");
+
+        final String generated = Files.readString(new CCodegen().generate(program, tempDir));
+
+        assertThat(generated).contains(
+            "javan_root_frame_push(javan_expr_roots, 1);\n"
+                + "        javan_expr_tmp_0 = javan_server_socket_accept(server);\n"
+                + "        javan_runtime_lock_enter();\n"
+                + "        accepted = javan_expr_tmp_0;",
+            "javan_root_frame_push(javan_expr_roots, 1);\n"
+                + "        javan_runtime_lock_enter();\n"
+                + "        javan_expr_tmp_0 = javan_atomic_reference_get(reference);\n"
+                + "        javan_runtime_lock_leave();\n"
+                + "        javan_runtime_lock_enter();\n"
+                + "        current = javan_expr_tmp_0;"
+        );
     }
 
     @Test
@@ -14140,28 +14194,22 @@ final class CoreBehaviorTest {
 
         assertThat(generated).contains(
             "void* arg0_array = 0;",
+            "void* javan_export_object_result = 0;",
             "void** javan_export_roots[] = {",
-            "(void**) &arg0_array",
-            "javan_root_frame_push(javan_export_roots, 1);",
-            "arg0_array = javan_byte_array_from(arg0.data, arg0.length);",
-            "void* javan_export_object_result = javan_com_acme_Bytes_echo___B__B(arg0_array);",
-            "void** javan_export_result_roots[] = {",
+            "(void**) &arg0_array,",
             "(void**) &javan_export_object_result",
-            "javan_root_frame_push(javan_export_result_roots, 1);",
+            "javan_root_frame_push(javan_export_roots, 2);",
+            "arg0_array = javan_byte_array_from(arg0.data, arg0.length);",
+            "javan_com_acme_Bytes_echo___B__B((void**) &javan_export_object_result, arg0_array);",
             "JavanByteArray javan_export_result = javan_byte_array_export(javan_export_object_result);",
-            "javan_root_frame_pop(javan_export_result_roots);",
             "javan_root_frame_pop(javan_export_roots);",
             "return javan_export_result;"
         );
-        assertThat(generated.indexOf("javan_root_frame_push(javan_export_roots, 1);"))
+        assertThat(generated.indexOf("javan_root_frame_push(javan_export_roots, 2);"))
             .isLessThan(generated.indexOf("arg0_array = javan_byte_array_from(arg0.data, arg0.length);"));
-        assertThat(generated.indexOf("void* javan_export_object_result = javan_com_acme_Bytes_echo___B__B(arg0_array);"))
-            .isLessThan(generated.indexOf("javan_root_frame_push(javan_export_result_roots, 1);"));
-        assertThat(generated.indexOf("javan_root_frame_push(javan_export_result_roots, 1);"))
+        assertThat(generated.indexOf("javan_com_acme_Bytes_echo___B__B((void**) &javan_export_object_result, arg0_array);"))
             .isLessThan(generated.indexOf("javan_byte_array_export"));
         assertThat(generated.indexOf("javan_byte_array_export"))
-            .isLessThan(generated.indexOf("javan_root_frame_pop(javan_export_result_roots);"));
-        assertThat(generated.indexOf("javan_root_frame_pop(javan_export_result_roots);"))
             .isLessThan(generated.indexOf("javan_root_frame_pop(javan_export_roots);"));
         assertThat(generated).doesNotContain("javan_free(arg0_array);");
     }
@@ -14200,30 +14248,24 @@ final class CoreBehaviorTest {
 
         assertThat(generated).contains(
             "void* arg0_string = 0;",
+            "void* javan_export_object_result = 0;",
             "void** javan_export_roots[] = {",
-            "(void**) &arg0_string",
-            "javan_root_frame_push(javan_export_roots, 1);",
-            "arg0_string = javan_string_from(arg0);",
-            "void* javan_export_object_result = javan_com_acme_Text_greet__Ljava_lang_String__Ljava_lang_String_(arg0_string);",
-            "void** javan_export_result_roots[] = {",
+            "(void**) &arg0_string,",
             "(void**) &javan_export_object_result",
-            "javan_root_frame_push(javan_export_result_roots, 1);",
+            "javan_root_frame_push(javan_export_roots, 2);",
+            "arg0_string = javan_string_from(arg0);",
+            "javan_com_acme_Text_greet__Ljava_lang_String__Ljava_lang_String_((void**) &javan_export_object_result, arg0_string);",
             "char* javan_export_result = javan_string_export((const char*) javan_export_object_result);",
-            "javan_root_frame_pop(javan_export_result_roots);",
             "javan_root_frame_pop(javan_export_roots);",
             "return javan_export_result;"
         );
-        assertThat(generated.indexOf("javan_root_frame_push(javan_export_roots, 1);"))
+        assertThat(generated.indexOf("javan_root_frame_push(javan_export_roots, 2);"))
             .isLessThan(generated.indexOf("arg0_string = javan_string_from(arg0);"));
         assertThat(generated.indexOf("arg0_string = javan_string_from(arg0);"))
-            .isLessThan(generated.indexOf("void* javan_export_object_result = javan_com_acme_Text_greet__Ljava_lang_String__Ljava_lang_String_(arg0_string);"));
-        assertThat(generated.indexOf("void* javan_export_object_result = javan_com_acme_Text_greet__Ljava_lang_String__Ljava_lang_String_(arg0_string);"))
-            .isLessThan(generated.indexOf("javan_root_frame_push(javan_export_result_roots, 1);"));
-        assertThat(generated.indexOf("javan_root_frame_push(javan_export_result_roots, 1);"))
+            .isLessThan(generated.indexOf("javan_com_acme_Text_greet__Ljava_lang_String__Ljava_lang_String_((void**) &javan_export_object_result, arg0_string);"));
+        assertThat(generated.indexOf("javan_com_acme_Text_greet__Ljava_lang_String__Ljava_lang_String_((void**) &javan_export_object_result, arg0_string);"))
             .isLessThan(generated.indexOf("javan_string_export"));
         assertThat(generated.indexOf("javan_string_export"))
-            .isLessThan(generated.indexOf("javan_root_frame_pop(javan_export_result_roots);"));
-        assertThat(generated.indexOf("javan_root_frame_pop(javan_export_result_roots);"))
             .isLessThan(generated.indexOf("javan_root_frame_pop(javan_export_roots);"));
     }
 
@@ -14347,16 +14389,17 @@ final class CoreBehaviorTest {
             "struct javan_class_com_acme_Empty",
             "int _javan_type_id;",
             "char _javan_empty;",
-            "void* message_text(void)",
+            "void message_text(void** result)",
             "javan_expr_tmp_0 = javan_new_com_acme_Message();",
             "message = javan_expr_tmp_0;",
             "((struct javan_class_com_acme_Message*) message)->field_text = (void*) \"hello\";",
             "javan_expr_tmp_0 = ((struct javan_class_com_acme_Message*) message)->field_text;",
             "javan_println_object_value(javan_expr_tmp_0);",
             "void* javan_return_value = (void*) \"returned\";",
-            "javan_generated_return_root = javan_return_value;",
-            "return javan_return_value;"
+            "*result = javan_return_value;",
+            "return;"
         );
+        assertThat(generated).doesNotContain("javan_generated_return_root");
     }
 
     @Test
@@ -14411,21 +14454,21 @@ final class CoreBehaviorTest {
             "static long long dispatch_long(void* self)",
             "static float dispatch_float(void* self)",
             "static double dispatch_double(void* self)",
-            "static void* dispatch_object(void* self)",
+            "static void dispatch_object(void** result, void* self)",
             "switch (((struct javan_object_header*) self)->_javan_type_id)",
             "a_void(self); return;",
             "return a_int(self);",
             "return a_long(self);",
             "return a_float(self);",
             "return a_double(self);",
-            "return a_object(self);",
+            "a_object(result, self); return;",
             "return;",
             "return 0;",
             "return 0LL;",
             "return 0.0f;",
-            "return 0.0;",
-            "return (void*) 0;"
+            "return 0.0;"
         );
+        assertThat(generated).doesNotContain("*result = (void*) 0;");
     }
 
     @Test
@@ -14771,7 +14814,6 @@ final class CoreBehaviorTest {
             "static void javan_clone_com_acme_Box(void** result, void* value) {",
             "\tif (result == 0) {",
             "\t\tjavan_panic(\"invalid object clone result\");",
-            "\t*result = (void*) 0;",
             "\tstruct javan_class_com_acme_Box* source = (struct javan_class_com_acme_Box*) value;",
             "\tstruct javan_class_com_acme_Box* copy = (struct javan_class_com_acme_Box*) 0;",
             "\tvoid** javan_clone_roots[] = {",
@@ -14796,6 +14838,7 @@ final class CoreBehaviorTest {
             "\t\tdefault:",
             "\t\t\tjavan_panic(\"CloneNotSupportedException\");"
         );
+        assertThat(cloneGenerated).doesNotContain("\t*result = (void*) 0;");
         assertThat(cloneGenerated.indexOf("\tjavan_root_frame_push(javan_clone_roots, 2);"))
             .isLessThan(cloneGenerated.indexOf("\tjavan_runtime_lock_enter();"));
         assertThat(cloneGenerated.indexOf("\tjavan_runtime_lock_enter();"))

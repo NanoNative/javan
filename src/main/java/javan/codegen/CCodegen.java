@@ -58,6 +58,7 @@ public final class CCodegen {
      */
     public Path generate(final IrProgram program, final Path generatedDirectory) throws IOException {
         final CodegenFeatures features = codegenFeatures(program);
+        final List<String> objectResultSymbols = objectResultSymbols(program);
         final StringBuilder c = new StringBuilder();
         c.append("#include \"javan_runtime.h\"").append(System.lineSeparator());
         c.append("#include <stddef.h>").append(System.lineSeparator());
@@ -73,10 +74,6 @@ public final class CCodegen {
         c.append(System.lineSeparator());
         final boolean emittedStaticFields = emitStaticFields(program, c);
         if (emittedStaticFields) {
-            c.append(System.lineSeparator());
-        }
-        final boolean emittedReturnRoot = emitReturnRootSlot(program, c);
-        if (emittedReturnRoot) {
             c.append(System.lineSeparator());
         }
         emitStaticRootInventory(program, c);
@@ -99,10 +96,10 @@ public final class CCodegen {
         }
         emitRuntimeHelperPrototypes(features, c);
         if (!program.materializedLambdaTargets().isEmpty()) {
-            c.append("static void* ").append(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
-            c.append("static void* ").append(MATERIALIZED_LAMBDA_LONG_OBJECT_APPLY_SYMBOL).append("(void* self, int64_t arg);").append(System.lineSeparator());
-            c.append("static void* ").append(MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL).append("(void* self, void* first_arg, void* second_arg);").append(System.lineSeparator());
-            c.append("static void* ").append(MATERIALIZED_LAMBDA_SUPPLIER_APPLY_SYMBOL).append("(void* self);").append(System.lineSeparator());
+            c.append("static void ").append(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL).append("(void** result, void* self, void* arg);").append(System.lineSeparator());
+            c.append("static void ").append(MATERIALIZED_LAMBDA_LONG_OBJECT_APPLY_SYMBOL).append("(void** result, void* self, int64_t arg);").append(System.lineSeparator());
+            c.append("static void ").append(MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL).append("(void** result, void* self, void* first_arg, void* second_arg);").append(System.lineSeparator());
+            c.append("static void ").append(MATERIALIZED_LAMBDA_SUPPLIER_APPLY_SYMBOL).append("(void** result, void* self);").append(System.lineSeparator());
             c.append("static int ").append(MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
             c.append("static void ").append(MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
             c.append("static void ").append(MATERIALIZED_LAMBDA_VOID2_APPLY_SYMBOL).append("(void* self, void* first_arg, void* second_arg);").append(System.lineSeparator());
@@ -121,7 +118,7 @@ public final class CCodegen {
             emitDispatch(program, dispatch, c);
         }
         for (final IrFunction function : program.functions()) {
-            emitFunction(program, function, c, true);
+            emitFunction(program, function, objectResultSymbols, c, true);
         }
         return Files2.writeString(generatedDirectory.resolve("main.c"), c.toString());
     }
@@ -141,6 +138,7 @@ public final class CCodegen {
         final List<ExportedMethod> exports
     ) throws IOException {
         final CodegenFeatures features = codegenFeatures(program);
+        final List<String> objectResultSymbols = objectResultSymbols(program);
         final StringBuilder c = new StringBuilder();
         c.append("#include \"javan_runtime.h\"").append(System.lineSeparator());
         c.append("#include <stddef.h>").append(System.lineSeparator());
@@ -156,10 +154,6 @@ public final class CCodegen {
         c.append(System.lineSeparator());
         final boolean emittedStaticFields = emitStaticFields(program, c);
         if (emittedStaticFields) {
-            c.append(System.lineSeparator());
-        }
-        final boolean emittedReturnRoot = emitReturnRootSlot(program, c);
-        if (emittedReturnRoot) {
             c.append(System.lineSeparator());
         }
         emitStaticRootInventory(program, c);
@@ -180,10 +174,10 @@ public final class CCodegen {
         }
         emitRuntimeHelperPrototypes(features, c);
         if (!program.materializedLambdaTargets().isEmpty()) {
-            c.append("static void* ").append(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
-            c.append("static void* ").append(MATERIALIZED_LAMBDA_LONG_OBJECT_APPLY_SYMBOL).append("(void* self, int64_t arg);").append(System.lineSeparator());
-            c.append("static void* ").append(MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL).append("(void* self, void* first_arg, void* second_arg);").append(System.lineSeparator());
-            c.append("static void* ").append(MATERIALIZED_LAMBDA_SUPPLIER_APPLY_SYMBOL).append("(void* self);").append(System.lineSeparator());
+            c.append("static void ").append(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL).append("(void** result, void* self, void* arg);").append(System.lineSeparator());
+            c.append("static void ").append(MATERIALIZED_LAMBDA_LONG_OBJECT_APPLY_SYMBOL).append("(void** result, void* self, int64_t arg);").append(System.lineSeparator());
+            c.append("static void ").append(MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL).append("(void** result, void* self, void* first_arg, void* second_arg);").append(System.lineSeparator());
+            c.append("static void ").append(MATERIALIZED_LAMBDA_SUPPLIER_APPLY_SYMBOL).append("(void** result, void* self);").append(System.lineSeparator());
             c.append("static int ").append(MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
             c.append("static void ").append(MATERIALIZED_LAMBDA_VOID_APPLY_SYMBOL).append("(void* self, void* arg);").append(System.lineSeparator());
             c.append("static void ").append(MATERIALIZED_LAMBDA_VOID2_APPLY_SYMBOL).append("(void* self, void* first_arg, void* second_arg);").append(System.lineSeparator());
@@ -201,7 +195,7 @@ public final class CCodegen {
             emitDispatch(program, dispatch, c);
         }
         for (final IrFunction function : program.functions()) {
-            emitFunction(program, function, c, false);
+            emitFunction(program, function, objectResultSymbols, c, false);
         }
         emitLibraryInitializer(program, c);
         for (final ExportedMethod export : exports) {
@@ -217,6 +211,28 @@ public final class CCodegen {
 
     private static CodegenFeatures codegenFeatures(final IrProgram program) {
         return new CodegenFeatures(usesGeneratedObjectClone(program));
+    }
+
+    private static List<String> objectResultSymbols(final IrProgram program) {
+        final List<String> result = new java.util.ArrayList<>();
+        for (final IrFunction function : program.functions()) {
+            if (function.returnType() == javan.ir.IrType.OBJECT) {
+                result.add(function.symbol());
+            }
+        }
+        for (final IrDispatch dispatch : program.dispatches()) {
+            if (dispatch.returnType() == javan.ir.IrType.OBJECT) {
+                result.add(dispatch.symbol());
+            }
+        }
+        result.add(EXACT_CATCH_NULL_APPLY_SYMBOL);
+        if (!program.materializedLambdaTargets().isEmpty()) {
+            result.add(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL);
+            result.add(MATERIALIZED_LAMBDA_LONG_OBJECT_APPLY_SYMBOL);
+            result.add(MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL);
+            result.add(MATERIALIZED_LAMBDA_SUPPLIER_APPLY_SYMBOL);
+        }
+        return List.copyOf(result);
     }
 
     private static void emitRuntimeHelperPrototypes(final CodegenFeatures features, final StringBuilder c) {
@@ -350,28 +366,6 @@ public final class CCodegen {
         return emitted;
     }
 
-    private static boolean emitReturnRootSlot(final IrProgram program, final StringBuilder c) {
-        if (!hasObjectReturn(program)) {
-            return false;
-        }
-        c.append("static void* ").append(returnRootSymbol()).append(" = 0;").append(System.lineSeparator());
-        return true;
-    }
-
-    private static boolean hasObjectReturn(final IrProgram program) {
-        for (final IrFunction function : program.functions()) {
-            if (function.returnType() == javan.ir.IrType.OBJECT) {
-                return true;
-            }
-        }
-        for (final IrDispatch dispatch : program.dispatches()) {
-            if (dispatch.returnType() == javan.ir.IrType.OBJECT) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private static void emitStaticRootInventory(final IrProgram program, final StringBuilder c) {
         final List<String> roots = staticObjectRootSymbols(program);
         if (!roots.isEmpty()) {
@@ -399,9 +393,6 @@ public final class CCodegen {
 
     private static List<String> staticObjectRootSymbols(final IrProgram program) {
         final List<String> result = new java.util.ArrayList<>();
-        if (hasObjectReturn(program)) {
-            result.add(returnRootSymbol());
-        }
         for (final IrClass classInfo : program.classes()) {
             for (final javan.ir.IrField field : classInfo.staticFields()) {
                 if (field.type() == javan.ir.IrType.OBJECT) {
@@ -598,7 +589,10 @@ public final class CCodegen {
             }
             concreteTargets.add(function);
         }
-        c.append("static void* ").append(EXACT_CATCH_NULL_APPLY_SYMBOL).append("(void* self, void* arg) {").append(System.lineSeparator());
+        c.append("static void ").append(EXACT_CATCH_NULL_APPLY_SYMBOL).append("(void** result, void* self, void* arg) {").append(System.lineSeparator());
+        c.append("    if (result == 0) {").append(System.lineSeparator());
+        c.append("        javan_panic(\"invalid catch-null function result\");").append(System.lineSeparator());
+        c.append("    }").append(System.lineSeparator());
         c.append("    if (self == 0) {").append(System.lineSeparator());
         c.append("        javan_panic(\"catch-null function receiver is null\");").append(System.lineSeparator());
         c.append("    }").append(System.lineSeparator());
@@ -627,7 +621,7 @@ public final class CCodegen {
         }
         c.append("        default: javan_panic(\"unsupported catch-null function receiver shape\");").append(System.lineSeparator());
         c.append("    }").append(System.lineSeparator());
-        c.append("    return 0;").append(System.lineSeparator());
+        c.append("    return;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
     }
 
@@ -751,19 +745,29 @@ public final class CCodegen {
         }
         c.append(padding).append("JavanPanicScope javan_function_or_null_scope;").append(System.lineSeparator());
         c.append(padding).append("jmp_buf javan_function_or_null_target;").append(System.lineSeparator());
+        c.append(padding).append("void* javan_function_or_null_result = 0;").append(System.lineSeparator());
+        c.append(padding).append("void** javan_function_or_null_roots[] = {").append(System.lineSeparator());
+        c.append(padding).append("    (void**) &javan_function_or_null_result").append(System.lineSeparator());
+        c.append(padding).append("};").append(System.lineSeparator());
+        c.append(padding).append("javan_root_frame_push(javan_function_or_null_roots, 1);").append(System.lineSeparator());
         c.append(padding).append("javan_panic_scope_push(&javan_function_or_null_scope, &javan_function_or_null_target);").append(System.lineSeparator());
         c.append(padding).append("if (setjmp(javan_function_or_null_target) != 0) {").append(System.lineSeparator());
+        c.append(padding).append("    javan_root_frame_pop(javan_function_or_null_roots);").append(System.lineSeparator());
         c.append(padding).append("    javan_clear_error();").append(System.lineSeparator());
-        c.append(padding).append("    return 0;").append(System.lineSeparator());
+        c.append(padding).append("    return;").append(System.lineSeparator());
         c.append(padding).append("}").append(System.lineSeparator());
-        c.append(padding).append("void* javan_function_or_null_result = ")
-            .append(symbol)
-            .append("(")
+        c.append(padding).append(symbol)
+            .append("((void**) &javan_function_or_null_result")
+            .append(argumentsBuilder.length() == 0 ? "" : ", ")
             .append(argumentsBuilder.toString())
             .append(");")
             .append(System.lineSeparator());
         c.append(padding).append("javan_panic_scope_pop(&javan_function_or_null_scope);").append(System.lineSeparator());
-        c.append(padding).append("return javan_function_or_null_result;").append(System.lineSeparator());
+        c.append(padding).append("javan_runtime_lock_enter();").append(System.lineSeparator());
+        c.append(padding).append("*result = javan_function_or_null_result;").append(System.lineSeparator());
+        c.append(padding).append("javan_runtime_lock_leave();").append(System.lineSeparator());
+        c.append(padding).append("javan_root_frame_pop(javan_function_or_null_roots);").append(System.lineSeparator());
+        c.append(padding).append("return;").append(System.lineSeparator());
     }
 
     private static void emitGeneratedObjectClassHelpers(final IrProgram program, final StringBuilder c) {
@@ -811,6 +815,8 @@ public final class CCodegen {
                     .append(") != 0) {").append(System.lineSeparator());
                 if (dispatch.returnType() == javan.ir.IrType.VOID) {
                     c.append("        ").append(target.functionSymbol()).append("(").append(dispatchArguments(dispatch)).append("); return;");
+                } else if (dispatch.returnType() == javan.ir.IrType.OBJECT) {
+                    c.append("        ").append(target.functionSymbol()).append("(").append(dispatchResultArguments(dispatch)).append("); return;");
                 } else {
                     c.append("        return ").append(target.functionSymbol()).append("(").append(dispatchArguments(dispatch)).append(");");
                 }
@@ -824,6 +830,8 @@ public final class CCodegen {
                 .append(": ");
             if (dispatch.returnType() == javan.ir.IrType.VOID) {
                 c.append(target.functionSymbol()).append("(").append(dispatchArguments(dispatch)).append("); return;");
+            } else if (dispatch.returnType() == javan.ir.IrType.OBJECT) {
+                c.append(target.functionSymbol()).append("(").append(dispatchResultArguments(dispatch)).append("); return;");
             } else {
                 c.append("return ").append(target.functionSymbol()).append("(").append(dispatchArguments(dispatch)).append(");");
             }
@@ -860,7 +868,7 @@ public final class CCodegen {
         if (program.materializedLambdaTargets().isEmpty()) {
             return;
         }
-        c.append("static void* ").append(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL).append("(void* self, void* arg) {")
+        c.append("static void ").append(MATERIALIZED_LAMBDA_OBJECT_APPLY_SYMBOL).append("(void** result, void* self, void* arg) {")
             .append(System.lineSeparator());
         c.append("    switch (javan_materialized_lambda_target_id(self)) {").append(System.lineSeparator());
         for (final IrMaterializedLambdaTarget target : program.materializedLambdaTargets()) {
@@ -870,32 +878,32 @@ public final class CCodegen {
             if (!materializedLambdaSingleObjectArgument(target)) {
                 continue;
             }
-            c.append("        case ").append(target.targetId()).append(": return ");
-            emitMaterializedLambdaInvocation(c, target, "self", List.of("arg"));
-            c.append(";").append(System.lineSeparator());
+            c.append("        case ").append(target.targetId()).append(": ");
+            emitMaterializedLambdaInvocation(c, target, "result", "self", List.of("arg"));
+            c.append("; return;").append(System.lineSeparator());
         }
         c.append("        default: javan_panic(\"unsupported materialized object lambda target\");").append(System.lineSeparator());
         c.append("    }").append(System.lineSeparator());
-        c.append("    return 0;").append(System.lineSeparator());
+        c.append("    return;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
 
-        c.append("static void* ").append(MATERIALIZED_LAMBDA_LONG_OBJECT_APPLY_SYMBOL).append("(void* self, int64_t arg) {")
+        c.append("static void ").append(MATERIALIZED_LAMBDA_LONG_OBJECT_APPLY_SYMBOL).append("(void** result, void* self, int64_t arg) {")
             .append(System.lineSeparator());
         c.append("    switch (javan_materialized_lambda_target_id(self)) {").append(System.lineSeparator());
         for (final IrMaterializedLambdaTarget target : program.materializedLambdaTargets()) {
             if (target.booleanResult() || target.voidResult() || !materializedLambdaSingleLongArgument(target)) {
                 continue;
             }
-            c.append("        case ").append(target.targetId()).append(": return ");
-            emitMaterializedLambdaInvocation(c, target, "self", List.of("arg"));
-            c.append(";").append(System.lineSeparator());
+            c.append("        case ").append(target.targetId()).append(": ");
+            emitMaterializedLambdaInvocation(c, target, "result", "self", List.of("arg"));
+            c.append("; return;").append(System.lineSeparator());
         }
         c.append("        default: javan_panic(\"unsupported materialized long object lambda target\");").append(System.lineSeparator());
         c.append("    }").append(System.lineSeparator());
-        c.append("    return 0;").append(System.lineSeparator());
+        c.append("    return;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
 
-        c.append("static void* ").append(MATERIALIZED_LAMBDA_SUPPLIER_APPLY_SYMBOL).append("(void* self) {")
+        c.append("static void ").append(MATERIALIZED_LAMBDA_SUPPLIER_APPLY_SYMBOL).append("(void** result, void* self) {")
             .append(System.lineSeparator());
         c.append("    switch (javan_materialized_lambda_target_id(self)) {").append(System.lineSeparator());
         for (final IrMaterializedLambdaTarget target : program.materializedLambdaTargets()) {
@@ -907,16 +915,16 @@ public final class CCodegen {
                 || !"()Ljava/lang/Object;".equals(target.interfaceMethodDescriptor())) {
                 continue;
             }
-            c.append("        case ").append(target.targetId()).append(": return ");
-            emitMaterializedLambdaInvocation(c, target, "self", List.of());
-            c.append(";").append(System.lineSeparator());
+            c.append("        case ").append(target.targetId()).append(": ");
+            emitMaterializedLambdaInvocation(c, target, "result", "self", List.of());
+            c.append("; return;").append(System.lineSeparator());
         }
         c.append("        default: javan_panic(\"unsupported materialized supplier lambda target\");").append(System.lineSeparator());
         c.append("    }").append(System.lineSeparator());
-        c.append("    return 0;").append(System.lineSeparator());
+        c.append("    return;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
 
-        c.append("static void* ").append(MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL).append("(void* self, void* first_arg, void* second_arg) {")
+        c.append("static void ").append(MATERIALIZED_LAMBDA_OBJECT2_APPLY_SYMBOL).append("(void** result, void* self, void* first_arg, void* second_arg) {")
             .append(System.lineSeparator());
         c.append("    switch (javan_materialized_lambda_target_id(self)) {").append(System.lineSeparator());
         for (final IrMaterializedLambdaTarget target : program.materializedLambdaTargets()) {
@@ -926,13 +934,13 @@ public final class CCodegen {
             if (materializedLambdaArity(target) != 2) {
                 continue;
             }
-            c.append("        case ").append(target.targetId()).append(": return ");
-            emitMaterializedLambdaInvocation(c, target, "self", List.of("first_arg", "second_arg"));
-            c.append(";").append(System.lineSeparator());
+            c.append("        case ").append(target.targetId()).append(": ");
+            emitMaterializedLambdaInvocation(c, target, "result", "self", List.of("first_arg", "second_arg"));
+            c.append("; return;").append(System.lineSeparator());
         }
         c.append("        default: javan_panic(\"unsupported materialized two-argument object lambda target\");").append(System.lineSeparator());
         c.append("    }").append(System.lineSeparator());
-        c.append("    return 0;").append(System.lineSeparator());
+        c.append("    return;").append(System.lineSeparator());
         c.append("}").append(System.lineSeparator()).append(System.lineSeparator());
 
         c.append("static int ").append(MATERIALIZED_LAMBDA_BOOLEAN_APPLY_SYMBOL).append("(void* self, void* arg) {")
@@ -946,7 +954,7 @@ public final class CCodegen {
                 continue;
             }
             c.append("        case ").append(target.targetId()).append(": return ");
-            emitMaterializedLambdaInvocation(c, target, "self", List.of("arg"));
+            emitMaterializedLambdaInvocation(c, target, "", "self", List.of("arg"));
             c.append(";").append(System.lineSeparator());
         }
         c.append("        default: javan_panic(\"unsupported materialized boolean lambda target\");").append(System.lineSeparator());
@@ -965,7 +973,7 @@ public final class CCodegen {
                 continue;
             }
             c.append("        case ").append(target.targetId()).append(": ");
-            emitMaterializedLambdaInvocation(c, target, "self", List.of("arg"));
+            emitMaterializedLambdaInvocation(c, target, "", "self", List.of("arg"));
             c.append("; return;").append(System.lineSeparator());
         }
         c.append("        default: javan_panic(\"unsupported materialized void lambda target\");").append(System.lineSeparator());
@@ -983,7 +991,7 @@ public final class CCodegen {
                 continue;
             }
             c.append("        case ").append(target.targetId()).append(": ");
-            emitMaterializedLambdaInvocation(c, target, "self", List.of("first_arg", "second_arg"));
+            emitMaterializedLambdaInvocation(c, target, "", "self", List.of("first_arg", "second_arg"));
             c.append("; return;").append(System.lineSeparator());
         }
         c.append("        default: javan_panic(\"unsupported materialized two-argument void lambda target\");").append(System.lineSeparator());
@@ -994,11 +1002,15 @@ public final class CCodegen {
     private static void emitMaterializedLambdaInvocation(
         final StringBuilder c,
         final IrMaterializedLambdaTarget target,
+        final String resultExpression,
         final String selfExpression,
         final List<String> argumentExpressions
     ) {
         c.append(target.functionSymbol()).append("(");
-        boolean first = true;
+        boolean first = resultExpression.length() == 0;
+        if (!first) {
+            c.append(resultExpression);
+        }
         for (int index = 0; index < target.captureCount(); index++) {
             if (!first) {
                 c.append(", ");
@@ -1035,6 +1047,7 @@ public final class CCodegen {
     private static void emitFunction(
         final IrProgram program,
         final IrFunction function,
+        final List<String> objectResultSymbols,
         final StringBuilder c,
         final boolean emitMain
     ) {
@@ -1067,7 +1080,7 @@ public final class CCodegen {
         }
         for (int index = 0; index < function.instructions().size(); index++) {
             final IrInstruction instruction = function.instructions().get(index);
-            emitInstruction(index, instruction, entry, rootFrameSymbol, !rootNames.isEmpty(), c);
+            emitInstruction(index, instruction, entry, rootFrameSymbol, !rootNames.isEmpty(), objectResultSymbols, c);
             if (hasStatementSafePoint(instruction)) {
                 rootLiveness.emitClearsAfter(index, c);
             }
@@ -1151,15 +1164,23 @@ public final class CCodegen {
         c.append("    }").append(System.lineSeparator());
         c.append("    javan_library_init();").append(System.lineSeparator());
         final List<Integer> objectArguments = objectExportArgumentIndexes(export);
+        final AbiType returnType = export.returnType();
+        final boolean objectReturn = returnType == AbiType.STRING
+            || returnType == AbiType.BYTE_ARRAY
+            || returnType == AbiType.OBJECT;
         for (final int index : objectArguments) {
             c.append("    void* ")
                 .append(convertedExportArgumentName(export.parameterTypes().get(index), index))
                 .append(" = 0;")
                 .append(System.lineSeparator());
         }
-        emitExportWrapperRootFramePush(export, objectArguments, c);
+        if (objectReturn) {
+            c.append("    void* javan_export_object_result = 0;").append(System.lineSeparator());
+        }
+        emitExportWrapperRootFramePush(export, objectArguments, objectReturn, c);
         for (final int index : objectArguments) {
             final AbiType type = export.parameterTypes().get(index);
+            c.append("    javan_runtime_lock_enter();").append(System.lineSeparator());
             if (type == AbiType.STRING) {
                 c.append("    arg").append(index).append("_string = javan_string_from(arg")
                     .append(index)
@@ -1173,40 +1194,38 @@ public final class CCodegen {
                     .append(".length);")
                     .append(System.lineSeparator());
             }
+            c.append("    javan_runtime_lock_leave();").append(System.lineSeparator());
         }
         final String call = export.internalSymbol() + "(" + exportArguments(export) + ")";
-        final AbiType returnType = export.returnType();
+        final String objectCall = export.internalSymbol()
+            + "((void**) &javan_export_object_result"
+            + (export.parameterTypes().isEmpty() ? "" : ", " + exportArguments(export))
+            + ")";
         if (returnType == AbiType.VOID) {
             c.append("    ").append(call).append(";").append(System.lineSeparator());
-            emitExportWrapperCleanup(objectArguments, c);
+            emitExportWrapperCleanup(objectArguments, objectReturn, c);
             c.append("    javan_panic_clear_target(&javan_export_panic_target);").append(System.lineSeparator());
         } else if (returnType == AbiType.STRING) {
-            c.append("    void* javan_export_object_result = ").append(call).append(";").append(System.lineSeparator());
-            emitExportWrapperReturnRootFramePush(c);
+            c.append("    ").append(objectCall).append(";").append(System.lineSeparator());
             c.append("    char* javan_export_result = javan_string_export((const char*) javan_export_object_result);").append(System.lineSeparator());
-            emitExportWrapperReturnRootFramePop(c);
-            emitExportWrapperCleanup(objectArguments, c);
+            emitExportWrapperCleanup(objectArguments, objectReturn, c);
             c.append("    javan_panic_clear_target(&javan_export_panic_target);").append(System.lineSeparator());
             c.append("    return javan_export_result;").append(System.lineSeparator());
         } else if (returnType == AbiType.BYTE_ARRAY) {
-            c.append("    void* javan_export_object_result = ").append(call).append(";").append(System.lineSeparator());
-            emitExportWrapperReturnRootFramePush(c);
+            c.append("    ").append(objectCall).append(";").append(System.lineSeparator());
             c.append("    JavanByteArray javan_export_result = javan_byte_array_export(javan_export_object_result);").append(System.lineSeparator());
-            emitExportWrapperReturnRootFramePop(c);
-            emitExportWrapperCleanup(objectArguments, c);
+            emitExportWrapperCleanup(objectArguments, objectReturn, c);
             c.append("    javan_panic_clear_target(&javan_export_panic_target);").append(System.lineSeparator());
             c.append("    return javan_export_result;").append(System.lineSeparator());
         } else if (returnType == AbiType.OBJECT) {
-            c.append("    void* javan_export_object_result = ").append(call).append(";").append(System.lineSeparator());
-            emitExportWrapperReturnRootFramePush(c);
+            c.append("    ").append(objectCall).append(";").append(System.lineSeparator());
             c.append("    JavanObjectHandle* javan_export_result = javan_object_handle_new(javan_export_object_result);").append(System.lineSeparator());
-            emitExportWrapperReturnRootFramePop(c);
-            emitExportWrapperCleanup(objectArguments, c);
+            emitExportWrapperCleanup(objectArguments, objectReturn, c);
             c.append("    javan_panic_clear_target(&javan_export_panic_target);").append(System.lineSeparator());
             c.append("    return javan_export_result;").append(System.lineSeparator());
         } else {
             c.append("    ").append(returnType.cReturnName()).append(" javan_export_result = ").append(call).append(";").append(System.lineSeparator());
-            emitExportWrapperCleanup(objectArguments, c);
+            emitExportWrapperCleanup(objectArguments, objectReturn, c);
             c.append("    javan_panic_clear_target(&javan_export_panic_target);").append(System.lineSeparator());
             c.append("    return javan_export_result;").append(System.lineSeparator());
         }
@@ -1339,23 +1358,13 @@ public final class CCodegen {
         throw new IllegalArgumentException("ABI type is not converted through a Java object slot: " + type.name());
     }
 
-    private static void emitExportWrapperReturnRootFramePush(final StringBuilder c) {
-        c.append("    void** javan_export_result_roots[] = {").append(System.lineSeparator());
-        c.append("        (void**) &javan_export_object_result").append(System.lineSeparator());
-        c.append("    };").append(System.lineSeparator());
-        c.append("    javan_root_frame_push(javan_export_result_roots, 1);").append(System.lineSeparator());
-    }
-
-    private static void emitExportWrapperReturnRootFramePop(final StringBuilder c) {
-        c.append("    javan_root_frame_pop(javan_export_result_roots);").append(System.lineSeparator());
-    }
-
     private static void emitExportWrapperRootFramePush(
         final ExportedMethod export,
         final List<Integer> objectArguments,
+        final boolean objectReturn,
         final StringBuilder c
     ) {
-        if (objectArguments.isEmpty()) {
+        if (objectArguments.isEmpty() && !objectReturn) {
             return;
         }
         c.append("    void** javan_export_roots[] = {").append(System.lineSeparator());
@@ -1363,20 +1372,27 @@ public final class CCodegen {
             final int argumentIndex = objectArguments.get(position);
             c.append("        (void**) &")
                 .append(convertedExportArgumentName(export.parameterTypes().get(argumentIndex), argumentIndex));
-            if (position < objectArguments.size() - 1) {
+            if (position < objectArguments.size() - 1 || objectReturn) {
                 c.append(',');
             }
             c.append(System.lineSeparator());
         }
+        if (objectReturn) {
+            c.append("        (void**) &javan_export_object_result").append(System.lineSeparator());
+        }
         c.append("    };").append(System.lineSeparator());
         c.append("    javan_root_frame_push(javan_export_roots, ")
-            .append(objectArguments.size())
+            .append(objectArguments.size() + (objectReturn ? 1 : 0))
             .append(");")
             .append(System.lineSeparator());
     }
 
-    private static void emitExportWrapperCleanup(final List<Integer> objectArguments, final StringBuilder c) {
-        if (objectArguments.isEmpty()) {
+    private static void emitExportWrapperCleanup(
+        final List<Integer> objectArguments,
+        final boolean objectReturn,
+        final StringBuilder c
+    ) {
+        if (objectArguments.isEmpty() && !objectReturn) {
             return;
         }
         c.append("    javan_root_frame_pop(javan_export_roots);").append(System.lineSeparator());
@@ -1493,9 +1509,11 @@ public final class CCodegen {
             if (roots == null) {
                 return;
             }
+            c.append("    javan_runtime_lock_enter();").append(System.lineSeparator());
             for (final String root : roots) {
                 c.append("    ").append(root).append(" = 0;").append(System.lineSeparator());
             }
+            c.append("    javan_runtime_lock_leave();").append(System.lineSeparator());
         }
 
         private static void collectRootUses(
@@ -1942,8 +1960,14 @@ public final class CCodegen {
                 .append(");")
                 .append(System.lineSeparator());
         }
-        for (final String assignment : plan.assignments()) {
-            c.append("        ").append(assignment).append(System.lineSeparator());
+        for (final ExpressionPlan.Assignment assignment : plan.assignments()) {
+            if (assignment.collectorVisibleRootWrite()) {
+                c.append("        javan_runtime_lock_enter();").append(System.lineSeparator());
+            }
+            c.append("        ").append(assignment.code()).append(System.lineSeparator());
+            if (assignment.collectorVisibleRootWrite()) {
+                c.append("        javan_runtime_lock_leave();").append(System.lineSeparator());
+            }
         }
         return "        ";
     }
@@ -1961,9 +1985,10 @@ public final class CCodegen {
         final StringBuilder c,
         final String function,
         final String cast,
-        final javan.ir.IrExpression expression
+        final javan.ir.IrExpression expression,
+        final List<String> objectResultSymbols
     ) {
-        final ExpressionPlan plan = new ExpressionPlan();
+        final ExpressionPlan plan = new ExpressionPlan(objectResultSymbols);
         final String value = plan.expression(expression);
         final String indent = emitExpressionScopeStart(plan, c);
         c.append(indent)
@@ -1979,29 +2004,42 @@ public final class CCodegen {
     private static void emitAssignment(
         final StringBuilder c,
         final String target,
-        final javan.ir.IrExpression expression
+        final javan.ir.IrExpression expression,
+        final boolean collectorVisibleRootWrite,
+        final List<String> objectResultSymbols
     ) {
-        final ExpressionPlan plan = new ExpressionPlan();
+        final ExpressionPlan plan = new ExpressionPlan(objectResultSymbols);
         final String value = plan.expression(expression);
         final String indent = emitExpressionScopeStart(plan, c);
+        if (collectorVisibleRootWrite) {
+            c.append(indent).append("javan_runtime_lock_enter();").append(System.lineSeparator());
+        }
         c.append(indent)
             .append(target)
             .append(" = ")
             .append(value)
             .append(";")
             .append(System.lineSeparator());
+        if (collectorVisibleRootWrite) {
+            c.append(indent).append("javan_runtime_lock_leave();").append(System.lineSeparator());
+        }
         emitExpressionScopeEnd(plan, c);
     }
 
     private static void emitFieldAssignment(
         final StringBuilder c,
         final String[] ownerField,
-        final java.util.List<javan.ir.IrExpression> arguments
+        final java.util.List<javan.ir.IrExpression> arguments,
+        final boolean collectorVisibleReferenceWrite,
+        final List<String> objectResultSymbols
     ) {
-        final ExpressionPlan plan = new ExpressionPlan();
+        final ExpressionPlan plan = new ExpressionPlan(objectResultSymbols);
         final String receiver = plan.expression(arguments.get(0));
         final String value = plan.expression(arguments.get(1));
         final String indent = emitExpressionScopeStart(plan, c);
+        if (collectorVisibleReferenceWrite) {
+            c.append(indent).append("javan_runtime_lock_enter();").append(System.lineSeparator());
+        }
         c.append(indent)
             .append("((struct ")
             .append(classSymbol(ownerField[0]))
@@ -2013,15 +2051,19 @@ public final class CCodegen {
             .append(value)
             .append(";")
             .append(System.lineSeparator());
+        if (collectorVisibleReferenceWrite) {
+            c.append(indent).append("javan_runtime_lock_leave();").append(System.lineSeparator());
+        }
         emitExpressionScopeEnd(plan, c);
     }
 
     private static void emitArraySet(
         final StringBuilder c,
         final String function,
-        final java.util.List<javan.ir.IrExpression> arguments
+        final java.util.List<javan.ir.IrExpression> arguments,
+        final List<String> objectResultSymbols
     ) {
-        final ExpressionPlan plan = new ExpressionPlan();
+        final ExpressionPlan plan = new ExpressionPlan(objectResultSymbols);
         final String array = plan.expression(arguments.get(0));
         final String index = plan.expression(arguments.get(1));
         final String value = plan.expression(arguments.get(2));
@@ -2043,9 +2085,10 @@ public final class CCodegen {
         final StringBuilder c,
         final String label,
         final javan.ir.IrExpression condition,
-        final String sourceContextSymbol
+        final String sourceContextSymbol,
+        final List<String> objectResultSymbols
     ) {
-        final ExpressionPlan plan = new ExpressionPlan();
+        final ExpressionPlan plan = new ExpressionPlan(objectResultSymbols);
         final String value = plan.expression(condition);
         if (plan.isEmpty()) {
             if (sourceContextSymbol.length() == 0) {
@@ -2091,21 +2134,41 @@ public final class CCodegen {
     }
 
     private static final class ExpressionPlan {
+        private final List<String> objectResultSymbols;
         private final java.util.List<Temporary> temporaries = new java.util.ArrayList<>();
-        private final java.util.List<String> assignments = new java.util.ArrayList<>();
+        private final java.util.List<Assignment> assignments = new java.util.ArrayList<>();
+
+        private ExpressionPlan(final List<String> objectResultSymbols) {
+            this.objectResultSymbols = objectResultSymbols;
+        }
 
         String expression(final javan.ir.IrExpression expression) {
+            if (isGeneratedObjectResultCall(expression)) {
+                final String arguments = expressionArguments(expression.arguments());
+                final String temporary = "javan_expr_tmp_" + temporaries.size();
+                temporaries.add(new Temporary(expression.type(), temporary));
+                assignments.add(new Assignment(
+                    expression.value()
+                        + "((void**) &"
+                        + temporary
+                        + (arguments.isEmpty() ? "" : ", " + arguments)
+                        + ");",
+                    false
+                ));
+                return temporary;
+            }
             if (usesRootedResultCall(expression)) {
                 final String arguments = expressionArguments(expression.arguments());
                 final String temporary = "javan_expr_tmp_" + temporaries.size();
                 temporaries.add(new Temporary(expression.type(), temporary));
-                assignments.add(
+                assignments.add(new Assignment(
                     rootedResultCallSymbol(expression)
                         + "((void**) &"
                         + temporary
                         + (arguments.isEmpty() ? "" : ", " + arguments)
-                        + ");"
-                );
+                        + ");",
+                    false
+                ));
                 return temporary;
             }
             final String raw = rawExpression(expression);
@@ -2114,8 +2177,27 @@ public final class CCodegen {
             }
             final String temporary = "javan_expr_tmp_" + temporaries.size();
             temporaries.add(new Temporary(expression.type(), temporary));
-            assignments.add(temporary + " = " + raw + ";");
+            assignments.add(new Assignment(
+                temporary + " = " + raw + ";",
+                requiresCollectorVisibleRootWrite(expression)
+            ));
             return temporary;
+        }
+
+        private static boolean requiresCollectorVisibleRootWrite(final javan.ir.IrExpression expression) {
+            if (expression.type() != javan.ir.IrType.OBJECT) {
+                return false;
+            }
+            if (expression.kind() != javan.ir.IrExpression.Kind.CALL) {
+                return true;
+            }
+            return "javan_atomic_reference_get".equals(expression.value());
+        }
+
+        private boolean isGeneratedObjectResultCall(final javan.ir.IrExpression expression) {
+            return expression.kind() == javan.ir.IrExpression.Kind.CALL
+                && expression.type() == javan.ir.IrType.OBJECT
+                && objectResultSymbols.contains(expression.value());
         }
 
         boolean isEmpty() {
@@ -2126,7 +2208,7 @@ public final class CCodegen {
             return java.util.List.copyOf(temporaries);
         }
 
-        java.util.List<String> assignments() {
+        java.util.List<Assignment> assignments() {
             return java.util.List.copyOf(assignments);
         }
 
@@ -2351,6 +2433,9 @@ public final class CCodegen {
 
         private record Temporary(javan.ir.IrType type, String name) {
         }
+
+        private record Assignment(String code, boolean collectorVisibleRootWrite) {
+        }
     }
 
     private static String intLiteral(final String value) {
@@ -2373,6 +2458,7 @@ public final class CCodegen {
         final boolean entry,
         final String rootFrameSymbol,
         final boolean hasRootFrame,
+        final List<String> objectResultSymbols,
         final StringBuilder c
     ) {
         final boolean sourceContext = shouldEmitSourceContext(instruction);
@@ -2388,50 +2474,50 @@ public final class CCodegen {
                     .append(System.lineSeparator());
                 break;
             case PRINTLN_INT:
-                emitPrintCall(c, "javan_println_int", "", instruction.expression().orElseThrow());
+                emitPrintCall(c, "javan_println_int", "", instruction.expression().orElseThrow(), objectResultSymbols);
                 break;
             case PRINTLN_ERROR_INT:
-                emitPrintCall(c, "javan_eprintln_int", "", instruction.expression().orElseThrow());
+                emitPrintCall(c, "javan_eprintln_int", "", instruction.expression().orElseThrow(), objectResultSymbols);
                 break;
             case PRINTLN_LONG:
-                emitPrintCall(c, "javan_println_long", "", instruction.expression().orElseThrow());
+                emitPrintCall(c, "javan_println_long", "", instruction.expression().orElseThrow(), objectResultSymbols);
                 break;
             case PRINTLN_ERROR_LONG:
-                emitPrintCall(c, "javan_eprintln_long", "", instruction.expression().orElseThrow());
+                emitPrintCall(c, "javan_eprintln_long", "", instruction.expression().orElseThrow(), objectResultSymbols);
                 break;
             case PRINTLN_FLOAT:
-                emitPrintCall(c, "javan_println_float", "", instruction.expression().orElseThrow());
+                emitPrintCall(c, "javan_println_float", "", instruction.expression().orElseThrow(), objectResultSymbols);
                 break;
             case PRINTLN_ERROR_FLOAT:
-                emitPrintCall(c, "javan_eprintln_float", "", instruction.expression().orElseThrow());
+                emitPrintCall(c, "javan_eprintln_float", "", instruction.expression().orElseThrow(), objectResultSymbols);
                 break;
             case PRINTLN_DOUBLE:
-                emitPrintCall(c, "javan_println_double", "", instruction.expression().orElseThrow());
+                emitPrintCall(c, "javan_println_double", "", instruction.expression().orElseThrow(), objectResultSymbols);
                 break;
             case PRINTLN_ERROR_DOUBLE:
-                emitPrintCall(c, "javan_eprintln_double", "", instruction.expression().orElseThrow());
+                emitPrintCall(c, "javan_eprintln_double", "", instruction.expression().orElseThrow(), objectResultSymbols);
                 break;
             case PRINTLN_BOOLEAN:
-                emitPrintCall(c, "javan_println_bool", "", instruction.expression().orElseThrow());
+                emitPrintCall(c, "javan_println_bool", "", instruction.expression().orElseThrow(), objectResultSymbols);
                 break;
             case PRINTLN_ERROR_BOOLEAN:
-                emitPrintCall(c, "javan_eprintln_bool", "", instruction.expression().orElseThrow());
+                emitPrintCall(c, "javan_eprintln_bool", "", instruction.expression().orElseThrow(), objectResultSymbols);
                 break;
             case PRINTLN_OBJECT:
-                emitPrintCall(c, "javan_println_object_value", "", instruction.expression().orElseThrow());
+                emitPrintCall(c, "javan_println_object_value", "", instruction.expression().orElseThrow(), objectResultSymbols);
                 break;
             case PRINTLN_ERROR_OBJECT:
-                emitPrintCall(c, "javan_eprintln_object_value", "", instruction.expression().orElseThrow());
+                emitPrintCall(c, "javan_eprintln_object_value", "", instruction.expression().orElseThrow(), objectResultSymbols);
                 break;
             case PRINT_OBJECT:
-                emitPrintCall(c, "javan_print_object_value", "", instruction.expression().orElseThrow());
+                emitPrintCall(c, "javan_print_object_value", "", instruction.expression().orElseThrow(), objectResultSymbols);
                 break;
             case PRINT_ERROR_OBJECT:
-                emitPrintCall(c, "javan_eprint_object_value", "", instruction.expression().orElseThrow());
+                emitPrintCall(c, "javan_eprint_object_value", "", instruction.expression().orElseThrow(), objectResultSymbols);
                 break;
             case CALL_STATIC_VOID:
                 if (instruction.expression().isPresent()) {
-                    final ExpressionPlan plan = new ExpressionPlan();
+                    final ExpressionPlan plan = new ExpressionPlan(objectResultSymbols);
                     final String call = plan.expression(instruction.expression().orElseThrow());
                     final String indent = emitExpressionScopeStart(plan, c);
                     c.append(indent).append(call).append(";").append(System.lineSeparator());
@@ -2444,75 +2530,105 @@ public final class CCodegen {
             case ASSIGN_LONG:
             case ASSIGN_FLOAT:
             case ASSIGN_DOUBLE:
+                emitAssignment(
+                    c,
+                    instruction.value().orElseThrow(),
+                    instruction.expression().orElseThrow(),
+                    false,
+                    objectResultSymbols
+                );
+                break;
             case ASSIGN_OBJECT:
-                emitAssignment(c, instruction.value().orElseThrow(), instruction.expression().orElseThrow());
+                emitAssignment(
+                    c,
+                    instruction.value().orElseThrow(),
+                    instruction.expression().orElseThrow(),
+                    true,
+                    objectResultSymbols
+                );
                 break;
             case ASSIGN_FIELD_INT: {
                 final String[] ownerField = ownerField(instruction.value().orElseThrow());
                 final java.util.List<javan.ir.IrExpression> arguments = instruction.expression().orElseThrow().arguments();
-                emitFieldAssignment(c, ownerField, arguments);
+                emitFieldAssignment(c, ownerField, arguments, false, objectResultSymbols);
                 break;
             }
             case ASSIGN_FIELD_LONG: {
                 final String[] ownerField = ownerField(instruction.value().orElseThrow());
                 final java.util.List<javan.ir.IrExpression> arguments = instruction.expression().orElseThrow().arguments();
-                emitFieldAssignment(c, ownerField, arguments);
+                emitFieldAssignment(c, ownerField, arguments, false, objectResultSymbols);
                 break;
             }
             case ASSIGN_FIELD_FLOAT: {
                 final String[] ownerField = ownerField(instruction.value().orElseThrow());
                 final java.util.List<javan.ir.IrExpression> arguments = instruction.expression().orElseThrow().arguments();
-                emitFieldAssignment(c, ownerField, arguments);
+                emitFieldAssignment(c, ownerField, arguments, false, objectResultSymbols);
                 break;
             }
             case ASSIGN_FIELD_DOUBLE: {
                 final String[] ownerField = ownerField(instruction.value().orElseThrow());
                 final java.util.List<javan.ir.IrExpression> arguments = instruction.expression().orElseThrow().arguments();
-                emitFieldAssignment(c, ownerField, arguments);
+                emitFieldAssignment(c, ownerField, arguments, false, objectResultSymbols);
                 break;
             }
             case ASSIGN_FIELD_OBJECT: {
                 final String[] ownerField = ownerField(instruction.value().orElseThrow());
                 final java.util.List<javan.ir.IrExpression> arguments = instruction.expression().orElseThrow().arguments();
-                emitFieldAssignment(c, ownerField, arguments);
+                emitFieldAssignment(c, ownerField, arguments, true, objectResultSymbols);
                 break;
             }
             case ASSIGN_STATIC_FIELD_INT:
             case ASSIGN_STATIC_FIELD_LONG:
             case ASSIGN_STATIC_FIELD_FLOAT:
-            case ASSIGN_STATIC_FIELD_DOUBLE:
+            case ASSIGN_STATIC_FIELD_DOUBLE: {
+                final String[] ownerField = ownerField(instruction.value().orElseThrow());
+                emitAssignment(
+                    c,
+                    staticFieldSymbol(ownerField[0], ownerField[1]),
+                    instruction.expression().orElseThrow(),
+                    false,
+                    objectResultSymbols
+                );
+                break;
+            }
             case ASSIGN_STATIC_FIELD_OBJECT: {
                 final String[] ownerField = ownerField(instruction.value().orElseThrow());
-                emitAssignment(c, staticFieldSymbol(ownerField[0], ownerField[1]), instruction.expression().orElseThrow());
+                emitAssignment(
+                    c,
+                    staticFieldSymbol(ownerField[0], ownerField[1]),
+                    instruction.expression().orElseThrow(),
+                    true,
+                    objectResultSymbols
+                );
                 break;
             }
             case ASSIGN_ARRAY_OBJECT: {
                 final java.util.List<javan.ir.IrExpression> arguments = instruction.expression().orElseThrow().arguments();
-                emitArraySet(c, "javan_object_array_set", arguments);
+                emitArraySet(c, "javan_object_array_set", arguments, objectResultSymbols);
                 break;
             }
             case ASSIGN_ARRAY_INT: {
                 final java.util.List<javan.ir.IrExpression> arguments = instruction.expression().orElseThrow().arguments();
-                emitArraySet(c, "javan_int_array_set", arguments);
+                emitArraySet(c, "javan_int_array_set", arguments, objectResultSymbols);
                 break;
             }
             case ASSIGN_ARRAY_BYTE:
-                emitArraySet(c, "javan_byte_array_set", instruction.expression().orElseThrow().arguments());
+                emitArraySet(c, "javan_byte_array_set", instruction.expression().orElseThrow().arguments(), objectResultSymbols);
                 break;
             case ASSIGN_ARRAY_SHORT:
-                emitArraySet(c, "javan_short_array_set", instruction.expression().orElseThrow().arguments());
+                emitArraySet(c, "javan_short_array_set", instruction.expression().orElseThrow().arguments(), objectResultSymbols);
                 break;
             case ASSIGN_ARRAY_CHAR:
-                emitArraySet(c, "javan_char_array_set", instruction.expression().orElseThrow().arguments());
+                emitArraySet(c, "javan_char_array_set", instruction.expression().orElseThrow().arguments(), objectResultSymbols);
                 break;
             case ASSIGN_ARRAY_LONG:
-                emitArraySet(c, "javan_long_array_set", instruction.expression().orElseThrow().arguments());
+                emitArraySet(c, "javan_long_array_set", instruction.expression().orElseThrow().arguments(), objectResultSymbols);
                 break;
             case ASSIGN_ARRAY_FLOAT:
-                emitArraySet(c, "javan_float_array_set", instruction.expression().orElseThrow().arguments());
+                emitArraySet(c, "javan_float_array_set", instruction.expression().orElseThrow().arguments(), objectResultSymbols);
                 break;
             case ASSIGN_ARRAY_DOUBLE:
-                emitArraySet(c, "javan_double_array_set", instruction.expression().orElseThrow().arguments());
+                emitArraySet(c, "javan_double_array_set", instruction.expression().orElseThrow().arguments(), objectResultSymbols);
                 break;
             case LABEL:
                 c.append(instruction.value().orElseThrow()).append(":").append(System.lineSeparator());
@@ -2524,10 +2640,10 @@ public final class CCodegen {
                     .append(System.lineSeparator());
                 break;
             case BRANCH_IF:
-                emitBranchIf(c, instruction.value().orElseThrow(), instruction.expression().orElseThrow(), sourceContextSymbol);
+                emitBranchIf(c, instruction.value().orElseThrow(), instruction.expression().orElseThrow(), sourceContextSymbol, objectResultSymbols);
                 break;
             case PANIC: {
-                final ExpressionPlan plan = new ExpressionPlan();
+                final ExpressionPlan plan = new ExpressionPlan(objectResultSymbols);
                 final String value = plan.expression(instruction.expression().orElseThrow());
                 final String indent = emitExpressionScopeStart(plan, c);
                 if (instruction.sourceLocation().isPresent()) {
@@ -2558,7 +2674,7 @@ public final class CCodegen {
             case RETURN_FLOAT:
             case RETURN_DOUBLE:
             case RETURN_OBJECT:
-                emitReturnValue(instruction.expression().orElseThrow(), rootFrameSymbol, hasRootFrame, sourceContextSymbol, c);
+                emitReturnValue(instruction.expression().orElseThrow(), rootFrameSymbol, hasRootFrame, sourceContextSymbol, objectResultSymbols, c);
                 break;
         }
         if (sourceContext && shouldClearSourceContextAfterInstruction(instruction)) {
@@ -2669,13 +2785,14 @@ public final class CCodegen {
         final String rootFrameSymbol,
         final boolean hasRootFrame,
         final String sourceContextSymbol,
+        final List<String> objectResultSymbols,
         final StringBuilder c
     ) {
         if (expression.type() == javan.ir.IrType.OBJECT) {
-            emitObjectReturnValue(expression, rootFrameSymbol, hasRootFrame, sourceContextSymbol, c);
+            emitObjectReturnValue(expression, rootFrameSymbol, hasRootFrame, sourceContextSymbol, objectResultSymbols, c);
             return;
         }
-        final ExpressionPlan plan = new ExpressionPlan();
+        final ExpressionPlan plan = new ExpressionPlan(objectResultSymbols);
         final String value = plan.expression(expression);
         if (!hasRootFrame && plan.isEmpty() && sourceContextSymbol.length() == 0) {
             c.append("    return ")
@@ -2714,9 +2831,10 @@ public final class CCodegen {
         final String rootFrameSymbol,
         final boolean hasRootFrame,
         final String sourceContextSymbol,
+        final List<String> objectResultSymbols,
         final StringBuilder c
     ) {
-        final ExpressionPlan plan = new ExpressionPlan();
+        final ExpressionPlan plan = new ExpressionPlan(objectResultSymbols);
         final String value = plan.expression(expression);
         final String indent;
         if (plan.isEmpty()) {
@@ -2730,7 +2848,9 @@ public final class CCodegen {
             .append(value)
             .append(";")
             .append(System.lineSeparator());
-        c.append(indent).append(returnRootSymbol()).append(" = javan_return_value;").append(System.lineSeparator());
+        c.append(indent).append("javan_runtime_lock_enter();").append(System.lineSeparator());
+        c.append(indent).append("*result = javan_return_value;").append(System.lineSeparator());
+        c.append(indent).append("javan_runtime_lock_leave();").append(System.lineSeparator());
         if (sourceContextSymbol.length() > 0) {
             emitSourceContextClear(c, indent, sourceContextSymbol);
         }
@@ -2739,8 +2859,7 @@ public final class CCodegen {
             c.append(indent).append("javan_root_frame_pop(javan_expr_roots);").append(System.lineSeparator());
         }
         emitRootFramePop(rootFrameSymbol, hasRootFrame, c, indent);
-        c.append(indent).append(returnRootSymbol()).append(" = 0;").append(System.lineSeparator());
-        c.append(indent).append("return javan_return_value;").append(System.lineSeparator());
+        c.append(indent).append("return;").append(System.lineSeparator());
         c.append("    }").append(System.lineSeparator());
     }
 
@@ -2748,12 +2867,16 @@ public final class CCodegen {
         if (isStatic) {
             c.append("static ");
         }
-        c.append(function.returnType().cName()).append(' ').append(function.symbol()).append('(');
-        if (function.parameters().isEmpty()) {
+        final boolean objectResult = function.returnType() == javan.ir.IrType.OBJECT;
+        c.append(objectResult ? "void" : function.returnType().cName()).append(' ').append(function.symbol()).append('(');
+        if (objectResult) {
+            c.append("void** result");
+        }
+        if (function.parameters().isEmpty() && !objectResult) {
             c.append("void");
         } else {
             for (int index = 0; index < function.parameters().size(); index++) {
-                if (index > 0) {
+                if (index > 0 || objectResult) {
                     c.append(", ");
                 }
                 final javan.ir.IrParameter parameter = function.parameters().get(index);
@@ -2764,9 +2887,13 @@ public final class CCodegen {
     }
 
     private static void emitDispatchSignature(final IrDispatch dispatch, final StringBuilder c) {
-        c.append("static ").append(dispatch.returnType().cName()).append(' ').append(dispatch.symbol()).append('(');
+        final boolean objectResult = dispatch.returnType() == javan.ir.IrType.OBJECT;
+        c.append("static ").append(objectResult ? "void" : dispatch.returnType().cName()).append(' ').append(dispatch.symbol()).append('(');
+        if (objectResult) {
+            c.append("void** result");
+        }
         for (int index = 0; index < dispatch.parameters().size(); index++) {
-            if (index > 0) {
+            if (index > 0 || objectResult) {
                 c.append(", ");
             }
             final javan.ir.IrParameter parameter = dispatch.parameters().get(index);
@@ -2784,6 +2911,11 @@ public final class CCodegen {
             result.append(dispatch.parameters().get(index).name());
         }
         return result.toString();
+    }
+
+    private static String dispatchResultArguments(final IrDispatch dispatch) {
+        final String arguments = dispatchArguments(dispatch);
+        return arguments.isEmpty() ? "result" : "result, " + arguments;
     }
 
     private static void emitDefaultReturn(final javan.ir.IrType type, final StringBuilder c) {
@@ -2804,7 +2936,7 @@ public final class CCodegen {
                 c.append("    return 0.0;").append(System.lineSeparator());
                 break;
             case OBJECT:
-                c.append("    return (void*) 0;").append(System.lineSeparator());
+                c.append("    return;").append(System.lineSeparator());
                 break;
         }
     }
@@ -2883,10 +3015,6 @@ public final class CCodegen {
 
     private static String rootFrameSymbol(final IrFunction function) {
         return "javan_roots_" + sanitize(function.symbol());
-    }
-
-    private static String returnRootSymbol() {
-        return "javan_generated_return_root";
     }
 
     private static String enumOrdinalSymbol(final String className) {
@@ -3119,8 +3247,6 @@ public final class CCodegen {
             .append(System.lineSeparator())
             .append("\t}")
             .append(System.lineSeparator())
-            .append("\t*result = (void*) 0;")
-            .append(System.lineSeparator())
             .append("\tstruct ")
             .append(classSymbol)
             .append("* source = (struct ")
@@ -3182,7 +3308,6 @@ public final class CCodegen {
         c.append("\tif (result == 0) {").append(System.lineSeparator());
         c.append("\t\tjavan_panic(\"invalid object clone result\");").append(System.lineSeparator());
         c.append("\t}").append(System.lineSeparator());
-        c.append("\t*result = (void*) 0;").append(System.lineSeparator());
         c.append("\tif (value == 0) {").append(System.lineSeparator());
         c.append("\t\tjavan_panic(\"null object clone\");").append(System.lineSeparator());
         c.append("\t}").append(System.lineSeparator());

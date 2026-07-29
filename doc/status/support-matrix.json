@@ -12,9 +12,9 @@
   },
   "counts": {
     "rows": 302,
-    "pass": 301,
+    "pass": 302,
     "scoped": 0,
-    "target": 1,
+    "target": 0,
     "rejected": 0
   },
   "features": [
@@ -66,7 +66,7 @@
     {"feature": "object-array-clone", "jdk25": "pass"},
     {"feature": "primitive-array-clone", "jdk25": "pass"},
     {"feature": "generated-object-clone-single-threaded", "jdk25": "pass"},
-    {"feature": "generated-object-clone-concurrent-return-handoff", "jdk25": "target"},
+    {"feature": "generated-object-clone-concurrent-return-handoff", "jdk25": "pass"},
     {"feature": "main-args", "jdk25": "pass"},
     {"feature": "jar-output", "jdk25": "pass"},
     {"feature": "jar-main-manifest", "jdk25": "pass"},

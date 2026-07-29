@@ -983,6 +983,227 @@ final class RuntimeFilesTest {
     }
 
     @Test
+    void writeSerializesCollectorVisibleRuntimeReferenceStores() throws Exception {
+        final Path runtime = new RuntimeFiles().write(tempDir);
+
+        assertThat(Files.readString(runtime)).contains(
+            "void javan_object_array_set(void* array, int index, void* value) {\n"
+                + "    javan_runtime_lock_enter();\n"
+                + "    javan_object_array* values = (javan_object_array*) javan_array_checked(array);",
+            "values->values[index] = value;\n"
+                + "    javan_runtime_lock_leave();",
+            "if (result == NULL) {\n"
+                + "        javan_panic(\"invalid array copy result\");\n"
+                + "    }\n"
+                + "    javan_runtime_lock_enter();\n"
+                + "    *result = NULL;\n"
+                + "    javan_runtime_lock_leave();\n"
+                + "    void* source_root = array;"
+        );
+    }
+
+    @Test
+    void interruptibleJoinReadsCompletionThroughItsNativeMutex() throws Exception {
+        final Path runtime = new RuntimeFiles().write(tempDir);
+        final String source = Files.readString(runtime);
+
+        assertThat(source).contains(
+            "static int javan_thread_completion_is_signaled(javan_thread* thread) {",
+            "AcquireSRWLockShared(&thread->native_completion_lock);",
+            "ReleaseSRWLockShared(&thread->native_completion_lock);",
+            "pthread_mutex_lock(&thread->native_completion_mutex)",
+            "int signaled = thread->native_completion_signaled != 0;",
+            "pthread_mutex_unlock(&thread->native_completion_mutex)",
+            "int done = not_started != 0 || javan_thread_completion_is_signaled(thread) != 0;",
+            "javan_runtime_lock_enter();\n"
+                + "    int started = thread->started != 0;\n"
+                + "    javan_runtime_lock_leave();\n"
+                + "    if (started == 0) {\n"
+                + "        return;\n"
+                + "    }",
+            "while (thread->native_completion_signaled == 0) {",
+            "javan_runtime_lock_enter();\n"
+                + "    javan_thread_leave_live_root(value);",
+            "javan_thread_completion_signal(thread);\n"
+                + "    javan_current_thread_value = NULL;\n"
+                + "    javan_runtime_lock_leave();"
+        );
+        assertThat(source).doesNotContain(
+            "int done = thread->started == 0 || thread->native_completion_signaled != 0;",
+            "while (thread->started != 0 && thread->native_completion_signaled == 0) {"
+        );
+    }
+
+    @Test
+    void workerExitReleasesItsThreadLocalRootFrameCache() throws Exception {
+        final Path runtime = new RuntimeFiles().write(tempDir);
+
+        assertThat(Files.readString(runtime)).contains(
+            "javan_thread_run_registered_target(value);\n"
+                + "    javan_root_frame_cache_cleanup();\n"
+                + "    javan_runtime_lock_enter();\n"
+                + "    javan_thread_leave_live_root(value);"
+        );
+    }
+
+    @Test
+    void rootFrameCleanupSerializesPublishedWorkerChains() throws Exception {
+        final Path runtime = new RuntimeFiles().write(tempDir);
+        final String source = Files.readString(runtime);
+
+        for (final String signature : java.util.List.of(
+            "static void javan_root_frame_cleanup(void)",
+            "static void javan_root_frame_cleanup_to("
+        )) {
+            final String function = runtimeFunction(source, signature);
+            assertThat(function.indexOf("javan_runtime_lock_enter();"))
+                .as(signature)
+                .isGreaterThanOrEqualTo(0);
+            assertThat(function.lastIndexOf("javan_runtime_lock_leave();"))
+                .as(signature)
+                .isGreaterThan(function.indexOf("javan_runtime_lock_enter();"));
+        }
+    }
+
+    @Test
+    void waitForNonCurrentThreadsRootsTheSelectedWorkerAcrossTheWait() throws Exception {
+        final Path runtime = new RuntimeFiles().write(tempDir);
+        final String function = runtimeFunction(
+            Files.readString(runtime),
+            "void javan_wait_for_non_current_threads(void)"
+        );
+
+        assertThat(function).contains(
+            "void** javan_wait_for_non_current_threads_roots[] = { &next };",
+            "javan_root_frame_push(javan_wait_for_non_current_threads_roots, 1);",
+            "next = candidate;",
+            "javan_root_frame_pop(javan_wait_for_non_current_threads_roots);"
+        );
+        final int selection = function.indexOf("next = candidate;");
+        assertThat(function.lastIndexOf("javan_runtime_lock_enter();", selection))
+            .isGreaterThanOrEqualTo(0);
+        assertThat(function.indexOf("javan_runtime_lock_leave();", selection))
+            .isGreaterThan(selection);
+        assertThat(function.indexOf("javan_thread_join(next);"))
+            .isLessThan(function.indexOf("javan_root_frame_pop(javan_wait_for_non_current_threads_roots);"));
+    }
+
+    @Test
+    void writeSerializesTheSupportedJavaAtomicFamily() throws Exception {
+        final Path runtime = new RuntimeFiles().write(tempDir);
+        final String source = Files.readString(runtime);
+
+        final Map<String, String> operations = Map.ofEntries(
+            Map.entry("void javan_atomic_integer_init(", "javan_atomic_integer_checked"),
+            Map.entry("int javan_atomic_integer_get(", "javan_atomic_integer_checked"),
+            Map.entry("void javan_atomic_integer_set(", "javan_atomic_integer_checked"),
+            Map.entry("int javan_atomic_integer_get_and_increment(", "javan_atomic_integer_checked"),
+            Map.entry("int javan_atomic_integer_increment_and_get(", "javan_atomic_integer_checked"),
+            Map.entry("int javan_atomic_integer_decrement_and_get(", "javan_atomic_integer_checked"),
+            Map.entry("void javan_atomic_boolean_init(", "javan_atomic_boolean_checked"),
+            Map.entry("int javan_atomic_boolean_get(", "javan_atomic_boolean_checked"),
+            Map.entry("void javan_atomic_boolean_set(", "javan_atomic_boolean_checked"),
+            Map.entry("void javan_atomic_reference_init(", "javan_atomic_reference_checked"),
+            Map.entry("void* javan_atomic_reference_get(", "javan_atomic_reference_checked"),
+            Map.entry("int javan_atomic_reference_compare_and_set(", "javan_atomic_reference_checked"),
+            Map.entry("void javan_atomic_reference_set(", "javan_atomic_reference_checked"),
+            Map.entry("void javan_atomic_long_init(", "javan_atomic_long_checked"),
+            Map.entry("long long javan_atomic_long_get(", "javan_atomic_long_checked"),
+            Map.entry("void javan_atomic_long_set(", "javan_atomic_long_checked"),
+            Map.entry("long long javan_atomic_long_increment_and_get(", "javan_atomic_long_checked"),
+            Map.entry("long long javan_atomic_long_decrement_and_get(", "javan_atomic_long_checked")
+        );
+        for (final Map.Entry<String, String> operation : operations.entrySet()) {
+            final String function = runtimeFunction(source, operation.getKey());
+            final int enter = function.indexOf("javan_runtime_lock_enter();");
+            final int checked = function.indexOf(operation.getValue());
+            final int leave = function.indexOf("javan_runtime_lock_leave();");
+            assertThat(enter).as(operation.getKey()).isGreaterThanOrEqualTo(0);
+            assertThat(enter).as(operation.getKey()).isLessThan(checked);
+            assertThat(checked).as(operation.getKey()).isLessThan(leave);
+        }
+
+        final String compareAndSet = runtimeFunction(
+            source,
+            "int javan_atomic_reference_compare_and_set("
+        );
+        assertThat(compareAndSet.indexOf("if (state->value == expected_value)"))
+            .isLessThan(compareAndSet.indexOf("state->value = next_value;"));
+        assertThat(compareAndSet.indexOf("state->value = next_value;"))
+            .isLessThan(compareAndSet.indexOf("javan_runtime_lock_leave();"));
+    }
+
+    @Test
+    void atomicIntegerAndLongCountersWrapAtTheirJavaBoundaries() throws Exception {
+        final String stdout = runRuntimeBoundaryProbe(
+            """
+            #include "javan_runtime.h"
+            #include <limits.h>
+            #include <stdio.h>
+
+            int main(void) {
+                javan_register_static_roots(0, 0);
+                (void) javan_thread_current();
+                void* integer = javan_atomic_integer_new();
+                void* long_value = javan_atomic_long_new();
+                void** roots[] = { &integer, &long_value };
+                javan_root_frame_push(roots, 2);
+
+                javan_atomic_integer_init(integer, INT_MAX);
+                printf("get-and=%d\\n", javan_atomic_integer_get_and_increment(integer));
+                printf("after-get-and=%d\\n", javan_atomic_integer_get(integer));
+                javan_atomic_integer_init(integer, INT_MAX);
+                printf("increment=%d\\n", javan_atomic_integer_increment_and_get(integer));
+                javan_atomic_integer_init(integer, INT_MIN);
+                printf("decrement=%d\\n", javan_atomic_integer_decrement_and_get(integer));
+
+                javan_atomic_long_init(long_value, LLONG_MAX);
+                printf("long-increment=%lld\\n", javan_atomic_long_increment_and_get(long_value));
+                javan_atomic_long_init(long_value, LLONG_MIN);
+                printf("long-decrement=%lld\\n", javan_atomic_long_decrement_and_get(long_value));
+
+                javan_root_frame_pop(roots);
+                return 0;
+            }
+            """,
+            "4096"
+        );
+
+        assertThat(stdout).isEqualTo(
+            """
+            get-and=2147483647
+            after-get-and=-2147483648
+            increment=-2147483648
+            decrement=2147483647
+            long-increment=-9223372036854775808
+            long-decrement=9223372036854775807
+            """
+        );
+    }
+
+    @Test
+    void atomicCounterWrapsAvoidSignedOverflowExpressions() throws Exception {
+        final Path runtime = new RuntimeFiles().write(tempDir);
+        final String source = Files.readString(runtime);
+
+        assertThat(runtimeFunction(source, "int javan_atomic_integer_get_and_increment(")).contains(
+            "state->value = current == INT_MAX ? INT_MIN : current + 1;"
+        );
+        assertThat(runtimeFunction(source, "int javan_atomic_integer_increment_and_get(")).contains(
+            "state->value = state->value == INT_MAX ? INT_MIN : state->value + 1;"
+        );
+        assertThat(runtimeFunction(source, "int javan_atomic_integer_decrement_and_get(")).contains(
+            "state->value = state->value == INT_MIN ? INT_MAX : state->value - 1;"
+        );
+        assertThat(runtimeFunction(source, "long long javan_atomic_long_increment_and_get(")).contains(
+            "state->value = state->value == LLONG_MAX ? LLONG_MIN : state->value + 1LL;"
+        );
+        assertThat(runtimeFunction(source, "long long javan_atomic_long_decrement_and_get(")).contains(
+            "state->value = state->value == LLONG_MIN ? LLONG_MAX : state->value - 1LL;"
+        );
+    }
+
+    @Test
     void writeEmitsWindowsHighResolutionNanoTimeFallback() throws Exception {
         final Path runtime = new RuntimeFiles().write(tempDir);
 
@@ -7266,6 +7487,14 @@ final class RuntimeFilesTest {
     private static boolean isWindowsHost() {
         final String osName = System.getProperty("os.name", "");
         return osName.toLowerCase(java.util.Locale.ROOT).contains("win");
+    }
+
+    private static String runtimeFunction(final String source, final String signature) {
+        final int start = source.lastIndexOf(signature);
+        assertThat(start).as(signature).isGreaterThanOrEqualTo(0);
+        final int end = source.indexOf("\n}\n", start);
+        assertThat(end).as(signature).isGreaterThan(start);
+        return source.substring(start, end + 2);
     }
 
     private static Path findFirstExecutableOnPath(final String... executables) {

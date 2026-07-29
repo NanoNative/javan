@@ -213,7 +213,7 @@ final class CliPackagingIntegrationTest extends CliIntegrationSupport {
             "\"localRootInventory\": true",
             "\"localRootLiveness\": true",
             "\"localRootLivenessModel\": \"cfg-safe-point-dead-root-clearing\"",
-            "\"rootModel\": \"generated-static-frame-return-and-expression-root-inventory-no-heap-scan\"",
+            "\"rootModel\": \"generated-static-local-parameter-expression-caller-owned-result-and-registered-platform-worker-root-inventory-no-conservative-heap-scan\"",
             "\"threadRoots\": true",
             "\"threadRootRegistry\": true",
             "\"threadRootScope\": \"parallel-host-thread-bootstrap-live-thread-root-registry-current-thread-root-membership-and-thread-target-field-traversal\"",

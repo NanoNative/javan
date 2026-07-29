@@ -483,7 +483,7 @@ public final class CompatibilityReports {
             pass("object-array-clone"),
             pass("primitive-array-clone"),
             pass("generated-object-clone-single-threaded"),
-            target("generated-object-clone-concurrent-return-handoff"),
+            pass("generated-object-clone-concurrent-return-handoff"),
             pass("main-args"),
             pass("jar-output"),
             pass("jar-main-manifest"),

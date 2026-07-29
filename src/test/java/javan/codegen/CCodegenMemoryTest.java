@@ -4,9 +4,12 @@ import javan.analysis.EntryPoint;
 import javan.build.AbiType;
 import javan.build.ExportedMethod;
 import javan.ir.IrClass;
+import javan.ir.IrDispatch;
+import javan.ir.IrDispatchTarget;
 import javan.ir.IrFunction;
 import javan.ir.IrInstruction;
 import javan.ir.IrLocal;
+import javan.ir.IrMaterializedLambdaTarget;
 import javan.ir.IrParameter;
 import javan.ir.IrProgram;
 import javan.ir.IrSourceLocation;
@@ -215,7 +218,13 @@ final class CCodegenMemoryTest {
 
         final String generated = Files.readString(new CCodegen().generate(program, tempDir));
 
-        assertThat(generated).contains("done:\n    tmp = 0;\n    javan_gc_safe_point();");
+        assertThat(generated).contains(
+            "done:\n"
+                + "    javan_runtime_lock_enter();\n"
+                + "    tmp = 0;\n"
+                + "    javan_runtime_lock_leave();\n"
+                + "    javan_gc_safe_point();"
+        );
     }
 
     @Test
@@ -246,7 +255,13 @@ final class CCodegenMemoryTest {
 
         final String generated = Files.readString(new CCodegen().generate(program, tempDir));
 
-        assertThat(generated).contains("if (1) goto use;\n    tmp = 0;\n    javan_gc_safe_point();");
+        assertThat(generated).contains(
+            "if (1) goto use;\n"
+                + "    javan_runtime_lock_enter();\n"
+                + "    tmp = 0;\n"
+                + "    javan_runtime_lock_leave();\n"
+                + "    javan_gc_safe_point();"
+        );
         assertThat(generated).doesNotContain("use:\n    tmp = 0;\n");
     }
 
@@ -365,18 +380,350 @@ final class CCodegenMemoryTest {
         assertThat(generated).contains(
             "javan_expr_tmp_0 = javan_new_com_acme_Node();",
             "void* javan_return_value = javan_expr_tmp_0;",
-            "javan_generated_return_root = javan_return_value;",
+            "javan_runtime_lock_enter();",
+            "*result = javan_return_value;",
+            "javan_runtime_lock_leave();",
             "javan_gc_safe_point();",
             "javan_root_frame_pop(javan_expr_roots);",
-            "javan_generated_return_root = 0;",
-            "return javan_return_value;"
+            "return;"
         );
         assertThat(generated.indexOf("javan_expr_tmp_0 = javan_new_com_acme_Node();"))
             .isLessThan(generated.indexOf("void* javan_return_value = javan_expr_tmp_0;"));
         assertThat(generated.indexOf("void* javan_return_value = javan_expr_tmp_0;"))
-            .isLessThan(generated.indexOf("javan_generated_return_root = javan_return_value;"));
-        assertThat(generated.indexOf("javan_generated_return_root = javan_return_value;"))
-            .isLessThan(generated.lastIndexOf("javan_generated_return_root = 0;"));
+            .isLessThan(generated.indexOf("*result = javan_return_value;"));
+        assertThat(generated.indexOf("*result = javan_return_value;"))
+            .isLessThan(generated.indexOf("javan_gc_safe_point();", generated.indexOf("*result = javan_return_value;")));
+    }
+
+    @Test
+    void handsGeneratedObjectResultsThroughCallerOwnedRootedSlots() throws Exception {
+        final IrProgram program = new IrProgram(
+            List.of(nodeClass()),
+            List.of(
+                new IrFunction(
+                    "com/acme/Main",
+                    "main",
+                    "([Ljava/lang/String;)V",
+                    "main_symbol",
+                    IrType.VOID,
+                    List.of(),
+                    List.of(new IrLocal(IrType.OBJECT, "answer")),
+                    List.of(
+                        IrInstruction.assignObject(
+                            "answer",
+                            IrExpression.objectCall(
+                                "dispatch_symbol",
+                                List.of(IrExpression.objectCall("make_symbol", List.of()))
+                            )
+                        ),
+                        IrInstruction.returnVoid()
+                    )
+                ),
+                new IrFunction(
+                    "com/acme/Factory",
+                    "make",
+                    "()Lcom/acme/Node;",
+                    "make_symbol",
+                    IrType.OBJECT,
+                    List.of(),
+                    List.of(),
+                    List.of(IrInstruction.returnObject(IrExpression.objectAllocation("com/acme/Node")))
+                ),
+                new IrFunction(
+                    "com/acme/Factory",
+                    "echo",
+                    "(Lcom/acme/Node;)Lcom/acme/Node;",
+                    "echo_symbol",
+                    IrType.OBJECT,
+                    List.of(new IrParameter(IrType.OBJECT, "self")),
+                    List.of(),
+                    List.of(IrInstruction.returnObject(IrExpression.objectLocal("self")))
+                )
+            ),
+            List.of(new IrDispatch(
+                "dispatch_symbol",
+                IrType.OBJECT,
+                List.of(new IrParameter(IrType.OBJECT, "self")),
+                List.of(new IrDispatchTarget("com/acme/Node", "echo_symbol"))
+            )),
+            "main_symbol"
+        );
+
+        final String generated = Files.readString(new CCodegen().generate(program, tempDir));
+
+        assertThat(generated).contains(
+            "static void make_symbol(void** result);",
+            "static void echo_symbol(void** result, void* self);",
+            "static void dispatch_symbol(void** result, void* self);",
+            "make_symbol((void**) &javan_expr_tmp_0);",
+            "dispatch_symbol((void**) &javan_expr_tmp_1, javan_expr_tmp_0);",
+            "echo_symbol(result, self); return;",
+            "javan_runtime_lock_enter();\n        *result = javan_return_value;\n        javan_runtime_lock_leave();\n        javan_gc_safe_point();\n        javan_root_frame_pop(javan_expr_roots);\n        return;"
+        );
+        assertThat(generated)
+            .doesNotContain("javan_generated_return_root")
+            .doesNotContain("return javan_return_value;");
+        assertThat(generated.indexOf("javan_root_frame_push(javan_expr_roots, 2);"))
+            .isLessThan(generated.indexOf("make_symbol((void**) &javan_expr_tmp_0);"));
+        assertThat(generated.indexOf("make_symbol((void**) &javan_expr_tmp_0);"))
+            .isLessThan(generated.indexOf("dispatch_symbol((void**) &javan_expr_tmp_1, javan_expr_tmp_0);"));
+    }
+
+    @Test
+    void serializesEveryMutationOfCollectorVisibleFrameRootSlots() throws Exception {
+        final IrProgram program = new IrProgram(
+            List.of(nodeClass()),
+            List.of(
+                new IrFunction(
+                    "com/acme/Main",
+                    "main",
+                    "([Ljava/lang/String;)V",
+                    "main_symbol",
+                    IrType.VOID,
+                    List.of(),
+                    List.of(
+                        new IrLocal(IrType.OBJECT, "allocated"),
+                        new IrLocal(IrType.OBJECT, "returned")
+                    ),
+                    List.of(
+                        IrInstruction.assignObject("allocated", IrExpression.objectAllocation("com/acme/Node")),
+                        IrInstruction.assignObject(
+                            "returned",
+                            IrExpression.objectCall("make_symbol", List.of())
+                        ),
+                        IrInstruction.returnVoid()
+                    )
+                ),
+                makeFunction()
+            ),
+            "main_symbol"
+        );
+
+        final String generated = Files.readString(new CCodegen().generate(program, tempDir));
+
+        assertThat(generated).contains(
+            "javan_root_frame_push(javan_expr_roots, 1);\n"
+                + "        javan_runtime_lock_enter();\n"
+                + "        javan_expr_tmp_0 = javan_new_com_acme_Node();\n"
+                + "        javan_runtime_lock_leave();",
+            "javan_runtime_lock_enter();\n"
+                + "        allocated = javan_expr_tmp_0;\n"
+                + "        javan_runtime_lock_leave();",
+            "make_symbol((void**) &javan_expr_tmp_0);\n"
+                + "        javan_runtime_lock_enter();\n"
+                + "        returned = javan_expr_tmp_0;\n"
+                + "        javan_runtime_lock_leave();",
+            "javan_runtime_lock_enter();\n"
+                + "    allocated = 0;\n"
+                + "    javan_runtime_lock_leave();",
+            "javan_runtime_lock_enter();\n"
+                + "    returned = 0;\n"
+                + "    javan_runtime_lock_leave();"
+        );
+    }
+
+    @Test
+    void handsMaterializedObjectLambdaResultsThroughCallerOwnedSlots() throws Exception {
+        final IrProgram program = new IrProgram(
+            List.of(),
+            List.of(
+                new IrFunction(
+                    "com/acme/Main",
+                    "main",
+                    "([Ljava/lang/String;)V",
+                    "main_symbol",
+                    IrType.VOID,
+                    List.of(),
+                    List.of(
+                        new IrLocal(IrType.OBJECT, "lambda"),
+                        new IrLocal(IrType.OBJECT, "argument"),
+                        new IrLocal(IrType.OBJECT, "answer")
+                    ),
+                    List.of(
+                        IrInstruction.assignObject(
+                            "answer",
+                            IrExpression.objectCall(
+                                "javan_materialized_lambda_apply_object",
+                                List.of(IrExpression.objectLocal("lambda"), IrExpression.objectLocal("argument"))
+                            )
+                        ),
+                        IrInstruction.assignObject(
+                            "answer",
+                            IrExpression.objectCall(
+                                "javan_materialized_lambda_apply_long_object",
+                                List.of(IrExpression.objectLocal("lambda"), IrExpression.longLiteral(7L))
+                            )
+                        ),
+                        IrInstruction.assignObject(
+                            "answer",
+                            IrExpression.objectCall(
+                                "javan_materialized_lambda_apply_object2",
+                                List.of(
+                                    IrExpression.objectLocal("lambda"),
+                                    IrExpression.objectLocal("argument"),
+                                    IrExpression.objectLocal("argument")
+                                )
+                            )
+                        ),
+                        IrInstruction.assignObject(
+                            "answer",
+                            IrExpression.objectCall(
+                                "javan_materialized_lambda_apply_supplier",
+                                List.of(IrExpression.objectLocal("lambda"))
+                            )
+                        ),
+                        IrInstruction.assignObject(
+                            "answer",
+                            IrExpression.objectCall(
+                                "bridge_symbol",
+                                List.of(IrExpression.objectLocal("lambda"), IrExpression.objectLocal("argument"))
+                            )
+                        ),
+                        IrInstruction.returnVoid()
+                    )
+                ),
+                new IrFunction(
+                    "com/acme/FallibleFunction",
+                    "apply",
+                    "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+                    "bridge_symbol",
+                    IrType.OBJECT,
+                    List.of(
+                        new IrParameter(IrType.OBJECT, "self"),
+                        new IrParameter(IrType.OBJECT, "arg")
+                    ),
+                    List.of(),
+                    List.of(IrInstruction.returnObject(IrExpression.objectCall(
+                        "javan_exact_catch_null_apply",
+                        List.of(IrExpression.objectLocal("self"), IrExpression.objectLocal("arg"))
+                    )))
+                ),
+                new IrFunction(
+                    "com/acme/Lambda",
+                    "apply",
+                    "(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "lambda_target_symbol",
+                    IrType.OBJECT,
+                    List.of(new IrParameter(IrType.OBJECT, "argument")),
+                    List.of(),
+                    List.of(IrInstruction.returnObject(IrExpression.objectLocal("argument")))
+                ),
+                new IrFunction(
+                    "com/acme/LongLambda",
+                    "apply",
+                    "(J)Ljava/lang/Object;",
+                    "long_target_symbol",
+                    IrType.OBJECT,
+                    List.of(new IrParameter(IrType.LONG, "value")),
+                    List.of(),
+                    List.of(IrInstruction.returnObject(IrExpression.objectNull()))
+                ),
+                new IrFunction(
+                    "com/acme/BiLambda",
+                    "apply",
+                    "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+                    "object2_target_symbol",
+                    IrType.OBJECT,
+                    List.of(
+                        new IrParameter(IrType.OBJECT, "first"),
+                        new IrParameter(IrType.OBJECT, "second")
+                    ),
+                    List.of(),
+                    List.of(IrInstruction.returnObject(IrExpression.objectLocal("first")))
+                ),
+                new IrFunction(
+                    "com/acme/SupplierLambda",
+                    "get",
+                    "()Ljava/lang/Object;",
+                    "supplier_target_symbol",
+                    IrType.OBJECT,
+                    List.of(),
+                    List.of(),
+                    List.of(IrInstruction.returnObject(IrExpression.objectNull()))
+                )
+            ),
+            List.of(),
+            "main_symbol",
+            List.of(
+                new IrMaterializedLambdaTarget(
+                    7,
+                    "java/util/function/Function",
+                    "apply",
+                    "(Ljava/lang/Object;)Ljava/lang/Object;",
+                    "lambda_target_symbol",
+                    0,
+                    false,
+                    false
+                ),
+                new IrMaterializedLambdaTarget(
+                    8,
+                    "java/util/function/LongFunction",
+                    "apply",
+                    "(J)Ljava/lang/Object;",
+                    "long_target_symbol",
+                    0,
+                    false,
+                    false
+                ),
+                new IrMaterializedLambdaTarget(
+                    9,
+                    "java/util/function/BiFunction",
+                    "apply",
+                    "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+                    "object2_target_symbol",
+                    0,
+                    false,
+                    false
+                ),
+                new IrMaterializedLambdaTarget(
+                    10,
+                    "java/util/function/Supplier",
+                    "get",
+                    "()Ljava/lang/Object;",
+                    "supplier_target_symbol",
+                    0,
+                    false,
+                    false
+                )
+            ),
+            java.util.Map.of()
+        );
+
+        final String generated = Files.readString(new CCodegen().generate(program, tempDir));
+
+        assertThat(generated).contains(
+            "static void javan_materialized_lambda_apply_object(void** result, void* self, void* arg);",
+            "static void javan_materialized_lambda_apply_object(void** result, void* self, void* arg) {",
+            "static void javan_materialized_lambda_apply_long_object(void** result, void* self, int64_t arg);",
+            "static void javan_materialized_lambda_apply_long_object(void** result, void* self, int64_t arg) {",
+            "static void javan_materialized_lambda_apply_object2(void** result, void* self, void* first_arg, void* second_arg);",
+            "static void javan_materialized_lambda_apply_object2(void** result, void* self, void* first_arg, void* second_arg) {",
+            "static void javan_materialized_lambda_apply_supplier(void** result, void* self);",
+            "static void javan_materialized_lambda_apply_supplier(void** result, void* self) {",
+            "case 7: lambda_target_symbol(result, arg); return;",
+            "case 8: long_target_symbol(result, arg); return;",
+            "case 9: object2_target_symbol(result, first_arg, second_arg); return;",
+            "case 10: supplier_target_symbol(result); return;",
+            "javan_materialized_lambda_apply_object((void**) &javan_expr_tmp_0, lambda, argument);",
+            "javan_materialized_lambda_apply_long_object((void**) &javan_expr_tmp_0, lambda, 7LL);",
+            "javan_materialized_lambda_apply_object2((void**) &javan_expr_tmp_0, lambda, argument, argument);",
+            "javan_materialized_lambda_apply_supplier((void**) &javan_expr_tmp_0, lambda);",
+            "bridge_symbol((void**) &javan_expr_tmp_0, lambda, argument);",
+            "static void javan_exact_catch_null_apply(void** result, void* self, void* arg) {",
+            "javan_exact_catch_null_apply((void**) &javan_expr_tmp_0, self, arg);",
+            "javan_root_frame_push(javan_function_or_null_roots, 1);",
+            "javan_materialized_lambda_apply_object((void**) &javan_function_or_null_result, self, arg);",
+            "javan_runtime_lock_enter();",
+            "*result = javan_function_or_null_result;",
+            "javan_runtime_lock_leave();",
+            "javan_root_frame_pop(javan_function_or_null_roots);",
+            "return;"
+        );
+        assertThat(generated).doesNotContain(
+            "return lambda_target_symbol(arg);",
+            "static void* javan_exact_catch_null_apply(",
+            "return javan_function_or_null_result;"
+        );
     }
 
     @Test
@@ -414,12 +761,12 @@ final class CCodegenMemoryTest {
         final String generated = Files.readString(new CCodegen().generate(program, tempDir));
 
         assertThat(generated).contains(
-            "javan_generated_return_root = javan_return_value;\n        javan_gc_safe_point();\n        javan_root_frame_pop(javan_roots_pick_symbol);\n        javan_generated_return_root = 0;\n        return javan_return_value;"
+            "*result = javan_return_value;\n        javan_runtime_lock_leave();\n        javan_gc_safe_point();\n        javan_root_frame_pop(javan_roots_pick_symbol);\n        return;"
         );
     }
 
     @Test
-    void includesObjectReturnSlotInStaticRootInventory() throws Exception {
+    void excludesObjectReturnSlotFromStaticRootInventory() throws Exception {
         final IrProgram program = new IrProgram(
             List.of(nodeClass()),
             List.of(
@@ -449,11 +796,9 @@ final class CCodegenMemoryTest {
 
         final String generated = Files.readString(new CCodegen().generate(program, tempDir));
 
-        assertThat(generated).contains(
-            "static void* javan_generated_return_root = 0;",
-            "(void**) &javan_generated_return_root",
-            "javan_register_static_roots(javan_static_roots, 1);"
-        );
+        assertThat(generated)
+            .doesNotContain("javan_generated_return_root")
+            .contains("javan_register_static_roots((void***) 0, 0);");
     }
 
     @Test
@@ -489,16 +834,16 @@ final class CCodegenMemoryTest {
             "void* javan_expr_tmp_0 = 0;",
             "void* javan_expr_tmp_1 = 0;",
             "javan_root_frame_push(javan_expr_roots, 2);",
-            "javan_expr_tmp_0 = make_symbol();",
-            "javan_expr_tmp_1 = make_symbol();",
+            "make_symbol((void**) &javan_expr_tmp_0);",
+            "make_symbol((void**) &javan_expr_tmp_1);",
             "consume_symbol(javan_expr_tmp_0, javan_expr_tmp_1);",
             "javan_root_frame_pop(javan_expr_roots);"
         );
         assertThat(generated.indexOf("javan_root_frame_push(javan_expr_roots, 2);"))
-            .isLessThan(generated.indexOf("javan_expr_tmp_0 = make_symbol();"));
-        assertThat(generated.indexOf("javan_expr_tmp_0 = make_symbol();"))
-            .isLessThan(generated.indexOf("javan_expr_tmp_1 = make_symbol();"));
-        assertThat(generated.indexOf("javan_expr_tmp_1 = make_symbol();"))
+            .isLessThan(generated.indexOf("make_symbol((void**) &javan_expr_tmp_0);"));
+        assertThat(generated.indexOf("make_symbol((void**) &javan_expr_tmp_0);"))
+            .isLessThan(generated.indexOf("make_symbol((void**) &javan_expr_tmp_1);"));
+        assertThat(generated.indexOf("make_symbol((void**) &javan_expr_tmp_1);"))
             .isLessThan(generated.indexOf("consume_symbol(javan_expr_tmp_0, javan_expr_tmp_1);"));
     }
 
@@ -573,8 +918,8 @@ final class CCodegenMemoryTest {
 
         assertThat(generated).contains(
             "javan_root_frame_push(javan_expr_roots, 2);",
-            "javan_expr_tmp_0 = make_symbol();",
-            "javan_expr_tmp_1 = make_symbol();",
+            "make_symbol((void**) &javan_expr_tmp_0);",
+            "make_symbol((void**) &javan_expr_tmp_1);",
             "((struct javan_class_com_acme_Node*) javan_expr_tmp_0)->field_next = javan_expr_tmp_1;",
             "javan_root_frame_pop(javan_expr_roots);"
         );
@@ -628,19 +973,19 @@ final class CCodegenMemoryTest {
             "void* javan_expr_tmp_1 = 0;",
             "void* javan_expr_tmp_2 = 0;",
             "javan_root_frame_push(javan_expr_roots, 3);",
-            "javan_expr_tmp_0 = make_holder_symbol();",
+            "make_holder_symbol((void**) &javan_expr_tmp_0);",
             "javan_expr_tmp_1 = ((struct javan_class_com_acme_Holder*) javan_expr_tmp_0)->field_child;",
-            "javan_expr_tmp_2 = make_symbol();",
+            "make_symbol((void**) &javan_expr_tmp_2);",
             "consume_symbol(javan_expr_tmp_1, javan_expr_tmp_2);",
             "javan_root_frame_pop(javan_expr_roots);"
         );
         assertThat(generated.indexOf("javan_root_frame_push(javan_expr_roots, 3);"))
-            .isLessThan(generated.indexOf("javan_expr_tmp_0 = make_holder_symbol();"));
-        assertThat(generated.indexOf("javan_expr_tmp_0 = make_holder_symbol();"))
+            .isLessThan(generated.indexOf("make_holder_symbol((void**) &javan_expr_tmp_0);"));
+        assertThat(generated.indexOf("make_holder_symbol((void**) &javan_expr_tmp_0);"))
             .isLessThan(generated.indexOf("javan_expr_tmp_1 = ((struct javan_class_com_acme_Holder*) javan_expr_tmp_0)->field_child;"));
         assertThat(generated.indexOf("javan_expr_tmp_1 = ((struct javan_class_com_acme_Holder*) javan_expr_tmp_0)->field_child;"))
-            .isLessThan(generated.indexOf("javan_expr_tmp_2 = make_symbol();"));
-        assertThat(generated.indexOf("javan_expr_tmp_2 = make_symbol();"))
+            .isLessThan(generated.indexOf("make_symbol((void**) &javan_expr_tmp_2);"));
+        assertThat(generated.indexOf("make_symbol((void**) &javan_expr_tmp_2);"))
             .isLessThan(generated.indexOf("consume_symbol(javan_expr_tmp_1, javan_expr_tmp_2);"));
         assertThat(generated.indexOf("consume_symbol(javan_expr_tmp_1, javan_expr_tmp_2);"))
             .isLessThan(generated.indexOf("javan_root_frame_pop(javan_expr_roots);"));
@@ -699,22 +1044,22 @@ final class CCodegenMemoryTest {
             "void* javan_expr_tmp_2 = 0;",
             "void* javan_expr_tmp_3 = 0;",
             "javan_root_frame_push(javan_expr_roots, 4);",
-            "javan_expr_tmp_0 = make_holder_symbol();",
+            "make_holder_symbol((void**) &javan_expr_tmp_0);",
             "javan_expr_tmp_1 = ((struct javan_class_com_acme_Holder*) javan_expr_tmp_0)->field_child;",
             "javan_expr_tmp_2 = ((struct javan_class_com_acme_Node*) javan_expr_tmp_1)->field_next;",
-            "javan_expr_tmp_3 = make_symbol();",
+            "make_symbol((void**) &javan_expr_tmp_3);",
             "consume_symbol(javan_expr_tmp_2, javan_expr_tmp_3);",
             "javan_root_frame_pop(javan_expr_roots);"
         );
         assertThat(generated.indexOf("javan_root_frame_push(javan_expr_roots, 4);"))
-            .isLessThan(generated.indexOf("javan_expr_tmp_0 = make_holder_symbol();"));
-        assertThat(generated.indexOf("javan_expr_tmp_0 = make_holder_symbol();"))
+            .isLessThan(generated.indexOf("make_holder_symbol((void**) &javan_expr_tmp_0);"));
+        assertThat(generated.indexOf("make_holder_symbol((void**) &javan_expr_tmp_0);"))
             .isLessThan(generated.indexOf("javan_expr_tmp_1 = ((struct javan_class_com_acme_Holder*) javan_expr_tmp_0)->field_child;"));
         assertThat(generated.indexOf("javan_expr_tmp_1 = ((struct javan_class_com_acme_Holder*) javan_expr_tmp_0)->field_child;"))
             .isLessThan(generated.indexOf("javan_expr_tmp_2 = ((struct javan_class_com_acme_Node*) javan_expr_tmp_1)->field_next;"));
         assertThat(generated.indexOf("javan_expr_tmp_2 = ((struct javan_class_com_acme_Node*) javan_expr_tmp_1)->field_next;"))
-            .isLessThan(generated.indexOf("javan_expr_tmp_3 = make_symbol();"));
-        assertThat(generated.indexOf("javan_expr_tmp_3 = make_symbol();"))
+            .isLessThan(generated.indexOf("make_symbol((void**) &javan_expr_tmp_3);"));
+        assertThat(generated.indexOf("make_symbol((void**) &javan_expr_tmp_3);"))
             .isLessThan(generated.indexOf("consume_symbol(javan_expr_tmp_2, javan_expr_tmp_3);"));
         assertThat(generated.indexOf("consume_symbol(javan_expr_tmp_2, javan_expr_tmp_3);"))
             .isLessThan(generated.indexOf("javan_root_frame_pop(javan_expr_roots);"));
@@ -786,25 +1131,25 @@ final class CCodegenMemoryTest {
             "void* javan_expr_tmp_3 = 0;",
             "void* javan_expr_tmp_4 = 0;",
             "javan_root_frame_push(javan_expr_roots, 5);",
-            "javan_expr_tmp_0 = make_holder_symbol();",
+            "make_holder_symbol((void**) &javan_expr_tmp_0);",
             "javan_expr_tmp_1 = ((struct javan_class_com_acme_Holder*) javan_expr_tmp_0)->field_child;",
-            "javan_expr_tmp_2 = make_symbol();",
-            "javan_expr_tmp_3 = link_symbol(javan_expr_tmp_1, javan_expr_tmp_2);",
-            "javan_expr_tmp_4 = make_symbol();",
+            "make_symbol((void**) &javan_expr_tmp_2);",
+            "link_symbol((void**) &javan_expr_tmp_3, javan_expr_tmp_1, javan_expr_tmp_2);",
+            "make_symbol((void**) &javan_expr_tmp_4);",
             "consume_symbol(javan_expr_tmp_3, javan_expr_tmp_4);",
             "javan_root_frame_pop(javan_expr_roots);"
         );
         assertThat(generated.indexOf("javan_root_frame_push(javan_expr_roots, 5);"))
-            .isLessThan(generated.indexOf("javan_expr_tmp_0 = make_holder_symbol();"));
-        assertThat(generated.indexOf("javan_expr_tmp_0 = make_holder_symbol();"))
+            .isLessThan(generated.indexOf("make_holder_symbol((void**) &javan_expr_tmp_0);"));
+        assertThat(generated.indexOf("make_holder_symbol((void**) &javan_expr_tmp_0);"))
             .isLessThan(generated.indexOf("javan_expr_tmp_1 = ((struct javan_class_com_acme_Holder*) javan_expr_tmp_0)->field_child;"));
         assertThat(generated.indexOf("javan_expr_tmp_1 = ((struct javan_class_com_acme_Holder*) javan_expr_tmp_0)->field_child;"))
-            .isLessThan(generated.indexOf("javan_expr_tmp_2 = make_symbol();"));
-        assertThat(generated.indexOf("javan_expr_tmp_2 = make_symbol();"))
-            .isLessThan(generated.indexOf("javan_expr_tmp_3 = link_symbol(javan_expr_tmp_1, javan_expr_tmp_2);"));
-        assertThat(generated.indexOf("javan_expr_tmp_3 = link_symbol(javan_expr_tmp_1, javan_expr_tmp_2);"))
-            .isLessThan(generated.indexOf("javan_expr_tmp_4 = make_symbol();"));
-        assertThat(generated.indexOf("javan_expr_tmp_4 = make_symbol();"))
+            .isLessThan(generated.indexOf("make_symbol((void**) &javan_expr_tmp_2);"));
+        assertThat(generated.indexOf("make_symbol((void**) &javan_expr_tmp_2);"))
+            .isLessThan(generated.indexOf("link_symbol((void**) &javan_expr_tmp_3, javan_expr_tmp_1, javan_expr_tmp_2);"));
+        assertThat(generated.indexOf("link_symbol((void**) &javan_expr_tmp_3, javan_expr_tmp_1, javan_expr_tmp_2);"))
+            .isLessThan(generated.indexOf("make_symbol((void**) &javan_expr_tmp_4);"));
+        assertThat(generated.indexOf("make_symbol((void**) &javan_expr_tmp_4);"))
             .isLessThan(generated.indexOf("consume_symbol(javan_expr_tmp_3, javan_expr_tmp_4);"));
         assertThat(generated.indexOf("consume_symbol(javan_expr_tmp_3, javan_expr_tmp_4);"))
             .isLessThan(generated.indexOf("javan_root_frame_pop(javan_expr_roots);"));
@@ -825,11 +1170,11 @@ final class CCodegenMemoryTest {
 
         assertThat(generated).contains(
             "javan_root_frame_push(javan_expr_roots, 1);",
-            "javan_expr_tmp_0 = make_symbol();",
+            "make_symbol((void**) &javan_expr_tmp_0);",
             "javan_println_object_value(javan_expr_tmp_0);",
             "javan_root_frame_pop(javan_expr_roots);"
         );
-        assertThat(generated.indexOf("javan_expr_tmp_0 = make_symbol();"))
+        assertThat(generated.indexOf("make_symbol((void**) &javan_expr_tmp_0);"))
             .isLessThan(generated.indexOf("javan_println_object_value(javan_expr_tmp_0);"));
         assertThat(generated.indexOf("javan_println_object_value(javan_expr_tmp_0);"))
             .isLessThan(generated.indexOf("javan_root_frame_pop(javan_expr_roots);"));
@@ -855,13 +1200,13 @@ final class CCodegenMemoryTest {
         assertThat(generated).contains(
             "javan_root_frame_push(javan_expr_roots, 2);",
             "javan_expr_tmp_0 = javan_object_array_new(1, \"[Ljava.lang.Object;\");",
-            "javan_expr_tmp_1 = make_symbol();",
+            "make_symbol((void**) &javan_expr_tmp_1);",
             "javan_object_array_set(javan_expr_tmp_0, 0, javan_expr_tmp_1);",
             "javan_root_frame_pop(javan_expr_roots);"
         );
         assertThat(generated.indexOf("javan_expr_tmp_0 = javan_object_array_new(1, \"[Ljava.lang.Object;\");"))
-            .isLessThan(generated.indexOf("javan_expr_tmp_1 = make_symbol();"));
-        assertThat(generated.indexOf("javan_expr_tmp_1 = make_symbol();"))
+            .isLessThan(generated.indexOf("make_symbol((void**) &javan_expr_tmp_1);"));
+        assertThat(generated.indexOf("make_symbol((void**) &javan_expr_tmp_1);"))
             .isLessThan(generated.indexOf("javan_object_array_set(javan_expr_tmp_0, 0, javan_expr_tmp_1);"));
     }
 
@@ -880,7 +1225,7 @@ final class CCodegenMemoryTest {
 
         assertThat(generated).contains(
             "javan_root_frame_push(javan_expr_roots, 1);",
-            "javan_expr_tmp_0 = make_symbol();",
+            "make_symbol((void**) &javan_expr_tmp_0);",
             "if (javan_expr_tmp_0) {",
             "javan_root_frame_pop(javan_expr_roots);",
             "goto done;",
@@ -917,17 +1262,17 @@ final class CCodegenMemoryTest {
             "(void**) &javan_expr_tmp_0",
             "(void**) &javan_expr_tmp_1",
             "javan_root_frame_push(javan_expr_roots, 2);",
-            "javan_expr_tmp_0 = make_symbol();",
-            "javan_expr_tmp_1 = make_symbol();",
+            "make_symbol((void**) &javan_expr_tmp_0);",
+            "make_symbol((void**) &javan_expr_tmp_1);",
             "if ((javan_expr_tmp_0 != javan_expr_tmp_1)) {",
             "javan_root_frame_pop(javan_expr_roots);",
             "goto done;"
         );
         assertThat(generated.indexOf("javan_root_frame_push(javan_expr_roots, 2);"))
-            .isLessThan(generated.indexOf("javan_expr_tmp_0 = make_symbol();"));
-        assertThat(generated.indexOf("javan_expr_tmp_0 = make_symbol();"))
-            .isLessThan(generated.indexOf("javan_expr_tmp_1 = make_symbol();"));
-        assertThat(generated.indexOf("javan_expr_tmp_1 = make_symbol();"))
+            .isLessThan(generated.indexOf("make_symbol((void**) &javan_expr_tmp_0);"));
+        assertThat(generated.indexOf("make_symbol((void**) &javan_expr_tmp_0);"))
+            .isLessThan(generated.indexOf("make_symbol((void**) &javan_expr_tmp_1);"));
+        assertThat(generated.indexOf("make_symbol((void**) &javan_expr_tmp_1);"))
             .isLessThan(generated.indexOf("if ((javan_expr_tmp_0 != javan_expr_tmp_1)) {"));
         assertThat(generated.indexOf("if ((javan_expr_tmp_0 != javan_expr_tmp_1)) {"))
             .isLessThan(generated.indexOf("goto done;"));
@@ -1235,15 +1580,15 @@ final class CCodegenMemoryTest {
 
         assertThat(generated).contains(
             "javan_root_frame_push(javan_expr_roots, 3);",
-            "javan_expr_tmp_0 = make_symbol();",
-            "javan_expr_tmp_1 = make_symbol();",
+            "make_symbol((void**) &javan_expr_tmp_0);",
+            "make_symbol((void**) &javan_expr_tmp_1);",
             "javan_expr_tmp_2 = javan_string_concat(\"\\001:\\001\", 2, (const char*[]){(const char*) javan_expr_tmp_0, (const char*) javan_expr_tmp_1});",
             "javan_panic((const char*) javan_expr_tmp_2);",
             "javan_root_frame_pop(javan_expr_roots);"
         );
-        assertThat(generated.indexOf("javan_expr_tmp_0 = make_symbol();"))
-            .isLessThan(generated.indexOf("javan_expr_tmp_1 = make_symbol();"));
-        assertThat(generated.indexOf("javan_expr_tmp_1 = make_symbol();"))
+        assertThat(generated.indexOf("make_symbol((void**) &javan_expr_tmp_0);"))
+            .isLessThan(generated.indexOf("make_symbol((void**) &javan_expr_tmp_1);"));
+        assertThat(generated.indexOf("make_symbol((void**) &javan_expr_tmp_1);"))
             .isLessThan(generated.indexOf("javan_expr_tmp_2 = javan_string_concat"));
         assertThat(generated.indexOf("javan_expr_tmp_2 = javan_string_concat"))
             .isLessThan(generated.indexOf("javan_panic((const char*) javan_expr_tmp_2);"));
@@ -1287,15 +1632,15 @@ final class CCodegenMemoryTest {
 
         assertThat(generated).contains(
             "javan_root_frame_push(javan_expr_roots, 3);",
-            "javan_expr_tmp_0 = make_symbol();",
-            "javan_expr_tmp_1 = make_symbol();",
-            "javan_expr_tmp_2 = choose_symbol(javan_expr_tmp_0, javan_expr_tmp_1);",
+            "make_symbol((void**) &javan_expr_tmp_0);",
+            "make_symbol((void**) &javan_expr_tmp_1);",
+            "choose_symbol((void**) &javan_expr_tmp_2, javan_expr_tmp_0, javan_expr_tmp_1);",
             "void* javan_return_value = javan_expr_tmp_2;",
-            "javan_generated_return_root = javan_return_value;",
+            "*result = javan_return_value;",
             "javan_root_frame_pop(javan_expr_roots);",
-            "return javan_return_value;"
+            "return;"
         );
-        assertThat(generated.indexOf("javan_generated_return_root = javan_return_value;"))
+        assertThat(generated.indexOf("*result = javan_return_value;"))
             .isLessThan(generated.indexOf("javan_root_frame_pop(javan_expr_roots);"));
     }
 
@@ -1338,13 +1683,15 @@ final class CCodegenMemoryTest {
             "return javan_export_error_result;",
             "void* arg0_array = 0;",
             "void* arg1_array = 0;",
+            "void* javan_export_object_result = 0;",
             "void** javan_export_roots[] = {",
             "        (void**) &arg0_array,",
-            "        (void**) &arg1_array",
-            "javan_root_frame_push(javan_export_roots, 2);",
+            "        (void**) &arg1_array,",
+            "        (void**) &javan_export_object_result",
+            "javan_root_frame_push(javan_export_roots, 3);",
             "arg0_array = javan_byte_array_from(arg0.data, arg0.length);",
             "arg1_array = javan_byte_array_from(arg1.data, arg1.length);",
-            BytecodeToIR.symbol(entry) + "(arg0_array, arg1_array);",
+            BytecodeToIR.symbol(entry) + "((void**) &javan_export_object_result, arg0_array, arg1_array);",
             "JavanByteArray javan_export_result = javan_byte_array_export(javan_export_object_result);",
             "javan_root_frame_pop(javan_export_roots);",
             "JavanResult javan_try_com_acme_Bytes_merge_bytes_bytes(JavanByteArray arg0, JavanByteArray arg1, JavanByteArray* out) {",
@@ -1358,17 +1705,74 @@ final class CCodegenMemoryTest {
             "*out = javan_try_value;",
             "return javan_result_ok();"
         );
-        assertThat(generated.indexOf("javan_root_frame_push(javan_export_roots, 2);"))
+        assertThat(generated.indexOf("javan_root_frame_push(javan_export_roots, 3);"))
             .isLessThan(generated.indexOf("arg0_array = javan_byte_array_from(arg0.data, arg0.length);"));
         assertThat(generated.indexOf("arg0_array = javan_byte_array_from(arg0.data, arg0.length);"))
             .isLessThan(generated.indexOf("arg1_array = javan_byte_array_from(arg1.data, arg1.length);"));
         assertThat(generated.indexOf("arg1_array = javan_byte_array_from(arg1.data, arg1.length);"))
-            .isLessThan(generated.indexOf(BytecodeToIR.symbol(entry) + "(arg0_array, arg1_array);"));
+            .isLessThan(generated.indexOf(BytecodeToIR.symbol(entry) + "((void**) &javan_export_object_result, arg0_array, arg1_array);"));
         assertThat(generated.indexOf("javan_root_frame_pop(javan_export_roots);"))
             .isLessThan(generated.indexOf("javan_panic_clear_target(&javan_export_panic_target);", generated.indexOf("javan_root_frame_pop(javan_export_roots);")));
         assertThat(generated)
             .doesNotContain("javan_free(arg0_array);")
             .doesNotContain("javan_free(arg1_array);");
+    }
+
+    @Test
+    void libraryWrapperPublishesConvertedInputsUnderRuntimeLock() throws Exception {
+        final EntryPoint entry = new EntryPoint(
+            "com/acme/Input",
+            "consume",
+            "(Ljava/lang/String;[B)V"
+        );
+        final IrProgram program = new IrProgram(
+            List.of(),
+            List.of(new IrFunction(
+                entry.className(),
+                entry.methodName(),
+                entry.descriptor(),
+                BytecodeToIR.symbol(entry),
+                IrType.VOID,
+                List.of(new IrParameter(IrType.OBJECT, "text"), new IrParameter(IrType.OBJECT, "bytes")),
+                List.of(),
+                List.of(IrInstruction.returnVoid())
+            )),
+            BytecodeToIR.symbol(entry)
+        );
+
+        final String generated = Files.readString(new CCodegen().generateLibrary(
+            program,
+            tempDir,
+            List.of(new ExportedMethod(
+                entry,
+                "javan_export_com_acme_Input_consume_string_bytes",
+                List.of(AbiType.STRING, AbiType.BYTE_ARRAY),
+                AbiType.VOID
+            ))
+        ));
+
+        final String stringPublication = "javan_runtime_lock_enter();\n"
+            + "    arg0_string = javan_string_from(arg0);\n"
+            + "    javan_runtime_lock_leave();";
+        final String arrayPublication = "javan_runtime_lock_enter();\n"
+            + "    arg1_array = javan_byte_array_from(arg1.data, arg1.length);\n"
+            + "    javan_runtime_lock_leave();";
+        assertThat(generated).contains(
+            "void* arg0_string = 0;",
+            "void* arg1_array = 0;",
+            "javan_root_frame_push(javan_export_roots, 2);",
+            stringPublication,
+            arrayPublication,
+            BytecodeToIR.symbol(entry) + "(arg0_string, arg1_array);",
+            "javan_root_frame_pop(javan_export_roots);",
+            "javan_panic_clear_target(&javan_export_panic_target);"
+        );
+        assertThat(generated.indexOf("javan_root_frame_push(javan_export_roots, 2);"))
+            .isLessThan(generated.indexOf(stringPublication));
+        assertThat(generated.indexOf(stringPublication))
+            .isLessThan(generated.indexOf(arrayPublication));
+        assertThat(generated.indexOf(arrayPublication))
+            .isLessThan(generated.indexOf(BytecodeToIR.symbol(entry) + "(arg0_string, arg1_array);"));
     }
 
     private static IrClass nodeClass() {
